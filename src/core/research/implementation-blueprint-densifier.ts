@@ -34,7 +34,7 @@ export async function densifyImplementationBlueprint(input: {
     generated_at: nowIso(),
     prompt: input.plan?.prompt || base.prompt || '',
     implementation_allowed_in_research: false,
-    handoff_route: '$Team',
+    handoff_route: '$Naruto',
     repository_aware: true,
     existing_files: likelyFiles,
     possible_new_files: possibleNewFiles,

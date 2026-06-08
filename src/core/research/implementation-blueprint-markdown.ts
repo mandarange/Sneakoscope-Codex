@@ -5,7 +5,7 @@ export function renderImplementationBlueprintMarkdown(blueprint: any = null) {
   lines.push('# Research Implementation Blueprint')
   lines.push('')
   lines.push(`Prompt: ${blueprint?.prompt || ''}`)
-  lines.push(`Handoff route: ${blueprint?.handoff_route || '$Team'}`)
+  lines.push(`Handoff route: ${blueprint?.handoff_route || '$Naruto'}`)
   lines.push(`Implementation allowed in Research: ${blueprint?.implementation_allowed_in_research === true ? 'yes' : 'no'}`)
   lines.push('')
   lines.push('## Sections')

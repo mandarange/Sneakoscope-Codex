@@ -42,7 +42,7 @@ function ambientGoalContinuation() {
     mode: 'ambient_codex_native_goal_overlay',
     native_slash_command: '/goal',
     non_disruptive: true,
-    rule: 'Use Codex native goal persistence when available to keep work resumable until completion; it never replaces the selected SKS route, Team, TriWiki, verification, reflection, or Honest Mode gates.'
+    rule: 'Use Codex native goal persistence when available to keep work resumable until completion; it never replaces the selected SKS route, Naruto, TriWiki, verification, reflection, or Honest Mode gates.'
   };
 }
 const REFLECTION_ARTIFACT = 'reflection.md';
@@ -262,7 +262,7 @@ function selectPipelineLane(route: any, task: any, proof: any) {
   }
   if (route?.id === 'ComputerUse') return { lane: 'computer_use_fast_lane', source: 'route_policy', fast_lane_allowed: true, reason: 'Computer Use route is intentionally direct and defers wiki/honest checks to closeout.', blockers: [], skip_when_fast: ['native_agent_intake', 'planning_debate', 'fresh_executor_team'], keep: ['focused_implementation', 'triwiki_validate_before_final', 'honest_mode'] };
   if (LIGHTWEIGHT_ROUTES.has(route?.id)) return { lane: `${String(route.id).toLowerCase()}_lightweight_lane`, source: 'route_policy', fast_lane_allowed: true, reason: 'Lightweight route bypasses full mission orchestration by design.', blockers: [], skip_when_fast: SPEED_LANE_POLICY.skip_when_fast, keep: ['focused_implementation', 'listed_verification', 'honest_mode'] };
-  if (routeRequiresSubagents(route, task)) return { lane: SPEED_LANE_POLICY.full_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'No Proof Field attached and this route normally requires full Team evidence.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
+  if (routeRequiresSubagents(route, task)) return { lane: SPEED_LANE_POLICY.full_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'No Proof Field attached and this route normally requires full Naruto evidence.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
   return { lane: SPEED_LANE_POLICY.balanced_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'Balanced parent-owned route until Proof Field proves a narrower lane.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
 }
 
@@ -316,7 +316,11 @@ function planNextActions(route: any, task: any, ambiguity: any, lane: any, agent
   }
   const actions = ['read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
   if (agentPolicy.required) actions.splice(1, 0, 'run sks agents run latest --json before implementation');
-  if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) actions.splice(1, 0, 'materialize full Team artifacts before implementation');
+  if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) {
+    actions.splice(1, 0, route?.id === 'Naruto'
+      ? 'materialize Naruto clone roster, work graph, worker proof, and naruto-gate.json before implementation'
+      : 'materialize full Team artifacts before implementation');
+  }
   if (looksLikeProblemSolvingRequest(task)) actions.splice(1, 0, 'run Solution Scout web search for similar fixes before editing');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
   return actions;
@@ -341,10 +345,10 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     'Ambient Goal continuation: even without an explicit $Goal keyword, use Codex native /goal persistence when it helps keep long work resumable and complete; do not let it replace or skip the selected SKS route gates.',
     'Route contract: execution routes infer contract answers from the prompt, TriWiki/current-code defaults, and conservative SKS policy. DFix and Answer bypass stateful execution because they do not start implementation.',
     'Plan-first interaction: when ambiguity questions are truly required, show the user only the missing human decision(s), then seal the decision contract internally and execute/verify.',
-    'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Team, not Answer.',
+    'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Naruto, not Answer.',
     'Best-practice prompt shape: extract Goal, Context, Constraints, and Done-when before implementation; keep questions compact and only ask for answers that can change scope, safety, user-facing behavior, or acceptance criteria.',
     chatCaptureIntakeText(),
-    'Default execution routing: general implementation/code-changing prompts promote to Team so the normal path is parallel analysis, TriWiki refresh, debate/consensus, then fresh parallel executors. Answer, DFix, Help, Wiki maintenance, and safety-specific routes are intentional exceptions.',
+    'Default execution routing: general implementation/code-changing prompts promote to Naruto so the normal path is shadow-clone fan-out, hardware-safe concurrency, patch envelopes, verification DAG, and GPT final arbitration. Answer, DFix, Help, Wiki maintenance, and safety-specific routes are intentional exceptions.',
     'Stance: infer the user intent aggressively from rough wording, local context, TriWiki, and conservative defaults; do not surface prequestion sheets before work.',
     subagentExecutionPolicyText(route, cleanPrompt),
     solutionScoutPolicyText(cleanPrompt),
@@ -365,7 +369,8 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     'Before final answer, include a user-visible completion summary that explains what changed and how it was verified, then run SKS Honest Mode: verify evidence/tests, state gaps, and confirm the goal is genuinely complete.'
   ];
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
-  if (route?.id === 'Team') lines.push(`Team route: agents, TriWiki refresh, debate, consensus, runtime graph compile with concrete task ids and worker inboxes, close planning agents, fresh executors, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, ${TEAM_SESSION_CLEANUP_ARTIFACT}, reflection, and Honest Mode. ${MIN_TEAM_REVIEW_POLICY_TEXT}`);
+  if (route?.id === 'Naruto') lines.push(`Naruto route: build clone roster, massive work graph, hardware-safe governor, active pool, allocation/rebalance policy, parallel verification DAG, GPT final pack, per-clone proof, session cleanup, reflection, and Honest Mode. $Team is deprecated for new execution missions.`);
+  if (route?.id === 'Team') lines.push(`Team route is a deprecated compatibility surface; use $Naruto for new execution missions. Existing Team mission observation commands remain available.`);
   if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
   if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, infer and seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings from the prompt, TriWiki/current-code defaults, and conservative policy. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, actively invoke the loaded imagegen skill through Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}), save the selected raster output into the mission assets/review evidence path, and record that real path before build/final. Direct API fallback, placeholders, HTML/CSS stand-ins, and prose-only substitutes do not satisfy the route gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
   if (route?.id === 'ImageUXReview') lines.push(`Image UX Review route: ${imageUxReviewPipelinePolicyText()} Use ${IMAGE_UX_REVIEW_POLICY_ARTIFACT}, ${IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT}, ${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT}, and ${IMAGE_UX_REVIEW_GATE_ARTIFACT} as the route evidence set. The route may suggest safe fixes only when the user requested fixing; otherwise report findings and blockers.`);
@@ -429,7 +434,8 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}): Pro
   const reasoning = routeReasoning(route, cleanPrompt);
   const nativeSessionsRequired = routeRequiresSubagents(route, cleanPrompt);
   if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization }), dreamContext);
-  if (route.id === 'Team') return withSkillDreamContext(await prepareTeam(root, route, task, required, { madSksAuthorization }), dreamContext);
+  if (route.id === 'Naruto') return withSkillDreamContext(await prepareNaruto(root, route, task, required, { madSksAuthorization }), dreamContext);
+  if (route.id === 'Team') return withSkillDreamContext(await prepareNaruto(root, { ...route, id: 'Naruto', command: '$Naruto', mode: 'NARUTO', stopGate: 'naruto-gate.json', requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'] }, task, required, { madSksAuthorization, teamAlias: true }), dreamContext);
   if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required), dreamContext);
   if (route.id === 'AutoResearch') return withSkillDreamContext(await prepareAutoResearch(root, route, task, required), dreamContext);
   if (route.id === 'DB') return withSkillDreamContext(await prepareDb(root, route, task, required), dreamContext);
@@ -580,6 +586,10 @@ export async function activeRouteContext(root: any, state: any) {
       : '';
     const roles = state.role_counts ? ` Role counts: ${formatRoleCounts(state.role_counts)}.` : '';
     return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Native session budget: ${state.agent_sessions || MIN_TEAM_REVIEWER_LANES}.${roles} Run native sessions, TriWiki refresh, debate, consensus, fresh development, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close or account for every Team native session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} After each native-session status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
+  }
+  if (state.mode === 'NARUTO') {
+    const clones = state.clone_count ? ` Clone count: ${state.clone_count}.` : '';
+    return `Active Naruto mission ${state.mission_id || 'latest'} must keep clone/worker evidence current.${clones} Use sks naruto status ${state.mission_id || 'latest'} --json, inspect .sneakoscope/missions/${state.mission_id || 'latest'}/naruto-gate.json and agents/agent-proof-evidence.json, then continue until the Naruto gate passes or a hard blocker is recorded.${reasoningNote}${planNote}`;
   }
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return `Active SKS route ${id} requires native multi-session evidence before code-changing work can be considered complete. Run worker/reviewer native sessions for disjoint write scopes, or record explicit unavailable/unsplittable native-session evidence before editing.${reasoningNote}${planNote}`;
@@ -1025,6 +1035,62 @@ async function prepareLightRoute(root: any, route: any, task: any, required: any
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'light_route' } });
   await setCurrent(root, routeState(id, route, 'ROUTE_CONTEXT_READY', required, { prompt: task, stop_gate: 'none', pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Load the route skill context, execute the smallest matching action, and finish with Honest Mode.');
+}
+
+async function prepareNaruto(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const cleanTask = stripDollarCommand(task) || String(task || '').trim();
+  const { id, dir } = await createMission(root, { mode: 'naruto', prompt: cleanTask });
+  const routeContextPayload = {
+    route: 'Naruto',
+    command: '$Naruto',
+    mode: 'NARUTO',
+    task: cleanTask,
+    required_skills: route.requiredSkills || ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
+    context7_required: required,
+    context_tracking: triwikiContextTracking(),
+    stop_gate: 'naruto-gate.json',
+    team_alias: opts.teamAlias === true,
+    mad_sks_authorization: Boolean(opts.madSksAuthorization)
+  };
+  await writeJsonAtomic(path.join(dir, 'route-context.json'), routeContextPayload);
+  await writeJsonAtomic(path.join(dir, 'naruto-gate.json'), {
+    schema: 'sks.naruto-gate.v1',
+    passed: false,
+    mission_id: id,
+    clone_roster_built: false,
+    work_graph_ready: false,
+    role_distribution_ready: false,
+    allocation_ready: false,
+    rebalance_ready: false,
+    concurrency_governor_ready: false,
+    active_pool_simulated: false,
+    verification_dag_ready: false,
+    gpt_final_pack_ready: false,
+    zellij_dashboard_ready: false,
+    native_agent_proof: false,
+    final_arbiter_accepted: false,
+    session_cleanup: false,
+    blockers: ['naruto_run_not_started'],
+    updated_at: nowIso()
+  });
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, required, ambiguity: { required: false, status: opts.teamAlias ? 'team_alias_to_naruto' : 'direct_naruto' } });
+  await setCurrent(root, routeState(id, route, 'NARUTO_READY', required, {
+    prompt: cleanTask,
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mode: 'NARUTO',
+    implementation_allowed: true,
+    ambiguity_gate_required: false,
+    ambiguity_gate_passed: true,
+    stop_gate: 'naruto-gate.json',
+    required_skills: routeContextPayload.required_skills,
+    subagents_required: true,
+    native_sessions_required: true,
+    naruto_gate_file: 'naruto-gate.json',
+    pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
+  }));
+  return routeContext(route, id, cleanTask, required, `Run sks naruto run ${JSON.stringify(cleanTask)} --json (or continue with Codex native workers for the same mission), then update naruto-gate.json from the worker proof and verification DAG.`);
 }
 
 function routeState(id: any, route: any, phase: any, context7Required: any, extra: any = {}) {

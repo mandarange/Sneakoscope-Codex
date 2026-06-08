@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sks.update-notice.v1",
+  "type": "object",
+  "required": ["schema", "checked_at", "package_name", "current_version", "latest_version", "update_available", "source", "cache_ttl_ms", "message"],
+  "properties": {
+    "schema": { "const": "sks.update-notice.v1" },
+    "checked_at": { "type": "string" },
+    "package_name": { "type": "string" },
+    "current_version": { "type": "string" },
+    "latest_version": { "type": ["string", "null"] },
+    "update_available": { "type": "boolean" },
+    "source": { "enum": ["npm-registry", "cache", "disabled", "error"] },
+    "cache_ttl_ms": { "type": "number", "minimum": 1 },
+    "message": { "type": "string" },
+    "error": { "type": "string" }
+  },
+  "additionalProperties": true
+}

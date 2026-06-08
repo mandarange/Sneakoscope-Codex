@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sks.mad-db-capability.v1",
+  "type": "object",
+  "required": ["schema", "mission_id", "cycle_id", "enabled", "created_at", "expires_at", "one_cycle_only", "priority", "scope", "operator_ack", "consumed"],
+  "properties": {
+    "schema": { "const": "sks.mad-db-capability.v1" },
+    "mission_id": { "type": "string", "pattern": "^M-" },
+    "cycle_id": { "type": "string" },
+    "enabled": { "type": "boolean" },
+    "created_at": { "type": "string" },
+    "expires_at": { "type": "string" },
+    "one_cycle_only": { "const": true },
+    "priority": { "const": "highest" },
+    "scope": { "const": "all_database_mutations" },
+    "operator_ack": {
+      "type": "object",
+      "required": ["phrase", "accepted_at", "cwd"],
+      "properties": {
+        "phrase": { "const": "I AUTHORIZE ONE-CYCLE DB BREAK-GLASS" },
+        "accepted_at": { "type": "string" },
+        "cwd": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "consumed": { "type": "boolean" },
+    "consumed_at": { "type": ["string", "null"] },
+    "consumed_by": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}

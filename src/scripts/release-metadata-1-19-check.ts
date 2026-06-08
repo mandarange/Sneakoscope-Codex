@@ -313,8 +313,10 @@ assertGate(typeof distManifest?.source_digest === 'string' && distManifest.sourc
 assertGate(pkg.scripts?.['release:metadata']?.includes('dist/scripts/release-metadata-check.js'), 'release:metadata must point to the generic release metadata check');
 const releaseCheckScript = String(pkg.scripts?.['release:check'] || '');
 assertGate(
-  releaseCheckScript.startsWith('npm run release:check:parallel') || releaseCheckScript.includes('release-gate-dag-runner.js --preset release'),
-  'release:check must use release:check:parallel or the release gate DAG runner'
+  releaseCheckScript.startsWith('npm run release:check:parallel')
+    || releaseCheckScript.includes('release-gate-dag-runner.js --preset release')
+    || releaseCheckScript.includes('release:check:affected'),
+  'release:check must use release:check:parallel, release:check:affected, or the release gate DAG runner'
 );
 for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
 for (const script of requiredRealScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package real script: ${script}`);

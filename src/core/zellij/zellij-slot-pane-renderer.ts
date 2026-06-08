@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { readZellijSlotTelemetrySnapshot, type ZellijSlotTelemetrySnapshot } from './zellij-slot-telemetry.js'
 
 export interface ZellijSlotPaneRenderInput {
   slotId: string
@@ -62,12 +63,28 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
 
 export async function renderZellijSlotPaneFromArtifacts(input: {
   artifactDir: string
+  artifactRoot?: string
+  missionId?: string
   slotId: string
   generationIndex: number
   role?: string | null
   backend?: string | null
   mode?: ZellijSlotPaneRenderInput['mode']
 }): Promise<string> {
+  if (input.missionId && input.missionId !== 'latest') {
+    const telemetry = await tryRenderTelemetrySlotPane({
+      artifactRoot: input.artifactRoot || input.artifactDir,
+      missionId: input.missionId,
+      slotId: input.slotId,
+      generationIndex: input.generationIndex
+    })
+    if (telemetry) return telemetry
+    return [
+      `${input.slotId} gen-${Math.max(1, Math.floor(Number(input.generationIndex) || 1))}`,
+      'waiting for telemetry...',
+      `mission ${input.missionId}`
+    ].join('\n')
+  }
   const artifactDir = path.resolve(input.artifactDir)
   const result = await readJson(path.join(artifactDir, 'worker-result.json'))
   const intake = await readJson(path.join(artifactDir, 'worker-intake.json'))
@@ -166,6 +183,7 @@ export function buildZellijSlotPaneCommand(input: {
   slotId: string
   generationIndex: number
   artifactDir: string
+  artifactRoot?: string
   backend?: string | null
   role?: string | null
   mode?: ZellijSlotPaneRenderInput['mode']
@@ -178,12 +196,58 @@ export function buildZellijSlotPaneCommand(input: {
     '--slot', input.slotId,
     '--generation', String(Math.max(1, Math.floor(Number(input.generationIndex) || 1))),
     '--artifact-dir', input.artifactDir,
+    '--artifact-root', input.artifactRoot || input.artifactDir,
     '--mode', input.mode || 'compact-slots',
     ...(input.backend ? ['--backend', input.backend] : []),
     ...(input.role ? ['--role', input.role] : []),
     ...(input.watch ? ['--watch'] : [])
   ]
   return [input.nodePath || process.execPath, ...args].map(shellQuote).join(' ')
+}
+
+async function tryRenderTelemetrySlotPane(input: {
+  artifactRoot: string
+  missionId: string
+  slotId: string
+  generationIndex: number
+}): Promise<string | null> {
+  const snapshot = await readZellijSlotTelemetrySnapshot(path.resolve(input.artifactRoot), input.missionId).catch(() => null)
+  if (!snapshot || !Object.keys(snapshot.slots || {}).length) return null
+  const slot = findTelemetrySlot(snapshot, input.slotId, input.generationIndex)
+  if (!slot) return null
+  if (slot.status === 'failed') {
+    return [
+      `${slot.slot_id} gen-${slot.generation_index} · FAILED`,
+      `blocker: ${trimInline(slot.blockers[0] || 'worker_failed', 78)}`,
+      `artifact: ${trimInline(slot.artifact_paths[slot.artifact_paths.length - 1] || '-', 78)}`
+    ].join('\n')
+  }
+  if (slot.status === 'completed' || slot.status === 'drained') {
+    return [
+      `${slot.slot_id} gen-${slot.generation_index} · done`,
+      `artifacts ${slot.artifact_paths.length} · ${slot.latest_event_type === 'verification_passed' ? 'verify passed' : 'verify queued'}`,
+      'closing in 3s'
+    ].join('\n')
+  }
+  const backend = [slot.backend, slot.service_tier, slot.worktree_id].filter((value) => value && value !== 'unknown').join(' · ') || 'worker'
+  const heartbeat = slot.latest_ts ? `${Math.max(0, Math.round((Date.now() - Date.parse(slot.latest_ts)) / 1000))}s` : '?'
+  return [
+    `${slot.slot_id} gen-${slot.generation_index} · ${trimInline(slot.role || 'worker', 28)}`,
+    trimInline(backend, 78),
+    `${slot.status}: ${trimInline(slot.task_title || 'worker task', 68)}`,
+    `${formatTelemetryProgress(slot.progress)} · latest ${slot.latest_event_type} ${heartbeat}`,
+    `${slot.latest_event_type === 'patch_candidate' ? 'patch candidate' : 'patch'}: ${slot.latest_event_type === 'patch_candidate' ? 'queued' : trimInline(slot.current_file || '-', 42)}`
+  ].join('\n')
+}
+
+function findTelemetrySlot(snapshot: ZellijSlotTelemetrySnapshot, slotId: string, generationIndex: number) {
+  const generation = Math.max(1, Math.floor(Number(generationIndex) || 1))
+  return Object.values(snapshot.slots || {}).find((row) => row.slot_id === slotId && Number(row.generation_index) === generation) || null
+}
+
+function formatTelemetryProgress(progress: { done: number; total: number; label: string } | null) {
+  if (!progress) return 'progress ?'
+  return `progress ${progress.done}/${progress.total}${progress.label ? ` ${trimInline(progress.label, 24)}` : ''}`
 }
 
 async function readJson(file: string): Promise<any | null> {

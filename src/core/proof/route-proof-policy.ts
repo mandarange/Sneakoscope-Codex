@@ -1,5 +1,8 @@
 export const SERIOUS_ROUTE_ALIASES = Object.freeze([
   '$Team',
+  '$Naruto',
+  '$ShadowClone',
+  '$Kagebunshin',
   '$DFix',
   '$QA-LOOP',
   '$Research',
@@ -37,7 +40,12 @@ export const VISUAL_ROUTE_ALIASES = Object.freeze([
 ]);
 
 const ROUTE_NORMALIZATION = Object.freeze({
-  team: '$Team',
+  team: '$Naruto',
+  naruto: '$Naruto',
+  shadowclone: '$Naruto',
+  'shadow-clone': '$Naruto',
+  kagebunshin: '$Naruto',
+  'kage-bunshin': '$Naruto',
   dfix: '$DFix',
   qaloop: '$QA-LOOP',
   'qa-loop': '$QA-LOOP',

@@ -2,6 +2,9 @@ import path from 'node:path';
 import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded } from './fsx.js';
 import { missionDir, setCurrent } from './mission.js';
 import { evaluateMadSksPermissionGate, isMadSksRouteState } from './permission-gates.js';
+import { resolveMadDbMutationPolicy } from './mad-db/mad-db-policy-resolver.js';
+import { consumeMadDbCapability } from './mad-db/mad-db-capability.js';
+import { appendMadDbLedgerEvent } from './mad-db/mad-db-ledger.js';
 
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
@@ -443,6 +446,29 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
   const policy = await loadDbSafetyPolicy(root);
   const contract = await loadMissionContract(root, state);
   const classification = classifyToolPayload(payload);
+  const madDb = await resolveMadDbMutationPolicy(root, state, classification);
+  if (madDb.allowed === true && state?.mission_id) {
+    const madDbDecision: any = madDb;
+    const decision = {
+      allowed: true,
+      action: 'allow',
+      reasons: madDb.reasons,
+      classification,
+      effective: { mode: 'mad-db-break-glass', env: 'operator_authorized_one_cycle', destructive: true, migrationApply: 'yes' },
+      mad_db: {
+        active: true,
+        priority: 'highest',
+        one_cycle_only: true,
+        cycle_id: madDbDecision.cycle_id,
+        capability_file: 'mad-db-capability.json',
+        consumed: true
+      }
+    };
+    await appendMadDbLedgerEvent(root, state.mission_id, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification });
+    await consumeMadDbCapability(root, state.mission_id, { consumedBy: 'db-safety-checkDbOperation', reason: 'db_mutation_allowed' });
+    await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });
+    return decision;
+  }
   const madSks = await madSksOverrideState(root, state);
   const decision = evaluateDbSafety({ classification, policy, contract, duringNoQuestion, madSks });
   if (decision.action === 'confirm') await writeMadSksTableDeletePending(root, state, decision);

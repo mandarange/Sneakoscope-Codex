@@ -38,7 +38,7 @@ const checks = {
     assertFileIncludes('src/core/research.ts', ['replication_pack_missing']);
   },
   'final-reviewer': () => {
-    assertFileIncludes('src/core/research/research-final-reviewer.ts', ['RESEARCH_FINAL_REVIEW_ARTIFACT', 'approved', 'runResearchFinalReviewer', 'runResearchStaticFinalReview', 'runResearchCodexFinalReviewer']);
+    assertFileIncludes('src/core/research/research-final-reviewer.ts', ['RESEARCH_FINAL_REVIEW_ARTIFACT', 'approved', 'runResearchFinalReviewer', 'runResearchStaticFinalReview', 'runResearchCodexFinalReviewer', 'template_like_prose', 'source_density_ok', 'implementation_concreteness_ok', 'evidence_bound_synthesis_ok']);
     assertFileIncludes('src/core/research.ts', ['research_final_review_not_approved']);
   },
   'work-graph': () => {
@@ -59,8 +59,8 @@ const checks = {
     assertFileIncludes('src/core/research/falsification.ts', ['falsification_cases_below_contract']);
   },
   'report-quality': () => {
-    assertFileIncludes('src/core/research/research-report-quality.ts', ['analyzeResearchReportQuality', 'REQUIRED_RESEARCH_REPORT_HEADINGS', 'research_report_references_missing_source_ids']);
-    assertFileIncludes('src/core/research.ts', ['report_word_count', 'report_quality', 'research_report_too_short']);
+    assertFileIncludes('src/core/research/research-report-quality.ts', ['analyzeResearchReportQuality', 'REQUIRED_RESEARCH_REPORT_HEADINGS', 'research_report_references_missing_source_ids', 'source_density_per_1000_words', 'claim_density_per_1000_words', 'analyzeResearchRepetition']);
+    assertFileIncludes('src/core/research.ts', ['report_word_count', 'report_quality', 'research_report_too_short', 'report_repetition']);
   },
   'schemas': () => {
     for (const file of [
@@ -71,7 +71,8 @@ const checks = {
       'schemas/research/experiment-plan.schema.json',
       'schemas/research/replication-pack.schema.json',
       'schemas/research/research-final-review.schema.json',
-      'schemas/research/research-source-shard.schema.json'
+      'schemas/research/research-source-shard.schema.json',
+      'schemas/research/research-synthesis-output.schema.json'
     ]) assertGate(readText(file).includes('"$schema"'), `${file} missing JSON Schema header`);
   },
   'stage-cycle-runner': () => {

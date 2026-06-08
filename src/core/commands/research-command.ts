@@ -272,8 +272,10 @@ async function researchRun(args: any) {
 
 function printResearchCompletion(id: string, root: string, dir: string, plan: any, gate: any) {
   const metrics = gate?.metrics || {};
+  const synthesis = metrics.synthesis || {};
   const rel = (artifact: string) => path.relative(root, path.join(dir, artifact));
   console.log(`Research done: ${id}`);
+  console.log(`Synthesis: ${synthesis.writer || 'missing'}`);
   console.log(`Report: ${rel('research-report.md')}`);
   console.log(`Paper: ${rel(researchPaperArtifactForPlan(plan))}`);
   console.log(`Implementation blueprint: ${rel('implementation-blueprint.json')}`);
@@ -281,7 +283,8 @@ function printResearchCompletion(id: string, root: string, dir: string, plan: an
   console.log(`Experiment plan: ${rel('experiment-plan.json')}`);
   console.log(`Replication pack: ${rel('replication-pack.json')}`);
   console.log(`Gate: ${gate?.passed ? 'passed' : 'blocked'}`);
-  console.log(`Quality: ${metrics.source_entries_total_with_counterevidence ?? metrics.source_entries ?? 0} sources / ${metrics.source_layers_covered ?? 0} layers / ${metrics.key_claims ?? 0} key claims / ${metrics.falsification_cases ?? 0} falsification cases`);
+  console.log(`Quality: ${metrics.report_word_count ?? 0} words / ${metrics.source_entries_total_with_counterevidence ?? metrics.source_entries ?? 0} sources / ${metrics.key_claims ?? 0} key claims / repetition ${synthesis.repetition_ratio ?? metrics.report_repetition?.repeated_paragraph_ratio ?? 'n/a'}`);
+  console.log(`Final review: static ${metrics.final_review_blockers?.length ? 'block' : 'pass'} / codex ${synthesis.codex_final_review_verdict || 'missing'}`);
   console.log(`Handoff: ${rel('team-handoff-goal.md')}`);
 }
 
@@ -315,6 +318,7 @@ async function researchStatus(args: any) {
   const experimentPlan = await readExperimentPlan(dir);
   const replicationPack = await readReplicationPack(dir);
   const finalReview = await readResearchFinalReview(dir);
+  const synthesisOutput = await readJson(path.join(dir, 'research-synthesis-output.json'), null);
   const blueprintValidation = validateImplementationBlueprint(implementationBlueprint, qualityContract);
   const experimentValidation = validateExperimentPlan(experimentPlan, qualityContract);
   const replicationValidation = validateReplicationPack(replicationPack);
@@ -351,6 +355,14 @@ async function researchStatus(args: any) {
     research_quality: {
       contract: qualityContract,
       report_word_count: gate?.metrics?.report_word_count ?? null,
+      synthesis: {
+        writer: gate?.metrics?.synthesis?.writer ?? (synthesisOutput ? 'evidence-bound writer artifact present' : null),
+        repetition_ratio: gate?.metrics?.synthesis?.repetition_ratio ?? gate?.metrics?.report_repetition?.repeated_paragraph_ratio ?? null,
+        source_density_per_1000_words: gate?.metrics?.synthesis?.source_density_per_1000_words ?? gate?.metrics?.source_density_per_1000_words ?? null,
+        claim_density_per_1000_words: gate?.metrics?.synthesis?.claim_density_per_1000_words ?? gate?.metrics?.claim_density_per_1000_words ?? null,
+        template_phrase_hits: gate?.metrics?.synthesis?.template_phrase_hits ?? gate?.metrics?.template_phrase_hits ?? [],
+        codex_final_review_verdict: finalReview?.codex_review?.verdict || null
+      },
       claim_evidence_matrix_present: claimMatrix.present,
       key_claims: claimMatrix.key_claim_ids.length,
       triangulated_claims: claimMatrix.triangulated_claim_count,

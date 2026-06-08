@@ -166,6 +166,7 @@ export const COMMANDS = {
   zellij: entry('beta', 'Inspect Zellij runtime status and explain repair (no auto-install)', 'dist/commands/zellij.js', directCommand(() => import('../commands/zellij.js'), 'dist/commands/zellij.js')),
   mad: entry('beta', 'MAD-SKS Zellij permission launcher', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),
   'mad-sks': entry('beta', 'MAD-SKS scoped permission modifier', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),
+  'mad-db': entry('beta', 'Create or inspect one-cycle Mad-DB break-glass capability tokens', 'dist/commands/mad-db.js', directCommand(() => import('../commands/mad-db.js'), 'dist/commands/mad-db.js')),
   'auto-review': entry('beta', 'Manage auto-review profile', 'dist/commands/auto-review.js', directCommand(() => import('../commands/auto-review.js'), 'dist/commands/auto-review.js')),
   autoreview: entry('beta', 'Alias for auto-review', 'dist/commands/auto-review.js', directCommand(() => import('../commands/auto-review.js'), 'dist/commands/auto-review.js')),
   'dollar-commands': entry('stable', 'List Codex App dollar commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),

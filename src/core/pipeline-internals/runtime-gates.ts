@@ -356,6 +356,24 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
     return required
       .filter((key: any) => gate[key] !== true);
   }
+  if (file === 'naruto-gate.json' || mode === 'NARUTO') {
+    const required = [
+      'clone_roster_built',
+      'work_graph_ready',
+      'role_distribution_ready',
+      'allocation_ready',
+      'rebalance_ready',
+      'concurrency_governor_ready',
+      'active_pool_simulated',
+      'verification_dag_ready',
+      'gpt_final_pack_ready',
+      'zellij_dashboard_ready',
+      'native_agent_proof',
+      'final_arbiter_accepted',
+      'session_cleanup'
+    ];
+    return required.filter((key: any) => gate[key] !== true);
+  }
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
     const required = ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete'];
     if (gate.ui_e2e_required === true) required.push('chrome_extension_preflight_passed', 'ui_chrome_extension_evidence');
@@ -386,6 +404,7 @@ async function missingRequiredGateArtifacts(root: any, file: any, state: any, ga
     return (evaluated.reasons || ['research_gate_blocked']).map((reason: any) => `research-gate:${reason}`);
   }
   if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') return missingImageUxReviewArtifacts(root, state, gate);
+  if (file === 'naruto-gate.json' || mode === 'NARUTO') return missingNarutoArtifacts(root, state, gate);
   if (file !== 'team-gate.json' && mode !== 'TEAM') return [];
   const missing: any[] = [];
   if (gate.team_roster_confirmed === true && !(await exists(path.join(missionDir(root, state.mission_id), 'team-roster.json')))) missing.push('team-roster.json');
@@ -541,6 +560,7 @@ function gateFilesForState(state: any) {
   if (state.stop_gate) return [state.stop_gate];
   if (state.mode === 'GOAL') return ['goal-workflow.json'];
   if (state.mode === 'RESEARCH') return ['research-gate.json', 'research-gate.evaluated.json'];
+  if (state.mode === 'NARUTO') return ['naruto-gate.json'];
   if (state.mode === 'TEAM') return ['team-gate.json'];
   if (state.mode === 'AUTORESEARCH') return ['autoresearch-gate.json'];
   if (state.mode === 'DB') return ['db-review.json'];
@@ -549,6 +569,26 @@ function gateFilesForState(state: any) {
   if (state.mode === 'PPT') return ['ppt-gate.json'];
   if (state.mode === 'IMAGE_UX_REVIEW') return [IMAGE_UX_REVIEW_GATE_ARTIFACT];
   return ['done-gate.json'];
+}
+
+async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}) {
+  const id = state?.mission_id;
+  if (!id) return ['mission_id'];
+  const dir = missionDir(root, id);
+  const required = [
+    'naruto-gate.json',
+    'agents/naruto-work-graph.json',
+    'agents/naruto-role-distribution.json',
+    'agents/naruto-concurrency-governor.json',
+    'agents/naruto-verification-dag.json',
+    'agents/naruto-gpt-final-pack.json'
+  ];
+  const missing: any[] = [];
+  for (const file of required) {
+    if (!(await exists(path.join(dir, file)))) missing.push(file);
+  }
+  if (gate.native_agent_proof === true && !(await exists(path.join(dir, 'agents', 'agent-proof-evidence.json')))) missing.push('agents/agent-proof-evidence.json');
+  return missing;
 }
 
 function extractLastMessage(payload: any) {

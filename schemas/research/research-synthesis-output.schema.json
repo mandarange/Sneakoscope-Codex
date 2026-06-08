@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sneakoscope.dev/research/research-synthesis-output.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "mission_id",
+    "generated_at",
+    "report_markdown",
+    "paper_markdown",
+    "synthesis_summary",
+    "quality_signals",
+    "blockers"
+  ],
+  "properties": {
+    "schema": { "const": "sks.research-synthesis-output.v1" },
+    "mission_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "report_markdown": { "type": "string" },
+    "paper_markdown": { "type": "string" },
+    "synthesis_summary": {
+      "type": "object",
+      "required": [
+        "key_claim_ids",
+        "source_ids_used",
+        "counterevidence_ids_used",
+        "blueprint_sections_used",
+        "experiment_steps_used"
+      ],
+      "properties": {
+        "key_claim_ids": { "type": "array", "items": { "type": "string" } },
+        "source_ids_used": { "type": "array", "items": { "type": "string" } },
+        "counterevidence_ids_used": { "type": "array", "items": { "type": "string" } },
+        "blueprint_sections_used": { "type": "array", "items": { "type": "string" } },
+        "experiment_steps_used": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "quality_signals": {
+      "type": "object",
+      "required": [
+        "report_word_count",
+        "source_citation_count",
+        "unique_source_ids_cited",
+        "key_claims_covered",
+        "repeated_paragraph_ratio",
+        "template_phrase_hits"
+      ],
+      "properties": {
+        "report_word_count": { "type": "number" },
+        "source_citation_count": { "type": "number" },
+        "unique_source_ids_cited": { "type": "number" },
+        "key_claims_covered": { "type": "number" },
+        "repeated_paragraph_ratio": { "type": "number" },
+        "template_phrase_hits": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

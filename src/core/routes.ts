@@ -377,11 +377,15 @@ export const ROUTES = [
     id: 'Team',
     command: '$Team',
     mode: 'TEAM',
-    route: 'multi-agent team orchestration',
-    description: 'Run substantial work through Team only when the proof cone is broad enough: native agents, TriWiki, debate, runtime task graph, fresh executors, review, cleanup, reflection, and Honest Mode.',
+    route: 'deprecated alias to Naruto',
+    description: 'Deprecated compatibility alias. New substantial work is routed to $Naruto, the native shadow-clone swarm SSOT.',
     requiredSkills: ['team', 'pipeline-runner', 'context7-docs', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
     dollarAliases: ['$From-Chat-IMG'],
     appSkillAliases: ['from-chat-img'],
+    deprecated: true,
+    hidden: true,
+    aliasTo: '$Naruto',
+    deprecationMessage: '$Team is deprecated and redirects new execution missions to $Naruto. Existing Team observation commands remain available for old missions.',
     lifecycle: ['native_agent_intake', 'triwiki_refresh', 'planning_debate', 'live_transcript', 'consensus_artifact', 'fresh_implementation_team', 'review_artifact', 'integration_evidence', 'session_cleanup', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
@@ -395,13 +399,13 @@ export const ROUTES = [
     mode: 'NARUTO',
     route: 'hardware-safe massive parallel work swarm',
     description: '$Naruto mode launches a hardware-safe massive parallel work swarm. Clones may implement, modify, verify, test, research, document, and resolve conflicts according to role and lease policy; write-capable output is accepted only through patch envelopes, verification DAG, mutation guard, and GPT final arbiter.',
-    requiredSkills: ['team', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
+    requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$ShadowClone', '$Kagebunshin'],
     appSkillAliases: ['shadow-clone', 'kage-bunshin'],
     lifecycle: ['clone_roster_build', 'massive_work_graph', 'hardware_safe_governor', 'dynamic_active_pool', 'lease_based_write_swarm', 'parallel_verification_dag', 'gpt_final_arbiter_pack', 'per_clone_proof', 'session_cleanup', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
-    stopGate: 'team-gate.json',
+    stopGate: 'naruto-gate.json',
     cliEntrypoint: 'sks naruto run "task" [--clones N] [--backend codex-sdk|fake|ollama] [--parallel-write] | sks naruto status',
     examples: ['$Naruto run sweep the codebase for TODO comments with 50 clones', '$ShadowClone --clones 100 fan out and draft tests for every module']
   },
@@ -621,7 +625,7 @@ export const ROUTES = [
   }
 ];
 
-export const DOLLAR_COMMANDS = ROUTES.flatMap(({ command, route, description, dollarAliases = [] }: any) => [
+export const DOLLAR_COMMANDS = ROUTES.filter((route: any) => route.hidden !== true).flatMap(({ command, route, description, dollarAliases = [] }: any) => [
   { command, route, description },
   ...dollarAliases.map((alias: any) => ({ command: alias, route, description }))
 ]);
@@ -657,11 +661,11 @@ export const COMMAND_CATALOG = [
   { name: 'auth', usage: 'sks auth status|health|repair|setup --host <domain> --api-key <key>', description: 'Shortcut for codex-lb provider auth status, health, repair, and setup commands.' },
   { name: 'openclaw', usage: 'sks openclaw install|path|print [--dir path] [--force] [--json]', description: 'Generate an OpenClaw skill package so OpenClaw agents can discover and use local SKS workflows.' },
   { name: 'hermes', usage: 'sks hermes install|status|path|print [--dir path] [--force] [--json]', description: 'Generate a Hermes Agent skill package so Hermes agents can discover and use local SKS workflows.' },
-  { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks team open-zellij latest | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD and Team lane UI.' },
+  { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks naruto dashboard latest | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD and Naruto lane UI.' },
   { name: 'tmux', usage: 'sks tmux [--json]', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
   { name: 'mad', usage: 'sks --mad [--high]', description: 'Open a one-shot Zellij Codex CLI workspace with the SKS MAD full-access auto-review profile.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
-  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Team.' },
+  { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Naruto.' },
   { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--json]', description: 'Toggle the project-local Fast mode default used by $Fast-On, $Fast-Off, and native-agent routes.' },
   { name: 'with-local-llm', usage: 'sks with-local-llm on|off|status|set-model [--json]', description: 'Toggle the optional local Ollama worker backend used by $with-local-llm-on/$with-local-llm-off and eligible simple worker slices.' },
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
@@ -706,7 +710,7 @@ export const COMMAND_CATALOG = [
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or rollback native multi-session agent missions with agents as target active slots, work items as the route queue size, cleanup executor proof for stale runtime resources, and patch rollback proof for applied patch entries.' },
-  { name: 'team', usage: 'sks team "task" [executor:5 reviewer:6 user:1] [--work-items N] [--target-active-slots N]|log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Create and observe a native-agent-first Team mission with at least five reviewer/QA validation lanes, current-session managed Zellij lanes when available, transcript messages, and cleanup-aware follow panes.' },
+  { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; observation subcommands remain for old Team missions.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -843,12 +847,12 @@ export function routePrompt(prompt: any): any {
       const nestedCommand = dollarCommand(afterModifier);
       if (nestedCommand) return routeByDollarCommand(nestedCommand) || routeById('MadSKS');
       if (looksLikeAnswerOnlyRequest(afterModifier)) return routeById('Answer');
-      if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return routeById('Team');
+      if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return routeById('Naruto');
       return routeById('MadSKS');
     }
     const route = routeByDollarCommand(command) || routeById('SKS');
-    if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return routeById('Team');
-    if (route?.id === 'Team') return route;
+    if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return routeById('Naruto');
+    if (route?.id === 'Team' && command === 'TEAM') return routeById('Naruto');
     return route;
   }
   if (hasFromChatImgSignal(text)) return routeById('Team');
@@ -858,17 +862,17 @@ export function routePrompt(prompt: any): any {
   if (looksLikeImageUxReviewRequest(text)) return routeById('ImageUXReview');
   if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
   if (looksLikeTinyDirectFix(text)) return routeById('DFix');
-  if (looksLikeQuestionShapedDirective(text)) return routeById('Team');
+  if (looksLikeQuestionShapedDirective(text)) return routeById('Naruto');
   if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
   if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return routeById('DB');
-  if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Team');
+  if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Naruto');
   if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Team');
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
   if (/\b(autoresearch|experiment|benchmark|SEO|GEO|ranking|optimi[sz]e|improve metric|discoverability|visibility|github stars?|npm downloads?|검색|노출|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
   if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return routeById('Research');
   if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return routeById('Wiki');
   if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return routeById('GX');
-  if (looksLikeTeamDefaultWork(text)) return routeById('Team');
+  if (looksLikeTeamDefaultWork(text)) return routeById('Naruto');
   return routeById('SKS');
 }
 
@@ -938,7 +942,7 @@ export function routeNeedsContext7(route: any, prompt: any = '') {
 
 export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (!route) return false;
-  if (route.id === 'Team') return true;
+  if (route.id === 'Team' || route.id === 'Naruto') return true;
   if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
   if (route.id === 'PPT') return false;
@@ -968,7 +972,7 @@ export function simpleGitOnlyRouteId(prompt: any = '') {
 
 export function reflectionRequiredForRoute(route: any) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
+  return /^(team|naruto|shadowclone|shadow-clone|kagebunshin|kage-bunshin|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt: any = '') {
@@ -999,7 +1003,7 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   }
   return [
     'Native multi-session policy: REQUIRED for code-changing or execution work in this route.',
-    'The selected SKS route itself authorizes route-owned worker/reviewer native sessions; the user does not need to separately ask for helper sessions when the default Team pipeline is active.',
+	    'The selected SKS route itself authorizes route-owned worker/reviewer native sessions; the user does not need to separately ask for helper sessions when the default Naruto pipeline is active.',
     'Before editing, the parent orchestrator must visibly state the SKS route, split independent write scopes, and run worker/reviewer native sessions whenever the route can be split safely.',
     'Run workers in parallel only with disjoint ownership. The parent owns integration, verification, and final evidence.',
     'If native sessions are unavailable or the work cannot be safely split, record explicit unavailable/unsplittable native-session evidence before editing.',
@@ -1014,7 +1018,7 @@ export function routeReasoning(route: any, prompt: any = '') {
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
   if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\bmad-sks\b|\bmadsks\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
-  if (route?.id === 'Team') return teamRouteReasoning(text);
+  if (route?.id === 'Team' || route?.id === 'Naruto') return teamRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');
   if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|SEO|GEO|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');

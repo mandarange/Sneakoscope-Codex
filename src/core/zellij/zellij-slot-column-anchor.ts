@@ -1,11 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { readZellijSlotTelemetrySnapshot } from './zellij-slot-telemetry.js'
 
 export interface ZellijSlotColumnAnchorInput {
   activeWorkers?: number
   visiblePaneCap?: number
   headlessWorkers?: number
   queueDepth?: number
+  completedWorkers?: number
+  failedWorkers?: number
+  updateAvailableVersion?: string | null
+  madDbActive?: boolean
   mode?: string
   workerRows?: ZellijSlotColumnWorkerRow[]
   maxWorkerRows?: number
@@ -30,7 +35,13 @@ export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput 
   const visible = Math.max(1, nonNegativeInt(input.visiblePaneCap, active || 1))
   const headless = nonNegativeInt(input.headlessWorkers, 0)
   const queue = nonNegativeInt(input.queueDepth, 0)
-  const header = `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}`
+  const done = nonNegativeInt(input.completedWorkers, 0)
+  const fail = nonNegativeInt(input.failedWorkers, 0)
+  const update = input.updateAvailableVersion ? ` · update ${trimInline(input.updateAvailableVersion, 18)} available` : ''
+  const madDb = input.madDbActive ? ' · MAD-DB ACTIVE' : ''
+  const header = done || fail
+    ? `SLOTS active ${active} · headless ${headless} · done ${done} · fail ${fail} · q ${queue}${update}${madDb}`
+    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${madDb}`
   const workers = Array.isArray(input.workerRows) ? input.workerRows : []
   if (!workers.length) return `${header}\nvisible slot panes stack below this anchor`
   const maxRows = Math.max(1, nonNegativeInt(input.maxWorkerRows, input.mode === 'full-debug' ? 24 : 12))
@@ -52,6 +63,12 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
 }): Promise<string> {
   const root = path.resolve(input.artifactRoot)
   const missionDir = inferMissionDir(root, input.missionId)
+  const telemetry = await readZellijSlotTelemetrySnapshot(root, input.missionId).catch(() => null)
+  const updateNotice = await readJson(path.join(missionDir, 'update-notice.json'))
+  const madDb = await readJson(path.join(missionDir, 'mad-db-capability.json'))
+  if (telemetry && Object.keys(telemetry.slots || {}).length) {
+    return renderTelemetryAnchor(telemetry, updateNotice, madDb)
+  }
   const snapshot = await readJson(path.join(missionDir, 'zellij-dashboard-snapshot.json'))
   const rightColumn = await readJson(path.join(missionDir, 'zellij-right-column-state.json'))
   const swarm = await readJson(path.join(root, 'agent-native-cli-session-swarm.json'))
@@ -62,8 +79,27 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   const headlessWorkers = Number(snapshot?.headless_workers ?? workerRows.filter((row) => row.placement === 'headless' && (!row.status || row.status === 'running')).length ?? 0)
   const queueDepth = Number(snapshot?.queue_depth ?? 0)
   const anchorInput: ZellijSlotColumnAnchorInput = { activeWorkers, visiblePaneCap, headlessWorkers, queueDepth, workerRows }
+  if (updateNotice?.update_available && updateNotice.latest_version) anchorInput.updateAvailableVersion = String(updateNotice.latest_version)
+  if (isMadDbActive(madDb)) anchorInput.madDbActive = true
   if (input.mode !== undefined) anchorInput.mode = input.mode
   return renderZellijSlotColumnAnchor(anchorInput)
+}
+
+function renderTelemetryAnchor(snapshot: any, updateNotice: any = null, madDbCapability: any = null): string {
+  const updatedAt = Date.parse(snapshot.updated_at || '')
+  const staleSeconds = Number.isFinite(updatedAt) ? Math.max(0, Math.round((Date.now() - updatedAt) / 1000)) : null
+  const counts = snapshot.counts || {}
+  const active = Number(counts.running || 0) + Number(counts.verifying || 0)
+  const update = updateNotice?.update_available && updateNotice?.latest_version ? ` · update ${trimInline(String(updateNotice.latest_version), 18)} available` : ''
+  const madDb = isMadDbActive(madDbCapability) ? ' · MAD-DB ACTIVE' : ''
+  if (staleSeconds != null && staleSeconds > 10) return `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${madDb}`
+  return `SLOTS active ${active} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${madDb}`
+}
+
+function isMadDbActive(capability: any) {
+  if (!capability || capability.enabled !== true || capability.consumed === true) return false
+  const expires = Date.parse(capability.expires_at || '')
+  return Number.isFinite(expires) && expires > Date.now()
 }
 
 export function buildZellijSlotColumnAnchorCommand(input: {

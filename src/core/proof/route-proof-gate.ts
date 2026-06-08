@@ -1,7 +1,7 @@
 import { containsPlaintextSecret } from '../secret-redaction.js';
 import { readRouteProof } from './proof-reader.js';
 import { validateCompletionProof } from './validation.js';
-import { proofStatusBlocks, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
+import { normalizeProofRoute, proofStatusBlocks, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
 import { routeRequiresAgentIntake } from '../agents/agent-plan.js';
 
 export async function validateRouteCompletionProof(root: any, { missionId = null, route = null, state = {}, visualClaim = undefined }: any = {}) {
@@ -29,9 +29,11 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
     if (!agents) issues.push('agent_proof_evidence_missing');
     else {
       if (agents.status !== 'passed' || agents.ok !== true) issues.push('agent_gate_not_passed');
+      const normalizedRoute = normalizeProofRoute(route || proof.route);
+      const maxAgentCount = normalizedRoute === '$Naruto' ? 100 : 20;
       const agentCount = Number(agents.agent_count || 0);
       if (agentCount < 5) issues.push('agent_count_below_5');
-      if (agentCount > 20) issues.push('agent_count_above_20');
+      if (agentCount > maxAgentCount) issues.push(`agent_count_above_${maxAgentCount}`);
       if (agents.all_sessions_closed !== true) issues.push('agent_sessions_not_closed');
       if (agents.no_overlap_ok !== true) issues.push('agent_no_overlap_not_ok');
       if (agents.ledger_hash_chain_ok !== true) issues.push('agent_ledger_hash_chain_not_ok');

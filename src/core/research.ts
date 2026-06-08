@@ -16,6 +16,7 @@ import { validateFalsificationCoverage } from './research/falsification.js';
 import { writeResearchHandoffArtifacts } from './research/research-handoff.js';
 import { RESEARCH_WORK_GRAPH_ARTIFACT, writeResearchWorkGraph } from './research/research-work-graph.js';
 import { researchPromptContractText, validateResearchPromptContract } from './research/research-prompt-contract.js';
+import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research/research-realistic-report.js';
 
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
 export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
@@ -923,6 +924,7 @@ export async function evaluateResearchGate(dir: any) {
   const reportPresent = await exists(path.join(dir, 'research-report.md'));
   const reportText = reportPresent ? await readText(path.join(dir, 'research-report.md'), '') : '';
   const reportQuality = analyzeResearchReportQuality(reportText);
+  const synthesisOutput = await readJson(path.join(dir, 'research-synthesis-output.json'), null);
   const reportWordCount = countWords(reportText);
   const paperArtifact = await findResearchPaperArtifact(dir, plan);
   const paperPresent = paperArtifact.exists;
@@ -1058,6 +1060,18 @@ export async function evaluateResearchGate(dir: any) {
       report_word_count: reportWordCount,
       report_min_words: contract.min_report_words,
       report_quality: reportQuality,
+      report_repetition: reportQuality.repetition,
+      source_density_per_1000_words: reportQuality.source_density_per_1000_words,
+      claim_density_per_1000_words: reportQuality.claim_density_per_1000_words,
+      template_phrase_hits: reportQuality.repetition?.template_phrase_hits || [],
+      synthesis: {
+        writer: synthesisOutput ? (sourceLedger?.mode === 'selftest_mock' ? 'mock' : 'codex-sdk evidence-bound writer') : 'missing',
+        repetition_ratio: reportQuality.repetition?.repeated_paragraph_ratio ?? null,
+        source_density_per_1000_words: reportQuality.source_density_per_1000_words,
+        claim_density_per_1000_words: reportQuality.claim_density_per_1000_words,
+        template_phrase_hits: reportQuality.repetition?.template_phrase_hits || [],
+        codex_final_review_verdict: finalReview?.codex_review?.verdict || null
+      },
       web_search_passes: webSearchPasses,
       paper_sections: Math.max(Number(gate.paper_sections || 0), paperSections),
       genius_opinion_summary_present: geniusSummaryPresent || gate.genius_opinion_summary_present === true,
@@ -1405,56 +1419,50 @@ export async function writeMockResearchResult(dir: any, plan: any) {
   await writeJsonAtomic(path.join(dir, 'falsification-ledger.json'), falsificationLedger);
   await writeJsonAtomic(path.join(dir, 'novelty-ledger.json'), ledger);
   await writeTextAtomic(path.join(dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), `${geniusSummary}\n`);
-  const evidenceParagraphs = Array.from({ length: 72 }, (_unused, index) => {
-    const claimId = mockClaimIds[index % mockClaimIds.length];
-    const sourceA = `mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`;
-    const sourceB = `mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 8}`;
-    const counter = index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2';
-    return `Quality note ${index + 1}: claim ${claimId} is treated as a falsifiable research-pipeline assertion, not a fact about live web evidence. The mock run cites ${sourceA} and ${sourceB}, compares the claim with ${counter}, and preserves the implementation handoff as read-only evidence. This repeated fixture text deliberately keeps the selftest report above the quality-contract word floor while still naming the same source-ledger ids that the gate verifies.`;
+  const mockSourceIds = [...mockLayerSources.map((source: any) => source.id), 'mock-counter-1', 'mock-counter-2'];
+  const mockCounterIds = ['mock-counter-1', 'mock-counter-2'];
+  const researchReportText = buildRealisticResearchReport({
+    plan,
+    claims: claimMatrix.claims,
+    sourceIds: mockSourceIds,
+    counterevidenceIds: mockCounterIds,
+    blueprint,
+    falsificationLedger,
+    experimentPlan,
+    replicationPack
   });
-  const researchReportText = [
-    '# SKS Research Report',
-    '',
-    `Prompt: ${plan.prompt}`,
-    '',
-    '## Question',
-    'Can SKS Research Mode close a research mission only when it has enough sourced claims, counterevidence, falsification, implementation handoff material, and replication evidence to support a downstream execution route?',
-    '',
-    '## Methodology',
-    'This mock run is a selftest fixture, so it does not claim live web retrieval. It exercises the same artifact contract that real research must satisfy: layered source ledger entries, source quality fields, claim-evidence matrix rows, falsification cases, a blueprint, an experiment plan, a replication pack, and a final reviewer decision.',
-    '',
-    '## Source Map',
-    'The source ledger contains two mock sources per source layer plus two counterevidence records. The source ids include mock-source-1 through mock-source-14, and the counterevidence ids include mock-counter-1 and mock-counter-2. Each source row includes layer, kind, locator, publisher_or_author, accessed_at, reliability, credibility, stance, and claim_ids.',
-    '',
-    '## Key Claims',
-    ...ledger.entries.map((entry: any) => `- ${entry.id}: ${entry.claim} Sources: ${(entry.source_ids || []).join(', ')}. Counterevidence: ${(entry.counterevidence_ids || entry.falsifiers || []).join(', ')}.`),
-    '',
-    '## Evidence Matrix Summary',
-    `The claim-evidence matrix records ${claimMatrix.key_claim_ids.length} key claims and ${claimMatrix.triangulated_claim_count} triangulated claims. Each critical or high-importance claim has at least one source id and one counterevidence id, and each hypothesis has a test_or_probe field for follow-up validation.`,
-    '',
-    '## Counterevidence',
-    'The first counterexample, mock-counter-1, attacks overclaiming without decisive tests. The second counterexample, mock-counter-2, attacks missing replication and thin experiment plans. Both are intentionally simple but give the gate two independent counterevidence entries to verify.',
-    '',
-    '## Falsification',
-    'The falsification ledger includes four cases. They attack summary-only output, missing independent confirmation, absent counterevidence, and absent replication. The cases survive only as gate-backed requirements, not as proof that the mock topic was researched on the live web.',
-    '',
-    '## Implementation Blueprint',
-    'The implementation blueprint has eight sections: problem, decision, architecture, interfaces, data contracts, execution plan, verification plan, and risks and rollbacks. The key point is that Research does not change repository source. It creates a handoff for a later $Team route that can validate the research and then decide what to implement.',
-    '',
-    '## Experiment / Validation Plan',
-    'The experiment plan contains five steps: compare a baseline and research output, score cited key claims, run the smallest implementation probe, compare falsification outcomes, and record replication commands. The replication pack lists the commands and expected artifacts needed to reproduce the gate.',
-    '',
-    '## Limitations',
-    'This is mock evidence for harness verification. It proves the local artifact contract and gate behavior, not live research accuracy. A normal non-mock run must still collect real sources and must keep the gate blocked if source access is unavailable.',
-    '',
-    '## References',
-    '- mock-source-1 through mock-source-14: layered mock sources generated by writeMockResearchResult.',
-    '- mock-counter-1 and mock-counter-2: counterevidence fixtures generated by writeMockResearchResult.',
-    '',
-    ...evidenceParagraphs
-  ].join('\n\n');
+  const researchPaperText = buildRealisticResearchPaper({
+    plan,
+    claims: claimMatrix.claims,
+    sourceIds: mockSourceIds,
+    counterevidenceIds: mockCounterIds
+  });
+  const reportQuality = analyzeResearchReportQuality(researchReportText);
+  await writeJsonAtomic(path.join(dir, 'research-synthesis-output.json'), {
+    schema: 'sks.research-synthesis-output.v1',
+    mission_id: plan?.mission_id || '',
+    generated_at: nowIso(),
+    report_markdown: researchReportText,
+    paper_markdown: researchPaperText,
+    synthesis_summary: {
+      key_claim_ids: claimMatrix.key_claim_ids,
+      source_ids_used: mockSourceIds,
+      counterevidence_ids_used: mockCounterIds,
+      blueprint_sections_used: blueprint.sections.map((section: any) => section.id),
+      experiment_steps_used: experimentPlan.steps.map((step: any) => step.id)
+    },
+    quality_signals: {
+      report_word_count: reportQuality.word_count,
+      source_citation_count: reportQuality.source_id_mentions.length,
+      unique_source_ids_cited: mockSourceIds.filter((id) => researchReportText.includes(id)).length,
+      key_claims_covered: claimMatrix.key_claim_ids.filter((id: string) => researchReportText.includes(id)).length,
+      repeated_paragraph_ratio: reportQuality.repetition.repeated_paragraph_ratio,
+      template_phrase_hits: reportQuality.repetition.template_phrase_hits
+    },
+    blockers: reportQuality.blockers
+  });
   await writeTextAtomic(path.join(dir, 'research-report.md'), `${researchReportText}\n`);
-  await writeTextAtomic(path.join(dir, paperArtifact), `# Research Paper: ${plan.prompt}\n\n## Abstract\nA source-cited research run should produce cross-layer, falsifiable novelty rather than only summarize known material.\n\n## Introduction\nThe mock topic is evaluated as a research workflow outcome with layered source coverage [mock-source-1].\n\n## Methodology\nFive xhigh agents produce Eureka ideas, debate, triangulate source layers, and falsify the strongest claim.\n\n## Findings\nThe surviving finding is that useful research needs cited novelty, source-layer coverage, cross-layer triangulation, and a cheap decisive probe.\n\n## Discussion\nThe debate favors gate-backed evidence over narrative confidence, and treats public discourse as signal rather than truth.\n\n## Limitations and Falsification\nThe claim fails without sources, counterevidence, triangulation checks, or testable predictions [mock-counter-1].\n\n## Conclusion and Next Experiment\nCompare this loop against a summary-only baseline and score testable insights.\n\n## References\n- [mock-source-1] Mock academic literature coverage.\n- [mock-source-2] Mock official government and leading-institution knowledge coverage.\n- [mock-source-3] Mock standards and primary documents coverage.\n- [mock-source-4] Mock current news and global reporting coverage.\n- [mock-source-5] Mock public discourse coverage.\n- [mock-source-6] Mock developer and practitioner knowledge coverage.\n- [mock-source-7] Mock counterevidence and fact-checking coverage.\n- [mock-counter-1] Mock overclaim counterexample.\n`);
+  await writeTextAtomic(path.join(dir, paperArtifact), `${researchPaperText}\n`);
   await writeJsonAtomic(path.join(dir, 'research-gate.json'), {
     ...defaultResearchGate(),
     passed: true,
@@ -1500,6 +1508,10 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     missing_evidence: [],
     blueprint_findings: ['mock complete package fixture has implementation blueprint sections'],
     falsification_findings: ['mock complete package fixture has counterevidence and falsification cases'],
+    template_like_prose: false,
+    source_density_ok: true,
+    implementation_concreteness_ok: true,
+    evidence_bound_synthesis_ok: true,
     required_revisions: [],
     confidence: 'high',
     mock: true
