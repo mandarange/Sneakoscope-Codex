@@ -2,6 +2,8 @@ import { renderZellijSlotPaneFromArtifacts } from '../core/zellij/zellij-slot-pa
 
 export async function run(_command: string = 'zellij-slot-pane', args: string[] = []) {
   const artifactDir = readOption(args, '--artifact-dir', process.cwd()) || process.cwd()
+  const artifactRoot = readOption(args, '--artifact-root', artifactDir) || artifactDir
+  const missionId = readOption(args, '--mission', '') || ''
   const slotId = readOption(args, '--slot', 'slot-001') || 'slot-001'
   const generationIndex = Number(readOption(args, '--generation', '1') || 1)
   const backend = readOption(args, '--backend', null)
@@ -10,7 +12,7 @@ export async function run(_command: string = 'zellij-slot-pane', args: string[] 
   const watch = hasFlag(args, '--watch')
   const intervalMs = Math.max(250, Number(readOption(args, '--interval-ms', '1000') || 1000))
   for (;;) {
-    const text = await renderZellijSlotPaneFromArtifacts({ artifactDir, slotId, generationIndex, backend, role, mode })
+    const text = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex, backend, role, mode })
     process.stdout.write('\x1Bc' + text + '\n')
     if (!watch) break
     await new Promise((resolve) => setTimeout(resolve, intervalMs))

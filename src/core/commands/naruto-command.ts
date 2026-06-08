@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { createMission, findLatestMission, loadMission } from '../mission.js'
+import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js'
 import { nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { classifyOllamaWorkerSlice } from '../agents/agent-runner-ollama.js'
@@ -233,6 +233,51 @@ async function narutoRun(parsed: NarutoArgs) {
     placeholderGuard,
     gitWorktreeCapability
   })
+  await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
+    schema: 'sks.naruto-gate.v1',
+    passed: false,
+    mission_id: mission.id,
+    clone_roster_built: true,
+    clone_count: roster.agent_count,
+    work_graph_ready: workGraph.ok === true,
+    role_distribution_ready: roleDistribution.ok === true,
+    allocation_ready: allocationPolicy.ok === true,
+    rebalance_ready: rebalancePolicy.ok === true,
+    concurrency_governor_ready: true,
+    active_pool_simulated: activePool.ok === true,
+    verification_dag_ready: true,
+    gpt_final_pack_ready: true,
+    zellij_dashboard_ready: zellijDashboard.ok === true,
+    native_agent_proof: false,
+    final_arbiter_accepted: false,
+    session_cleanup: false,
+    blockers: [],
+    updated_at: nowIso()
+  })
+  await setCurrent(root, {
+    mission_id: mission.id,
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mode: 'NARUTO',
+    phase: 'NARUTO_NATIVE_AGENT_INTAKE',
+    questions_allowed: false,
+    implementation_allowed: true,
+    context7_required: false,
+    context7_verified: parsed.mock,
+    subagents_required: true,
+    subagents_verified: false,
+    native_sessions_required: true,
+    native_sessions_verified: false,
+    reflection_required: true,
+    visible_progress_required: true,
+    required_skills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
+    stop_gate: 'naruto-gate.json',
+    clone_count: roster.agent_count,
+    target_active_slots: activeSlots,
+    work_graph_ready: workGraph.ok === true,
+    naruto_gate_file: 'naruto-gate.json',
+    prompt: parsed.prompt
+  })
   let liveZellij: any = null
   if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
     liveZellij = await launchZellijLayout({
@@ -305,6 +350,41 @@ async function narutoRun(parsed: NarutoArgs) {
     narutoAllocationPolicy: allocationPolicy,
     narutoRebalancePolicy: rebalancePolicy,
     json: parsed.json
+  })
+  const nativeProofOk = result.proof?.ok === true || result.proof?.status === 'passed'
+  const finalAccepted = result.proof?.status === 'passed' || result.proof?.gpt_final_status === 'approved'
+  await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
+    schema: 'sks.naruto-gate.v1',
+    passed: result.ok === true && nativeProofOk && finalAccepted,
+    mission_id: mission.id,
+    clone_roster_built: true,
+    clone_count: roster.agent_count,
+    work_graph_ready: workGraph.ok === true,
+    role_distribution_ready: roleDistribution.ok === true,
+    allocation_ready: allocationPolicy.ok === true,
+    rebalance_ready: rebalancePolicy.ok === true,
+    concurrency_governor_ready: true,
+    active_pool_simulated: activePool.ok === true,
+    verification_dag_ready: true,
+    gpt_final_pack_ready: true,
+    zellij_dashboard_ready: zellijDashboard.ok === true,
+    native_agent_proof: nativeProofOk,
+    final_arbiter_accepted: finalAccepted,
+    session_cleanup: result.proof?.all_sessions_closed === true || nativeProofOk,
+    blockers: result.proof?.blockers || [],
+    updated_at: nowIso()
+  })
+  await setCurrent(root, {
+    mission_id: mission.id,
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mode: 'NARUTO',
+    phase: result.ok === true ? 'NARUTO_COMPLETE_OR_REVIEW' : 'NARUTO_BLOCKED',
+    native_sessions_verified: nativeProofOk,
+    subagents_verified: nativeProofOk,
+    naruto_gate_file: 'naruto-gate.json',
+    stop_gate: 'naruto-gate.json',
+    prompt: parsed.prompt
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
   const localWorkerSummary = summarizeNarutoLocalWorkerResult(localWorker, result)

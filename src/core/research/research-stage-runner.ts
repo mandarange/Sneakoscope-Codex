@@ -11,6 +11,7 @@ import { renderImplementationBlueprintMarkdown } from './implementation-blueprin
 import { readImplementationBlueprint, validateImplementationBlueprint, writeImplementationBlueprint } from './implementation-blueprint.js'
 import { writeResearchHandoffArtifacts } from './research-handoff.js'
 import { runResearchCodexFinalReviewer, runResearchFinalReviewer, runResearchStaticFinalReview } from './research-final-reviewer.js'
+import { runResearchCodexSynthesisWriter, validateResearchSynthesisOutput, type ResearchSynthesisOutput } from './research-synthesis-writer.js'
 import { buildResearchSourceShardPrompt, defaultResearchSourceShardOutput, researchSourceLayerById, researchSourceShardOutputSchema, validateResearchSourceShardOutput } from './research-source-shards.js'
 import { mergeResearchSourceShards } from './research-source-ledger-merge.js'
 import { evaluateResearchGate, researchPaperArtifactForPlan, RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, researchAgentAgentName, RESEARCH_PAPER_SECTION_GROUPS } from '../research.js'
@@ -219,6 +220,7 @@ async function runExperimentPlanStage(input: StageInput, startedAt: string): Pro
 async function runSynthesisStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
   const claimMatrix = await readJson(path.join(input.dir, 'claim-evidence-matrix.json'), null)
   const sourceLedger = await readJson(path.join(input.dir, 'source-ledger.json'), null)
+  const contract = await readJson(path.join(input.dir, 'research-quality-contract.json'), null)
   const claims = Array.isArray(claimMatrix?.claims) ? claimMatrix.claims : []
   const sourceIds = [
     ...(Array.isArray(sourceLedger?.sources) ? sourceLedger.sources : []),
@@ -244,9 +246,43 @@ async function runSynthesisStage(input: StageInput, startedAt: string): Promise<
   await writeJsonAtomic(path.join(input.dir, 'agent-ledger.json'), buildAgentLedger(input.plan, sourceIds))
   await writeJsonAtomic(path.join(input.dir, 'debate-ledger.json'), buildDebateLedger(sourceIds))
   await writeTextAtomic(path.join(input.dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), buildGeniusSummary(input.plan))
-  await writeTextAtomic(path.join(input.dir, 'research-report.md'), buildResearchReport(input.plan, claims, sourceIds))
-  await writeTextAtomic(path.join(input.dir, researchPaperArtifactForPlan(input.plan)), buildResearchPaper(input.plan, sourceIds))
-  return baseResult(input, startedAt, 'synthesis', 'passed', ['research-report.md', researchPaperArtifactForPlan(input.plan), RESEARCH_GENIUS_SUMMARY_ARTIFACT, 'agent-ledger.json', 'debate-ledger.json', 'novelty-ledger.json'], [], { claims: claims.length, sources: sourceIds.length })
+  if (input.mock || input.backend === 'mock' || input.backend === 'deterministic') {
+    return runDeterministicMockSynthesisStage(input, startedAt, { claimMatrix, sourceLedger, contract, claims, sourceIds })
+  }
+  const synthesis = await runResearchCodexSynthesisWriter({
+    root: input.root,
+    dir: input.dir,
+    plan: input.plan,
+    cycle: input.cycle,
+    timeoutMs: input.timeoutMs,
+    backendPreference: input.backend === 'python-codex-sdk' ? ['python-codex-sdk', 'codex-sdk'] : ['codex-sdk', 'python-codex-sdk']
+  })
+  const validation = validateResearchSynthesisOutput(synthesis, contract, claimMatrix, sourceLedger)
+  return synthesisStageResult(input, startedAt, synthesis, validation, 'codex')
+}
+
+async function runDeterministicMockSynthesisStage(input: StageInput, startedAt: string, artifacts: any): Promise<ResearchStageResult> {
+  const synthesis = await runResearchCodexSynthesisWriter({
+    root: input.root,
+    dir: input.dir,
+    plan: { ...input.plan, backend: input.backend },
+    cycle: input.cycle,
+    timeoutMs: input.timeoutMs,
+    mock: true
+  })
+  const validation = validateResearchSynthesisOutput(synthesis, artifacts.contract, artifacts.claimMatrix, artifacts.sourceLedger)
+  return synthesisStageResult(input, startedAt, synthesis, validation, input.backend === 'deterministic' ? 'deterministic' : 'mock')
+}
+
+function synthesisStageResult(input: StageInput, startedAt: string, synthesis: ResearchSynthesisOutput, validation: { ok: boolean; blockers: string[] }, writer: 'codex' | 'mock' | 'deterministic'): ResearchStageResult {
+  const artifacts = ['research-synthesis-output.json', 'research-report.md', researchPaperArtifactForPlan(input.plan), RESEARCH_GENIUS_SUMMARY_ARTIFACT, 'agent-ledger.json', 'debate-ledger.json', 'novelty-ledger.json']
+  const blockers = [...new Set([...(validation.blockers || []), ...(synthesis.blockers || [])])]
+  return baseResult(input, startedAt, 'synthesis', validation.ok && blockers.length === 0 ? 'passed' : 'blocked', artifacts, blockers, {
+    synthesis_writer: writer === 'codex' ? 'codex-sdk' : writer,
+    claims: synthesis.synthesis_summary.key_claim_ids.length,
+    sources: synthesis.synthesis_summary.source_ids_used.length,
+    ...synthesis.quality_signals
+  })
 }
 
 async function runFinalReviewStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
@@ -489,13 +525,7 @@ function buildGeniusSummary(plan: any) {
   ].join('\n')
 }
 
-function buildResearchReport(plan: any, claims: any[], sourceIds: string[]) {
-  const paragraphs = Array.from({ length: 72 }, (_unused, index) => {
-    const claim = claims[index % Math.max(1, claims.length)] || { id: `claim-${index + 1}`, claim: 'stage-aware research runtime evidence is required' }
-    const sourceA = sourceIds[index % Math.max(1, sourceIds.length)] || 'source-ledger'
-    const sourceB = sourceIds[(index + 1) % Math.max(1, sourceIds.length)] || 'claim-evidence-matrix'
-    return `Runtime evidence note ${index + 1}: ${claim.id} is evaluated as a falsifiable claim, not as narrative filler. The synthesis cites ${sourceA} and ${sourceB}, checks counterevidence where available, and keeps implementation guidance in the blueprint rather than mutating source files during Research. This paragraph exists to make report quality measurable while still tying every repeated claim back to source-ledger ids and stage artifacts.`
-  })
+function buildDeterministicMockResearchReport(plan: any, claims: any[], sourceIds: string[]) {
   return [
     '# SKS Research Report',
     '',
@@ -533,12 +563,11 @@ function buildResearchReport(plan: any, claims: any[], sourceIds: string[]) {
     '',
     '## References',
     ...sourceIds.map((id) => `- ${id}`),
-    '',
-    ...paragraphs
+    ''
   ].join('\n\n') + '\n'
 }
 
-function buildResearchPaper(plan: any, sourceIds: string[]) {
+function buildDeterministicMockResearchPaper(plan: any, sourceIds: string[]) {
   return [
     `# Research Paper: ${plan?.prompt || 'Stage-aware research runtime'}`,
     '',

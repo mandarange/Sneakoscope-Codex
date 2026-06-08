@@ -4,6 +4,7 @@ import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { resolveFastModePolicy } from './fast-mode-policy.js'
 import { runNativeWorkerBackendRouter } from './native-worker-backend-router.js'
+import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type ZellijSlotTelemetryStatus } from '../zellij/zellij-slot-telemetry.js'
 
 export const NATIVE_CLI_WORKER_SCHEMA = 'sks.native-cli-worker.v1'
 
@@ -51,7 +52,7 @@ export async function runNativeCliWorker(input: any = {}) {
     worker_env: process.env.SKS_AGENT_WORKER === '1',
     violations: recursion.violations
   }
-  await writeJsonAtomic(path.join(workerDir, 'worker-intake.json'), {
+	  await writeJsonAtomic(path.join(workerDir, 'worker-intake.json'), {
     schema: NATIVE_CLI_WORKER_SCHEMA,
     generated_at: nowIso(),
     parent_mission_id: String(intake.parent_mission_id || input.parentMissionId || intake.mission_id || ''),
@@ -83,8 +84,16 @@ export async function runNativeCliWorker(input: any = {}) {
     goal_mode_ref: agent.goal_mode_ref || intake.goal_mode_ref || null,
     strategy_refs: slice.strategy_refs || intake.strategy_refs || null,
     no_recursive_orchestrator_guard: guard.ok
-  })
-  await appendJsonl(path.resolve(agentRoot, heartbeatRel), {
+	  })
+	  await workerTelemetry(agentRoot, intake, agent, slice, {
+	    eventType: 'task_started',
+	    status: 'running',
+	    backend,
+	    serviceTier: policy.service_tier,
+	    artifacts: [path.join(workerDirRel, 'worker-intake.json'), heartbeatRel],
+	    logTail: String(slice.description || slice.title || slice.id || 'worker task started')
+	  })
+	  await appendJsonl(path.resolve(agentRoot, heartbeatRel), {
     schema: 'sks.native-cli-worker-heartbeat.v1',
     ts: nowIso(),
     event: 'started',
@@ -93,8 +102,16 @@ export async function runNativeCliWorker(input: any = {}) {
     slot_id: agent.slot_id || null,
     generation_index: agent.generation_index || null,
     fast_mode: policy.fast_mode,
-    service_tier: policy.service_tier
-  })
+	    service_tier: policy.service_tier
+	  })
+	  await workerTelemetry(agentRoot, intake, agent, slice, {
+	    eventType: 'heartbeat',
+	    status: 'running',
+	    backend,
+	    serviceTier: policy.service_tier,
+	    artifacts: [heartbeatRel],
+	    logTail: 'worker heartbeat started'
+	  })
   await writeJsonAtomic(path.join(workerDir, 'worker-fast-mode.json'), {
     schema: 'sks.native-cli-worker-fast-mode.v1',
     generated_at: nowIso(),
@@ -121,16 +138,24 @@ export async function runNativeCliWorker(input: any = {}) {
     guard
   })
   const patchEnvelopes = routed.patchEnvelopes
-  if (patchEnvelopes.length) {
-    await writeJsonAtomic(path.resolve(agentRoot, patchRel), {
+	  if (patchEnvelopes.length) {
+	    await writeJsonAtomic(path.resolve(agentRoot, patchRel), {
       schema: 'sks.native-cli-worker-patch-envelope.v1',
       generated_at: nowIso(),
       ok: true,
       envelope_count: patchEnvelopes.length,
       proof_level: routed.report.proof_level,
-      envelopes: patchEnvelopes
-    })
-  } else {
+	      envelopes: patchEnvelopes
+	    })
+	    await workerTelemetry(agentRoot, intake, agent, slice, {
+	      eventType: 'patch_candidate',
+	      status: 'running',
+	      backend,
+	      serviceTier: policy.service_tier,
+	      artifacts: [patchRel],
+	      logTail: `patch envelopes ${patchEnvelopes.length}`
+	    })
+	  } else {
     noPatchReason = {
       schema: 'sks.native-cli-worker-no-patch-reason.v1',
       generated_at: nowIso(),
@@ -142,8 +167,17 @@ export async function runNativeCliWorker(input: any = {}) {
       backend,
       blockers: Array.isArray(slice.write_paths) && slice.write_paths.length && backend !== 'fake' ? ['write_capable_no_patch_envelope'] : []
     }
-    await writeJsonAtomic(path.join(workerDir, 'worker-no-patch-reason.json'), noPatchReason)
-  }
+	    await writeJsonAtomic(path.join(workerDir, 'worker-no-patch-reason.json'), noPatchReason)
+	    await workerTelemetry(agentRoot, intake, agent, slice, {
+	      eventType: 'artifact_written',
+	      status: 'running',
+	      backend,
+	      serviceTier: policy.service_tier,
+	      artifacts: [path.join(workerDirRel, 'worker-no-patch-reason.json')],
+	      blockers: noPatchReason.blockers || [],
+	      logTail: noPatchReason.reason
+	    })
+	  }
   const minRuntimeMs = Number(intake.min_runtime_ms || input.minRuntimeMs || 0)
   if (Number.isFinite(minRuntimeMs) && minRuntimeMs > 0) await delay(Math.min(30000, Math.floor(minRuntimeMs)))
   const report = {
@@ -222,7 +256,16 @@ export async function runNativeCliWorker(input: any = {}) {
     verification: { status: guard.ok && routed.result.status === 'done' ? 'passed' : 'failed', checks: [...(routed.result.verification?.checks || []), 'native-cli-worker-process', 'worker-artifact-contract', 'fast-mode-policy', 'native-worker-backend-router'] },
     recursion_guard: { ok: guard.ok, violations: guard.violations }
   })
-  await writeJsonAtomic(path.resolve(agentRoot, resultRel), result)
+	  await writeJsonAtomic(path.resolve(agentRoot, resultRel), result)
+	  await workerTelemetry(agentRoot, intake, agent, slice, {
+	    eventType: result.status === 'done' ? 'worker_completed' : 'worker_failed',
+	    status: result.status === 'done' ? 'completed' : 'failed',
+	    backend,
+	    serviceTier: policy.service_tier,
+	    artifacts: result.artifacts || [],
+	    blockers: result.blockers || [],
+	    logTail: result.summary || ''
+	  })
   await writeJsonAtomic(path.join(workerDir, 'worker-session-proof.json'), {
     schema: 'sks.native-cli-worker-session-proof.v1',
     generated_at: nowIso(),
@@ -249,14 +292,23 @@ export async function runNativeCliWorker(input: any = {}) {
     service_tier: policy.service_tier,
     blockers: result.blockers
   })
-  await appendJsonl(path.resolve(agentRoot, heartbeatRel), {
+	  await appendJsonl(path.resolve(agentRoot, heartbeatRel), {
     schema: 'sks.native-cli-worker-heartbeat.v1',
     ts: nowIso(),
     event: 'finished',
     pid: process.pid,
     session_id: agent.session_id,
-    status: result.status
-  })
+	    status: result.status
+	  })
+	  await workerTelemetry(agentRoot, intake, agent, slice, {
+	    eventType: 'heartbeat',
+	    status: result.status === 'done' ? 'completed' : 'failed',
+	    backend,
+	    serviceTier: policy.service_tier,
+	    artifacts: [heartbeatRel, resultRel],
+	    blockers: result.blockers || [],
+	    logTail: 'worker heartbeat finished'
+	  })
   await writeJsonAtomic(path.join(workerDir, 'worker-terminal-close-report.json'), {
     schema: 'sks.native-cli-worker-terminal-close-report.v1',
     generated_at: nowIso(),
@@ -320,4 +372,45 @@ function normalizeWorkerWorktree(value: any): {
     branch: String(value?.branch || 'unknown'),
     main_repo_root: value?.main_repo_root == null ? null : String(value.main_repo_root)
   }
+}
+
+async function workerTelemetry(agentRoot: string, intake: any, agent: any, slice: any, input: {
+  eventType: ZellijSlotTelemetryEventType
+  status: ZellijSlotTelemetryStatus
+  backend: string
+  serviceTier: string
+  artifacts?: string[]
+  blockers?: string[]
+  logTail?: string
+}) {
+  const missionId = String(intake.mission_id || intake.parent_mission_id || '')
+  if (!missionId) return
+  await appendZellijSlotTelemetry(agentRoot, {
+    schema: 'sks.zellij-slot-telemetry-event.v1',
+    ts: nowIso(),
+    mission_id: missionId,
+    slot_id: String(agent.slot_id || agent.id || 'slot-001'),
+    generation_index: Number(agent.generation_index || 1),
+    worker_id: String(agent.id || agent.slot_id || 'worker'),
+    event_type: input.eventType,
+    status: input.status,
+    role: String(agent.naruto_role || agent.role || agent.persona_id || agent.id || 'worker'),
+    backend: input.backend,
+    service_tier: input.serviceTier,
+    worktree_id: agent.worktree?.id || slice.worktree?.id || intake.worktree?.id || null,
+    worktree_path: agent.worktree?.path || slice.worktree?.path || intake.worktree?.path || null,
+    task_title: String(slice.description || slice.title || slice.id || 'worker task'),
+    current_file: firstString([slice.write_paths?.[0], slice.readonly_paths?.[0], slice.input_files?.[0]]) || null,
+    artifact_paths: input.artifacts || [],
+    log_tail: input.logTail || '',
+    blockers: input.blockers || []
+  }).catch(() => undefined)
+}
+
+function firstString(values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim()
+    if (text) return text
+  }
+  return null
 }

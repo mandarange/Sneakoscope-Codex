@@ -28,6 +28,12 @@ export interface ZellijDashboardSnapshot {
   }
   gpt_final_status: string
   gate_progress: string
+  update_notice?: {
+    update_available: boolean
+    latest_version: string | null
+    source: string
+    message?: string
+  } | null
   patch_verify: {
     patches: number
     gpt_approved: number
@@ -73,6 +79,7 @@ export function buildZellijDashboardSnapshot(input: Partial<ZellijDashboardSnaps
     local_llm: input.local_llm || { tps: 0, queue: 0 },
     gpt_final_status: input.gpt_final_status || 'not_started',
     gate_progress: input.gate_progress || 'not_release',
+    update_notice: input.update_notice || null,
     patch_verify: input.patch_verify || {
       patches: 0,
       gpt_approved: 0,
@@ -102,6 +109,7 @@ export function renderZellijDashboardText(snapshot: ZellijDashboardSnapshot): st
     `Local LLM TPS / queue: ${snapshot.local_llm.tps}/${snapshot.local_llm.queue}`,
     `GPT final status: ${snapshot.gpt_final_status}`,
     `Gate progress: ${snapshot.gate_progress}`,
+    `Update notice: ${snapshot.update_notice?.update_available ? `${snapshot.update_notice.latest_version || 'available'} available` : (snapshot.update_notice ? `none (${snapshot.update_notice.source})` : 'not checked')}`,
     `Patch / verify: patches ${snapshot.patch_verify.patches} · approved ${snapshot.patch_verify.gpt_approved} · conflicts ${snapshot.patch_verify.conflicts} · verify ${snapshot.patch_verify.verification_running}/${snapshot.patch_verify.verification_passed}/${snapshot.patch_verify.verification_failed}`,
     'Workers:',
     ...(snapshot.workers.length ? snapshot.workers.slice(0, 12).map((worker) => `${worker.slot_id} gen-${worker.generation_index} ${worker.role} ${worker.backend}/${worker.provider}/${worker.service_tier} WT:${worker.worktree_id || '-'} ${worker.status} ${worker.current_file || ''} ${worker.latest_heartbeat || ''}`) : ['none']),

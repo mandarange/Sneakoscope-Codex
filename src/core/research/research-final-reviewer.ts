@@ -80,6 +80,10 @@ export async function runResearchCodexFinalReviewer(input: {
       missing_evidence: [],
       blueprint_findings: [],
       falsification_findings: [],
+      template_like_prose: true,
+      source_density_ok: false,
+      implementation_concreteness_ok: false,
+      evidence_bound_synthesis_ok: false,
       required_revisions: ['static_review_failed'],
       confidence: 'low',
       skipped: true,
@@ -97,6 +101,10 @@ export async function runResearchCodexFinalReviewer(input: {
       missing_evidence: [],
       blueprint_findings: ['mock final reviewer approves the complete package fixture'],
       falsification_findings: ['mock counterevidence and falsification cases are present'],
+      template_like_prose: false,
+      source_density_ok: true,
+      implementation_concreteness_ok: true,
+      evidence_bound_synthesis_ok: true,
       required_revisions: [],
       confidence: 'high',
       mock: true
@@ -154,6 +162,10 @@ export async function runResearchFinalReviewer(dir: string, input: any = {}) {
     ...(Array.isArray(staticReview?.blockers) ? staticReview.blockers : []),
     ...(codexRequired && !codexReview ? ['research_codex_final_review_missing'] : []),
     ...(codexReview && !codexApproved ? ['research_codex_final_review_not_approved'] : []),
+    ...(codexReview?.template_like_prose === true ? ['research_codex_template_like_prose'] : []),
+    ...(codexReview && codexReview.source_density_ok === false ? ['research_codex_source_density_not_ok'] : []),
+    ...(codexReview && codexReview.implementation_concreteness_ok === false ? ['research_codex_implementation_concreteness_not_ok'] : []),
+    ...(codexReview && codexReview.evidence_bound_synthesis_ok === false ? ['research_codex_evidence_bound_synthesis_not_ok'] : []),
     ...(Array.isArray(codexReview?.required_revisions) ? codexReview.required_revisions.map((revision: any) => `codex_revision:${revision}`) : [])
   ]
   const review = {
@@ -176,6 +188,8 @@ function buildResearchFinalReviewPrompt(plan: any, staticReview: any): string {
     `Prompt: ${plan?.prompt || ''}`,
     '',
     'Review the mission artifacts read-only. Reject if claims lack evidence, blueprint steps are template-like, falsification is missing, or the package is only a short summary.',
+    'Reject repeated paragraphs, template-like prose, unsupported synthesis, source IDs that do not exist in source-ledger, and implementation blueprints that lack concrete files/tests.',
+    'Set template_like_prose=true for repeated or boilerplate reports. Set source_density_ok=false for sparse source ids. Set implementation_concreteness_ok=false for weak file/test/rollback plans. Set evidence_bound_synthesis_ok=false when recommendations are not tied to evidence.',
     'Return only JSON matching sks.research-codex-final-review.v1 with verdict approve, revise, or reject.',
     '',
     `Static review summary:\n${JSON.stringify(staticReview, null, 2).slice(0, 12000)}`
@@ -192,6 +206,10 @@ function normalizeCodexReview(worker: any, result: any) {
       missing_evidence: [],
       blueprint_findings: [],
       falsification_findings: [],
+      template_like_prose: false,
+      source_density_ok: false,
+      implementation_concreteness_ok: false,
+      evidence_bound_synthesis_ok: false,
       required_revisions: Array.isArray(result?.blockers) ? result.blockers : ['codex_final_reviewer_unavailable'],
       confidence: 'low',
       worker_result_path: result?.workerResultPath || null
@@ -205,6 +223,10 @@ function normalizeCodexReview(worker: any, result: any) {
     missing_evidence: Array.isArray(worker?.missing_evidence) ? worker.missing_evidence.map(String) : [],
     blueprint_findings: Array.isArray(worker?.blueprint_findings) ? worker.blueprint_findings.map(String) : [],
     falsification_findings: Array.isArray(worker?.falsification_findings) ? worker.falsification_findings.map(String) : [],
+    template_like_prose: worker?.template_like_prose === true,
+    source_density_ok: worker?.source_density_ok === true,
+    implementation_concreteness_ok: worker?.implementation_concreteness_ok === true,
+    evidence_bound_synthesis_ok: worker?.evidence_bound_synthesis_ok === true,
     required_revisions: Array.isArray(worker?.required_revisions) ? worker.required_revisions.map(String) : [],
     confidence: ['low', 'medium', 'high'].includes(worker?.confidence) ? worker.confidence : 'medium',
     worker_result_path: result.workerResultPath
@@ -213,7 +235,7 @@ function normalizeCodexReview(worker: any, result: any) {
 
 export const researchCodexFinalReviewSchema = {
   type: 'object',
-  required: ['schema', 'verdict', 'unsupported_claim_ids', 'missing_evidence', 'blueprint_findings', 'falsification_findings', 'required_revisions', 'confidence'],
+  required: ['schema', 'verdict', 'unsupported_claim_ids', 'missing_evidence', 'blueprint_findings', 'falsification_findings', 'template_like_prose', 'source_density_ok', 'implementation_concreteness_ok', 'evidence_bound_synthesis_ok', 'required_revisions', 'confidence'],
   properties: {
     schema: { const: 'sks.research-codex-final-review.v1' },
     verdict: { enum: ['approve', 'revise', 'reject'] },
@@ -221,6 +243,10 @@ export const researchCodexFinalReviewSchema = {
     missing_evidence: { type: 'array' },
     blueprint_findings: { type: 'array' },
     falsification_findings: { type: 'array' },
+    template_like_prose: { type: 'boolean' },
+    source_density_ok: { type: 'boolean' },
+    implementation_concreteness_ok: { type: 'boolean' },
+    evidence_bound_synthesis_ok: { type: 'boolean' },
     required_revisions: { type: 'array' },
     confidence: { enum: ['low', 'medium', 'high'] }
   }

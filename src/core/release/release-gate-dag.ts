@@ -7,6 +7,7 @@ import { findReadyReleaseGateNodes, findReleaseGatesBlockedByFailedDeps, pickRea
 import { readReleaseGateCacheHit, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
 import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGateManifestV2, type ReleaseGateNode } from './release-gate-node.js'
 import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
+import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
 
 export interface ReleaseGateDagRunResult {
   schema: 'sks.release-gate-dag-run.v1'
@@ -15,6 +16,9 @@ export interface ReleaseGateDagRunResult {
   selected_preset: string
   total_gates: number
   selected_gates: number
+  selected_gate_ids: string[]
+  skipped_by_affected: string[]
+  affected_selection: ReleaseGateAffectedSelection | null
   completed: number
   failed: number
   cached: number
@@ -25,6 +29,9 @@ export interface ReleaseGateDagRunResult {
   critical_path_ms: number
   peak_running: number
   peak_resources: Record<string, number>
+  cached_gates: string[]
+  executed_gates: string[]
+  slowest_gates: Array<{ id: string; duration_ms: number; cached: boolean }>
   budget_snapshot: ReleaseGateBudget
   budget_summary: string
   report_dir: string
@@ -47,11 +54,17 @@ export async function runReleaseGateDag(input: {
   noCache?: boolean
   failFast?: boolean
   explain?: boolean
+  changedSince?: string | null
+  full?: boolean
 }): Promise<ReleaseGateDagRunResult> {
   const root = path.resolve(input.root)
   const preset = input.preset || 'release'
   const manifest = loadReleaseGateManifest(root)
-  const selected = selectPreset(manifest, preset)
+  const presetGates = selectReleaseGatePreset(manifest, preset)
+  const affected = (preset === 'affected' || preset === 'fast') && input.full !== true
+    ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', preset })
+    : selectAffectedReleaseGates(root, manifest, presetGates, { full: true, preset })
+  const selected = affected.gates
   const runId = `rg-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
   const reportDir = path.join(root, '.sneakoscope', 'reports', 'release-gates', runId)
   fs.mkdirSync(reportDir, { recursive: true })
@@ -64,6 +77,8 @@ export async function runReleaseGateDag(input: {
   const budget = defaultReleaseGateBudget()
   const peakResources: Record<string, number> = {}
   let cached = 0
+  const cachedGates: string[] = []
+  const executedGates: string[] = []
   let sumGateMs = 0
   let peakRunning = 0
 
@@ -75,9 +90,12 @@ export async function runReleaseGateDag(input: {
       ok: failures.length === 0,
       run_id: runId,
       selected_preset: preset,
-      total_gates: manifest.gates.length,
-      selected_gates: selected.length,
-      completed: completed.size,
+	      total_gates: manifest.gates.length,
+	      selected_gates: selected.length,
+	      selected_gate_ids: selected.map((gate) => gate.id),
+	      skipped_by_affected: affected.selection.mode === 'affected' ? affected.selection.skipped_gate_ids : [],
+	      affected_selection: affected.selection,
+	      completed: completed.size,
       failed: failed.size,
       cached,
       wall_ms: wallMs,
@@ -85,9 +103,15 @@ export async function runReleaseGateDag(input: {
       cpu_time_saved_ms: Math.max(0, sumGateMs - wallMs),
       parallelism_gain: wallMs > 0 ? Number((sumGateMs / wallMs).toFixed(2)) : 1,
       critical_path_ms: estimateCriticalPath(selected, completed),
-      peak_running: peakRunning,
-      peak_resources: peakResources,
-      budget_snapshot: budget,
+	      peak_running: peakRunning,
+	      peak_resources: peakResources,
+	      cached_gates: cachedGates,
+	      executed_gates: executedGates,
+	      slowest_gates: [...completed.values(), ...failed.values()]
+	        .sort((a, b) => b.duration_ms - a.duration_ms)
+	        .slice(0, 10)
+	        .map((row) => ({ id: row.id, duration_ms: row.duration_ms, cached: row.cached })),
+	      budget_snapshot: budget,
       budget_summary: summarizeReleaseGateBudget(budget),
       report_dir: reportDir,
       failures
@@ -113,16 +137,18 @@ export async function runReleaseGateDag(input: {
       pending.delete(gate.id)
       const cacheHit = !input.noCache && gate.cache.enabled && readReleaseGateCacheHit(root, gate)
       if (cacheHit) {
-        const result: GateRunResult = { id: gate.id, ok: true, exit_code: 0, duration_ms: 0, cached: true, stderr_tail: '' }
-        completed.set(gate.id, result)
-        cached += 1
-        progressed = true
+	        const result: GateRunResult = { id: gate.id, ok: true, exit_code: 0, duration_ms: 0, cached: true, stderr_tail: '' }
+	        completed.set(gate.id, result)
+	        cached += 1
+	        cachedGates.push(gate.id)
+	        progressed = true
         appendReleaseGateJsonl(timeline, { event: 'cache_hit', gate_id: gate.id, at: new Date().toISOString() })
         writeSummarySnapshot(false)
         continue
-      }
-      appendReleaseGateJsonl(timeline, { event: 'start', gate_id: gate.id, resource: gate.resource, at: new Date().toISOString() })
-      running.set(gate.id, { gate, promise: runGate(root, runId, reportDir, gate) })
+	      }
+	      appendReleaseGateJsonl(timeline, { event: 'start', gate_id: gate.id, resource: gate.resource, at: new Date().toISOString() })
+	      executedGates.push(gate.id)
+	      running.set(gate.id, { gate, promise: runGate(root, runId, reportDir, gate) })
       peakRunning = Math.max(peakRunning, running.size)
       const used = countReleaseGateResources([...running.values()].map((row) => row.gate))
       for (const [resource, count] of Object.entries(used)) {
@@ -173,8 +199,9 @@ export async function runReleaseGateDag(input: {
   return result
 }
 
-function selectPreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
-  return manifest.gates.filter((gate) => gate.preset.includes(preset))
+export function selectReleaseGatePreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
+  const effectivePreset = preset === 'affected' || preset === 'fast' ? 'release' : preset
+  return manifest.gates.filter((gate) => gate.preset.includes(effectivePreset))
 }
 
 interface GateRunResult {

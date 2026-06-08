@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.15 is the ultra-stabilization patch for the 2.0 research runtime. It turns the research synthesis stage into an evidence-bound writer path, rejects repeated/template-like reports, preserves deterministic rendering only for explicit mock fixtures, strengthens repository-aware implementation blueprints, and expands downstream Team handoff artifacts so implementation agents receive claims, sources, work items, tests, and rollback context instead of thin prose.
+
+The 2.0.15 release gate adds `research:synthesis-writer`, `research:synthesis-prompt-contract`, `research:synthesis-writer-blackbox`, `research:repetition-detector`, `research:template-report-rejection`, `research:real-synthesis-no-deterministic-renderer`, and `research:handoff-consumability` coverage while retaining the 2.0.14 stage-cycle runtime and final-reviewer checks. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, and operator-run npm publication after review.
+
 SKS 2.0.14 is the quantum research runtime closure patch for the 2.0 line. It promotes Research from a linear final-report path into a stage-aware runtime with parallel source shards, source-ledger merging, claim/evidence matrix construction, repository-aware implementation blueprint densification, experiment planning, synthesis, and static plus Codex final-review evidence.
 
 The 2.0.14 release gate adds stage-cycle runtime blackbox checks, parallel source-shard proof, source-ledger merge checks, claim-builder checks, blueprint densifier checks, short-report rejection, complete-package fixture proof, final-reviewer blackbox proof, and `codex-sdk:research-pipeline` coverage for the new default cycle runner. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, and operator-run npm publication after review.

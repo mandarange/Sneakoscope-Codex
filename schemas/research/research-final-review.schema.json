@@ -10,6 +10,16 @@
     "approved": { "type": "boolean" },
     "blockers": { "type": "array", "items": { "type": "string" } },
     "checks": { "type": "object" },
+    "codex_review": {
+      "type": "object",
+      "properties": {
+        "template_like_prose": { "type": "boolean" },
+        "source_density_ok": { "type": "boolean" },
+        "implementation_concreteness_ok": { "type": "boolean" },
+        "evidence_bound_synthesis_ok": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
     "reviewer": { "type": "string" }
   },
   "additionalProperties": true

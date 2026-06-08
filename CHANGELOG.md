@@ -4,6 +4,24 @@
 
 
 
+## [2.0.15] - 2026-06-07
+
+### Added
+
+- Evidence-bound Codex/GPT research synthesis writer.
+- Anti-template and repetition detector.
+- Source-density and claim-density quality checks.
+- Realistic complete-package fixture.
+- Research handoff consumability blackbox.
+- Ultra stability report coverage through the release DAG.
+
+### Fixed
+
+- Deterministic synthesis renderer is now mock/fallback only.
+- Template-like research reports are rejected.
+- Final reviewer detects repeated prose and unsupported synthesis.
+- Non-mock Research blocks when Codex/GPT synthesis or final review is unavailable.
+
 ## [2.0.14] - 2026-06-07
 
 ### Added

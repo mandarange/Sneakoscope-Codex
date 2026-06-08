@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { appendJsonlBounded, exists, nowIso, readJson, sksRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
-import { createMission, loadMission, setCurrent } from '../mission.js';
+import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js';
 import { buildQuestionSchema, writeQuestions } from '../questions.js';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, ROUTES, hasFromChatImgSignal, routePrompt, routeReasoning, triwikiContextTracking } from '../routes.js';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, writeTeamRuntimeArtifacts } from '../team-dag.js';
@@ -18,12 +18,14 @@ import { attachZellijSessionInteractive, launchTeamZellijView } from '../zellij/
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { ambientGoalContinuation, flag, readBoundedIntegerFlag, readFlagValue } from './command-utils.js';
+import { narutoCommand } from './naruto-command.js';
 
 const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json';
 
 export async function team(args: any = []) {
   const teamSubcommands = new Set(['log', 'tail', 'watch', 'lane', 'status', 'dashboard', 'event', 'message', 'open-zellij', 'attach-zellij', 'cleanup-zellij', 'open-tmux', 'attach-tmux', 'cleanup-tmux']);
   if (teamSubcommands.has(args[0])) return teamCommand(args[0], args.slice(1));
+  return redirectTeamCreateToNaruto(args);
   const jsonOutput = flag(args, '--json');
   const mock = flag(args, '--mock');
   const openZellij = !mock && !jsonOutput && !flag(args, '--no-open-zellij') && !flag(args, '--no-zellij');
@@ -190,6 +192,29 @@ export async function team(args: any = []) {
   else if (!mock) console.log(`Zellij: blocked (${Array.from(new Set(result.zellij?.blockers || [])).join('; ')})`);
   console.log(`Watch: sks team watch ${id}`);
   console.log(`Artifacts: .sneakoscope/missions/${id}`);
+}
+
+async function redirectTeamCreateToNaruto(args: any[] = []) {
+  const root = await sksRoot();
+  const list = (args || []).map((arg: any) => String(arg));
+  const narutoArgs = list[0] === 'run' ? list : ['run', ...list];
+  console.warn('SKS Team is deprecated for new execution missions; redirecting to $Naruto.');
+  const result: any = await narutoCommand(narutoArgs);
+  const missionId = result?.mission_id || await findLatestMission(root);
+  if (missionId) {
+    await writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'team-alias-to-naruto.json'), {
+      schema: 'sks.team-alias-to-naruto.v1',
+      ok: true,
+      mission_id: missionId,
+      source_command: 'sks team',
+      redirected_to: 'sks naruto run',
+      route_command: '$Naruto',
+      deprecated_route: '$Team',
+      created_at: nowIso(),
+      args: list
+    });
+  }
+  return result;
 }
 
 export function parseTeamCreateArgs(args: any) {

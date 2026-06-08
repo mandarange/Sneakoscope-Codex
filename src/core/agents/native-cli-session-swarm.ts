@@ -9,6 +9,7 @@ import { closeWorkerInRightColumn, recordHeadlessWorkerInRightColumn } from '../
 import { resolveProviderContext } from '../provider/provider-context.js'
 import { buildZellijSlotPaneCommand } from '../zellij/zellij-slot-pane-renderer.js'
 import { resolveZellijUiMode } from '../zellij/zellij-ui-mode.js'
+import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type ZellijSlotTelemetryStatus } from '../zellij/zellij-slot-telemetry.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
 
@@ -118,14 +119,20 @@ class NativeCliSessionSwarmRecorder {
     }
     const stdout = fs.createWriteStream(path.join(this.root, stdoutRel), { flags: 'a' })
     const stderr = fs.createWriteStream(path.join(this.root, stderrRel), { flags: 'a' })
-    const placement = String(ctx.opts.workerPlacement || this.input.workerPlacement || (this.input.backend === 'zellij' ? 'zellij-pane' : 'process'))
+	    const placement = String(ctx.opts.workerPlacement || this.input.workerPlacement || (this.input.backend === 'zellij' ? 'zellij-pane' : 'process'))
     const zellijReservation = placement === 'zellij-pane'
       && ctx.opts.zellijPaneWorker !== false
       && (ctx.opts.zellijSessionName || this.input.missionId)
       ? this.reserveVisibleZellijPane(ctx.opts, String(ctx.agent.session_id || ctx.agent.id || `${Date.now()}:${Math.random()}`))
       : null
-    const useZellijPane = Boolean(zellijReservation)
-    if (useZellijPane) {
+	    const useZellijPane = Boolean(zellijReservation)
+	    await this.telemetry(ctx, {
+	      eventType: 'slot_reserved',
+	      status: placement === 'zellij-pane' && !useZellijPane ? 'headless' : 'queued',
+	      artifacts: [intakeRel, heartbeatRel, resultRel],
+	      logTail: `placement=${placement}`
+	    })
+	    if (useZellijPane) {
       stdout.end()
       stderr.end()
       return this.launchWorkerInZellijPane({
@@ -140,10 +147,16 @@ class NativeCliSessionSwarmRecorder {
         zellijReservation
       })
     }
-    if (placement === 'zellij-pane' && ctx.opts.zellijPaneWorker !== false && !useZellijPane) {
-      record.worker_placement = 'headless'
-      record.headless_reason = `visible_pane_cap:${this.zellijVisiblePaneCap(ctx.opts)}`
-      await recordHeadlessWorkerInRightColumn({
+	    if (placement === 'zellij-pane' && ctx.opts.zellijPaneWorker !== false && !useZellijPane) {
+	      record.worker_placement = 'headless'
+	      record.headless_reason = `visible_pane_cap:${this.zellijVisiblePaneCap(ctx.opts)}`
+	      await this.telemetry(ctx, {
+	        eventType: 'headless_overflow',
+	        status: 'headless',
+	        artifacts: [intakeRel, heartbeatRel, resultRel],
+	        logTail: record.headless_reason
+	      })
+	      await recordHeadlessWorkerInRightColumn({
         root: this.root,
         projectRoot: ctx.opts.projectRoot || this.input.projectRoot || ctx.opts.cwd,
         missionId: this.input.missionId,
@@ -173,8 +186,14 @@ class NativeCliSessionSwarmRecorder {
     })
     record.pid = child.pid || null
     record.process_id = child.pid || null
-    record.status = 'running'
-    if (child.pid) this.active.add(child.pid)
+	    record.status = 'running'
+	    await this.telemetry(ctx, {
+	      eventType: 'worker_spawned',
+	      status: 'launching',
+	      artifacts: [intakeRel, heartbeatRel, resultRel, stdoutRel, stderrRel],
+	      logTail: `pid=${child.pid || 'unknown'}`
+	    })
+	    if (child.pid) this.active.add(child.pid)
     this.maxObserved = Math.max(this.maxObserved, this.active.size)
     await this.record(record)
     child.stdout?.pipe(stdout)
@@ -202,9 +221,16 @@ class NativeCliSessionSwarmRecorder {
       }).catch(() => null)
     }
     const parsed = await readJson<any>(path.join(this.root, resultRel), null).catch(() => null)
-    if (!parsed) {
-      record.blockers = ['native_cli_worker_result_missing']
-      await this.record(record)
+	    if (!parsed) {
+	      record.blockers = ['native_cli_worker_result_missing']
+	      await this.telemetry(ctx, {
+	        eventType: 'worker_failed',
+	        status: 'failed',
+	        artifacts: [stdoutRel, stderrRel],
+	        blockers: record.blockers,
+	        logTail: 'Native CLI worker result missing.'
+	      })
+	      await this.record(record)
       return validateAgentWorkerResult({
         mission_id: this.input.missionId,
         agent_id: ctx.agent.id,
@@ -226,9 +252,16 @@ class NativeCliSessionSwarmRecorder {
       ...parsed,
       artifacts: [...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), stdoutRel, stderrRel]
     })
-    record.status = result.status === 'done' ? 'closed' : result.status
-    record.blockers = result.blockers || []
-    await this.record(record)
+	    record.status = result.status === 'done' ? 'closed' : result.status
+	    record.blockers = result.blockers || []
+	    await this.telemetry(ctx, {
+	      eventType: result.status === 'done' ? 'worker_completed' : 'worker_failed',
+	      status: result.status === 'done' ? 'completed' : 'failed',
+	      artifacts: result.artifacts || [],
+	      blockers: result.blockers || [],
+	      logTail: result.summary || ''
+	    })
+	    await this.record(record)
     return result
   }
 
@@ -271,7 +304,13 @@ class NativeCliSessionSwarmRecorder {
       ...(input.ctx.opts.ollamaBaseUrl ? { SKS_OLLAMA_BASE_URL: String(input.ctx.opts.ollamaBaseUrl) } : {}),
       SKS_ZELLIJ_SESSION_NAME: sessionName
     }
-    const role = String(input.ctx.agent.naruto_role || input.ctx.agent.role || input.ctx.agent.persona_id || 'worker')
+	    const role = String(input.ctx.agent.naruto_role || input.ctx.agent.role || input.ctx.agent.persona_id || 'worker')
+	    await this.telemetry(input.ctx, {
+	      eventType: 'slot_reserved',
+	      status: 'queued',
+	      artifacts: [path.join(input.workerDirRel, 'worker-intake.json'), input.heartbeatRel, input.resultRel],
+	      logTail: `zellij=${sessionName}`
+	    })
     const workerCommand = uiMode === 'full-debug'
       ? buildPaneWorkerCommand({
         args: input.args,
@@ -364,13 +403,27 @@ class NativeCliSessionSwarmRecorder {
     input.record.worktree = worktree
     input.record.zellij_ui_mode = uiMode
     input.record.slot_visualization = uiMode === 'full-debug' ? 'worker-command-pane' : 'zellij-slot-pane-renderer'
-    input.record.status = launchBlockers.length ? 'failed' : 'running'
-    input.record.blockers = launchBlockers
-    await this.record(input.record)
-    if (launchBlockers.length) {
+	    input.record.status = launchBlockers.length ? 'failed' : 'running'
+	    input.record.blockers = launchBlockers
+	    await this.telemetry(input.ctx, {
+	      eventType: 'worker_spawned',
+	      status: launchBlockers.length ? 'failed' : 'launching',
+	      artifacts: [input.resultRel, input.heartbeatRel, input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')],
+	      blockers: launchBlockers,
+	      logTail: paneRecord.pane_title || ''
+	    })
+	    await this.record(input.record)
+	    if (launchBlockers.length) {
       this.active.delete(activeToken)
       input.record.closed_at = nowIso()
-      input.record.status = 'failed'
+	      input.record.status = 'failed'
+	      await this.telemetry(input.ctx, {
+	        eventType: 'worker_failed',
+	        status: 'failed',
+	        artifacts: [input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')],
+	        blockers: launchBlockers,
+	        logTail: 'Zellij worker pane launch failed.'
+	      })
       await this.record(input.record)
       return validateAgentWorkerResult({
         mission_id: this.input.missionId,
@@ -404,7 +457,13 @@ class NativeCliSessionSwarmRecorder {
       input.record.process_id = processRun.pid
       await this.record(input.record)
     }
-    await waitForWorkerHeartbeat(path.join(this.root, input.heartbeatRel), Number(process.env.SKS_ZELLIJ_WORKER_HEARTBEAT_TIMEOUT_MS || 30000))
+	    await waitForWorkerHeartbeat(path.join(this.root, input.heartbeatRel), Number(process.env.SKS_ZELLIJ_WORKER_HEARTBEAT_TIMEOUT_MS || 30000))
+	    await this.telemetry(input.ctx, {
+	      eventType: 'heartbeat',
+	      status: 'running',
+	      artifacts: [input.heartbeatRel],
+	      logTail: await tailFile(path.join(this.root, input.heartbeatRel), 600)
+	    })
     await appendJsonl(path.join(this.root, input.workerDirRel, 'zellij-worker-pane-events.jsonl'), {
       schema: 'sks.zellij-worker-pane-event.v1',
       ts: nowIso(),
@@ -436,7 +495,7 @@ class NativeCliSessionSwarmRecorder {
         sdk_run_id: sdkRunId
       })
     }
-    if (parsed) {
+	    if (parsed) {
       await appendJsonl(path.join(this.root, input.workerDirRel, 'zellij-worker-pane-events.jsonl'), {
         schema: 'sks.zellij-worker-pane-event.v1',
         ts: nowIso(),
@@ -446,8 +505,14 @@ class NativeCliSessionSwarmRecorder {
         generation_index: input.ctx.agent.generation_index || null,
         session_id: input.ctx.agent.session_id,
         result_path: input.resultRel
-      })
-    }
+	      })
+	      await this.telemetry(input.ctx, {
+	        eventType: 'artifact_written',
+	        status: 'verifying',
+	        artifacts: [input.resultRel],
+	        logTail: parsed.summary || 'worker result written'
+	      })
+	    }
     input.record.pid = Number(workerProcessReport?.pid || processRun?.pid) || null
     input.record.process_id = input.record.pid
     input.record.compact_worker_exit_code = compactExit?.code ?? null
@@ -459,10 +524,10 @@ class NativeCliSessionSwarmRecorder {
     input.record.exit_code = parsed ? (parsed.status === 'done' ? 0 : 1) : 1
     input.record.status = parsed?.status === 'done' ? 'closed' : 'failed'
     const heartbeatOk = await hasHeartbeat(path.join(this.root, input.heartbeatRel))
-    input.record.blockers = [
+	    input.record.blockers = [
       ...(parsed ? parsed.blockers || [] : ['zellij_worker_result_timeout']),
       ...(heartbeatOk ? [] : ['zellij_worker_heartbeat_missing'])
-    ]
+	    ]
     paneRecord = await closeWorkerPane({
       root: this.root,
       paneRecord,
@@ -477,9 +542,16 @@ class NativeCliSessionSwarmRecorder {
       workerResultPath: input.resultRel
     })
     input.record.zellij_worker_pane_closed_at = paneRecord.closed_at
-    await this.record(input.record)
-    if (!parsed) {
-      return validateAgentWorkerResult({
+	    await this.record(input.record)
+	    if (!parsed) {
+	      await this.telemetry(input.ctx, {
+	        eventType: 'worker_failed',
+	        status: 'failed',
+	        artifacts: [input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')],
+	        blockers: input.record.blockers,
+	        logTail: 'Zellij pane worker result timed out.'
+	      })
+	      return validateAgentWorkerResult({
         mission_id: this.input.missionId,
         agent_id: input.ctx.agent.id,
         session_id: input.ctx.agent.session_id,
@@ -495,8 +567,15 @@ class NativeCliSessionSwarmRecorder {
         source_intelligence_refs: input.ctx.agent.source_intelligence_refs || null,
         goal_mode_ref: input.ctx.agent.goal_mode_ref || null
       })
-    }
-    return validateAgentWorkerResult({
+	    }
+	    await this.telemetry(input.ctx, {
+	      eventType: parsed.status === 'done' ? 'worker_completed' : 'worker_failed',
+	      status: parsed.status === 'done' ? 'completed' : 'failed',
+	      artifacts: [...new Set([...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')])],
+	      blockers: input.record.blockers,
+	      logTail: parsed.summary || ''
+	    })
+	    return validateAgentWorkerResult({
       ...parsed,
       blockers: input.record.blockers,
       artifacts: [...new Set([...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')])]
@@ -508,12 +587,41 @@ class NativeCliSessionSwarmRecorder {
     return this.summary()
   }
 
-  private async record(record: any) {
+	  private async record(record: any) {
     const index = this.records.findIndex((row) => row.session_id === record.session_id)
     if (index >= 0) this.records[index] = record
     else this.records.push(record)
     await this.persist()
-  }
+	  }
+
+	  private async telemetry(ctx: { agent: any; slice: any; opts: any }, input: {
+	    eventType: ZellijSlotTelemetryEventType
+	    status: ZellijSlotTelemetryStatus
+	    artifacts?: string[]
+	    blockers?: string[]
+	    logTail?: string
+	  }) {
+	    await appendZellijSlotTelemetry(this.root, {
+	      schema: 'sks.zellij-slot-telemetry-event.v1',
+	      ts: nowIso(),
+	      mission_id: this.input.missionId,
+	      slot_id: String(ctx.agent?.slot_id || ctx.agent?.id || 'slot-001'),
+	      generation_index: Number(ctx.agent?.generation_index || 1),
+	      worker_id: String(ctx.agent?.id || ctx.agent?.slot_id || 'worker'),
+	      event_type: input.eventType,
+	      status: input.status,
+	      role: String(ctx.agent?.naruto_role || ctx.agent?.role || ctx.agent?.persona_id || ctx.agent?.id || 'worker'),
+	      backend: this.input.backend,
+	      service_tier: this.input.fastModePolicy.service_tier,
+	      worktree_id: ctx.agent?.worktree?.id || ctx.slice?.worktree?.id || null,
+	      worktree_path: ctx.agent?.worktree?.path || ctx.slice?.worktree?.path || null,
+	      task_title: String(ctx.slice?.description || ctx.slice?.title || ctx.slice?.id || 'worker task'),
+	      current_file: firstString([ctx.slice?.write_paths?.[0], ctx.slice?.readonly_paths?.[0], ctx.slice?.input_files?.[0]]) || null,
+	      artifact_paths: input.artifacts || [],
+	      log_tail: input.logTail || '',
+	      blockers: input.blockers || []
+	    }).catch(() => undefined)
+	  }
 
   private async persist() {
     this.writeLock = this.writeLock.catch(() => undefined).then(async () => {
@@ -704,6 +812,23 @@ function normalizeWorkerWorktree(value: any): {
     path: String(pathValue),
     branch: String(value?.branch || 'unknown'),
     main_repo_root: value?.main_repo_root == null ? null : String(value.main_repo_root)
+  }
+}
+
+function firstString(values: unknown[]) {
+  for (const value of values) {
+    const text = String(value || '').trim()
+    if (text) return text
+  }
+  return null
+}
+
+async function tailFile(file: string, max: number) {
+  try {
+    const text = await fs.promises.readFile(file, 'utf8')
+    return text.length > max ? text.slice(-max) : text
+  } catch {
+    return ''
   }
 }
 

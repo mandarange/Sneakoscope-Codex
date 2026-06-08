@@ -110,7 +110,7 @@ export function quickstartCommand() {
   sks dollar-commands
   sks all-features selftest --mock --execute-fixtures --strict-artifacts --json
 
-For implementation work, use Codex App prompt routes such as $Team, $Goal, $QA-LOOP, $Image-UX-Review, and $Computer-Use.`);
+For implementation work, use Codex App prompt routes such as $Naruto, $Goal, $QA-LOOP, $Image-UX-Review, and $Computer-Use.`);
 }
 
 export async function updateCheckCommand(args: any = []) {

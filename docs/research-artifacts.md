@@ -1,10 +1,11 @@
 # Research Artifacts
 
-Required 2.0.14 research artifacts include:
+Required 2.0.15 research artifacts include:
 
 - `research-quality-contract.json`: threshold contract for source count, source layers, counterevidence, claim support, blueprint depth, falsification, experiments, and report length.
 - `claim-evidence-matrix.json`: key claims, source ids, counterevidence ids, triangulation, unsupported claims, confidence, and test probes.
 - `source-quality-report.json`: metadata completeness and claim citation coverage for `source-ledger.json`.
+- `research-synthesis-output.json`: evidence-bound synthesis output containing report markdown, paper markdown, cited source ids, covered key claims, repetition ratio, and template phrase hits.
 - `implementation-blueprint.json` and `implementation-blueprint.md`: read-only handoff sections for later execution routes.
 - `experiment-plan.json` and `experiment-plan.md`: validation steps, metrics, controls, and acceptance threshold.
 - `replication-pack.json`: inputs, commands, expected artifacts, and reproduction notes.
@@ -17,4 +18,4 @@ Required 2.0.14 research artifacts include:
 
 The legacy core artifacts still matter: `research-report.md`, the dated research paper artifact, `research-source-skill.md`, `source-ledger.json`, `agent-ledger.json`, `debate-ledger.json`, `novelty-ledger.json`, `falsification-ledger.json`, and `research-gate.json`.
 
-Short reports, one-source ledgers, empty claim matrices, incomplete blueprints, missing experiment/replication packs, and unapproved final review artifacts are blackbox rejected even if the prose is fluent.
+Short reports, one-source ledgers, empty claim matrices, incomplete blueprints, missing experiment/replication packs, repeated/template-like prose, low source density, low claim density, and unapproved final review artifacts are blackbox rejected even if the prose is fluent.

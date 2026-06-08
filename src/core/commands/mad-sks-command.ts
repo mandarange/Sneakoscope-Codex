@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
+import { PACKAGE_VERSION, appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
 import { createMission, setCurrent } from '../mission.js';
 import { buildMadHighLaunchProfileNoWrite, madHighProfileName } from '../auto-review.js';
@@ -18,6 +18,8 @@ import { applyMadSksRollbackPlan } from '../mad-sks/rollback-apply.js';
 import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js';
 import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.js';
 import { diffCodexAppUiSnapshots, writeCodexAppUiSnapshot } from '../codex-app/codex-app-ui-state-snapshot.js';
+import { checkSksUpdateNotice } from '../update/update-notice.js';
+import { createMadDbCapability, MAD_DB_ACK } from '../mad-db/mad-db-capability.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -28,16 +30,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     const profile = buildMadHighLaunchProfileNoWrite();
     return console.log(JSON.stringify(profile, null, 2));
   }
-  const update = deps.maybePromptSksUpdateForLaunch ? await deps.maybePromptSksUpdateForLaunch(args, { label: 'MAD launch' }) : { status: 'skipped' };
-  if (update.status === 'updated') {
-    console.log(`SKS updated from ${deps.packageVersion} to ${update.latest}. Rerun: sks --mad`);
-    return;
-  }
-  if (update.status === 'failed') {
-    console.error(`SKS update failed: ${update.error}`);
-    process.exitCode = 1;
-    return;
-  }
+  const update = { status: 'notice_only', non_blocking: true };
   const codexUpdate = deps.maybePromptCodexUpdateForLaunch ? await deps.maybePromptCodexUpdateForLaunch(args, { label: 'MAD launch' }) : { status: 'skipped' };
   if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
     console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
@@ -67,6 +60,13 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
   const rawArgs = (args || []).map((arg: any) => String(arg));
+  const madDbRequested = rawArgs.includes('--mad-db');
+  const madDbAck = readOption(rawArgs, '--ack', '');
+  if (madDbRequested && madDbAck !== MAD_DB_ACK) {
+    console.error(`SKS MAD-DB launch blocked. Required --ack ${JSON.stringify(MAD_DB_ACK)}`);
+    process.exitCode = 2;
+    return { ok: false, status: 'blocked', reason: 'mad_db_ack_phrase_required', required_ack: MAD_DB_ACK };
+  }
   const allowMadRepair = rawArgs.includes('--repair-config') || rawArgs.includes('--fix') || rawArgs.includes('--yes-repair');
   const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: allowMadRepair, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
   const afterPreflightUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-preflight-${uiSnapshotId}`).catch(() => null) : null;
@@ -85,7 +85,39 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return launchPreflight;
   }
   const madLaunch = await activateMadZellijPermissionState(process.cwd(), args);
+  const madDbCapability = madDbRequested
+    ? await createMadDbCapability(madLaunch.root, { missionId: madLaunch.mission_id, ack: madDbAck, cwd: process.cwd() })
+    : null;
+  if (madDbCapability) {
+    await setCurrent(madLaunch.root, {
+      mission_id: madLaunch.mission_id,
+      mad_db_active: true,
+      mad_db_cycle_id: madDbCapability.cycle_id,
+      mad_db_capability_file: 'mad-db-capability.json',
+      mad_db_break_glass: true
+    });
+    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.capability_created', cycle_id: madDbCapability.cycle_id, expires_at: madDbCapability.expires_at });
+  }
+  const updateNotice = await checkSksUpdateNotice({
+    packageName: deps.packageName || 'sneakoscope',
+    currentVersion: deps.packageVersion || PACKAGE_VERSION,
+    missionDir: madLaunch.dir
+  }).catch((err: any) => ({
+    schema: 'sks.update-notice.v1',
+    checked_at: nowIso(),
+    package_name: deps.packageName || 'sneakoscope',
+    current_version: deps.packageVersion || PACKAGE_VERSION,
+    latest_version: null,
+    update_available: false,
+    source: 'error',
+    cache_ttl_ms: 0,
+    message: 'SKS update notice check failed; MAD launch continues.',
+    error: err?.message || String(err)
+  }));
+  await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
+  if (madDbCapability) console.log(`MAD-DB one-cycle capability active; expires ${madDbCapability.expires_at}.`);
+  if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, or system/admin scopes. Catastrophic guards remain.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
   const madSksEnv = {
@@ -439,7 +471,8 @@ function madLaunchOnlyFlags() {
     '--allow-generated-assets',
     '--allow-file-permissions',
     '--allow-chmod',
-    '--allow-delete',
+	    '--allow-delete',
+	    '--mad-db',
     '--confirm-delete',
     '--confirm-destructive-delete',
     '--no-swarm',
@@ -455,7 +488,8 @@ function madLaunchOnlyFlags() {
     '--yes',
     '-y',
     '--dry-run',
-    '--plan-only'
+	    '--plan-only',
+	    '--ack'
   ]);
 }
 
@@ -465,7 +499,8 @@ function madLaunchValueFlags() {
     '--mad-swarm-agents',
     '--mad-swarm-work-items',
     '--mad-swarm-backend',
-    '--mad-swarm-prompt'
+	    '--mad-swarm-prompt',
+	    '--ack'
   ]);
 }
 
