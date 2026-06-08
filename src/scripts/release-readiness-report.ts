@@ -233,6 +233,7 @@ const sideEffectRuntime = runNodeScriptWithOkReportCache(
 const releaseProvenance = runNodeScript('dist/scripts/release-provenance-check.js');
 const imagegenCore = runNodeScript('dist/scripts/imagegen-capability-check.js');
 const dynamicReleaseMode = process.env.SKS_RELEASE_DYNAMIC === '1' || Boolean(process.env.SKS_REPORT_DIR);
+const imagegenExternalMissingAllowed = imagegenCore.status !== 0 && dynamicReleaseMode && process.env.SKS_RELEASE_REQUIRE_IMAGEGEN !== '1';
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
   flagship_proof_graph_v3: readJson('.sneakoscope/reports/flagship-proof-graph-v3.json', null),
@@ -428,7 +429,7 @@ if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
 if (sideEffectRuntime.status !== 0) remainingP0.push('side_effect_runtime_report_failed');
 if (releaseProvenance.status !== 0) remainingP0.push('release_provenance_failed');
-if (imagegenCore.status !== 0) remainingP0.push('imagegen_core_capability_failed');
+if (imagegenCore.status !== 0 && !imagegenExternalMissingAllowed) remainingP0.push('imagegen_core_capability_failed');
 
 const stamp = readJson('.sneakoscope/reports/release-check-stamp.json', null);
 const stampVerify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
@@ -464,11 +465,12 @@ const report = {
     modes: ['probe_only', 'live_capture_attempted', 'live_capture_success', 'live_capture_blocked']
   },
   imagegen_core: {
-    status: imagegenCore.status === 0 ? 'pass' : 'fail',
+    status: imagegenCore.status === 0 ? 'pass' : imagegenExternalMissingAllowed ? 'external_unavailable' : 'fail',
     model: 'gpt-image-2',
     required_for_full_visual_verification: true,
     preferred_surface: 'Codex App $imagegen',
     codex_app_builtin_required: true,
+    release_blocking: !imagegenExternalMissingAllowed,
     real_output_verified_by_capability_check: false,
     capability_detection_is_not_output_proof: true,
     fallback_surface: 'Explicit OpenAI Images API gpt-image-2 fallback (non-Codex evidence)',

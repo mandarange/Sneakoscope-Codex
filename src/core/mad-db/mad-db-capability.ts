@@ -25,6 +25,8 @@ export interface MadDbCapability {
   consumed: boolean
   consumed_at: string | null
   consumed_by: string | null
+  max_operations: number
+  operation_count: number
 }
 
 export async function createMadDbCapability(root: string, input: {
@@ -54,7 +56,9 @@ export async function createMadDbCapability(root: string, input: {
     },
     consumed: false,
     consumed_at: null,
-    consumed_by: null
+    consumed_by: null,
+    max_operations: Math.max(1, Math.floor(Number(process.env.SKS_MAD_DB_MAX_OPERATIONS || 20))),
+    operation_count: 0
   }
   const dir = missionDir(root, input.missionId)
   await writeJsonAtomic(path.join(dir, MAD_DB_CAPABILITY_FILE), capability)
@@ -79,8 +83,38 @@ export function isMadDbCapabilityActive(capability: MadDbCapability | null, nowM
   return capability.enabled === true
     && capability.consumed !== true
     && capability.one_cycle_only === true
+    && Number(capability.operation_count || 0) < Number(capability.max_operations || 20)
     && Number.isFinite(expires)
     && expires > nowMs
+}
+
+export async function recordMadDbOperation(root: string, missionId: string, input: { operationId?: string; toolName?: string; sqlHash?: string } = {}) {
+  const capability = await readMadDbCapability(root, missionId)
+  if (!isMadDbCapabilityActive(capability)) return capability
+  const operationCount = Number(capability!.operation_count || 0) + 1
+  const maxOperations = Math.max(1, Number(capability!.max_operations || 20))
+  const updated: MadDbCapability = {
+    ...capability!,
+    operation_count: operationCount,
+    max_operations: maxOperations
+  }
+  const dir = missionDir(root, missionId)
+  await writeJsonAtomic(path.join(dir, MAD_DB_CAPABILITY_FILE), updated)
+  await appendJsonlBounded(path.join(dir, 'mad-db-ledger.jsonl'), {
+    ts: nowIso(),
+    type: 'db_operation.counted',
+    mission_id: missionId,
+    cycle_id: updated.cycle_id,
+    operation_id: input.operationId || null,
+    tool_name: input.toolName || null,
+    sql_hash: input.sqlHash || null,
+    operation_count: operationCount,
+    max_operations: maxOperations
+  })
+  if (operationCount >= maxOperations) {
+    return consumeMadDbCapability(root, missionId, { consumedBy: 'db-safety-checkDbOperation', reason: 'mad_db_max_operations_reached' })
+  }
+  return updated
 }
 
 export async function consumeMadDbCapability(root: string, missionId: string, input: { consumedBy?: string; reason?: string } = {}) {

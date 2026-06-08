@@ -25,6 +25,7 @@ import {
   writeAgentSessionGeneration,
   type AgentSessionGeneration
 } from './agent-session-generation.js'
+import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
 
 export const AGENT_SCHEDULER_SCHEMA = 'sks.agent-scheduler.v1'
 export const AGENT_SCHEDULER_EVENT_SCHEMA = 'sks.agent-scheduler-event.v1'
@@ -59,6 +60,23 @@ export interface AgentSchedulerState {
   all_slots_closed_after_drain: boolean
   all_generations_closed: boolean
   blockers: string[]
+  batch_dispatch_count: number
+  largest_batch_size: number
+  first_batch_launch_span_ms: number
+  average_batch_launch_span_ms: number
+  scheduler_utilization: number
+  active_slot_time_ms: number
+  wall_time_ms: number
+}
+
+type PendingLaunch = {
+  slotIndex: number
+  slot: AgentWorkerSlot
+  openedSlot: AgentWorkerSlot
+  generation: AgentSessionGeneration
+  agent: any
+  workItem: any
+  provisionalSessionId: string
 }
 
 export type AgentSchedulerLaunchContext = {
@@ -106,6 +124,10 @@ export async function runAgentScheduler(input: {
   })
   const active = new Map<string, { slot_id: string; work_item_id: string; session_id: string; promise: Promise<any> }>()
   const results: any[] = []
+  const schedulerStartedAt = Date.now()
+  let batchCounter = 0
+  let batchLaunchSpanTotalMs = 0
+  let batchDispatchInProgress = false
   let state: AgentSchedulerState = buildState(input.missionId, targetActiveSlots, queue, slots, active, {
     status: 'initializing',
     refillDelayMs: input.refillDelayMs || 0,
@@ -115,7 +137,7 @@ export async function runAgentScheduler(input: {
   await refillSlots(null)
 
   while (active.size > 0 || pendingWorkItems(queue).length > 0) {
-    if (active.size === 0 && pendingWorkItems(queue).length > 0) {
+    if (!batchDispatchInProgress && active.size === 0 && pendingWorkItems(queue).length > 0) {
       state.blockers.push('scheduler_pending_queue_without_active_sessions')
       state.status = 'blocked'
       await writeAll(input.root, state, slots, queue, active, { event_type: 'scheduler_blocked', pending_count: pendingWorkItems(queue).length }, input.onSchedulerEvent)
@@ -178,6 +200,7 @@ export async function runAgentScheduler(input: {
   state.all_slots_closed_after_drain = slots.every((slot) => slot.status === 'closed')
   state.all_generations_closed = true
   if (!state.pending_queue_drained) state.blockers.push('scheduler_pending_queue_not_drained')
+  updateUtilizationMetrics()
   await writeAll(input.root, state, slots, queue, active, { event_type: 'scheduler_drained' }, input.onSchedulerEvent)
   return {
     schema: 'sks.agent-scheduler-result.v1',
@@ -190,44 +213,58 @@ export async function runAgentScheduler(input: {
 
   async function refillSlots(backfill: { closed_session_id: string; active_count_before: number; closed_at_ms: number } | null) {
     state.status = 'running'
+    const launches = collectLaunchBatch()
+    if (!launches.length) return
+    batchDispatchInProgress = true
+    const batchId = `batch-${Date.now().toString(36)}-${batchCounter++}`
+    const batchStart = Date.now()
     const launchEvents: Record<string, unknown>[] = []
-    while (active.size < targetActiveSlots && pendingWorkItems(queue).length > 0) {
-      const slotIndex = slots.findIndex((slot) => slot.status === 'idle')
-      if (slotIndex < 0) break
-      const slot = slots[slotIndex]
-      if (!slot) break
-      const generationIndex = slot.generation_count + 1
-      const provisionalSessionId = `${slot.slot_id}-gen-${generationIndex}`
-      const workItem = leaseNextWorkItem(queue, provisionalSessionId, {
-        slotId: slot.slot_id,
-        agentId: String(slot.persona_assignment?.agent_id || ''),
-        activeWritePaths: activeWritePaths(queue)
-      })
-      if (!workItem) break
-      const generation = createAgentSessionGeneration({
-        slotId: slot.slot_id,
-        generationIndex,
-        missionId: input.missionId,
-        rootHash: input.rootHash,
-        taskId: workItem.id,
-        personaId: String(slot.persona_assignment.persona_id || slot.persona_assignment.agent_id || slot.slot_id),
-        sourceIntelligenceRefs: workItem.source_intelligence_refs,
-        goalModeRef: workItem.goal_mode_ref
-      })
-      workItem.running_session_id = generation.session_id
-      await writeAgentSessionGeneration(input.root, generation)
-      const agent = buildAgentForGeneration(slot, generation, workItem)
-      const openedSlot = openWorkerSlotGeneration(slot, generation)
-      slots[slotIndex] = openedSlot
+    try {
+      for (const launch of launches) slots[launch.slotIndex] = launch.openedSlot
+      await Promise.all(launches.map((launch) => writeAgentSessionGeneration(input.root, launch.generation)))
       await writeAll(input.root, state, slots, queue, active, {
-        event_type: 'session_launch_started',
-        session_id: generation.session_id,
-        slot_id: slot.slot_id,
-        generation_index: generation.generation_index,
-        work_item_id: workItem.id
+        event_type: 'batch_dispatch_started',
+        batch_id: batchId,
+        launch_count: launches.length,
+        session_ids: launches.map((launch) => launch.generation.session_id)
       }, input.onSchedulerEvent)
-      const promise = Promise.resolve()
-        .then(() => input.launchSession({ agent, workItem, generation, slot: openedSlot, queue, state }))
+      await appendParallelRuntimeEvent(input.root, input.missionId, {
+        event_type: 'batch_dispatch_started',
+        slot_id: null,
+        generation_index: null,
+        session_id: null,
+        pid: null,
+        backend: 'scheduler',
+        placement: 'unknown',
+        batch_id: batchId,
+        meta: { launch_count: launches.length, active_count_before: active.size }
+      }).catch(() => undefined)
+      for (const launch of launches) {
+        const { slot, openedSlot, generation, agent, workItem } = launch
+        await appendParallelRuntimeEvent(input.root, input.missionId, {
+          event_type: 'slot_reserved',
+          slot_id: slot.slot_id,
+          generation_index: generation.generation_index,
+          session_id: generation.session_id,
+          pid: null,
+          backend: 'scheduler',
+          placement: 'unknown',
+          batch_id: batchId,
+          meta: { work_item_id: workItem.id }
+        }).catch(() => undefined)
+        await appendParallelRuntimeEvent(input.root, input.missionId, {
+          event_type: 'worker_launch_invoked',
+          slot_id: slot.slot_id,
+          generation_index: generation.generation_index,
+          session_id: generation.session_id,
+          pid: null,
+          backend: 'scheduler',
+          placement: 'unknown',
+          batch_id: batchId,
+          meta: { work_item_id: workItem.id }
+        }).catch(() => undefined)
+        const promise = Promise.resolve()
+          .then(() => input.launchSession({ agent, workItem, generation, slot: openedSlot, queue, state }))
         .then((result) => ({
           result,
           session_id: generation.session_id,
@@ -268,8 +305,16 @@ export async function runAgentScheduler(input: {
           terminal_close_report_path: path.join(generation.artifact_dir, 'agent-terminal-close-report.json')
         }))
       active.set(generation.session_id, { slot_id: slot.slot_id, work_item_id: workItem.id, session_id: generation.session_id, promise })
-      await appendAgentWorkQueueEvent(input.root, 'work_item_dispatched', { work_item_id: workItem.id, session_id: generation.session_id, slot_id: slot.slot_id })
+      }
+      await appendAgentWorkQueueEvent(input.root, 'batch_work_items_dispatched', {
+        batch_id: batchId,
+        launch_count: launches.length,
+        session_ids: launches.map((launch) => launch.generation.session_id),
+        work_item_ids: launches.map((launch) => launch.workItem.id)
+      })
+      for (const launch of launches) await appendAgentWorkQueueEvent(input.root, 'work_item_dispatched', { work_item_id: launch.workItem.id, session_id: launch.generation.session_id, slot_id: launch.slot.slot_id })
       if (backfill) {
+        const firstLaunch = launches[0]
         const refillLatencyMs = Math.max(0, Date.now() - backfill.closed_at_ms)
         state.backfill_count += 1
         state.refill_latency_events_ms.push(refillLatencyMs)
@@ -277,25 +322,97 @@ export async function runAgentScheduler(input: {
         launchEvents.push({
           event_type: 'backfill_event',
           closed_session_id: backfill.closed_session_id,
-          new_session_id: generation.session_id,
-          slot_id: slot.slot_id,
+          new_session_id: firstLaunch?.generation.session_id || null,
+          slot_id: firstLaunch?.slot.slot_id || null,
+          batch_id: batchId,
+          launch_count: launches.length,
           active_count_before: backfill.active_count_before,
           active_count_after: active.size,
           refill_latency_ms: refillLatencyMs
         })
         backfill = null
       } else {
-        launchEvents.push({
+        for (const launch of launches) launchEvents.push({
           event_type: 'session_launched',
-          session_id: generation.session_id,
-          slot_id: slot.slot_id,
-          work_item_id: workItem.id,
+          session_id: launch.generation.session_id,
+          slot_id: launch.slot.slot_id,
+          work_item_id: launch.workItem.id,
           active_count_after: active.size
         })
       }
       if (input.refillDelayMs && input.refillDelayMs > 0) await delay(input.refillDelayMs)
+      const launchSpanMs = Math.max(0, Date.now() - batchStart)
+      batchLaunchSpanTotalMs += launchSpanMs
+      state.batch_dispatch_count += 1
+      state.largest_batch_size = Math.max(state.largest_batch_size, launches.length)
+      if (state.first_batch_launch_span_ms === 0) state.first_batch_launch_span_ms = launchSpanMs
+      state.average_batch_launch_span_ms = Math.round(batchLaunchSpanTotalMs / Math.max(1, state.batch_dispatch_count))
+      updateUtilizationMetrics()
+      await appendParallelRuntimeEvent(input.root, input.missionId, {
+        event_type: 'batch_dispatch_completed',
+        slot_id: null,
+        generation_index: null,
+        session_id: null,
+        pid: null,
+        backend: 'scheduler',
+        placement: 'unknown',
+        batch_id: batchId,
+        meta: { launch_count: launches.length, launch_span_ms: launchSpanMs, active_count_after: active.size }
+      }).catch(() => undefined)
+      await writeAll(input.root, state, slots, queue, active, {
+        event_type: 'batch_dispatch_completed',
+        batch_id: batchId,
+        launch_count: launches.length,
+        launch_span_ms: launchSpanMs,
+        active_count_after: active.size,
+        session_ids: launches.map((launch) => launch.generation.session_id)
+      }, input.onSchedulerEvent)
+    } finally {
+      batchDispatchInProgress = false
     }
-    for (const event of launchEvents) await writeAll(input.root, state, slots, queue, active, event, input.onSchedulerEvent)
+    for (const event of launchEvents) await appendJsonl(path.join(input.root, 'agent-scheduler-events.jsonl'), { schema: AGENT_SCHEDULER_EVENT_SCHEMA, ts: nowIso(), ...event })
+  }
+
+  function collectLaunchBatch(): PendingLaunch[] {
+    const launches: PendingLaunch[] = []
+    const reservedSlots = new Set<number>()
+    while (active.size + launches.length < targetActiveSlots && pendingWorkItems(queue).length > 0) {
+      const slotIndex = slots.findIndex((slot, index) => slot.status === 'idle' && !reservedSlots.has(index))
+      if (slotIndex < 0) break
+      const slot = slots[slotIndex]
+      if (!slot) break
+      const generationIndex = slot.generation_count + 1
+      const provisionalSessionId = `${slot.slot_id}-gen-${generationIndex}`
+      const workItem = leaseNextWorkItem(queue, provisionalSessionId, {
+        slotId: slot.slot_id,
+        agentId: String(slot.persona_assignment?.agent_id || ''),
+        activeWritePaths: activeWritePaths(queue)
+      })
+      if (!workItem) break
+      const generation = createAgentSessionGeneration({
+        slotId: slot.slot_id,
+        generationIndex,
+        missionId: input.missionId,
+        rootHash: input.rootHash,
+        taskId: workItem.id,
+        personaId: String(slot.persona_assignment.persona_id || slot.persona_assignment.agent_id || slot.slot_id),
+        sourceIntelligenceRefs: workItem.source_intelligence_refs,
+        goalModeRef: workItem.goal_mode_ref
+      })
+      workItem.running_session_id = generation.session_id
+      const openedSlot = openWorkerSlotGeneration(slot, generation)
+      const agent = buildAgentForGeneration(slot, generation, workItem)
+      launches.push({ slotIndex, slot, openedSlot, generation, agent, workItem, provisionalSessionId })
+      reservedSlots.add(slotIndex)
+    }
+    return launches
+  }
+
+  function updateUtilizationMetrics() {
+    state.wall_time_ms = Math.max(0, Date.now() - schedulerStartedAt)
+    state.active_slot_time_ms = Math.max(state.active_slot_time_ms, state.completed_count * state.wall_time_ms)
+    const denominator = Math.max(1, state.wall_time_ms * targetActiveSlots)
+    state.scheduler_utilization = Number(Math.min(1, state.active_slot_time_ms / denominator).toFixed(3))
   }
 }
 
@@ -349,6 +466,14 @@ function buildState(
     all_slots_closed_after_drain: slots.length > 0 && slots.every((slot) => slot.status === 'closed'),
     all_generations_closed: false,
     blockers: [...(previous?.blockers || [])]
+    ,
+    batch_dispatch_count: previous?.batch_dispatch_count || 0,
+    largest_batch_size: previous?.largest_batch_size || 0,
+    first_batch_launch_span_ms: previous?.first_batch_launch_span_ms || 0,
+    average_batch_launch_span_ms: previous?.average_batch_launch_span_ms || 0,
+    scheduler_utilization: previous?.scheduler_utilization || 0,
+    active_slot_time_ms: previous?.active_slot_time_ms || 0,
+    wall_time_ms: previous?.wall_time_ms || 0
   }
 }
 
@@ -385,6 +510,13 @@ async function writeAll(
   currentState.blocked = nextState.blocked
   currentState.pending_queue_drained = nextState.pending_queue_drained
   currentState.all_slots_closed_after_drain = nextState.all_slots_closed_after_drain
+  currentState.batch_dispatch_count = nextState.batch_dispatch_count
+  currentState.largest_batch_size = nextState.largest_batch_size
+  currentState.first_batch_launch_span_ms = nextState.first_batch_launch_span_ms
+  currentState.average_batch_launch_span_ms = nextState.average_batch_launch_span_ms
+  currentState.scheduler_utilization = nextState.scheduler_utilization
+  currentState.active_slot_time_ms = nextState.active_slot_time_ms
+  currentState.wall_time_ms = nextState.wall_time_ms
   await writeAgentWorkQueue(root, queue)
   await writeAgentWorkerSlots(root, slots)
   await writeJsonAtomic(path.join(root, 'agent-scheduler-state.json'), currentState)

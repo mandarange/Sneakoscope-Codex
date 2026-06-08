@@ -4,6 +4,7 @@ import { ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { evaluateGitWorktreeCapability, type GitWorktreeCapability } from './git-worktree-capability.js'
 import { gitBlocker, gitOutputLine, runGitCommand } from './git-worktree-runner.js'
 import { sanitizePathPart } from './git-worktree-root.js'
+import { appendParallelRuntimeEvent } from '../agents/parallel-runtime-proof.js'
 
 export interface GitWorkerWorktreeAllocation {
   schema: 'sks.git-worktree-allocation.v1'
@@ -24,6 +25,14 @@ export interface GitWorkerWorktreeAllocation {
   blockers: string[]
 }
 
+export type WorktreeAllocationInput = {
+  workerId: string
+  slotId?: string
+  generationIndex?: number
+  baseRef?: string
+  branchPrefix?: string
+}
+
 export async function allocateWorkerWorktree(input: {
   repoRoot?: string
   missionId: string
@@ -33,6 +42,18 @@ export async function allocateWorkerWorktree(input: {
   baseRef?: string
   branchPrefix?: string
 }): Promise<GitWorkerWorktreeAllocation> {
+  const eventRoot = input.repoRoot || process.cwd()
+  const writeProofEvents = await shouldWriteWorktreeAllocationProof(eventRoot, input.missionId)
+  if (writeProofEvents) await appendParallelRuntimeEvent(eventRoot, input.missionId, {
+    event_type: 'worktree_allocation_started',
+    slot_id: input.slotId || input.workerId || null,
+    generation_index: input.generationIndex || 1,
+    session_id: null,
+    pid: null,
+    backend: 'git-worktree',
+    placement: 'unknown',
+    worktree_id: input.workerId || null
+  }).catch(() => undefined)
   const capability = await evaluateGitWorktreeCapability({
     root: input.repoRoot || process.cwd(),
     missionId: input.missionId,
@@ -92,7 +113,66 @@ export async function allocateWorkerWorktree(input: {
     blockers: [...new Set(blockers)]
   }
   await appendWorktreeManifest(allocation)
+  if (writeProofEvents) await appendParallelRuntimeEvent(eventRoot, input.missionId, {
+    event_type: 'worktree_allocation_completed',
+    slot_id: allocation.slot_id,
+    generation_index: allocation.generation_index,
+    session_id: null,
+    pid: null,
+    backend: 'git-worktree',
+    placement: 'unknown',
+    worktree_id: `${allocation.slot_id}-gen-${allocation.generation_index}`,
+    meta: {
+      ok: allocation.ok,
+      worktree_path: allocation.worktree_path,
+      branch: allocation.branch,
+      blockers: allocation.blockers
+    }
+  }).catch(() => undefined)
   return allocation
+}
+
+export async function allocateWorkerWorktreesBatch(input: {
+  root: string
+  missionId: string
+  workers: WorktreeAllocationInput[]
+  maxParallel: number
+}): Promise<GitWorkerWorktreeAllocation[]> {
+  const maxParallel = Math.max(1, Math.floor(Number(input.maxParallel || 1)))
+  const queue = uniqueWorktreeAllocationInputs(input.workers)
+  const allocations: GitWorkerWorktreeAllocation[] = []
+  const workers = Array.from({ length: Math.min(maxParallel, queue.length) }, async () => {
+    while (queue.length) {
+      const next = queue.shift()
+      if (!next) continue
+      allocations.push(await allocateWorkerWorktree({
+        repoRoot: input.root,
+        missionId: input.missionId,
+        workerId: next.workerId,
+        ...(next.slotId === undefined ? {} : { slotId: next.slotId }),
+        ...(next.generationIndex === undefined ? {} : { generationIndex: next.generationIndex }),
+        ...(next.baseRef === undefined ? {} : { baseRef: next.baseRef }),
+        ...(next.branchPrefix === undefined ? {} : { branchPrefix: next.branchPrefix })
+      }))
+    }
+  })
+  await Promise.all(workers)
+  return allocations
+}
+
+function uniqueWorktreeAllocationInputs(workers: WorktreeAllocationInput[] = []): WorktreeAllocationInput[] {
+  const seen = new Set<string>()
+  const unique: WorktreeAllocationInput[] = []
+  for (const worker of workers) {
+    const workerId = sanitizePathPart(worker.workerId || 'worker')
+    const slotId = sanitizePathPart(worker.slotId || workerId)
+    const generationIndex = Math.max(1, Math.floor(Number(worker.generationIndex || 1)))
+    const key = `${workerId}:${slotId}:${generationIndex}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push({ ...worker, workerId, slotId, generationIndex })
+  }
+  return unique
 }
 
 async function appendWorktreeManifest(allocation: GitWorkerWorktreeAllocation) {
@@ -112,6 +192,16 @@ async function appendWorktreeManifest(allocation: GitWorkerWorktreeAllocation) {
     allocations: nextAllocations
   }
   await writeJsonAtomic(allocation.manifest_path, manifest)
+}
+
+async function shouldWriteWorktreeAllocationProof(root: string, missionId: string): Promise<boolean> {
+  if (process.env.SKS_GIT_WORKTREE_ALLOCATION_PROOF === '0') return false
+  try {
+    const stat = await fsp.stat(path.join(root, '.sneakoscope', 'missions', missionId, 'agents'))
+    return stat.isDirectory()
+  } catch {
+    return false
+  }
 }
 
 function sanitizeBranchPart(value: string): string {

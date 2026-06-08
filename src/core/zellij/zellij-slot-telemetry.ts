@@ -1,8 +1,11 @@
 import path from 'node:path'
+import fsp from 'node:fs/promises'
 import { appendJsonlBounded, ensureDir, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 
 export const ZELLIJ_SLOT_TELEMETRY_EVENT_SCHEMA = 'sks.zellij-slot-telemetry-event.v1'
 export const ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA = 'sks.zellij-slot-telemetry-snapshot.v1'
+const telemetrySnapshotCache = new Map<string, ZellijSlotTelemetrySnapshot>()
+const telemetrySnapshotWriteCounts = new Map<string, number>()
 
 export type ZellijSlotTelemetryEventType =
   | 'slot_reserved'
@@ -105,13 +108,48 @@ export async function appendZellijSlotTelemetry(root: string, event: ZellijSlotT
   const file = slotTelemetryEventPath(root, missionId)
   await ensureDir(path.dirname(file))
   await appendJsonlBounded(file, normalized)
+  const previous = await readZellijSlotTelemetrySnapshotNoRebuild(root, missionId)
+  if (previous) {
+    const snapshotPath = slotTelemetrySnapshotPath(root, missionId)
+    const next = applyTelemetryEventToSnapshot(previous, normalized)
+    telemetrySnapshotCache.set(snapshotPath, next)
+    if (shouldFlushTelemetrySnapshot(snapshotPath, normalized)) await writeTelemetrySnapshotFast(snapshotPath, next)
+    return
+  }
   await rebuildZellijSlotTelemetrySnapshot(root, missionId)
 }
 
 export async function readZellijSlotTelemetrySnapshot(root: string, missionId: string): Promise<ZellijSlotTelemetrySnapshot> {
-  const existing = await readJson(slotTelemetrySnapshotPath(root, missionId), null)
+  const snapshotPath = slotTelemetrySnapshotPath(root, missionId)
+  const cached = telemetrySnapshotCache.get(snapshotPath)
+  if (cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return cached
+  const existing = await readJson(snapshotPath, null)
   if (existing?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return existing as ZellijSlotTelemetrySnapshot
   return rebuildZellijSlotTelemetrySnapshot(root, missionId)
+}
+
+export async function readZellijSlotTelemetrySnapshotNoRebuild(root: string, missionId: string): Promise<ZellijSlotTelemetrySnapshot | null> {
+  const snapshotPath = slotTelemetrySnapshotPath(root, missionId)
+  const cached = telemetrySnapshotCache.get(snapshotPath)
+  if (cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return cached
+  const existing = await readJson(snapshotPath, null)
+  if (existing?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) telemetrySnapshotCache.set(snapshotPath, existing as ZellijSlotTelemetrySnapshot)
+  return existing?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? existing as ZellijSlotTelemetrySnapshot : null
+}
+
+export function applyTelemetryEventToSnapshot(snapshot: ZellijSlotTelemetrySnapshot, event: ZellijSlotTelemetryEvent): ZellijSlotTelemetrySnapshot {
+  const key = slotTelemetryKey(event.slot_id || event.worker_id, event.generation_index)
+  const slots = {
+    ...(snapshot.slots || {}),
+    [key]: mergeSlotTelemetry(snapshot.slots?.[key], event)
+  }
+  return {
+    schema: ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA,
+    mission_id: event.mission_id || snapshot.mission_id,
+    updated_at: nowIso(),
+    slots,
+    counts: countSlotTelemetry(slots)
+  }
 }
 
 export async function rebuildZellijSlotTelemetrySnapshot(root: string, missionId: string): Promise<ZellijSlotTelemetrySnapshot> {
@@ -132,6 +170,7 @@ export async function rebuildZellijSlotTelemetrySnapshot(root: string, missionId
     counts: countSlotTelemetry(slots)
   }
   await writeJsonAtomic(slotTelemetrySnapshotPath(root, missionId), snapshot)
+  telemetrySnapshotCache.set(slotTelemetrySnapshotPath(root, missionId), snapshot)
   return snapshot
 }
 
@@ -254,6 +293,22 @@ function slotTelemetryKey(slotId: unknown, generationIndex: unknown) {
 function tail(value: unknown, max: number) {
   const text = String(value || '').replace(/\s+$/g, '')
   return text.length > max ? text.slice(-max) : text
+}
+
+async function writeTelemetrySnapshotFast(file: string, snapshot: ZellijSlotTelemetrySnapshot) {
+  await ensureDir(path.dirname(file))
+  await fsp.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
+}
+
+function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEvent) {
+  const next = (telemetrySnapshotWriteCounts.get(file) || 0) + 1
+  telemetrySnapshotWriteCounts.set(file, next)
+  return next === 1
+    || next % 100 === 0
+    || event.event_type === 'worker_completed'
+    || event.event_type === 'worker_failed'
+    || event.status === 'completed'
+    || event.status === 'failed'
 }
 
 function inferMissionDir(root: string, missionId: string) {

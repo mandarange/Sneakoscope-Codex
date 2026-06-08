@@ -16,5 +16,5 @@ await capMod.createMadDbCapability(root, { missionId: mission.id, ack: capMod.MA
 const allowed = await db.checkDbOperation(root, state, { tool_name: 'supabase.execute_sql', sql: 'drop table users;' })
 assertGate(allowed.allowed === true && allowed.mad_db?.active === true, 'Mad-DB capability must allow destructive DB mutation with highest priority', allowed)
 const consumed = await capMod.readMadDbCapability(root, mission.id)
-assertGate(consumed.consumed === true, 'Mad-DB capability must be consumed after one allowed cycle', consumed)
+assertGate(consumed.consumed === false && consumed.operation_count === 1, 'Mad-DB capability must remain active during bounded one-cycle after first operation', consumed)
 emitGate('mad-db:priority-resolver', { cycle_id: consumed.cycle_id })

@@ -16,3 +16,29 @@ export async function appendMadDbLedgerEvent(root: string, missionId: string, ev
   await writeJsonAtomic(path.join(dir, 'mad-db-ledger.latest.json'), row).catch(() => undefined)
   return row
 }
+
+export async function appendMadDbOperationLifecycle(root: string, missionId: string, input: {
+  type: 'db_operation.started' | 'db_operation.allowed' | 'db_operation.succeeded' | 'db_operation.failed'
+  operationId: string
+  cycleId?: string | null
+  mcpServer?: string | null
+  toolName?: string | null
+  sqlHash?: string | null
+  destructive?: boolean
+  resultStatus?: 'unknown_pending_tool_result' | 'succeeded' | 'failed'
+  rowCount?: number | null
+  error?: string | null
+}) {
+  return appendMadDbLedgerEvent(root, missionId, {
+    type: input.type,
+    operation_id: input.operationId,
+    cycle_id: input.cycleId || null,
+    mcp_server: input.mcpServer || null,
+    tool_name: input.toolName || null,
+    sql_hash: input.sqlHash || null,
+    destructive: input.destructive === true,
+    result_status: input.resultStatus || 'unknown_pending_tool_result',
+    row_count: input.rowCount ?? null,
+    error: input.error || null
+  })
+}

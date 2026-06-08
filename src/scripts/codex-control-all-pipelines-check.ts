@@ -24,7 +24,8 @@ const sources = {
   dfix: readText('src/core/commands/dfix-command.ts'),
   workerRouter: readText('src/core/agents/native-worker-backend-router.ts')
 };
-assertGate(sources.team.includes("mock ? 'fake' : 'codex-sdk'"), 'Team must route native agents through codex control backend');
+const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToNaruto') && sources.team.includes('narutoCommand');
+assertGate(teamCreateRedirectsToNaruto, 'Team create must route through Naruto codex control backend SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex control backend');
 assertGate(sources.research.includes("mock ? 'fake' : 'codex-sdk'"), 'Research must route native agents through codex control backend');
 assertGate(sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto defaults must name codex-sdk control backend');

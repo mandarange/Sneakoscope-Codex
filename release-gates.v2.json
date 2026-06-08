@@ -3373,7 +3373,7 @@
         "git-worktree"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -3398,7 +3398,7 @@
         "git-worktree"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 240000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -4061,7 +4061,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 360000,
+      "timeout_ms": 900000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -4147,7 +4147,7 @@
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 360000,
+      "timeout_ms": 1200000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -5620,7 +5620,7 @@
         "cpu-light"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 240000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -7482,6 +7482,613 @@
           "src/**",
           "schemas/**"
         ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "parallel:runtime-proof",
+      "command": "npm run parallel:runtime-proof --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "parallel:runtime-proof-events",
+      "command": "npm run parallel:runtime-proof-events --silent",
+      "deps": [
+        "parallel:runtime-proof"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "parallel:runtime-real-blackbox",
+      "command": "npm run parallel:runtime-real-blackbox --silent",
+      "deps": [
+        "parallel:runtime-proof",
+        "scheduler:batch-dispatch",
+        "release:worktree-gates",
+        "naruto:readonly-routing",
+        "naruto:shadow-clone-swarm"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 240000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "parallel:claim-enforcement",
+      "command": "npm run parallel:claim-enforcement --silent",
+      "deps": [
+        "parallel:runtime-proof-events"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "scheduler:batch-dispatch",
+      "command": "npm run scheduler:batch-dispatch --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "scheduler:utilization-proof",
+      "command": "npm run scheduler:utilization-proof --silent",
+      "deps": [
+        "scheduler:batch-dispatch"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "scheduler:no-false-pending-block",
+      "command": "npm run scheduler:no-false-pending-block --silent",
+      "deps": [
+        "scheduler:batch-dispatch"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native-swarm:process-spawn-proof",
+      "command": "npm run native-swarm:process-spawn-proof --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native-swarm:zellij-does-not-block-workers",
+      "command": "npm run native-swarm:zellij-does-not-block-workers --silent",
+      "deps": [
+        "native-swarm:process-spawn-proof"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native-swarm:heartbeat-does-not-serialize-launch",
+      "command": "npm run native-swarm:heartbeat-does-not-serialize-launch --silent",
+      "deps": [
+        "native-swarm:process-spawn-proof"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "model-call:concurrency",
+      "command": "npm run model-call:concurrency --silent",
+      "deps": [
+        "parallel:runtime-proof"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:parallelism-mode",
+      "command": "npm run naruto:parallelism-mode --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:visible-vs-active-workers",
+      "command": "npm run naruto:visible-vs-active-workers --silent",
+      "deps": [
+        "naruto:parallelism-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:parallel-runtime-proof",
+      "command": "npm run naruto:parallel-runtime-proof --silent",
+      "deps": [
+        "parallel:runtime-proof",
+        "naruto:parallelism-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:parallelism-ux",
+      "command": "npm run naruto:parallelism-ux --silent",
+      "deps": [
+        "naruto:parallelism-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:real-parallelism-blackbox",
+      "command": "npm run naruto:real-parallelism-blackbox --silent",
+      "deps": [
+        "parallel:runtime-proof",
+        "scheduler:batch-dispatch",
+        "native-swarm:process-spawn-proof",
+        "naruto:parallelism-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 600000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-batch-allocation",
+      "command": "npm run git:worktree-batch-allocation --silent",
+      "deps": [
+        "parallel:runtime-proof"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-prewarm-runtime",
+      "command": "npm run git:worktree-prewarm-runtime --silent",
+      "deps": [
+        "git:worktree-batch-allocation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "release:full-parallelism-blackbox",
+      "command": "npm run release:full-parallelism-blackbox --silent",
+      "deps": [
+        "release:dynamic-presets",
+        "release:gate-batch-runner",
+        "release:worktree-gates",
+        "naruto:readonly-routing",
+        "naruto:shadow-clone-swarm"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:slot-telemetry-incremental",
+      "command": "npm run zellij:slot-telemetry-incremental --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:slot-telemetry-performance",
+      "command": "npm run zellij:slot-telemetry-performance --silent",
+      "deps": [
+        "zellij:slot-telemetry-incremental",
+        "parallel:runtime-real-blackbox",
+        "release:worktree-gates",
+        "naruto:readonly-routing",
+        "naruto:shadow-clone-swarm"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "team:legacy-create-removed",
+      "command": "npm run team:legacy-create-removed --silent",
+      "deps": [
+        "team:alias-to-naruto"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "mad-db:one-cycle-bounded",
+      "command": "npm run mad-db:one-cycle-bounded --silent",
+      "deps": [
+        "mad-db:capability",
+        "mad-db:priority-resolver"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "mad-db:operation-lifecycle-ledger",
+      "command": "npm run mad-db:operation-lifecycle-ledger --silent",
+      "deps": [
+        "mad-db:one-cycle-bounded"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
       },
       "isolation": {
         "home": "temp",

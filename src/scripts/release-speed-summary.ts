@@ -14,6 +14,7 @@ console.log(JSON.stringify({
   schema: 'sks.release-speed-summary.v1',
   ok: true,
   report: latest || null,
+  mode: summary?.affected_selection?.mode || (summary?.full === true ? 'full' : 'unknown'),
   selected_gates: summary?.selected_gates || 0,
   skipped_by_affected: summary?.skipped_by_affected?.length || 0,
   cached: summary?.cached || 0,
@@ -21,5 +22,6 @@ console.log(JSON.stringify({
   wall_ms: summary?.wall_ms || 0,
   cpu_time_saved_ms: summary?.cpu_time_saved_ms || 0,
   parallelism_gain: summary?.parallelism_gain || 0,
+  max_running: summary?.peak_running || summary?.max_running || 0,
   slowest_gates: summary?.slowest_gates || []
 }, null, 2))

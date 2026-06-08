@@ -163,10 +163,12 @@ async function narutoRun(parsed: NarutoArgs) {
     requestedClones: roster.agent_count,
     totalWorkItems: workGraph.total_work_items,
     pendingWorkQueueSize: workGraph.total_work_items,
-    backend: schedulerBackend
+    backend: schedulerBackend,
+    parallelismMode: parsed.parallelism
   })
   const backendMinimum = schedulerBackend === 'fake' ? roster.agent_count : Math.min(roster.agent_count, 2)
-  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), safe.cap))
+  const activeCap = parsed.parallelism === 'safe' ? safe.cap : MAX_NARUTO_AGENT_COUNT
+  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), activeCap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
   const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
   const runPreRunSmoke = parsed.smoke === true || process.env.SKS_NARUTO_PRE_RUN_SMOKE === '1'
@@ -279,6 +281,18 @@ async function narutoRun(parsed: NarutoArgs) {
     prompt: parsed.prompt
   })
   let liveZellij: any = null
+  if (!parsed.json) {
+    console.log('$Naruto starting:')
+    console.log('  clones requested: ' + roster.agent_count)
+    console.log('  work items: ' + workGraph.total_work_items)
+    console.log('  target active workers: ' + activeSlots)
+    console.log('  visible panes: ' + zellijVisiblePanes)
+    console.log('  headless workers: ' + Math.max(0, activeSlots - zellijVisiblePanes))
+    console.log('  backend: ' + schedulerBackend)
+    console.log('  parallelism mode: ' + parsed.parallelism)
+    if (activeSlots < roster.agent_count) console.log('  cap reasons: ' + (governor.reasons.join(', ') || 'host safety cap'))
+    if (parsed.parallelism !== 'safe' && activeSlots < 10) console.log('  warning: active workers below 10 in non-safe mode')
+  }
   if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
     liveZellij = await launchZellijLayout({
       root,
@@ -351,8 +365,13 @@ async function narutoRun(parsed: NarutoArgs) {
     narutoRebalancePolicy: rebalancePolicy,
     json: parsed.json
   })
+  const parallelRuntime = result.parallel_runtime_proof || null
   const nativeProofOk = result.proof?.ok === true || result.proof?.status === 'passed'
   const finalAccepted = result.proof?.status === 'passed' || result.proof?.gpt_final_status === 'approved'
+  const parallelRuntimeOk = !parsed.mock || roster.agent_count < 16 || (
+    parallelRuntime?.passed === true
+    && Number(parallelRuntime.max_observed_active_workers || 0) >= Math.min(16, activeSlots)
+  )
   await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
     schema: 'sks.naruto-gate.v1',
     passed: result.ok === true && nativeProofOk && finalAccepted,
@@ -369,9 +388,10 @@ async function narutoRun(parsed: NarutoArgs) {
     gpt_final_pack_ready: true,
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: nativeProofOk,
+    parallel_runtime_proof: parallelRuntimeOk,
     final_arbiter_accepted: finalAccepted,
     session_cleanup: result.proof?.all_sessions_closed === true || nativeProofOk,
-    blockers: result.proof?.blockers || [],
+    blockers: [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate'])],
     updated_at: nowIso()
   })
   await setCurrent(root, {
@@ -437,6 +457,15 @@ async function narutoRun(parsed: NarutoArgs) {
         worker_lifecycle_sample: realActivePoolSmoke.worker_lifecycle.slice(0, 5)
       }
     },
+    parallel_runtime: parallelRuntime ? {
+      proof_path: path.join(result.ledger_root || '', 'parallel-runtime-proof.json'),
+      max_observed_active_workers: parallelRuntime.max_observed_active_workers,
+      unique_worker_pids: parallelRuntime.unique_worker_pids,
+      speedup_ratio: parallelRuntime.speedup_ratio,
+      visible_panes: parallelRuntime.visible_panes,
+      headless_workers: parallelRuntime.headless_workers,
+      passed: parallelRuntime.passed
+    } : null,
     local_worker: localWorkerSummary,
     proof: result.proof?.status || 'missing',
     run: compactNarutoRunResult(result),
@@ -450,6 +479,13 @@ async function narutoRun(parsed: NarutoArgs) {
     console.log('Backend: ' + result.backend)
     console.log('Roles: ' + roleDistribution.entries.map((entry) => `${entry.role}:${entry.count}`).join(', '))
     console.log('Proof: ' + summary.proof)
+    if (summary.parallel_runtime) {
+      console.log('$Naruto parallel proof:')
+      console.log('  max active workers: ' + summary.parallel_runtime.max_observed_active_workers)
+      console.log('  unique PIDs: ' + summary.parallel_runtime.unique_worker_pids)
+      console.log('  speedup: ' + summary.parallel_runtime.speedup_ratio + 'x')
+      console.log('  result: ' + (summary.parallel_runtime.passed ? 'passed' : 'blocked'))
+    }
     if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + summary.zellij.session_name + '; dashboard tracks ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s)')
     else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
@@ -714,6 +750,7 @@ interface NarutoArgs {
   noOpenZellij: boolean
   attach: boolean
   smoke: boolean
+  parallelism: 'extreme' | 'balanced' | 'safe'
 }
 
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
@@ -745,9 +782,16 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
   const attach = hasFlag(args, '--attach')
   const smoke = hasFlag(args, '--smoke')
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url'])
+  const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach, smoke }
+  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach, smoke, parallelism }
+}
+
+function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {
+  const text = String(value || 'extreme').toLowerCase()
+  if (text === 'safe' || text === 'balanced' || text === 'extreme') return text
+  return 'extreme'
 }
 
 async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
