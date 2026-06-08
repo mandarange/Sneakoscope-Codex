@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.15** is the ultra-stabilized Research synthesis release. It keeps the 2.0.14 stage-aware runtime, then hardens final synthesis so non-mock Research uses an evidence-bound Codex/GPT writer, rejects repeated or template-like reports, records source/claim density, and produces handoffs that Team or Naruto can consume directly.
+SKS **2.0.16** is the real parallelism closure release. It proves Naruto/agent runtime concurrency with PID, launch overlap, wall-clock speedup, active/headless worker, model-call, worktree allocation, and incremental Zellij telemetry evidence while keeping Naruto as the execution SSOT.
 
 What changed:
 

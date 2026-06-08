@@ -1,4 +1,5 @@
 import { nowIso } from '../fsx.js'
+import { allocateWorkerWorktreesBatch as allocateBatch, type GitWorkerWorktreeAllocation, type WorktreeAllocationInput } from './git-worktree-manager.js'
 
 export interface GitWorktreePoolPlan {
   schema: 'sks.git-worktree-pool.v1'
@@ -34,4 +35,13 @@ export function planGitWorktreePool(input: {
     assignments,
     blockers: []
   }
+}
+
+export async function allocateWorkerWorktreesBatch(input: {
+  root: string
+  missionId: string
+  workers: WorktreeAllocationInput[]
+  maxParallel: number
+}): Promise<GitWorkerWorktreeAllocation[]> {
+  return allocateBatch(input)
 }

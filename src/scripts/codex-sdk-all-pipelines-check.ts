@@ -21,7 +21,8 @@ const sources = {
   dfix: readText('src/core/commands/dfix-command.ts'),
   coreSkill: readText('src/core/skills/core-skill-types.ts')
 };
-assertGate(sources.team.includes("mock ? 'fake' : 'codex-sdk'"), 'Team must route native agents through codex-sdk');
+const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToNaruto') && sources.team.includes('narutoCommand');
+assertGate(teamCreateRedirectsToNaruto, 'Team create must route through Naruto codex-sdk SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex-sdk');
 assertGate(sources.research.includes("mock ? 'fake' : 'codex-sdk'"), 'Research must route native agents through codex-sdk');
 assertGate(sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto defaults must name codex-sdk');

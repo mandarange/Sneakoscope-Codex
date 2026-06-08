@@ -17,6 +17,7 @@ import { writeUltraRouterProof } from '../router/router-proof.js'
 import { readLocalModelConfig } from '../agents/ollama-worker-config.js'
 import { runLocalLlmTask } from '../local-llm/local-llm-control-adapter.js'
 import { detectPythonCodexSdkCapability, runPythonCodexSdkTask } from './python-codex-sdk-adapter.js'
+import { defaultModelCallBudget, withModelCallSlot } from './model-call-concurrency.js'
 
 export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResult & Record<string, unknown>> {
   const root = path.resolve(input.mutationLedgerRoot)
@@ -43,7 +44,16 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   ]
   let adapterResult: any = null
   if (!blockers.length) {
-    adapterResult = await runWithCodexReliabilityShield(task, async () => {
+    adapterResult = await withModelCallSlot({
+      root,
+      missionId: task.missionId,
+      provider: 'codex-sdk',
+      budget: defaultModelCallBudget('codex-sdk'),
+      slotId: task.slotId || null,
+      generationIndex: task.generationIndex ?? null,
+      sessionId: task.sessionId || null,
+      backend: 'codex-sdk'
+    }, () => runWithCodexReliabilityShield(task, async () => {
       try {
         return fakeAllowed
           ? await runFakeCodexSdkTask(task)
@@ -59,7 +69,7 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
           blockers: ['codex_sdk_run_failed:' + String(err?.message || err)]
         }
       }
-    })
+    }))
   }
   const events = Array.isArray(adapterResult?.events) ? adapterResult.events : []
   const translatedEvents = translateCodexSdkEvents(events)
@@ -146,7 +156,16 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
   if (runtime.env.env.CODEX_HOME) await ensureDir(runtime.env.env.CODEX_HOME)
   const fakeAllowed = process.env.SKS_PYTHON_CODEX_SDK_FAKE === '1'
   const adapterResult = capability.ok || fakeAllowed
-    ? await runPythonCodexSdkTask(task, { env: runtime.env.env, config: runtime.config })
+    ? await withModelCallSlot({
+      root,
+      missionId: task.missionId,
+      provider: 'python-codex-sdk',
+      budget: defaultModelCallBudget('python-codex-sdk'),
+      slotId: task.slotId || null,
+      generationIndex: task.generationIndex ?? null,
+      sessionId: task.sessionId || null,
+      backend: 'python-codex-sdk'
+    }, () => runPythonCodexSdkTask(task, { env: runtime.env.env, config: runtime.config }))
     : { ok: false, events: [], translatedEvents: [], finalResponse: '', threadId: '', turnId: '', blockers: capability.blockers, capability }
   const events = Array.isArray(adapterResult.events) ? adapterResult.events : []
   const translatedEvents = Array.isArray(adapterResult.translatedEvents) ? adapterResult.translatedEvents : []
@@ -244,7 +263,16 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
 
 async function runLocalControlTask(root: string, task: CodexTaskInput, schema: Record<string, unknown>, routerDecision: unknown) {
   const config = await readLocalModelConfig()
-  const adapterResult = await runLocalLlmTask(task, { config, outputSchema: schema })
+  const adapterResult = await withModelCallSlot({
+    root,
+    missionId: task.missionId,
+    provider: 'local-llm',
+    budget: defaultModelCallBudget('local-llm'),
+    slotId: task.slotId || null,
+    generationIndex: task.generationIndex ?? null,
+    sessionId: task.sessionId || null,
+    backend: 'local-llm'
+  }, () => runLocalLlmTask(task, { config, outputSchema: schema }))
   for (const event of adapterResult.events || []) await appendJsonl(path.join(root, 'local-llm-events.jsonl'), event)
   const structuredOutput = adapterResult.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }

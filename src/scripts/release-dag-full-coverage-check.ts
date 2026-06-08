@@ -79,7 +79,27 @@ const requiredReleasePresetIds = [
   'mad-db:priority-resolver',
   'mad-db:ledger',
   'mad-db:one-cycle-consumption',
-  'mad-db:safety-conflict-matrix'
+  'mad-db:safety-conflict-matrix',
+  'parallel:runtime-proof',
+  'parallel:runtime-proof-events',
+  'parallel:runtime-real-blackbox',
+  'parallel:claim-enforcement',
+  'scheduler:batch-dispatch',
+  'scheduler:utilization-proof',
+  'native-swarm:process-spawn-proof',
+  'native-swarm:zellij-does-not-block-workers',
+  'model-call:concurrency',
+  'naruto:parallelism-mode',
+  'naruto:visible-vs-active-workers',
+  'naruto:parallel-runtime-proof',
+  'naruto:real-parallelism-blackbox',
+  'git:worktree-batch-allocation',
+  'release:full-parallelism-blackbox',
+  'zellij:slot-telemetry-incremental',
+  'zellij:slot-telemetry-performance',
+  'team:legacy-create-removed',
+  'mad-db:one-cycle-bounded',
+  'mad-db:operation-lifecycle-ledger'
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))

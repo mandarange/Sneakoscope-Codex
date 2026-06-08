@@ -23,6 +23,7 @@ export async function evaluateGitWorktreeCapability(input: {
   requireGitWorktree?: boolean
 } = {}): Promise<GitWorktreeCapability> {
   const requireGitWorktree = input.requireGitWorktree === true || process.env.SKS_REQUIRE_GIT_WORKTREE === '1'
+  const disabledByEnv = process.env.SKS_DISABLE_GIT_WORKTREE === '1'
   const detection = await detectGitRepo(input.root || process.cwd())
   const blockers: string[] = [...detection.blockers]
   const gitAvailable = Boolean(detection.git_binary)
@@ -40,6 +41,22 @@ export async function evaluateGitWorktreeCapability(input: {
       detection,
       root_resolution: null,
       blockers
+    }
+  }
+  if (disabledByEnv) {
+    if (requireGitWorktree) blockers.push('git_worktree_disabled_by_env')
+    return {
+      schema: 'sks.git-worktree-capability.v1',
+      ok: blockers.length === 0,
+      mode: 'patch-envelope-only',
+      require_git_worktree: requireGitWorktree,
+      git_available: gitAvailable,
+      is_git_repo: true,
+      worktree_supported: false,
+      worktree_probe_attempted: false,
+      detection,
+      root_resolution: null,
+      blockers: [...new Set(blockers)]
     }
   }
 

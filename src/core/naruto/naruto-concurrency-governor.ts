@@ -10,6 +10,7 @@ export interface NarutoConcurrencyGovernorInput {
   backend?: string
   hardware?: HardwareCapacityProbeInput
   zellijVisiblePaneCap?: number
+  parallelismMode?: 'extreme' | 'balanced' | 'safe' | string
 }
 
 export interface NarutoConcurrencyGovernorDecision {
@@ -25,6 +26,7 @@ export interface NarutoConcurrencyGovernorDecision {
   git_worktree_parallel: number
   cpu_io_parallel: number
   verification_parallel: number
+  parallelism_mode: 'extreme' | 'balanced' | 'safe'
   reasons: string[]
   backpressure: 'normal' | 'throttled' | 'saturated'
   hardware: ReturnType<typeof probeHardwareCapacity>
@@ -38,6 +40,7 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
   const hardware = probeHardwareCapacity(input.hardware || {})
   const zellijVisiblePaneCap = normalizePositiveInt(input.zellijVisiblePaneCap, Math.min(8, Math.max(4, Math.floor(hardware.terminal_rows / 5))))
   const backend = String(input.backend || 'codex-sdk')
+  const parallelismMode = normalizeParallelismMode(input.parallelismMode)
   const freeGb = hardware.free_memory_bytes / (1024 * 1024 * 1024)
   const totalGb = hardware.total_memory_bytes / (1024 * 1024 * 1024)
   const reclaimableFloorGb = totalGb >= 32 ? 16 : totalGb >= 16 ? 8 : totalGb >= 8 ? 4 : Math.max(1, freeGb)
@@ -62,7 +65,12 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
   const rawSafe = Math.max(1, Math.min(requestedClones, totalWorkItems, memoryCap, fdCap, cpuCap + ioCap, gitWorktreeCap + processCap, backendBudget, queueCap, leaseCap, 100))
   const pressure = monitorNarutoResourcePressure(hardware, { activeWorkers: rawSafe, zellijVisiblePaneCap })
   const backpressure = applyNarutoBackpressure(rawSafe, pressure)
-  const safeActiveWorkers = Math.max(1, Math.min(rawSafe, backpressure.adjusted_active_workers))
+  const currentSafeActiveWorkers = Math.max(1, Math.min(rawSafe, backpressure.adjusted_active_workers))
+  const safeActiveWorkers = parallelismMode === 'extreme'
+    ? rawSafe
+    : parallelismMode === 'balanced'
+      ? Math.max(1, Math.min(rawSafe, Math.max(16, Math.floor(rawSafe * 0.75))))
+      : currentSafeActiveWorkers
   const safeVisible = Math.min(safeActiveWorkers, zellijVisiblePaneCap)
   const reasons = [
     ...(memoryCap < requestedClones ? ['memory_cap'] : []),
@@ -89,10 +97,17 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
     git_worktree_parallel: gitWorktreeCap,
     cpu_io_parallel: cpuCap + ioCap,
     verification_parallel: Math.max(1, Math.min(hardware.cpu_core_count * 2, safeActiveWorkers, 16)),
+    parallelism_mode: parallelismMode,
     reasons: [...new Set(reasons)],
     backpressure: backpressure.backpressure,
     hardware
   }
+}
+
+function normalizeParallelismMode(value: unknown): 'extreme' | 'balanced' | 'safe' {
+  const text = String(value || process.env.SKS_NARUTO_PARALLELISM || 'extreme').toLowerCase()
+  if (text === 'safe' || text === 'balanced' || text === 'extreme') return text
+  return 'extreme'
 }
 
 function normalizePositiveInt(value: unknown, fallback: number): number {

@@ -15,7 +15,7 @@ export const DEFAULT_AGENT_CONCURRENCY = 5
 // ceiling to up to 100 concurrent clone sessions. Only the naruto path opts into this
 // cap; every other roster/scheduler caller keeps MAX_AGENT_COUNT as the default.
 export const MAX_NARUTO_AGENT_COUNT = 100
-export const DEFAULT_NARUTO_CLONES = 12
+export const DEFAULT_NARUTO_CLONES = 32
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 
 export type AgentBackend = typeof AGENT_BACKENDS[number]

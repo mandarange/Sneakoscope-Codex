@@ -10,6 +10,7 @@ import { resolveProviderContext } from '../provider/provider-context.js'
 import { buildZellijSlotPaneCommand } from '../zellij/zellij-slot-pane-renderer.js'
 import { resolveZellijUiMode } from '../zellij/zellij-ui-mode.js'
 import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type ZellijSlotTelemetryStatus } from '../zellij/zellij-slot-telemetry.js'
+import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
 
@@ -187,13 +188,23 @@ class NativeCliSessionSwarmRecorder {
     record.pid = child.pid || null
     record.process_id = child.pid || null
 	    record.status = 'running'
+	    await appendParallelRuntimeEvent(this.root, this.input.missionId, {
+	      event_type: 'worker_process_spawned',
+	      slot_id: ctx.agent.slot_id || ctx.agent.id || null,
+	      generation_index: ctx.agent.generation_index || null,
+	      session_id: ctx.agent.session_id || null,
+	      pid: child.pid || null,
+	      backend: this.input.backend,
+	      placement: record.worker_placement === 'headless' ? 'headless' : 'process',
+	      worktree_id: worktree?.id || null
+	    }).catch(() => undefined)
 	    await this.telemetry(ctx, {
 	      eventType: 'worker_spawned',
 	      status: 'launching',
 	      artifacts: [intakeRel, heartbeatRel, resultRel, stdoutRel, stderrRel],
 	      logTail: `pid=${child.pid || 'unknown'}`
 	    })
-	    if (child.pid) this.active.add(child.pid)
+    if (child.pid) this.active.add(child.pid)
     this.maxObserved = Math.max(this.maxObserved, this.active.size)
     await this.record(record)
     child.stdout?.pipe(stdout)
@@ -343,6 +354,30 @@ class NativeCliSessionSwarmRecorder {
         mode: uiMode,
         watch: true
     })
+    const processRun = uiMode === 'full-debug'
+      ? null
+      : await this.spawnCompactSlotWorkerProcess({
+        args: input.args,
+        cwd: workerCwd,
+        env: workerEnv,
+        stdoutRel: input.stdoutRel,
+        stderrRel: input.stderrRel
+      })
+    if (processRun?.pid) {
+      input.record.pid = processRun.pid
+      input.record.process_id = processRun.pid
+      await appendParallelRuntimeEvent(this.root, this.input.missionId, {
+        event_type: 'worker_process_spawned',
+        slot_id: slotId,
+        generation_index: Number(input.ctx.agent.generation_index || 1),
+        session_id: input.ctx.agent.session_id || null,
+        pid: processRun.pid,
+        backend: this.input.backend,
+        placement: 'zellij-pane',
+        worktree_id: worktree?.id || null
+      }).catch(() => undefined)
+      await this.record(input.record)
+    }
     let paneRecord: any
     try {
       paneRecord = await openWorkerPane({
@@ -387,7 +422,9 @@ class NativeCliSessionSwarmRecorder {
     } finally {
       if (input.zellijReservation) this.releaseVisibleZellijReservation(input.zellijReservation)
     }
-    const launchBlockers = paneRecord.blockers || []
+    const zellijRequired = process.env.SKS_REQUIRE_ZELLIJ === '1'
+    const launchBlockers = zellijRequired ? paneRecord.blockers || [] : []
+    const launchWarnings = zellijRequired ? [] : paneRecord.blockers || []
     input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', uiMode === 'full-debug' ? '<native-cli-worker-command>' : '<zellij-slot-pane-renderer-command>']
     input.record.zellij_session_name = sessionName
     input.record.zellij_pane_id = paneRecord.pane_id || null
@@ -405,6 +442,7 @@ class NativeCliSessionSwarmRecorder {
     input.record.slot_visualization = uiMode === 'full-debug' ? 'worker-command-pane' : 'zellij-slot-pane-renderer'
 	    input.record.status = launchBlockers.length ? 'failed' : 'running'
 	    input.record.blockers = launchBlockers
+	    input.record.warnings = [...(input.record.warnings || []), ...launchWarnings]
 	    await this.telemetry(input.ctx, {
 	      eventType: 'worker_spawned',
 	      status: launchBlockers.length ? 'failed' : 'launching',
@@ -443,27 +481,17 @@ class NativeCliSessionSwarmRecorder {
       })
     }
 
-    const processRun = uiMode === 'full-debug'
-      ? null
-      : await this.spawnCompactSlotWorkerProcess({
-        args: input.args,
-        cwd: workerCwd,
-        env: workerEnv,
-        stdoutRel: input.stdoutRel,
-        stderrRel: input.stderrRel
-      })
-    if (processRun?.pid) {
-      input.record.pid = processRun.pid
-      input.record.process_id = processRun.pid
-      await this.record(input.record)
-    }
-	    await waitForWorkerHeartbeat(path.join(this.root, input.heartbeatRel), Number(process.env.SKS_ZELLIJ_WORKER_HEARTBEAT_TIMEOUT_MS || 30000))
-	    await this.telemetry(input.ctx, {
-	      eventType: 'heartbeat',
-	      status: 'running',
-	      artifacts: [input.heartbeatRel],
-	      logTail: await tailFile(path.join(this.root, input.heartbeatRel), 600)
-	    })
+	    const heartbeatSeen = await waitForWorkerHeartbeat(path.join(this.root, input.heartbeatRel), Number(process.env.SKS_ZELLIJ_WORKER_HEARTBEAT_TIMEOUT_MS || 5000))
+	    if (heartbeatSeen) {
+	      await this.telemetry(input.ctx, {
+	        eventType: 'heartbeat',
+	        status: 'running',
+	        artifacts: [input.heartbeatRel],
+	        logTail: await tailFile(path.join(this.root, input.heartbeatRel), 600)
+	      })
+	    } else {
+	      input.record.warnings = [...(input.record.warnings || []), 'zellij_worker_heartbeat_missing_launch_warning']
+	    }
     await appendJsonl(path.join(this.root, input.workerDirRel, 'zellij-worker-pane-events.jsonl'), {
       schema: 'sks.zellij-worker-pane-event.v1',
       ts: nowIso(),
@@ -526,8 +554,9 @@ class NativeCliSessionSwarmRecorder {
     const heartbeatOk = await hasHeartbeat(path.join(this.root, input.heartbeatRel))
 	    input.record.blockers = [
       ...(parsed ? parsed.blockers || [] : ['zellij_worker_result_timeout']),
-      ...(heartbeatOk ? [] : ['zellij_worker_heartbeat_missing'])
+      ...(heartbeatOk ? [] : [])
 	    ]
+    if (!heartbeatOk) input.record.warnings = [...(input.record.warnings || []), 'zellij_worker_heartbeat_missing']
     paneRecord = await closeWorkerPane({
       root: this.root,
       paneRecord,
@@ -621,6 +650,24 @@ class NativeCliSessionSwarmRecorder {
 	      log_tail: input.logTail || '',
 	      blockers: input.blockers || []
 	    }).catch(() => undefined)
+	    const parallelEvent = mapTelemetryToParallelEvent(input.eventType)
+	    if (parallelEvent) {
+	      await appendParallelRuntimeEvent(this.root, this.input.missionId, {
+	        event_type: parallelEvent,
+	        slot_id: String(ctx.agent?.slot_id || ctx.agent?.id || 'slot-001'),
+	        generation_index: Number(ctx.agent?.generation_index || 1),
+	        session_id: ctx.agent?.session_id == null ? null : String(ctx.agent.session_id),
+	        pid: null,
+	        backend: this.input.backend,
+	        placement: normalizeParallelPlacement(ctx.opts?.workerPlacement || this.input.workerPlacement || (input.status === 'headless' ? 'headless' : 'unknown')),
+	        worktree_id: ctx.agent?.worktree?.id || ctx.slice?.worktree?.id || null,
+	        meta: {
+	          status: input.status,
+	          artifacts: input.artifacts || [],
+	          blockers: input.blockers || []
+	        }
+	      }).catch(() => undefined)
+	    }
 	  }
 
   private async persist() {
@@ -821,6 +868,20 @@ function firstString(values: unknown[]) {
     if (text) return text
   }
   return null
+}
+
+function mapTelemetryToParallelEvent(eventType: ZellijSlotTelemetryEventType) {
+  if (eventType === 'slot_reserved') return 'slot_reserved'
+  if (eventType === 'heartbeat') return 'worker_heartbeat_seen'
+  if (eventType === 'worker_completed') return 'worker_completed'
+  if (eventType === 'worker_failed') return 'worker_failed'
+  return null
+}
+
+function normalizeParallelPlacement(value: unknown) {
+  const text = String(value || '')
+  if (text === 'zellij-pane' || text === 'process' || text === 'headless') return text
+  return 'unknown'
 }
 
 async function tailFile(file: string, max: number) {

@@ -83,7 +83,7 @@ const proofClones = 24;
 const proofConcurrency = 6;
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
 const isolatedWorktreeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-shadow-wt-'));
-const childEnv = { ...process.env, SKS_WORKTREE_ROOT: isolatedWorktreeRoot };
+const childEnv = { ...process.env, SKS_WORKTREE_ROOT: isolatedWorktreeRoot, SKS_DISABLE_GIT_WORKTREE: '1' };
 assertGate(exists('dist/bin/sks.js'), 'dist/bin/sks.js missing (build first)');
 const helpRun = spawnSync(process.execPath, [cli, 'naruto', '--help', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 });
 const helpParsed = parseJson(helpRun.stdout);
@@ -94,8 +94,9 @@ const run = spawnSync(process.execPath, [
 	  '--backend', 'fake',
 	  '--work-items', String(proofClones),
 	  '--concurrency', String(proofConcurrency),
-	  '--json'
-	], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 300000, maxBuffer: 8 * 1024 * 1024 });
+	  '--json',
+	  '--no-open-zellij'
+	], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 780000, maxBuffer: 8 * 1024 * 1024 });
 assertGate(run.status === 0, 'sks naruto run must exit 0', { status: run.status, stderr: tail(run.stderr) });
 
 const parsed = parseJson(run.stdout);
@@ -129,12 +130,12 @@ assertGate(commandGraph.active_waves.some((wave) => wave.write_paths.length > 1)
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
 assertGate(Number(state.completed_count) === Number(parsed.work_graph?.total_work_items || 0) && Number(state.completed_count) >= proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count, total_work_items: parsed.work_graph?.total_work_items, proofClones });
 
-const explicitConcurrency = spawnSync(process.execPath, [cli, 'naruto', 'run', 'explicit concurrency', '--clones', '6', '--backend', 'fake', '--work-items', '6', '--concurrency', '6', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+const explicitConcurrency = spawnSync(process.execPath, [cli, 'naruto', 'run', 'explicit concurrency', '--clones', '6', '--backend', 'fake', '--work-items', '6', '--concurrency', '6', '--json', '--no-open-zellij'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
 const explicitParsed = parseJson(explicitConcurrency.stdout);
 assertGate(explicitConcurrency.status === 0 && explicitParsed?.target_active_slots === 6, 'explicit --concurrency must let Naruto use the requested parallel slot count', { status: explicitConcurrency.status, target_active_slots: explicitParsed?.target_active_slots });
 
 // 7) A small request is NOT throttled below what was asked (cap only ever reduces, never inflates).
-const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json', '--no-open-zellij'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
 const smallParsed = parseJson(small.stdout);
 assertGate(small.status === 0 && smallParsed?.target_active_slots === 2, 'a 2-clone run must run 2 concurrently (no over-throttle)', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
 

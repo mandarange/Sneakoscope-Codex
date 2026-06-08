@@ -4,6 +4,25 @@
 
 
 
+## [2.0.16] - 2026-06-08
+
+### Added
+
+- Real parallel runtime proof with PID, timeline, wall-clock, overlap, visible pane, and headless worker evidence.
+- Batch dispatch scheduler and scheduler utilization metrics.
+- Naruto real parallelism blackbox, parallelism modes, and production parallel proof summary.
+- Model-call concurrency metrics separate from worker process concurrency.
+- Worktree allocation batch/pool proof and scheduler prewarm wiring.
+- Incremental Zellij slot telemetry snapshots and performance gates.
+- Full release parallelism blackbox report.
+
+### Fixed
+
+- Worker launch fan-out no longer waits on per-slot scheduler state writes.
+- Visible pane count is separated from active/headless worker count.
+- Team create now remains a Naruto redirect without unreachable legacy create code.
+- Mad-DB semantics are clarified as bounded one-cycle, multi-operation break-glass.
+
 ## [2.0.15] - 2026-06-07
 
 ### Added

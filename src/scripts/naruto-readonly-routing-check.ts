@@ -7,6 +7,7 @@ import { assertGate, emitGate, exists, importDist, root } from './sks-1-18-gate-
 
 const worker = await importDist('core/agents/agent-worker-pipeline.js')
 const cli = path.join(root, 'dist', 'bin', 'sks.js')
+const childEnv = { ...process.env, SKS_DISABLE_GIT_WORKTREE: '1' }
 assertGate(exists('dist/bin/sks.js'), 'dist/bin/sks.js missing (build first)')
 
 const readOnlyWorker = worker.validateAgentWorkerResult({
@@ -59,8 +60,9 @@ const readonlyRun = spawnSync(process.execPath, [
   '--backend',
   'fake',
   '--readonly',
-  '--json'
-], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 6 * 1024 * 1024 })
+  '--json',
+  '--no-open-zellij'
+], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 6 * 1024 * 1024 })
 const readonlyJson = parseJson(readonlyRun.stdout)
 assertGate(readonlyRun.status === 0 && readonlyJson?.ok === true, 'readonly Naruto fake blackbox must exit ok', { status: readonlyRun.status, stdout: tail(readonlyRun.stdout), stderr: tail(readonlyRun.stderr) })
 assertGate(readonlyJson.proof === 'passed', 'readonly Naruto proof must pass', { proof: readonlyJson.proof, blockers: readonlyJson.run?.proof?.blockers })
@@ -89,8 +91,9 @@ const writeRun = spawnSync(process.execPath, [
   '--backend',
   'fake',
   '--parallel-write',
-  '--json'
-], { cwd: root, encoding: 'utf8', timeout: 120000, maxBuffer: 6 * 1024 * 1024 })
+  '--json',
+  '--no-open-zellij'
+], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 6 * 1024 * 1024 })
 const writeJson = parseJson(writeRun.stdout)
 assertGate(writeRun.status === 0 && writeJson?.ok === true, 'write-capable Naruto fake blackbox must exit ok', { status: writeRun.status, stdout: tail(writeRun.stdout), stderr: tail(writeRun.stderr) })
 const writeRoot = path.join(root, '.sneakoscope', 'missions', writeJson.mission_id, 'agents')

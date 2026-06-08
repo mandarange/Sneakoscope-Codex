@@ -55,7 +55,7 @@ import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } fro
 import { resolveLocalCollaborationPolicy, localCollaborationParticipated } from '../local-llm/local-collaboration-policy.js'
 import { runFinalGptReviewStage } from '../pipeline/final-gpt-review-stage.js'
 import { selectFinalGptPatchSource } from '../pipeline/final-gpt-patch-stage.js'
-import { allocateWorkerWorktree } from '../git/git-worktree-manager.js'
+import { allocateWorkerWorktree, allocateWorkerWorktreesBatch } from '../git/git-worktree-manager.js'
 import { exportGitWorktreeDiff } from '../git/git-worktree-diff.js'
 import { buildGitWorktreePatchEnvelope } from '../git/git-worktree-patch-envelope.js'
 import { checkpointWorkerWorktree } from '../git/git-worktree-checkpoint.js'
@@ -65,6 +65,7 @@ import { applyGitWorktreeMergeQueue } from '../git/git-worktree-merge-queue.js'
 import { crossRebaseIdleWorktrees } from '../git/git-worktree-cross-rebase.js'
 import { gitOutputLine, runGitCommand } from '../git/git-worktree-runner.js'
 import type { GitWorktreeDiff } from '../git/git-worktree-diff.js'
+import { writeParallelRuntimeProof } from './parallel-runtime-proof.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
@@ -290,9 +291,44 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     diffs: [] as any[],
     checkpoints: [] as any[],
     cleanup: [] as any[],
+    prewarmed_allocations: [] as any[],
     blockers: [] as string[]
   }
   await writeJsonAtomic(path.join(ledgerRoot, 'agent-git-worktree-runtime.json'), gitWorktreeRuntime)
+  const preparedWorktreeAllocations = new Map<string, any>()
+  if (gitWorktreePolicy?.mode === 'git-worktree') {
+    const writeSlices = uniqueWritableSlicesForWorktrees(partition.slices, Math.max(1, targetActiveSlots))
+    if (writeSlices.length) {
+      const prewarmed = await allocateWorkerWorktreesBatch({
+        root: gitWorktreePolicy.main_repo_root || root,
+        missionId,
+        workers: writeSlices.map((slice: any, index: number) => ({
+          workerId: String(slice.owner_agent_id || slice.owner || `worker-${index + 1}`),
+          slotId: String(slice.owner_agent_id || slice.owner || `slot-${index + 1}`),
+          generationIndex: 1
+        })),
+        maxParallel: Math.min(targetActiveSlots, Number(process.env.SKS_NARUTO_GIT_WORKTREE_CAP || targetActiveSlots))
+      }).catch((err: unknown) => {
+        gitWorktreeRuntime.blockers.push('git_worktree_batch_prewarm_failed:' + (err instanceof Error ? err.message : String(err)))
+        gitWorktreeRuntime.ok = false
+        return []
+      })
+      gitWorktreeRuntime.prewarmed_allocations = prewarmed.map((allocation: any) => ({
+        worker_id: allocation.worker_id,
+        slot_id: allocation.slot_id,
+        ok: allocation.ok,
+        worktree_path: allocation.worktree_path,
+        branch: allocation.branch,
+        blockers: allocation.blockers
+      }))
+      for (const allocation of prewarmed) {
+        if (allocation.ok) preparedWorktreeAllocations.set(String(allocation.worker_id), allocation)
+        else gitWorktreeRuntime.blockers.push(...allocation.blockers)
+      }
+      gitWorktreeRuntime.ok = gitWorktreeRuntime.blockers.length === 0
+      await writeJsonAtomic(path.join(ledgerRoot, 'agent-git-worktree-runtime.json'), gitWorktreeRuntime)
+    }
+  }
   const nativeCliSwarm = createNativeCliSessionSwarmRecorder(ledgerRoot, {
     missionId,
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
@@ -330,7 +366,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
         agent,
         slice,
         policy: gitWorktreePolicy,
-        runtime: gitWorktreeRuntime
+        runtime: gitWorktreeRuntime,
+        preparedAllocation: preparedWorktreeAllocations.get(String(agent.id || '')) || null
       })
       const runtimeAgent = workerWorktree ? { ...agent, worktree: workerWorktree.context } : agent
       const runtimeSlice = workerWorktree ? { ...slice, worktree: workerWorktree.context } : slice
@@ -429,6 +466,13 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     }
   })
   await nativeCliSwarm.finalize()
+  const parallelRuntimeProof = await writeParallelRuntimeProof(ledgerRoot, missionId, {
+    requestedWorkers: Number(opts.agents || roster.agent_count || targetActiveSlots),
+    targetActiveSlots,
+    visiblePanes: visualLaneCount,
+    expectedWorkerRuntimeMs: targetActiveSlots >= 10 ? 8000 : targetActiveSlots >= 2 ? 2000 : 25,
+    minActiveWorkers: Math.min(targetActiveSlots, desiredWorkItemCount)
+  })
   const results = scheduler.results
   const nativeCliSessionProof = await writeNativeCliSessionProof(ledgerRoot, {
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
@@ -596,6 +640,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     gpt_final_arbiter: gptFinalArbiter,
     final_gpt_patch_stage: finalGptPatchStage,
     patch_swarm: patchSwarm,
+    parallel_runtime_proof: parallelRuntimeProof,
     proof
   }
 }
@@ -614,6 +659,20 @@ function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) 
   })
   if (!assigned && patchEnvelopes.length && next[0]) next[0] = { ...next[0], patch_envelopes: patchEnvelopes }
   return next
+}
+
+function uniqueWritableSlicesForWorktrees(slices: any[] = [], limit: number) {
+  const selected: any[] = []
+  const seenOwners = new Set<string>()
+  for (const slice of Array.isArray(slices) ? slices : []) {
+    if (!Array.isArray(slice?.write_paths) || slice.write_paths.length === 0) continue
+    const owner = String(slice.owner_agent_id || slice.owner || slice.id || '')
+    if (!owner || seenOwners.has(owner)) continue
+    seenOwners.add(owner)
+    selected.push(slice)
+    if (selected.length >= Math.max(1, limit)) break
+  }
+  return selected
 }
 
 function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any, targetActiveSlots: number, parentPrompt = '') {
@@ -869,13 +928,14 @@ async function prepareWorkerGitWorktree(input: {
   slice: any
   policy: AgentRunOptions['gitWorktreePolicy']
   runtime: any
+  preparedAllocation?: any
 }) {
   if (input.policy?.mode !== 'git-worktree') return null
   const sliceHasWritePaths = Array.isArray(input.slice.write_paths) && input.slice.write_paths.length > 0
   const agentWriteCapable = input.agent.write_allowed === true || /write|lease|required/i.test(String(input.agent.write_policy || ''))
   if (!sliceHasWritePaths && !agentWriteCapable) return null
   const generationIndex = Math.max(1, Math.floor(Number(input.agent.generation_index || 1)))
-  const allocation = await allocateWorkerWorktree({
+  const allocation = input.preparedAllocation || await allocateWorkerWorktree({
     repoRoot: input.policy.main_repo_root || input.root,
     missionId: input.missionId,
     workerId: String(input.agent.id || input.slice.id || 'worker'),

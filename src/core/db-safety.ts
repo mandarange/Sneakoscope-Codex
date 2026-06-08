@@ -1,10 +1,10 @@
 import path from 'node:path';
-import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded } from './fsx.js';
+import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded, sha256 } from './fsx.js';
 import { missionDir, setCurrent } from './mission.js';
 import { evaluateMadSksPermissionGate, isMadSksRouteState } from './permission-gates.js';
 import { resolveMadDbMutationPolicy } from './mad-db/mad-db-policy-resolver.js';
-import { consumeMadDbCapability } from './mad-db/mad-db-capability.js';
-import { appendMadDbLedgerEvent } from './mad-db/mad-db-ledger.js';
+import { recordMadDbOperation } from './mad-db/mad-db-capability.js';
+import { appendMadDbLedgerEvent, appendMadDbOperationLifecycle } from './mad-db/mad-db-ledger.js';
 
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
@@ -449,6 +449,16 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
   const madDb = await resolveMadDbMutationPolicy(root, state, classification);
   if (madDb.allowed === true && state?.mission_id) {
     const madDbDecision: any = madDb;
+    const operationId = `mad-db-op-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const sqlHash = classification.sql?.statements?.length ? sha256(String(classification.sql.statements.join('\n'))) : null;
+    await appendMadDbOperationLifecycle(root, state.mission_id, {
+      type: 'db_operation.started',
+      operationId,
+      cycleId: madDbDecision.cycle_id,
+      toolName: classification.toolName || null,
+      sqlHash,
+      destructive: classification.level === 'destructive'
+    });
     const decision = {
       allowed: true,
       action: 'allow',
@@ -461,11 +471,29 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
         one_cycle_only: true,
         cycle_id: madDbDecision.cycle_id,
         capability_file: 'mad-db-capability.json',
-        consumed: true
+        consumed: false,
+        operation_id: operationId,
+        operation_count: Number(madDbDecision.operation_count || 0) + 1,
+        max_operations: madDbDecision.max_operations || 20
       }
     };
-    await appendMadDbLedgerEvent(root, state.mission_id, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification });
-    await consumeMadDbCapability(root, state.mission_id, { consumedBy: 'db-safety-checkDbOperation', reason: 'db_mutation_allowed' });
+    await appendMadDbLedgerEvent(root, state.mission_id, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification, operation_id: operationId });
+    await appendMadDbOperationLifecycle(root, state.mission_id, {
+      type: 'db_operation.allowed',
+      operationId,
+      cycleId: madDbDecision.cycle_id,
+      toolName: classification.toolName || null,
+      sqlHash,
+      destructive: classification.level === 'destructive',
+      resultStatus: 'unknown_pending_tool_result'
+    });
+    const updatedCapability: any = await recordMadDbOperation(root, state.mission_id, {
+      operationId,
+      ...(classification.toolName ? { toolName: classification.toolName } : {}),
+      ...(sqlHash ? { sqlHash } : {})
+    });
+    decision.mad_db.consumed = updatedCapability?.consumed === true;
+    decision.mad_db.operation_count = updatedCapability?.operation_count ?? decision.mad_db.operation_count;
     await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });
     return decision;
   }

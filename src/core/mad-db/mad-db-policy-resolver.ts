@@ -19,6 +19,8 @@ export async function resolveMadDbMutationPolicy(root: string, state: any = {}, 
     audit_required: true,
     mission_id: missionId,
     cycle_id: capability!.cycle_id,
+    operation_count: capability!.operation_count || 0,
+    max_operations: capability!.max_operations || 20,
     capability
   }
 }
