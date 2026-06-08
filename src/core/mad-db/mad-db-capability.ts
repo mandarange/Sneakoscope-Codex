@@ -119,7 +119,7 @@ export async function recordMadDbOperation(root: string, missionId: string, inpu
 
 export async function consumeMadDbCapability(root: string, missionId: string, input: { consumedBy?: string; reason?: string } = {}) {
   const capability = await readMadDbCapability(root, missionId)
-  if (!isMadDbCapabilityActive(capability)) return capability
+  if (!capability || capability.consumed === true) return capability
   const consumed: MadDbCapability = {
     ...capability!,
     consumed: true,
@@ -131,6 +131,13 @@ export async function consumeMadDbCapability(root: string, missionId: string, in
   await writeJsonAtomic(path.join(dir, 'mad-db-capability.consumed.json'), consumed)
   await appendJsonlBounded(path.join(dir, 'mad-db-ledger.jsonl'), { ts: nowIso(), type: 'capability.consumed', mission_id: missionId, cycle_id: consumed.cycle_id, consumed_by: consumed.consumed_by })
   return consumed
+}
+
+export async function closeMadDbCycle(root: string, missionId: string, cycleId: string): Promise<MadDbCapability | null> {
+  const capability = await readMadDbCapability(root, missionId)
+  if (!capability || capability.cycle_id !== cycleId) return capability
+  if (capability.consumed === true) return capability
+  return consumeMadDbCapability(root, missionId, { consumedBy: 'mad-db-cycle-close', reason: 'mad_db_cycle_closed' })
 }
 
 export async function revokeMadDbCapability(root: string, missionId: string, reason = 'operator_revoked') {

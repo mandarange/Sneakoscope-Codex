@@ -8,11 +8,20 @@ import { writeRouteCompletionProof } from '../core/proof/route-adapter.js';
 import { finalizeRouteWithProof } from '../core/proof/route-finalizer.js';
 import { renderProofMarkdown, writeCompletionProof } from '../core/proof/proof-writer.js';
 import { validateCompletionProof } from '../core/proof/validation.js';
+import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../core/agents/runtime-proof-summary.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'show';
   const rest = args.slice(1);
+  if (action === 'latest' && !flag(args, '--completion')) {
+    const runtime = await tryRuntimeProofSummary(root);
+    if (runtime) {
+      if (flag(args, '--json')) return printJson(runtime);
+      console.log(renderRuntimeProofSummary(runtime));
+      return;
+    }
+  }
   if (action === 'show' || action === 'latest') {
     const proof = await withFreshSummaries(root, await readLatestProof(root));
     if (flag(args, '--json') || action === 'latest') return printJson(proof);
@@ -109,6 +118,16 @@ export async function run(_command: any, args: any = []) {
   }
   console.error('Usage: sks proof show|latest|validate|route <mission-id|latest>|finalize <mission-id|latest> [--route route] [--strict] [--mock] [--json]|export --md|repair latest|smoke [--json]');
   process.exitCode = 1;
+}
+
+async function tryRuntimeProofSummary(root: string) {
+  try {
+    const summary = await buildRuntimeProofSummary(root, 'latest');
+    if (summary.blockers.includes('parallel_runtime_proof_missing') && summary.blockers.includes('agent_scheduler_state_missing')) return null;
+    return summary;
+  } catch {
+    return null;
+  }
 }
 
 async function withFreshSummaries(root: any, proof: any) {

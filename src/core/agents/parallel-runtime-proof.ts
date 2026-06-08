@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonlBounded, ensureDir, nowIso, readText, writeJsonAtomic } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 
 export const PARALLEL_RUNTIME_EVENT_SCHEMA = 'sks.parallel-runtime-event.v1'
 export const PARALLEL_RUNTIME_PROOF_SCHEMA = 'sks.parallel-runtime-proof.v1'
@@ -42,6 +42,9 @@ export interface ParallelRuntimeProof {
   schema: typeof PARALLEL_RUNTIME_PROOF_SCHEMA
   mission_id: string
   generated_at: string
+  proof_mode: 'production' | 'mock-process' | 'in-process-fixture'
+  require_worker_pids: boolean
+  allow_missing_pids: boolean
   requested_workers: number
   target_active_slots: number
   max_observed_active_workers: number
@@ -62,6 +65,16 @@ export interface ParallelRuntimeProof {
   }>
   visible_panes: number
   headless_workers: number
+  utilization_proof_consistency: {
+    ok: boolean
+    scheduler_max_active: number
+    proof_max_active: number
+    wall_ms_delta: number
+    scheduler_active_slot_time_ms: number
+    proof_active_slot_time_ms: number
+    active_slot_time_ms_delta: number
+    scheduler_observation_delay_tolerance_ms: number
+  }
   passed: boolean
   blockers: string[]
 }
@@ -94,6 +107,9 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
   minActiveWorkers?: number
   minSpeedupRatio?: number
   firstBatchLaunchSpanLimitMs?: number
+  proofMode?: 'production' | 'mock-process' | 'in-process-fixture'
+  requireWorkerPids?: boolean
+  allowMissingPids?: boolean
 } = {}): Promise<ParallelRuntimeProof> {
   const events = await readParallelRuntimeEvents(root, missionId)
   const sorted = events.sort((a, b) => a.ms - b.ms)
@@ -165,6 +181,11 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
 
   const requestedWorkers = positiveInt(opts.requestedWorkers, workerStarts.size || workerPids.size || maxWorkers)
   const targetActiveSlots = positiveInt(opts.targetActiveSlots, requestedWorkers)
+  const proofMode = opts.proofMode || 'production'
+  const allowMissingPids = proofMode === 'in-process-fixture' && opts.allowMissingPids === true
+  const requireWorkerPids = opts.requireWorkerPids ?? (
+    proofMode === 'production' && requestedWorkers >= 16
+  )
   const wallMs = Math.max(0, lastMs - firstMs)
   const sequentialEstimateMs = workerDurations.length
     ? workerDurations.reduce((sum, value) => sum + value, 0)
@@ -180,18 +201,28 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
   const launchEvents = sorted.filter((event) => event.event_type === 'worker_launch_invoked' || event.event_type === 'worker_process_spawned')
   const launchSpanMs = launchEvents.length ? Math.max(...launchEvents.map((event) => event.ms)) - Math.min(...launchEvents.map((event) => event.ms)) : 0
   const firstBatchLimit = positiveInt(opts.firstBatchLaunchSpanLimitMs, requestedWorkers >= 16 ? 2500 : 30000)
-  const blockers = [
-    ...(sorted.length ? [] : ['parallel_runtime_events_missing']),
-    ...(minActiveWorkers <= 0 || maxWorkers >= minActiveWorkers ? [] : ['max_observed_active_workers_below_target']),
-    ...(requestedWorkers >= 16 && workerPids.size && workerPids.size < minActiveWorkers ? ['unique_worker_pids_below_target'] : []),
-    ...(speedupRatio >= minSpeedup ? [] : ['speedup_ratio_below_target']),
-    ...(firstBatchLaunchSpanMs <= firstBatchLimit ? [] : ['first_batch_launch_span_above_limit'])
-  ]
+  const schedulerState = await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null).catch(() => null)
+  const coalescedOverlapWindows = coalesceOverlapWindows(overlapWindows)
+  const utilizationProofConsistency = buildUtilizationProofConsistency(schedulerState, {
+    proofMaxActive: maxWorkers,
+    proofWallMs: wallMs,
+    proofActiveSlotTimeMs: activeSlotTimeMsFromWindows(coalescedOverlapWindows)
+  })
+  const blockers: string[] = []
+  if (!sorted.length) blockers.push('parallel_runtime_events_missing')
+  if (minActiveWorkers > 0 && maxWorkers < minActiveWorkers) blockers.push('max_observed_active_workers_below_target')
+  if (requireWorkerPids && workerPids.size < minActiveWorkers) blockers.push('unique_worker_pids_below_target')
+  if (requireWorkerPids && workerPids.size === 0) blockers.push('unique_worker_pids_missing_in_production_proof')
+  if (speedupRatio < minSpeedup) blockers.push('speedup_ratio_below_target')
+  if (firstBatchLaunchSpanMs > firstBatchLimit) blockers.push('first_batch_launch_span_above_limit')
 
   return {
     schema: PARALLEL_RUNTIME_PROOF_SCHEMA,
     mission_id: missionId,
     generated_at: nowIso(),
+    proof_mode: proofMode,
+    require_worker_pids: requireWorkerPids,
+    allow_missing_pids: allowMissingPids,
     requested_workers: requestedWorkers,
     target_active_slots: targetActiveSlots,
     max_observed_active_workers: maxWorkers,
@@ -204,9 +235,10 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
     wall_ms: wallMs,
     sequential_estimate_ms: sequentialEstimateMs,
     speedup_ratio: speedupRatio,
-    overlap_windows: coalesceOverlapWindows(overlapWindows),
+    overlap_windows: coalescedOverlapWindows,
     visible_panes: visiblePanes,
     headless_workers: headlessWorkers,
+    utilization_proof_consistency: utilizationProofConsistency,
     passed: blockers.length === 0,
     blockers
   }
@@ -274,6 +306,49 @@ function nonNegativeInt(value: unknown, fallback: number): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Math.floor(fallback || 0))
   return Math.floor(parsed)
+}
+
+function buildUtilizationProofConsistency(state: any, input: { proofMaxActive: number; proofWallMs: number; proofActiveSlotTimeMs: number }) {
+  if (!state || typeof state !== 'object') {
+    return {
+      ok: true,
+      scheduler_max_active: 0,
+      proof_max_active: input.proofMaxActive,
+      wall_ms_delta: 0,
+      scheduler_active_slot_time_ms: 0,
+      proof_active_slot_time_ms: input.proofActiveSlotTimeMs,
+      active_slot_time_ms_delta: 0,
+      scheduler_observation_delay_tolerance_ms: 0
+    }
+  }
+  const schedulerMaxActive = nonNegativeInt(state.max_observed_active_slots, 0)
+  const schedulerWallMs = nonNegativeInt(state.wall_time_ms, 0)
+  const schedulerActiveSlotTimeMs = nonNegativeInt(state.active_slot_time_ms, 0)
+  const wallDelta = Math.abs(schedulerWallMs - input.proofWallMs)
+  const activeSlotDelta = Math.abs(schedulerActiveSlotTimeMs - input.proofActiveSlotTimeMs)
+  const maxActiveDelta = Math.abs(schedulerMaxActive - input.proofMaxActive)
+  const wallToleranceMs = Math.max(500, Math.round(Math.max(schedulerWallMs, input.proofWallMs) * 0.25))
+  const activeSlotToleranceMs = Math.max(500, Math.round(Math.max(schedulerActiveSlotTimeMs, input.proofActiveSlotTimeMs) * 0.25))
+  const observationDelayToleranceMs = Math.max(activeSlotToleranceMs, wallDelta * Math.max(1, schedulerMaxActive))
+  const wallConsistent = wallDelta <= wallToleranceMs
+  const activeSlotConsistent = schedulerActiveSlotTimeMs > 0 && input.proofActiveSlotTimeMs > 0 && (
+    activeSlotDelta <= activeSlotToleranceMs
+    || (schedulerActiveSlotTimeMs >= input.proofActiveSlotTimeMs && activeSlotDelta <= observationDelayToleranceMs)
+  )
+  return {
+    ok: maxActiveDelta <= 1 && (wallConsistent || activeSlotConsistent),
+    scheduler_max_active: schedulerMaxActive,
+    proof_max_active: input.proofMaxActive,
+    wall_ms_delta: wallDelta,
+    scheduler_active_slot_time_ms: schedulerActiveSlotTimeMs,
+    proof_active_slot_time_ms: input.proofActiveSlotTimeMs,
+    active_slot_time_ms_delta: activeSlotDelta,
+    scheduler_observation_delay_tolerance_ms: observationDelayToleranceMs
+  }
+}
+
+function activeSlotTimeMsFromWindows(windows: ParallelRuntimeProof['overlap_windows']) {
+  return windows.reduce((sum, window) => sum + Math.max(0, window.end_ms - window.start_ms) * Math.max(0, window.active_workers), 0)
 }
 
 function coalesceOverlapWindows(windows: ParallelRuntimeProof['overlap_windows']) {

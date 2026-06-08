@@ -13,6 +13,7 @@ const migrationOnlyFiles = new Set([
   'src/cli/command-registry.ts',
   'src/commands/tmux.ts',
   'src/core/commands/basic-cli.ts',
+  'src/core/commands/team-legacy-observe-command.ts',
   'src/core/commands/team-command.ts'
 ]);
 const legacyFixtureFileRe = /^(scripts|test)\/.*(?:tmux|real-tmux|warp-right-lane).*$/;

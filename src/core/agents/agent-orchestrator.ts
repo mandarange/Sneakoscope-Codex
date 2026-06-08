@@ -471,7 +471,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     targetActiveSlots,
     visiblePanes: visualLaneCount,
     expectedWorkerRuntimeMs: targetActiveSlots >= 10 ? 8000 : targetActiveSlots >= 2 ? 2000 : 25,
-    minActiveWorkers: Math.min(targetActiveSlots, desiredWorkItemCount)
+    minActiveWorkers: Math.min(targetActiveSlots, desiredWorkItemCount),
+    proofMode: opts.mock === true ? 'mock-process' : 'production',
+    requireWorkerPids: opts.nativeCliSwarm !== false && targetActiveSlots >= 16
   })
   const results = scheduler.results
   const nativeCliSessionProof = await writeNativeCliSessionProof(ledgerRoot, {

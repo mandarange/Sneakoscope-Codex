@@ -99,7 +99,18 @@ const requiredReleasePresetIds = [
   'zellij:slot-telemetry-performance',
   'team:legacy-create-removed',
   'mad-db:one-cycle-bounded',
-  'mad-db:operation-lifecycle-ledger'
+  'mad-db:operation-lifecycle-ledger',
+  'parallel:strict-pid-proof',
+  'parallel:missing-pid-rejection',
+  'scheduler:utilization-integral',
+  'scheduler:parallel-proof-consistency',
+  'zellij:slot-telemetry-live-flush',
+  'zellij:slot-pane-stale-detection',
+  'mad-db:lifecycle-hook-decision',
+  'mad-db:mcp-result-lifecycle',
+  'mad-db:operation-lifecycle-blackbox',
+  'runtime:proof-summary',
+  'runtime:proof-summary-cli'
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))

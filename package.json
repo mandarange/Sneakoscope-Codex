@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "2.0.16",
+  "version": "2.0.17",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -646,7 +646,18 @@
     "naruto:ssot-gate-aliases": "node ./dist/scripts/naruto-ssot-gate-aliases-check.js",
     "naruto:ssot-pipeline-default": "node ./dist/scripts/naruto-ssot-pipeline-default-check.js",
     "team:alias-to-naruto": "node ./dist/scripts/team-alias-to-naruto-check.js",
-    "release:speed-summary:report": "node ./dist/scripts/release-speed-summary.js"
+    "release:speed-summary:report": "node ./dist/scripts/release-speed-summary.js",
+    "parallel:strict-pid-proof": "node ./dist/scripts/parallel-strict-pid-proof-check.js",
+    "parallel:missing-pid-rejection": "node ./dist/scripts/parallel-missing-pid-rejection-check.js",
+    "scheduler:utilization-integral": "node ./dist/scripts/scheduler-utilization-integral-check.js",
+    "scheduler:parallel-proof-consistency": "node ./dist/scripts/scheduler-parallel-proof-consistency-check.js",
+    "zellij:slot-telemetry-live-flush": "node ./dist/scripts/zellij-slot-telemetry-live-flush-check.js",
+    "zellij:slot-pane-stale-detection": "node ./dist/scripts/zellij-slot-pane-stale-detection-check.js",
+    "mad-db:lifecycle-hook-decision": "node ./dist/scripts/mad-db-lifecycle-hook-decision-check.js",
+    "mad-db:mcp-result-lifecycle": "node ./dist/scripts/mad-db-mcp-result-lifecycle-check.js",
+    "mad-db:operation-lifecycle-blackbox": "node ./dist/scripts/mad-db-operation-lifecycle-blackbox.js",
+    "runtime:proof-summary": "node ./dist/scripts/runtime-proof-summary-check.js",
+    "runtime:proof-summary-cli": "node ./dist/scripts/runtime-proof-summary-cli-check.js"
   },
   "keywords": [
     "sneakoscope",

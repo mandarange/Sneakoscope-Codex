@@ -852,7 +852,7 @@ function commandMaturity(name: any) {
 
 function routeMaturity(command: any) {
   if (['$Answer', '$DFix', '$SKS', '$Fast-Mode', '$Wiki', '$Help'].includes(command)) return 'stable';
-  if (['$Team', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS'].includes(command)) return 'beta';
+  if (['$Team', '$Goal', '$DB', '$Computer-Use', '$CU', '$QA-LOOP', '$MAD-SKS', '$MAD-DB'].includes(command)) return 'beta';
   return 'labs';
 }
 
@@ -876,13 +876,14 @@ function knownGapsForCommand(name: any) {
 
 function routeVoxelContract(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT', '$From-Chat-IMG', '$GX'].includes(command)) return 'image/source/bbox voxel required';
-  if (command === '$DB' || command === '$MAD-SKS') return 'DB policy voxel required';
+  if (command === '$DB' || command === '$MAD-SKS' || command === '$MAD-DB') return 'DB policy voxel required';
   return 'TriWiki anchors required';
 }
 
 function routeKnownGaps(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT'].includes(command)) return ['live imagegen/CU evidence required'];
   if (command === '$MAD-SKS') return ['permission closed by owning gate'];
+  if (command === '$MAD-DB') return ['one-cycle capability must be explicitly enabled, consumed, or revoked'];
   return [];
 }
 
