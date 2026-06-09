@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/usage/codex-account-usage.schema.json",
+  "title": "SKS Codex Account Usage",
+  "type": "object",
+  "required": ["schema", "generated_at", "ok", "source", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.codex-account-usage.v1" },
+    "generated_at": { "type": "string" },
+    "ok": { "type": "boolean" },
+    "source": { "enum": ["app-server", "unavailable", "fake"] },
+    "account_id": { "type": ["string", "null"] },
+    "token_usage": {
+      "type": ["object", "null"],
+      "properties": {
+        "input_tokens": { "type": "number" },
+        "output_tokens": { "type": "number" },
+        "total_tokens": { "type": "number" },
+        "reset_at": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "usage_limit_tokens": { "type": ["number", "null"] },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

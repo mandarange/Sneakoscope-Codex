@@ -16,43 +16,34 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.17** is the micro-hardening release for strict production PID proof, true scheduler active-time utilization, live Zellij slot telemetry freshness, Mad-DB result lifecycle audit, and unified runtime/release proof summaries.
+SKS **2.0.18** is the Codex 0.138 integration release: capability artifacts, Desktop `/app` handoff, plugin JSON inventory, image saved-path contracts, model-advertised effort order, account usage budget policy, and startup doctor checks.
 
 What changed:
 
-- Zellij slot panes distinguish `slot_status_renderer` panes from Codex worker panes, and the first visible worker now stacks downward below the `SLOTS` anchor with real geometry proof available under `real-check`.
-- Naruto allocation owners now flow into work graph items, scheduler slices, queue ownership, and worker runtime proof; inactive owners are rebalanced and active write conflicts stay out of concurrent execution.
-- Naruto active-pool checks now exercise actual child-worker spawn/result collection paths while production source-of-truth stays with the agent orchestrator scheduler.
-- Worktree candidate output requires GPT Final approval before apply; GPT `modified` output replaces candidate patches and GPT `rejected` blocks apply.
-- Visible Zellij reservations are capped before pane launch so concurrent worker starts cannot over-open the right column.
-- Git worktree integration now proves the primary repo receives validated worktree diffs, with rollback hash evidence recorded around the apply step.
-- Agent role config repair detects stale generated role files and rewrites structured GPT-5.5-compatible configs atomically.
-- Release gates now include slot-only UI, compact slot renderer, headless overflow, role-config repair, worktree primary-runtime, real active-pool, extreme real parallelism, and real right-column geometry checks.
-- Release audit, dynamic selection, and stamp hashing use `release-gates.v2.json` as the manifest source of truth.
-- Git capability checks detect repo roots, Git dirs, worktree support, and safe cache roots while blocking in-repo worktree roots unless `SKS_ALLOW_IN_REPO_WORKTREES=1` is explicit.
-- Worker worktree allocation creates isolated branches/paths under `$SKS_WORKTREE_ROOT`, `$XDG_CACHE_HOME/sks/worktrees`, or `~/.cache/sks/worktrees`; main checkouts stay untouched until integration.
-- Product Design plugin readiness now checks both local and remote Codex App catalogs, auto-installs the remote plugin when needed, and records the installed/enabled skill surface.
-- UI/design/PPT runtime routes prefer Product Design for research, ideation, audit, design QA, prototype, URL-to-code, image-to-code, share, and user-context steps.
-- Naruto read-only runs force write mode off, propagate no-patch reasons through worker proof, and skip changed-file lease checks when no write-capable patch envelope exists.
-- `codex-sdk` is the default native agent backend for Team, QA, Research, Naruto, MAD-SKS, and direct agent runs, with every runtime task entering through `runCodexTask`.
-- Codex App UI snapshot, preservation, clobber guard, and doctor repair checks protect host-owned Fast UI/profile settings around `sks --mad`.
-- Provider context resolves `openai`, `codex-lb`, and `codex-app` with badge/fallback surfaces while avoiding private Codex App UI mutation.
-- UltraRouter writes `ultra-router-proof.json` decisions with tier, scores, hard filters, cache state, and cheapest-good-enough profile selection.
-- Reliability Shield writes `codex-reliability-shield.json` for empty-result retry, stream-idle blocking, tool-result repair, and no-CoT keepalive heartbeats.
-- Raw `codex exec` execution is removed from runtime fallback paths; explicit legacy requests are blocked with `legacy_codex_exec_runtime_removed`.
-- SDK runs write `codex-control-proof.json`, `codex-thread-registry.json`, `codex-sdk-events.jsonl`, and schema-validated worker results.
-- Zellij proof now links `pane_id`, `slot_id`, `generation_index`, `session_id`, `sdk_thread_id`, provider, and `service_tier`.
-- Production runtime scripts are TypeScript source under `src/scripts` and build to `dist/scripts`; Python remains optional diagnostics under `pytools`.
-- Release gates include `codex-control:*`, `ultra-router:*`, `codex-sdk:*`, Codex App Fast UI preservation, provider badges, Zellij spawn-on-demand, slot/pane binding, release truth, and real smoke checks.
-- Research synthesis is now evidence-bound in non-mock runs; deterministic report generation is mock/fallback only.
-- Research quality checks reject repeated paragraphs, template-like prose, low source density, low claim density, and thin implementation sections.
-- Research handoffs now include context, key claims, evidence summary, blueprint sections, parallel work items, acceptance tests, rollback, and source appendix for `$Team` or `$Naruto`.
+- `sks doctor` now reports Codex 0.138 feature readiness, plugin JSON inventory, candidate-only remote MCP servers, unavailable app templates, and repairable plugin discovery cache state.
+- QA-LOOP can write a Codex Desktop `/app` handoff artifact with `--app-handoff` or require it with `--app-handoff-required`; this never substitutes for Codex Chrome Extension web UI evidence.
+- Zellij slot panes and the right-column anchor surface pending QA `/app` handoffs so desktop review is visible during long native-agent runs.
+- Codex plugin detail JSON is normalized into `.sneakoscope/codex-plugin-inventory.json`, and plugin-provided remote MCP servers remain candidate-only until explicitly enabled under DB/Mad-DB safety policy.
+- Imagegen and QA image flows write `image-artifact-path-contract.json` with exact saved file paths and follow-up edit hints.
+- Effort routing now understands the fallback order `minimal < low < medium < high < xhigh`, records model capability, and escalates QA effort after repeated failures.
+- Codex account token usage can be recorded from an app-server usage endpoint, and QA budget policy reduces remote concurrency near limits while preserving GPT final review.
+- Naruto final pass status now depends on the parallel runtime proof, and Mad-DB post-tool lifecycle recording handles MCP `isError` failures.
 
 Quick checks:
 
 ```bash
 npm run typecheck
 npm run build
+npm run codex:0138-capability
+npm run codex-sdk:version-compat
+npm run codex-app:handoff
+npm run codex-plugin:inventory
+npm run qa-loop:app-handoff
+npm run image:artifact-path-contract
+npm run codex:effort-order
+npm run codex:account-usage
+npm run codex:0138-doctor
+npm run doctor:codex-0138-fix
 npm run codex-control:capability
 npm run codex-control:structured-output
 npm run codex-control:event-stream-ledger

@@ -19,6 +19,10 @@ import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair
 import { resolveProviderContext } from '../core/provider/provider-context.js';
 import { readLocalModelConfig } from '../core/agents/ollama-worker-config.js';
 import { repairAgentRoleConfigs } from '../core/agents/agent-role-config.js';
+import { writeCodex0138CapabilityArtifacts } from '../core/codex-control/codex-0138-capability.js';
+import { runCodex0138Doctor } from '../core/doctor/codex-0138-doctor.js';
+import { writeCodexPluginInventoryArtifacts, pluginAppTemplatePolicy } from '../core/codex-plugins/codex-plugin-json.js';
+import { writeMcpPluginInventoryArtifacts } from '../core/mcp/mcp-plugin-inventory.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -169,6 +173,13 @@ export async function run(_command: any, args: any = []) {
     : null;
   const { detectImagegenCapability } = await import('../core/imagegen/imagegen-capability.js');
   const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null }));
+  const codex0138Capability = await writeCodex0138CapabilityArtifacts(root, { codexBin: codexBin || null }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
+  const codex0138Doctor = await runCodex0138Doctor(root, { fix: doctorFix }).catch((err: any) => ({ schema: 'sks.codex-0138-doctor.v1', ok: false, error: err?.message || String(err), blockers: ['codex_0138_doctor_exception'], warnings: [] }));
+  const pluginInventory = await writeCodexPluginInventoryArtifacts(root).catch((err: any) => ({ error: err?.message || String(err), report: null, artifact: null }));
+  const pluginPolicy = (pluginInventory as any)?.report ? pluginAppTemplatePolicy((pluginInventory as any).report) : null;
+  const mcpPluginInventory = (pluginInventory as any)?.report
+    ? await writeMcpPluginInventoryArtifacts(root, { inventory: (pluginInventory as any).report }).catch((err: any) => ({ error: err?.message || String(err), candidates: null }))
+    : null;
   const pkgBytes = await dirSize(root).catch(() => 0);
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,
@@ -182,10 +193,14 @@ export async function run(_command: any, args: any = []) {
     agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
     codex_app_ui: codexAppUi,
+    codex_0138_doctor: codex0138Doctor,
+    codex_plugin_inventory: (pluginInventory as any)?.report || null,
+    codex_plugin_app_template_policy: pluginPolicy,
     require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     operator_actions: [
       ...(codexConfig.operator_actions || []),
-      ...(configRepair?.operator_actions || [])
+      ...(configRepair?.operator_actions || []),
+      ...(pluginPolicy?.doctor_warnings || [])
     ]
   });
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
@@ -212,6 +227,13 @@ export async function run(_command: any, args: any = []) {
       ok: (imagegen as any).auth_readiness?.available_paths?.length > 0,
       auth_readiness: (imagegen as any).auth_readiness || null,
       codex_app_builtin_available: (imagegen as any).codex_app?.available === true
+    },
+    codex_0138: {
+      capability: (codex0138Capability as any).report || null,
+      doctor: codex0138Doctor,
+      plugins: (pluginInventory as any)?.report || null,
+      plugin_app_template_policy: pluginPolicy,
+      mcp_plugin_inventory: (mcpPluginInventory as any)?.candidates || null
     },
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
@@ -260,6 +282,20 @@ export async function run(_command: any, args: any = []) {
       for (const action of imagegenReady.next_actions || []) console.log(`  - ${action}`);
     }
   }
+  const codex0138 = (codex0138Capability as any).report || {};
+  console.log('Codex 0.138 features:');
+  console.log(`  /app handoff: ${codex0138.supports_app_handoff ? 'ok' : 'unavailable'}`);
+  console.log(`  plugin JSON: ${codex0138.supports_plugin_json ? 'ok' : 'unavailable'}`);
+  console.log(`  image path exposure: ${codex0138.supports_image_path_exposure ? 'ok' : 'unavailable'}`);
+  console.log(`  OAuth MCP pre-refresh: ${codex0138.supports_oauth_mcp_prerefresh ? 'ok' : 'unavailable'}`);
+  const plugins = (pluginInventory as any)?.report?.plugins || [];
+  const remoteMcpCount = plugins.flatMap((plugin: any) => plugin.remote_mcp_servers || []).length;
+  const unavailableTemplates = pluginPolicy?.unavailable_app_templates?.length || 0;
+  console.log(`Codex plugins: ${(pluginInventory as any)?.report ? 'ok' : 'warning'}`);
+  console.log(`  Remote MCP servers: ${remoteMcpCount} candidates`);
+  console.log(`  Unavailable app templates: ${unavailableTemplates}`);
+  for (const warning of pluginPolicy?.doctor_warnings || []) console.log(`  warning: ${warning}`);
+  if ((codex0138Doctor as any)?.fixed?.length) console.log(`  doctor --fix repaired: ${(codex0138Doctor as any).fixed.join(', ')}`);
   console.log(`codex-lb:  ${codexLb.ok ? 'ok' : `warning ${codexLb.circuit?.state || 'unknown'}`}`);
   if (localModel) {
     console.log('Local LLM:');

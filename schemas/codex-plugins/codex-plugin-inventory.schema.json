@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/codex-plugins/codex-plugin-inventory.schema.json",
+  "title": "SKS Codex Plugin Inventory",
+  "type": "object",
+  "required": ["schema", "generated_at", "plugins", "marketplace_available", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.codex-plugin-inventory.v1" },
+    "generated_at": { "type": "string" },
+    "marketplace_available": { "type": "boolean" },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "source", "installed", "enabled", "default_prompts", "remote_mcp_servers", "unavailable_app_templates"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "name": { "type": "string" },
+          "source": { "enum": ["marketplace", "local", "remote", "unknown"] },
+          "installed": { "type": "boolean" },
+          "enabled": { "type": "boolean" },
+          "default_prompts": { "type": "array", "items": { "type": "string" } },
+          "remote_mcp_servers": { "type": "array", "items": { "type": "object" } },
+          "unavailable_app_templates": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

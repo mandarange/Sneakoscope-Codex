@@ -11,6 +11,8 @@ export interface ZellijSlotColumnAnchorInput {
   failedWorkers?: number
   updateAvailableVersion?: string | null
   madDbActive?: boolean
+  qaAppHandoffPending?: boolean
+  qaAppHandoffArtifact?: string | null
   mode?: string
   workerRows?: ZellijSlotColumnWorkerRow[]
   maxWorkerRows?: number
@@ -39,17 +41,20 @@ export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput 
   const fail = nonNegativeInt(input.failedWorkers, 0)
   const update = input.updateAvailableVersion ? ` · update ${trimInline(input.updateAvailableVersion, 18)} available` : ''
   const madDb = input.madDbActive ? ' · MAD-DB ACTIVE' : ''
+  const appHandoff = input.qaAppHandoffPending ? ' · QA /app handoff pending' : ''
   const header = done || fail
-    ? `SLOTS active ${active} · headless ${headless} · done ${done} · fail ${fail} · q ${queue}${update}${madDb}`
-    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${madDb}`
+    ? `SLOTS active ${active} · headless ${headless} · done ${done} · fail ${fail} · q ${queue}${update}${madDb}${appHandoff}`
+    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${madDb}${appHandoff}`
   const workers = Array.isArray(input.workerRows) ? input.workerRows : []
-  if (!workers.length) return `${header}\nvisible slot panes stack below this anchor`
+  const handoffLine = input.qaAppHandoffPending ? `QA app handoff pending · ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 64)}` : null
+  if (!workers.length) return [header, handoffLine, 'visible slot panes stack below this anchor'].filter(Boolean).join('\n')
   const maxRows = Math.max(1, nonNegativeInt(input.maxWorkerRows, input.mode === 'full-debug' ? 24 : 12))
   const overflowRows = workers.filter((row) => row.placement === 'headless').slice(0, maxRows)
   const visibleRows = overflowRows.length ? overflowRows : workers.filter((row) => row.placement !== 'zellij-pane').slice(0, maxRows)
   const hidden = Math.max(0, workers.length - visibleRows.length)
   return [
     header,
+    handoffLine,
     `visible slot panes stack below this anchor`,
     ...visibleRows.map((row, index) => renderWorkerRow(row, index + 1)),
     ...(hidden && visibleRows.length ? [`+${hidden} worker${hidden === 1 ? '' : 's'} in dedicated panes or overflow`] : [])
@@ -66,8 +71,9 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   const telemetry = await readZellijSlotTelemetrySnapshot(root, input.missionId).catch(() => null)
   const updateNotice = await readJson(path.join(missionDir, 'update-notice.json'))
   const madDb = await readJson(path.join(missionDir, 'mad-db-capability.json'))
+  const appHandoff = await readJson(path.join(missionDir, 'qa-loop', 'app-handoff.json'))
   if (telemetry && Object.keys(telemetry.slots || {}).length) {
-    return renderTelemetryAnchor(telemetry, updateNotice, madDb)
+    return renderTelemetryAnchor(telemetry, updateNotice, madDb, appHandoff)
   }
   const snapshot = await readJson(path.join(missionDir, 'zellij-dashboard-snapshot.json'))
   const rightColumn = await readJson(path.join(missionDir, 'zellij-right-column-state.json'))
@@ -81,19 +87,24 @@ export async function renderZellijSlotColumnAnchorFromArtifacts(input: {
   const anchorInput: ZellijSlotColumnAnchorInput = { activeWorkers, visiblePaneCap, headlessWorkers, queueDepth, workerRows }
   if (updateNotice?.update_available && updateNotice.latest_version) anchorInput.updateAvailableVersion = String(updateNotice.latest_version)
   if (isMadDbActive(madDb)) anchorInput.madDbActive = true
+  if (['pending', 'blocked_for_desktop_review'].includes(String(appHandoff?.status || ''))) {
+    anchorInput.qaAppHandoffPending = true
+    anchorInput.qaAppHandoffArtifact = appHandoff?.artifact_path || 'qa-loop/app-handoff.json'
+  }
   if (input.mode !== undefined) anchorInput.mode = input.mode
   return renderZellijSlotColumnAnchor(anchorInput)
 }
 
-function renderTelemetryAnchor(snapshot: any, updateNotice: any = null, madDbCapability: any = null): string {
+function renderTelemetryAnchor(snapshot: any, updateNotice: any = null, madDbCapability: any = null, appHandoff: any = null): string {
   const updatedAt = Date.parse(snapshot.updated_at || '')
   const staleSeconds = Number.isFinite(updatedAt) ? Math.max(0, Math.round((Date.now() - updatedAt) / 1000)) : null
   const counts = snapshot.counts || {}
   const active = Number(counts.running || 0) + Number(counts.verifying || 0)
   const update = updateNotice?.update_available && updateNotice?.latest_version ? ` · update ${trimInline(String(updateNotice.latest_version), 18)} available` : ''
   const madDb = isMadDbActive(madDbCapability) ? ' · MAD-DB ACTIVE' : ''
-  if (staleSeconds != null && staleSeconds > 10) return `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${madDb}`
-  return `SLOTS active ${active} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${madDb}`
+  const qaHandoff = ['pending', 'blocked_for_desktop_review'].includes(String(appHandoff?.status || '')) ? ' · QA /app handoff pending' : ''
+  if (staleSeconds != null && staleSeconds > 10) return `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${madDb}${qaHandoff}`
+  return `SLOTS active ${active} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${madDb}${qaHandoff}`
 }
 
 function isMadDbActive(capability: any) {

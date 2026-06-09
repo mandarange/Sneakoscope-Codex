@@ -53,6 +53,8 @@ export interface CodexTaskInput {
   }
   mutationLedgerRoot: string
   zellijPaneId?: string | null
+  reasoningEffort?: string | null
+  modelReasoningEffort?: string | null
 }
 
 export interface CodexTaskResult {

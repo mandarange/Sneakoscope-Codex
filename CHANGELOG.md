@@ -4,6 +4,26 @@
 
 
 
+
+## [2.0.18] - 2026-06-09
+
+### Added
+
+- Codex 0.138 capability detection with root and mission artifacts for `/app` handoff, plugin JSON, image path exposure, model-defined efforts, token usage, PAT v2, and OAuth MCP pre-refresh support.
+- QA-LOOP Codex Desktop `/app` handoff artifacts, CLI flags, status output, Zellij pending-status surfacing, and explicit separation from Codex Chrome Extension web UI evidence.
+- Codex plugin JSON inventory and candidate-only remote MCP server policy, including unavailable app-template doctor warnings and QA handoff recommendations.
+- Image artifact saved-path contracts for QA/imagegen outputs so follow-up visual edits use real model-visible local paths.
+- Model-advertised reasoning effort order support, QA effort escalation, Codex account token usage telemetry, and QA budget policy artifacts.
+- Codex 0.138 doctor checks for shell fallback, Linux proxy socket paths, OAuth MCP pre-refresh readiness, AGENTS.md logical paths, and plugin discovery cache repair.
+- Release DAG coverage and hermetic gates for the Codex 0.138 integration surface.
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Naruto final gate pass status now includes `parallelRuntimeOk` instead of only recording it as side evidence.
+- Team legacy create removal coverage now rejects the old `parseTeamCreateArgs` helper token.
+- Mad-DB MCP result lifecycle recording now uses a central post-tool helper and treats MCP `isError` results as failed DB operation lifecycle events.
+
 ## [2.0.17] - 2026-06-08
 
 ### Added

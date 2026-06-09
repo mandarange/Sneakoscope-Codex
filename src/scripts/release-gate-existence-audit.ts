@@ -86,7 +86,11 @@ const required = [
 ];
 
 assertGate(releaseManifest.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest.schema });
-assertGate(String(scripts['release:check'] || '').includes('release-gate-dag-runner') && String(scripts['release:check'] || '').includes('--preset release'), 'release:check must use the v2 DAG release preset', { release_check: scripts['release:check'] });
+const releaseCheck = String(scripts['release:check'] || '');
+const releaseCheckTarget = releaseCheck.includes('release:check:affected')
+  ? String(scripts['release:check:affected'] || '')
+  : releaseCheck;
+assertGate(releaseCheckTarget.includes('release-gate-dag-runner') && /--preset\s+(?:release|affected)/.test(releaseCheckTarget), 'release:check must use the v2 DAG release/affected preset', { release_check: scripts['release:check'], resolved_release_check: releaseCheckTarget });
 assertGate(releaseGates.length > 0, 'release v2 manifest must include release preset gates', { gate_count: releaseGates.length });
 
 for (const name of required) {

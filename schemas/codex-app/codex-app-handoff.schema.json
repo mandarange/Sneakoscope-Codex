@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/codex-app/codex-app-handoff.schema.json",
+  "title": "SKS Codex App Handoff",
+  "type": "object",
+  "required": ["schema", "ok", "status", "desktop_handoff_supported", "artifact_path", "prompt_artifact_path"],
+  "properties": {
+    "schema": { "const": "sks.codex-app-handoff-result.v1" },
+    "ok": { "type": "boolean" },
+    "attempted": { "type": "boolean" },
+    "launched": { "type": "boolean" },
+    "status": { "enum": ["pending", "skipped", "blocked_for_desktop_review"] },
+    "desktop_handoff_supported": { "type": "boolean" },
+    "artifact_path": { "type": "string", "minLength": 1 },
+    "prompt_artifact_path": { "type": "string", "minLength": 1 },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "request": { "type": "object" }
+  },
+  "additionalProperties": true
+}

@@ -20,6 +20,7 @@ import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.
 import { diffCodexAppUiSnapshots, writeCodexAppUiSnapshot } from '../codex-app/codex-app-ui-state-snapshot.js';
 import { checkSksUpdateNotice } from '../update/update-notice.js';
 import { createMadDbCapability, MAD_DB_ACK } from '../mad-db/mad-db-capability.js';
+import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -371,6 +372,7 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   const has = (scope: string) => allowedScopes.has(scope as any);
   const dbWriteAllowed = has('db_write');
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad Zellij scoped high-power maintenance session' });
+  await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch(() => null);
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
   // The interactive launch 'before' snapshot is only persisted (env + policy json)
   // and is never compared against an 'after' snapshot during the session, so the
@@ -555,6 +557,7 @@ function codexLbImmediateLaunchOpts(args: any = [], lb: any = {}, opts: any = {}
 
 export async function madSksFixture(root: any) {
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: '$MAD-SKS fixture permission gate' });
+  await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch(() => null);
   const gate = { schema_version: 1, passed: true, mad_sks_permission_active: true, permissions_deactivated: true, catastrophic_safety_guard_active: true, permission_profile: permissionGateSummary(), fixture: true };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
   return { mission_id: id, dir, gate };
@@ -738,6 +741,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
 async function materializeMadSksRun(root: string, targetRoot: string, permission: any, userIntent: string, json: boolean, opts: any = {}) {
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: userIntent });
+  await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch(() => null);
   const before = await snapshotProtectedCore(packageRoot(), 'before');
   const authorization = opts.authorizationManifest || createMadSksAuthorizationManifest({ permission, userIntent });
   const authorizationPath = opts.authorizationManifestPath || path.join(dir, 'mad-sks-authorization.json');

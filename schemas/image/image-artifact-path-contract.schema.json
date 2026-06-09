@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/image/image-artifact-path-contract.schema.json",
+  "title": "SKS Image Artifact Path Contract",
+  "type": "object",
+  "required": ["schema", "mission_id", "generated_at", "images", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.image-artifact-path-contract.v1" },
+    "mission_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string" },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "file_path", "relative_path", "exists", "model_visible_path", "followup_edit_hint"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["input_attachment", "generated_image", "edited_image", "visual_qa_snapshot"] },
+          "file_path": { "type": "string", "minLength": 1 },
+          "relative_path": { "type": "string" },
+          "exists": { "type": "boolean" },
+          "mime_type": { "type": ["string", "null"] },
+          "model_visible_path": { "type": "string", "minLength": 1 },
+          "followup_edit_hint": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

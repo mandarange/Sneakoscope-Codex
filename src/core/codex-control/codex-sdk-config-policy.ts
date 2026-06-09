@@ -4,7 +4,7 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
   const config: Record<string, unknown> = {
     model: String(process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5'),
     service_tier: 'fast',
-    model_reasoning_effort: 'medium',
+    model_reasoning_effort: String(input.modelReasoningEffort || input.reasoningEffort || process.env.SKS_CODEX_REASONING || process.env.CODEX_MODEL_REASONING_EFFORT || 'medium'),
     mcp_servers: {},
     sks: {
       route: input.route,

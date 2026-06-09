@@ -13,6 +13,12 @@ import { scanDbSafety } from '../db-safety.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { flag, promptOf, readBoundedIntegerFlag, readFlagValue, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
+import { runCodexAppHandoff, qaLoopShouldRequestAppHandoff } from '../codex-app/codex-app-handoff.js';
+import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
+import { writeCodexAccountUsageArtifacts } from '../usage/codex-account-usage.js';
+import { buildQaLoopBudgetPolicy, selectQaLoopEscalatedEffort } from '../qa-loop/qa-loop-budget-policy.js';
+import { discoverImageArtifactsInDir, writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
+import { pluginAppTemplatePolicy } from '../codex-plugins/codex-plugin-json.js';
 import fsp from 'node:fs/promises';
 
 export async function qaLoopCommand(sub: any, args: any = []) {
@@ -28,8 +34,8 @@ export async function qaLoopCommand(sub: any, args: any = []) {
 Usage:
   sks qa-loop prepare "target"
   sks qa-loop answer <mission-id|latest> <answers.json>
-  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]
-  sks qa-loop status <mission-id|latest>
+  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--app-handoff] [--app-handoff-required]
+  sks qa-loop status <mission-id|latest> [--desktop]
 `);
 }
 
@@ -129,6 +135,89 @@ async function qaLoopRun(args: any) {
   const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaGate.qa_report_file;
   const uiRequired = qaUiRequired(contract.answers || {});
+  const capabilityArtifact = await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
+  const usageArtifact = await writeCodexAccountUsageArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), snapshot: null }));
+  const budgetPolicy = buildQaLoopBudgetPolicy({ usage: (usageArtifact as any)?.snapshot || null, provider: 'codex-sdk' });
+  await writeJsonAtomic(path.join(dir, 'qa-loop', 'qa-loop-budget-policy.json'), budgetPolicy);
+  const effortEscalation = selectQaLoopEscalatedEffort({
+    failureCount: Number(qaGate.safe_fix_attempts || qaGate.failure_count || 0),
+    currentEffort: String(profile || 'high').replace(/^sks-(?:logic|agent)-/, '').replace(/-fast$/, '') || 'high'
+  });
+  await writeJsonAtomic(path.join(dir, 'qa-loop', 'qa-loop-effort-escalation.json'), effortEscalation);
+  const discoveredImages = await discoverImageArtifactsInDir(dir).catch(() => []);
+  const imagePathContract = discoveredImages.length
+    ? await writeQaLoopImagePathContract(root, dir, id, discoveredImages)
+    : null;
+  const pluginInventory = await readJson(path.join(root, '.sneakoscope', 'codex-plugin-inventory.json'), null);
+  const pluginPolicy = pluginInventory?.schema === 'sks.codex-plugin-inventory.v1' ? pluginAppTemplatePolicy(pluginInventory) : null;
+  const appHandoffRequired = flag(args, '--app-handoff-required') || process.env.SKS_QA_LOOP_APP_HANDOFF_REQUIRED === '1';
+  const appHandoffRequested = qaLoopShouldRequestAppHandoff({
+    args,
+    uiRequired,
+    visualArtifactsPresent: discoveredImages.length > 0,
+    pluginAppTemplateUnavailable: Boolean(pluginPolicy?.unavailable_app_templates?.length),
+    userRequestedDesktopReview: appHandoffRequired
+  });
+  const appHandoff = appHandoffRequested || appHandoffRequired
+    ? await runCodexAppHandoff(root, {
+        schema: 'sks.codex-app-handoff-request.v1',
+        mission_id: id,
+        route: '$QA-LOOP',
+        reason: appHandoffRequired ? 'desktop_app_review_required' : 'desktop_app_review_requested',
+        thread_ref: null,
+        workspace_path: root,
+        artifacts: [
+          'decision-contract.json',
+          'qa-gate.json',
+          'qa-ledger.json',
+          reportFile,
+          capabilityArtifact && !(capabilityArtifact as any).error ? 'codex-0138-capability.json' : '',
+          imagePathContract ? 'qa-loop/image-artifact-path-contract.json' : ''
+        ].filter(Boolean),
+        prompt: mission.prompt || 'QA-LOOP desktop handoff',
+        require_desktop: appHandoffRequired,
+        capability_required: 'codex-0.138'
+      }).catch((err: any) => ({
+        ok: false,
+        status: 'blocked_for_desktop_review',
+        artifact_path: path.join(dir, 'qa-loop', 'app-handoff.json'),
+        blockers: [`codex_app_handoff_failed:${err?.message || String(err)}`],
+        desktop_handoff_supported: false
+      }))
+    : null;
+  if (appHandoff || imagePathContract) {
+    const latestGate = await readJson(path.join(dir, 'qa-gate.json'), qaGate);
+    const nextGate = {
+      ...latestGate,
+      desktop_app_handoff_required: appHandoffRequired,
+      desktop_app_handoff_status: appHandoff ? appHandoff.status : 'not_requested',
+      desktop_app_handoff_artifact: appHandoff ? path.relative(dir, appHandoff.artifact_path) : null,
+      desktop_app_handoff_supported: appHandoff ? appHandoff.desktop_handoff_supported === true : false,
+      desktop_app_handoff_is_web_ui_evidence: false,
+      image_artifact_path_contract_present: Boolean(imagePathContract),
+      image_artifact_path_contract_artifact: imagePathContract ? 'qa-loop/image-artifact-path-contract.json' : null,
+      image_artifact_path_contract_blockers: imagePathContract?.contract?.blockers || [],
+      blockers: Array.from(new Set([
+        ...(latestGate.blockers || []),
+        ...(appHandoffRequired && appHandoff && appHandoff.ok !== true ? ['blocked_for_desktop_review'] : []),
+        ...(imagePathContract?.contract?.blockers || [])
+      ])),
+      notes: [
+        ...(latestGate.notes || []),
+        ...(appHandoff ? ['Codex Desktop /app handoff is tracked separately and is not web UI verification evidence.'] : []),
+        ...(imagePathContract ? ['Image artifacts expose real saved file paths for follow-up visual edits.'] : [])
+      ]
+    };
+    await writeJsonAtomic(path.join(dir, 'qa-gate.json'), nextGate);
+    if (appHandoffRequired && appHandoff && appHandoff.ok !== true) {
+      await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: nextGate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'qa-loop/app-handoff.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nextGate.blockers, command: { cmd: `sks qa-loop run ${id} --app-handoff-required`, status: 2 } });
+      await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_DESKTOP_APP_HANDOFF', questions_allowed: true });
+      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked_for_desktop_review', mission_id: id, app_handoff: appHandoff, gate: nextGate }, null, 2));
+      console.error('QA-LOOP blocked: Codex Desktop /app handoff is required but unavailable or still pending.');
+      process.exitCode = 2;
+      return;
+    }
+  }
   if (uiRequired && !mock) {
     const chrome = await codexChromeExtensionStatus();
     if (!chrome.ok) {
@@ -228,7 +317,7 @@ async function qaLoopRun(args: any) {
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     const cycleDir = path.join(dir, 'qa-loop', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
-    const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile });
+    const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile, imagePathContract: imagePathContract?.contract || null, appHandoff });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.start', cycle });
     const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, logDir: cycleDir });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
@@ -265,7 +354,8 @@ async function qaLoopStatus(args: any) {
   const status = await qaStatus(dir);
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
   const agentSessions = await readJson(path.join(dir, 'agents', 'agent-sessions.json'), null);
-  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null }, null, 2));
+  const desktop = await readJson(path.join(dir, 'qa-loop', 'app-handoff.json'), null);
+  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, desktop_app_handoff: desktop, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null }, null, 2));
   console.log('SKS QA-LOOP Status\n');
   console.log(`Mission:   ${id}`);
   console.log(`Phase:     ${state.phase || mission.phase}`);
@@ -273,4 +363,20 @@ async function qaLoopStatus(args: any) {
   console.log(`Report:    ${status.report_written ? `present ${status.report_file || ''}`.trim() : 'missing'}`);
   console.log(`Gate:      ${status.gate?.passed ? 'passed' : 'not passed'}`);
   if (status.gate?.reasons?.length) console.log(`Reasons:   ${status.gate.reasons.join(', ')}`);
+  if (flag(args, '--desktop')) {
+    console.log('Desktop:');
+    console.log(`  /app handoff: ${desktop?.status || 'not_requested'}`);
+    if (desktop?.operator_instruction?.prompt_artifact) console.log(`  prompt:       ${desktop.operator_instruction.prompt_artifact}`);
+    console.log('  web evidence: not a substitute for Codex Chrome Extension web UI verification');
+  }
+}
+
+async function writeQaLoopImagePathContract(root: string, dir: string, missionId: string, images: any[]) {
+  const primary = await writeImageArtifactPathContract(root, {
+    missionId,
+    images,
+    artifactPath: path.join(dir, 'image-artifact-path-contract.json')
+  });
+  await writeJsonAtomic(path.join(dir, 'qa-loop', 'image-artifact-path-contract.json'), primary.contract);
+  return primary;
 }
