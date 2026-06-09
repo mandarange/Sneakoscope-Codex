@@ -77,6 +77,48 @@ const hydrated = await renderer.renderZellijSlotPaneFromArtifacts({
   generationIndex: 2,
   mode: 'compact-slots'
 })
+const missionRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-slot-pane-mission-'))
+const missionId = 'M-slot-pane-renderer'
+const snapshotDir = path.join(missionRoot, '.sneakoscope', 'missions', missionId, 'zellij')
+await fs.mkdir(snapshotDir, { recursive: true })
+await fs.writeFile(path.join(snapshotDir, 'slot-telemetry.snapshot.json'), `${JSON.stringify({
+  schema: 'sks.zellij-slot-telemetry-snapshot.v1',
+  mission_id: missionId,
+  updated_at: new Date(Date.now() - 11000).toISOString(),
+  flush_count: 1,
+  slots: {
+    'slot-003:g2': {
+      slot_id: 'slot-003',
+      generation_index: 2,
+      worker_id: 'slot-003',
+      status: 'running',
+      role: 'implementer',
+      backend: 'codex-sdk',
+      provider: 'codex-lb',
+      service_tier: 'fast',
+      worktree_id: 'WT-0007',
+      worktree_path: null,
+      task_title: 'mission telemetry stale fixture',
+      current_file: null,
+      latest_event_type: 'task_started',
+      latest_ts: new Date(Date.now() - 12000).toISOString(),
+      progress: null,
+      artifact_paths: [],
+      blockers: [],
+      log_tail: ''
+    }
+  },
+  counts: { queued: 0, running: 1, verifying: 0, completed: 0, failed: 0, headless: 0 }
+})}\n`, 'utf8')
+const missionHydrated = await renderer.renderZellijSlotPaneFromArtifacts({
+  artifactDir,
+  artifactRoot: missionRoot,
+  missionId,
+  slotId: 'slot-003',
+  generationIndex: 2,
+  mode: 'compact-slots'
+})
+await fs.rm(missionRoot, { recursive: true, force: true })
 await fs.rm(artifactDir, { recursive: true, force: true })
 const command = renderer.buildZellijSlotPaneCommand({
   cliPath: '/repo/dist/bin/sks.js',
@@ -98,9 +140,11 @@ const report = {
   artifact_hydrates_runtime: /runtime: fast on/.test(hydrated) && /model: gpt-5\.5/.test(hydrated) && /reasoning: medium/.test(hydrated) && /auth: codex_lb_key/.test(hydrated),
   artifact_hydrates_live_event: /tool apply_patch/.test(hydrated) && /renderer stdout tail/.test(hydrated),
   artifact_hydrates_planned_file: /zellij-slot-pane-renderer\.ts/.test(hydrated),
+  mission_stale_hydrates_artifact_fallback: /telemetry stale; worker may still be running/.test(missionHydrated) && (/renderer stdout tail/.test(missionHydrated) || /tool apply_patch/.test(missionHydrated)),
   command_uses_slot_pane: command.includes('zellij-slot-pane') && command.includes('--watch'),
   snapshot: text,
-  hydrated_snapshot: hydrated
+  hydrated_snapshot: hydrated,
+  mission_hydrated_snapshot: missionHydrated
 }
-assertGate(lines.length <= 17 && report.contains_slot && report.contains_status && report.contains_runtime && report.contains_files && report.contains_live_event && report.artifact_hydrates_runtime && report.artifact_hydrates_live_event && report.artifact_hydrates_planned_file && report.command_uses_slot_pane, 'compact slot pane renderer must render one live work pane per slot', report)
+assertGate(lines.length <= 17 && report.contains_slot && report.contains_status && report.contains_runtime && report.contains_files && report.contains_live_event && report.artifact_hydrates_runtime && report.artifact_hydrates_live_event && report.artifact_hydrates_planned_file && report.mission_stale_hydrates_artifact_fallback && report.command_uses_slot_pane, 'compact slot pane renderer must render one live work pane per slot', report)
 emitGate('zellij:compact-slot-renderer', report)

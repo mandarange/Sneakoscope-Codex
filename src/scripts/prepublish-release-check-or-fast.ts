@@ -4,7 +4,7 @@
 //
 // Fast path: accept a current release-check stamp.
 // Repair path: if the stamp is missing/stale, run the authoritative full
-// `release:check` once, then require the fast check to pass.
+// `release:check:full` once, then require the fast check to pass.
 //
 // This keeps direct `npm publish` usable without weakening the publish gate:
 // stale stamp repair is the full release gate, not a synthetic stamp write.
@@ -38,7 +38,7 @@ function runReleaseCheck() {
       stdio: 'inherit'
     });
   }
-  return spawnSync(npmCmd, ['run', 'release:check'], {
+  return spawnSync(npmCmd, ['run', 'release:check:full'], {
     cwd: process.cwd(),
     encoding: 'utf8',
     env: process.env,
@@ -83,7 +83,7 @@ function main() {
     process.exit(first.status || 1);
   }
 
-  console.error('Prepublish release stamp is stale or missing; running full `npm run release:check` before publish.');
+  console.error('Prepublish release stamp is stale or missing; running full `npm run release:check:full` before publish.');
   const releaseCheck = runReleaseCheck();
   if (releaseCheck.status !== 0) process.exit(releaseCheck.status || 1);
 

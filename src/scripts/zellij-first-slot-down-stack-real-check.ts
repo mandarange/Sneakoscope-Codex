@@ -71,8 +71,8 @@ async function runRealFirstSlotDownStackProof() {
       record2.worker_direction_requested === 'down',
       record2.direction_requested === 'down',
       Boolean(record1.slot_column_anchor_pane_id),
-      record1.pane_kind === 'slot_status_renderer',
-      record1.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer'
+      record1.pane_kind === 'worker_codex_sdk',
+      record1.scaling_primitive === 'native_cli_process_in_zellij_worker_pane'
     ]
     const proofBlockers = [
       ...blockers,
@@ -180,15 +180,8 @@ async function openSlotRenderer(root: string, missionId: string, sessionName: st
   await ensureDir(path.join(root, workerArtifactDir))
   const command = [
     process.execPath,
-    path.join(packageRoot(), 'dist/bin/sks.js'),
-    'zellij-slot-pane',
-    '--mission',
-    missionId,
-    '--artifact-dir',
-    path.join(root, workerArtifactDir),
-    '--mode',
-    'compact-slots',
-    '--watch'
+    '-e',
+    `console.log(${JSON.stringify(`${slotId} live worker pane`)})`
   ].map(shellQuote).join(' ')
   return openWorkerPane({
     root,
@@ -207,10 +200,10 @@ async function openSlotRenderer(root: string, missionId: string, sessionName: st
     cwd: packageRoot(),
     serviceTier: 'fast',
     backend: 'codex-sdk',
-    statusLabel: 'slot-renderer',
+    statusLabel: 'worker',
     rightColumnMode: 'spawn-on-first-worker',
     visiblePaneCap: 2,
-    uiMode: 'compact-slots'
+    uiMode: 'full-debug'
   })
 }
 

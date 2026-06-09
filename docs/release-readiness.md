@@ -89,10 +89,13 @@ without confirmation, or config/auth/skill mutations without backup or no-op pro
 Publishing to npm requires `npm run release:check:full` (the complete hermetic gate
 set) **plus** `npm run release:real-check` for environment-dependent proof when that
 proof is required. Ordinary `npm run release:check` is now the change-aware affected
-gate for local checks; it cannot authorize a publish on its own. `prepublishOnly`
-and `npm run publish:dry` both run `release:check:full`, verify the fresh
-`.sneakoscope/reports/release-check-stamp.json`, and then run provenance/registry
-checks before the real or dry-run publish step. The dynamic runners
+gate for local checks; it cannot authorize a publish on its own. `npm run publish:dry`
+runs `release:check:full`, verifies the fresh
+`.sneakoscope/reports/release-check-stamp.json`, and then runs provenance/registry
+checks before the dry-run publish step. `prepublishOnly` uses
+`prepublish-release-check-or-fast` to accept that current stamp before the real
+publish; if the stamp is missing or stale, it runs `release:check:full` once before
+continuing. The dynamic runners
 `npm run release:check:dynamic` and `npm run release:check:dynamic:execute` remain
 local/CI accelerations only — they narrow the gate set to changed inputs and cached
 results, so they **cannot** authorize a publish on their own. See

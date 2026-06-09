@@ -20,13 +20,14 @@ export interface ReleaseGateAffectedSelection {
 
 export function selectAffectedReleaseGates(root: string, manifest: ReleaseGateManifestV2, gates: ReleaseGateNode[], input: {
   changedSince?: string | null
+  changedFiles?: string[]
   full?: boolean
   preset?: string
 } = {}): { gates: ReleaseGateNode[]; selection: ReleaseGateAffectedSelection } {
   if (input.full) {
     return selectionResult(gates, gates, [], 'full', {}, [])
   }
-  const changedFiles = resolveChangedFiles(root, input.changedSince || 'auto')
+  const changedFiles = input.changedFiles ? [...new Set(input.changedFiles)].sort() : resolveChangedFiles(root, input.changedSince || 'auto')
   const selected: ReleaseGateNode[] = []
   const reasons: Record<string, string> = {}
   for (const gate of gates) {
@@ -44,7 +45,9 @@ export function selectAffectedReleaseGates(root: string, manifest: ReleaseGateMa
       reasons[gate.id] = 'always_keep_core_release_safety'
     }
   }
-  const expanded = expandWithDependencies(selected, manifest)
+  const expanded = input.preset === 'affected' || input.preset === 'fast'
+    ? selected
+    : expandWithDependencies(selected, manifest)
   const ordered = manifest.gates.filter((gate) => expanded.some((row) => row.id === gate.id))
   return selectionResult(gates, ordered, changedFiles, 'affected', reasons, gates.filter((gate) => !ordered.some((row) => row.id === gate.id)).map((gate) => gate.id))
 }
@@ -68,14 +71,25 @@ function expandWithDependencies(selected: ReleaseGateNode[], manifest: ReleaseGa
 function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], preset: string) {
   if (ALWAYS_KEEP.has(gate.id)) return 'always_keep_core_release_safety'
   if (!changedFiles.length) return preset === 'fast' ? 'fast_no_diff_core_only_skip' : 'no_changed_files'
+  const releaseGate = /^(release:|publish:|prepublish)/.test(gate.id)
   if (changedFiles.some((file) => file === 'package.json' || file === 'package-lock.json')) {
     if (/^(release:|publish:|prepublish|runtime:|typecheck|schema:check)/.test(gate.id)) return 'package_metadata_changed'
   }
-  if (changedFiles.some((file) => file === 'release-gates.v2.json' || file.startsWith('src/core/release/') || file.startsWith('src/scripts/release-'))) return 'release_gate_system_changed'
+  if (changedFiles.some((file) => file === 'release-gates.v2.json' || file.startsWith('src/core/release/'))) {
+    if (releaseGate) return 'release_gate_system_changed'
+  }
+  const matchingReleaseScript = changedFiles.some((file) => releaseScriptGateCandidates(file).includes(gate.id))
+  if (matchingReleaseScript) return 'release_script_changed'
+  if (changedFiles.some((file) => file.startsWith('src/scripts/prepublish-') || file.startsWith('src/scripts/publish-'))) {
+    if (releaseGate && gate.id === 'release:version-truth') return 'publish_or_prepublish_script_changed'
+  }
+  if (changedFiles.some((file) => file.startsWith('src/scripts/scheduler-') || file.startsWith('src/core/scheduler/'))) {
+    return gate.id.startsWith('scheduler:') ? 'scheduler_source_changed' : null
+  }
   if (changedFiles.some((file) => file.startsWith('src/core/research/'))) return gate.id.startsWith('research:') ? 'research_source_changed' : null
   if (changedFiles.some((file) => file.startsWith('src/core/zellij/') || file.startsWith('src/commands/zellij'))) return gate.id.startsWith('zellij:') || gate.id.startsWith('agent:zellij') || gate.id.startsWith('naruto:zellij') ? 'zellij_source_changed' : null
   if (changedFiles.some((file) => file.includes('/db') || file.includes('mad-db') || file.includes('mcp'))) return /db|mcp|mad-db|mad-sks/.test(gate.id) ? 'db_mcp_or_mad_db_changed' : null
-  const inputs = gate.cache?.inputs || []
+  const inputs = (gate.cache?.inputs || []).filter((pattern) => !isBroadAffectedInput(pattern))
   if (inputs.some((pattern) => changedFiles.some((file) => matchesGlobish(file, pattern)))) return 'cache_input_changed'
   return null
 }
@@ -116,4 +130,32 @@ function matchesGlobish(file: string, pattern: string) {
   if (normalized.includes('**')) return file.startsWith(normalized.split('**')[0] || '')
   if (normalized.endsWith('*')) return file.startsWith(normalized.slice(0, -1))
   return false
+}
+
+function isBroadAffectedInput(pattern: string) {
+  const normalized = pattern.replace(/\\/g, '/')
+  return new Set([
+    '**',
+    '**/*',
+    'src/**',
+    'src/**/*',
+    'schemas/**',
+    'schemas/**/*',
+    'package.json',
+    'package-lock.json',
+    'release-gates.v2.json'
+  ]).has(normalized)
+}
+
+function releaseScriptGateCandidates(file: string) {
+  const normalized = file.replace(/\\/g, '/')
+  const base = normalized.split('/').pop()?.replace(/\.(ts|js|mjs|cjs)$/, '') || ''
+  if (!base.startsWith('release-')) return []
+  const rest = base.slice('release-'.length)
+  const withoutCheck = rest.replace(/-check$/, '')
+  return [
+    `release:${rest}`,
+    `release:${withoutCheck}`,
+    `release:${withoutCheck}:check`
+  ]
 }

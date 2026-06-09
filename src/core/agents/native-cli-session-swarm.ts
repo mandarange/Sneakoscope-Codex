@@ -8,7 +8,7 @@ import { closeWorkerPane, openWorkerPane } from '../zellij/zellij-worker-pane-ma
 import { closeWorkerInRightColumn, recordHeadlessWorkerInRightColumn } from '../zellij/zellij-right-column-manager.js'
 import { resolveProviderContext } from '../provider/provider-context.js'
 import { buildZellijSlotPaneCommand } from '../zellij/zellij-slot-pane-renderer.js'
-import { resolveZellijUiMode } from '../zellij/zellij-ui-mode.js'
+import { resolveZellijWorkerPaneUiMode } from '../zellij/zellij-ui-mode.js'
 import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type ZellijSlotTelemetryStatus } from '../zellij/zellij-slot-telemetry.js'
 import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
 
@@ -300,7 +300,8 @@ class NativeCliSessionSwarmRecorder {
       route: this.input.route,
       serviceTier: this.input.fastModePolicy.service_tier
     })
-    const uiMode = resolveZellijUiMode(Array.isArray(input.ctx.opts.args) ? input.ctx.opts.args : [], process.env)
+    const uiMode = resolveZellijWorkerPaneUiMode(Array.isArray(input.ctx.opts.args) ? input.ctx.opts.args : [], process.env)
+    const liveWorkerPane = uiMode !== 'compact-slots'
     const workerEnv = {
       ...(input.ctx.opts.env || {}),
       ...fastModeEnv(this.input.fastModePolicy),
@@ -322,7 +323,7 @@ class NativeCliSessionSwarmRecorder {
 	      artifacts: [path.join(input.workerDirRel, 'worker-intake.json'), input.heartbeatRel, input.resultRel],
 	      logTail: `zellij=${sessionName}`
 	    })
-    const workerCommand = uiMode === 'full-debug'
+    const workerCommand = liveWorkerPane
       ? buildPaneWorkerCommand({
         args: input.args,
         stdoutPath: path.join(this.root, input.stdoutRel),
@@ -354,7 +355,7 @@ class NativeCliSessionSwarmRecorder {
         mode: uiMode,
         watch: true
     })
-    const processRun = uiMode === 'full-debug'
+    const processRun = liveWorkerPane
       ? null
       : await this.spawnCompactSlotWorkerProcess({
         args: input.args,
@@ -425,7 +426,7 @@ class NativeCliSessionSwarmRecorder {
     const zellijRequired = process.env.SKS_REQUIRE_ZELLIJ === '1'
     const launchBlockers = zellijRequired ? paneRecord.blockers || [] : []
     const launchWarnings = zellijRequired ? [] : paneRecord.blockers || []
-    input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', uiMode === 'full-debug' ? '<native-cli-worker-command>' : '<zellij-slot-pane-renderer-command>']
+    input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', liveWorkerPane ? '<native-cli-worker-command>' : '<zellij-slot-pane-renderer-command>']
     input.record.zellij_session_name = sessionName
     input.record.zellij_pane_id = paneRecord.pane_id || null
     input.record.zellij_pane_id_source = paneRecord.pane_id_source
@@ -439,7 +440,7 @@ class NativeCliSessionSwarmRecorder {
     input.record.provider_context = paneRecord.provider_context
     input.record.worktree = worktree
     input.record.zellij_ui_mode = uiMode
-    input.record.slot_visualization = uiMode === 'full-debug' ? 'worker-command-pane' : 'zellij-slot-pane-renderer'
+    input.record.slot_visualization = liveWorkerPane ? 'worker-command-pane' : 'zellij-slot-pane-renderer'
 	    input.record.status = launchBlockers.length ? 'failed' : 'running'
 	    input.record.blockers = launchBlockers
 	    input.record.warnings = [...(input.record.warnings || []), ...launchWarnings]
@@ -780,7 +781,10 @@ export function buildPaneWorkerCommand(input: { args: string[]; stdoutPath: stri
   const holdMs = Math.max(0, Number(process.env.SKS_ZELLIJ_WORKER_PANE_HOLD_MS || 1500))
   const hold = holdMs > 0 ? `sleep ${shellQuote(String(Math.min(30, holdMs / 1000)))}` : ':'
   const header = input.header ? `printf '%s\\n' ${shellQuote(input.header)} | tee -a ${shellQuote(input.stdoutPath)};` : ''
-  return `${envPrefix.join(' ')} ${header} ${command} >> ${shellQuote(input.stdoutPath)} 2>> ${shellQuote(input.stderrPath)}; code=$?; ${heartbeat}; ${hold}; exit $code`.trim()
+  const exitPath = `${input.heartbeatPath}.exit`
+  const visibleCommand = `(${command}; printf '%s' "$?" > ${shellQuote(exitPath)}) 2>&1 | tee -a ${shellQuote(input.stdoutPath)}`
+  const readExit = `code=$(cat ${shellQuote(exitPath)} 2>/dev/null || printf '1'); rm -f ${shellQuote(exitPath)}`
+  return `${envPrefix.join(' ')} ${header} ${visibleCommand}; ${readExit}; ${heartbeat}; ${hold}; exit $code`.trim()
 }
 
 function buildPaneWorkerHeader(input: {
