@@ -5,6 +5,24 @@
 
 
 
+## [2.0.19] - 2026-06-09
+
+### Added
+
+- Optional Codex Desktop `/app` launch attempt mode.
+- QA-LOOP app handoff lifecycle confirmation.
+- Parallel plugin detail inventory fetch and cache diff.
+- Global image saved-path contract enforcement.
+- Codex model effort auto-discovery.
+- App-server token usage auto-discovery fallback.
+
+### Fixed
+
+- Plugin inventory no longer fetches details sequentially.
+- Image generation/edit artifacts cannot bypass saved-path contract.
+- QA-LOOP Desktop review is not confused with Chrome Extension web evidence.
+- Capability detector no longer blindly assumes all 0.138 features without probes.
+
 ## [2.0.18] - 2026-06-09
 
 ### Added

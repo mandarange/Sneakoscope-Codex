@@ -133,7 +133,23 @@ const requiredReleasePresetIds = [
   'qa-loop:budget-policy',
   'naruto:parallel-gate-consistency',
   'codex:0138-doctor',
-  'doctor:codex-0138-fix'
+  'doctor:codex-0138-fix',
+  'codex:0138-feature-probes',
+  'codex-app:launcher',
+  'codex-app:handoff-launch',
+  'qa-loop:app-handoff-launch',
+  'qa-loop:app-handoff-confirmation',
+  'qa-loop:app-handoff-status-lifecycle',
+  'qa-loop:app-handoff-gate-lifecycle',
+  'codex-plugin:parallel-detail-fetch',
+  'codex-plugin:cache',
+  'codex-plugin:diff',
+  'image:artifact-registry',
+  'image:global-path-contract',
+  'qa-loop:image-path-prompt-injection',
+  'codex:model-metadata',
+  'codex:effort-auto-discovery',
+  'codex:account-usage-autodiscovery'
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))

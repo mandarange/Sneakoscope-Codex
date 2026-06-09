@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.19 is the Codex 0.138 deep-integration polishing release for the 2.0 line. It adds optional Codex Desktop `/app` launch attempts, QA-LOOP Desktop handoff confirmation lifecycle, parallel plugin detail fetch, plugin inventory cache/diff, global image saved-path registry enforcement, Codex model effort metadata auto-discovery, account usage auto-discovery, and feature probes that can override coarse version-only 0.138 capability assumptions.
+
+The 2.0.19 release gate adds `codex-app:launcher`, `codex-app:handoff-launch`, QA `/app` lifecycle gates, `codex-plugin:parallel-detail-fetch`, `codex-plugin:cache`, `codex-plugin:diff`, `image:artifact-registry`, `image:global-path-contract`, `qa-loop:image-path-prompt-injection`, `codex:model-metadata`, `codex:effort-auto-discovery`, `codex:account-usage-autodiscovery`, and `codex:0138-feature-probes`. Publish readiness still requires a fresh full `release:check:full` stamp, `publish:dry`, provenance/registry checks, and operator-run publication after review.
+
 SKS 2.0.18 is the Codex 0.138 integration release for the 2.0 line. It adds capability artifacts for Codex 0.138 surfaces, QA-LOOP Codex Desktop `/app` handoff, Codex plugin JSON inventory, candidate-only plugin MCP policy, image saved-path contracts, model-advertised effort order, account usage budget policy, and Codex 0.138 doctor checks.
 
 The 2.0.18 release gate adds `codex:0138-capability`, `codex:0138-capability-artifact`, `codex-sdk:version-compat`, `codex-app:handoff`, QA `/app` handoff gates, plugin inventory/MCP gates, image path contract gates, effort/account-usage gates, Naruto parallel gate consistency, and Codex 0.138 doctor/fix checks. Publish readiness still requires a fresh full `release:check:full` stamp, `publish:dry`, provenance/registry checks, and operator-run publication after review.

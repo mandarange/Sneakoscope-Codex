@@ -23,7 +23,7 @@ export function buildQaLoopBudgetPolicy(input: { usage?: CodexAccountUsageSnapsh
   const baseBudget = defaultModelCallBudget(String(input.provider || 'codex-sdk'))
   return {
     schema: 'sks.qa-loop-budget-policy.v1',
-    ok: true,
+    ok: available,
     account_usage_source: usage?.source || 'unavailable',
     token_usage_available: available,
     near_limit: nearLimit,
