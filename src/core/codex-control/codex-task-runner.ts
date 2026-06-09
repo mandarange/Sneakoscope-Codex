@@ -430,7 +430,7 @@ async function ensurePythonCodexLbConfig(env: Record<string, string>, config: Re
     `model = ${tomlQuote(model)}`,
     'model_provider = "codex-lb"',
     'service_tier = "fast"',
-    'model_reasoning_effort = "minimal"',
+    `model_reasoning_effort = ${tomlQuote(String(config.model_reasoning_effort || env.SKS_CODEX_REASONING || env.CODEX_MODEL_REASONING_EFFORT || 'minimal'))}`,
     'approval_policy = "never"',
     '',
     '[model_providers.codex-lb]',

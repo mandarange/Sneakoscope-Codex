@@ -1,4 +1,5 @@
 import type { AgentPersona } from './agent-schema.js'
+import { codexModelEffortCapability, type CodexModelEffortCapability } from '../codex-control/codex-model-capabilities.js'
 
 export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
 
@@ -15,6 +16,7 @@ export interface AgentEffortDecision {
   dynamic: true
   escalation_triggers: string[]
   downshift_triggers: string[]
+  model_effort_capability?: CodexModelEffortCapability
 }
 
 const XHIGH_SIGNAL_RE = /(frontier|autoresearch|novelty|hypothesis|falsif|forensic|from-chat-img|image\s*work\s*order|새로운\s*연구|가설|포렌식)/i
@@ -45,6 +47,7 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
     reason = 'implementation_lane_capped_at_high'
   }
 
+  const modelCapability = codexModelEffortCapability({ defaultEffort: effort })
   return {
     schema: 'sks.agent-effort-decision.v1',
     policy_version: 1,
@@ -52,6 +55,7 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
     role,
     reasoning_effort: effort,
     model_reasoning_effort: effort,
+    model_effort_capability: modelCapability,
     reasoning_profile: reasoningProfileName(effort),
     service_tier: 'fast',
     reason,
@@ -94,6 +98,7 @@ export function decideNarutoCloneEffort(input: { persona?: Partial<AgentPersona>
   const writes = !readonly || /write|edit|route-local|workspace|patch|integrat/i.test(writePolicy) || hasActionTool
   const toolUse = writes || NARUTO_ACTION_TOOL_RE.test(prompt)
   const effort: AgentReasoningEffort = toolUse ? 'medium' : 'low'
+  const modelCapability = codexModelEffortCapability({ defaultEffort: effort })
   return {
     schema: 'sks.agent-effort-decision.v1',
     policy_version: 1,
@@ -101,6 +106,7 @@ export function decideNarutoCloneEffort(input: { persona?: Partial<AgentPersona>
     role,
     reasoning_effort: effort,
     model_reasoning_effort: effort,
+    model_effort_capability: modelCapability,
     reasoning_profile: reasoningProfileName(effort),
     service_tier: 'fast',
     reason: toolUse ? 'naruto_tool_use_medium' : 'naruto_simple_no_tool_low',
@@ -129,7 +135,8 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     policy_version: 1,
     dynamic: true,
     service_tier: 'fast',
-    allowed_efforts: ['low', 'medium', 'high', 'xhigh'],
+    allowed_efforts: codexModelEffortCapability().advertised_efforts,
+    model_effort_capability: codexModelEffortCapability(),
     max_agents: roster.max_agents || 20,
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,

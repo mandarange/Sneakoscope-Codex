@@ -92,6 +92,30 @@ export async function recordMadDbToolResult(input: {
   }
 }
 
+export async function maybeRecordMadDbToolResultFromToolUse(input: {
+  root: string
+  missionId: string
+  toolCallPayload?: any
+  toolResult?: any
+  decision?: any
+}) {
+  const payload = input.toolResult ?? input.toolCallPayload ?? {}
+  const hook = lifecycleHookFromUnknown(input.decision)
+    || lifecycleHookFromUnknown(input.toolCallPayload)
+    || lifecycleHookFromUnknown(input.toolResult)
+    || await readLatestPendingMadDbLifecycleHook(input.root, input.missionId, input.toolCallPayload || payload)
+  if (!hook) return null
+  const ok = !madDbToolUseFailed(payload)
+  return recordMadDbToolResult({
+    root: input.root,
+    missionId: input.missionId,
+    hook,
+    ok,
+    rowCount: extractRowCount(payload),
+    error: ok ? null : extractToolError(payload)
+  })
+}
+
 export function lifecycleHookFromUnknown(value: any): MadDbLifecycleHook | null {
   const candidate = value?.ledger_result_hook || value?.mad_db?.ledger_result_hook || value
   const missionId = stringOrNull(candidate?.mission_id || candidate?.missionId)
@@ -122,6 +146,54 @@ function hookMatchesPayload(hook: MadDbLifecycleHook, payload: any) {
   ].filter(Boolean).join(' ').toLowerCase()
   if (!toolText) return true
   return toolText.includes(String(hook.tool_name).toLowerCase()) || String(hook.tool_name).toLowerCase().includes(toolText)
+}
+
+function madDbToolUseFailed(payload: any = {}) {
+  if (payload?.isError === true || payload?.tool_response?.isError === true || payload?.toolResponse?.isError === true || payload?.result?.isError === true) return true
+  const candidates = [
+    payload.exit_code,
+    payload.exitCode,
+    payload.tool_response?.exit_code,
+    payload.toolResponse?.exitCode,
+    payload.result?.exit_code,
+    payload.result?.exitCode
+  ]
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue
+    const n = Number(candidate)
+    if (Number.isFinite(n)) return n !== 0
+  }
+  if (payload.success === false || payload.tool_response?.success === false || payload.toolResponse?.success === false || payload.result?.success === false) return true
+  if (payload.executed === false) return true
+  return false
+}
+
+function extractRowCount(payload: any = {}) {
+  const candidates = [
+    payload.row_count,
+    payload.rowCount,
+    payload.tool_response?.row_count,
+    payload.tool_response?.rowCount,
+    payload.toolResponse?.rowCount,
+    payload.result?.row_count,
+    payload.result?.rowCount,
+    payload.result?.rows_affected,
+    payload.tool_response?.rows_affected
+  ]
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue
+    const parsed = Number(candidate)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
+
+function extractToolError(payload: any = {}) {
+  if (payload?.result?.isError === true && Array.isArray(payload.result.content)) {
+    const text = payload.result.content.map((entry: any) => entry?.text || entry?.message || '').filter(Boolean).join('\n')
+    if (text.trim()) return text.trim()
+  }
+  return String(payload.error || payload.message || payload.stderr || payload.tool_response?.stderr || payload.toolResponse?.stderr || payload.result?.stderr || payload.result?.error || 'tool_failed')
 }
 
 async function hasTerminalLifecycleEvent(root: string, missionId: string, operationId: string) {

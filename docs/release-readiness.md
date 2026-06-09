@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 2.0.18 is the Codex 0.138 integration release for the 2.0 line. It adds capability artifacts for Codex 0.138 surfaces, QA-LOOP Codex Desktop `/app` handoff, Codex plugin JSON inventory, candidate-only plugin MCP policy, image saved-path contracts, model-advertised effort order, account usage budget policy, and Codex 0.138 doctor checks.
+
+The 2.0.18 release gate adds `codex:0138-capability`, `codex:0138-capability-artifact`, `codex-sdk:version-compat`, `codex-app:handoff`, QA `/app` handoff gates, plugin inventory/MCP gates, image path contract gates, effort/account-usage gates, Naruto parallel gate consistency, and Codex 0.138 doctor/fix checks. Publish readiness still requires a fresh full `release:check:full` stamp, `publish:dry`, provenance/registry checks, and operator-run publication after review.
+
 SKS 2.0.17 is the micro-hardening release for the 2.0 parallel-runtime line. It makes production parallel proof require real worker PIDs, limits missing-PID acceptance to explicit in-process fixtures, computes scheduler utilization from active slot-time instead of completed-count estimates, and records proof consistency against the scheduler active-time integral.
 
 The 2.0.17 release gate adds strict PID rejection, scheduler active-time consistency, live Zellij slot telemetry flushing with stale-pane JSON/status output, Mad-DB decision-to-result lifecycle hooks, runtime proof summaries, Team alias isolation, and release speed/DAG coverage checks while retaining the 2.0.16 real parallelism closure gates. Publish readiness still requires a fresh full `release:check` stamp, `publish:dry`, provenance/registry checks, and operator-run publication after review.

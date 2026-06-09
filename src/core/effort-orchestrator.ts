@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { nowIso, writeJsonAtomic } from './fsx.js';
 import { ARTIFACT_FILES } from './artifact-schemas.js';
+import { codexModelEffortCapability, modelEffortAtLeast } from './codex-control/codex-model-capabilities.js';
 
 export const EFFORT_POLICY_VERSION = 1;
 
@@ -37,11 +38,19 @@ export function selectEffort(task: any = {}) {
     reasonCodes.push('default_medium');
   }
 
+  const modelCapability = codexModelEffortCapability({
+    model: task.model || task.model_id,
+    advertisedEfforts: task.advertised_efforts || task.model_advertised_efforts,
+    defaultEffort: task.model_reasoning_effort || task.default_effort
+  });
+  const modelReasoningEffort = modelEffortAtLeast(selected, modelCapability);
   return {
     schema_version: EFFORT_POLICY_VERSION,
     mission_id: task.mission_id || 'unassigned',
     task_id: task.task_id || 'TASK-001',
     selected_effort: selected,
+    model_reasoning_effort: modelReasoningEffort,
+    model_effort_capability: modelCapability,
     reason_codes: reasonCodes,
     risk_scores: risks,
     demotion_allowed_after: demotionPolicy(selected),

@@ -110,7 +110,30 @@ const requiredReleasePresetIds = [
   'mad-db:mcp-result-lifecycle',
   'mad-db:operation-lifecycle-blackbox',
   'runtime:proof-summary',
-  'runtime:proof-summary-cli'
+  'runtime:proof-summary-cli',
+  'codex:0138-capability',
+  'codex:0138-capability-artifact',
+  'codex-sdk:version-compat',
+  'codex-app:handoff',
+  'qa-loop:app-handoff',
+  'qa-loop:app-handoff-capability',
+  'qa-loop:app-handoff-cli',
+  'zellij:qa-app-handoff-status',
+  'codex-plugin:json',
+  'codex-plugin:inventory',
+  'mcp:plugin-inventory',
+  'codex-plugin:app-template-policy',
+  'image:artifact-path-contract',
+  'qa-loop:image-path-exposure',
+  'image:generation-path-handoff',
+  'image:followup-edit-path',
+  'codex:effort-order',
+  'qa-loop:effort-escalation',
+  'codex:account-usage',
+  'qa-loop:budget-policy',
+  'naruto:parallel-gate-consistency',
+  'codex:0138-doctor',
+  'doctor:codex-0138-fix'
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))

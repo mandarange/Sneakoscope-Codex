@@ -3,7 +3,7 @@ import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdi
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
 import { missionDir, setCurrent, stateFile } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
-import { readLatestPendingMadDbLifecycleHook, recordMadDbToolResult } from './mad-db/mad-db-result-lifecycle.js';
+import { maybeRecordMadDbToolResultFromToolUse } from './mad-db/mad-db-result-lifecycle.js';
 import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
 import { isMadSksRouteState } from './permission-gates.js';
 import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
@@ -178,6 +178,7 @@ function toolFailed(payload: any = {}) {
     const n = Number(candidate);
     if (Number.isFinite(n)) return n !== 0;
   }
+  if (payload.isError === true || payload.tool_response?.isError === true || payload.toolResponse?.isError === true || payload.result?.isError === true) return true;
   if (payload.success === false || payload.tool_response?.success === false || payload.toolResponse?.success === false || payload.result?.success === false) return true;
   if (payload.executed === false) return true;
   return false;
@@ -455,15 +456,11 @@ async function hookPostTool(root: any, state: any, payload: any, noQuestion: any
 
 async function recordMadDbPostToolLifecycle(root: any, state: any = {}, payload: any = {}) {
   if (!state?.mission_id) return null;
-  const hook = await readLatestPendingMadDbLifecycleHook(root, String(state.mission_id), payload);
-  if (!hook) return null;
-  return recordMadDbToolResult({
+  return maybeRecordMadDbToolResultFromToolUse({
     root,
     missionId: String(state.mission_id),
-    hook,
-    ok: !toolFailed(payload),
-    rowCount: extractRowCount(payload),
-    error: toolFailed(payload) ? extractToolError(payload) : null
+    toolCallPayload: payload,
+    toolResult: payload
   });
 }
 

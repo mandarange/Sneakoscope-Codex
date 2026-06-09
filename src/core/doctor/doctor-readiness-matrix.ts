@@ -43,6 +43,10 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (input.codex_app_ui?.fast_selector === 'manual_action_required') warnings.add('codex_app_fast_selector_manual_action_required')
   if (input.codex_app_ui?.requires_confirmation === true) blockers.add('codex_app_fast_ui_repair_requires_confirmation')
   if (input.codex_app_ui?.fast_selector === 'repaired') warnings.add('codex_app_fast_selector_repaired_restart_app_if_needed')
+  const codex0138Doctor = input.codex_0138_doctor || null
+  if (codex0138Doctor?.ok === false) for (const blocker of normalizeList(codex0138Doctor.blockers)) warnings.add(blocker)
+  for (const warning of normalizeList(codex0138Doctor?.warnings)) warnings.add(warning)
+  for (const warning of normalizeList(input.codex_plugin_app_template_policy?.doctor_warnings)) warnings.add(warning)
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
   const localModel = input.local_model || {}
   const localStatus = String(localModel.status || (localModel.enabled ? 'enabled_unverified' : 'disabled'))
@@ -90,6 +94,9 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
       replacement: 'zellij'
     },
     codex_doctor: codexDoctor || null,
+    codex_0138_doctor: codex0138Doctor,
+    codex_plugin_inventory: input.codex_plugin_inventory || null,
+    codex_plugin_app_template_policy: input.codex_plugin_app_template_policy || null,
     fast_mode_ready: input.fast_mode_ready !== false,
     codex_app_ui: input.codex_app_ui || null,
     hooks_ready: input.hooks_ready !== false,

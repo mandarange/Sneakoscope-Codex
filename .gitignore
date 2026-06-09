@@ -108,6 +108,10 @@ id_ed25519
 .sneakoscope/skills/
 .sneakoscope/smoke-archives/
 .sneakoscope/memory/
+.sneakoscope/codex-0138-capability.json
+.sneakoscope/codex-0138-doctor.json
+.sneakoscope/codex-plugin-inventory.json
+.sneakoscope/mcp-plugin-server-candidates.json
 .sneakoscope/manifest.json
 .sneakoscope/policy.json
 .sneakoscope/db-safety.json

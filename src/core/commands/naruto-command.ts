@@ -20,6 +20,7 @@ import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../agents/runtime-proof-summary.js'
+import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -70,6 +71,7 @@ async function narutoRun(parsed: NarutoArgs) {
     maxAgentCount: MAX_NARUTO_AGENT_COUNT
   })
   const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
+  await writeCodex0138CapabilityArtifacts(root, { missionId: mission.id }).catch(() => null)
   const gitWorktreeCapability = writeCapable
     ? await evaluateGitWorktreeCapability({ root, missionId: mission.id })
     : null
@@ -376,7 +378,7 @@ async function narutoRun(parsed: NarutoArgs) {
   )
   await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
     schema: 'sks.naruto-gate.v1',
-    passed: result.ok === true && nativeProofOk && finalAccepted,
+    passed: result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk,
     mission_id: mission.id,
     clone_roster_built: true,
     clone_count: roster.agent_count,

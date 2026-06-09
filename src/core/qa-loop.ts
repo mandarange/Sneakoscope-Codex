@@ -321,6 +321,14 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     ui_chrome_extension_evidence: !uiRequired,
     ui_computer_use_evidence: false,
     ui_evidence_source: uiRequired ? null : 'not_required',
+    desktop_app_handoff_required: false,
+    desktop_app_handoff_status: 'not_requested',
+    desktop_app_handoff_artifact: null,
+    desktop_app_handoff_supported: false,
+    desktop_app_handoff_is_web_ui_evidence: false,
+    image_artifact_path_contract_present: false,
+    image_artifact_path_contract_artifact: null,
+    image_artifact_path_contract_blockers: [],
     api_e2e_required: apiRequired,
     unsafe_external_side_effects: false,
     corrective_loop_enabled: corrective,
@@ -376,6 +384,12 @@ export async function evaluateQaGate(dir: any) {
     if (evidenceMentionsForbiddenBrowserAutomation({ evidence: gate.evidence, notes: gate.notes, ui_evidence_source: gate.ui_evidence_source })) reasons.push('forbidden_browser_automation_evidence');
     if (evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
   }
+  if (gate.desktop_app_handoff_required === true) {
+    if (gate.desktop_app_handoff_status !== 'pending' && gate.desktop_app_handoff_status !== 'completed') reasons.push('desktop_app_handoff_missing');
+    if (gate.desktop_app_handoff_is_web_ui_evidence === true) reasons.push('desktop_app_handoff_misused_as_web_evidence');
+  }
+  const imageBlockers = Array.isArray(gate.image_artifact_path_contract_blockers) ? gate.image_artifact_path_contract_blockers : [];
+  if (imageBlockers.includes('image_generated_file_path_missing')) reasons.push('image_generated_file_path_missing');
   if (!reportFile) reasons.push('qa_report_file_missing');
   else if (!isQaReportFilename(reportFile)) reasons.push('qa_report_filename_prefix_invalid');
   else if (!(await exists(path.join(dir, reportFile)))) reasons.push('qa_report_missing');
@@ -396,8 +410,14 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
   return evaluateQaGate(dir);
 }
 
-export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile }: any) {
+export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile, imagePathContract, appHandoff }: any) {
   const report = reportFile && isQaReportFilename(reportFile) ? reportFile : 'the date/version-prefixed report named by qa-gate.json.qa_report_file';
+  const imageContractText = imagePathContract
+    ? `\nIMAGE PATH CONTRACT:\n${JSON.stringify(imagePathContract, null, 2)}\nUse model_visible_path values for follow-up image edits; do not invent generated image paths.\n`
+    : '';
+  const appHandoffText = appHandoff
+    ? `\nCODEX DESKTOP /app HANDOFF:\n${JSON.stringify(appHandoff, null, 2)}\nThis is desktop-app review status only and is not web UI evidence.\n`
+    : '';
   return `SKS QA-LOOP
 MISSION: ${id}
 TASK: ${mission.prompt}
@@ -410,6 +430,7 @@ GATE: passed=false while unresolved_findings or unresolved_fixable_findings > 0,
 ARTIFACTS: update qa-ledger.json, ${report}, qa-gate.json, and qa-loop/cycle-${cycle}/.
 CONTRACT:
 ${JSON.stringify(contract, null, 2)}
+${imageContractText}${appHandoffText}
 Previous tail:
 ${String(previous || '').slice(-2500)}
 `;
@@ -418,9 +439,11 @@ ${String(previous || '').slice(-2500)}
 export async function qaStatus(dir: any) {
   const gate = await readJson(path.join(dir, 'qa-gate.evaluated.json'), await readJson(path.join(dir, 'qa-gate.json'), null));
   const ledger = await readJson(path.join(dir, 'qa-ledger.json'), null);
+  const appHandoff = await readJson(path.join(dir, 'qa-loop', 'app-handoff.json'), null);
+  const imagePathContract = await readJson(path.join(dir, 'qa-loop', 'image-artifact-path-contract.json'), null);
   const reportFile = qaReportFileFromGate(gate?.gate || gate || {}) || ledger?.qa_report_file || null;
   const report = reportFile && isQaReportFilename(reportFile) ? await readText(path.join(dir, reportFile), '') : '';
-  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()) };
+  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()), desktop_app_handoff: appHandoff, image_path_contract: imagePathContract };
 }
 
 function qaChecklist(a: any) {

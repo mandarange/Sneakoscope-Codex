@@ -7,6 +7,7 @@ import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
 import { validateGptImage2Request } from '../imagegen/gpt-image-2-request-validator.js';
 import { withResponsesRetry } from '../responses-retry-policy.js';
 import { discoverCodexAppGeneratedImage } from './codex-app-generated-image-discovery.js';
+import { writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 
 const DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits';
 
@@ -38,6 +39,7 @@ export interface ImageUxReviewImagegenResult {
   request_artifact?: string | null;
   response_artifact?: string | null;
   latency_ms?: number | null;
+  image_artifact_path_contract?: string | null;
 }
 
 export function buildCalloutPrompt(sourceScreenId: string, context: any = {}) {
@@ -158,6 +160,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           real_generated: true
         });
         const outputSource = manualOutput ? 'manual_attach' : 'auto_discovered_generated_images';
+        const imageContract = await writeGeneratedImagePathContract(input, dest, 'codex_app_imagegen').catch(() => null);
         await writeJsonAtomic(responseArtifact, {
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
@@ -169,6 +172,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           output_image_sha256: meta.sha256,
           output_id: meta.output_id,
           output_source: outputSource,
+          image_artifact_path_contract: imageContract?.artifact_path || null,
           discovered_from: discovery?.selected?.path || null,
           discovery: discovery ? { candidates_considered: discovery.candidates_considered, since_ms: discovery.since_ms, max_age_ms: discovery.max_age_ms } : null,
           local_only: true
@@ -183,6 +187,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           output_source: outputSource,
           request_artifact: requestArtifact,
           response_artifact: responseArtifact,
+          image_artifact_path_contract: imageContract?.artifact_path || null,
           latency_ms: null
         };
       }
@@ -276,6 +281,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
         real_generated: false,
         mock: true
       });
+      const imageContract = await writeGeneratedImagePathContract(input, out, 'fake_imagegen_adapter').catch(() => null);
       await writeJsonAtomic(responseArtifact, {
         schema: 'sks.image-ux-gpt-image-2-response.v1',
         created_at: nowIso(),
@@ -286,6 +292,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
         output_image_path: out,
         output_image_sha256: meta.sha256,
         output_id: meta.output_id,
+        image_artifact_path_contract: imageContract?.artifact_path || null,
         dimensions: { width: meta.width, height: meta.height, format: meta.format },
         latency_ms: Date.now() - started,
         fake_adapter: true,
@@ -294,7 +301,7 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
         mock: true,
         local_only: true
       });
-      return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'fake_imagegen_adapter', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+      return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'fake_imagegen_adapter', request_artifact: requestArtifact, response_artifact: responseArtifact, image_artifact_path_contract: imageContract?.artifact_path || null, latency_ms: Date.now() - started };
     }
   };
 }
@@ -421,6 +428,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
             output_id: generated.id || payload?.id || null,
             real_generated: true
           });
+          const imageContract = await writeGeneratedImagePathContract(input, out, 'openai_responses_image_generation').catch(() => null);
           await writeJsonAtomic(responseArtifact, {
             schema: 'sks.image-ux-gpt-image-2-response.v1',
             created_at: nowIso(),
@@ -433,12 +441,13 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
             output_image_path: out,
             output_image_sha256: meta.sha256,
             output_id: meta.output_id,
+            image_artifact_path_contract: imageContract?.artifact_path || null,
             dimensions: { width: meta.width, height: meta.height, format: meta.format },
             latency_ms: Date.now() - started,
             token_cost_metadata: payload?.usage || null,
             local_only: true
           });
-          return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+          return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, image_artifact_path_contract: imageContract?.artifact_path || null, latency_ms: Date.now() - started };
         }
         const sourceBytes = await fsp.readFile(sourcePath);
         const qualityParam = imagegenQualityParam(opts);
@@ -475,6 +484,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           output_id: image?.id || payload?.id || null,
           real_generated: true
         });
+        const imageContract = await writeGeneratedImagePathContract(input, out, 'openai_images_api').catch(() => null);
         await writeJsonAtomic(responseArtifact, {
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
@@ -486,12 +496,13 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           output_image_path: out,
           output_image_sha256: meta.sha256,
           output_id: meta.output_id,
+          image_artifact_path_contract: imageContract?.artifact_path || null,
           dimensions: { width: meta.width, height: meta.height, format: meta.format },
           latency_ms: Date.now() - started,
           token_cost_metadata: payload?.usage || null,
           local_only: true
         });
-        return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+        return { ok: true, status: 'generated', generated_image_path: out, output_id: meta.output_id, blocker: null, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, image_artifact_path_contract: imageContract?.artifact_path || null, latency_ms: Date.now() - started };
       } catch (err: unknown) {
         const provider = useResponsesImageTool ? 'openai_responses_image_generation' : 'openai_images_api';
         const payload = { error: { message: err instanceof Error ? err.message : String(err) } };
@@ -501,6 +512,18 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
       }
     }
   };
+}
+
+async function writeGeneratedImagePathContract(input: ImageUxReviewImagegenRequest, outputPath: string, provider: string) {
+  return writeImageArtifactPathContract(process.cwd(), {
+    missionId: input.mission_id || 'unassigned',
+    images: [{
+      id: `${provider}-${input.source_screen_id || 'screen'}`,
+      kind: 'generated_image',
+      filePath: outputPath
+    }],
+    artifactPath: path.join(input.output_dir, 'image-artifact-path-contract.json')
+  });
 }
 
 export async function generateGptImage2CalloutReview(input: ImageUxReviewImagegenRequest, opts: any = {}) {

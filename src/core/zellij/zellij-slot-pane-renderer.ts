@@ -28,6 +28,8 @@ export interface ZellijSlotPaneRenderInput {
   eventLines?: string[] | null
   stdoutTail?: string[] | null
   stderrTail?: string[] | null
+  qaAppHandoffPending?: boolean | null
+  qaAppHandoffArtifact?: string | null
   mode?: 'compact-slots' | 'dashboard-plus-slots' | 'full-debug'
 }
 
@@ -54,6 +56,7 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
     `doing: ${task}`,
     `files: ${trimInline(files.length ? files.join(', ') : 'no changed file yet', 78)}`,
     `patch: ${trimInline(input.patchStatus || 'queued', 24)}  verify: ${trimInline(input.verifyStatus || 'queued', 24)}`,
+    input.qaAppHandoffPending ? `QA app handoff pending: ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 55)}` : null,
     ...events.map((event) => `event: ${trimInline(event, 78)}`),
     ...stdout.map((line) => `out: ${trimInline(line, 79)}`),
     ...stderr.map((line) => `err: ${trimInline(line, 79)}`)
@@ -140,6 +143,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
     ...(Array.isArray(intake?.input_files) ? intake.input_files : [])
   ])
   const now = Date.now()
+  const qaAppHandoff = await readQaAppHandoffNearArtifactDir(artifactDir)
   if (!result && !intake && !backendReport && !fastReport && !paneReport && !codexProof && !localProof && !heartbeatMtime && !eventRows.length) return null
   return renderZellijSlotPane({
     slotId: input.slotId,
@@ -197,8 +201,23 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
     eventLines: eventRows.map(formatArtifactEvent).filter(Boolean),
     stdoutTail: await readTextTailLines(path.join(artifactDir, 'worker.stdout.log'), 2),
     stderrTail: await readTextTailLines(path.join(artifactDir, 'worker.stderr.log'), 1),
+    qaAppHandoffPending: ['pending', 'blocked_for_desktop_review'].includes(String(qaAppHandoff?.status || '')),
+    qaAppHandoffArtifact: qaAppHandoff?.artifact_path || null,
     mode: input.mode || 'compact-slots'
   })
+}
+
+async function readQaAppHandoffNearArtifactDir(artifactDir: string) {
+  let current = path.resolve(artifactDir)
+  for (let i = 0; i < 8; i += 1) {
+    const candidate = path.join(current, 'qa-loop', 'app-handoff.json')
+    const json = await readJson(candidate)
+    if (json) return json
+    const next = path.dirname(current)
+    if (next === current) break
+    current = next
+  }
+  return null
 }
 
 export async function renderZellijSlotPaneStatusFromArtifacts(input: {
