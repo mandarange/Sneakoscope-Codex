@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.18** is the Codex 0.138 integration release: capability artifacts, Desktop `/app` handoff, plugin JSON inventory, image saved-path contracts, model-advertised effort order, account usage budget policy, and startup doctor checks.
+SKS **2.0.19** is the Codex 0.138 deep-integration polish release: optional Desktop `/app` launch attempts, Desktop handoff confirmation lifecycle, parallel/cached plugin inventory, global image saved-path contracts, effort metadata auto-discovery, account usage auto-discovery, and hardened feature probes.
 
 What changed:
 

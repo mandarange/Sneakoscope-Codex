@@ -325,6 +325,9 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     desktop_app_handoff_status: 'not_requested',
     desktop_app_handoff_artifact: null,
     desktop_app_handoff_supported: false,
+    desktop_app_handoff_confirmed: false,
+    desktop_app_handoff_verdict: null,
+    desktop_app_handoff_confirmation_artifact: null,
     desktop_app_handoff_is_web_ui_evidence: false,
     image_artifact_path_contract_present: false,
     image_artifact_path_contract_artifact: null,
@@ -385,7 +388,10 @@ export async function evaluateQaGate(dir: any) {
     if (evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
   }
   if (gate.desktop_app_handoff_required === true) {
-    if (gate.desktop_app_handoff_status !== 'pending' && gate.desktop_app_handoff_status !== 'completed') reasons.push('desktop_app_handoff_missing');
+    if (!['pending', 'launched_pending_confirmation', 'completed'].includes(String(gate.desktop_app_handoff_status || ''))) reasons.push('desktop_app_handoff_missing');
+    if (gate.desktop_app_handoff_confirmed !== true) reasons.push('desktop_app_handoff_confirmation_missing');
+    if (gate.desktop_app_handoff_verdict !== 'pass') reasons.push('desktop_app_handoff_verdict_not_pass');
+    if (gate.desktop_app_handoff_status !== 'completed') reasons.push('desktop_app_handoff_not_completed');
     if (gate.desktop_app_handoff_is_web_ui_evidence === true) reasons.push('desktop_app_handoff_misused_as_web_evidence');
   }
   const imageBlockers = Array.isArray(gate.image_artifact_path_contract_blockers) ? gate.image_artifact_path_contract_blockers : [];
@@ -406,7 +412,38 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
   const reportFile = isQaReportFilename(previousReportFile) ? previousReportFile : qaReportFilename();
   const uiRequired = qaUiRequired(contract.answers || {});
   await writeTextAtomic(path.join(dir, reportFile), `# QA-LOOP Report\n\nMission: ${mission.id}\nMode: mock verification\n\nMock QA-LOOP completed. No live UI/API actions were executed.\n\n## Honest Mode\n\nThis is a mock smoke run for command verification, not production QA evidence.\n`);
-  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), { ...defaultQaGate(contract, { reportFile }), passed: !uiRequired, qa_report_written: true, qa_ledger_complete: true, checklist_completed: true, safety_reviewed: true, credentials_not_persisted: true, chrome_extension_preflight_passed: !uiRequired, ui_chrome_extension_evidence: !uiRequired, ui_computer_use_evidence: false, ui_evidence_source: uiRequired ? null : 'not_required', unresolved_findings: 0, unresolved_fixable_findings: 0, unsafe_or_deferred_findings: 0, post_fix_verification_complete: true, honest_mode_complete: true, evidence: ['mock QA-LOOP smoke completed'], notes: ['No live UI/API verification was claimed.'] });
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), {
+    ...defaultQaGate(contract, { reportFile }),
+    desktop_app_handoff_required: previousGate.desktop_app_handoff_required === true,
+    desktop_app_handoff_status: previousGate.desktop_app_handoff_status || 'not_requested',
+    desktop_app_handoff_artifact: previousGate.desktop_app_handoff_artifact || null,
+    desktop_app_handoff_supported: previousGate.desktop_app_handoff_supported === true,
+    desktop_app_handoff_confirmed: previousGate.desktop_app_handoff_confirmed === true,
+    desktop_app_handoff_verdict: previousGate.desktop_app_handoff_verdict || null,
+    desktop_app_handoff_confirmation_artifact: previousGate.desktop_app_handoff_confirmation_artifact || null,
+    desktop_app_handoff_is_web_ui_evidence: false,
+    image_artifact_path_contract_present: previousGate.image_artifact_path_contract_present === true,
+    image_artifact_path_contract_artifact: previousGate.image_artifact_path_contract_artifact || null,
+    image_artifact_path_contract_blockers: previousGate.image_artifact_path_contract_blockers || [],
+    blockers: previousGate.blockers || [],
+    passed: !uiRequired,
+    qa_report_written: true,
+    qa_ledger_complete: true,
+    checklist_completed: true,
+    safety_reviewed: true,
+    credentials_not_persisted: true,
+    chrome_extension_preflight_passed: !uiRequired,
+    ui_chrome_extension_evidence: !uiRequired,
+    ui_computer_use_evidence: false,
+    ui_evidence_source: uiRequired ? null : 'not_required',
+    unresolved_findings: 0,
+    unresolved_fixable_findings: 0,
+    unsafe_or_deferred_findings: 0,
+    post_fix_verification_complete: true,
+    honest_mode_complete: true,
+    evidence: ['mock QA-LOOP smoke completed'],
+    notes: ['No live UI/API verification was claimed.']
+  });
   return evaluateQaGate(dir);
 }
 
@@ -440,10 +477,11 @@ export async function qaStatus(dir: any) {
   const gate = await readJson(path.join(dir, 'qa-gate.evaluated.json'), await readJson(path.join(dir, 'qa-gate.json'), null));
   const ledger = await readJson(path.join(dir, 'qa-ledger.json'), null);
   const appHandoff = await readJson(path.join(dir, 'qa-loop', 'app-handoff.json'), null);
+  const appConfirmation = await readJson(path.join(dir, 'qa-loop', 'app-handoff-confirmation.json'), null);
   const imagePathContract = await readJson(path.join(dir, 'qa-loop', 'image-artifact-path-contract.json'), null);
   const reportFile = qaReportFileFromGate(gate?.gate || gate || {}) || ledger?.qa_report_file || null;
   const report = reportFile && isQaReportFilename(reportFile) ? await readText(path.join(dir, reportFile), '') : '';
-  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()), desktop_app_handoff: appHandoff, image_path_contract: imagePathContract };
+  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()), desktop_app_handoff: appHandoff, desktop_app_confirmation: appConfirmation, desktop_review_complete: appConfirmation?.verdict === 'pass', image_path_contract: imagePathContract };
 }
 
 function qaChecklist(a: any) {

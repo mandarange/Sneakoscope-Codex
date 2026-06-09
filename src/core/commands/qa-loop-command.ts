@@ -17,24 +17,28 @@ import { runCodexAppHandoff, qaLoopShouldRequestAppHandoff } from '../codex-app/
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 import { writeCodexAccountUsageArtifacts } from '../usage/codex-account-usage.js';
 import { buildQaLoopBudgetPolicy, selectQaLoopEscalatedEffort } from '../qa-loop/qa-loop-budget-policy.js';
+import { writeCodexModelEffortCapabilityArtifact } from '../codex-control/codex-model-capabilities.js';
 import { discoverImageArtifactsInDir, writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 import { pluginAppTemplatePolicy } from '../codex-plugins/codex-plugin-json.js';
+import { confirmQaLoopAppHandoff } from '../qa-loop/qa-loop-app-handoff-confirmation.js';
 import fsp from 'node:fs/promises';
 
 export async function qaLoopCommand(sub: any, args: any = []) {
-  const known = new Set(['prepare', 'answer', 'run', 'status', 'help', '--help', '-h']);
+  const known = new Set(['prepare', 'answer', 'run', 'status', 'app-confirm', 'help', '--help', '-h']);
   const action = known.has(sub) ? sub : 'prepare';
   const actionArgs = action === 'prepare' && sub && !known.has(sub) ? [sub, ...args] : args;
   if (action === 'prepare') return qaLoopPrepare(actionArgs);
   if (action === 'answer') return qaLoopAnswer(actionArgs);
   if (action === 'run') return qaLoopRun(actionArgs);
   if (action === 'status') return qaLoopStatus(actionArgs);
+  if (action === 'app-confirm') return qaLoopAppConfirm(actionArgs);
   console.log(`SKS QA-LOOP
 
 Usage:
   sks qa-loop prepare "target"
   sks qa-loop answer <mission-id|latest> <answers.json>
-  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--app-handoff] [--app-handoff-required]
+  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--app-handoff] [--app-handoff-required] [--app-handoff-launch] [--app-handoff-artifact-only]
+  sks qa-loop app-confirm <mission-id|latest> --verdict pass|fail --notes "..."
   sks qa-loop status <mission-id|latest> [--desktop]
 `);
 }
@@ -139,9 +143,11 @@ async function qaLoopRun(args: any) {
   const usageArtifact = await writeCodexAccountUsageArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), snapshot: null }));
   const budgetPolicy = buildQaLoopBudgetPolicy({ usage: (usageArtifact as any)?.snapshot || null, provider: 'codex-sdk' });
   await writeJsonAtomic(path.join(dir, 'qa-loop', 'qa-loop-budget-policy.json'), budgetPolicy);
+  const effortCapabilityArtifact = await writeCodexModelEffortCapabilityArtifact(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), capability: null }));
   const effortEscalation = selectQaLoopEscalatedEffort({
     failureCount: Number(qaGate.safe_fix_attempts || qaGate.failure_count || 0),
-    currentEffort: String(profile || 'high').replace(/^sks-(?:logic|agent)-/, '').replace(/-fast$/, '') || 'high'
+    currentEffort: String(profile || 'high').replace(/^sks-(?:logic|agent)-/, '').replace(/-fast$/, '') || 'high',
+    capability: (effortCapabilityArtifact as any)?.capability || undefined
   });
   await writeJsonAtomic(path.join(dir, 'qa-loop', 'qa-loop-effort-escalation.json'), effortEscalation);
   const discoveredImages = await discoverImageArtifactsInDir(dir).catch(() => []);
@@ -151,6 +157,9 @@ async function qaLoopRun(args: any) {
   const pluginInventory = await readJson(path.join(root, '.sneakoscope', 'codex-plugin-inventory.json'), null);
   const pluginPolicy = pluginInventory?.schema === 'sks.codex-plugin-inventory.v1' ? pluginAppTemplatePolicy(pluginInventory) : null;
   const appHandoffRequired = flag(args, '--app-handoff-required') || process.env.SKS_QA_LOOP_APP_HANDOFF_REQUIRED === '1';
+  const launchMode = flag(args, '--app-handoff-launch') || process.env.SKS_QA_LOOP_APP_HANDOFF_LAUNCH === '1'
+    ? 'attempt-launch'
+    : 'artifact-only';
   const appHandoffRequested = qaLoopShouldRequestAppHandoff({
     args,
     uiRequired,
@@ -176,13 +185,15 @@ async function qaLoopRun(args: any) {
         ].filter(Boolean),
         prompt: mission.prompt || 'QA-LOOP desktop handoff',
         require_desktop: appHandoffRequired,
-        capability_required: 'codex-0.138'
+        capability_required: 'codex-0.138',
+        launch_mode: flag(args, '--app-handoff-artifact-only') ? 'artifact-only' : launchMode
       }).catch((err: any) => ({
         ok: false,
         status: 'blocked_for_desktop_review',
         artifact_path: path.join(dir, 'qa-loop', 'app-handoff.json'),
         blockers: [`codex_app_handoff_failed:${err?.message || String(err)}`],
-        desktop_handoff_supported: false
+        desktop_handoff_supported: false,
+        launch_attempt: null
       }))
     : null;
   if (appHandoff || imagePathContract) {
@@ -193,6 +204,9 @@ async function qaLoopRun(args: any) {
       desktop_app_handoff_status: appHandoff ? appHandoff.status : 'not_requested',
       desktop_app_handoff_artifact: appHandoff ? path.relative(dir, appHandoff.artifact_path) : null,
       desktop_app_handoff_supported: appHandoff ? appHandoff.desktop_handoff_supported === true : false,
+      desktop_app_handoff_confirmed: latestGate.desktop_app_handoff_confirmed === true,
+      desktop_app_handoff_verdict: latestGate.desktop_app_handoff_verdict || null,
+      desktop_app_handoff_launch_attempt: appHandoff ? appHandoff.launch_attempt || null : null,
       desktop_app_handoff_is_web_ui_evidence: false,
       image_artifact_path_contract_present: Boolean(imagePathContract),
       image_artifact_path_contract_artifact: imagePathContract ? 'qa-loop/image-artifact-path-contract.json' : null,
@@ -200,6 +214,7 @@ async function qaLoopRun(args: any) {
       blockers: Array.from(new Set([
         ...(latestGate.blockers || []),
         ...(appHandoffRequired && appHandoff && appHandoff.ok !== true ? ['blocked_for_desktop_review'] : []),
+        ...(appHandoffRequired && latestGate.desktop_app_handoff_confirmed !== true ? ['desktop_app_handoff_confirmation_missing'] : []),
         ...(imagePathContract?.contract?.blockers || [])
       ])),
       notes: [
@@ -355,7 +370,9 @@ async function qaLoopStatus(args: any) {
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
   const agentSessions = await readJson(path.join(dir, 'agents', 'agent-sessions.json'), null);
   const desktop = await readJson(path.join(dir, 'qa-loop', 'app-handoff.json'), null);
-  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, desktop_app_handoff: desktop, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null }, null, 2));
+  const desktopConfirmation = await readJson(path.join(dir, 'qa-loop', 'app-handoff-confirmation.json'), null);
+  const desktopReviewComplete = desktopConfirmation?.verdict === 'pass';
+  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, desktop_app_handoff: desktop, desktop_app_confirmation: desktopConfirmation, desktop_review_complete: desktopReviewComplete, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null }, null, 2));
   console.log('SKS QA-LOOP Status\n');
   console.log(`Mission:   ${id}`);
   console.log(`Phase:     ${state.phase || mission.phase}`);
@@ -366,9 +383,25 @@ async function qaLoopStatus(args: any) {
   if (flag(args, '--desktop')) {
     console.log('Desktop:');
     console.log(`  /app handoff: ${desktop?.status || 'not_requested'}`);
+    console.log(`  launch:       ${desktop?.launch_attempt?.attempted ? desktop?.launch_attempt?.launched ? 'launched' : 'attempted_fallback' : 'not_attempted'}`);
+    console.log(`  confirmation: ${desktopConfirmation?.verdict || 'missing'}`);
+    console.log(`  complete:     ${desktopReviewComplete ? 'yes' : 'no'}`);
     if (desktop?.operator_instruction?.prompt_artifact) console.log(`  prompt:       ${desktop.operator_instruction.prompt_artifact}`);
     console.log('  web evidence: not a substitute for Codex Chrome Extension web UI verification');
   }
+}
+
+async function qaLoopAppConfirm(args: any) {
+  const root = await sksRoot();
+  const id = await resolveMissionId(root, args[0]);
+  const verdict = String(readFlagValue(args, '--verdict', '') || '').trim();
+  const notes = String(readFlagValue(args, '--notes', '') || '');
+  if (!id || !['pass', 'fail'].includes(verdict)) throw new Error('Usage: sks qa-loop app-confirm <mission-id|latest> --verdict pass|fail --notes "..."');
+  const result = await confirmQaLoopAppHandoff(root, { missionId: id, verdict: verdict as 'pass' | 'fail', notes });
+  const evaluated = await evaluateQaGate(path.join(root, '.sneakoscope', 'missions', id));
+  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-app-confirm.v1', ok: verdict === 'pass', mission_id: id, confirmation: result.confirmation, artifact_path: result.artifact_path, gate: result.gate, evaluated }, null, 2));
+  console.log(`QA-LOOP Desktop app handoff confirmation recorded: ${id} (${verdict})`);
+  console.log(path.relative(root, result.artifact_path));
 }
 
 async function writeQaLoopImagePathContract(root: string, dir: string, missionId: string, images: any[]) {

@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "2.0.18",
+  "version": "2.0.19",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -680,7 +680,23 @@
     "mad-db:mcp-result-lifecycle": "node ./dist/scripts/mad-db-mcp-result-lifecycle-check.js",
     "mad-db:operation-lifecycle-blackbox": "node ./dist/scripts/mad-db-operation-lifecycle-blackbox.js",
     "runtime:proof-summary": "node ./dist/scripts/runtime-proof-summary-check.js",
-    "runtime:proof-summary-cli": "node ./dist/scripts/runtime-proof-summary-cli-check.js"
+    "runtime:proof-summary-cli": "node ./dist/scripts/runtime-proof-summary-cli-check.js",
+    "codex-app:launcher": "node ./dist/scripts/codex-app-launcher-check.js",
+    "codex-app:handoff-launch": "node ./dist/scripts/codex-app-handoff-launch-check.js",
+    "qa-loop:app-handoff-launch": "node ./dist/scripts/qa-loop-app-handoff-launch-check.js",
+    "qa-loop:app-handoff-confirmation": "node ./dist/scripts/qa-loop-app-handoff-confirmation-check.js",
+    "qa-loop:app-handoff-status-lifecycle": "node ./dist/scripts/qa-loop-app-handoff-status-lifecycle-check.js",
+    "qa-loop:app-handoff-gate-lifecycle": "node ./dist/scripts/qa-loop-app-handoff-gate-lifecycle-check.js",
+    "codex-plugin:parallel-detail-fetch": "node ./dist/scripts/codex-plugin-parallel-detail-fetch-check.js",
+    "codex-plugin:cache": "node ./dist/scripts/codex-plugin-cache-check.js",
+    "codex-plugin:diff": "node ./dist/scripts/codex-plugin-diff-check.js",
+    "image:artifact-registry": "node ./dist/scripts/image-artifact-registry-check.js",
+    "image:global-path-contract": "node ./dist/scripts/image-global-path-contract-check.js",
+    "qa-loop:image-path-prompt-injection": "node ./dist/scripts/qa-loop-image-path-prompt-injection-check.js",
+    "codex:model-metadata": "node ./dist/scripts/codex-model-metadata-check.js",
+    "codex:effort-auto-discovery": "node ./dist/scripts/codex-effort-auto-discovery-check.js",
+    "codex:account-usage-autodiscovery": "node ./dist/scripts/codex-account-usage-autodiscovery-check.js",
+    "codex:0138-feature-probes": "node ./dist/scripts/codex-0138-feature-probes-check.js"
   },
   "keywords": [
     "sneakoscope",

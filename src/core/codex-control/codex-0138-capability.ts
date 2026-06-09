@@ -6,6 +6,7 @@ import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
 export interface Codex0138Capability {
   schema: 'sks.codex-0138-capability.v1'
   ok: boolean
+  probe_mode: 'version-only' | 'feature-probe'
   codex_bin: string | null
   version_text: string | null
   parsed_version: string | null
@@ -16,6 +17,11 @@ export interface Codex0138Capability {
   supports_app_server_token_usage: boolean
   supports_v2_pat_auth: boolean
   supports_oauth_mcp_prerefresh: boolean
+  feature_probe_results: {
+    plugin_json?: 'passed' | 'failed' | 'skipped'
+    app_handoff_platform?: 'passed' | 'failed' | 'skipped'
+    image_path_exposure_contract?: 'sks-enforced'
+  }
   blockers: string[]
 }
 
@@ -29,23 +35,36 @@ export async function detectCodex0138Capability(input: { codexBin?: string | nul
     : await readCodexVersionText(codexBin)
   const parsed = parseCodexVersion(versionText)
   const atLeast138 = Boolean(parsed && semverGte(parsed, '0.138.0'))
+  const probeMode = process.env.SKS_CODEX_0138_PROBE === '1' ? 'feature-probe' : 'version-only'
+  const featureProbeResults = probeMode === 'feature-probe'
+    ? await probeCodex0138Features(codexBin, { fake })
+    : {
+        plugin_json: 'skipped' as const,
+        app_handoff_platform: 'skipped' as const,
+        image_path_exposure_contract: 'sks-enforced' as const
+      }
+  const pluginJsonOk = atLeast138 && (probeMode === 'version-only' || featureProbeResults.plugin_json !== 'failed')
+  const appHandoffOk = atLeast138 && (probeMode === 'version-only' || featureProbeResults.app_handoff_platform === 'passed')
   const blockers = [
     ...(!codexBin ? ['codex_cli_missing'] : []),
-    ...(atLeast138 ? [] : ['codex_0_138_required_for_app_plugin_features'])
+    ...(atLeast138 ? [] : ['codex_0_138_required_for_app_plugin_features']),
+    ...(probeMode === 'feature-probe' && featureProbeResults.plugin_json === 'failed' ? ['codex_plugin_json_probe_failed'] : [])
   ]
   return {
     schema: 'sks.codex-0138-capability.v1',
-    ok: atLeast138,
+    ok: atLeast138 && blockers.length === 0,
+    probe_mode: probeMode,
     codex_bin: codexBin || null,
     version_text: versionText || null,
     parsed_version: parsed,
-    supports_app_handoff: atLeast138,
-    supports_plugin_json: atLeast138,
+    supports_app_handoff: appHandoffOk,
+    supports_plugin_json: pluginJsonOk,
     supports_image_path_exposure: atLeast138,
     supports_model_defined_efforts: atLeast138,
     supports_app_server_token_usage: atLeast138,
     supports_v2_pat_auth: atLeast138,
     supports_oauth_mcp_prerefresh: atLeast138,
+    feature_probe_results: featureProbeResults,
     blockers
   }
 }
@@ -80,4 +99,30 @@ async function readCodexVersionText(codexBin: string | null): Promise<string | n
   }))
   const text = `${result.stdout || ''}${result.stderr || ''}`.trim()
   return result.code === 0 ? text : text || null
+}
+
+async function probeCodex0138Features(codexBin: string | null, opts: { fake?: boolean } = {}): Promise<Codex0138Capability['feature_probe_results']> {
+  if (opts.fake) {
+    return {
+      plugin_json: process.env.SKS_CODEX_0138_FAKE_PLUGIN_JSON_FAIL === '1' ? 'failed' : 'passed',
+      app_handoff_platform: process.platform === 'darwin' || process.platform === 'win32' ? 'passed' : 'failed',
+      image_path_exposure_contract: 'sks-enforced'
+    }
+  }
+  const timeoutMs = Math.max(1, Number(process.env.SKS_CODEX_0138_PROBE_TIMEOUT_MS || 3000) || 3000)
+  const platformSupported = process.platform === 'darwin' || process.platform === 'win32'
+  if (!codexBin) {
+    return {
+      plugin_json: 'failed',
+      app_handoff_platform: platformSupported ? 'skipped' : 'failed',
+      image_path_exposure_contract: 'sks-enforced'
+    }
+  }
+  const list = await runProcess(codexBin, ['plugin', 'list', '--json'], { timeoutMs, maxOutputBytes: 64 * 1024 }).catch(() => ({ code: 1 }))
+  const detailHelp = await runProcess(codexBin, ['plugin', 'detail', '--help'], { timeoutMs, maxOutputBytes: 64 * 1024 }).catch(() => ({ code: 1 }))
+  return {
+    plugin_json: list.code === 0 && detailHelp.code === 0 ? 'passed' : 'failed',
+    app_handoff_platform: platformSupported ? 'passed' : 'failed',
+    image_path_exposure_contract: 'sks-enforced'
+  }
 }

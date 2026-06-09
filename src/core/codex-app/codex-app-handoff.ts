@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { detectCodex0138Capability, type Codex0138Capability } from '../codex-control/codex-0138-capability.js'
 import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { attemptCodexAppLaunch, type CodexAppLaunchAttempt } from './codex-app-launcher.js'
 
 export interface CodexAppHandoffRequest {
   schema: 'sks.codex-app-handoff-request.v1'
@@ -13,6 +14,7 @@ export interface CodexAppHandoffRequest {
   prompt: string
   require_desktop: boolean
   capability_required: 'codex-0.138'
+  launch_mode?: 'artifact-only' | 'attempt-launch'
 }
 
 export interface CodexAppHandoffResult {
@@ -20,9 +22,11 @@ export interface CodexAppHandoffResult {
   ok: boolean
   attempted: boolean
   launched: boolean
-  status: 'pending' | 'skipped' | 'blocked_for_desktop_review'
+  status: 'pending' | 'skipped' | 'blocked_for_desktop_review' | 'launched_pending_confirmation'
   codex_0138_capability: Codex0138Capability
   command_line: string[]
+  launch_attempt?: CodexAppLaunchAttempt | null
+  confirmation_required: boolean
   desktop_handoff_supported: boolean
   fallback_reason: string | null
   artifact_path: string
@@ -53,6 +57,7 @@ export async function runCodexAppHandoff(root: string, request: CodexAppHandoffR
   const capability = await detectCodex0138Capability()
   const platformSupported = process.platform === 'darwin' || process.platform === 'win32'
   const desktopSupported = capability.supports_app_handoff === true && platformSupported
+  const launchMode = request.launch_mode || 'artifact-only'
   const dir = path.join(root, '.sneakoscope', 'missions', request.mission_id, 'qa-loop')
   const artifactPath = path.join(dir, 'app-handoff.json')
   const promptArtifactPath = path.join(dir, 'app-handoff-prompt.md')
@@ -62,26 +67,45 @@ export async function runCodexAppHandoff(root: string, request: CodexAppHandoffR
   ]
   const prompt = buildCodexAppHandoffPrompt(request)
   await writeTextAtomic(promptArtifactPath, prompt)
-  const status = request.require_desktop && !desktopSupported
+  const launchAttempt = desktopSupported
+    ? await attemptCodexAppLaunch({
+        cwd: root,
+        promptArtifactPath,
+        mode: launchMode,
+        timeoutMs: 3000
+      })
+    : await attemptCodexAppLaunch({
+        cwd: root,
+        promptArtifactPath,
+        mode: 'artifact-only',
+        timeoutMs: 3000
+      })
+  const status: CodexAppHandoffResult['status'] = request.require_desktop && !desktopSupported
     ? 'blocked_for_desktop_review'
-    : desktopSupported
-      ? 'pending'
-      : 'skipped'
+    : request.require_desktop && launchMode === 'attempt-launch' && launchAttempt.attempted && !launchAttempt.launched
+      ? 'blocked_for_desktop_review'
+      : desktopSupported && launchAttempt.launched
+        ? 'launched_pending_confirmation'
+        : desktopSupported
+          ? 'pending'
+          : 'skipped'
   const result: CodexAppHandoffResult = {
     schema: 'sks.codex-app-handoff-result.v1',
-    ok: request.require_desktop ? desktopSupported : true,
-    attempted: false,
-    launched: false,
+    ok: request.require_desktop ? status !== 'blocked_for_desktop_review' : true,
+    attempted: launchAttempt.attempted,
+    launched: launchAttempt.launched,
     status,
     codex_0138_capability: capability,
-    command_line: ['codex', '/app'],
+    command_line: launchAttempt.command_line,
+    launch_attempt: launchAttempt,
+    confirmation_required: request.require_desktop,
     desktop_handoff_supported: desktopSupported,
     fallback_reason: desktopSupported
-      ? 'interactive_tui_handoff_pending_operator'
+      ? launchAttempt.fallback_reason || 'desktop_handoff_pending_operator_confirmation'
       : blockers.join(';') || null,
     artifact_path: artifactPath,
     prompt_artifact_path: promptArtifactPath,
-    blockers: request.require_desktop ? blockers : []
+    blockers: request.require_desktop ? [...blockers, ...(status === 'blocked_for_desktop_review' ? launchAttempt.blockers : [])] : []
   }
   await writeJsonAtomic(artifactPath, {
     ...result,

@@ -12,6 +12,8 @@ export interface ImageArtifactPathContract {
     kind: 'input_attachment' | 'generated_image' | 'edited_image' | 'visual_qa_snapshot'
     file_path: string
     relative_path: string
+    route?: string | null
+    stage?: string | null
     exists: boolean
     mime_type: string | null
     width?: number | null
@@ -24,7 +26,7 @@ export interface ImageArtifactPathContract {
 
 export async function buildImageArtifactPathContract(root: string, input: {
   missionId: string
-  images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string }>
+  images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string; route?: string | null; stage?: string | null }>
 }): Promise<ImageArtifactPathContract> {
   const images = []
   const blockers: string[] = []
@@ -38,6 +40,8 @@ export async function buildImageArtifactPathContract(root: string, input: {
       kind: image.kind,
       file_path: filePath,
       relative_path: path.relative(root, filePath),
+      route: image.route || null,
+      stage: image.stage || null,
       exists,
       mime_type: mimeForPath(filePath),
       width: dims?.width ?? null,
@@ -60,7 +64,7 @@ export async function buildImageArtifactPathContract(root: string, input: {
 
 export async function writeImageArtifactPathContract(root: string, input: {
   missionId: string
-  images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string }>
+  images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string; route?: string | null; stage?: string | null }>
   artifactPath?: string | null
 }) {
   const contract = await buildImageArtifactPathContract(root, input)

@@ -1,22 +1,48 @@
+import path from 'node:path'
+import { writeJsonAtomic } from '../fsx.js'
+import { collectCodexModelMetadata, type CodexModelMetadata } from './codex-model-metadata.js'
+
 export interface CodexModelEffortCapability {
   model: string
   advertised_efforts: string[]
   default_effort: string
   order_source: 'model-advertised' | 'sks-fallback'
+  metadata_source?: CodexModelMetadata['source'] | null
+  metadata_blockers?: string[]
 }
 
 export const SKS_FALLBACK_EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh']
 
-export function codexModelEffortCapability(input: { model?: string | null; advertisedEfforts?: string[] | null; defaultEffort?: string | null } = {}): CodexModelEffortCapability {
-  const advertised = normalizeAdvertisedEfforts(input.advertisedEfforts)
+export function codexModelEffortCapability(input: { model?: string | null; advertisedEfforts?: string[] | null; defaultEffort?: string | null; metadata?: CodexModelMetadata | null } = {}): CodexModelEffortCapability {
+  const metadataIsFallback = input.metadata?.source === 'fallback'
+  const advertised = metadataIsFallback ? [] : normalizeAdvertisedEfforts(input.metadata?.advertised_efforts || input.advertisedEfforts)
   const order = advertised.length ? advertised : SKS_FALLBACK_EFFORT_ORDER
-  const defaultEffort = order.includes(String(input.defaultEffort || '')) ? String(input.defaultEffort) : order.includes('medium') ? 'medium' : order[0] || 'medium'
+  const requestedDefault = input.metadata?.default_effort || input.defaultEffort
+  const defaultEffort = order.includes(String(requestedDefault || '')) ? String(requestedDefault) : order.includes('medium') ? 'medium' : order[0] || 'medium'
   return {
-    model: String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5'),
+    model: String(input.metadata?.model || input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5'),
     advertised_efforts: order,
     default_effort: defaultEffort,
-    order_source: advertised.length ? 'model-advertised' : 'sks-fallback'
+    order_source: advertised.length ? 'model-advertised' : 'sks-fallback',
+    metadata_source: input.metadata?.source || null,
+    metadata_blockers: input.metadata?.blockers || []
   }
+}
+
+export async function resolveCodexModelEffortCapability(input: { model?: string | null } = {}): Promise<CodexModelEffortCapability> {
+  const metadata = await collectCodexModelMetadata({ model: input.model || null })
+  return codexModelEffortCapability({ metadata })
+}
+
+export async function writeCodexModelEffortCapabilityArtifact(root: string, input: { missionId: string; model?: string | null }): Promise<{ capability: CodexModelEffortCapability; artifact: string }> {
+  const capability = await resolveCodexModelEffortCapability({ model: input.model || null })
+  const artifact = path.join(root, '.sneakoscope', 'missions', input.missionId, 'codex-model-effort-capability.json')
+  await writeJsonAtomic(artifact, {
+    schema: 'sks.codex-model-effort-capability-artifact.v1',
+    generated_at: new Date().toISOString(),
+    ...capability
+  })
+  return { capability, artifact }
 }
 
 export function normalizeAdvertisedEfforts(value: any): string[] {

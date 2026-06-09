@@ -7,6 +7,10 @@ export interface CodexPluginInventory {
   schema: 'sks.codex-plugin-inventory.v1'
   generated_at: string
   codex_0138_capability: any
+  fetch_concurrency: number
+  detail_fetch_count: number
+  detail_fetch_failed_count: number
+  duration_ms: number
   plugins: Array<{
     id: string
     name: string
@@ -41,14 +45,17 @@ export async function runCodexPluginDetailJson(pluginId: string): Promise<any> {
 }
 
 export async function buildCodexPluginInventory(): Promise<CodexPluginInventory> {
+  const started = Date.now()
   const capability = await detectCodex0138Capability()
   const listJson = await runCodexPluginListJson()
   const summaries = normalizePluginList(listJson)
-  const plugins = []
-  for (const summary of summaries) {
+  const concurrency = Math.max(1, Number(process.env.SKS_CODEX_PLUGIN_DETAIL_CONCURRENCY || 6) || 6)
+  let failed = 0
+  const plugins = await mapWithConcurrency(summaries, concurrency, async (summary) => {
     const detail = await runCodexPluginDetailJson(summary.id || summary.name).catch((err: any) => ({ error: err?.message || String(err) }))
-    plugins.push(normalizePlugin(summary, detail))
-  }
+    if (detail?.error || normalizeList(detail?.blockers).length > 0) failed += 1
+    return normalizePlugin(summary, detail)
+  })
   const blockers = [
     ...(capability.supports_plugin_json ? [] : ['codex_0_138_plugin_json_unavailable']),
     ...normalizeList(listJson?.blockers)
@@ -57,10 +64,29 @@ export async function buildCodexPluginInventory(): Promise<CodexPluginInventory>
     schema: 'sks.codex-plugin-inventory.v1',
     generated_at: nowIso(),
     codex_0138_capability: capability,
+    fetch_concurrency: concurrency,
+    detail_fetch_count: summaries.length,
+    detail_fetch_failed_count: failed,
+    duration_ms: Date.now() - started,
     plugins,
     marketplace_available: plugins.some((plugin) => plugin.source === 'marketplace' || plugin.source === 'remote') || Boolean(listJson?.marketplace_available || listJson?.marketplaceAvailable),
     blockers
   }
+}
+
+export async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const limit = Math.max(1, Math.floor(concurrency || 1))
+  const results = new Array<R>(items.length)
+  let next = 0
+  async function worker() {
+    while (next < items.length) {
+      const index = next
+      next += 1
+      results[index] = await fn(items[index] as T)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length || 1) }, () => worker()))
+  return results
 }
 
 export async function writeCodexPluginInventoryArtifacts(root: string, inventory = null as CodexPluginInventory | null) {
@@ -153,15 +179,17 @@ function boolish(value: any, fallback = false) {
 }
 
 function fakePluginList() {
+  const count = Math.max(1, Number(process.env.SKS_CODEX_PLUGIN_JSON_FAKE_COUNT || 1) || 1)
   return {
     marketplace_available: true,
-    plugins: [{
+    plugins: Array.from({ length: count }, (_, index) => ({
       id: 'fixture-plugin',
-      name: 'Fixture Plugin',
+      name: index === 0 ? 'Fixture Plugin' : `Fixture Plugin ${index + 1}`,
+      ...(index === 0 ? {} : { id: `fixture-plugin-${index + 1}` }),
       source: 'marketplace',
       installed: true,
       enabled: true
-    }]
+    }))
   }
 }
 
