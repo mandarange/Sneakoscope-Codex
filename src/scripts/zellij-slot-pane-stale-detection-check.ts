@@ -10,7 +10,17 @@ import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-stale-'))
 const missionId = 'M-zellij-stale'
 const file = slotTelemetrySnapshotPath(root, missionId)
+const artifactDir = path.join(root, 'worker-artifacts')
 await fs.mkdir(path.dirname(file), { recursive: true })
+await fs.mkdir(artifactDir, { recursive: true })
+await fs.writeFile(path.join(artifactDir, 'worker-intake.json'), JSON.stringify({
+  agent: { session_id: 'stale-session', role: 'worker' },
+  backend: 'codex-sdk',
+  slice: { title: 'fresh artifact fallback', write_paths: ['src/core/zellij/zellij-slot-pane-renderer.ts'] }
+}, null, 2))
+await fs.writeFile(path.join(artifactDir, 'worker-heartbeat.jsonl'), `${JSON.stringify({ event: 'progress', status: 'running', message: 'fresh heartbeat fallback' })}\n`)
+await fs.writeFile(path.join(artifactDir, 'codex-sdk-events.jsonl'), `${JSON.stringify({ sdk_event_type: 'item.completed', lane_status: 'running', current_tool: 'apply_patch', current_file: 'src/core/zellij/zellij-slot-pane-renderer.ts' })}\n`)
+await fs.writeFile(path.join(artifactDir, 'worker.stdout.log'), 'fresh worker stdout fallback\n')
 const snapshot = {
   schema: 'sks.zellij-slot-telemetry-snapshot.v1',
   mission_id: missionId,
@@ -42,13 +52,15 @@ const snapshot = {
 }
 snapshot.updated_at = new Date(Date.now() - 3500).toISOString()
 await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
-const staleText = await renderZellijSlotPaneFromArtifacts({ artifactDir: root, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
-const staleStatus = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir: root, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
+const staleText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
+const staleStatus = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
 assertGate(/telemetry stale 3\.\d+s/.test(staleText), 'slot pane must show 3s stale telemetry warning', { staleText, staleStatus })
 assertGate(staleStatus.telemetry_stale === true && staleStatus.telemetry_age_ms >= 3000, 'slot pane status JSON must expose stale telemetry', staleStatus)
+assertGate(staleText.includes('fresh worker stdout fallback') || staleText.includes('apply_patch'), 'stale slot pane must show fresh artifact/log fallback', { staleText })
 
 snapshot.updated_at = new Date(Date.now() - 11000).toISOString()
 await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
-const blockedText = await renderZellijSlotPaneFromArtifacts({ artifactDir: root, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
+const blockedText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
 assertGate(blockedText.includes('telemetry stale; worker may still be running'), 'slot pane must show >10s stale blocker line', { blockedText })
-emitGate('zellij:slot-pane-stale-detection', { stale_age_ms: staleStatus.telemetry_age_ms })
+assertGate(blockedText.includes('fresh worker stdout fallback') || blockedText.includes('apply_patch'), 'blocked stale slot pane must keep artifact/log fallback', { blockedText })
+emitGate('zellij:slot-pane-stale-detection', { stale_age_ms: staleStatus.telemetry_age_ms, artifact_fallback: true })

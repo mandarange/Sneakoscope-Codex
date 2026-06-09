@@ -125,18 +125,32 @@ export async function runNativeCliWorker(input: any = {}) {
   })
   await writeJsonAtomic(path.join(workerDir, 'worker-recursion-guard.json'), guard)
   let noPatchReason: any = null
-  const routed = await runNativeWorkerBackendRouter({
+  const progressTelemetry = startWorkerProgressTelemetry({
     agentRoot,
-    workerDirRel,
-    resultRel,
-    patchRel,
+    heartbeatRel,
+    intake,
     agent,
     slice,
-    intake: { ...intake, ...input },
     backend,
-    fastModePolicy: policy,
-    guard
+    serviceTier: policy.service_tier
   })
+  let routed: Awaited<ReturnType<typeof runNativeWorkerBackendRouter>>
+  try {
+    routed = await runNativeWorkerBackendRouter({
+      agentRoot,
+      workerDirRel,
+      resultRel,
+      patchRel,
+      agent,
+      slice,
+      intake: { ...intake, ...input },
+      backend,
+      fastModePolicy: policy,
+      guard
+    })
+  } finally {
+    progressTelemetry.stop()
+  }
   const patchEnvelopes = routed.patchEnvelopes
 	  if (patchEnvelopes.length) {
 	    await writeJsonAtomic(path.resolve(agentRoot, patchRel), {
@@ -329,6 +343,48 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function startWorkerProgressTelemetry(input: {
+  agentRoot: string
+  heartbeatRel: string
+  intake: any
+  agent: any
+  slice: any
+  backend: string
+  serviceTier: string
+}) {
+  const parsed = Number(process.env.SKS_ZELLIJ_WORKER_PROGRESS_MS || 2000)
+  const intervalMs = Math.max(500, Number.isFinite(parsed) ? Math.floor(parsed) : 2000)
+  let tick = 0
+  const timer = setInterval(() => {
+    tick += 1
+    const progress = { done: tick, total: 0, label: 'backend running' }
+    appendJsonl(path.resolve(input.agentRoot, input.heartbeatRel), {
+      schema: 'sks.native-cli-worker-heartbeat.v1',
+      ts: nowIso(),
+      event: 'progress',
+      pid: process.pid,
+      session_id: input.agent.session_id,
+      slot_id: input.agent.slot_id || null,
+      generation_index: input.agent.generation_index || null,
+      progress
+    }).catch(() => undefined)
+    workerTelemetry(input.agentRoot, input.intake, input.agent, input.slice, {
+      eventType: 'task_progress',
+      status: 'running',
+      backend: input.backend,
+      serviceTier: input.serviceTier,
+      artifacts: [input.heartbeatRel],
+      progress,
+      logTail: `backend running ${tick}`
+    }).catch(() => undefined)
+  }, intervalMs)
+  return {
+    stop() {
+      clearInterval(timer)
+    }
+  }
+}
+
 function parseNativeCliWorkerArgs(args: string[]) {
   return {
     intake: readOption(args, '--intake', ''),
@@ -381,6 +437,7 @@ async function workerTelemetry(agentRoot: string, intake: any, agent: any, slice
   serviceTier: string
   artifacts?: string[]
   blockers?: string[]
+  progress?: { done: number; total: number; label: string }
   logTail?: string
 }) {
   const missionId = String(intake.mission_id || intake.parent_mission_id || '')
@@ -401,6 +458,7 @@ async function workerTelemetry(agentRoot: string, intake: any, agent: any, slice
     worktree_path: agent.worktree?.path || slice.worktree?.path || intake.worktree?.path || null,
     task_title: String(slice.description || slice.title || slice.id || 'worker task'),
     current_file: firstString([slice.write_paths?.[0], slice.readonly_paths?.[0], slice.input_files?.[0]]) || null,
+    ...(input.progress ? { progress: input.progress } : {}),
     artifact_paths: input.artifacts || [],
     log_tail: input.logTail || '',
     blockers: input.blockers || []

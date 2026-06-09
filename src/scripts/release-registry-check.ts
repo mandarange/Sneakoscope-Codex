@@ -321,7 +321,15 @@ function packageMaintainers(pkg, env) {
 function normalizeNpmUser(value) {
   if (!value) return '';
   if (typeof value === 'object') return normalizeNpmUser(value.name || value.username || '');
-  return String(value).trim().replace(/^@/, '').split(/\s+/)[0].toLowerCase();
+  const text = String(value).trim();
+  if (/^["[{]/.test(text)) {
+    try {
+      return normalizeNpmUser(JSON.parse(text));
+    } catch {
+      // Fall through for legacy plain-text npm output.
+    }
+  }
+  return text.replace(/^@/, '').split(/\s+/)[0].toLowerCase();
 }
 
 function tail(value, limit = 1200) {

@@ -129,6 +129,14 @@ if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'maintainers'
   assert.equal(ok.status, 0, `${ok.stdout}\n${ok.stderr}`);
   assert.match(ok.stdout, /Publish auth check passed: sneakoscope@/);
 
+  const okJsonWhoami = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: { ...baseEnv, SKS_FAKE_NPM_USER: JSON.stringify('cdw0424') }
+  });
+  assert.equal(okJsonWhoami.status, 0, `${okJsonWhoami.stdout}\n${okJsonWhoami.stderr}`);
+  assert.match(okJsonWhoami.stdout, /Publish auth check passed: sneakoscope@/);
+
   const blocked = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
     cwd: process.cwd(),
     encoding: 'utf8',

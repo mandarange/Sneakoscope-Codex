@@ -65,6 +65,10 @@ export async function runReleaseGateDag(input: {
     ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', preset })
     : selectAffectedReleaseGates(root, manifest, presetGates, { full: true, preset })
   const selected = affected.gates
+  const selectedIds = new Set(selected.map((gate) => gate.id))
+  const affectedExternalSatisfiedDeps = affected.selection.mode === 'affected'
+    ? new Set(selected.flatMap((gate) => gate.deps || []).filter((dep) => !selectedIds.has(dep)))
+    : new Set<string>()
   const runId = `rg-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
   const reportDir = path.join(root, '.sneakoscope', 'reports', 'release-gates', runId)
   fs.mkdirSync(reportDir, { recursive: true })
@@ -130,7 +134,7 @@ export async function runReleaseGateDag(input: {
   }
 
   while (pending.size || running.size) {
-    const ready = findReadyReleaseGateNodes({ pending, completed, failed })
+    const ready = findReadyReleaseGateNodes({ pending, completed, failed, satisfiedDeps: affectedExternalSatisfiedDeps })
     const launchable = pickReadyLaunchableReleaseGates({ ready, running: [...running.values()].map((row) => row.gate) })
     let progressed = false
     for (const gate of launchable) {

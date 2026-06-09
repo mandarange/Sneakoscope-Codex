@@ -7,7 +7,7 @@ const scripts = pkg.scripts || {};
 const buildManifestWriter = fs.readFileSync('dist/scripts/write-build-manifest.js', 'utf8');
 const distRuntimeCheck = fs.readFileSync('dist/scripts/check-dist-runtime.js', 'utf8');
 
-test('publish lifecycle requires the full release gate for publish readiness', () => {
+test('publish lifecycle requires the full release stamp for publish readiness', () => {
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(scripts['feature-quality:check'], /--release/);
@@ -17,7 +17,7 @@ test('publish lifecycle requires the full release gate for publish readiness', (
   assert.match(scripts['release:check:affected'], /--preset affected/);
   assert.match(scripts['release:check:full'], /--preset release --full/);
   assert.match(scripts['release:check:full'], /release-check-stamp\.js write/);
-  assert.match(scripts.prepublishOnly, /npm run release:check:full/);
+  assert.match(scripts.prepublishOnly, /prepublish-release-check-or-fast\.js/);
   assert.match(scripts.prepublishOnly, /release-check-stamp\.js verify/);
   assert.match(scripts.prepublishOnly, /--require-unpublished/);
   assert.match(scripts.prepublishOnly, /--require-publish-auth/);
