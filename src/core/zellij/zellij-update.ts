@@ -2,7 +2,9 @@ import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
-import { ensureDir, nowIso, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
+import { ensureDir, globalSksRoot, nowIso, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
+import { guardContextForRoute, guardedPackageInstall } from '../safety/mutation-guard.js'
+import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { checkZellijCapability } from './zellij-capability.js'
 import { compareVersionLike, parseZellijVersionText } from './zellij-command.js'
 
@@ -152,11 +154,37 @@ export async function upgradeZellijToLatest(input: {
     }
   }
   const upgradeArgs = missing ? ['install', 'zellij'] : ['upgrade', 'zellij']
-  let run = await runProcess('brew', upgradeArgs, { timeoutMs: input.timeoutMs || 180000, maxOutputBytes: 256 * 1024 })
+  // Package installs go through the mutation guard with an explicit
+  // zellij_install scope contract (same path ensureZellijCliTool uses), so the
+  // mutation ledger records the install and safety gates can audit it. The
+  // upgrade only runs after the operator confirmed the [Y/n] prompt or passed
+  // --yes / `sks zellij update --yes`.
+  const guardRoot = globalSksRoot()
+  const guardCommand = `brew ${upgradeArgs.join(' ')}`
+  const contract = createRequestedScopeContract({
+    route: 'zellij-update',
+    userRequest: guardCommand,
+    projectRoot: guardRoot,
+    overrides: { package_install: true, zellij_install: true }
+  })
+  const guardCtx = guardContextForRoute(guardRoot, contract, guardCommand)
+  let run = await guardedPackageInstall(guardCtx, 'zellij', {
+    confirmed: true,
+    command: 'brew',
+    args: upgradeArgs,
+    timeoutMs: input.timeoutMs || 180000,
+    maxOutputBytes: 256 * 1024
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: String(err?.message || err) }))
   if (run.code !== 0 && !missing && /No such keg|No available formula|not installed/i.test(`${run.stderr}\n${run.stdout}`)) {
     // zellij exists on PATH but was not installed through Homebrew (e.g. cargo
     // or a manual binary). Installing the brew formula gives a managed copy.
-    run = await runProcess('brew', ['install', 'zellij'], { timeoutMs: input.timeoutMs || 180000, maxOutputBytes: 256 * 1024 })
+    run = await guardedPackageInstall(guardCtx, 'zellij', {
+      confirmed: true,
+      command: 'brew',
+      args: ['install', 'zellij'],
+      timeoutMs: input.timeoutMs || 180000,
+      maxOutputBytes: 256 * 1024
+    }).catch((err: any) => ({ code: 1, stdout: '', stderr: String(err?.message || err) }))
   }
   if (run.code !== 0 && /already installed|already up-to-date/i.test(`${run.stderr}\n${run.stdout}`)) {
     return {

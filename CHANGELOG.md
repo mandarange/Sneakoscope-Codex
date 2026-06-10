@@ -10,7 +10,7 @@
 ### Added
 
 - Zellij worker panes now join a native stacked-pane group (`new-pane --stacked`, zellij >= 0.43): the first worker splits down from the SLOTS anchor and every following worker stacks vertically instead of fragmenting the screen. Opt out with `SKS_ZELLIJ_WORKER_STACKED=0`.
-- Zellij version check and latest-stable upgrade flow, mirroring the Codex CLI update prompt: launch-time `[Y/n]` prompt on `sks --mad-sks` / `sks naruto run`, a new `sks zellij update [--yes]` subcommand, GitHub releases lookup with a 6h on-disk cache, and `SKS_SKIP_ZELLIJ_UPDATE` / `--skip-zellij-update` escapes.
+- Zellij version check and latest-stable upgrade flow, mirroring the Codex CLI update prompt: launch-time `[Y/n]` prompt on `sks --mad-sks` / `sks naruto run`, a new `sks zellij update [--yes]` subcommand, GitHub releases lookup with a 6h on-disk cache, and `SKS_SKIP_ZELLIJ_UPDATE` / `--skip-zellij-update` escapes. Brew installs/upgrades run through the mutation guard with an explicit `zellij_install` scope contract so the mutation ledger records them.
 - Naruto finalizer policy is wired into the run result: `naruto-finalizer.json` artifact plus a console blocker line when local-LLM output still needs the GPT final arbiter.
 - Worker completion/failure messages now flow through the agent message bus (`agent-messages.jsonl`) for operator-readable swarm history.
 
