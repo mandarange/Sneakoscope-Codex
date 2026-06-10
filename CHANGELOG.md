@@ -24,6 +24,7 @@
 - `npm publish` re-ran the entire release DAG from zero on every release: the gate cache key hashed the raw package version, package.json, and dist/build-manifest.json, so a pure `sks versioning bump` (which also rewrites the three PACKAGE_VERSION constant sources) invalidated ~280 behavior gates including the ~11-minute blackbox suite. Cache hashing is now version-neutral for the five version-surface files; behavior changes still invalidate keys, version-correctness gates stay cache-disabled and always re-run, and `SKS_RELEASE_CACHE_VERSION_SENSITIVE=1` restores the old hashing.
 - Naruto backpressure throttling (50% throttled / 25% saturated) is no longer silent: the run header reports when host resource pressure reduced active workers.
 - GitHub release tags with a leading `v` failed version parsing in the zellij update check.
+- npm packlist could balloon past gate limits (4683 files / 13MB) when stray TypeScript `.d.ts`/`.map` artifacts landed in `dist` (tsconfig emits declarations + source maps; only `build-dist` prunes them). The package `files` field now excludes `dist/**/*.d.ts`, `*.map`, and `*.tsbuildinfo` outright, so the published package stays at ~830 files regardless of how `dist` was produced.
 
 ### Removed
 
