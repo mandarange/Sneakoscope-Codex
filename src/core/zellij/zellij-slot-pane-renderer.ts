@@ -283,7 +283,10 @@ async function tryRenderTelemetrySlotPane(input: {
   if (!slot) return null
   const staleRows = staleTelemetryRows(telemetryStatus(snapshot).telemetry_age_ms)
   const fallbackRows = artifactFallbackRows(input.artifactRender)
-  const liveRows = staleRows.length || !slot.progress ? fallbackRows : []
+  // Always surface the live artifact rows (current file, tool events, stdout
+  // tail). Telemetry freshness only tells us the worker is alive — the user
+  // still needs to see WHAT the worker is doing right now.
+  const liveRows = fallbackRows
   if (slot.status === 'failed') {
     return [
       `${slot.slot_id} gen-${slot.generation_index} · FAILED`,
@@ -322,7 +325,7 @@ function artifactFallbackRows(text: string | null | undefined): string[] {
     .map((line) => line.replace(/^\|\s?/, '').replace(/\s?\|$/, '').trim())
     .filter((line) => /^(heartbeat|doing|files|event|out|err):\s+/i.test(line))
     .filter((line) => !/unknown|waiting for worker intake|no changed file yet/i.test(line))
-    .slice(-4)
+    .slice(-7)
     .map((line) => `live: ${trimInline(line, 72)}`)
 }
 

@@ -244,30 +244,38 @@ export async function runAgentScheduler(input: {
         batch_id: batchId,
         meta: { launch_count: launches.length, active_count_before: active.size }
       }).catch(() => undefined)
+      // Telemetry appends run concurrently across launches (per-slot ordering
+      // preserved inside each async chain). Awaiting these file writes in
+      // series before each dispatch serialized worker launch by 2 disk writes
+      // per slot — with 20 slots that is 40 sequential appends before the last
+      // worker even started.
+      const dispatchTelemetryWrites: Promise<unknown>[] = []
       for (const launch of launches) {
         const { slot, openedSlot, generation, agent, workItem } = launch
-        await appendParallelRuntimeEvent(input.root, input.missionId, {
-          event_type: 'slot_reserved',
-          slot_id: slot.slot_id,
-          generation_index: generation.generation_index,
-          session_id: generation.session_id,
-          pid: null,
-          backend: 'scheduler',
-          placement: 'unknown',
-          batch_id: batchId,
-          meta: { work_item_id: workItem.id }
-        }).catch(() => undefined)
-        await appendParallelRuntimeEvent(input.root, input.missionId, {
-          event_type: 'worker_launch_invoked',
-          slot_id: slot.slot_id,
-          generation_index: generation.generation_index,
-          session_id: generation.session_id,
-          pid: null,
-          backend: 'scheduler',
-          placement: 'unknown',
-          batch_id: batchId,
-          meta: { work_item_id: workItem.id }
-        }).catch(() => undefined)
+        dispatchTelemetryWrites.push((async () => {
+          await appendParallelRuntimeEvent(input.root, input.missionId, {
+            event_type: 'slot_reserved',
+            slot_id: slot.slot_id,
+            generation_index: generation.generation_index,
+            session_id: generation.session_id,
+            pid: null,
+            backend: 'scheduler',
+            placement: 'unknown',
+            batch_id: batchId,
+            meta: { work_item_id: workItem.id }
+          }).catch(() => undefined)
+          await appendParallelRuntimeEvent(input.root, input.missionId, {
+            event_type: 'worker_launch_invoked',
+            slot_id: slot.slot_id,
+            generation_index: generation.generation_index,
+            session_id: generation.session_id,
+            pid: null,
+            backend: 'scheduler',
+            placement: 'unknown',
+            batch_id: batchId,
+            meta: { work_item_id: workItem.id }
+          }).catch(() => undefined)
+        })())
         const promise = Promise.resolve()
           .then(() => input.launchSession({ agent, workItem, generation, slot: openedSlot, queue, state }))
         .then((result) => ({
@@ -312,13 +320,14 @@ export async function runAgentScheduler(input: {
         accumulateActiveSlotTime()
         active.set(generation.session_id, { slot_id: slot.slot_id, work_item_id: workItem.id, session_id: generation.session_id, promise })
       }
+      await Promise.all(dispatchTelemetryWrites)
       await appendAgentWorkQueueEvent(input.root, 'batch_work_items_dispatched', {
         batch_id: batchId,
         launch_count: launches.length,
         session_ids: launches.map((launch) => launch.generation.session_id),
         work_item_ids: launches.map((launch) => launch.workItem.id)
       })
-      for (const launch of launches) await appendAgentWorkQueueEvent(input.root, 'work_item_dispatched', { work_item_id: launch.workItem.id, session_id: launch.generation.session_id, slot_id: launch.slot.slot_id })
+      await Promise.all(launches.map((launch) => appendAgentWorkQueueEvent(input.root, 'work_item_dispatched', { work_item_id: launch.workItem.id, session_id: launch.generation.session_id, slot_id: launch.slot.slot_id })))
       if (backfill) {
         const firstLaunch = launches[0]
         const refillLatencyMs = Math.max(0, Date.now() - backfill.closed_at_ms)

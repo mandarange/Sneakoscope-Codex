@@ -5,7 +5,7 @@ import { resolveProviderContext, type ProviderContext } from '../provider/provid
 import { runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
 import { buildZellijSlotColumnAnchorCommand } from './zellij-slot-column-anchor.js'
-import { closeWorkerInRightColumn, prepareWorkerInRightColumn, recordSlotColumnAnchorInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
+import { closeWorkerInRightColumn, prepareWorkerInRightColumn, readRightColumnState, recordSlotColumnAnchorInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
 import type { SksZellijUiMode } from './zellij-ui-mode.js'
 
 export const ZELLIJ_WORKER_PANE_SCHEMA = 'sks.zellij-worker-pane.v1'
@@ -97,6 +97,8 @@ export interface ZellijWorkerPaneRecord {
   column_creation_direction_applied?: 'right' | 'unknown' | 'not_applied' | null
   worker_direction_requested: 'down'
   worker_direction_applied: 'down' | 'unknown' | 'not_applied'
+  worker_stacked_requested?: boolean
+  worker_stacked_applied?: boolean
   slot_column_anchor_pane_id?: string | null
   right_column?: {
     mode: 'spawn-on-first-worker' | 'off'
@@ -138,6 +140,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   columnCreationDirectionApplied?: 'right' | 'unknown' | 'not_applied' | null
   workerDirectionRequested?: 'down'
   workerDirectionApplied?: 'down' | 'unknown' | 'not_applied'
+  stackedRequested?: boolean
+  stackedApplied?: boolean
   slotColumnAnchorPaneId?: string | null
   rightColumn?: ZellijWorkerPaneRecord['right_column']
   status?: ZellijWorkerPaneRecord['status']
@@ -204,6 +208,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     column_creation_direction_applied: input.columnCreationDirectionApplied ?? null,
     worker_direction_requested: input.workerDirectionRequested || 'down',
     worker_direction_applied: input.workerDirectionApplied || (directionApplied === 'down' ? 'down' : directionApplied === 'unknown' ? 'unknown' : 'not_applied'),
+    worker_stacked_requested: input.stackedRequested === true,
+    worker_stacked_applied: input.stackedApplied === true,
     slot_column_anchor_pane_id: input.slotColumnAnchorPaneId || null,
     right_column: input.rightColumn || null,
     sdk_thread_id: input.sdkThreadId || null,
@@ -284,11 +290,33 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     return record
   }
   const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
-  let slotColumnAnchorPaneId = rightColumn?.state.slot_column_anchor_pane_id || null
+  // CRITICAL: serialize anchor + worker pane creation per session. Workers
+  // launch concurrently, and without this lock every worker raced past the
+  // "does the SLOTS anchor exist yet?" check and created its OWN anchor with
+  // --direction right — splitting the screen into N side-by-side columns
+  // (observed in agent-zellij-pane-launch-ledger: terminal_1..terminal_5 all
+  // recorded as separate slot_column_anchor_pane_id values in one mission).
+  return withZellijPaneCreationLock(input.sessionName, async () => {
+  // Re-read the right-column state now that we hold the lock: a previously
+  // serialized worker may have created the anchor and/or its own pane.
+  const freshState = rightColumn
+    ? await readRightColumnState(root, input.missionId, input.projectRoot).catch(() => null)
+    : null
+  let slotColumnAnchorPaneId = freshState?.slot_column_anchor_pane_id || rightColumn?.state.slot_column_anchor_pane_id || null
+  const lastVisibleWorkerPaneId = [...(freshState?.visible_worker_panes || [])]
+    .filter((pane) => pane.pane_id && (pane.status === 'launching' || pane.status === 'running'))
+    .map((pane) => String(pane.pane_id))
+    .pop() || null
+  const freshFocusCandidate = lastVisibleWorkerPaneId
+    || slotColumnAnchorPaneId
+    || freshState?.right_anchor_pane_id
+    || freshState?.dashboard_pane_id
+    || rightColumn?.focusPaneId
+    || null
   let anchorLaunch: ZellijCommandResult | null = null
   let columnCreationDirectionRequested: 'right' | null = null
   let columnCreationDirectionApplied: 'right' | 'unknown' | 'not_applied' | null = null
-  if (rightColumn && !rightColumn.focusPaneId && !slotColumnAnchorPaneId) {
+  if (rightColumn && !freshFocusCandidate) {
     columnCreationDirectionRequested = 'right'
     const anchorCommand = buildZellijSlotColumnAnchorCommand({
       cliPath: path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
@@ -316,12 +344,22 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
       })
     }
   }
-  const focusPaneId = rightColumn?.focusPaneId || slotColumnAnchorPaneId || null
+  const focusPaneId = lastVisibleWorkerPaneId || slotColumnAnchorPaneId || freshFocusCandidate || null
   const directionRequested: 'right' | 'down' = 'down'
   const focus = focusPaneId
     ? await focusZellijPaneById(input.sessionName, focusPaneId, cwd)
     : null
-  const newPaneArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, ...(directionRequested === 'down' ? ['--near-current-pane'] : []), '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+  // Vertical stack policy: the first worker splits DOWN from the SLOTS anchor;
+  // every following worker joins a zellij stacked-pane group with the previous
+  // worker (`new-pane --stacked`, zellij >= 0.43) so the right column stays a
+  // clean vertical stack instead of fragmenting the screen. Opt out with
+  // SKS_ZELLIJ_WORKER_STACKED=0.
+  const stackRequested = process.env.SKS_ZELLIJ_WORKER_STACKED !== '0'
+    && Boolean(lastVisibleWorkerPaneId)
+    && focus?.ok === true
+  const newPaneArgs = stackRequested
+    ? ['--session', input.sessionName, 'action', 'new-pane', '--stacked', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+    : ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, '--near-current-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
   let launch = createSession.ok
     ? await runZellij(newPaneArgs, {
         cwd,
@@ -329,11 +367,10 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         optional: false
       })
     : null
+  let stackApplied = Boolean(stackRequested && launch?.ok)
   let directionApplied: ZellijWorkerPaneRecord['direction_applied'] = launch?.ok ? directionRequested : 'not_applied'
   if (createSession.ok && launch && !launch.ok) {
-    const fallbackArgs = rightColumn && directionRequested === 'down'
-      ? ['--session', input.sessionName, 'action', 'new-pane', '--direction', 'down', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
-      : ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
+    const fallbackArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
     const fallback = await runZellij(fallbackArgs, {
       cwd,
       timeoutMs: 5000,
@@ -341,6 +378,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     })
     if (fallback.ok) {
       launch = fallback
+      stackApplied = false
       directionApplied = rightColumn ? 'down' : 'unknown'
     }
   }
@@ -383,6 +421,8 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     columnCreationDirectionApplied,
     workerDirectionRequested: 'down',
     workerDirectionApplied: directionApplied === 'down' ? 'down' : directionApplied === 'unknown' ? 'unknown' : 'not_applied',
+    stackedRequested: stackRequested,
+    stackedApplied: stackApplied,
     slotColumnAnchorPaneId,
     rightColumn: rightColumn ? { mode: 'spawn-on-first-worker', focus_pane_id: focusPaneId, y_order: rightColumn.yOrder, slot_column_anchor_pane_id: slotColumnAnchorPaneId } : null,
     status: blockers.length ? 'failed' : 'running',
@@ -429,6 +469,8 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     column_creation_direction_applied: record.column_creation_direction_applied || null,
     worker_direction_requested: record.worker_direction_requested,
     worker_direction_applied: record.worker_direction_applied,
+    worker_stacked_requested: record.worker_stacked_requested === true,
+    worker_stacked_applied: record.worker_stacked_applied === true,
     slot_column_anchor_pane_id: record.slot_column_anchor_pane_id || null,
     command: record.command,
     worker_artifact_dir: input.workerArtifactDir,
@@ -441,6 +483,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     blockers
   })
   return record
+  })
 }
 
 export async function closeWorkerPane(input: {
@@ -693,6 +736,14 @@ async function focusZellijPaneById(sessionName: string, paneId: string, cwd: str
     })
     last = focus
     if (focus.ok) return focus
+    // zellij exits non-zero with "Pane Terminal(N) is already focused" when the
+    // target pane already holds focus (common: new-pane auto-focuses the pane
+    // it created, so the previous worker pane is usually still focused). That
+    // is a success for our purposes — without this, stacked placement would
+    // silently fall back to a plain down-split on every consecutive worker.
+    if (/already focused/i.test(`${focus.stdout_tail || ''} ${focus.stderr_tail || ''}`)) {
+      return { ...focus, ok: true, blockers: [], warnings: [...focus.warnings, 'zellij_pane_already_focused'] }
+    }
   }
   return last
 }
@@ -726,6 +777,25 @@ function zellijPaneIdCandidates(paneId: string) {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const zellijPaneCreationLocks = new Map<string, Promise<unknown>>()
+
+async function withZellijPaneCreationLock<T>(sessionName: string, fn: () => Promise<T>): Promise<T> {
+  const key = String(sessionName || 'default')
+  const previous = zellijPaneCreationLocks.get(key) || Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  zellijPaneCreationLocks.set(key, previous.then(() => current, () => current))
+  await previous.catch(() => undefined)
+  try {
+    return await fn()
+  } finally {
+    release()
+    if (zellijPaneCreationLocks.get(key) === current) zellijPaneCreationLocks.delete(key)
+  }
 }
 
 function normalizeExistingZellijSession(sessionName: string, result: ZellijCommandResult): ZellijCommandResult {

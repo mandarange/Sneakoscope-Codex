@@ -11,6 +11,7 @@ import { buildZellijSlotPaneCommand } from '../zellij/zellij-slot-pane-renderer.
 import { resolveZellijWorkerPaneUiMode } from '../zellij/zellij-ui-mode.js'
 import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type ZellijSlotTelemetryStatus } from '../zellij/zellij-slot-telemetry.js'
 import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
+import { appendAgentMessage } from './agent-message-bus.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
 
@@ -651,6 +652,15 @@ class NativeCliSessionSwarmRecorder {
 	      log_tail: input.logTail || '',
 	      blockers: input.blockers || []
 	    }).catch(() => undefined)
+	    if (input.eventType === 'worker_completed' || input.eventType === 'worker_failed') {
+	      await appendAgentMessage(this.root, {
+	        from: String(ctx.agent?.slot_id || ctx.agent?.id || 'worker'),
+	        session_id: ctx.agent?.session_id == null ? '' : String(ctx.agent.session_id),
+	        to: 'orchestrator',
+	        type: input.eventType,
+	        body: input.logTail || input.eventType
+	      }).catch(() => undefined)
+	    }
 	    const parallelEvent = mapTelemetryToParallelEvent(input.eventType)
 	    if (parallelEvent) {
 	      await appendParallelRuntimeEvent(this.root, this.input.missionId, {
@@ -681,6 +691,13 @@ class NativeCliSessionSwarmRecorder {
   private summary() {
     const closed = this.records.filter((row) => row.status === 'closed')
     const processIds = this.records.map((row) => row.pid).filter((pid) => Number.isFinite(Number(pid)))
+    // Both pane-backed primitives count as zellij pane worker sessions: the
+    // worker command can run inside the pane (full-debug) or headless behind a
+    // live slot renderer pane (compact-slots default). Counting only the
+    // former under-reported pane sessions as 0 in the default UI mode.
+    const paneBackedRecords = this.records.filter((row) =>
+      row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane'
+      || row.scaling_primitive === 'native_cli_process_with_zellij_slot_renderer')
     return {
       schema: NATIVE_CLI_SESSION_SWARM_SCHEMA,
       generated_at: nowIso(),
@@ -688,8 +705,12 @@ class NativeCliSessionSwarmRecorder {
       mission_id: this.input.missionId,
       route: this.input.route,
       backend: this.input.backend,
-      scaling_primitive: this.records.some((row) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane') ? 'native_cli_process_in_zellij_worker_pane' : 'native_cli_process',
-      zellij_pane_worker_sessions: this.records.filter((row) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane').length,
+      scaling_primitive: this.records.some((row) => row.scaling_primitive === 'native_cli_process_in_zellij_worker_pane')
+        ? 'native_cli_process_in_zellij_worker_pane'
+        : paneBackedRecords.length
+          ? 'native_cli_process_with_zellij_slot_renderer'
+          : 'native_cli_process',
+      zellij_pane_worker_sessions: paneBackedRecords.length,
       requested_agents: this.input.requestedAgents,
       target_active_slots: this.input.targetActiveSlots,
       spawned_worker_process_count: this.records.length,
