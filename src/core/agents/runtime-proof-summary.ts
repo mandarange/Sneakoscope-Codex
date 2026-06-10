@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { findLatestMission, missionDir } from '../mission.js'
 import { readJson, writeJsonAtomic } from '../fsx.js'
+import { readAgentMessageBus, type AgentMessageBusEntry } from './agent-message-bus.js'
 
 export const RUNTIME_PROOF_SUMMARY_SCHEMA = 'sks.runtime-proof-summary.v1'
 
@@ -29,10 +30,17 @@ export interface RuntimeProofSummary {
     largest_batch_size: number
     utilization: number
   }
+  messages: {
+    recent: AgentMessageBusEntry[]
+    completed_count: number
+    failed_count: number
+    warning_count: number
+    error_count: number
+  }
   blockers: string[]
 }
 
-export async function buildRuntimeProofSummary(root: string, missionIdInput: string = 'latest'): Promise<RuntimeProofSummary> {
+export async function buildRuntimeProofSummary(root: string, missionIdInput: string = 'latest', opts: { maxMessages?: number } = {}): Promise<RuntimeProofSummary> {
   const missionId = missionIdInput === 'latest' ? await findLatestMission(root) : missionIdInput
   if (!missionId) throw new Error('runtime_proof_summary_mission_missing')
   const dir = missionDir(root, missionId)
@@ -42,6 +50,10 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const swarm = await readJson<any>(path.join(agentsDir, 'agent-native-cli-session-swarm.json'), null)
   const telemetry = await readJson<any>(path.join(dir, 'zellij', 'slot-telemetry.snapshot.json'), null)
   const governor = await readJson<any>(path.join(agentsDir, 'naruto-concurrency-governor.json'), null)
+  const messagesAll = await readAgentMessageBus(root, missionId, { max: 500 })
+  const recentMessages = await readAgentMessageBus(root, missionId, { max: opts.maxMessages || 8 })
+  const failedMessages = messagesAll.filter((row) => row.event_type === 'worker_failed')
+  const errorMessages = messagesAll.filter((row) => row.level === 'error')
   const telemetryAgeMs = telemetry?.updated_at ? Math.max(0, Date.now() - Date.parse(telemetry.updated_at)) : Number.MAX_SAFE_INTEGER
   const visiblePanes = Number(parallel?.visible_panes ?? swarm?.zellij_pane_worker_sessions ?? telemetryVisiblePaneCount(telemetry) ?? 0)
   const targetActive = Number(scheduler?.target_active_slots ?? parallel?.target_active_slots ?? swarm?.target_active_slots ?? governor?.target_active_slots ?? 0)
@@ -50,6 +62,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
     ...(!parallel ? ['parallel_runtime_proof_missing'] : []),
     ...(!scheduler ? ['agent_scheduler_state_missing'] : []),
     ...(parallel?.passed === false ? parallel.blockers || ['parallel_runtime_proof_failed'] : []),
+    ...(errorMessages.length ? ['agent_message_bus_error_blockers'] : []),
     ...(telemetryAgeMs > 3000 ? ['zellij_telemetry_stale'] : [])
   ].map(String)
   const summary: RuntimeProofSummary = {
@@ -77,6 +90,13 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
       largest_batch_size: Number(scheduler?.largest_batch_size || 0),
       utilization: Number(scheduler?.scheduler_utilization || 0)
     },
+    messages: {
+      recent: recentMessages,
+      completed_count: messagesAll.filter((row) => row.event_type === 'worker_completed').length,
+      failed_count: failedMessages.length,
+      warning_count: messagesAll.filter((row) => row.level === 'warning').length,
+      error_count: errorMessages.length
+    },
     blockers
   }
   await writeJsonAtomic(path.join(agentsDir, 'runtime-proof-summary.json'), summary)
@@ -92,8 +112,20 @@ export function renderRuntimeProofSummary(summary: RuntimeProofSummary): string 
     `Visible/headless: ${summary.ui.visible_panes} / ${summary.ui.headless_workers}`,
     `Telemetry: ${summary.ui.stale ? `stale ${(summary.ui.telemetry_age_ms / 1000).toFixed(1)}s` : `fresh ${(summary.ui.telemetry_age_ms / 1000).toFixed(1)}s`}`,
     `Model calls max: ${summary.model_calls.max_observed}`,
+    ...(summary.messages.recent.length ? [
+      'Recent worker messages:',
+      ...summary.messages.recent.map((row) => `  ${messageStatusLabel(row)} ${row.slot_id || row.worker_id}: ${row.message}`)
+    ] : []),
     ...(summary.blockers.length ? [`Blockers: ${summary.blockers.join(', ')}`] : [])
   ].join('\n')
+}
+
+function messageStatusLabel(row: AgentMessageBusEntry): string {
+  if (row.event_type === 'worker_completed') return '[done]'
+  if (row.event_type === 'worker_failed') return '[fail]'
+  if (row.level === 'warning') return '[warn]'
+  if (row.level === 'error') return '[err]'
+  return '[info]'
 }
 
 function telemetryVisiblePaneCount(snapshot: any) {

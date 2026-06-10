@@ -33,6 +33,23 @@ export interface ZellijUpgradeResult {
   error?: string | null
 }
 
+export type ZellijUpdatePromptMode = 'interactive-prompt' | 'nonblocking-notice' | 'skip'
+
+export function resolveZellijUpdatePromptMode(input: {
+  ci?: boolean
+  noQuestion?: boolean
+  headless?: boolean
+  skipFlag?: boolean
+  env?: NodeJS.ProcessEnv
+}): ZellijUpdatePromptMode {
+  const env = input.env || process.env
+  if (input.skipFlag === true || env.SKS_SKIP_ZELLIJ_UPDATE === '1') return 'skip'
+  if (input.ci === true || env.CI === '1' || /^true$/i.test(String(env.CI || ''))) return 'nonblocking-notice'
+  if (input.noQuestion === true || env.SKS_NO_QUESTION === '1' || /^true$/i.test(String(env.SKS_NO_QUESTION || ''))) return 'nonblocking-notice'
+  if (input.headless === true) return 'nonblocking-notice'
+  return 'interactive-prompt'
+}
+
 const ZELLIJ_RELEASES_API_PATH = '/repos/zellij-org/zellij/releases/latest'
 
 export function zellijUpgradeCommandHint(missing = false): string {
@@ -228,6 +245,7 @@ export async function upgradeZellijToLatest(input: {
 export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts: {
   label?: string
   env?: NodeJS.ProcessEnv
+  missionDir?: string | null
 } = {}): Promise<{
   status: 'skipped' | 'current' | 'missing' | 'available' | 'skipped_by_user' | 'upgraded' | 'installed' | 'manual_required' | 'failed' | 'noop'
   current: string | null
@@ -237,10 +255,18 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
 }> {
   const env = opts.env || process.env
   const list = (args || []).map((arg) => String(arg))
-  if (list.includes('--json') || list.includes('--skip-cli-tools') || list.includes('--skip-zellij-update') || env.SKS_SKIP_ZELLIJ_UPDATE === '1') {
+  const mode = resolveZellijUpdatePromptMode({
+    env,
+    skipFlag: list.includes('--json') || list.includes('--skip-cli-tools') || list.includes('--skip-zellij-update'),
+    noQuestion: list.includes('--no-question') || list.includes('--no-questions'),
+    headless: !(process.stdin.isTTY && process.stdout.isTTY)
+  })
+  if (mode === 'skip') {
     return { status: 'skipped', current: null, latest: null, command: null }
   }
-  const notice = await checkZellijUpdateNotice({ env }).catch(() => null)
+  const noticeInput: Parameters<typeof checkZellijUpdateNotice>[0] = { env }
+  if (opts.missionDir !== undefined) noticeInput.missionDir = opts.missionDir
+  const notice = await checkZellijUpdateNotice(noticeInput).catch(() => null)
   if (!notice) return { status: 'skipped', current: null, latest: null, command: null }
   if (notice.zellij_missing) {
     // Zellij is an optional integration; installation is owned by
@@ -253,6 +279,10 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
   }
   const label = opts.label || 'Zellij launch'
   const autoYes = list.includes('--yes') || list.includes('-y')
+  if (mode === 'nonblocking-notice') {
+    console.log(`Zellij update available: ${notice.current_version} -> ${notice.latest_version}. Run: ${notice.upgrade_command}`)
+    return { status: 'available', current: notice.current_version, latest: notice.latest_version, command: notice.upgrade_command }
+  }
   if (!autoYes && !canAskYesNo(env)) {
     console.log(`Zellij update available: ${notice.current_version} -> ${notice.latest_version}. Run: ${notice.upgrade_command}`)
     return { status: 'available', current: notice.current_version, latest: notice.latest_version, command: notice.upgrade_command }
@@ -323,7 +353,7 @@ function githubLatestTag(timeoutMs: number): Promise<string> {
 }
 
 function canAskYesNo(env: NodeJS.ProcessEnv) {
-  return Boolean(process.stdin.isTTY && process.stdout.isTTY && env.CI !== 'true')
+  return resolveZellijUpdatePromptMode({ env, headless: !(process.stdin.isTTY && process.stdout.isTTY) }) === 'interactive-prompt'
 }
 
 async function askYesNoDefaultYes(question: string): Promise<boolean> {

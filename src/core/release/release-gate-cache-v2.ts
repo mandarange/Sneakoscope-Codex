@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import type { ReleaseGateNode } from './release-gate-node.js'
+import { normalizeReleaseCacheInputForBehavior } from './release-cache-key.js'
 
 export const RELEASE_GATE_CACHE_V2_SCHEMA = 'sks.release-gate-cache.v2'
 
@@ -25,7 +26,8 @@ const VERSION_NEUTRAL_CACHE_FILES = new Set([
   'package-lock.json',
   'src/core/version.ts',
   'src/core/fsx.ts',
-  'src/bin/sks.ts'
+  'src/bin/sks.ts',
+  'dist/build-manifest.json'
 ])
 
 export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string {
@@ -57,24 +59,21 @@ export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string
     for (const file of expanded) {
       const rel = path.relative(root, file)
       hash.update(rel)
-      if (!versionSensitive && VERSION_NEUTRAL_CACHE_FILES.has(rel)) hashVersionNeutralFile(hash, file, releaseVersion)
+      if (!versionSensitive && VERSION_NEUTRAL_CACHE_FILES.has(rel)) hashVersionNeutralFile(hash, rel, file, releaseVersion)
       else hashFileIfPresent(hash, file)
     }
   }
   return hash.digest('hex')
 }
 
-function hashVersionNeutralFile(hash: crypto.Hash, file: string, releaseVersion: string): void {
+function hashVersionNeutralFile(hash: crypto.Hash, rel: string, file: string, releaseVersion: string): void {
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return
   const text = fs.readFileSync(file, 'utf8')
   if (!releaseVersion) {
     hash.update(text)
     return
   }
-  // Replace exact occurrences of the current release version literal so a
-  // version-only bump hashes identically. Any other content change in these
-  // files still alters the key.
-  hash.update(text.split(releaseVersion).join('__SKS_RELEASE_VERSION__'))
+  hash.update(normalizeReleaseCacheInputForBehavior(rel, text))
 }
 
 export function expandGlob(root: string, input: string): string[] {

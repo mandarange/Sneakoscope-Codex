@@ -60,11 +60,23 @@ export async function buildSideEffectRuntimeReport(root: string): Promise<SideEf
 async function discoverLedgerPaths(root: string): Promise<string[]> {
   const found = new Set<string>()
   await addIfExists(found, mutationLedgerPath(root))
-  await walkForLedgers(path.join(root, '.sneakoscope', 'missions'), found)
+  await walkForLedgers(path.join(root, '.sneakoscope', 'missions'), found, {
+    depth: 0,
+    maxDepth: positiveInt(process.env.SKS_SIDE_EFFECT_LEDGER_SCAN_MAX_DEPTH, 6),
+    visitedDirs: 0,
+    maxDirs: positiveInt(process.env.SKS_SIDE_EFFECT_LEDGER_SCAN_MAX_DIRS, 20000)
+  })
   return [...found].sort()
 }
 
-async function walkForLedgers(dir: string, found: Set<string>): Promise<void> {
+async function walkForLedgers(dir: string, found: Set<string>, budget: {
+  depth: number
+  maxDepth: number
+  visitedDirs: number
+  maxDirs: number
+}): Promise<void> {
+  if (budget.depth > budget.maxDepth || budget.visitedDirs >= budget.maxDirs) return
+  budget.visitedDirs += 1
   let entries: import('node:fs').Dirent[]
   try {
     entries = await fsp.readdir(dir, { withFileTypes: true })
@@ -73,9 +85,18 @@ async function walkForLedgers(dir: string, found: Set<string>): Promise<void> {
   }
   for (const entry of entries) {
     const file = path.join(dir, entry.name)
-    if (entry.isDirectory()) await walkForLedgers(file, found)
+    if (entry.isDirectory() && !shouldSkipLedgerScanDir(entry.name)) await walkForLedgers(file, found, { ...budget, depth: budget.depth + 1 })
     else if (entry.isFile() && entry.name === 'mutation-ledger.jsonl') found.add(file)
   }
+}
+
+function shouldSkipLedgerScanDir(name: string): boolean {
+  return new Set(['node_modules', '.git', 'dist', 'vendor', '.next', 'coverage']).has(name)
+}
+
+function positiveInt(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
 }
 
 async function addIfExists(found: Set<string>, file: string): Promise<void> {
