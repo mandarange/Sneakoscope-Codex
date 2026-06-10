@@ -1,0 +1,135 @@
+import path from 'node:path'
+import { findCodexBinary } from '../codex-adapter.js'
+import { compareSemverLike, parseCodexVersionText } from '../codex-compat/codex-version-policy.js'
+import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+
+// Codex rust-v0.139.0 surface (https://github.com/openai/codex/releases/tag/rust-v0.139.0):
+// - Code mode can call standalone web search directly (incl. nested JS tool calls).
+// - Tool/connector input schemas preserve `oneOf`/`allOf`; large schemas keep more
+//   shallow structure when compacted (richer MCP tool + output schema support).
+// - `codex doctor` reports editor/pager env details (redacted in JSON output).
+// - `codex plugin marketplace list --json` includes each marketplace `source`,
+//   and plugin lists can return from the cached remote catalog before a
+//   background refresh.
+// - `-P` sandbox permissions profile alias on the CLI.
+// - Multi-agent v2: `close_agent` renamed to `interrupt_agent`, residency LRU,
+//   concurrency counted by active execution, descendants not reopened on resume.
+export interface Codex0139Capability {
+  schema: 'sks.codex-0139-capability.v1'
+  ok: boolean
+  probe_mode: 'version-only' | 'feature-probe'
+  codex_bin: string | null
+  version_text: string | null
+  parsed_version: string | null
+  supports_code_mode_web_search: boolean
+  supports_rich_tool_schemas: boolean
+  supports_doctor_env_details: boolean
+  supports_marketplace_source_field: boolean
+  supports_plugin_catalog_cache: boolean
+  supports_sandbox_profile_alias: boolean
+  supports_interrupt_agent_rename: boolean
+  feature_probe_results: {
+    marketplace_list_json?: 'passed' | 'failed' | 'skipped'
+    sandbox_profile_alias?: 'passed' | 'failed' | 'skipped'
+  }
+  blockers: string[]
+}
+
+export async function detectCodex0139Capability(input: { codexBin?: string | null } = {}): Promise<Codex0139Capability> {
+  const fake = process.env.SKS_CODEX_0139_FAKE === '1'
+  const codexBin = fake
+    ? input.codexBin || process.env.CODEX_BIN || 'codex'
+    : input.codexBin || process.env.CODEX_BIN || await findCodexBinary()
+  const versionText = fake
+    ? String(process.env.SKS_CODEX_VERSION_FAKE || 'codex-cli 0.139.0')
+    : await readCodexVersionText(codexBin)
+  const parsed = parseCodexVersionText(versionText)
+  const atLeast139 = Boolean(parsed && compareSemverLike(parsed, '0.139.0') >= 0)
+  const probeMode = process.env.SKS_CODEX_0139_PROBE === '1' ? 'feature-probe' : 'version-only'
+  const featureProbeResults = probeMode === 'feature-probe'
+    ? await probeCodex0139Features(codexBin, { fake })
+    : {
+        marketplace_list_json: 'skipped' as const,
+        sandbox_profile_alias: 'skipped' as const
+      }
+  const marketplaceOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.marketplace_list_json !== 'failed')
+  const profileAliasOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.sandbox_profile_alias !== 'failed')
+  const blockers = [
+    ...(!codexBin ? ['codex_cli_missing'] : []),
+    ...(atLeast139 ? [] : ['codex_0_139_required_for_search_schema_marketplace_features']),
+    ...(probeMode === 'feature-probe' && featureProbeResults.marketplace_list_json === 'failed' ? ['codex_marketplace_list_json_probe_failed'] : [])
+  ]
+  return {
+    schema: 'sks.codex-0139-capability.v1',
+    ok: atLeast139 && blockers.length === 0,
+    probe_mode: probeMode,
+    codex_bin: codexBin || null,
+    version_text: versionText || null,
+    parsed_version: parsed,
+    supports_code_mode_web_search: atLeast139,
+    supports_rich_tool_schemas: atLeast139,
+    supports_doctor_env_details: atLeast139,
+    supports_marketplace_source_field: marketplaceOk,
+    supports_plugin_catalog_cache: atLeast139,
+    supports_sandbox_profile_alias: profileAliasOk,
+    supports_interrupt_agent_rename: atLeast139,
+    feature_probe_results: featureProbeResults,
+    blockers
+  }
+}
+
+export async function writeCodex0139CapabilityArtifacts(root: string, input: { missionId?: string | null; codexBin?: string | null } = {}) {
+  const capability = await detectCodex0139Capability({ codexBin: input.codexBin || null })
+  const report = { ...capability, generated_at: nowIso() }
+  const rootArtifact = path.join(root, '.sneakoscope', 'codex-0139-capability.json')
+  await writeJsonAtomic(rootArtifact, report)
+  let missionArtifact: string | null = null
+  if (input.missionId) {
+    missionArtifact = path.join(root, '.sneakoscope', 'missions', input.missionId, 'codex-0139-capability.json')
+    await writeJsonAtomic(missionArtifact, report)
+  }
+  return { report, root_artifact: rootArtifact, mission_artifact: missionArtifact }
+}
+
+async function readCodexVersionText(codexBin: string | null): Promise<string | null> {
+  if (!codexBin) return null
+  const result = await runProcess(codexBin, ['--version'], { timeoutMs: 10_000, maxOutputBytes: 16 * 1024 }).catch((err: any) => ({
+    code: 1,
+    stdout: '',
+    stderr: err?.message || String(err)
+  }))
+  const text = `${result.stdout || ''}${result.stderr || ''}`.trim()
+  return result.code === 0 ? text : text || null
+}
+
+async function probeCodex0139Features(codexBin: string | null, opts: { fake?: boolean } = {}): Promise<Codex0139Capability['feature_probe_results']> {
+  if (opts.fake) {
+    return {
+      marketplace_list_json: process.env.SKS_CODEX_0139_FAKE_MARKETPLACE_FAIL === '1' ? 'failed' : 'passed',
+      sandbox_profile_alias: 'passed'
+    }
+  }
+  const timeoutMs = Math.max(1, Number(process.env.SKS_CODEX_0139_PROBE_TIMEOUT_MS || 3000) || 3000)
+  if (!codexBin) {
+    return { marketplace_list_json: 'failed', sandbox_profile_alias: 'failed' }
+  }
+  const marketplace = await runProcess(codexBin, ['plugin', 'marketplace', 'list', '--json'], { timeoutMs, maxOutputBytes: 256 * 1024 }).catch(() => ({ code: 1, stdout: '' }))
+  const marketplaceListJson = marketplace.code === 0 && marketplaceSourcesPresent((marketplace as any).stdout) ? 'passed' as const : 'failed' as const
+  const help = await runProcess(codexBin, ['--help'], { timeoutMs, maxOutputBytes: 256 * 1024 }).catch(() => ({ code: 1, stdout: '' }))
+  const aliasOk = help.code === 0 && /(^|\s)-P[,\s]/m.test(String((help as any).stdout || ''))
+  return {
+    marketplace_list_json: marketplaceListJson,
+    sandbox_profile_alias: aliasOk ? 'passed' : 'failed'
+  }
+}
+
+export function marketplaceSourcesPresent(stdout: unknown): boolean {
+  try {
+    const parsed = JSON.parse(String(stdout || ''))
+    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.marketplaces) ? parsed.marketplaces : Array.isArray(parsed?.items) ? parsed.items : []
+    if (!rows.length) return true
+    return rows.some((row: any) => typeof row?.source === 'string' && row.source.length > 0)
+  } catch {
+    return false
+  }
+}
