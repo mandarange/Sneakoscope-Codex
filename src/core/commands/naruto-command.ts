@@ -23,6 +23,7 @@ import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../agents/runtime-proof-summary.js'
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js'
+import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -80,6 +81,7 @@ async function narutoRun(parsed: NarutoArgs) {
   })
   const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
   await writeCodex0138CapabilityArtifacts(root, { missionId: mission.id }).catch(() => null)
+  await writeCodex0139CapabilityArtifacts(root, { missionId: mission.id }).catch(() => null)
   const gitWorktreeCapability = writeCapable
     ? await evaluateGitWorktreeCapability({ root, missionId: mission.id })
     : null

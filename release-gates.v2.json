@@ -8395,6 +8395,35 @@
       ]
     },
     {
+      "id": "codex:0139-capability",
+      "command": "npm run codex:0139-capability --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "codex:0138-capability-artifact",
       "command": "npm run codex:0138-capability-artifact --silent",
       "deps": [

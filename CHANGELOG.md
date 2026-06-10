@@ -5,6 +5,16 @@
 
 
 
+## [3.0.1] - 2026-06-10
+
+### Added
+
+- Codex `rust-v0.139.0` capability detection (`codex:0139-capability` gate, `.sneakoscope/codex-0139-capability.json` root + mission artifacts on `sks --mad` / `sks naruto run`): standalone web search in code mode, preserved `oneOf`/`allOf` tool schemas, doctor editor/pager env details, plugin marketplace `source` field and cached remote catalog, `-P` sandbox profile alias, and the multi-agent v2 `interrupt_agent` rename. See [docs/codex-0.139-compat.md](docs/codex-0.139-compat.md).
+
+### Fixed
+
+- Cockpit subagent-stage classification now accepts the Codex 0.139 multi-agent v2 `interrupt_agent` event name alongside the pre-0.139 `close_agent`, so lifecycle events keep mapping to `result` stages on newer CLIs.
+
 ## [3.0.0] - 2026-06-10
 
 ### Added

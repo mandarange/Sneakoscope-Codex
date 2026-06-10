@@ -35,9 +35,11 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.0.0** is the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
+SKS **3.0.1** tracks Codex CLI `rust-v0.139.0`: capability detection for code-mode web search, preserved `oneOf`/`allOf` tool schemas, plugin marketplace `source`/cached catalog, the `-P` sandbox profile alias, and the multi-agent v2 `interrupt_agent` rename (accepted alongside `close_agent` in cockpit event classification). See [docs/codex-0.139-compat.md](docs/codex-0.139-compat.md).
 
-What changed:
+SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
+
+What changed in 3.0.0:
 
 - **Slot panes are finally alive.** The watch renderer froze for entire missions because the telemetry snapshot cache never invalidated; snapshot reads are now mtime-aware, multi-process flushes merge instead of clobbering each other, and the disk `updated_at` stays authoritative for stale detection.
 - **One SLOTS column, vertical stack.** Concurrent workers used to race anchor creation and split the screen into N side-by-side columns. Anchor + worker pane creation is serialized per session, and workers join a native Zellij stacked-pane group (`new-pane --stacked`, opt out with `SKS_ZELLIJ_WORKER_STACKED=0`).

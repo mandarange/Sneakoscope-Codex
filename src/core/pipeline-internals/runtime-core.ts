@@ -1212,10 +1212,12 @@ function subagentToolName(payload: any) {
 
 function subagentStage(payload: any) {
   const hay = JSON.stringify(payload || {});
-  if (!/(spawn_agent|send_input|wait_agent|close_agent|subagent|worker|explorer)/i.test(hay)) return null;
+  // Codex 0.139 renamed multi-agent v2 `close_agent` to `interrupt_agent`;
+  // accept both so cockpit evidence keeps classifying on newer CLIs.
+  if (!/(spawn_agent|send_input|wait_agent|close_agent|interrupt_agent|subagent|worker|explorer)/i.test(hay)) return null;
   if (/subagent[_ -]?unavailable|subagents unavailable|unsafe to split|unsplittable|cannot safely split/i.test(hay)) return 'exception';
   if (/spawn_agent/i.test(hay)) return 'spawn_agent';
-  if (/wait_agent|close_agent|completed|final/i.test(hay)) return 'result';
+  if (/wait_agent|close_agent|interrupt_agent|completed|final/i.test(hay)) return 'result';
   return 'subagent';
 }
 

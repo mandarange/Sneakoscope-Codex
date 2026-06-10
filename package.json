@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -562,6 +562,7 @@
     "release:check:dag:no-cache": "node ./dist/scripts/release-gate-dag-runner.js --preset release --no-cache",
     "release:check:dag:fail-fast": "node ./dist/scripts/release-gate-dag-runner.js --preset release --fail-fast",
     "codex:0138-capability": "node ./dist/scripts/codex-0138-capability-check.js",
+    "codex:0139-capability": "node ./dist/scripts/codex-0139-capability-check.js",
     "codex:0138-capability-artifact": "node ./dist/scripts/codex-0138-capability-artifact-check.js",
     "codex-sdk:version-compat": "node ./dist/scripts/codex-sdk-version-compat-check.js",
     "codex-app:handoff": "node ./dist/scripts/codex-app-handoff-check.js",
