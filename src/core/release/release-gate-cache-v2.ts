@@ -9,19 +9,44 @@ export function releaseGateCacheFile(root: string): string {
   return path.join(root, '.sneakoscope', 'reports', 'release-gates', 'cache-v2.json')
 }
 
+// Files whose only release-to-release difference is the version literal.
+// Hashing them version-neutrally keeps a pure `sks versioning bump` from
+// invalidating every behavior gate: bumping the version rewrites
+// package.json, package-lock.json, and the three PACKAGE_VERSION constant
+// sources, which are inputs of ~280 gates (via `package.json` and `src/**`).
+// Before this normalization every publish re-ran the entire DAG from zero
+// (test:blackbox alone is ~11 minutes) even when no behavior changed.
+// Version-CORRECTNESS gates (release:version-truth, release:metadata, ...)
+// are declared with `cache.enabled: false`, so they always re-run and still
+// catch version drift. Set SKS_RELEASE_CACHE_VERSION_SENSITIVE=1 to restore
+// the old fully version-sensitive hashing.
+const VERSION_NEUTRAL_CACHE_FILES = new Set([
+  'package.json',
+  'package-lock.json',
+  'src/core/version.ts',
+  'src/core/fsx.ts',
+  'src/bin/sks.ts'
+])
+
 export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  const releaseVersion = String(pkg.version || '')
+  const versionSensitive = process.env.SKS_RELEASE_CACHE_VERSION_SENSITIVE === '1'
   const hash = crypto.createHash('sha256')
   hash.update(gate.id)
   hash.update(gate.command)
-  hash.update(String(pkg.version || ''))
+  if (versionSensitive) hash.update(releaseVersion)
   hash.update(process.version)
   hash.update(String(process.env.npm_config_user_agent || ''))
   hash.update(JSON.stringify(gate.resource || []))
   hash.update(JSON.stringify(gate.preset || []))
   hashFileIfPresent(hash, path.join(root, 'release-gates.v2.json'))
-  hashFileIfPresent(hash, path.join(root, 'package.json'))
-  hashFileIfPresent(hash, path.join(root, 'dist', 'build-manifest.json'))
+  if (versionSensitive || !gate.cache.inputs.length) {
+    // No declared inputs (or explicitly version-sensitive mode): fall back to
+    // the conservative global digests so such a gate cannot cache-hit forever.
+    hashFileIfPresent(hash, path.join(root, 'package.json'))
+    hashFileIfPresent(hash, path.join(root, 'dist', 'build-manifest.json'))
+  }
   for (const input of gate.cache.inputs) {
     const expanded = expandGlob(root, input)
     hash.update(`input:${input}`)
@@ -30,11 +55,26 @@ export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string
       continue
     }
     for (const file of expanded) {
-      hash.update(path.relative(root, file))
-      hashFileIfPresent(hash, file)
+      const rel = path.relative(root, file)
+      hash.update(rel)
+      if (!versionSensitive && VERSION_NEUTRAL_CACHE_FILES.has(rel)) hashVersionNeutralFile(hash, file, releaseVersion)
+      else hashFileIfPresent(hash, file)
     }
   }
   return hash.digest('hex')
+}
+
+function hashVersionNeutralFile(hash: crypto.Hash, file: string, releaseVersion: string): void {
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return
+  const text = fs.readFileSync(file, 'utf8')
+  if (!releaseVersion) {
+    hash.update(text)
+    return
+  }
+  // Replace exact occurrences of the current release version literal so a
+  // version-only bump hashes identically. Any other content change in these
+  // files still alters the key.
+  hash.update(text.split(releaseVersion).join('__SKS_RELEASE_VERSION__'))
 }
 
 export function expandGlob(root: string, input: string): string[] {
