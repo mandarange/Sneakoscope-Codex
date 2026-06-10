@@ -5,6 +5,29 @@
 
 
 
+## [3.0.0] - 2026-06-10
+
+### Added
+
+- Zellij worker panes now join a native stacked-pane group (`new-pane --stacked`, zellij >= 0.43): the first worker splits down from the SLOTS anchor and every following worker stacks vertically instead of fragmenting the screen. Opt out with `SKS_ZELLIJ_WORKER_STACKED=0`.
+- Zellij version check and latest-stable upgrade flow, mirroring the Codex CLI update prompt: launch-time `[Y/n]` prompt on `sks --mad-sks` / `sks naruto run`, a new `sks zellij update [--yes]` subcommand, GitHub releases lookup with a 6h on-disk cache, and `SKS_SKIP_ZELLIJ_UPDATE` / `--skip-zellij-update` escapes.
+- Naruto finalizer policy is wired into the run result: `naruto-finalizer.json` artifact plus a console blocker line when local-LLM output still needs the GPT final arbiter.
+- Worker completion/failure messages now flow through the agent message bus (`agent-messages.jsonl`) for operator-readable swarm history.
+
+### Fixed
+
+- Zellij slot pane renderers froze for the entire mission: the telemetry snapshot cache never invalidated, so `--watch` loops re-rendered the first frame forever. Snapshot reads are now mtime-aware and multi-process flushes merge instead of clobbering each other's slots.
+- Concurrent workers raced anchor creation and each opened its own `SLOTS` column with `--direction right`, splitting the screen into N side-by-side columns. Anchor + worker pane creation is now serialized per session with fresh state re-reads under the lock.
+- Worker panes defaulted to `full-debug`, which runs the worker with `--json` and shows nothing until exit. The default is now the live `compact-slots` slot renderer, which streams heartbeat, current file, tool events, and stdout tails every second.
+- `focus-pane-id` returning non-zero for an already-focused pane silently degraded stacked placement to plain down-splits.
+- Scheduler batch dispatch serialized two telemetry file writes per worker before launching the next one; telemetry appends now run concurrently across launches while preserving per-slot ordering.
+- Naruto backpressure throttling (50% throttled / 25% saturated) is no longer silent: the run header reports when host resource pressure reduced active workers.
+- GitHub release tags with a leading `v` failed version parsing in the zellij update check.
+
+### Removed
+
+- Dead code: `naruto-work-stealing.ts` (never invoked; the scheduler's backfill already refills idle slots from the queue) and `zellij-right-column-layout-proof.ts` (no consumers).
+
 ## [2.0.19] - 2026-06-09
 
 ### Added

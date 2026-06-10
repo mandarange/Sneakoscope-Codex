@@ -7,6 +7,7 @@ import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/a
 import { DEFAULT_NARUTO_CLONES, MAX_NARUTO_AGENT_COUNT } from '../agents/agent-schema.js'
 import { resolveOllamaWorkerConfig } from '../agents/ollama-worker-config.js'
 import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/zellij-launcher.js'
+import { maybePromptZellijUpdateForLaunch } from '../zellij/zellij-update.js'
 import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
 import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
@@ -15,6 +16,7 @@ import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../naruto/na
 import { allocateNarutoTasksToWorkers } from '../naruto/naruto-allocation-policy.js'
 import { rebalanceNarutoReadyWork } from '../naruto/naruto-rebalance-policy.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
+import { evaluateNarutoFinalizer } from '../naruto/naruto-finalizer.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
@@ -38,6 +40,12 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
   if (parsed.action === 'dashboard') return narutoDashboard(parsed)
   if (parsed.action === 'workers') return narutoWorkers(parsed)
   if (parsed.action === 'proof') return narutoProof(parsed)
+  // Like the Codex CLI update prompt: check the installed zellij version and
+  // offer an upgrade to the latest stable release before the live session
+  // opens. Never blocks the run.
+  if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
+    await maybePromptZellijUpdateForLaunch(args, { label: '$Naruto launch' }).catch(() => undefined)
+  }
   return narutoRun(parsed)
 }
 
@@ -295,6 +303,9 @@ async function narutoRun(parsed: NarutoArgs) {
     console.log('  backend: ' + schedulerBackend)
     console.log('  parallelism mode: ' + parsed.parallelism)
     if (activeSlots < roster.agent_count) console.log('  cap reasons: ' + (governor.reasons.join(', ') || 'host safety cap'))
+    // Backpressure used to throttle silently (50% when throttled, 25% when
+    // saturated); always tell the operator when host pressure reduced workers.
+    if (governor.backpressure !== 'normal') console.log('  backpressure: ' + governor.backpressure + ' — host resource pressure reduced active workers (memory/cpu/fd/disk thresholds)')
     if (parsed.parallelism !== 'safe' && activeSlots < 10) console.log('  warning: active workers below 10 in non-safe mode')
   }
   if (!parsed.json && !parsed.mock && !parsed.noOpenZellij) {
@@ -412,6 +423,18 @@ async function narutoRun(parsed: NarutoArgs) {
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
   const localWorkerSummary = summarizeNarutoLocalWorkerResult(localWorker, result)
+  // Finalizer policy: when local LLM workers contributed patches, the GPT
+  // final arbiter must have accepted before patches are considered final.
+  const finalizer = evaluateNarutoFinalizer({
+    localParticipated: Number(localWorkerSummary?.selected_worker_count || 0) > 0,
+    gptFinalStatus: result.proof?.gpt_final_status || null,
+    applyPatches: writeCapable
+  })
+  await writeJsonAtomic(path.join(mission.dir, 'naruto-finalizer.json'), {
+    ...finalizer,
+    generated_at: nowIso(),
+    mission_id: mission.id
+  })
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: result.ok === true,
@@ -471,6 +494,7 @@ async function narutoRun(parsed: NarutoArgs) {
       passed: parallelRuntime.passed
     } : null,
     local_worker: localWorkerSummary,
+    finalizer,
     proof: result.proof?.status || 'missing',
     run: compactNarutoRunResult(result),
     zellij: null as any
@@ -483,6 +507,7 @@ async function narutoRun(parsed: NarutoArgs) {
     console.log('Backend: ' + result.backend)
     console.log('Roles: ' + roleDistribution.entries.map((entry) => `${entry.role}:${entry.count}`).join(', '))
     console.log('Proof: ' + summary.proof)
+    if (!finalizer.ok) console.log('Finalizer: blocked — ' + finalizer.blockers.join(', '))
     if (summary.parallel_runtime) {
       console.log('$Naruto parallel proof:')
       console.log('  max active workers: ' + summary.parallel_runtime.max_observed_active_workers)

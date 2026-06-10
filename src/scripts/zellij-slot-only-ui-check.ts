@@ -11,13 +11,16 @@ const swarm = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-sessio
 const report = {
   schema: 'sks.zellij-slot-only-ui-check.v1',
   default_compact_slots: uiMode.includes("return 'compact-slots'"),
-  worker_panes_default_live: uiMode.includes('resolveZellijWorkerPaneUiMode') && uiMode.includes("|| 'full-debug'"),
+  worker_panes_default_live_renderer: uiMode.includes('resolveZellijWorkerPaneUiMode') && uiMode.includes("|| 'compact-slots'"),
+  full_debug_opt_in_available: uiMode.includes("'--zellij-full-debug'") && uiMode.includes("fromEnv === 'full-debug'"),
   compact_explicit_fallback: uiMode.includes("'--zellij-compact-slots'") && uiMode.includes("fromEnv === 'compact-slots'"),
   state_records_ui_mode: manager.includes('ui_mode: uiMode'),
   compact_skips_dashboard: manager.includes('if (!createDashboard)') && manager.includes('dashboard_created: false'),
   first_slot_creates_slot_anchor_right: worker.includes('buildZellijSlotColumnAnchorCommand') && worker.includes("'--direction', 'right', '--name', 'SLOTS'"),
+  anchor_creation_serialized: worker.includes('withZellijPaneCreationLock'),
   workers_stack_down_from_anchor: worker.includes("const directionRequested: 'right' | 'down' = 'down'")
-    && worker.includes("directionRequested === 'down' ? ['--near-current-pane'] : []")
+    && worker.includes("'--near-current-pane'")
+    && worker.includes("'--stacked'")
     && worker.includes('slot_column_anchor_pane_id'),
   explicit_compact_uses_renderer: swarm.includes('buildZellijSlotPaneCommand') && swarm.includes("liveWorkerPane ? 'worker-command-pane' : 'zellij-slot-pane-renderer'")
     && swarm.includes('paneRecord.pane_kind')

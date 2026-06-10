@@ -8,6 +8,7 @@ const telemetrySnapshotCache = new Map<string, ZellijSlotTelemetrySnapshot>()
 const telemetrySnapshotWriteCounts = new Map<string, number>()
 const telemetrySnapshotFlushCounts = new Map<string, number>()
 const telemetrySnapshotLastFlushMs = new Map<string, number>()
+const telemetrySnapshotDiskStat = new Map<string, { mtimeMs: number; size: number }>()
 
 export type ZellijSlotTelemetryEventType =
   | 'slot_reserved'
@@ -123,21 +124,68 @@ export async function appendZellijSlotTelemetry(root: string, event: ZellijSlotT
 }
 
 export async function readZellijSlotTelemetrySnapshot(root: string, missionId: string): Promise<ZellijSlotTelemetrySnapshot> {
-  const snapshotPath = slotTelemetrySnapshotPath(root, missionId)
-  const cached = telemetrySnapshotCache.get(snapshotPath)
-  if (cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return cached
-  const existing = await readJson(snapshotPath, null)
-  if (existing?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return existing as ZellijSlotTelemetrySnapshot
+  const fresh = await readZellijSlotTelemetrySnapshotNoRebuild(root, missionId)
+  if (fresh) return fresh
   return rebuildZellijSlotTelemetrySnapshot(root, missionId)
 }
 
 export async function readZellijSlotTelemetrySnapshotNoRebuild(root: string, missionId: string): Promise<ZellijSlotTelemetrySnapshot | null> {
   const snapshotPath = slotTelemetrySnapshotPath(root, missionId)
   const cached = telemetrySnapshotCache.get(snapshotPath)
-  if (cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return cached
+  const stat = await statTelemetryFile(snapshotPath)
+  const recorded = telemetrySnapshotDiskStat.get(snapshotPath)
+  const diskChanged = Boolean(stat) && (!recorded || recorded.mtimeMs !== stat!.mtimeMs || recorded.size !== stat!.size)
+  // CRITICAL: never serve a process-local cache forever. Long-lived reader
+  // processes (zellij slot pane renderers in --watch mode) must observe
+  // snapshot flushes performed by the orchestrator and worker processes,
+  // otherwise the pane renders the same frame for the entire mission.
+  if (!diskChanged && cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) return cached
   const existing = await readJson(snapshotPath, null)
-  if (existing?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) telemetrySnapshotCache.set(snapshotPath, existing as ZellijSlotTelemetrySnapshot)
-  return existing?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? existing as ZellijSlotTelemetrySnapshot : null
+  if (stat) telemetrySnapshotDiskStat.set(snapshotPath, stat)
+  if (existing?.schema !== ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA) {
+    return cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? cached : null
+  }
+  const disk = existing as ZellijSlotTelemetrySnapshot
+  // Merge with any locally cached (possibly not-yet-flushed) slot state so a
+  // writer process does not lose its pending events when another process
+  // flushed the snapshot file in the meantime. The DISK updated_at stays
+  // authoritative on the read path: it reflects the last real flush, which is
+  // what stale-telemetry detection must measure.
+  const merged = cached?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? mergeTelemetrySnapshots(disk, cached, { updatedAt: 'base' }) : disk
+  telemetrySnapshotCache.set(snapshotPath, merged)
+  return merged
+}
+
+export function mergeTelemetrySnapshots(base: ZellijSlotTelemetrySnapshot, overlay: ZellijSlotTelemetrySnapshot, opts: { updatedAt?: 'base' | 'latest' } = {}): ZellijSlotTelemetrySnapshot {
+  const slots: ZellijSlotTelemetrySnapshot['slots'] = { ...(base.slots || {}) }
+  for (const [key, row] of Object.entries(overlay.slots || {})) {
+    const existing = slots[key]
+    slots[key] = !existing || telemetryTsMs(row.latest_ts) >= telemetryTsMs(existing.latest_ts) ? row : existing
+  }
+  const baseTs = Date.parse(String(base.updated_at || '')) || 0
+  const overlayTs = Date.parse(String(overlay.updated_at || '')) || 0
+  return {
+    schema: ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA,
+    mission_id: base.mission_id || overlay.mission_id,
+    updated_at: opts.updatedAt === 'base' ? base.updated_at : overlayTs > baseTs ? overlay.updated_at : base.updated_at,
+    flush_count: Math.max(Number(base.flush_count || 0), Number(overlay.flush_count || 0)),
+    slots,
+    counts: countSlotTelemetry(slots)
+  }
+}
+
+function telemetryTsMs(value: unknown): number {
+  const parsed = Date.parse(String(value || ''))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+async function statTelemetryFile(file: string): Promise<{ mtimeMs: number; size: number } | null> {
+  try {
+    const st = await fsp.stat(file)
+    return { mtimeMs: st.mtimeMs, size: st.size }
+  } catch {
+    return null
+  }
 }
 
 export function applyTelemetryEventToSnapshot(snapshot: ZellijSlotTelemetrySnapshot, event: ZellijSlotTelemetryEvent): ZellijSlotTelemetrySnapshot {
@@ -304,9 +352,16 @@ async function writeTelemetrySnapshotFast(file: string, snapshot: ZellijSlotTele
   const flushCount = Number(telemetrySnapshotFlushCounts.get(file) || 0) + 1
   telemetrySnapshotFlushCounts.set(file, flushCount)
   telemetrySnapshotLastFlushMs.set(file, Date.now())
-  const next = { ...snapshot, flush_count: flushCount }
+  // Merge with the on-disk snapshot before overwriting: multiple processes
+  // (orchestrator + worker children) flush this file concurrently and a plain
+  // overwrite would drop slots that only the other process has observed.
+  const disk = await readJson(file, null) as ZellijSlotTelemetrySnapshot | null
+  const merged = disk?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? mergeTelemetrySnapshots(disk, snapshot) : snapshot
+  const next = { ...merged, flush_count: Math.max(flushCount, Number(merged.flush_count || 0)) }
   telemetrySnapshotCache.set(file, next)
   await fsp.writeFile(file, `${JSON.stringify(next)}\n`, 'utf8')
+  const stat = await statTelemetryFile(file)
+  if (stat) telemetrySnapshotDiskStat.set(file, stat)
 }
 
 function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEvent) {

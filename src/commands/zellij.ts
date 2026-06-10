@@ -4,6 +4,7 @@ import { projectRoot, readJson } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
+import { checkZellijUpdateNotice, upgradeZellijToLatest } from '../core/zellij/zellij-update.js';
 import { runZellij } from '../core/zellij/zellij-command.js';
 import { appendZellijLaneCommand, normalizeZellijSlot } from '../core/zellij/zellij-lane-runtime.js';
 import { buildZellijDashboardSnapshot, renderZellijDashboardText } from '../core/zellij/zellij-dashboard-renderer.js';
@@ -22,6 +23,7 @@ export async function run(_command: string = 'zellij', args: string[] = []) {
   const json = flag(args, '--json');
   const root = await projectRoot();
   if (sub === 'help') return printHelp(json);
+  if (sub === 'update' || sub === 'upgrade') return zellijUpdate(args, json);
   if (sub === 'repair') return zellijRepair(root, args, json);
   if (sub === 'dispatch' || sub === 'send') return zellijDispatch(root, args, json);
   if (sub === 'focus-worker') return zellijFocusWorker(root, args, json);
@@ -62,6 +64,52 @@ async function zellijStatus(root: string, args: string[], json: boolean) {
       for (const action of result.next_actions) console.log(`    - ${action}`);
     }
   }
+  if (!result.ok) process.exitCode = 1;
+}
+
+async function zellijUpdate(args: string[], json: boolean) {
+  const apply = flag(args, '--yes') || flag(args, '-y') || flag(args, '--apply');
+  const notice = await checkZellijUpdateNotice({});
+  if (!apply || !notice.update_available) {
+    const result = {
+      schema: 'sks.zellij-update-command.v1',
+      subcommand: 'update',
+      ok: !notice.error,
+      mode: apply ? 'apply' : 'check',
+      current_version: notice.current_version,
+      latest_version: notice.latest_version,
+      update_available: notice.update_available,
+      zellij_missing: notice.zellij_missing,
+      source: notice.source,
+      upgrade_command: notice.upgrade_command,
+      message: notice.message,
+      next_actions: notice.update_available ? ['Apply with: sks zellij update --yes'] : [],
+      error: notice.error || null
+    };
+    if (json) printJson(result);
+    else {
+      console.log(notice.message);
+      if (notice.update_available) console.log('Apply with: sks zellij update --yes');
+    }
+    if (notice.error && !notice.latest_version) process.exitCode = 1;
+    return;
+  }
+  const upgraded = await upgradeZellijToLatest({});
+  const result = {
+    schema: 'sks.zellij-update-command.v1',
+    subcommand: 'update',
+    ok: upgraded.status === 'upgraded' || upgraded.status === 'installed' || upgraded.status === 'noop',
+    mode: 'apply',
+    status: upgraded.status,
+    before_version: upgraded.before_version,
+    after_version: upgraded.after_version,
+    latest_version: upgraded.latest_version,
+    command: upgraded.command,
+    error: upgraded.error || null
+  };
+  if (json) printJson(result);
+  else if (result.ok) console.log(`Zellij ${upgraded.before_version || 'unknown'} -> ${upgraded.after_version || upgraded.latest_version || 'latest'} (${upgraded.command})`);
+  else console.log(`Zellij update ${upgraded.status}: ${upgraded.error || upgraded.command}`);
   if (!result.ok) process.exitCode = 1;
 }
 
@@ -243,9 +291,10 @@ function printHelp(json: boolean) {
     schema: ZELLIJ_COMMAND_SCHEMA,
     subcommand: 'help',
     ok: true,
-    usage: 'sks zellij status|repair|dispatch|send|focus-worker|worker-logs|dashboard|close-drained [--json]',
+    usage: 'sks zellij status|update|repair|dispatch|send|focus-worker|worker-logs|dashboard|close-drained [--json]',
     subcommands: {
       status: 'Report Zellij runtime capability and interactive-route readiness.',
+      update: 'Check the latest stable Zellij release; apply the upgrade with --yes (Homebrew).',
       repair: 'Explain how to install/repair Zellij (no automatic install).',
       dispatch: 'Append a nonblocking JSONL command for a lane; optionally write to a reconciled pane id with --write-pane.',
       send: 'Alias for dispatch.',
@@ -260,6 +309,7 @@ function printHelp(json: boolean) {
   else {
     console.log('sks zellij — inspect and repair the Zellij interactive runtime');
     console.log('  sks zellij status [--require-real] [--json]');
+    console.log('  sks zellij update [--yes] [--json]');
     console.log('  sks zellij repair [--explain] [--json]');
     console.log('  sks zellij dispatch --mission M --slot slot-001 --text "..." [--write-pane] [--json]');
     console.log('  sks zellij focus-worker slot-001 [--mission M] [--json]');

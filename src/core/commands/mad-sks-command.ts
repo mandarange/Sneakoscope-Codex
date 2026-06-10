@@ -38,6 +38,10 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return;
   }
+  // Zellij is checked the same way Codex is, but it stays NON-blocking: a
+  // failed or skipped zellij upgrade never prevents the MAD launch.
+  const zellijUpdate = deps.maybePromptZellijUpdateForLaunch ? await deps.maybePromptZellijUpdateForLaunch(args, { label: 'MAD launch' }).catch(() => ({ status: 'error' })) : { status: 'skipped' };
+  void zellijUpdate;
   const depStatus = deps.ensureMadLaunchDependencies ? await deps.ensureMadLaunchDependencies(args) : { ready: true, actions: [] };
   if (!depStatus.ready) {
     console.error('SKS MAD launch blocked by missing dependencies.');
