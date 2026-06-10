@@ -118,9 +118,11 @@ export function isZellijSocketPathTooLong(text: unknown): boolean {
 }
 
 export function parseZellijVersionText(text: unknown): string | null {
-  const match = String(text || '').match(/\b(\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.-]+)?\b/)
+  const match = String(text || '').match(/(?:^|[^0-9A-Za-z])v?(\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.-]+)?(?:$|[^0-9A-Za-z])/i)
   return match?.[1] ?? null
 }
+
+export const parseZellijVersion = parseZellijVersionText
 
 export function compareVersionLike(a: unknown, b: unknown): number {
   const pa = versionParts(a)

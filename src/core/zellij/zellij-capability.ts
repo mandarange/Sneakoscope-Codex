@@ -4,6 +4,8 @@ import { compareVersionLike, parseZellijVersionText, runZellij } from './zellij-
 
 export const ZELLIJ_CAPABILITY_SCHEMA = 'sks.zellij-capability.v1'
 export const ZELLIJ_MIN_VERSION = '0.41.0'
+export const ZELLIJ_STACKED_PANE_CAPABILITY_SCHEMA = 'sks.zellij-stacked-pane-capability.v1'
+export const ZELLIJ_STACKED_PANE_MIN_VERSION = '0.43.0'
 
 export interface ZellijCapabilityReport {
   schema: typeof ZELLIJ_CAPABILITY_SCHEMA
@@ -20,6 +22,64 @@ export interface ZellijCapabilityReport {
   blockers: string[]
   warnings: string[]
   operator_actions: string[]
+}
+
+export interface ZellijStackedPaneCapability {
+  schema: typeof ZELLIJ_STACKED_PANE_CAPABILITY_SCHEMA
+  ok: boolean
+  zellij_bin: string | null
+  version_text: string | null
+  parsed_version: string | null
+  supports_stacked_panes: boolean
+  requires_update: boolean
+  fallback_mode: 'native-stacked' | 'down-split-stack-emulation' | 'headless-only'
+  blockers: string[]
+}
+
+export function zellijSupportsStackedPanes(version: string | null): boolean {
+  const parsed = parseZellijVersionText(version)
+  return Boolean(parsed && compareVersionLike(parsed, ZELLIJ_STACKED_PANE_MIN_VERSION) >= 0)
+}
+
+export function resolveZellijStackedPaneCapability(input: {
+  ok?: boolean
+  zellijBin?: string | null
+  versionText?: string | null
+  blockers?: string[]
+} = {}): ZellijStackedPaneCapability {
+  const versionText = input.versionText == null ? null : String(input.versionText)
+  const parsedVersion = parseZellijVersionText(versionText)
+  const supports = zellijSupportsStackedPanes(parsedVersion)
+  const blockers = [...(input.blockers || [])].map(String)
+  const zellijMissing = blockers.includes('zellij_missing') || blockers.includes('zellij_missing_required')
+  if (!parsedVersion && !zellijMissing && input.ok === false) blockers.push('zellij_version_unparsed')
+  return {
+    schema: ZELLIJ_STACKED_PANE_CAPABILITY_SCHEMA,
+    ok: blockers.length === 0 && supports,
+    zellij_bin: input.zellijBin === undefined ? 'zellij' : input.zellijBin,
+    version_text: versionText,
+    parsed_version: parsedVersion,
+    supports_stacked_panes: supports,
+    requires_update: Boolean(parsedVersion && !supports),
+    fallback_mode: supports ? 'native-stacked' : zellijMissing ? 'headless-only' : 'down-split-stack-emulation',
+    blockers
+  }
+}
+
+export async function checkZellijStackedPaneCapability(opts: { writeReport?: boolean; root?: string } = {}): Promise<ZellijStackedPaneCapability> {
+  const versionRun = await runZellij(['--version'], { optional: true, timeoutMs: 5000 })
+  const versionText = `${versionRun.stdout_tail}\n${versionRun.stderr_tail}`.trim()
+  const report = resolveZellijStackedPaneCapability({
+    ok: versionRun.ok,
+    zellijBin: 'zellij',
+    versionText,
+    blockers: versionRun.ok ? [] : versionRun.blockers
+  })
+  if (opts.writeReport !== false) {
+    const root = opts.root || process.cwd()
+    await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'zellij-stacked-pane-capability.json'), report)
+  }
+  return report
 }
 
 export async function checkZellijCapability(opts: { root?: string; require?: boolean; writeReport?: boolean } = {}): Promise<ZellijCapabilityReport> {

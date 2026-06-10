@@ -1,7 +1,9 @@
 import path from 'node:path'
 import { appendJsonl, ensureDir, nowIso, packageRoot, readJson, writeJsonAtomic } from '../fsx.js'
+import { appendParallelRuntimeEvent } from '../agents/parallel-runtime-proof.js'
 import { providerPaneLabel } from '../provider/provider-badge.js'
 import { resolveProviderContext, type ProviderContext } from '../provider/provider-context.js'
+import { checkZellijStackedPaneCapability, type ZellijStackedPaneCapability } from './zellij-capability.js'
 import { runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
 import { buildZellijSlotColumnAnchorCommand } from './zellij-slot-column-anchor.js'
@@ -10,6 +12,7 @@ import type { SksZellijUiMode } from './zellij-ui-mode.js'
 
 export const ZELLIJ_WORKER_PANE_SCHEMA = 'sks.zellij-worker-pane.v1'
 export const ZELLIJ_WORKER_PANE_EVENT_SCHEMA = 'sks.zellij-worker-pane-event.v1'
+export const ZELLIJ_PANE_CREATION_LOCK_METRICS_SCHEMA = 'sks.zellij-pane-creation-lock-metrics.v1'
 
 export type ZellijWorkerPaneIdSource =
   | 'zellij_worker_new_pane_stdout'
@@ -17,6 +20,19 @@ export type ZellijWorkerPaneIdSource =
   | 'zellij_worker_pane_stdout_missing'
   | 'zellij_worker_pane_launch_failed'
   | 'zellij_worker_headless_overflow'
+
+export interface ZellijPaneCreationLockMetrics {
+  schema: typeof ZELLIJ_PANE_CREATION_LOCK_METRICS_SCHEMA
+  mission_id: string
+  session_name: string
+  slot_id: string
+  generation_index: number
+  requested_at: string
+  acquired_at: string
+  released_at: string
+  wait_ms: number
+  held_ms: number
+}
 
 export interface ZellijWorkerPaneOpenInput {
   root: string
@@ -99,6 +115,8 @@ export interface ZellijWorkerPaneRecord {
   worker_direction_applied: 'down' | 'unknown' | 'not_applied'
   worker_stacked_requested?: boolean
   worker_stacked_applied?: boolean
+  worker_stacked_fallback_mode?: ZellijStackedPaneCapability['fallback_mode'] | null
+  worker_stacked_capability?: ZellijStackedPaneCapability | null
   slot_column_anchor_pane_id?: string | null
   right_column?: {
     mode: 'spawn-on-first-worker' | 'off'
@@ -110,6 +128,7 @@ export interface ZellijWorkerPaneRecord {
   sdk_run_id?: string | null
   stream_event_count?: number
   structured_output_valid?: boolean
+  warnings?: string[]
   blockers: string[]
 }
 
@@ -142,6 +161,8 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   workerDirectionApplied?: 'down' | 'unknown' | 'not_applied'
   stackedRequested?: boolean
   stackedApplied?: boolean
+  stackedFallbackMode?: ZellijStackedPaneCapability['fallback_mode'] | null
+  stackedCapability?: ZellijStackedPaneCapability | null
   slotColumnAnchorPaneId?: string | null
   rightColumn?: ZellijWorkerPaneRecord['right_column']
   status?: ZellijWorkerPaneRecord['status']
@@ -149,6 +170,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   sdkRunId?: string | null
   streamEventCount?: number
   structuredOutputValid?: boolean
+  warnings?: string[]
   blockers?: string[]
   workerCommand?: string
   paneKind?: ZellijWorkerPaneRecord['pane_kind']
@@ -210,12 +232,15 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     worker_direction_applied: input.workerDirectionApplied || (directionApplied === 'down' ? 'down' : directionApplied === 'unknown' ? 'unknown' : 'not_applied'),
     worker_stacked_requested: input.stackedRequested === true,
     worker_stacked_applied: input.stackedApplied === true,
+    worker_stacked_fallback_mode: input.stackedFallbackMode || null,
+    worker_stacked_capability: input.stackedCapability || null,
     slot_column_anchor_pane_id: input.slotColumnAnchorPaneId || null,
     right_column: input.rightColumn || null,
     sdk_thread_id: input.sdkThreadId || null,
     sdk_run_id: input.sdkRunId || null,
     stream_event_count: Number(input.streamEventCount || 0),
     structured_output_valid: input.structuredOutputValid === true,
+    warnings: input.warnings || [],
     blockers
   }
 }
@@ -296,7 +321,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   // --direction right — splitting the screen into N side-by-side columns
   // (observed in agent-zellij-pane-launch-ledger: terminal_1..terminal_5 all
   // recorded as separate slot_column_anchor_pane_id values in one mission).
-  return withZellijPaneCreationLock(input.sessionName, async () => {
+  return withZellijPaneCreationLock(input, async () => {
   // Re-read the right-column state now that we hold the lock: a previously
   // serialized worker may have created the anchor and/or its own pane.
   const freshState = rightColumn
@@ -354,9 +379,23 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   // worker (`new-pane --stacked`, zellij >= 0.43) so the right column stays a
   // clean vertical stack instead of fragmenting the screen. Opt out with
   // SKS_ZELLIJ_WORKER_STACKED=0.
-  const stackRequested = process.env.SKS_ZELLIJ_WORKER_STACKED !== '0'
+  const stackIntent = process.env.SKS_ZELLIJ_WORKER_STACKED !== '0'
     && Boolean(lastVisibleWorkerPaneId)
     && focus?.ok === true
+  const stackedCapability = stackIntent
+    ? await checkZellijStackedPaneCapability({ writeReport: false }).catch((err: any): ZellijStackedPaneCapability => ({
+        schema: 'sks.zellij-stacked-pane-capability.v1',
+        ok: false,
+        zellij_bin: 'zellij',
+        version_text: null,
+        parsed_version: null,
+        supports_stacked_panes: false,
+        requires_update: false,
+        fallback_mode: 'headless-only',
+        blockers: [`zellij_stacked_capability_check_failed:${err?.code || err?.message || String(err)}`]
+      }))
+    : null
+  const stackRequested = stackIntent && stackedCapability?.supports_stacked_panes === true
   const newPaneArgs = stackRequested
     ? ['--session', input.sessionName, 'action', 'new-pane', '--stacked', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
     : ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, '--near-current-pane', '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
@@ -369,6 +408,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     : null
   let stackApplied = Boolean(stackRequested && launch?.ok)
   let directionApplied: ZellijWorkerPaneRecord['direction_applied'] = launch?.ok ? directionRequested : 'not_applied'
+  let stackedRejectedFallback = false
   if (createSession.ok && launch && !launch.ok) {
     const fallbackArgs = ['--session', input.sessionName, 'action', 'new-pane', '--direction', directionRequested, '--name', paneName, '--', 'sh', '-lc', input.workerCommand]
     const fallback = await runZellij(fallbackArgs, {
@@ -379,6 +419,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     if (fallback.ok) {
       launch = fallback
       stackApplied = false
+      stackedRejectedFallback = stackRequested
       directionApplied = rightColumn ? 'down' : 'unknown'
     }
   }
@@ -401,6 +442,10 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     ...(launch && !launch.ok ? launch.blockers.map((blocker) => `zellij_worker_pane_${blocker}`) : []),
     ...(launch?.ok && !isRealZellijWorkerPaneIdSource(paneIdSource) ? ['zellij_worker_pane_id_real_source_missing'] : [])
   ]
+  const warnings = [
+    ...(stackIntent && stackedCapability && !stackedCapability.supports_stacked_panes ? [`zellij_stacked_pane_fallback:${stackedCapability.fallback_mode}`] : []),
+    ...(stackedRejectedFallback ? ['zellij_stacked_pane_rejected_fallback_down'] : [])
+  ]
   const record = buildWorkerPaneArtifact({
     ...input,
     paneId,
@@ -421,13 +466,16 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     columnCreationDirectionApplied,
     workerDirectionRequested: 'down',
     workerDirectionApplied: directionApplied === 'down' ? 'down' : directionApplied === 'unknown' ? 'unknown' : 'not_applied',
-    stackedRequested: stackRequested,
+    stackedRequested: stackIntent,
     stackedApplied: stackApplied,
+    stackedFallbackMode: stackIntent ? (stackApplied ? 'native-stacked' : stackedCapability?.fallback_mode || 'down-split-stack-emulation') : null,
+    stackedCapability,
     slotColumnAnchorPaneId,
     rightColumn: rightColumn ? { mode: 'spawn-on-first-worker', focus_pane_id: focusPaneId, y_order: rightColumn.yOrder, slot_column_anchor_pane_id: slotColumnAnchorPaneId } : null,
     status: blockers.length ? 'failed' : 'running',
     providerContext,
     serviceTier: input.serviceTier || providerContext.service_tier,
+    warnings,
     blockers
   })
   await writeWorkerPaneArtifact(root, record)
@@ -444,8 +492,27 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     ok: record.ok,
     pane_id: record.pane_id,
     pane_id_source: record.pane_id_source,
+    worker_stacked_requested: record.worker_stacked_requested === true,
+    worker_stacked_applied: record.worker_stacked_applied === true,
+    worker_stacked_fallback_mode: record.worker_stacked_fallback_mode || null,
     blockers
   })
+  await appendParallelRuntimeEvent(root, input.missionId, {
+    event_type: 'zellij_pane_created',
+    slot_id: input.slotId,
+    generation_index: input.generationIndex,
+    session_id: input.sessionId,
+    pid: null,
+    backend: String(input.backend || 'zellij'),
+    placement: 'zellij-pane',
+    meta: {
+      ok: record.ok,
+      pane_id: record.pane_id,
+      worker_stacked_requested: record.worker_stacked_requested === true,
+      worker_stacked_applied: record.worker_stacked_applied === true,
+      worker_stacked_fallback_mode: record.worker_stacked_fallback_mode || null
+    }
+  }).catch(() => undefined)
   await appendJsonl(path.join(root, 'agent-zellij-pane-launch-ledger.jsonl'), {
     schema: 'sks.agent-zellij-pane-launch.v1',
     generated_at: nowIso(),
@@ -471,6 +538,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     worker_direction_applied: record.worker_direction_applied,
     worker_stacked_requested: record.worker_stacked_requested === true,
     worker_stacked_applied: record.worker_stacked_applied === true,
+    worker_stacked_fallback_mode: record.worker_stacked_fallback_mode || null,
     slot_column_anchor_pane_id: record.slot_column_anchor_pane_id || null,
     command: record.command,
     worker_artifact_dir: input.workerArtifactDir,
@@ -781,8 +849,20 @@ function sleep(ms: number): Promise<void> {
 
 const zellijPaneCreationLocks = new Map<string, Promise<unknown>>()
 
-async function withZellijPaneCreationLock<T>(sessionName: string, fn: () => Promise<T>): Promise<T> {
-  const key = String(sessionName || 'default')
+async function withZellijPaneCreationLock<T>(input: ZellijWorkerPaneOpenInput, fn: () => Promise<T>): Promise<T> {
+  const key = String(input.sessionName || 'default')
+  const requestedAt = nowIso()
+  const requestedMs = Date.now()
+  await appendWorkerPaneEvent(path.resolve(input.root), 'zellij_pane_creation_lock_requested', input, {}).catch(() => undefined)
+  await appendParallelRuntimeEvent(path.resolve(input.root), input.missionId, {
+    event_type: 'zellij_pane_creation_lock_requested',
+    slot_id: input.slotId,
+    generation_index: input.generationIndex,
+    session_id: input.sessionId,
+    pid: null,
+    backend: String(input.backend || 'zellij'),
+    placement: 'zellij-pane'
+  }).catch(() => undefined)
   const previous = zellijPaneCreationLocks.get(key) || Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {
@@ -790,12 +870,62 @@ async function withZellijPaneCreationLock<T>(sessionName: string, fn: () => Prom
   })
   zellijPaneCreationLocks.set(key, previous.then(() => current, () => current))
   await previous.catch(() => undefined)
+  const acquiredAt = nowIso()
+  const acquiredMs = Date.now()
+  await appendWorkerPaneEvent(path.resolve(input.root), 'zellij_pane_creation_lock_acquired', input, { wait_ms: acquiredMs - requestedMs }).catch(() => undefined)
+  await appendParallelRuntimeEvent(path.resolve(input.root), input.missionId, {
+    event_type: 'zellij_pane_creation_lock_acquired',
+    slot_id: input.slotId,
+    generation_index: input.generationIndex,
+    session_id: input.sessionId,
+    pid: null,
+    backend: String(input.backend || 'zellij'),
+    placement: 'zellij-pane',
+    meta: { wait_ms: acquiredMs - requestedMs }
+  }).catch(() => undefined)
   try {
     return await fn()
   } finally {
+    const releasedAt = nowIso()
+    const releasedMs = Date.now()
+    const metrics: ZellijPaneCreationLockMetrics = {
+      schema: ZELLIJ_PANE_CREATION_LOCK_METRICS_SCHEMA,
+      mission_id: input.missionId,
+      session_name: input.sessionName,
+      slot_id: input.slotId,
+      generation_index: input.generationIndex,
+      requested_at: requestedAt,
+      acquired_at: acquiredAt,
+      released_at: releasedAt,
+      wait_ms: acquiredMs - requestedMs,
+      held_ms: releasedMs - acquiredMs
+    }
+    await appendJsonl(paneCreationLockMetricsPath(path.resolve(input.root), input.missionId), metrics).catch(() => undefined)
+    await appendWorkerPaneEvent(path.resolve(input.root), 'zellij_pane_creation_lock_released', input, { wait_ms: metrics.wait_ms, held_ms: metrics.held_ms }).catch(() => undefined)
+    await appendParallelRuntimeEvent(path.resolve(input.root), input.missionId, {
+      event_type: 'zellij_pane_creation_lock_released',
+      slot_id: input.slotId,
+      generation_index: input.generationIndex,
+      session_id: input.sessionId,
+      pid: null,
+      backend: String(input.backend || 'zellij'),
+      placement: 'zellij-pane',
+      meta: { wait_ms: metrics.wait_ms, held_ms: metrics.held_ms }
+    }).catch(() => undefined)
     release()
     if (zellijPaneCreationLocks.get(key) === current) zellijPaneCreationLocks.delete(key)
   }
+}
+
+function paneCreationLockMetricsPath(root: string, missionId: string) {
+  return path.join(missionArtifactRoot(root, missionId), 'zellij', 'pane-creation-lock-events.jsonl')
+}
+
+function missionArtifactRoot(root: string, missionId: string) {
+  const resolved = path.resolve(root)
+  if (path.basename(resolved) === 'agents') return path.dirname(resolved)
+  if (path.basename(resolved) === missionId) return resolved
+  return path.join(resolved, '.sneakoscope', 'missions', missionId)
 }
 
 function normalizeExistingZellijSession(sessionName: string, result: ZellijCommandResult): ZellijCommandResult {

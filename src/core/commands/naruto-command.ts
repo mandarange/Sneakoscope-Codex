@@ -744,7 +744,7 @@ async function narutoProof(parsed: NarutoArgs) {
   const root = await sksRoot()
   const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
   if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'proof', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
-  const summary = await buildRuntimeProofSummary(root, id)
+  const summary = await buildRuntimeProofSummary(root, id, { maxMessages: parsed.messages })
   return emit(parsed, { ...summary, action: 'proof' }, () => {
     console.log(renderRuntimeProofSummary(summary))
   })
@@ -760,7 +760,7 @@ async function narutoHelp(parsed: NarutoArgs) {
     usage: [
       'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama] [--local-model|--no-ollama] [--work-items N] [--real] [--readonly] [--json]',
       'sks naruto status [--mission <id>] [--json]',
-      'sks naruto proof latest [--json]'
+      'sks naruto proof latest [--messages 20] [--json]'
     ],
     defaults: { clones: DEFAULT_NARUTO_CLONES, max_clones: MAX_NARUTO_AGENT_COUNT, backend: 'codex-sdk' }
   }
@@ -793,6 +793,7 @@ interface NarutoArgs {
   attach: boolean
   smoke: boolean
   parallelism: 'extreme' | 'balanced' | 'safe'
+  messages: number
 }
 
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
@@ -825,15 +826,21 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const attach = hasFlag(args, '--attach')
   const smoke = hasFlag(args, '--smoke')
   const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism'])
+  const messages = normalizeMessages(readOption(args, '--messages', '8'))
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach, smoke, parallelism }
+  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
 }
 
 function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {
   const text = String(value || 'extreme').toLowerCase()
   if (text === 'safe' || text === 'balanced' || text === 'extreme') return text
   return 'extreme'
+}
+
+function normalizeMessages(value: unknown): number {
+  const parsed = Number(value)
+  return Math.max(0, Math.min(100, Math.floor(Number.isFinite(parsed) ? parsed : 8)))
 }
 
 async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {

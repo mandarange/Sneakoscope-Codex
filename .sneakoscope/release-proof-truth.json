@@ -1,0 +1,15 @@
+{
+  "schema": "sks.release-proof-truth.v1",
+  "generated_at": "2026-06-10T14:01:14.879Z",
+  "package_version": "3.0.2",
+  "git_commit_sha": "c48727453d68db62b763082fc3afe4645daa0970",
+  "git_branch": "main",
+  "git_status_clean": false,
+  "package_json_sha256": "66b5cf2349222bf5a46a7d4e100e2c5acfbbcbbaa4743ad2f70b6b48ce444fd3",
+  "package_lock_sha256": "426e7ea77c7356bde436fc1e5ba42cd50742aa051914145484c483266fbf82fd",
+  "version_ts_sha256": "df0bce76a7b63c37b24dee130f87297e488b3667ca65d6f25e8eb1ba46bb6869",
+  "changelog_sha256": "c28c65f2c42c35a71b28dbc2f7271fe45293d4a7adcc5b094f0e8da9caf3e7a0",
+  "release_gates_sha256": "bb2fade13df90c8f8f0a62a504ef975cf606d4313d183f80ebd2470a3d0972f3",
+  "npm_packlist_count": 832,
+  "npm_packlist_bytes": 5496012
+}

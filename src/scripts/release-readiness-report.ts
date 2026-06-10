@@ -440,6 +440,7 @@ const stampVerify = spawnSync(process.execPath, ['dist/scripts/release-check-sta
 });
 const currentStamp = stampVerify.status === 0 && stamp?.package_version === RELEASE_VERSION ? stamp : null;
 if (stampVerify.status !== 0 && !dynamicReleaseMode) remainingP0.push('release_check_stamp_stale_or_missing');
+const releaseProofTruth = readJson('.sneakoscope/release-proof-truth.json', readJson('dist/release-proof-truth.json', null));
 const report = {
   schema: 'sks.release-readiness.v1',
   generated_at: new Date().toISOString(),
@@ -452,6 +453,10 @@ const report = {
   package: {
     name: pkg.name,
     version: pkg.version
+  },
+  release_proof_truth: releaseProofTruth || {
+    schema: 'sks.release-proof-truth.v1',
+    status: 'missing'
   },
   hook_strict_subset: {
     status: checks.hook_strict_subset ? 'present' : 'missing'
@@ -1108,6 +1113,7 @@ function renderMarkdown(report) {
 
 - Schema: \`${report.schema}\`
 - Package: \`${report.package.name}@${report.package.version}\`
+- Source truth: commit \`${report.release_proof_truth.git_commit_sha || 'missing'}\`, clean=\`${report.release_proof_truth.git_status_clean ?? 'unknown'}\`, packlist=\`${report.release_proof_truth.npm_packlist_count ?? 'unknown'}\`
 - Scope: \`${report.scope.gate}\`; \`ok: true\` means ${report.scope.ok_means}.
 - Hook strict subset: \`${report.hook_strict_subset.status}\`
 - codex-lb persistence truth: \`${report.codex_lb_setup_truthfulness.status}\`

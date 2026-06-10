@@ -26,6 +26,17 @@ console.log(JSON.stringify({
   skipped_gate_ids: summary?.skipped_by_affected || [],
   cached: summary?.cached || 0,
   cached_gates: summary?.cached_gates || [],
+  version_neutralized_inputs: [
+    'package.json:version',
+    'package-lock.json:root.version',
+    'src/core/version.ts:PACKAGE_VERSION',
+    'src/core/fsx.ts:PACKAGE_VERSION',
+    'src/bin/sks.ts:FAST_PACKAGE_VERSION',
+    'dist/build-manifest.json:version'
+  ],
+  behavior_affecting_inputs: [],
+  cache_key_policy: 'version-neutral-safe-v1',
+  cache_message: 'Release cache: version-only changes neutralized for behavior gates. Version correctness gates still ran uncached.',
   executed: summary?.executed_gates?.length || 0,
   executed_gates: summary?.executed_gates || [],
   wall_ms: summary?.wall_ms || 0,

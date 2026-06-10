@@ -5,15 +5,24 @@
 
 
 
-## [3.0.1] - 2026-06-10
+## [3.0.2] - 2026-06-10
 
 ### Added
 
 - Codex `rust-v0.139.0` capability detection (`codex:0139-capability` gate, `.sneakoscope/codex-0139-capability.json` root + mission artifacts on `sks --mad` / `sks naruto run`): standalone web search in code mode, preserved `oneOf`/`allOf` tool schemas, doctor editor/pager env details, plugin marketplace `source` field and cached remote catalog, `-P` sandbox profile alias, and the multi-agent v2 `interrupt_agent` rename. See [docs/codex-0.139-compat.md](docs/codex-0.139-compat.md).
+- Zellij stacked-pane version matrix gates for `>=0.43`, `<0.43`, `v`-prefixed versions, and unknown version text.
+- Zellij pane creation lock metrics and a 32-worker blackbox proving pane serialization does not serialize worker execution.
+- Release cache version-neutral safety fixtures that prove only pure version-surface changes are neutralized.
+- Agent message bus runtime summary fields and `sks naruto proof latest --messages N` proof output.
+- Release proof source-truth artifact with commit, branch, dirty status, file hashes, and npm packlist size.
 
 ### Fixed
 
 - Cockpit subagent-stage classification now accepts the Codex 0.139 multi-agent v2 `interrupt_agent` event name alongside the pre-0.139 `close_agent`, so lifecycle events keep mapping to `result` stages on newer CLIs.
+- Zellij update prompt mode now resolves CI, `SKS_NO_QUESTION`, headless, skip flag, and skip env cases before any interactive prompt.
+- Zellij `<0.43` no longer receives unsupported worker `--stacked` pane calls; worker pane artifacts record requested/applied/fallback state.
+- Release cache neutralization now parses package, lockfile, version constants, and build manifest surfaces instead of replacing every matching version string.
+- Runtime proof summary now counts recent worker completion/failure/warning/error messages and blocks on error-level message bus entries.
 
 ## [3.0.0] - 2026-06-10
 
