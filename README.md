@@ -1,10 +1,31 @@
-# Sneakoscope Codex
+<div align="center">
 
-Fast legacy-free proof-first Codex trust layer with image-based Voxel TriWiki.
+# 🔭 Sneakoscope Codex
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work auditable.
+**Proof-first Codex orchestration — massive parallel agent swarms you can actually watch, audit, and trust.**
 
-SKS does not try to clone every other harness. It focuses on one thing: making Codex work auditable, visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
+[![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
+[![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
+[![license](https://img.shields.io/badge/license-MIT-blue)](#license)
+[![zellij](https://img.shields.io/badge/UI-Zellij%20stacked%20panes-1e90ff)](#mad-zellij-launch)
+
+`npm i -g sneakoscope` → `sks --mad` → watch up to **100 shadow-clone workers** code in parallel,<br/>each in a live Zellij pane, every claim backed by Completion Proof.
+
+</div>
+
+---
+
+Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work **auditable**. It does not try to clone every other harness. It focuses on one thing relentlessly: Codex work becomes visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
+
+| | What you get |
+| --- | --- |
+| 🍥 **`$Naruto` swarm** | Up to 100 parallel clone workers behind a hardware-safe concurrency governor, lease-based parallel writes, and a scheduler that backfills idle slots while runnable work remains |
+| 🖥️ **Live Zellij cockpit** | Workers stack vertically as native Zellij stacked panes; each pane streams heartbeat, current file, tool events, and stdout tails every second |
+| 🧾 **Completion Proof** | Every serious route ends with schema-backed proof artifacts — no "trust me, it's done" |
+| 🛡️ **Safety gates** | DB/migration/destructive operations stay gated, 190+ release gate scripts, Honest Mode |
+| 🖼️ **Visual evidence** | Image Voxel TriWiki plus `$imagegen`/`gpt-image-2`-bound visual review flows |
+
+![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 ## LLM Init Prompt for Hermes / OpenClaw Agent Builders
 
@@ -12,22 +33,18 @@ SKS does not try to clone every other harness. It focuses on one thing: making C
 Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-Codex](https://github.com/mandarange/Sneakoscope-Codex)] as the repo reference and [npm i -g sneakoscope] as the recommended global install command, then run the appropriate `sks` setup, doctor, Codex App, and proof checks for this repo. Keep generated SKS state out of source control unless documented, and record every version-facing change in CHANGELOG.md.
 ```
 
-![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
+## 🚀 Current Release
 
-## Current Release
-
-SKS **3.0.0** is the parallel-runtime stabilization release: real-time Zellij slot panes (mtime-aware telemetry snapshots, multi-process merge-on-flush), serialized SLOTS anchor creation with native stacked worker panes (`new-pane --stacked`), live `compact-slots` renderer as the default worker pane UI, a Zellij version check/upgrade flow mirroring the Codex CLI update prompt (`sks zellij update`), concurrent scheduler dispatch telemetry, visible naruto backpressure reporting, and dead-code removal across the swarm runtime.
+SKS **3.0.0** is the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 
 What changed:
 
-- `sks doctor` now reports Codex 0.138 feature readiness, plugin JSON inventory, candidate-only remote MCP servers, unavailable app templates, and repairable plugin discovery cache state.
-- QA-LOOP can write a Codex Desktop `/app` handoff artifact with `--app-handoff` or require it with `--app-handoff-required`; this never substitutes for Codex Chrome Extension web UI evidence.
-- Zellij slot panes and the right-column anchor surface pending QA `/app` handoffs so desktop review is visible during long native-agent runs.
-- Codex plugin detail JSON is normalized into `.sneakoscope/codex-plugin-inventory.json`, and plugin-provided remote MCP servers remain candidate-only until explicitly enabled under DB/Mad-DB safety policy.
-- Imagegen and QA image flows write `image-artifact-path-contract.json` with exact saved file paths and follow-up edit hints.
-- Effort routing now understands the fallback order `minimal < low < medium < high < xhigh`, records model capability, and escalates QA effort after repeated failures.
-- Codex account token usage can be recorded from an app-server usage endpoint, and QA budget policy reduces remote concurrency near limits while preserving GPT final review.
-- Naruto final pass status now depends on the parallel runtime proof, and Mad-DB post-tool lifecycle recording handles MCP `isError` failures.
+- **Slot panes are finally alive.** The watch renderer froze for entire missions because the telemetry snapshot cache never invalidated; snapshot reads are now mtime-aware, multi-process flushes merge instead of clobbering each other, and the disk `updated_at` stays authoritative for stale detection.
+- **One SLOTS column, vertical stack.** Concurrent workers used to race anchor creation and split the screen into N side-by-side columns. Anchor + worker pane creation is serialized per session, and workers join a native Zellij stacked-pane group (`new-pane --stacked`, opt out with `SKS_ZELLIJ_WORKER_STACKED=0`).
+- **Live renderer is the default worker pane.** `full-debug` showed nothing until worker exit (workers run with `--json`); the default `compact-slots` renderer streams heartbeat, current file, tool events, and stdout tails every second.
+- **Zellij stays current like Codex does.** `sks --mad` / `sks naruto run` offer a `[Y/n]` upgrade to the latest stable Zellij (GitHub releases lookup, 6h cache), plus an explicit `sks zellij update [--yes]` subcommand and `SKS_SKIP_ZELLIJ_UPDATE` escape.
+- **Faster, honest dispatch.** Scheduler batch telemetry writes run concurrently per batch instead of serializing two file writes per worker; naruto backpressure throttling (50%/25% under host pressure) is reported in the run header instead of staying silent.
+- **Wired, not decorative.** The naruto finalizer gate and the agent message bus now run in production paths; dead swarm code (`naruto-work-stealing`, `zellij-right-column-layout-proof`) was removed.
 
 Quick checks:
 
@@ -62,7 +79,7 @@ npm run codex-control:all-pipelines
 
 Broader release checks still live behind `npm run release:check`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
-## Parallelism, UX, And Integrations
+## 🍥 Parallelism, UX, And Integrations
 
 - **Extreme parallel fan-out (`$Naruto` / native agents).** Each clone is a separate CLI worker that spends almost all of its wall-clock awaiting the Codex API, so live concurrency scales by **memory and the provider rate limit, not CPU cores** — a capable host can run up to 100 workers in parallel. The 429/rate-limit backoff is handled by the centralized responses retry policy. Tune it with `SKS_NARUTO_MAX_CONCURRENCY` (hard cap, 1–100), `SKS_NARUTO_GB_PER_WORKER` (memory budget per worker), and `SKS_NARUTO_MIN_CONCURRENCY` (low-free-memory floor).
 
@@ -88,7 +105,7 @@ Broader release checks still live behind `npm run release:check`. Detailed relea
 
 - **CLI-only SKS update notices.** Codex App hooks no longer stop normal work to ask for an SKS update. CLI launch surfaces such as `sks --mad` print a non-blocking latest-version notice, `sks update-check` / `sks update check` show the explicit status, and `sks doctor --fix` runs the guarded global SKS update path before repair.
 
-## Retention And Cleanup
+## 🧹 Retention And Cleanup
 
 SKS keeps durable learning context separate from disposable route work files. Durable context includes `.sneakoscope/memory/**`, shared TriWiki records, `.sneakoscope/wiki/context-pack.json`, wrongness memory, image voxels, avoidance rules, route Completion Proof, trust reports, evidence indexes, reflections, and agent proof summaries. These files are treated as the long-term learning and audit chain.
 
@@ -103,68 +120,105 @@ npm run retention:cleanup-safety
 
 The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the default posture is now immediate cleanup for short-lived temp files while preserving long-term SKS learning and proof artifacts.
 
-## Documentation
+## 📚 Documentation
+
+<details>
+<summary><b>Core concepts & architecture</b> — proof, trust, pipeline design</summary>
 
 - Completion Proof: [docs/completion-proof.md](docs/completion-proof.md)
-- TypeScript architecture: [docs/typescript-architecture.md](docs/typescript-architecture.md)
 - Trust Kernel: [docs/trust-kernel.md](docs/trust-kernel.md)
-- TriWiki Wrongness Memory: [docs/triwiki-wrongness-memory.md](docs/triwiki-wrongness-memory.md)
-- Git collaboration: [docs/git-collaboration.md](docs/git-collaboration.md)
-- Git hygiene: [docs/git-hygiene.md](docs/git-hygiene.md)
-- Shared TriWiki: [docs/shared-triwiki.md](docs/shared-triwiki.md)
-- Shared Wrongness Memory: [docs/shared-wrongness-memory.md](docs/shared-wrongness-memory.md)
-- Git policy: [docs/git-policy.md](docs/git-policy.md)
-- Wrongness Learning Loop: [docs/wrongness-learning-loop.md](docs/wrongness-learning-loop.md)
-- Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
-- Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
-- Codex CLI compatibility: [docs/codex-cli-compat.md](docs/codex-cli-compat.md)
-- MAD-SKS rollback: [docs/mad-sks-rollback.md](docs/mad-sks-rollback.md)
-- MAD-SKS: [docs/mad-sks.md](docs/mad-sks.md)
+- Pipeline architecture: [docs/pipeline-architecture.md](docs/pipeline-architecture.md)
+- TypeScript architecture: [docs/typescript-architecture.md](docs/typescript-architecture.md)
+- Runtime truth matrix: [docs/runtime-truth-matrix.md](docs/runtime-truth-matrix.md)
+- Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
+- Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
 - Permission kernel: [docs/permission-kernel.md](docs/permission-kernel.md)
 - Immutable harness guard: [docs/immutable-harness-guard.md](docs/immutable-harness-guard.md)
-- Codex App: [docs/codex-app.md](docs/codex-app.md)
-- Core dominance: [docs/core-dominance.md](docs/core-dominance.md)
+- Package boundary: [docs/package-boundary.md](docs/package-boundary.md)
+- Managed paths: [docs/managed-paths.md](docs/managed-paths.md)
 - Performance budgets: [docs/performance-budgets.md](docs/performance-budgets.md)
+- Route finalization: [docs/route-finalization.md](docs/route-finalization.md)
+- Rust accelerator: [docs/rust-accelerator.md](docs/rust-accelerator.md)
+
+</details>
+
+<details>
+<summary><b>Agents & parallelism</b> — Naruto swarm, worker panes, parallel writes</summary>
+
+- Naruto massive parallel swarm: [docs/naruto.md](docs/naruto.md)
 - Native Agent Kernel: [docs/native-agent-kernel.md](docs/native-agent-kernel.md)
+- Native agent engines: [docs/native-agent-engines.md](docs/native-agent-engines.md)
+- Native CLI Session Swarm: [docs/native-cli-session-swarm.md](docs/native-cli-session-swarm.md)
+- No-subagent scaling: [docs/no-subagent-scaling.md](docs/no-subagent-scaling.md)
+- Parallel write agents: [docs/parallel-write-agents.md](docs/parallel-write-agents.md)
+- Agent patch queue: [docs/agent-patch-queue.md](docs/agent-patch-queue.md)
+- Strategy-first parallel write: [docs/strategy-first-parallel-write.md](docs/strategy-first-parallel-write.md)
+- Intelligent work graph: [docs/intelligent-work-graph.md](docs/intelligent-work-graph.md)
+- Agent terminal lanes: [docs/agent-terminal-lanes.md](docs/agent-terminal-lanes.md)
+- Agent cleanup executor: [docs/agent-cleanup-executor.md](docs/agent-cleanup-executor.md)
+- MCP readOnly scheduler: [docs/mcp-readonly-scheduler.md](docs/mcp-readonly-scheduler.md)
+- MAD-SKS: [docs/mad-sks.md](docs/mad-sks.md)
+- MAD-SKS rollback: [docs/mad-sks-rollback.md](docs/mad-sks-rollback.md)
+- ADHD orchestration gate: [docs/adhd-orchestrating-gate.md](docs/adhd-orchestrating-gate.md)
+- Zellij migration: [docs/migration/tmux-to-zellij.md](docs/migration/tmux-to-zellij.md)
+
+</details>
+
+<details>
+<summary><b>Memory & learning</b> — TriWiki, wrongness memory, fixtures</summary>
+
+- TriWiki Wrongness Memory: [docs/triwiki-wrongness-memory.md](docs/triwiki-wrongness-memory.md)
+- Shared TriWiki: [docs/shared-triwiki.md](docs/shared-triwiki.md)
+- Shared Wrongness Memory: [docs/shared-wrongness-memory.md](docs/shared-wrongness-memory.md)
+- Wrongness Learning Loop: [docs/wrongness-learning-loop.md](docs/wrongness-learning-loop.md)
+- Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
+- Image Wrongness: [docs/image-wrongness.md](docs/image-wrongness.md)
+- Feature fixtures: [docs/feature-fixtures.md](docs/feature-fixtures.md)
+
+</details>
+
+<details>
+<summary><b>Codex integration</b> — App, CLI compat, codex-lb, hooks</summary>
+
+- Codex App: [docs/codex-app.md](docs/codex-app.md)
+- Codex CLI compatibility: [docs/codex-cli-compat.md](docs/codex-cli-compat.md)
+- Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
+- Codex App Hooks/PAT: [docs/hooks-pat.md](docs/hooks-pat.md)
+- codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
 - Source Intelligence Layer: [docs/source-intelligence-layer.md](docs/source-intelligence-layer.md)
 - X AI / Context7 / Codex Web policy: [docs/xai-context7-codex-web-policy.md](docs/xai-context7-codex-web-policy.md)
 - Main no-Scout / worker Scout policy: [docs/main-no-scout-worker-scout-policy.md](docs/main-no-scout-worker-scout-policy.md)
-- Agent terminal lanes: [docs/agent-terminal-lanes.md](docs/agent-terminal-lanes.md)
-- Zellij migration: [docs/migration/tmux-to-zellij.md](docs/migration/tmux-to-zellij.md)
 - Real Codex dynamic smoke: [docs/real-codex-dynamic-smoke.md](docs/real-codex-dynamic-smoke.md)
-- Agent cleanup executor: [docs/agent-cleanup-executor.md](docs/agent-cleanup-executor.md)
-- Intelligent work graph: [docs/intelligent-work-graph.md](docs/intelligent-work-graph.md)
-- Fake vs real proof policy: [docs/fake-vs-real-proof-policy.md](docs/fake-vs-real-proof-policy.md)
-- Runtime truth matrix: [docs/runtime-truth-matrix.md](docs/runtime-truth-matrix.md)
-- ADHD orchestration gate: [docs/adhd-orchestrating-gate.md](docs/adhd-orchestrating-gate.md)
-- Strategy-first parallel write: [docs/strategy-first-parallel-write.md](docs/strategy-first-parallel-write.md)
 - Appshots pipeline: [docs/appshots-pipeline.md](docs/appshots-pipeline.md)
 - Appshots thread attachments: [docs/appshots-thread-attachments.md](docs/appshots-thread-attachments.md)
-- MCP readOnly scheduler: [docs/mcp-readonly-scheduler.md](docs/mcp-readonly-scheduler.md)
-- Parallel write agents: [docs/parallel-write-agents.md](docs/parallel-write-agents.md)
-- Agent patch queue: [docs/agent-patch-queue.md](docs/agent-patch-queue.md)
-- Native CLI Session Swarm: [docs/native-cli-session-swarm.md](docs/native-cli-session-swarm.md)
-- No-subagent scaling: [docs/no-subagent-scaling.md](docs/no-subagent-scaling.md)
 - Fast mode default and `$Fast-On`/`$Fast-Off` toggles: [docs/fast-mode-default.md](docs/fast-mode-default.md)
-- Migration 1.18.7 to 1.18.8: [docs/migration-1.18.7-to-1.18.8.md](docs/migration-1.18.7-to-1.18.8.md)
-- Codex official Goal mode: [docs/codex-official-goal-mode.md](docs/codex-official-goal-mode.md)
+
+</details>
+
+<details>
+<summary><b>Git & collaboration</b></summary>
+
+- Git collaboration: [docs/git-collaboration.md](docs/git-collaboration.md)
+- Git hygiene: [docs/git-hygiene.md](docs/git-hygiene.md)
+- Git policy: [docs/git-policy.md](docs/git-policy.md)
+
+</details>
+
+<details>
+<summary><b>Quality & release</b> — gates, E2E, migrations, gaps</summary>
+
+- Release readiness: [docs/release-readiness.md](docs/release-readiness.md)
 - Release parallel full coverage: [docs/release-parallel-full-coverage.md](docs/release-parallel-full-coverage.md)
 - Priority closure P0-P4: [docs/priority-closure-p0-p4.md](docs/priority-closure-p0-p4.md)
-- Image Voxel TriWiki: [docs/image-voxel-ledger.md](docs/image-voxel-ledger.md)
-- Image Wrongness: [docs/image-wrongness.md](docs/image-wrongness.md)
-- Route finalization: [docs/route-finalization.md](docs/route-finalization.md)
-- Feature fixtures: [docs/feature-fixtures.md](docs/feature-fixtures.md)
-- Managed paths: [docs/managed-paths.md](docs/managed-paths.md)
+- Black-box package tests: [docs/black-box-package-tests.md](docs/black-box-package-tests.md)
+- Hermetic E2E: [docs/testing-hermetic-e2e.md](docs/testing-hermetic-e2e.md)
 - Rollback: [docs/rollback.md](docs/rollback.md)
 - Known gaps: [docs/known-gaps.md](docs/known-gaps.md)
-- Native agent engines: [docs/native-agent-engines.md](docs/native-agent-engines.md)
-- Hermetic E2E: [docs/testing-hermetic-e2e.md](docs/testing-hermetic-e2e.md)
-- Pipeline architecture: [docs/pipeline-architecture.md](docs/pipeline-architecture.md)
-- Rust accelerator: [docs/rust-accelerator.md](docs/rust-accelerator.md)
-- Codex App Hooks/PAT: [docs/hooks-pat.md](docs/hooks-pat.md)
-- codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
+- Migration 1.18.7 to 1.18.8: [docs/migration-1.18.7-to-1.18.8.md](docs/migration-1.18.7-to-1.18.8.md)
 
-## 60-second start
+</details>
+
+## ⚡ 60-Second Start
 
 Recommended install: use the global npm package so `sks` and the Codex App `$` skills are refreshed together.
 
@@ -183,13 +237,13 @@ sks selftest --mock
 sks rust smoke --json
 ```
 
-## Three core promises
+## 🤝 Three Core Promises
 
 1. Completion Proof for every serious route
 2. Image Voxel TriWiki anchors and relations for every visual route
 3. Route contracts, evidence indexes, wrongness memory, trust reports, Codex App, codex-lb, hooks, Rust fallback parity, DB, route modularity, and generated fixtures verified by release gates
 
-## Install
+## 📦 Install
 
 Recommended path:
 
@@ -234,7 +288,7 @@ sks commit --json
 sks selftest --mock
 ```
 
-## What Sneakoscope Adds
+## 🎁 What Sneakoscope Adds
 
 `sks` adds a Zellij-backed Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw and Hermes skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
@@ -270,7 +324,7 @@ Project setup writes shared `.gitignore` entries for generated SKS files: `.snea
 
 During npm postinstall, SKS installs generated Codex App skills and tries `skills add MohtashamMurshid/getdesign` when the `skills` CLI is available. Design work still flows through one authority: `design.md`.
 
-## Terminal CLI Usage
+## 💻 Terminal CLI Usage
 
 Use terminal commands when you want to inspect, set up, verify, or start a CLI-first workspace.
 
@@ -478,7 +532,7 @@ $PPT create a customer proposal deck as HTML/PDF
 
 `$PPT` seals presentation context before artifact work and grounds design in `design.md`, getdesign inputs, and source material. The route loads `imagegen`; when the sealed deck needs generated raster assets or generated slide visual critique, use Codex App `$imagegen`/`gpt-image-2` and record the real output path in the PPT image/review ledgers.
 
-## Codex App Usage
+## 🧩 Codex App Usage
 
 Sneakoscope has two surfaces:
 
@@ -562,7 +616,7 @@ SKS does not install Git pre-commit hooks. Release metadata is changed only by e
 
 TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and tmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
-## OpenClaw And Hermes Agent Usage
+## 🤖 OpenClaw And Hermes Agent Usage
 
 Sneakoscope can generate an OpenClaw skill package for agents that need to operate SKS-enabled repositories.
 
@@ -600,7 +654,7 @@ SKS_HERMES=1 sks dollar-commands --json
 SKS_HERMES=1 sks status --json
 ```
 
-## Prompt `$` Commands
+## 💬 Prompt `$` Commands
 
 Use these inside Codex App or another agent prompt. They are prompt commands, not terminal commands.
 
@@ -608,7 +662,7 @@ Common prompts: `$Team`, `$From-Chat-IMG`, `$with-local-llm-on`, `$with-local-ll
 
 `$MAD-DB` is the prompt-visible Mad-DB alias for one-cycle DB break-glass work. It maps to the same guarded MAD-SKS permission route, while the terminal lifecycle remains `sks mad-db status|enable|revoke`; it is not a permanent DB unlock and catastrophic DB safeguards remain active.
 
-## Common Workflows
+## 🔁 Common Workflows
 
 First install:
 
@@ -637,7 +691,7 @@ sks wiki refresh
 sks wiki validate .sneakoscope/wiki/context-pack.json
 ```
 
-## Safety Model
+## 🛡️ Safety Model
 
 Sneakoscope intentionally treats these as high-risk:
 
@@ -649,7 +703,7 @@ Sneakoscope intentionally treats these as high-risk:
 
 By default, SKS favors inspection, local files, branch-safe changes, explicit confirmation for destructive DB operations, and completion claims backed by tests or artifacts.
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
 ### `sks` points to an old version
 
@@ -735,7 +789,7 @@ sks wiki validate .sneakoscope/wiki/context-pack.json
 
 Finalization requires evidence, valid Team cleanup artifacts, reflection when required, and Honest Mode.
 
-## Development And Release
+## 🏗️ Development And Release
 
 Run local checks:
 
