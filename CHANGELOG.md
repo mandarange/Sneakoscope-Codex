@@ -21,6 +21,7 @@
 - Worker panes defaulted to `full-debug`, which runs the worker with `--json` and shows nothing until exit. The default is now the live `compact-slots` slot renderer, which streams heartbeat, current file, tool events, and stdout tails every second.
 - `focus-pane-id` returning non-zero for an already-focused pane silently degraded stacked placement to plain down-splits.
 - Scheduler batch dispatch serialized two telemetry file writes per worker before launching the next one; telemetry appends now run concurrently across launches while preserving per-slot ordering.
+- `npm publish` re-ran the entire release DAG from zero on every release: the gate cache key hashed the raw package version, package.json, and dist/build-manifest.json, so a pure `sks versioning bump` (which also rewrites the three PACKAGE_VERSION constant sources) invalidated ~280 behavior gates including the ~11-minute blackbox suite. Cache hashing is now version-neutral for the five version-surface files; behavior changes still invalidate keys, version-correctness gates stay cache-disabled and always re-run, and `SKS_RELEASE_CACHE_VERSION_SENSITIVE=1` restores the old hashing.
 - Naruto backpressure throttling (50% throttled / 25% saturated) is no longer silent: the run header reports when host resource pressure reduced active workers.
 - GitHub release tags with a leading `v` failed version parsing in the zellij update check.
 
