@@ -776,6 +776,12 @@
       "reason": "Release/check script writes only hermetic temp fixture files for cache key hashing proof."
     },
     {
+      "file": "src/scripts/release-cache-version-neutral-fixture-check.ts",
+      "symbol": "writeFixture",
+      "token": "fs.writeFile",
+      "reason": "Release cache fixture gate writes only inside a fresh os.tmpdir mkdtemp fixture root to compare version-neutral cache keys."
+    },
+    {
       "file": "src/scripts/release-parallel-speed-budget-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
