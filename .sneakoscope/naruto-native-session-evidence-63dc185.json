@@ -1,0 +1,77 @@
+{
+  "schema": "sks.naruto-native-session-completion-evidence.v1",
+  "generated_at": "2026-06-10T14:04:24Z",
+  "commit": "63dc185e4ad04e4c3e4bef5d109532141c4d2b69",
+  "branch": "main",
+  "hook_requirement": "SKS $Naruto requires native multi-session evidence before completion. Run worker/reviewer native sessions for disjoint code-changing work, or record explicit evidence that native sessions were unavailable or unsafe to split.",
+  "native_session_evidence": {
+    "primary_mission": {
+      "mission_id": "M-20260610-220704-4bf1",
+      "command": "node ./dist/bin/sks.js naruto status --mission M-20260610-220704-4bf1 --json",
+      "status_ok": true,
+      "proof": "pending",
+      "target_active_slots": 25,
+      "max_active_slots": 25,
+      "completed": 49,
+      "total_work_items": 64,
+      "write_allowed_count": 45,
+      "role_distribution_total_workers": 64,
+      "implementation_like_workers": 35,
+      "implementation_like_ratio": 0.547,
+      "safe_active_workers": 25,
+      "parallelism_mode": "extreme",
+      "evidence_paths": [
+        ".sneakoscope/missions/M-20260610-220704-4bf1/agents/agent-native-cli-session-swarm.json",
+        ".sneakoscope/missions/M-20260610-220704-4bf1/agents/naruto-work-graph.json",
+        ".sneakoscope/missions/M-20260610-220704-4bf1/agents/naruto-concurrency-governor.json",
+        ".sneakoscope/missions/M-20260610-220704-4bf1/agents/agent-proof-evidence.json",
+        ".sneakoscope/missions/M-20260610-220704-4bf1/reflection-gate.json"
+      ]
+    }
+  },
+  "version_correction_missions": [
+    {
+      "mission_id": "M-20260610-225427-285f",
+      "command": "node ./dist/bin/sks.js naruto status --mission M-20260610-225427-285f --json",
+      "status_ok": false,
+      "proof": "missing",
+      "reason": "Hook-created mission shell existed for the late 3.0.2 correction, but no native proof artifact was produced for that narrow post-integration correction."
+    },
+    {
+      "mission_id": "M-20260610-225427-4af1",
+      "command": "node ./dist/bin/sks.js naruto status --mission M-20260610-225427-4af1 --json",
+      "status_ok": false,
+      "proof": "missing",
+      "reason": "Hook-created mission shell existed for the late 3.0.2 correction, but no native proof artifact was produced for that narrow post-integration correction."
+    }
+  ],
+  "unsafe_to_split_evidence": {
+    "scope": "late 3.0.2 version-surface correction after integration and before/around commit-and-push finalization",
+    "why_native_code_changing_split_was_not_run": [
+      "The remaining correction was a coherent version truth fix across tightly coupled release surfaces: package.json, package-lock.json, src/core/version.ts, src/core/fsx.ts, src/bin/sks.ts, Cargo.toml, Cargo.lock, crates/sks-core/src/main.rs, CHANGELOG.md, README.md, docs/release-readiness.md, and GITHUB-RELEASE-v3.0.2.md.",
+      "Splitting that correction into new independent code-changing workers after parent integration would have increased mismatch risk across release truth surfaces and could have required rewriting or stacking commits after the user requested commit-and-push.",
+      "The parent session immediately verified the integrated correction with build, release metadata, version truth, proof truth, CLI version, readiness, affected release DAG, and post-push provenance gates."
+    ],
+    "git_evidence": {
+      "post_push_head": "63dc185e4ad04e4c3e4bef5d109532141c4d2b69",
+      "upstream_head": "63dc185e4ad04e4c3e4bef5d109532141c4d2b69",
+      "status_after_push": "main...origin/main"
+    }
+  },
+  "verified_commands": [
+    "npm run build --silent",
+    "npm run release:metadata --silent",
+    "npm run release:version-truth --silent",
+    "npm run release:proof-truth --silent",
+    "node ./dist/bin/sks.js --version",
+    "node ./dist/scripts/release-check-stamp.js write",
+    "npm run release:readiness --silent",
+    "npm run release:check --silent",
+    "npm run release:provenance --silent"
+  ],
+  "honest_mode": {
+    "claim": "The main directive had native Naruto mission evidence, but the final 3.0.2 correction did not run new native code-changing workers.",
+    "support": "Primary mission status shows 64 workers/items with 49 completed and 45 write-allowed work items; late correction mission statuses show proof missing.",
+    "remaining_gap": "No additional native worker/reviewer session produced code changes specifically for the post-integration 3.0.2 correction."
+  }
+}
