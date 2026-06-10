@@ -16,7 +16,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## Current Release
 
-SKS **2.0.19** is the Codex 0.138 deep-integration polish release: optional Desktop `/app` launch attempts, Desktop handoff confirmation lifecycle, parallel/cached plugin inventory, global image saved-path contracts, effort metadata auto-discovery, account usage auto-discovery, and hardened feature probes.
+SKS **3.0.0** is the parallel-runtime stabilization release: real-time Zellij slot panes (mtime-aware telemetry snapshots, multi-process merge-on-flush), serialized SLOTS anchor creation with native stacked worker panes (`new-pane --stacked`), live `compact-slots` renderer as the default worker pane UI, a Zellij version check/upgrade flow mirroring the Codex CLI update prompt (`sks zellij update`), concurrent scheduler dispatch telemetry, visible naruto backpressure reporting, and dead-code removal across the swarm runtime.
 
 What changed:
 
