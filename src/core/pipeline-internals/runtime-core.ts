@@ -29,6 +29,7 @@ import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE,
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../team-dag.js';
 import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from '../team-live.js';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../team-review-policy.js';
+import { normalizeCodexMultiAgentEventName } from '../codex-control/codex-multi-agent-event-normalizer.js';
 
 export { routePrompt };
 
@@ -1217,7 +1218,10 @@ function subagentStage(payload: any) {
   if (!/(spawn_agent|send_input|wait_agent|close_agent|interrupt_agent|subagent|worker|explorer)/i.test(hay)) return null;
   if (/subagent[_ -]?unavailable|subagents unavailable|unsafe to split|unsplittable|cannot safely split/i.test(hay)) return 'exception';
   if (/spawn_agent/i.test(hay)) return 'spawn_agent';
-  if (/wait_agent|close_agent|interrupt_agent|completed|final/i.test(hay)) return 'result';
+  for (const name of ['interrupt_agent', 'close_agent']) {
+    if (hay.includes(name) && normalizeCodexMultiAgentEventName(name).stage === 'result') return 'result';
+  }
+  if (/wait_agent|completed|final/i.test(hay)) return 'result';
   return 'subagent';
 }
 

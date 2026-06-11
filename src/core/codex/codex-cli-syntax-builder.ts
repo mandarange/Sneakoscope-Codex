@@ -9,6 +9,7 @@ export type BuildCodexExecArgsOptions = {
   ephemeral?: boolean
   skipGitRepoCheck?: boolean
   profile?: string | null
+  profileAlias?: 'long' | 'short'
   ignoreUserConfig?: boolean
   ignoreRules?: boolean
   sandbox?: CodexSandboxMode
@@ -40,7 +41,7 @@ export function buildCodexExecArgs(opts: BuildCodexExecArgsOptions): string[] {
   if (opts.outputLastMessage) args.push('--output-last-message', opts.outputLastMessage)
   if (opts.ephemeral) args.push('--ephemeral')
   if (opts.skipGitRepoCheck) args.push('--skip-git-repo-check')
-  if (opts.profile) args.push('--profile', opts.profile)
+  if (opts.profile) args.push(...buildCodexProfileArgs(opts.profile, opts.profileAlias))
   else if (opts.ignoreUserConfig) args.push('--ignore-user-config')
   if (opts.ignoreRules) args.push('--ignore-rules')
   if (opts.fullAuto) args.push('--full-auto')
@@ -50,6 +51,10 @@ export function buildCodexExecArgs(opts: BuildCodexExecArgsOptions): string[] {
   if (serviceTier) args.push('-c', `service_tier=${serviceTier}`)
   args.push(opts.prompt)
   return args
+}
+
+export function buildCodexProfileArgs(profile: string, alias: 'long' | 'short' = 'long'): string[] {
+  return alias === 'short' ? ['-P', profile] : ['--profile', profile]
 }
 
 function normalizeCodexServiceTier(value: unknown): CodexServiceTier | null {

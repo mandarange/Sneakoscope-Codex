@@ -86,6 +86,35 @@
       ]
     },
     {
+      "id": "agent:message-bus-reader",
+      "command": "npm run agent:message-bus-reader --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "agent:model-authored-patch-envelope",
       "command": "npm run agent:model-authored-patch-envelope --silent",
       "deps": [],
@@ -895,6 +924,100 @@
       ]
     },
     {
+      "id": "codex-app:handoff",
+      "command": "npm run codex-app:handoff --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-app:handoff-launch",
+      "command": "npm run codex-app:handoff-launch --silent",
+      "deps": [
+        "codex-app:launcher",
+        "codex-app:handoff"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-app:launcher",
+      "command": "npm run codex-app:launcher --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "codex-app:provider-badge",
       "command": "npm run codex-app:provider-badge --silent",
       "deps": [],
@@ -1216,6 +1339,192 @@
         "enabled": true,
         "inputs": [
           "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-plugin:app-template-policy",
+      "command": "npm run codex-plugin:app-template-policy --silent",
+      "deps": [
+        "codex-plugin:inventory"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-plugin:cache",
+      "command": "npm run codex-plugin:cache --silent",
+      "deps": [
+        "codex-plugin:parallel-detail-fetch"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-plugin:diff",
+      "command": "npm run codex-plugin:diff --silent",
+      "deps": [
+        "codex-plugin:cache"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-plugin:inventory",
+      "command": "npm run codex-plugin:inventory --silent",
+      "deps": [
+        "codex-plugin:json"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-plugin:json",
+      "command": "npm run codex-plugin:json --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-plugin:parallel-detail-fetch",
+      "command": "npm run codex-plugin:parallel-detail-fetch --silent",
+      "deps": [
+        "codex-plugin:json"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -1653,6 +1962,35 @@
       ]
     },
     {
+      "id": "codex-sdk:version-compat",
+      "command": "npm run codex-sdk:version-compat --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "codex-sdk:zellij-pane-binding",
       "command": "npm run codex-sdk:zellij-pane-binding --silent",
       "deps": [],
@@ -1792,6 +2130,452 @@
       ]
     },
     {
+      "id": "codex:0138-capability",
+      "command": "npm run codex:0138-capability --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0138-capability-artifact",
+      "command": "npm run codex:0138-capability-artifact --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0138-doctor",
+      "command": "npm run codex:0138-doctor --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0138-feature-probes",
+      "command": "npm run codex:0138-feature-probes --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-capability",
+      "command": "npm run codex:0139-capability --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-code-mode-web-search",
+      "command": "npm run codex:0139-code-mode-web-search --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-doctor-env-redaction",
+      "command": "npm run codex:0139-doctor-env-redaction --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-feature-probes",
+      "command": "npm run codex:0139-feature-probes --silent",
+      "deps": [
+        "codex:0139-capability",
+        "codex:0139-interrupt-agent",
+        "codex:0139-rich-tool-schema",
+        "codex:0139-doctor-env-redaction",
+        "codex:0139-marketplace-source",
+        "codex:0139-sandbox-profile-alias"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-interrupt-agent",
+      "command": "npm run codex:0139-interrupt-agent --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-marketplace-source",
+      "command": "npm run codex:0139-marketplace-source --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-real-probes",
+      "command": "npm run codex:0139-real-probes --silent",
+      "deps": [
+        "codex:0139-capability"
+      ],
+      "resource": [
+        "network",
+        "fs-read"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check"
+      ]
+    },
+    {
+      "id": "codex:0139-rich-tool-schema",
+      "command": "npm run codex:0139-rich-tool-schema --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0139-sandbox-profile-alias",
+      "command": "npm run codex:0139-sandbox-profile-alias --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:account-usage",
+      "command": "npm run codex:account-usage --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:account-usage-autodiscovery",
+      "command": "npm run codex:account-usage-autodiscovery --silent",
+      "deps": [
+        "codex:account-usage"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "codex:config-eperm-fixture",
       "command": "npm run codex:config-eperm-fixture --silent",
       "deps": [],
@@ -1805,6 +2589,66 @@
         "enabled": true,
         "inputs": [
           "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:effort-auto-discovery",
+      "command": "npm run codex:effort-auto-discovery --silent",
+      "deps": [
+        "codex:model-metadata"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:effort-order",
+      "command": "npm run codex:effort-order --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -1889,6 +2733,37 @@
         "enabled": true,
         "inputs": [
           "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:model-metadata",
+      "command": "npm run codex:model-metadata --silent",
+      "deps": [
+        "codex:effort-order"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -2380,6 +3255,66 @@
       ]
     },
     {
+      "id": "docs:codex-0139-wording",
+      "command": "npm run docs:codex-0139-wording --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "doctor:codex-0138-fix",
+      "command": "npm run doctor:codex-0138-fix --silent",
+      "deps": [
+        "codex:0138-doctor"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "doctor:codex-doctor-parity",
       "command": "npm run doctor:codex-doctor-parity --silent",
       "deps": [],
@@ -2804,6 +3739,159 @@
         "inputs": [
           "src/core/git/git-worktree-diff.ts",
           "src/scripts/git-worktree-untracked-diff-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "image:artifact-path-contract",
+      "command": "npm run image:artifact-path-contract --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "image:artifact-registry",
+      "command": "npm run image:artifact-registry --silent",
+      "deps": [
+        "image:artifact-path-contract"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "image:followup-edit-path",
+      "command": "npm run image:followup-edit-path --silent",
+      "deps": [
+        "image:artifact-path-contract"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "image:generation-path-handoff",
+      "command": "npm run image:generation-path-handoff --silent",
+      "deps": [
+        "image:artifact-path-contract"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "image:global-path-contract",
+      "command": "npm run image:global-path-contract --silent",
+      "deps": [
+        "image:artifact-registry"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
         ]
       },
       "isolation": {
@@ -3579,6 +4667,37 @@
       ]
     },
     {
+      "id": "mcp:plugin-inventory",
+      "command": "npm run mcp:plugin-inventory --silent",
+      "deps": [
+        "codex-plugin:inventory"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "mcp:readonly-runtime-scheduler",
       "command": "npm run mcp:readonly-runtime-scheduler --silent",
       "deps": [],
@@ -3919,6 +5038,37 @@
       ]
     },
     {
+      "id": "naruto:parallel-gate-consistency",
+      "command": "npm run naruto:parallel-gate-consistency --silent",
+      "deps": [
+        "naruto:parallel-runtime-proof"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "naruto:parallel-patch-apply",
       "command": "npm run naruto:parallel-patch-apply --silent",
       "deps": [],
@@ -4000,6 +5150,62 @@
       "command": "npm run naruto:parallelism-ux --silent",
       "deps": [
         "naruto:parallelism-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:proof-message-summary",
+      "command": "npm run naruto:proof-message-summary --silent",
+      "deps": [
+        "runtime:proof-summary-messages"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:proof-zellij-stacked-summary",
+      "command": "npm run naruto:proof-zellij-stacked-summary --silent",
+      "deps": [
+        "runtime:proof-zellij-stacked-summary"
       ],
       "resource": [
         "cpu-light",
@@ -4967,6 +6173,350 @@
       ]
     },
     {
+      "id": "qa-loop:app-handoff",
+      "command": "npm run qa-loop:app-handoff --silent",
+      "deps": [
+        "codex-app:handoff",
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:app-handoff-capability",
+      "command": "npm run qa-loop:app-handoff-capability --silent",
+      "deps": [
+        "codex:0138-capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:app-handoff-cli",
+      "command": "npm run qa-loop:app-handoff-cli --silent",
+      "deps": [
+        "qa-loop:app-handoff"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:app-handoff-confirmation",
+      "command": "npm run qa-loop:app-handoff-confirmation --silent",
+      "deps": [
+        "qa-loop:app-handoff"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:app-handoff-gate-lifecycle",
+      "command": "npm run qa-loop:app-handoff-gate-lifecycle --silent",
+      "deps": [
+        "qa-loop:app-handoff-confirmation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:app-handoff-launch",
+      "command": "npm run qa-loop:app-handoff-launch --silent",
+      "deps": [
+        "qa-loop:app-handoff",
+        "codex-app:handoff-launch"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:app-handoff-status-lifecycle",
+      "command": "npm run qa-loop:app-handoff-status-lifecycle --silent",
+      "deps": [
+        "qa-loop:app-handoff-confirmation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:budget-policy",
+      "command": "npm run qa-loop:budget-policy --silent",
+      "deps": [
+        "codex:account-usage"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:effort-escalation",
+      "command": "npm run qa-loop:effort-escalation --silent",
+      "deps": [
+        "codex:effort-order"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:image-path-exposure",
+      "command": "npm run qa-loop:image-path-exposure --silent",
+      "deps": [
+        "image:artifact-path-contract"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "qa-loop:image-path-prompt-injection",
+      "command": "npm run qa-loop:image-path-prompt-injection --silent",
+      "deps": [
+        "qa-loop:image-path-exposure",
+        "image:artifact-registry"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "release:affected-selector",
       "command": "npm run release:affected-selector --silent",
       "deps": [],
@@ -5069,6 +6619,97 @@
           "src/core/release/**",
           "release-gates.v2.json",
           "package.json"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "release:cache-input-classifier",
+      "command": "npm run release:cache-input-classifier --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "release:cache-neutralization-report",
+      "command": "npm run release:cache-neutralization-report --silent",
+      "deps": [
+        "release:speed-summary"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "release:cache-version-neutral-fixtures",
+      "command": "npm run release:cache-version-neutral-fixtures --silent",
+      "deps": [
+        "release:cache-input-classifier"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
         ]
       },
       "isolation": {
@@ -5280,6 +6921,31 @@
       ]
     },
     {
+      "id": "release:github-body-helper",
+      "command": "npm run release:github-body-helper --silent",
+      "deps": [
+        "release:proof-truth"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "release:parallel-speed-budget",
       "command": "npm run release:parallel-speed-budget --silent",
       "deps": [
@@ -5478,6 +7144,29 @@
       ]
     },
     {
+      "id": "release:proof-truth",
+      "command": "npm run release:proof-truth --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "release:provenance",
       "command": "npm run release:provenance --silent",
       "deps": [],
@@ -5522,6 +7211,35 @@
         "enabled": true,
         "inputs": [
           "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "release:runtime-truth-matrix",
+      "command": "npm run release:runtime-truth-matrix --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -6646,6 +8364,64 @@
       ]
     },
     {
+      "id": "runtime:proof-summary-messages",
+      "command": "npm run runtime:proof-summary-messages --silent",
+      "deps": [
+        "agent:message-bus-reader",
+        "runtime:proof-summary"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "runtime:proof-zellij-stacked-summary",
+      "command": "npm run runtime:proof-zellij-stacked-summary --silent",
+      "deps": [
+        "runtime:proof-summary",
+        "zellij:pane-creation-lock-metrics"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 30000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "runtime:ts-python-boundary",
       "command": "npm run runtime:ts-python-boundary --silent",
       "deps": [],
@@ -7604,6 +9380,35 @@
       ]
     },
     {
+      "id": "zellij:fake-adapter",
+      "command": "npm run zellij:fake-adapter --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "zellij:first-slot-down-stack",
       "command": "npm run zellij:first-slot-down-stack --silent",
       "deps": [
@@ -7758,6 +9563,162 @@
         "enabled": true,
         "inputs": [
           "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:pane-creation-lock-metrics",
+      "command": "npm run zellij:pane-creation-lock-metrics --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:pane-lock-concurrency-blackbox",
+      "command": "npm run zellij:pane-lock-concurrency-blackbox --silent",
+      "deps": [
+        "zellij:pane-creation-lock-metrics",
+        "parallel:runtime-real-blackbox"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:pane-lock-does-not-block-worker",
+      "command": "npm run zellij:pane-lock-does-not-block-worker --silent",
+      "deps": [
+        "zellij:pane-creation-lock-metrics"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:pane-lock-open-worker-integration",
+      "command": "npm run zellij:pane-lock-open-worker-integration --silent",
+      "deps": [
+        "zellij:fake-adapter",
+        "zellij:pane-creation-lock-metrics",
+        "zellij:stacked-capability-routing"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:qa-app-handoff-status",
+      "command": "npm run zellij:qa-app-handoff-status --silent",
+      "deps": [
+        "qa-loop:app-handoff"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -8261,6 +10222,129 @@
       ]
     },
     {
+      "id": "zellij:stacked-capability-routing",
+      "command": "npm run zellij:stacked-capability-routing --silent",
+      "deps": [
+        "zellij:stacked-version-matrix"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:stacked-fallback-integration",
+      "command": "npm run zellij:stacked-fallback-integration --silent",
+      "deps": [
+        "zellij:fake-adapter",
+        "zellij:stacked-capability-routing"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:stacked-version-matrix",
+      "command": "npm run zellij:stacked-version-matrix --silent",
+      "deps": [
+        "zellij:stacked-version-parser"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:stacked-version-parser",
+      "command": "npm run zellij:stacked-version-parser --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "zellij:ui-design",
       "command": "npm run zellij:ui-design --silent",
       "deps": [],
@@ -8273,6 +10357,97 @@
         "enabled": true,
         "inputs": [
           "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:update-prompt-matrix",
+      "command": "npm run zellij:update-prompt-matrix --silent",
+      "deps": [
+        "zellij:update-prompt-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:update-prompt-mode",
+      "command": "npm run zellij:update-prompt-mode --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "zellij:update-prompt-safety",
+      "command": "npm run zellij:update-prompt-safety --silent",
+      "deps": [
+        "zellij:update-prompt-mode"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -8364,1772 +10539,6 @@
       },
       "preset": [
         "real-check"
-      ]
-    },
-    {
-      "id": "codex:0138-capability",
-      "command": "npm run codex:0138-capability --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:0139-capability",
-      "command": "npm run codex:0139-capability --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:0138-capability-artifact",
-      "command": "npm run codex:0138-capability-artifact --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-sdk:version-compat",
-      "command": "npm run codex-sdk:version-compat --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-app:handoff",
-      "command": "npm run codex-app:handoff --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff",
-      "command": "npm run qa-loop:app-handoff --silent",
-      "deps": [
-        "codex-app:handoff",
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff-capability",
-      "command": "npm run qa-loop:app-handoff-capability --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff-cli",
-      "command": "npm run qa-loop:app-handoff-cli --silent",
-      "deps": [
-        "qa-loop:app-handoff"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:qa-app-handoff-status",
-      "command": "npm run zellij:qa-app-handoff-status --silent",
-      "deps": [
-        "qa-loop:app-handoff"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-plugin:json",
-      "command": "npm run codex-plugin:json --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-plugin:inventory",
-      "command": "npm run codex-plugin:inventory --silent",
-      "deps": [
-        "codex-plugin:json"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "mcp:plugin-inventory",
-      "command": "npm run mcp:plugin-inventory --silent",
-      "deps": [
-        "codex-plugin:inventory"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-plugin:app-template-policy",
-      "command": "npm run codex-plugin:app-template-policy --silent",
-      "deps": [
-        "codex-plugin:inventory"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "image:artifact-path-contract",
-      "command": "npm run image:artifact-path-contract --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:image-path-exposure",
-      "command": "npm run qa-loop:image-path-exposure --silent",
-      "deps": [
-        "image:artifact-path-contract"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "image:generation-path-handoff",
-      "command": "npm run image:generation-path-handoff --silent",
-      "deps": [
-        "image:artifact-path-contract"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "image:followup-edit-path",
-      "command": "npm run image:followup-edit-path --silent",
-      "deps": [
-        "image:artifact-path-contract"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:effort-order",
-      "command": "npm run codex:effort-order --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:effort-escalation",
-      "command": "npm run qa-loop:effort-escalation --silent",
-      "deps": [
-        "codex:effort-order"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:account-usage",
-      "command": "npm run codex:account-usage --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:budget-policy",
-      "command": "npm run qa-loop:budget-policy --silent",
-      "deps": [
-        "codex:account-usage"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "naruto:parallel-gate-consistency",
-      "command": "npm run naruto:parallel-gate-consistency --silent",
-      "deps": [
-        "naruto:parallel-runtime-proof"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:0138-doctor",
-      "command": "npm run codex:0138-doctor --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "doctor:codex-0138-fix",
-      "command": "npm run doctor:codex-0138-fix --silent",
-      "deps": [
-        "codex:0138-doctor"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:0138-feature-probes",
-      "command": "npm run codex:0138-feature-probes --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-app:launcher",
-      "command": "npm run codex-app:launcher --silent",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-app:handoff-launch",
-      "command": "npm run codex-app:handoff-launch --silent",
-      "deps": [
-        "codex-app:launcher",
-        "codex-app:handoff"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff-launch",
-      "command": "npm run qa-loop:app-handoff-launch --silent",
-      "deps": [
-        "qa-loop:app-handoff",
-        "codex-app:handoff-launch"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff-confirmation",
-      "command": "npm run qa-loop:app-handoff-confirmation --silent",
-      "deps": [
-        "qa-loop:app-handoff"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff-status-lifecycle",
-      "command": "npm run qa-loop:app-handoff-status-lifecycle --silent",
-      "deps": [
-        "qa-loop:app-handoff-confirmation"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:app-handoff-gate-lifecycle",
-      "command": "npm run qa-loop:app-handoff-gate-lifecycle --silent",
-      "deps": [
-        "qa-loop:app-handoff-confirmation"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-plugin:parallel-detail-fetch",
-      "command": "npm run codex-plugin:parallel-detail-fetch --silent",
-      "deps": [
-        "codex-plugin:json"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-plugin:cache",
-      "command": "npm run codex-plugin:cache --silent",
-      "deps": [
-        "codex-plugin:parallel-detail-fetch"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex-plugin:diff",
-      "command": "npm run codex-plugin:diff --silent",
-      "deps": [
-        "codex-plugin:cache"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "image:artifact-registry",
-      "command": "npm run image:artifact-registry --silent",
-      "deps": [
-        "image:artifact-path-contract"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "image:global-path-contract",
-      "command": "npm run image:global-path-contract --silent",
-      "deps": [
-        "image:artifact-registry"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "qa-loop:image-path-prompt-injection",
-      "command": "npm run qa-loop:image-path-prompt-injection --silent",
-      "deps": [
-        "qa-loop:image-path-exposure",
-        "image:artifact-registry"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:model-metadata",
-      "command": "npm run codex:model-metadata --silent",
-      "deps": [
-        "codex:effort-order"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:effort-auto-discovery",
-      "command": "npm run codex:effort-auto-discovery --silent",
-      "deps": [
-        "codex:model-metadata"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "codex:account-usage-autodiscovery",
-      "command": "npm run codex:account-usage-autodiscovery --silent",
-      "deps": [
-        "codex:account-usage"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:stacked-version-parser",
-      "command": "npm run zellij:stacked-version-parser --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:stacked-version-matrix",
-      "command": "npm run zellij:stacked-version-matrix --silent",
-      "deps": [
-        "zellij:stacked-version-parser"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:stacked-capability-routing",
-      "command": "npm run zellij:stacked-capability-routing --silent",
-      "deps": [
-        "zellij:stacked-version-matrix"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:pane-creation-lock-metrics",
-      "command": "npm run zellij:pane-creation-lock-metrics --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:pane-lock-does-not-block-worker",
-      "command": "npm run zellij:pane-lock-does-not-block-worker --silent",
-      "deps": [
-        "zellij:pane-creation-lock-metrics"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:pane-lock-concurrency-blackbox",
-      "command": "npm run zellij:pane-lock-concurrency-blackbox --silent",
-      "deps": [
-        "zellij:pane-creation-lock-metrics",
-        "parallel:runtime-real-blackbox"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "release:cache-input-classifier",
-      "command": "npm run release:cache-input-classifier --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "release:cache-version-neutral-fixtures",
-      "command": "npm run release:cache-version-neutral-fixtures --silent",
-      "deps": [
-        "release:cache-input-classifier"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "release:cache-neutralization-report",
-      "command": "npm run release:cache-neutralization-report --silent",
-      "deps": [
-        "release:speed-summary"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "agent:message-bus-reader",
-      "command": "npm run agent:message-bus-reader --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "runtime:proof-summary-messages",
-      "command": "npm run runtime:proof-summary-messages --silent",
-      "deps": [
-        "agent:message-bus-reader",
-        "runtime:proof-summary"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "naruto:proof-message-summary",
-      "command": "npm run naruto:proof-message-summary --silent",
-      "deps": [
-        "runtime:proof-summary-messages"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:update-prompt-mode",
-      "command": "npm run zellij:update-prompt-mode --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:update-prompt-safety",
-      "command": "npm run zellij:update-prompt-safety --silent",
-      "deps": [
-        "zellij:update-prompt-mode"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "zellij:update-prompt-matrix",
-      "command": "npm run zellij:update-prompt-matrix --silent",
-      "deps": [
-        "zellij:update-prompt-mode"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "release:proof-truth",
-      "command": "npm run release:proof-truth --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "release:github-body-helper",
-      "command": "npm run release:github-body-helper --silent",
-      "deps": [
-        "release:proof-truth"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
-    },
-    {
-      "id": "release:runtime-truth-matrix",
-      "command": "npm run release:runtime-truth-matrix --silent",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
       ]
     }
   ]

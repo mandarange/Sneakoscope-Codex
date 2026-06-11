@@ -2,6 +2,8 @@
   "schema": "sks.codex-0139-capability.v1",
   "ok": true,
   "probe_mode": "version-only",
+  "probe_timeout_ms": 3000,
+  "probe_error_summary": [],
   "codex_bin": "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
   "version_text": "codex-cli 0.139.0",
   "parsed_version": "0.139.0",
@@ -14,8 +16,12 @@
   "supports_interrupt_agent_rename": true,
   "feature_probe_results": {
     "marketplace_list_json": "skipped",
-    "sandbox_profile_alias": "skipped"
+    "sandbox_profile_alias": "skipped",
+    "interrupt_agent_event_mapping": "skipped",
+    "rich_tool_schema_preservation": "skipped",
+    "doctor_env_redaction": "skipped",
+    "code_mode_web_search": "skipped"
   },
   "blockers": [],
-  "generated_at": "2026-06-10T13:07:04.332Z"
+  "generated_at": "2026-06-11T01:41:08.806Z"
 }

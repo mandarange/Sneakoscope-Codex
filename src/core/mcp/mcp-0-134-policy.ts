@@ -110,6 +110,9 @@ export function compactMcpToolSchema(schema: any, maxBytes = 8192) {
       type: schema?.type || 'object',
       description: String(schema?.description || '').slice(0, 512),
       properties: Object.fromEntries(Object.entries(schema?.properties || {}).slice(0, 50)),
+      ...(Array.isArray(schema?.oneOf) ? { oneOf: schema.oneOf } : {}),
+      ...(Array.isArray(schema?.allOf) ? { allOf: schema.allOf } : {}),
+      ...(Array.isArray(schema?.required) ? { required: schema.required } : {}),
       ...preservedDefs,
       ...(refs.length ? { refs } : {})
     },

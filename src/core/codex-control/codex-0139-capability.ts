@@ -18,6 +18,8 @@ export interface Codex0139Capability {
   schema: 'sks.codex-0139-capability.v1'
   ok: boolean
   probe_mode: 'version-only' | 'feature-probe'
+  probe_timeout_ms: number
+  probe_error_summary: string[]
   codex_bin: string | null
   version_text: string | null
   parsed_version: string | null
@@ -31,6 +33,10 @@ export interface Codex0139Capability {
   feature_probe_results: {
     marketplace_list_json?: 'passed' | 'failed' | 'skipped'
     sandbox_profile_alias?: 'passed' | 'failed' | 'skipped'
+    interrupt_agent_event_mapping?: 'passed' | 'failed' | 'skipped'
+    rich_tool_schema_preservation?: 'passed' | 'failed' | 'skipped'
+    doctor_env_redaction?: 'passed' | 'failed' | 'skipped'
+    code_mode_web_search?: 'passed' | 'failed' | 'skipped'
   }
   blockers: string[]
 }
@@ -46,33 +52,52 @@ export async function detectCodex0139Capability(input: { codexBin?: string | nul
   const parsed = parseCodexVersionText(versionText)
   const atLeast139 = Boolean(parsed && compareSemverLike(parsed, '0.139.0') >= 0)
   const probeMode = process.env.SKS_CODEX_0139_PROBE === '1' ? 'feature-probe' : 'version-only'
+  const probeTimeoutMs = Math.max(1, Number(process.env.SKS_CODEX_0139_PROBE_TIMEOUT_MS || 3000) || 3000)
   const featureProbeResults = probeMode === 'feature-probe'
-    ? await probeCodex0139Features(codexBin, { fake })
+    ? await probeCodex0139Features(codexBin, { fake, timeoutMs: probeTimeoutMs })
     : {
         marketplace_list_json: 'skipped' as const,
-        sandbox_profile_alias: 'skipped' as const
+        sandbox_profile_alias: 'skipped' as const,
+        interrupt_agent_event_mapping: 'skipped' as const,
+        rich_tool_schema_preservation: 'skipped' as const,
+        doctor_env_redaction: 'skipped' as const,
+        code_mode_web_search: 'skipped' as const
       }
   const marketplaceOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.marketplace_list_json !== 'failed')
   const profileAliasOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.sandbox_profile_alias !== 'failed')
+  const interruptAgentOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.interrupt_agent_event_mapping !== 'failed')
+  const richSchemaOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.rich_tool_schema_preservation !== 'failed')
+  const doctorEnvOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.doctor_env_redaction !== 'failed')
+  const codeSearchOk = atLeast139 && (probeMode === 'version-only' || featureProbeResults.code_mode_web_search !== 'failed')
+  const probeErrorSummary = Object.entries(featureProbeResults)
+    .filter(([, status]) => status === 'failed')
+    .map(([name]) => `${name}:failed`)
   const blockers = [
     ...(!codexBin ? ['codex_cli_missing'] : []),
     ...(atLeast139 ? [] : ['codex_0_139_required_for_search_schema_marketplace_features']),
-    ...(probeMode === 'feature-probe' && featureProbeResults.marketplace_list_json === 'failed' ? ['codex_marketplace_list_json_probe_failed'] : [])
+    ...(probeMode === 'feature-probe' && featureProbeResults.marketplace_list_json === 'failed' ? ['codex_marketplace_list_json_probe_failed'] : []),
+    ...(probeMode === 'feature-probe' && featureProbeResults.sandbox_profile_alias === 'failed' ? ['codex_sandbox_profile_alias_probe_failed'] : []),
+    ...(probeMode === 'feature-probe' && featureProbeResults.interrupt_agent_event_mapping === 'failed' ? ['codex_interrupt_agent_probe_failed'] : []),
+    ...(probeMode === 'feature-probe' && featureProbeResults.rich_tool_schema_preservation === 'failed' ? ['codex_rich_tool_schema_probe_failed'] : []),
+    ...(probeMode === 'feature-probe' && featureProbeResults.doctor_env_redaction === 'failed' ? ['codex_doctor_env_redaction_probe_failed'] : []),
+    ...(probeMode === 'feature-probe' && featureProbeResults.code_mode_web_search === 'failed' ? ['codex_code_mode_web_search_probe_failed'] : [])
   ]
   return {
     schema: 'sks.codex-0139-capability.v1',
     ok: atLeast139 && blockers.length === 0,
     probe_mode: probeMode,
+    probe_timeout_ms: probeTimeoutMs,
+    probe_error_summary: probeErrorSummary,
     codex_bin: codexBin || null,
     version_text: versionText || null,
     parsed_version: parsed,
-    supports_code_mode_web_search: atLeast139,
-    supports_rich_tool_schemas: atLeast139,
-    supports_doctor_env_details: atLeast139,
+    supports_code_mode_web_search: codeSearchOk,
+    supports_rich_tool_schemas: richSchemaOk,
+    supports_doctor_env_details: doctorEnvOk,
     supports_marketplace_source_field: marketplaceOk,
     supports_plugin_catalog_cache: atLeast139,
     supports_sandbox_profile_alias: profileAliasOk,
-    supports_interrupt_agent_rename: atLeast139,
+    supports_interrupt_agent_rename: interruptAgentOk,
     feature_probe_results: featureProbeResults,
     blockers
   }
@@ -102,16 +127,27 @@ async function readCodexVersionText(codexBin: string | null): Promise<string | n
   return result.code === 0 ? text : text || null
 }
 
-async function probeCodex0139Features(codexBin: string | null, opts: { fake?: boolean } = {}): Promise<Codex0139Capability['feature_probe_results']> {
+async function probeCodex0139Features(codexBin: string | null, opts: { fake?: boolean; timeoutMs?: number } = {}): Promise<Codex0139Capability['feature_probe_results']> {
   if (opts.fake) {
     return {
       marketplace_list_json: process.env.SKS_CODEX_0139_FAKE_MARKETPLACE_FAIL === '1' ? 'failed' : 'passed',
-      sandbox_profile_alias: 'passed'
+      sandbox_profile_alias: process.env.SKS_CODEX_0139_FAKE_PROFILE_ALIAS_FAIL === '1' ? 'failed' : 'passed',
+      interrupt_agent_event_mapping: process.env.SKS_CODEX_0139_FAKE_INTERRUPT_FAIL === '1' ? 'failed' : 'passed',
+      rich_tool_schema_preservation: process.env.SKS_CODEX_0139_FAKE_RICH_SCHEMA_FAIL === '1' ? 'failed' : 'passed',
+      doctor_env_redaction: process.env.SKS_CODEX_0139_FAKE_DOCTOR_ENV_FAIL === '1' ? 'failed' : 'passed',
+      code_mode_web_search: process.env.SKS_CODEX_0139_FAKE_WEB_SEARCH_FAIL === '1' ? 'failed' : 'passed'
     }
   }
-  const timeoutMs = Math.max(1, Number(process.env.SKS_CODEX_0139_PROBE_TIMEOUT_MS || 3000) || 3000)
+  const timeoutMs = Math.max(1, Number(opts.timeoutMs || process.env.SKS_CODEX_0139_PROBE_TIMEOUT_MS || 3000) || 3000)
   if (!codexBin) {
-    return { marketplace_list_json: 'failed', sandbox_profile_alias: 'failed' }
+    return {
+      marketplace_list_json: 'failed',
+      sandbox_profile_alias: 'failed',
+      interrupt_agent_event_mapping: 'skipped',
+      rich_tool_schema_preservation: 'skipped',
+      doctor_env_redaction: 'skipped',
+      code_mode_web_search: 'skipped'
+    }
   }
   const marketplace = await runProcess(codexBin, ['plugin', 'marketplace', 'list', '--json'], { timeoutMs, maxOutputBytes: 256 * 1024 }).catch(() => ({ code: 1, stdout: '' }))
   const marketplaceListJson = marketplace.code === 0 && marketplaceSourcesPresent((marketplace as any).stdout) ? 'passed' as const : 'failed' as const
@@ -119,7 +155,11 @@ async function probeCodex0139Features(codexBin: string | null, opts: { fake?: bo
   const aliasOk = help.code === 0 && /(^|\s)-P[,\s]/m.test(String((help as any).stdout || ''))
   return {
     marketplace_list_json: marketplaceListJson,
-    sandbox_profile_alias: aliasOk ? 'passed' : 'failed'
+    sandbox_profile_alias: aliasOk ? 'passed' : 'failed',
+    interrupt_agent_event_mapping: 'skipped',
+    rich_tool_schema_preservation: 'skipped',
+    doctor_env_redaction: 'skipped',
+    code_mode_web_search: 'skipped'
   }
 }
 
@@ -128,8 +168,32 @@ export function marketplaceSourcesPresent(stdout: unknown): boolean {
     const parsed = JSON.parse(String(stdout || ''))
     const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.marketplaces) ? parsed.marketplaces : Array.isArray(parsed?.items) ? parsed.items : []
     if (!rows.length) return true
-    return rows.some((row: any) => typeof row?.source === 'string' && row.source.length > 0)
+    return rows.every((row: any) => typeof row?.source === 'string' && row.source.length > 0)
   } catch {
     return false
   }
+}
+
+export function codexHelpSupportsSandboxProfileAlias(stdout: unknown): boolean {
+  return /(^|\s)-P[,\s]+--profile\b|--profile[,\s]+-P\b|(^|\s)-P\b/m.test(String(stdout || ''))
+}
+
+export function redactCodexDoctorEnvDetails(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => redactCodexDoctorEnvDetails(item))
+  if (!value || typeof value !== 'object') {
+    return secretLikeValue(value) ? '<redacted>' : value
+  }
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+    if (secretLikeKey(key) || secretLikeValue(entry)) return [key, '<redacted>']
+    return [key, redactCodexDoctorEnvDetails(entry)]
+  }))
+}
+
+function secretLikeKey(key: string): boolean {
+  return /(?:api[_-]?key|auth[_-]?token|secret|password|credential|bearer|session[_-]?token)/i.test(key)
+}
+
+function secretLikeValue(value: unknown): boolean {
+  const text = typeof value === 'string' ? value : ''
+  return /(?:sk-[A-Za-z0-9_-]{6,}|Bearer\s+[A-Za-z0-9._-]{8,}|[A-Za-z0-9._-]{12,}\.[A-Za-z0-9._-]{12,}\.[A-Za-z0-9._-]{12,})/.test(text)
 }
