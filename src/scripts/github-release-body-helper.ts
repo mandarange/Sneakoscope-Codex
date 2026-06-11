@@ -8,6 +8,7 @@ const args = process.argv.slice(2)
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const truth = readJson('.sneakoscope/release-proof-truth.json') || readJson('dist/release-proof-truth.json')
 const codex0139 = readJson('.sneakoscope/codex-0139-capability.json')
+const codex0139Real = readJson('.sneakoscope/codex-0139-real-probe-summary.json')
 const zellij = readJson('.sneakoscope/reports/zellij-worker-pane-summary.json')
 const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8')
 const latest = latestChangelogSection(changelog)
@@ -25,6 +26,7 @@ const body = [
   `Release proof truth: ${truth ? '.sneakoscope/release-proof-truth.json' : 'missing'}`,
   `Codex SDK package: ${sdkVersion || 'unknown'}`,
   `External Codex CLI 0.139 capability: ${codex0139 ? `${codex0139.ok ? 'ok' : 'blocked'}${codex0139.parsed_version ? ` (${codex0139.parsed_version})` : ''}` : 'not recorded'}`,
+  `Codex 0.139 real probes: ${codex0139Real ? `${codex0139Real.ok ? 'ok' : 'blocked'} (${codex0139Real.actual_cli_probe_count || 0} actual CLI, ${codex0139Real.skipped_count || 0} skipped, ${codex0139Real.failed_count || 0} failed)` : 'not run in this release environment. Hermetic fixture gates: passed.'}`,
   `Zellij stacked panes: ${zellij ? `${zellij.stacked_applied_count || 0}/${zellij.stacked_requested_count || 0} applied, fallback ${zellij.stacked_fallback_count || 0}, SLOTS anchors ${zellij.duplicate_slot_anchor_count || 0}` : 'not recorded'}`,
   `Packlist: ${truth?.npm_packlist_count ?? 'unknown'} files / ${truth?.npm_packlist_bytes ?? 'unknown'} bytes`,
   ...(warnings.length ? [`Warnings: ${warnings.join('; ')}`] : ['Warnings: none']),
@@ -36,7 +38,7 @@ const body = [
 if (args.includes('--check')) {
   assertGate(Boolean(truth && truth.schema === 'sks.release-proof-truth.v1'), 'release proof truth missing; run npm run release:proof-truth first')
   assertGate(latest.version === pkg.version, 'latest changelog section must match package version', { latest: latest.version, package: pkg.version })
-  assertGate(body.includes(`Version: ${pkg.version}`) && body.includes('Commit:') && body.includes('Dirty:') && body.includes('Release proof truth:') && body.includes('Codex SDK package:') && body.includes('External Codex CLI 0.139 capability:') && body.includes('Zellij stacked panes:') && body.includes('Packlist:'), 'github release body helper missing source truth fields', { body })
+  assertGate(body.includes(`Version: ${pkg.version}`) && body.includes('Commit:') && body.includes('Dirty:') && body.includes('Release proof truth:') && body.includes('Codex SDK package:') && body.includes('External Codex CLI 0.139 capability:') && body.includes('Codex 0.139 real probes:') && body.includes('Zellij stacked panes:') && body.includes('Packlist:'), 'github release body helper missing source truth fields', { body })
   assertGate(!warnings.some((warning) => warning.includes('package version') || warning.includes('changelog latest') || warning.includes('release proof truth missing')), 'github release body helper source truth warnings must not include version/proof mismatch', { warnings, body })
 }
 

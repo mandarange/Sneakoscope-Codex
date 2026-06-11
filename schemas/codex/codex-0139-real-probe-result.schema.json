@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex/codex-0139-real-probe-result.schema.json",
+  "title": "SKS Codex 0.139 real probe result",
+  "type": "object",
+  "required": [
+    "schema",
+    "generated_at",
+    "codex_bin",
+    "version_text",
+    "parsed_version",
+    "require_real",
+    "overall_ok",
+    "probe_timeout_ms",
+    "probes",
+    "skipped",
+    "blockers"
+  ],
+  "properties": {
+    "schema": { "const": "sks.codex-0139-real-probe-result.v1" },
+    "generated_at": { "type": "string" },
+    "codex_bin": { "type": ["string", "null"] },
+    "version_text": { "type": ["string", "null"] },
+    "parsed_version": { "type": ["string", "null"] },
+    "require_real": { "type": "boolean" },
+    "overall_ok": { "type": "boolean" },
+    "probe_timeout_ms": { "type": "integer", "minimum": 1 },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code_mode_web_search",
+        "rich_tool_schema",
+        "doctor_env_redaction",
+        "marketplace_source_json",
+        "plugin_catalog_cache",
+        "sandbox_profile_alias",
+        "interrupt_agent_event",
+        "image_referenced_path",
+        "sandbox_proxy_preservation"
+      ],
+      "properties": {
+        "code_mode_web_search": { "$ref": "#/$defs/singleProbe" },
+        "rich_tool_schema": { "$ref": "#/$defs/singleProbe" },
+        "doctor_env_redaction": { "$ref": "#/$defs/singleProbe" },
+        "marketplace_source_json": { "$ref": "#/$defs/singleProbe" },
+        "plugin_catalog_cache": { "$ref": "#/$defs/singleProbe" },
+        "sandbox_profile_alias": { "$ref": "#/$defs/singleProbe" },
+        "interrupt_agent_event": { "$ref": "#/$defs/singleProbe" },
+        "image_referenced_path": { "$ref": "#/$defs/singleProbe" },
+        "sandbox_proxy_preservation": { "$ref": "#/$defs/singleProbe" }
+      }
+    },
+    "skipped": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "singleProbe": {
+      "type": "object",
+      "required": ["ok", "mode", "duration_ms", "artifact_paths", "evidence", "blockers"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "mode": {
+          "enum": [
+            "actual-cli",
+            "actual-sdk",
+            "actual-app-server",
+            "actual-sks-bridge",
+            "captured-real-fixture",
+            "skipped"
+          ]
+        },
+        "command_line": { "type": "array", "items": { "type": "string" } },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "stdout_tail": { "type": "string" },
+        "stderr_tail": { "type": "string" },
+        "artifact_paths": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "object" },
+        "blockers": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

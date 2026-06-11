@@ -4,6 +4,27 @@
 
 
 
+
+## [3.0.4] - 2026-06-10
+
+### Added
+
+- Actual Codex 0.139 real probe runner.
+- Real code-mode web search probe.
+- Real doctor env redaction probe.
+- Real plugin marketplace/source/cache probes.
+- Real `-P` sandbox profile alias probe.
+- Real rich schema preservation probe through SKS bridge and optional Codex SDK/tool path.
+- Real interrupt_agent event stream probe.
+- Real image referenced-path probe.
+- Real sandbox/proxy preservation probe.
+
+### Fixed
+
+- `codex:0139-real-probes` no longer passes with skipped high-value probes in require-real mode.
+- Actual probe results now write root + mission artifacts and release readiness summaries.
+- Optional real probes are separated from hermetic release gates but strict release can require them.
+
 ## [3.0.3] - 2026-06-10
 
 ### Added

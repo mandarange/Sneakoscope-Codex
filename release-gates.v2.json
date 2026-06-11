@@ -2436,14 +2436,15 @@
       "id": "codex:0139-real-probes",
       "command": "npm run codex:0139-real-probes --silent",
       "deps": [
-        "codex:0139-capability"
+        "codex:0139-capability",
+        "codex:0139-feature-probes"
       ],
       "resource": [
         "network",
         "fs-read"
       ],
       "side_effect": "real-env",
-      "timeout_ms": 120000,
+      "timeout_ms": 180000,
       "cache": {
         "enabled": false,
         "inputs": []
@@ -2454,7 +2455,7 @@
         "report_dir": "per-gate"
       },
       "preset": [
-        "real-check"
+        "release"
       ]
     },
     {
@@ -10539,6 +10540,322 @@
       },
       "preset": [
         "real-check"
+      ]
+    },
+    {
+      "id": "codex:0139-real-probes:require-real",
+      "command": "npm run codex:0139-real-probes:require-real --silent",
+      "deps": [
+        "codex:0139-real-probes"
+      ],
+      "resource": [
+        "network",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-code-mode-web-search-real",
+      "command": "npm run codex:0139-code-mode-web-search-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "network",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-rich-tool-schema-real",
+      "command": "npm run codex:0139-rich-tool-schema-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-doctor-env-real",
+      "command": "npm run codex:0139-doctor-env-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-plugin-marketplace-real",
+      "command": "npm run codex:0139-plugin-marketplace-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "network",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-plugin-cache-real",
+      "command": "npm run codex:0139-plugin-cache-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "network",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-sandbox-profile-alias-real",
+      "command": "npm run codex:0139-sandbox-profile-alias-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-interrupt-agent-real",
+      "command": "npm run codex:0139-interrupt-agent-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-image-path-real",
+      "command": "npm run codex:0139-image-path-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-sandbox-proxy-real",
+      "command": "npm run codex:0139-sandbox-proxy-real --silent",
+      "deps": [
+        "codex:0139-real-probes:require-real"
+      ],
+      "resource": [
+        "network",
+        "io-light"
+      ],
+      "side_effect": "real-env",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "real-check",
+        "strict-release"
+      ]
+    },
+    {
+      "id": "codex:0139-real-probe-summary",
+      "command": "npm run codex:0139-real-probe-summary --silent",
+      "deps": [
+        "codex:0139-real-probes"
+      ],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "doctor:codex-0139-real-probes",
+      "command": "npm run doctor:codex-0139-real-probes --silent",
+      "deps": [
+        "codex:0139-real-probe-summary"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
       ]
     }
   ]
