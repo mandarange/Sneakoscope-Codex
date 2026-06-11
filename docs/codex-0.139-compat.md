@@ -1,6 +1,6 @@
 # Codex 0.139 Compatibility
 
-SKS 3.0.1 tracks Codex CLI `rust-v0.139.0` (https://github.com/openai/codex/releases/tag/rust-v0.139.0). The minimum supported baseline stays `rust-v0.136.0`; 0.139 features are detected, recorded, and used opportunistically — never required.
+SKS 3.0.3 is Codex 0.139-aware: it bundles @openai/codex-sdk 0.138.0 at this release boundary, and it detects Codex 0.139 features from the external Codex CLI when that CLI is installed and supports them. The minimum supported baseline stays `rust-v0.136.0`; 0.139 features are detected, recorded, and used opportunistically rather than assumed for every environment. The release gates include hermetic fixtures and optional real probes.
 
 ## Capability detection
 
@@ -16,7 +16,7 @@ SKS 3.0.1 tracks Codex CLI `rust-v0.139.0` (https://github.com/openai/codex/rele
 | `supports_sandbox_profile_alias` | `-P` sandbox permissions profile alias (#27054). |
 | `supports_interrupt_agent_rename` | Multi-agent v2 renamed `close_agent` to `interrupt_agent` (#26994). |
 
-Probe mode (`SKS_CODEX_0139_PROBE=1`) additionally exercises `codex plugin marketplace list --json` (checking the new `source` field shape) and the `-P` alias in `codex --help`. `SKS_CODEX_0139_FAKE=1` with `SKS_CODEX_VERSION_FAKE` drives hermetic gate fixtures.
+Probe mode (`SKS_CODEX_0139_PROBE=1`) additionally exercises `codex plugin marketplace list --json` (checking the new `source` field shape) and the `-P` alias in `codex --help`. `SKS_CODEX_0139_FAKE=1` with `SKS_CODEX_VERSION_FAKE` drives hermetic gate fixtures. SKS is Codex-0.139-aware capability detection, not a claim that every installed environment bundles or always supports Codex 0.139 features.
 
 ## Runtime adaptations
 

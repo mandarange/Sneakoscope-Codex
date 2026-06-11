@@ -2,6 +2,7 @@ import path from 'node:path'
 import { findLatestMission, missionDir } from '../mission.js'
 import { readJson, writeJsonAtomic } from '../fsx.js'
 import { readAgentMessageBus, type AgentMessageBusEntry } from './agent-message-bus.js'
+import { buildZellijWorkerPaneSummary, type ZellijWorkerPaneSummary } from '../zellij/zellij-worker-pane-summary.js'
 
 export const RUNTIME_PROOF_SUMMARY_SCHEMA = 'sks.runtime-proof-summary.v1'
 
@@ -37,6 +38,15 @@ export interface RuntimeProofSummary {
     warning_count: number
     error_count: number
   }
+  zellij: Pick<ZellijWorkerPaneSummary,
+    | 'stacked_requested_count'
+    | 'stacked_applied_count'
+    | 'stacked_fallback_count'
+    | 'fallback_modes'
+    | 'pane_lock_wait_p95_ms'
+    | 'pane_lock_held_p95_ms'
+    | 'duplicate_slot_anchor_count'
+  >
   blockers: string[]
 }
 
@@ -52,6 +62,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const governor = await readJson<any>(path.join(agentsDir, 'naruto-concurrency-governor.json'), null)
   const messagesAll = await readAgentMessageBus(root, missionId, { max: 500 })
   const recentMessages = await readAgentMessageBus(root, missionId, { max: opts.maxMessages || 8 })
+  const zellijSummary = await buildZellijWorkerPaneSummary(root, missionId).catch(() => null)
   const failedMessages = messagesAll.filter((row) => row.event_type === 'worker_failed')
   const errorMessages = messagesAll.filter((row) => row.level === 'error')
   const telemetryAgeMs = telemetry?.updated_at ? Math.max(0, Date.now() - Date.parse(telemetry.updated_at)) : Number.MAX_SAFE_INTEGER
@@ -63,7 +74,8 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
     ...(!scheduler ? ['agent_scheduler_state_missing'] : []),
     ...(parallel?.passed === false ? parallel.blockers || ['parallel_runtime_proof_failed'] : []),
     ...(errorMessages.length ? ['agent_message_bus_error_blockers'] : []),
-    ...(telemetryAgeMs > 3000 ? ['zellij_telemetry_stale'] : [])
+    ...(telemetryAgeMs > 3000 ? ['zellij_telemetry_stale'] : []),
+    ...(zellijSummary?.blockers || [])
   ].map(String)
   const summary: RuntimeProofSummary = {
     schema: RUNTIME_PROOF_SUMMARY_SCHEMA,
@@ -97,6 +109,15 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
       warning_count: messagesAll.filter((row) => row.level === 'warning').length,
       error_count: errorMessages.length
     },
+    zellij: {
+      stacked_requested_count: Number(zellijSummary?.stacked_requested_count || 0),
+      stacked_applied_count: Number(zellijSummary?.stacked_applied_count || 0),
+      stacked_fallback_count: Number(zellijSummary?.stacked_fallback_count || 0),
+      fallback_modes: zellijSummary?.fallback_modes || {},
+      pane_lock_wait_p95_ms: Number(zellijSummary?.pane_lock_wait_p95_ms || 0),
+      pane_lock_held_p95_ms: Number(zellijSummary?.pane_lock_held_p95_ms || 0),
+      duplicate_slot_anchor_count: Number(zellijSummary?.duplicate_slot_anchor_count || 0)
+    },
     blockers
   }
   await writeJsonAtomic(path.join(agentsDir, 'runtime-proof-summary.json'), summary)
@@ -112,6 +133,10 @@ export function renderRuntimeProofSummary(summary: RuntimeProofSummary): string 
     `Visible/headless: ${summary.ui.visible_panes} / ${summary.ui.headless_workers}`,
     `Telemetry: ${summary.ui.stale ? `stale ${(summary.ui.telemetry_age_ms / 1000).toFixed(1)}s` : `fresh ${(summary.ui.telemetry_age_ms / 1000).toFixed(1)}s`}`,
     `Model calls max: ${summary.model_calls.max_observed}`,
+    `Zellij stacked panes: ${summary.zellij.stacked_applied_count}/${summary.zellij.stacked_requested_count} applied`,
+    `Stack fallback: ${summary.zellij.stacked_fallback_count}`,
+    `Pane lock wait p95: ${summary.zellij.pane_lock_wait_p95_ms}ms`,
+    `SLOTS anchors: ${summary.zellij.duplicate_slot_anchor_count}`,
     ...(summary.messages.recent.length ? [
       'Recent worker messages:',
       ...summary.messages.recent.map((row) => `  ${messageStatusLabel(row)} ${row.slot_id || row.worker_id}: ${row.message}`)

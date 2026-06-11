@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { runProcess, type RunProcessOptions } from '../fsx.js'
+import { runFakeZellij } from './zellij-fake-adapter.js'
 
 export const ZELLIJ_UNIX_SOCKET_PATH_LIMIT = 103
 
@@ -44,7 +45,15 @@ export async function runZellij(args: readonly string[] = [], opts: ZellijRunOpt
   if (Object.keys(preparedEnv.env).length > 0) runOpts.env = preparedEnv.env
   if (opts.stdoutFile !== undefined) runOpts.stdoutFile = opts.stdoutFile
   if (opts.stderrFile !== undefined) runOpts.stderrFile = opts.stderrFile
-  const result = await runProcess('zellij', args, runOpts)
+  const fakeOpts: { cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number; maxOutputBytes?: number } = {
+    cwd: runOpts.cwd || process.cwd(),
+    env: preparedEnv.env
+  }
+  if (runOpts.timeoutMs !== undefined) fakeOpts.timeoutMs = runOpts.timeoutMs
+  if (runOpts.maxOutputBytes !== undefined) fakeOpts.maxOutputBytes = runOpts.maxOutputBytes
+  const result = process.env.SKS_ZELLIJ_FAKE_ADAPTER === '1' || preparedEnv.env.SKS_ZELLIJ_FAKE_ADAPTER === '1'
+    ? await runFakeZellij(args, fakeOpts)
+    : await runProcess('zellij', args, runOpts)
   const ok = result.code === 0
   const stderr = String(result.stderr || '')
   const missing = result.code === -1 && /ENOENT|not found|spawn zellij/i.test(stderr)

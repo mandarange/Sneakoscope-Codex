@@ -260,6 +260,12 @@
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
     {
+      "file": "src/scripts/naruto-proof-zellij-stacked-summary-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped temp Zellij summary fixture artifacts under an mkdtemp root."
+    },
+    {
       "file": "src/scripts/postinstall-safe-side-effects-check.ts",
       "symbol": "postinstall",
       "token": "writeFileSync",
@@ -306,6 +312,12 @@
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/runtime-proof-zellij-stacked-summary-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes scoped temp Zellij summary fixture artifacts under an mkdtemp root."
     },
     {
       "file": "src/scripts/release-native-agent-fixture-check.ts",

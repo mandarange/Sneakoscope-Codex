@@ -26,6 +26,7 @@ const requiredDocs = [
   'docs/main-no-scout-worker-scout-policy.md',
   'docs/agent-terminal-lanes.md',
   'docs/migration/tmux-to-zellij.md',
+  'docs/codex-0.139-compat.md',
   'docs/codex-0.136-compat.md',
   'docs/codex-0.135-compat.md',
   'docs/triwiki-runtime-state.md',
@@ -73,6 +74,7 @@ const requiredDocs = [
   'docs/release-parallel-full-coverage.md',
   'docs/priority-closure-p0-p4.md',
   'docs/release-readiness.md',
+  'docs/release-proof-truth.md',
   'docs/legacy-upgrade-1.19.md',
   'docs/architecture-ts-rust-boundary.md',
   'docs/zellij-ui-design.md',
@@ -83,7 +85,9 @@ const requiredDocs = [
 const versionedDocs = new Set([
   'README.md',
   'CHANGELOG.md',
-  'docs/release-readiness.md'
+  'docs/codex-0.139-compat.md',
+  'docs/release-readiness.md',
+  'docs/release-proof-truth.md'
 ]);
 const requiredScripts = [
   'runtime:no-src-mjs',

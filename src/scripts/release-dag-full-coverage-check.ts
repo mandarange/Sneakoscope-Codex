@@ -144,6 +144,20 @@ const requiredReleasePresetIds = [
   'codex:0138-doctor',
   'doctor:codex-0138-fix',
   'codex:0138-feature-probes',
+  'codex:0139-capability',
+  'codex:0139-feature-probes',
+  'codex:0139-interrupt-agent',
+  'codex:0139-rich-tool-schema',
+  'codex:0139-doctor-env-redaction',
+  'codex:0139-code-mode-web-search',
+  'codex:0139-marketplace-source',
+  'codex:0139-sandbox-profile-alias',
+  'zellij:fake-adapter',
+  'zellij:pane-lock-open-worker-integration',
+  'zellij:stacked-fallback-integration',
+  'runtime:proof-zellij-stacked-summary',
+  'naruto:proof-zellij-stacked-summary',
+  'docs:codex-0139-wording',
   'codex-app:launcher',
   'codex-app:handoff-launch',
   'qa-loop:app-handoff-launch',
@@ -162,6 +176,8 @@ const requiredReleasePresetIds = [
 ]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
+const codex0139RequiredGates = requiredReleasePresetIds.filter((id) => id.startsWith('codex:0139'))
+const codex0139MissingRequiredGates = codex0139RequiredGates.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
 const allowed = legacyIds.filter((id) => allowlist.has(id)).map((id) => ({ id, reason: allowlist.get(id) }))
 const coverage = legacyIds.length ? (legacyIds.length - missing.length) / legacyIds.length : 1
 const schemaComplete = manifest.gates.every((gate) => gate.id && gate.command && Array.isArray(gate.deps) && Array.isArray(gate.resource) && gate.side_effect && gate.timeout_ms && gate.cache && gate.isolation && Array.isArray(gate.preset))
@@ -174,6 +190,8 @@ const report = {
   missing,
   required_release_preset_ids: requiredReleasePresetIds,
   missing_required_release_preset: missingRequiredReleasePreset,
+  codex_0139_required_gates: codex0139RequiredGates,
+  codex_0139_missing_required_gates: codex0139MissingRequiredGates,
   allowed,
   schema_complete: schemaComplete
 }

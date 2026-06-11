@@ -35,7 +35,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.0.2** tracks Codex CLI `rust-v0.139.0` and hardens the 3.0.0 swarm release: capability detection for code-mode web search, preserved `oneOf`/`allOf` tool schemas, plugin marketplace `source`/cached catalog, the `-P` sandbox profile alias, the multi-agent v2 `interrupt_agent` rename, Zellij stacked-pane version gates, pane-lock concurrency proof, release cache safety fixtures, agent message proof summaries, and release proof source-truth artifacts. See [docs/codex-0.139-compat.md](docs/codex-0.139-compat.md).
+SKS **3.0.3** is Codex 0.139-aware while it bundles @openai/codex-sdk 0.138.0 at this release boundary. It detects and uses 0.139 features from the external Codex CLI when that CLI supports them, with release gates that include hermetic fixtures and optional real probes for code-mode web search markers, preserved `oneOf`/`allOf` tool schemas, plugin marketplace `source`, the `-P` profile alias, the multi-agent v2 `interrupt_agent` rename, Zellij stacked/fallback pane proof, pane-lock openWorkerPane integration, release cache safety fixtures, runtime proof summaries, and release proof source-truth artifacts. See [docs/codex-0.139-compat.md](docs/codex-0.139-compat.md).
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 

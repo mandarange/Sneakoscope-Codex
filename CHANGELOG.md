@@ -4,6 +4,22 @@
 
 
 
+## [3.0.3] - 2026-06-10
+
+### Added
+
+- Codex 0.139 required release coverage across `codex:0139-capability` and the new feature fixture gates.
+- Codex 0.139 feature-probe fixtures for `interrupt_agent`, `oneOf`/`allOf`, doctor env redaction, marketplace `source`, `-P` profile alias, and code-mode web search availability.
+- Real openWorkerPane pane-lock integration blackbox through a fake Zellij adapter.
+- Runtime proof summary stacked/fallback visibility with pane-lock p95 and SLOTS anchor counts.
+- Release wording clarifying that SKS bundles @openai/codex-sdk 0.138.0 while Codex 0.139 features come from the external Codex CLI when supported; release gates include hermetic fixtures and optional real probes.
+
+### Fixed
+
+- `codex:0139-capability` and its high-value fixture gates are now required by release-dag-full-coverage.
+- Codex 0.139 capability detector no longer relies only on version flags for high-value features.
+- Zellij pane-lock proof now exercises the SKS worker pane manager path rather than only synthetic lock simulation.
+
 
 ## [3.0.2] - 2026-06-10
 
