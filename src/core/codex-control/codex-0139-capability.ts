@@ -24,6 +24,7 @@ export interface Codex0139Capability {
   version_text: string | null
   parsed_version: string | null
   supports_code_mode_web_search: boolean
+  supports_code_mode_web_search_real_verified?: boolean
   supports_rich_tool_schemas: boolean
   supports_doctor_env_details: boolean
   supports_marketplace_source_field: boolean
@@ -92,6 +93,7 @@ export async function detectCodex0139Capability(input: { codexBin?: string | nul
     version_text: versionText || null,
     parsed_version: parsed,
     supports_code_mode_web_search: codeSearchOk,
+    supports_code_mode_web_search_real_verified: false,
     supports_rich_tool_schemas: richSchemaOk,
     supports_doctor_env_details: doctorEnvOk,
     supports_marketplace_source_field: marketplaceOk,
@@ -152,7 +154,9 @@ async function probeCodex0139Features(codexBin: string | null, opts: { fake?: bo
   const marketplace = await runProcess(codexBin, ['plugin', 'marketplace', 'list', '--json'], { timeoutMs, maxOutputBytes: 256 * 1024 }).catch(() => ({ code: 1, stdout: '' }))
   const marketplaceListJson = marketplace.code === 0 && marketplaceSourcesPresent((marketplace as any).stdout) ? 'passed' as const : 'failed' as const
   const help = await runProcess(codexBin, ['--help'], { timeoutMs, maxOutputBytes: 256 * 1024 }).catch(() => ({ code: 1, stdout: '' }))
-  const aliasOk = help.code === 0 && /(^|\s)-P[,\s]/m.test(String((help as any).stdout || ''))
+  const sandboxHelp = await runProcess(codexBin, ['sandbox', '--help'], { timeoutMs, maxOutputBytes: 256 * 1024 }).catch(() => ({ code: 1, stdout: '' }))
+  const aliasOk = help.code === 0 && codexHelpSupportsSandboxProfileAlias((help as any).stdout)
+    || sandboxHelp.code === 0 && codexHelpSupportsSandboxProfileAlias((sandboxHelp as any).stdout)
   return {
     marketplace_list_json: marketplaceListJson,
     sandbox_profile_alias: aliasOk ? 'passed' : 'failed',
@@ -168,14 +172,15 @@ export function marketplaceSourcesPresent(stdout: unknown): boolean {
     const parsed = JSON.parse(String(stdout || ''))
     const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.marketplaces) ? parsed.marketplaces : Array.isArray(parsed?.items) ? parsed.items : []
     if (!rows.length) return true
-    return rows.every((row: any) => typeof row?.source === 'string' && row.source.length > 0)
+    return rows.every((row: any) => typeof row?.source === 'string' && row.source.length > 0
+      || typeof row?.marketplaceSource?.source === 'string' && row.marketplaceSource.source.length > 0)
   } catch {
     return false
   }
 }
 
 export function codexHelpSupportsSandboxProfileAlias(stdout: unknown): boolean {
-  return /(^|\s)-P[,\s]+--profile\b|--profile[,\s]+-P\b|(^|\s)-P\b/m.test(String(stdout || ''))
+  return /(^|\s)-P[,\s]+--(?:permissions-)?profile\b|--(?:permissions-)?profile[,\s]+-P\b|(^|\s)-P\b/m.test(String(stdout || ''))
 }
 
 export function redactCodexDoctorEnvDetails(value: unknown): unknown {

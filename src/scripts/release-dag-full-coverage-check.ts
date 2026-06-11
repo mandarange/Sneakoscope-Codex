@@ -18,6 +18,7 @@ const allowlist = new Map([
 ])
 const gateIds = new Set(manifest.gates.map((gate) => gate.id))
 const releasePresetIds = new Set(manifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release')).map((gate) => gate.id))
+const realCheckPresetIds = new Set(manifest.gates.filter((gate) => Array.isArray(gate.preset) && (gate.preset.includes('real-check') || gate.preset.includes('strict-release'))).map((gate) => gate.id))
 const requiredReleasePresetIds = [
   'zellij:first-slot-down-stack',
   'zellij:slot-renderer-proof-semantics',
@@ -152,6 +153,9 @@ const requiredReleasePresetIds = [
   'codex:0139-code-mode-web-search',
   'codex:0139-marketplace-source',
   'codex:0139-sandbox-profile-alias',
+  'codex:0139-real-probes',
+  'codex:0139-real-probe-summary',
+  'doctor:codex-0139-real-probes',
   'zellij:fake-adapter',
   'zellij:pane-lock-open-worker-integration',
   'zellij:stacked-fallback-integration',
@@ -174,8 +178,21 @@ const requiredReleasePresetIds = [
   'codex:effort-auto-discovery',
   'codex:account-usage-autodiscovery'
 ]
+const requiredRealCheckPresetIds = [
+  'codex:0139-real-probes:require-real',
+  'codex:0139-code-mode-web-search-real',
+  'codex:0139-rich-tool-schema-real',
+  'codex:0139-doctor-env-real',
+  'codex:0139-plugin-marketplace-real',
+  'codex:0139-plugin-cache-real',
+  'codex:0139-sandbox-profile-alias-real',
+  'codex:0139-interrupt-agent-real',
+  'codex:0139-image-path-real',
+  'codex:0139-sandbox-proxy-real'
+]
 const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
+const missingRequiredRealCheckPreset = requiredRealCheckPresetIds.filter((id) => !gateIds.has(id) || !realCheckPresetIds.has(id))
 const codex0139RequiredGates = requiredReleasePresetIds.filter((id) => id.startsWith('codex:0139'))
 const codex0139MissingRequiredGates = codex0139RequiredGates.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
 const allowed = legacyIds.filter((id) => allowlist.has(id)).map((id) => ({ id, reason: allowlist.get(id) }))
@@ -183,13 +200,15 @@ const coverage = legacyIds.length ? (legacyIds.length - missing.length) / legacy
 const schemaComplete = manifest.gates.every((gate) => gate.id && gate.command && Array.isArray(gate.deps) && Array.isArray(gate.resource) && gate.side_effect && gate.timeout_ms && gate.cache && gate.isolation && Array.isArray(gate.preset))
 const report = {
   schema: 'sks.release-dag-full-coverage-check.v1',
-  ok: missing.length === 0 && missingRequiredReleasePreset.length === 0 && coverage >= 0.95 && schemaComplete,
+  ok: missing.length === 0 && missingRequiredReleasePreset.length === 0 && missingRequiredRealCheckPreset.length === 0 && coverage >= 0.95 && schemaComplete,
   legacy_gate_count: legacyIds.length,
   v2_gate_count: manifest.gates.length,
   coverage,
   missing,
   required_release_preset_ids: requiredReleasePresetIds,
   missing_required_release_preset: missingRequiredReleasePreset,
+  required_real_check_preset_ids: requiredRealCheckPresetIds,
+  missing_required_real_check_preset: missingRequiredRealCheckPreset,
   codex_0139_required_gates: codex0139RequiredGates,
   codex_0139_missing_required_gates: codex0139MissingRequiredGates,
   allowed,

@@ -46,6 +46,9 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const codex0138Doctor = input.codex_0138_doctor || null
   if (codex0138Doctor?.ok === false) for (const blocker of normalizeList(codex0138Doctor.blockers)) warnings.add(blocker)
   for (const warning of normalizeList(codex0138Doctor?.warnings)) warnings.add(warning)
+  const codex0139RealProbes = input.codex_0139_real_probes || null
+  if (codex0139RealProbes?.real_probes_last_run_status === 'blocked') warnings.add('codex_0139_real_probes_blocked')
+  if (codex0139RealProbes?.real_probes_last_run_status === 'not_run') warnings.add('codex_0139_real_probes_not_run')
   for (const warning of normalizeList(input.codex_plugin_app_template_policy?.doctor_warnings)) warnings.add(warning)
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
   const localModel = input.local_model || {}
@@ -95,6 +98,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     },
     codex_doctor: codexDoctor || null,
     codex_0138_doctor: codex0138Doctor,
+    codex_0139_real_probes: codex0139RealProbes,
     codex_plugin_inventory: input.codex_plugin_inventory || null,
     codex_plugin_app_template_policy: input.codex_plugin_app_template_policy || null,
     fast_mode_ready: input.fast_mode_ready !== false,
