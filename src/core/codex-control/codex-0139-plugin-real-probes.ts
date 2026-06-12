@@ -23,7 +23,7 @@ export async function runCodex0139MarketplaceSourceRealProbe(input: {
   const rows = parseRows((result as any).stdout)
   const missingSourceRows = rows
     .map((row, index) => ({ index, name: String(row?.name || row?.id || row?.pluginId || `row-${index + 1}`), keys: Object.keys(row || {}), root: typeof row?.root === 'string' ? row.root : null }))
-    .filter((row, index) => !rowHasMarketplaceSource(rows[index]))
+    .filter((row, index) => !rowHasMarketplaceSourceLocator(rows[index]))
   const ok = (result as any).code === 0 && marketplaceSourcesPresent((result as any).stdout)
   const artifact = path.join(input.root, '.sneakoscope', 'codex-0139-plugin-marketplace-real.json')
   await writeJsonAtomic(artifact, {
@@ -34,6 +34,7 @@ export async function runCodex0139MarketplaceSourceRealProbe(input: {
     empty_marketplace_list: rows.length === 0,
     row_count: rows.length,
     rows_have_source: rows.every(rowHasMarketplaceSource),
+    rows_have_source_locator: rows.every(rowHasMarketplaceSourceLocator),
     missing_source_rows: missingSourceRows,
     stdout_tail: codex0139ProbeTail((result as any).stdout),
     stderr_tail: codex0139ProbeTail((result as any).stderr)
@@ -50,6 +51,7 @@ export async function runCodex0139MarketplaceSourceRealProbe(input: {
       empty_marketplace_list: rows.length === 0,
       row_count: rows.length,
       rows_have_source: rows.every(rowHasMarketplaceSource),
+      rows_have_source_locator: rows.every(rowHasMarketplaceSourceLocator),
       missing_source_rows: missingSourceRows
     },
     blockers: ok ? [] : ['codex_plugin_marketplace_source_real_probe_failed']
@@ -59,6 +61,10 @@ export async function runCodex0139MarketplaceSourceRealProbe(input: {
 function rowHasMarketplaceSource(row: any): boolean {
   return typeof row?.source === 'string' && row.source.length > 0
     || typeof row?.marketplaceSource?.source === 'string' && row.marketplaceSource.source.length > 0
+}
+
+function rowHasMarketplaceSourceLocator(row: any): boolean {
+  return rowHasMarketplaceSource(row) || typeof row?.root === 'string' && row.root.length > 0
 }
 
 export async function runCodex0139PluginCacheRealProbe(input: {

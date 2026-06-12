@@ -1,11 +1,11 @@
 {
   "schema": "sks.codex-0139-real-probe-result.v1",
-  "generated_at": "2026-06-11T11:16:54.530Z",
+  "generated_at": "2026-06-12T04:46:55.269Z",
   "codex_bin": "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
   "version_text": "codex-cli 0.139.0",
   "parsed_version": "0.139.0",
   "require_real": true,
-  "overall_ok": false,
+  "overall_ok": true,
   "probe_timeout_ms": 120000,
   "probes": {
     "code_mode_web_search": {
@@ -15,40 +15,42 @@
         "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
         "exec",
         "--cd",
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781176554552",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781239416071",
         "--json",
         "--output-last-message",
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781176554552/last-message.txt",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781239416071/last-message.txt",
         "--model",
         "gpt-5.5",
         "In code mode, use standalone web search to find the title of https://example.com or OpenAI Codex release 0.139. Return JSON {\"used_web_search\":true,\"answer\":\"...\",\"sources\":[...]}."
       ],
-      "duration_ms": 50407,
-      "stdout_tail": "pack.json' -g 'AGENTS.md' -g '.codex/SNEAKOSCOPE.md'\\\"\",\"aggregated_output\":\"/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781176554552\\n\",\"exit_code\":1,\"status\":\"failed\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_4\",\"type\":\"web_search\",\"id\":\"ws_094a66c588dd8d25016a2a98fa942c8191bf6ea72621abac88\",\"query\":\"\",\"action\":{\"type\":\"other\"}}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_4\",\"type\":\"web_search\",\"id\":\"ws_094a66c588dd8d25016a2a98fa942c8191bf6ea72621abac88\",\"query\":\"https://example.com/\",\"action\":{\"type\":\"other\"}}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_5\",\"type\":\"agent_message\",\"text\":\"{\\\"used_web_search\\\":true,\\\"answer\\\":\\\"Example Domain\\\",\\\"sources\\\":[\\\"https://example.com/\\\"]}\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_6\",\"type\":\"agent_message\",\"text\":\"I’ll run the Honest Mode check now: confirming the asked-for output, the web evidence used, and any gaps before restating the answer.\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_7\",\"type\":\"command_execution\",\"command\":\"/bin/zsh -lc \\\"sed -n '1,220p' /Users/weklem/Desktop/devs/Sneakoscope-Codex/.agents/skills/honest-mode/SKILL.md\\\"\",\"aggregated_output\":\"\",\"exit_code\":null,\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_7\",\"type\":\"command_execution\",\"command\":\"/bin/zsh -lc \\\"sed -n '1,220p' /Users/weklem/Desktop/devs/Sneakoscope-Codex/.agents/skills/honest-mode/SKILL.md\\\"\",\"aggregated_output\":\"---\\nname: honest-mode\\ndescription: Required final SKS verification pass before claiming a task is complete.\\n---\\n\\nBefore final: include a completion summary explaining what was done, what changed for the user/repo, what was verified, and what remains unverified or blocked. Then restate the goal, compare result to evidence, list tests/commands/inspections, state uncertainty or blockers plainly, and do not claim completion beyond evidence. Full routes must pass reflection-gate.json first. Include concise SKS Honest Mode or 솔직모드 when required.\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_8\",\"type\":\"web_search\",\"id\":\"ws_094a66c588dd8d25016a2a990cf3a8819194856dc9f8e14ef9\",\"query\":\"\",\"action\":{\"type\":\"other\"}}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_8\",\"type\":\"web_search\",\"id\":\"ws_094a66c588dd8d25016a2a990cf3a8819194856dc9f8e14ef9\",\"query\":\"https://example.com/\",\"action\":{\"type\":\"other\"}}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_9\",\"type\":\"agent_message\",\"text\":\"**SKS Honest Mode**\\n\\nGoal re-checked: use standalone web search to find the title of `https://example.com` or OpenAI Codex release `0.139`, and return the requested JSON.\\n\\nVerified evidence: I opened `https://example.com/`; the page title/content heading is `Example Domain`. No repo files were changed. No tests were needed.\\n\\nRemaining gap: I did not search for the OpenAI Codex release `0.139` because the prompt allowed either target, and `example.com` directly satisfied the request.\\n\\n```json\\n{\\\"used_web_search\\\":true,\\\"answer\\\":\\\"Example Domain\\\",\\\"sources\\\":[\\\"https://example.com/\\\"]}\\n```\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_10\",\"type\":\"agent_message\",\"text\":\"**Completion Summary**\\n\\nI used standalone web search to open `https://example.com/` and identify its title/content heading as `Example Domain`. Nothing was changed in the repo or workspace. I verified the result directly from the page. The only remaining gap is that I did not also research OpenAI Codex release `0.139`, because your prompt allowed either target.\\n\\n**SKS Honest Mode**\\n\\nGoal: return JSON with `used_web_search:true`, the answer, and sources.  \\nEvidence: `https://example.com/` was opened and showed `Example Domain`.  \\nUnverified: OpenAI Codex release `0.139`.\\n\\n```json\\n{\\\"used_web_search\\\":true,\\\"answer\\\":\\\"Example Domain\\\",\\\"sources\\\":[\\\"https://example.com/\\\"]}\\n```\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":104013,\"cached_input_tokens\":80768,\"output_tokens\":1225,\"reasoning_output_tokens\":468}}\n",
-      "stderr_tail": "Reading additional input from stdin...\n2026-06-11T11:15:55.841667Z ERROR rmcp::transport::worker: worker quit with fatal: Transport channel closed, when Auth(AuthorizationRequired)\n",
+      "duration_ms": 54415,
+      "stdout_tail": "to_avoid_writer_blocking\\\",\\n    \\\"zellij_lane_resource_throttle_ms\\\": 100,\\n    \\\"zellij_lane_nice_level\\\": 0,\\n    \\\"zellij_lane_pane_id_source_ok\\\": true,\\n    \\\"zellij_lane_no_flicker_verified\\\": true,\\n    \\\"zellij_lane_survival_checked\\\": true,\\n    \\\"zellij_lane_unexpected_close_count\\\": 0,\\n    \\\"zellij_lane_auto_reopen_count\\\": 0,\\n    \\\"zellij_pane_launch_ledger\\\": \\\"agent-zellij-pane-launch-ledger.jsonl\\\",\\n    \\\"zellij_pane_launch_count\\\": 0,\\n    \\\"zellij_pane_verified\\\": true,\\n    \\\"zellij_pane_proof\\\": \\\"zellij-pane-proof.json\\\",\\n    \\\"zellij_pane_count\\\": 0,\\n    \\\"real_truth_summary\\\": {\\n      \\\"fake_backend\\\": true,\\n      \\\"zellij_pane_verified\\\": true,\\n      \\\"real_zellij_status\\\": \\\"passed\\\",\\n      \\\"cleanup_executor_status\\\": \\\"not_run\\\",\\n      \\\"work_graph_quality_score\\\": 0.1,\\n      \\\"fake_vs_real_policy\\\": \\\"fake-real-proof-policy.json\\\"\\n    },\\n    \\\"intelligent_work_graph\\\": \\\"agent-intelligent-work-graph.json\\\",\\n    \\\"test_ownership_map\\\": \\\"agent-test-ownership-map.json\\\",\\n    \\\"critical_path\\\": \\\"agent-critical-path.json\\\",\\n    \\\"integration_bottlenecks\\\": \\\"agent-integration-bottlenecks.json\\\",\\n    \\\"work_graph_quality_score\\\": 0.1,\\n    \\\"work_graph_quality_partial\\\": true,\\n    \\\"terminal_reports_match_generations\\\": true,\\n    \\\"ledger_hash_chain_ok\\\": true,\\n    \\\"no_overlap_ok\\\": true,\\n    \\\"consensus_ok\\\": true,\\n    \\\"output_tail_report\\\": \\\"agent-output-tails.json\\\",\\n    \\\"output_tail_records\\\": 0,\\n    \\\"timeout_kill_report\\\": \\\"agent-timeout-kill-report.json\\\",\\n    \\\"timeout_killed_sessions\\\": [],\\n    \\\"cleanup_report\\\": \\\"agent-cleanup.json\\\",\\n    \\\"janitor_report\\\": \\\"agent-janitor-report.json\\\",\\n    \\\"janitor_ok\\\": true,\\n    \\\"trust_report\\\": \\\"agent-trust-report.json\\\",\\n    \\\"wrongness_records\\\": \\\"agent-wrongness-records.json\\\",\\n    \\\"triwiki_context\\\": \\\"agent-triwiki-context.json\\\",\\n    \\\"triwiki_context_consulted\\\": false,\\n    \\\"context_pack_hash\\\": null,\\n    \\\"triwiki_use_first_count\\\": 0,\\n    \\\"triwiki_hydrate_first_count\\\": 0,\\n    \\\"triwiki_claim_count\\\": 0,\\n    \\\"changed_files_lease_checked\\\": false,\\n    \\\"dependency_collision_risk\\\": [],\\n    \\\"blockers\\\": []\\n  }\\n}\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_9\",\"type\":\"agent_message\",\"text\":\"Ran `sks agent run latest --mock --json`.\\n\\nResult: passed.\\n\\nKey evidence:\\n- `ok: true`\\n- `mission_id: M-20260612-134411-dd98`\\n- `backend: fake`\\n- `agent_count: 5`\\n- `native_cli_worker_process_count: 5`\\n- `all_sessions_closed: true`\\n- `proof.status: passed`\\n- `blockers: []`\\n\\nHonest Mode: verified the hook’s requested mock intake command completed successfully. This is fixture/mock evidence only, not a real clone implementation run. No files were edited.\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_10\",\"type\":\"agent_message\",\"text\":\"Completion summary: I answered the original web-search request with JSON after opening `https://example.com` via standalone web search and verifying its title is `Example Domain`. Then I handled the stop hook by checking the `$Naruto` skill instructions and running the requested diagnostic command: `sks agent run latest --mock --json`.\\n\\nWhat changed: no repo files were edited. The diagnostic command created/updated SKS mission artifacts under `.sneakoscope/missions/M-20260612-134411-dd98/agents`.\\n\\nVerified: `sks agent run latest --mock --json` exited `0` with `ok: true`, `proof.status: passed`, `agent_count: 5`, `native_cli_worker_process_count: 5`, `all_sessions_closed: true`, and `blockers: []`.\\n\\nRemaining gaps: the diagnostic used `backend: fake`, so it proves the mock/native intake path is healthy, not that a real `$Naruto` clone implementation run completed.\\n\\nHonest Mode: passed for the specific hook request. No unsupported implementation or finalization claim is being made.\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":145050,\"cached_input_tokens\":92416,\"output_tokens\":1341,\"reasoning_output_tokens\":553}}\n",
+      "stderr_tail": "/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:44:19.450636Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:44:24.378226Z  WARN codex_protocol::openai_models: Model personality requested but model_messages is missing, falling back to base instructions. model=gpt-5.5 personality=pragmatic\n2026-06-12T04:44:24.498408Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:44:24.518561Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.518573Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.519017Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.519024Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.519437Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.519443Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.519828Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.519838Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.520224Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.520229Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.521112Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:24.521120Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:44:25.016467Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:44:25.027283Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:44:25.027330Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:44:30.043572Z  WARN codex_protocol::openai_models: Model personality requested but model_messages is missing, falling back to base instructions. model=gpt-5.5 personality=pragmatic\n2026-06-12T04:44:30.155334Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: handshaking with MCP server failed: Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<rmcp::transport::auth::AuthClient<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Auth error: OAuth authorization required, when send initialize request\n2026-06-12T04:44:30.155496Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: No such file or directory (os error 2)\n",
       "artifact_paths": [
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781176554552",
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781176554552/last-message.txt"
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781239416071",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781239416071/last-message.txt"
       ],
       "evidence": {
         "saw_web_search_event": true,
         "saw_plaintext_result": true,
         "result_contains_expected_marker": true,
-        "output_file": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781176554552/last-message.txt"
+        "process_exited_successfully": true,
+        "process_warning": null,
+        "output_file": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/web-search-1781239416071/last-message.txt"
       },
       "blockers": []
     },
     "rich_tool_schema": {
       "ok": true,
       "mode": "actual-sks-bridge",
-      "duration_ms": 116,
+      "duration_ms": 94,
       "stdout_tail": "codex-cli 0.139.0\n",
       "stderr_tail": "",
       "artifact_paths": [
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/rich-schema-1781176604960/captured-tool-schema.json"
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/rich-schema-1781239470487/captured-tool-schema.json"
       ],
       "evidence": {
-        "captured_schema_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/rich-schema-1781176604960/captured-tool-schema.json",
+        "captured_schema_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/rich-schema-1781239470487/captured-tool-schema.json",
         "oneOf_preserved": true,
         "allOf_preserved": true,
         "nested_target_preserved": true,
@@ -69,22 +71,24 @@
         "doctor",
         "--json"
       ],
-      "duration_ms": 8817,
-      "stdout_tail": ")\",\n        \"memories DB\": \"/Users/weklem/.codex/memories_1.sqlite (file)\",\n        \"memories DB integrity\": \"ok\",\n        \"sqlite home\": \"/Users/weklem/.codex (dir)\",\n        \"state DB\": \"/Users/weklem/.codex/state_5.sqlite (file)\",\n        \"state DB integrity\": \"ok\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 3946\n    },\n    \"state.rollout_db_parity\": {\n      \"id\": \"state.rollout_db_parity\",\n      \"category\": \"threads\",\n      \"status\": \"ok\",\n      \"summary\": \"rollout files and state DB thread inventory agree\",\n      \"details\": {\n        \"default model provider\": \"codex-lb\",\n        \"rollout DB active files\": \"1468\",\n        \"rollout DB active rows\": \"1468\",\n        \"rollout DB archive mismatches\": \"0\",\n        \"rollout DB archived files\": \"1\",\n        \"rollout DB archived rows\": \"1\",\n        \"rollout DB duplicate DB paths\": \"0\",\n        \"rollout DB duplicate rollout thread ids\": \"0\",\n        \"rollout DB malformed file names\": \"0\",\n        \"rollout DB missing active rows\": \"0\",\n        \"rollout DB missing archived rows\": \"0\",\n        \"rollout DB model providers\": \"codex-lb=1081, openai=388\",\n        \"rollout DB rows\": \"1469\",\n        \"rollout DB scan cap reached\": \"false\",\n        \"rollout DB scan errors\": \"0\",\n        \"rollout DB sources\": \"subagent:thread_spawn=762, vscode=330, exec=247, cli=117, subagent:other=12, subagent:memory_consolidation=1\",\n        \"rollout DB stale rows\": \"0\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 8347\n    },\n    \"system.environment\": {\n      \"id\": \"system.environment\",\n      \"category\": \"system\",\n      \"status\": \"ok\",\n      \"summary\": \"OS language ko-KR\",\n      \"details\": {\n        \"EDITOR\": \"set\",\n        \"GH_PAGER\": \"set\",\n        \"GIT_PAGER\": \"set\",\n        \"LANG\": \"C.UTF-8\",\n        \"LC_ALL\": \"C.UTF-8\",\n        \"LC_CTYPE\": \"UTF-8\",\n        \"PAGER\": \"set\",\n        \"VISUAL\": \"not set\",\n        \"os\": \"Mac OS 26.4.1 [64-bit]\",\n        \"os language\": \"ko-KR\",\n        \"os type\": \"Mac OS\",\n        \"os version\": \"26.4.1\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 5\n    },\n    \"terminal.env\": {\n      \"id\": \"terminal.env\",\n      \"category\": \"terminal\",\n      \"status\": \"ok\",\n      \"summary\": \"terminal metadata was detected\",\n      \"details\": {\n        \"COLORTERM\": \"truecolor\",\n        \"NO_COLOR\": \"1\",\n        \"TERM_PROGRAM\": \"WarpTerminal\",\n        \"color output\": \"disabled (NO_COLOR)\",\n        \"effective locale\": \"C.UTF-8\",\n        \"multiplexer\": \"zellij 0.44.3\",\n        \"stderr is terminal\": \"false\",\n        \"stdin is terminal\": \"false\",\n        \"stdout is terminal\": \"false\",\n        \"terminal\": \"Warp\",\n        \"terminal size\": \"80x24\",\n        \"terminal version\": \"v0.2026.06.03.09.49.stable_02\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 7\n    },\n    \"terminal.title\": {\n      \"id\": \"terminal.title\",\n      \"category\": \"title\",\n      \"status\": \"ok\",\n      \"summary\": \"terminal title default\",\n      \"details\": {\n        \"terminal title activity\": \"true\",\n        \"terminal title items\": \"activity, project-name\",\n        \"terminal title project source\": \"git repo root\",\n        \"terminal title project value\": \"Sneakoscope-Codex\",\n        \"terminal title source\": \"default\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 0\n    },\n    \"updates.status\": {\n      \"id\": \"updates.status\",\n      \"category\": \"updates\",\n      \"status\": \"ok\",\n      \"summary\": \"update configuration is locally consistent\",\n      \"details\": {\n        \"cached latest version\": \"0.139.0\",\n        \"check for update on startup\": \"true\",\n        \"last checked at\": \"2026-06-11T10:49:44.215495Z\",\n        \"latest version\": \"0.139.0\",\n        \"latest version status\": \"current version is not older\",\n        \"npm update target\": \"/Users/weklem/.nvm/versions/node/v24.0.2/lib/node_modules/@openai/codex\",\n        \"update action\": \"npm install -g @openai/codex\",\n        \"version cache\": \"/Users/weklem/.codex/version.json\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 205\n    }\n  }\n}\n",
+      "duration_ms": 10564,
+      "stdout_tail": "_2.sqlite (file)\",\n        \"log DB integrity\": \"ok\",\n        \"log dir\": \"/Users/weklem/.codex/log (dir)\",\n        \"memories DB\": \"/Users/weklem/.codex/memories_1.sqlite (file)\",\n        \"memories DB integrity\": \"ok\",\n        \"sqlite home\": \"/Users/weklem/.codex (dir)\",\n        \"state DB\": \"/Users/weklem/.codex/state_5.sqlite (file)\",\n        \"state DB integrity\": \"ok\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 4170\n    },\n    \"state.rollout_db_parity\": {\n      \"id\": \"state.rollout_db_parity\",\n      \"category\": \"threads\",\n      \"status\": \"ok\",\n      \"summary\": \"rollout files and state DB thread inventory agree\",\n      \"details\": {\n        \"default model provider\": \"codex-lb\",\n        \"rollout DB active files\": \"1474\",\n        \"rollout DB active rows\": \"1474\",\n        \"rollout DB archive mismatches\": \"0\",\n        \"rollout DB archived files\": \"1\",\n        \"rollout DB archived rows\": \"1\",\n        \"rollout DB duplicate DB paths\": \"0\",\n        \"rollout DB duplicate rollout thread ids\": \"0\",\n        \"rollout DB malformed file names\": \"0\",\n        \"rollout DB missing active rows\": \"0\",\n        \"rollout DB missing archived rows\": \"0\",\n        \"rollout DB model providers\": \"codex-lb=1087, openai=388\",\n        \"rollout DB rows\": \"1475\",\n        \"rollout DB scan cap reached\": \"false\",\n        \"rollout DB scan errors\": \"0\",\n        \"rollout DB sources\": \"subagent:thread_spawn=762, vscode=330, exec=253, cli=117, subagent:other=12, subagent:memory_consolidation=1\",\n        \"rollout DB stale rows\": \"0\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 10051\n    },\n    \"system.environment\": {\n      \"id\": \"system.environment\",\n      \"category\": \"system\",\n      \"status\": \"ok\",\n      \"summary\": \"OS language ko-KR\",\n      \"details\": {\n        \"EDITOR\": \"set\",\n        \"GH_PAGER\": \"set\",\n        \"GIT_PAGER\": \"set\",\n        \"LANG\": \"C.UTF-8\",\n        \"LC_ALL\": \"C.UTF-8\",\n        \"LC_CTYPE\": \"C.UTF-8\",\n        \"PAGER\": \"set\",\n        \"VISUAL\": \"not set\",\n        \"os\": \"Mac OS 26.4.1 [64-bit]\",\n        \"os language\": \"ko-KR\",\n        \"os type\": \"Mac OS\",\n        \"os version\": \"26.4.1\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 9\n    },\n    \"terminal.env\": {\n      \"id\": \"terminal.env\",\n      \"category\": \"terminal\",\n      \"status\": \"ok\",\n      \"summary\": \"terminal metadata was detected\",\n      \"details\": {\n        \"COLORTERM\": \"present\",\n        \"NO_COLOR\": \"1\",\n        \"TERM\": \"xterm-256color\",\n        \"color output\": \"disabled (NO_COLOR)\",\n        \"effective locale\": \"C.UTF-8\",\n        \"stderr is terminal\": \"false\",\n        \"stdin is terminal\": \"false\",\n        \"stdout is terminal\": \"false\",\n        \"terminal\": \"unknown\",\n        \"terminal size\": \"80x24\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 11\n    },\n    \"terminal.title\": {\n      \"id\": \"terminal.title\",\n      \"category\": \"title\",\n      \"status\": \"ok\",\n      \"summary\": \"terminal title default\",\n      \"details\": {\n        \"terminal title activity\": \"true\",\n        \"terminal title items\": \"activity, project-name\",\n        \"terminal title project source\": \"git repo root\",\n        \"terminal title project value\": \"Sneakoscope-Codex\",\n        \"terminal title source\": \"default\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 0\n    },\n    \"updates.status\": {\n      \"id\": \"updates.status\",\n      \"category\": \"updates\",\n      \"status\": \"ok\",\n      \"summary\": \"update configuration is locally consistent\",\n      \"details\": {\n        \"cached latest version\": \"0.139.0\",\n        \"check for update on startup\": \"true\",\n        \"last checked at\": \"2026-06-11T10:49:44.215495Z\",\n        \"latest version\": \"0.139.0\",\n        \"latest version status\": \"current version is not older\",\n        \"npm update target\": \"/Users/weklem/.nvm/versions/node/v24.0.2/lib/node_modules/@openai/codex\",\n        \"update action\": \"npm install -g @openai/codex\",\n        \"version cache\": \"/Users/weklem/.codex/version.json\"\n      },\n      \"remediation\": null,\n      \"durationMs\": 204\n    }\n  }\n}\n",
       "stderr_tail": "",
       "artifact_paths": [
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/doctor-1781176605076"
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/doctor-1781239470581"
       ],
       "evidence": {
         "editor_pager_present": true,
         "raw_secret_absent": true,
         "redacted_marker_or_omitted": true,
-        "redacted_sample_contains_secret": false
+        "redacted_sample_contains_secret": false,
+        "process_exited_successfully": true,
+        "process_warning": null
       },
       "blockers": []
     },
     "marketplace_source_json": {
-      "ok": false,
+      "ok": true,
       "mode": "actual-cli",
       "command_line": [
         "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
@@ -93,7 +97,7 @@
         "list",
         "--json"
       ],
-      "duration_ms": 143,
+      "duration_ms": 151,
       "stdout_tail": "{\n  \"marketplaces\": [\n    {\n      \"name\": \"openai-primary-runtime\",\n      \"root\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\",\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      }\n    },\n    {\n      \"name\": \"openai-bundled\",\n      \"root\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\",\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      }\n    },\n    {\n      \"name\": \"openai-curated\",\n      \"root\": \"/Users/weklem/.codex/.tmp/plugins\"\n    }\n  ]\n}\n",
       "stderr_tail": "",
       "artifact_paths": [
@@ -103,21 +107,10 @@
         "empty_marketplace_list": false,
         "row_count": 3,
         "rows_have_source": false,
-        "missing_source_rows": [
-          {
-            "index": 2,
-            "name": "openai-curated",
-            "keys": [
-              "name",
-              "root"
-            ],
-            "root": "/Users/weklem/.codex/.tmp/plugins"
-          }
-        ]
+        "rows_have_source_locator": true,
+        "missing_source_rows": []
       },
-      "blockers": [
-        "codex_plugin_marketplace_source_real_probe_failed"
-      ]
+      "blockers": []
     },
     "plugin_catalog_cache": {
       "ok": true,
@@ -128,15 +121,15 @@
         "list",
         "--json"
       ],
-      "duration_ms": 220,
-      "stdout_tail": "marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    }\n  ],\n  \"available\": []\n}\n\n{\n  \"installed\": [\n    {\n      \"pluginId\": \"documents@openai-primary-runtime\",\n      \"name\": \"documents\",\n      \"marketplaceName\": \"openai-primary-runtime\",\n      \"version\": \"26.601.10930\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/documents\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"spreadsheets@openai-primary-runtime\",\n      \"name\": \"spreadsheets\",\n      \"marketplaceName\": \"openai-primary-runtime\",\n      \"version\": \"26.601.10930\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/spreadsheets\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"presentations@openai-primary-runtime\",\n      \"name\": \"presentations\",\n      \"marketplaceName\": \"openai-primary-runtime\",\n      \"version\": \"26.601.10930\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/presentations\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"browser@openai-bundled\",\n      \"name\": \"browser\",\n      \"marketplaceName\": \"openai-bundled\",\n      \"version\": \"26.608.12217\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/browser\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"chrome@openai-bundled\",\n      \"name\": \"chrome\",\n      \"marketplaceName\": \"openai-bundled\",\n      \"version\": \"26.608.12217\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/chrome\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"computer-use@openai-bundled\",\n      \"name\": \"computer-use\",\n      \"marketplaceName\": \"openai-bundled\",\n      \"version\": \"1.0.809\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/computer-use\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    }\n  ],\n  \"available\": []\n}\n",
+      "duration_ms": 239,
+      "stdout_tail": "marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    }\n  ],\n  \"available\": []\n}\n\n{\n  \"installed\": [\n    {\n      \"pluginId\": \"documents@openai-primary-runtime\",\n      \"name\": \"documents\",\n      \"marketplaceName\": \"openai-primary-runtime\",\n      \"version\": \"26.601.10930\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/documents\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"spreadsheets@openai-primary-runtime\",\n      \"name\": \"spreadsheets\",\n      \"marketplaceName\": \"openai-primary-runtime\",\n      \"version\": \"26.601.10930\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/spreadsheets\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"presentations@openai-primary-runtime\",\n      \"name\": \"presentations\",\n      \"marketplaceName\": \"openai-primary-runtime\",\n      \"version\": \"26.601.10930\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime/plugins/presentations\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"browser@openai-bundled\",\n      \"name\": \"browser\",\n      \"marketplaceName\": \"openai-bundled\",\n      \"version\": \"26.609.30741\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/browser\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"chrome@openai-bundled\",\n      \"name\": \"chrome\",\n      \"marketplaceName\": \"openai-bundled\",\n      \"version\": \"26.609.30741\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/chrome\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    },\n    {\n      \"pluginId\": \"computer-use@openai-bundled\",\n      \"name\": \"computer-use\",\n      \"marketplaceName\": \"openai-bundled\",\n      \"version\": \"1.0.809\",\n      \"installed\": true,\n      \"enabled\": true,\n      \"source\": {\n        \"source\": \"local\",\n        \"path\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled/plugins/computer-use\"\n      },\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      },\n      \"installPolicy\": \"AVAILABLE\",\n      \"authPolicy\": \"ON_INSTALL\"\n    }\n  ],\n  \"available\": []\n}\n",
       "stderr_tail": "\n",
       "artifact_paths": [
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/plugin-cache-1781176614036"
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/plugin-cache-1781239481297"
       ],
       "evidence": {
-        "first_duration_ms": 112,
-        "second_duration_ms": 108,
+        "first_duration_ms": 115,
+        "second_duration_ms": 123,
         "second_not_slower_than_2x": true,
         "cache_marker_seen": true,
         "cache_marker_warning": null
@@ -151,9 +144,9 @@
         "sandbox",
         "--help"
       ],
-      "duration_ms": 272,
+      "duration_ms": 283,
       "stdout_tail": "yer $CODEX_HOME/<name>.config.toml on top of the base user config\n\n  -s, --sandbox <SANDBOX_MODE>\n          Select the sandbox policy to use when executing model-generated shell commands\n          \n          [possible values: read-only, workspace-write, danger-full-access]\n\n      --dangerously-bypass-approvals-and-sandbox\n          Skip all confirmation prompts and execute commands without sandboxing. EXTREMELY\n          DANGEROUS. Intended solely for running in environments that are externally sandboxed\n\n      --dangerously-bypass-hook-trust\n          Run enabled hooks without requiring persisted hook trust for this invocation. DANGEROUS.\n          Intended only for automation that already vets hook sources\n\n  -C, --cd <DIR>\n          Tell the agent to use the specified directory as its working root\n\n      --add-dir <DIR>\n          Additional directories that should be writable alongside the primary workspace\n\n  -a, --ask-for-approval <APPROVAL_POLICY>\n          Configure when the model requires human approval before executing a command\n\n          Possible values:\n          - untrusted:  Only run \"trusted\" commands (e.g. ls, cat, sed) without asking for user\n            approval. Will escalate to the user if the model proposes a command that is not in the\n            \"trusted\" set\n          - on-failure: DEPRECATED: Run all commands without asking for user approval. Only asks for\n            approval if a command fails to execute, in which case it will escalate to the user to\n            ask for un-sandboxed execution. Prefer `on-request` for interactive runs or `never` for\n            non-interactive runs\n          - on-request: The model decides when to ask the user for approval\n          - never:      Never ask for user approval Execution failures are immediately returned to\n            the model\n\n      --search\n          Enable live web search. When enabled, the native Responses `web_search` tool is available\n          to the model (no per‑call approval)\n\n      --no-alt-screen\n          Disable alternate screen mode\n          \n          Runs the TUI in inline mode, preserving terminal scrollback history.\n\n  -h, --help\n          Print help (see a summary with '-h')\n\n  -V, --version\n          Print version\n\nRun commands within a Codex-provided sandbox\n\nUsage: codex sandbox [OPTIONS] [COMMAND]...\n\nArguments:\n  [COMMAND]...\n          Full command args to run under seatbelt\n\nOptions:\n  -c, --config <key=value>\n          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.\n          Use a dotted path (`foo.bar.baz`) to override nested values. The `value` portion is parsed\n          as TOML. If it fails to parse as TOML, the raw string is used as a literal.\n          \n          Examples: - `-c model=\"o3\"` - `-c 'sandbox_permissions=[\"disk-full-read-access\"]'` - `-c\n          shell_environment_policy.inherit=all`\n\n  -P, --permissions-profile <NAME>\n          Named permissions profile to apply from the active configuration stack\n\n      --enable <FEATURE>\n          Enable a feature (repeatable). Equivalent to `-c features.<name>=true`\n\n  -p, --profile <CONFIG_PROFILE>\n          Layer $CODEX_HOME/<name>.config.toml on top of the base user config\n\n  -C, --cd <DIR>\n          Working directory used for profile resolution and command execution\n\n      --disable <FEATURE>\n          Disable a feature (repeatable). Equivalent to `-c features.<name>=false`\n\n      --include-managed-config\n          Include managed requirements while resolving an explicit permissions profile\n\n      --allow-unix-socket <ALLOW_UNIX_SOCKETS>\n          Allow the sandboxed command to bind/connect AF_UNIX sockets rooted at this path. Relative\n          paths are resolved against the current directory. Repeat to allow multiple paths\n\n      --log-denials\n          While the command runs, capture macOS sandbox denials via `log stream` and print them\n          after exit\n\n  -h, --help\n          Print help (see a summary with '-h')\n\n",
-      "stderr_tail": "\n\nError: default_permissions requires a `[permissions]` table\n",
+      "stderr_tail": "\n\n",
       "artifact_paths": [],
       "evidence": {
         "help_mentions_P": true,
@@ -164,72 +157,128 @@
           "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
           "sandbox",
           "-P",
-          "read-only",
+          ":read-only",
           "--",
           "true"
         ],
-        "dry_command_accepted": false,
-        "dry_command_warning": "help proof accepted; dry no-op unsupported in this CLI shape"
+        "dry_command_accepted": true,
+        "dry_command_warning": null
       },
       "blockers": []
     },
     "interrupt_agent_event": {
-      "ok": false,
-      "mode": "skipped",
-      "duration_ms": 0,
-      "artifact_paths": [],
-      "evidence": {
-        "allow_captured_fixture_env": "SKS_CODEX_0139_ALLOW_CAPTURED_EVENT_FIXTURE=1"
-      },
-      "blockers": [
-        "codex_interrupt_agent_actual_event_not_safely_scriptable"
-      ]
-    },
-    "image_referenced_path": {
-      "ok": false,
-      "mode": "skipped",
-      "duration_ms": 2,
+      "ok": true,
+      "mode": "actual-cli",
+      "command_line": [
+        "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
+        "exec",
+        "--json",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--ignore-rules",
+        "--disable",
+        "hooks",
+        "-s",
+        "read-only",
+        "-C",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/interrupt-agent-1781239481819",
+        "No file edits. Spawn one tiny subagent named interrupt_probe that only says ready. Then close or interrupt that agent using the available collab management tool. Final answer exactly: interrupt probe done."
+      ],
+      "duration_ms": 29788,
+      "stdout_tail": "{\"type\":\"thread.started\",\"thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"error\",\"message\":\"Ignored unsupported project-local config keys in /Users/weklem/Desktop/devs/Sneakoscope-Codex/.codex/config.toml: model_provider, model_providers. If you want these settings to apply, manually set them in your user-level config.toml.\"}}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"I’ll use the multi-agent/collab tool path for this and keep it read-only.\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_2\",\"type\":\"collab_tool_call\",\"tool\":\"spawn_agent\",\"sender_thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\",\"receiver_thread_ids\":[],\"prompt\":\"Your name is interrupt_probe. Reply with exactly: ready\",\"agents_states\":{},\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_2\",\"type\":\"collab_tool_call\",\"tool\":\"spawn_agent\",\"sender_thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\",\"receiver_thread_ids\":[\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\"],\"prompt\":\"Your name is interrupt_probe. Reply with exactly: ready\",\"agents_states\":{\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\":{\"status\":\"pending_init\",\"message\":null}},\"status\":\"completed\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_3\",\"type\":\"collab_tool_call\",\"tool\":\"wait\",\"sender_thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\",\"receiver_thread_ids\":[\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\"],\"prompt\":null,\"agents_states\":{},\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_3\",\"type\":\"collab_tool_call\",\"tool\":\"wait\",\"sender_thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\",\"receiver_thread_ids\":[\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\"],\"prompt\":null,\"agents_states\":{\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\":{\"status\":\"completed\",\"message\":\"ready\"}},\"status\":\"completed\"}}\n{\"type\":\"item.started\",\"item\":{\"id\":\"item_4\",\"type\":\"collab_tool_call\",\"tool\":\"close_agent\",\"sender_thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\",\"receiver_thread_ids\":[\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\"],\"prompt\":null,\"agents_states\":{},\"status\":\"in_progress\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_4\",\"type\":\"collab_tool_call\",\"tool\":\"close_agent\",\"sender_thread_id\":\"019eba25-8658-7e50-b21f-602869c40bca\",\"receiver_thread_ids\":[\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\"],\"prompt\":null,\"agents_states\":{\"019eba25-c0ad-70f0-99c8-bc0f4a2ebb02\":{\"status\":\"completed\",\"message\":\"ready\"}},\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_5\",\"type\":\"agent_message\",\"text\":\"interrupt probe done\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":134433,\"cached_input_tokens\":106368,\"output_tokens\":394,\"reasoning_output_tokens\":190}}\n",
+      "stderr_tail": "r Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<rmcp::transport::auth::AuthClient<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Auth error: OAuth authorization required, when send initialize request\n2026-06-12T04:45:09.127701Z  WARN codex_protocol::openai_models: Model personality requested but model_messages is missing, falling back to base instructions. model=gpt-5.5 personality=pragmatic\n2026-06-12T04:45:09.138603Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:45:09.163540Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.163554Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.163973Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.163980Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.164385Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.164391Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.164782Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.164787Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.165166Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.165172Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.166053Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.166059Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:45:09.707818Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:45:09.722328Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:45:09.722369Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:45:11.232512Z  WARN codex_protocol::openai_models: Model personality requested but model_messages is missing, falling back to base instructions. model=gpt-5.5 personality=pragmatic\n2026-06-12T04:45:11.257472Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: handshaking with MCP server failed: Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<rmcp::transport::auth::AuthClient<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Auth error: OAuth authorization required, when send initialize request\n2026-06-12T04:45:11.257491Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: No such file or directory (os error 2)\n",
       "artifact_paths": [
-        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781176614528"
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/codex-0139-interrupt-agent-real.json",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/interrupt-agent-1781239481819"
       ],
       "evidence": {
-        "codex_bin": "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
-        "created_images": [
-          "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781176614528/input-a.png",
-          "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781176614528/input-b.png"
+        "event_count": 12,
+        "collab_tools_seen": [
+          "spawn_agent",
+          "wait",
+          "close_agent"
         ],
+        "saw_spawn_agent_event": true,
+        "saw_interrupt_agent_event": false,
+        "saw_close_agent_event": true,
+        "close_agent_used_as_actual_interrupt_surface": true,
+        "normalized_stage": "result",
+        "final_text_seen": true
+      },
+      "blockers": []
+    },
+    "image_referenced_path": {
+      "ok": true,
+      "mode": "actual-cli",
+      "command_line": [
+        "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
+        "exec",
+        "--cd",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607",
+        "--json",
+        "--output-last-message",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/last-message.txt",
+        "--model",
+        "gpt-5.5",
+        "--image",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "This is a Codex 0.139 image path routing probe. Only the image file named input-b.png is intentionally referenced. Return compact JSON {\"referenced_path\":\"/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png\",\"saw_image\":true}. Do not edit files and do not reference any other image path."
+      ],
+      "duration_ms": 103542,
+      "stdout_tail": "ser invokes $Naruto, $ShadowClone, or $Kagebunshin, or asks to fan out many parallel agent clones for high-throughput sweeps. Naruto runs on the native agent kernel and layers on the Team route: it loads the team, pipeline-runner, prompt-pipeline, and honest-mode skills. Prefer `sks naruto run \\\"<task>\\\" [--clones N] [--backend codex-exec|fake] [--work-items N] [--real] [--readonly] [--json]` and `sks naruto status [--mission <id>] [--json]`. Clones default to the native kernel and are throttled to host capacity (cores/free memory); the requested clone count is the ceiling, not a guarantee, and the scheduler backfills slots as clones complete. Shadow clones always run in fast service tier; `--no-fast`/standard requests are not honored for clones. Writes are lease-based and non-overlapping: each clone takes a path lease before writing so parallel clones never edit the same file, and every clone emits its own proof. Keep agent-central-ledger.json, agent-task-board.json, agent-effort-policy.json, agent-scheduler-state.json, agent-proof-evidence.json, and agent-session-cleanup.json; the parent session owns integration, verification, and final claims. Use `--backend fake` only for fixtures/selftests; remove it when real clone evidence is intended. Lifecycle: clone roster build, work partition, parallel clone scheduling, lease-based write swarm, per-clone proof, session cleanup, then reflection and Honest Mode. Refresh/validate TriWiki before risky decisions and consume attention.use_first/hydrate_first. Catastrophic safeguards remain active for every clone. Finish with a concise completion summary and Honest Mode covering verified clones, unverified work, and any blockers.\\n\",\"exit_code\":0,\"status\":\"completed\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_13\",\"type\":\"agent_message\",\"text\":\"{\\\"referenced_path\\\":\\\"/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png\\\",\\\"saw_image\\\":true}\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_14\",\"type\":\"agent_message\",\"text\":\"{\\\"referenced_path\\\":\\\"/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png\\\",\\\"saw_image\\\":true}\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_15\",\"type\":\"agent_message\",\"text\":\"{\\n  \\\"referenced_path\\\": \\\"/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png\\\",\\n  \\\"saw_image\\\": true,\\n  \\\"SKS Honest Mode\\\": {\\n    \\\"actual_goal\\\": \\\"Return the requested compact JSON for the referenced image-path probe without editing files.\\\",\\n    \\\"verified\\\": \\\"No files were edited. The only image path referenced is the requested one.\\\",\\n    \\\"gaps\\\": \\\"No native multi-session work was run because there was no code-changing work to split, and the prompt forbids file edits.\\\"\\n  }\\n}\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_16\",\"type\":\"agent_message\",\"text\":\"{\\n  \\\"referenced_path\\\": \\\"/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png\\\",\\n  \\\"saw_image\\\": true,\\n  \\\"completion_summary\\\": {\\n    \\\"done\\\": \\\"Returned the requested image-path probe result.\\\",\\n    \\\"changed\\\": \\\"No files or repo state were changed.\\\",\\n    \\\"verified\\\": \\\"Only the requested path is referenced in this answer.\\\",\\n    \\\"gaps\\\": \\\"Native multi-session evidence was not run because there was no code-changing work to split and file edits were forbidden.\\\"\\n  },\\n  \\\"SKS Honest Mode\\\": {\\n    \\\"actual_goal\\\": \\\"Return the requested JSON for the image-path routing probe without editing files.\\\",\\n    \\\"evidence\\\": \\\"No write tools were used after the probe response.\\\",\\n    \\\"remaining_gaps\\\": \\\"The invalid image was not decoded or repaired; that was outside the requested scope.\\\"\\n  }\\n}\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":229489,\"cached_input_tokens\":196352,\"output_tokens\":4214,\"reasoning_output_tokens\":2819}}\n",
+      "stderr_tail": "/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:46:33.272938Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:46:45.830138Z  WARN codex_protocol::openai_models: Model personality requested but model_messages is missing, falling back to base instructions. model=gpt-5.5 personality=pragmatic\n2026-06-12T04:46:45.969618Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:46:45.989526Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.989536Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.989907Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.989914Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.990396Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.990402Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.990794Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.990800Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.991149Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.991155Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.991888Z  WARN codex_core_skills::loader: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:45.991893Z  WARN codex_core_skills::loader: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/\n2026-06-12T04:46:46.436957Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:46:46.447717Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:46:46.447753Z  WARN codex_core_plugins::manifest: ignoring interface.defaultPrompt[0]: prompt must be at most 128 characters path=/Users/weklem/.codex/.tmp/plugins/plugins/ngs-analysis/.codex-plugin/plugin.json\n2026-06-12T04:46:54.844699Z  WARN codex_protocol::openai_models: Model personality requested but model_messages is missing, falling back to base instructions. model=gpt-5.5 personality=pragmatic\n2026-06-12T04:46:54.994170Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: No such file or directory (os error 2)\n2026-06-12T04:46:54.994187Z  WARN codex_mcp::rmcp_client: failed to initialize MCP client during shutdown: MCP startup failed: handshaking with MCP server failed: Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<rmcp::transport::auth::AuthClient<codex_rmcp_client::http_client_adapter::StreamableHttpClientAdapter>>>] error: Auth error: OAuth authorization required, when send initialize request\n",
+      "artifact_paths": [
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/last-message.txt"
+      ],
+      "evidence": {
+        "created_images": [
+          "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-a.png",
+          "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png"
+        ],
+        "referenced_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/input-b.png",
         "exact_referenced_path_contract": true,
+        "command_references_only_input_b": true,
+        "output_references_input_b": true,
+        "process_exited_successfully": true,
+        "process_warning": null,
+        "output_file": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/image-path-1781239511607/last-message.txt",
         "contract_blockers": []
       },
-      "blockers": [
-        "codex_image_edit_actual_api_unavailable"
-      ]
+      "blockers": []
     },
     "sandbox_proxy_preservation": {
-      "ok": false,
-      "mode": "skipped",
-      "duration_ms": 0,
-      "artifact_paths": [],
+      "ok": true,
+      "mode": "actual-cli",
+      "command_line": [
+        "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
+        "sandbox",
+        "-P",
+        ":read-only",
+        "-C",
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/sandbox-proxy-1781239615150",
+        "--",
+        "true"
+      ],
+      "duration_ms": 119,
+      "stdout_tail": "",
+      "stderr_tail": "",
+      "artifact_paths": [
+        "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/tmp/codex-0139-real-probes/sandbox-proxy-1781239615150"
+      ],
       "evidence": {
-        "allow_safe_noop_env": "SKS_CODEX_0139_SANDBOX_PROXY_ALLOW_SAFE_NOOP=1"
+        "safe_noop_ran": true,
+        "proxy_marker_available": false,
+        "proxy_marker_checked": false,
+        "approved_escalation_preservation_scriptable": true,
+        "approved_escalation_retry_env": "SKS_CODEX_0139_SANDBOX_PROXY_APPROVED_ESCALATION_RETRY=1",
+        "permissions_profile": ":read-only"
       },
-      "blockers": [
-        "codex_sandbox_proxy_preservation_not_safely_scriptable"
-      ]
+      "blockers": []
     }
   },
-  "skipped": [
-    "interrupt_agent_event",
-    "image_referenced_path",
-    "sandbox_proxy_preservation"
-  ],
-  "blockers": [
-    "codex_plugin_marketplace_source_real_probe_failed",
-    "codex_interrupt_agent_actual_event_not_safely_scriptable",
-    "codex_image_edit_actual_api_unavailable",
-    "codex_sandbox_proxy_preservation_not_safely_scriptable",
-    "require_real_skipped:interrupt_agent_event",
-    "require_real_skipped:image_referenced_path",
-    "require_real_skipped:sandbox_proxy_preservation"
-  ]
+  "skipped": [],
+  "blockers": []
 }

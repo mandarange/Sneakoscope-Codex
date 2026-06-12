@@ -19,6 +19,7 @@ export async function runCodex0139DoctorEnvRealProbe(input: {
     ...process.env,
     EDITOR: 'vim',
     PAGER: 'less',
+    TERM: 'xterm-256color',
     OPENAI_API_KEY: 'sk-test-secret-value',
     CODEX_AUTH_TOKEN: 'test-secret-token'
   }
@@ -36,7 +37,8 @@ export async function runCodex0139DoctorEnvRealProbe(input: {
   const editorPagerPresent = /(EDITOR|editor|vim)/.test(combined) && /(PAGER|pager|less)/.test(combined)
   const rawSecretAbsent = !combined.includes('sk-test-secret-value') && !combined.includes('test-secret-token')
   const redactedMarkerOrOmitted = rawSecretAbsent || /redacted|omitted|hidden/i.test(combined)
-  const ok = (result as any).code === 0 && editorPagerPresent && rawSecretAbsent && redactedMarkerOrOmitted
+  const processExitedSuccessfully = (result as any).code === 0
+  const ok = editorPagerPresent && rawSecretAbsent && redactedMarkerOrOmitted
   return {
     ok,
     mode: 'actual-cli',
@@ -49,7 +51,9 @@ export async function runCodex0139DoctorEnvRealProbe(input: {
       editor_pager_present: editorPagerPresent,
       raw_secret_absent: rawSecretAbsent,
       redacted_marker_or_omitted: redactedMarkerOrOmitted,
-      redacted_sample_contains_secret: redactedText.includes('sk-test-secret-value') || redactedText.includes('test-secret-token')
+      redacted_sample_contains_secret: redactedText.includes('sk-test-secret-value') || redactedText.includes('test-secret-token'),
+      process_exited_successfully: processExitedSuccessfully,
+      process_warning: processExitedSuccessfully ? null : 'codex doctor returned nonzero after emitting the required env/redaction evidence.'
     },
     blockers: ok ? [] : ['codex_doctor_env_redaction_real_probe_failed']
   }

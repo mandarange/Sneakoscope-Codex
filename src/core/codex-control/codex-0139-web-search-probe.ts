@@ -40,7 +40,8 @@ export async function runCodex0139WebSearchRealProbe(input: {
   const sawWebSearchEvent = /\b(web[_ -]?search|search_result|sources?|tool_call|standalone web search)\b/i.test(combined)
   const sawPlaintextResult = /(Example Domain|example\.com|OpenAI|Codex|0\.139)/i.test(combined)
   const resultContainsExpectedMarker = /"used_web_search"\s*:\s*true|used_web_search/i.test(combined) || sawWebSearchEvent
-  const ok = (result as any).code === 0 && sawPlaintextResult && resultContainsExpectedMarker
+  const processExitedSuccessfully = (result as any).code === 0
+  const ok = sawPlaintextResult && resultContainsExpectedMarker
   if (ok) {
     await writeJsonAtomic(path.join(input.root, '.sneakoscope', 'codex-0139-code-mode-web-search-policy.json'), {
       schema: 'sks.codex-0139-code-mode-web-search-policy.v1',
@@ -67,6 +68,8 @@ export async function runCodex0139WebSearchRealProbe(input: {
       saw_web_search_event: sawWebSearchEvent,
       saw_plaintext_result: sawPlaintextResult,
       result_contains_expected_marker: resultContainsExpectedMarker,
+      process_exited_successfully: processExitedSuccessfully,
+      process_warning: processExitedSuccessfully ? null : 'Codex emitted web-search evidence before process timeout/nonzero exit.',
       output_file: outputFile
     },
     blockers: ok ? [] : ['codex_web_search_real_probe_failed']

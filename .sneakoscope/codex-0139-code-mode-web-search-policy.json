@@ -1,7 +1,7 @@
 {
   "schema": "sks.codex-0139-code-mode-web-search-policy.v1",
   "ok": true,
-  "generated_at": "2026-06-11T11:16:44.948Z",
+  "generated_at": "2026-06-12T04:44:30.476Z",
   "allow_standalone_web_search_in_code_mode": true,
   "real_probe_verified": true,
   "evidence": {

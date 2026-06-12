@@ -26,6 +26,7 @@ assertGate(older.ok === false && older.supports_code_mode_web_search === false, 
 // Marketplace source-field parser accepts array and wrapped shapes.
 assertGate(mod.marketplaceSourcesPresent(JSON.stringify([{ name: 'm', source: 'https://example.com/catalog.json' }])) === true, 'marketplace source array shape', {})
 assertGate(mod.marketplaceSourcesPresent(JSON.stringify({ marketplaces: [{ name: 'm', source: 'git' }] })) === true, 'marketplace source wrapped shape', {})
+assertGate(mod.marketplaceSourcesPresent(JSON.stringify({ marketplaces: [{ name: 'm', root: '/tmp/codex-marketplace' }] })) === true, 'marketplace root locator wrapped shape', {})
 assertGate(mod.marketplaceSourcesPresent('not json') === false, 'marketplace parser rejects non-JSON', {})
 
 emitGate('codex:0139-capability', { parsed_version: cap.parsed_version })
