@@ -226,6 +226,12 @@
     {
       "file": "src/scripts/install-update-preserves-config-check.ts",
       "symbol": "backups",
+      "token": "chmod",
+      "reason": "Release/check script marks a mkdtemp fake Codex fixture executable so Context7 global setup preservation can be tested without mutating user config."
+    },
+    {
+      "file": "src/scripts/install-update-preserves-config-check.ts",
+      "symbol": "backups",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
     },
