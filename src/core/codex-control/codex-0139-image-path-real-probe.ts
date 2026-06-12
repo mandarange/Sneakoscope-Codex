@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { buildCodexExecArgs, findCodexBinary } from '../codex-adapter.js'
-import { ensureDir, runProcess } from '../fsx.js'
+import { ensureDir, runProcess, writeBinaryAtomic } from '../fsx.js'
 import { buildImageArtifactPathContract } from '../image/image-artifact-path-contract.js'
 import { codex0139ProbeTail, skippedCodex0139Probe, type Codex0139SingleProbe } from './codex-0139-real-probes.js'
 
@@ -21,8 +21,8 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   await ensureDir(tempDir)
   const inputA = path.join(tempDir, 'input-a.png')
   const inputB = path.join(tempDir, 'input-b.png')
-  await fs.writeFile(inputA, ONE_BY_ONE_PNG)
-  await fs.writeFile(inputB, ONE_BY_ONE_PNG)
+  await writeBinaryAtomic(inputA, ONE_BY_ONE_PNG)
+  await writeBinaryAtomic(inputB, ONE_BY_ONE_PNG)
   const contract = await buildImageArtifactPathContract(input.root, {
     missionId: 'codex-0139-image-path-real-probe',
     images: [

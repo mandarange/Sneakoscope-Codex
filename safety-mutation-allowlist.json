@@ -626,6 +626,18 @@
       "reason": "Central filesystem primitive kept as an audited helper for higher-level guarded flows."
     },
     {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeBinaryAtomic",
+      "token": "rename",
+      "reason": "Central binary atomic write helper renames only its generated temp file into the caller-scoped target path."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeBinaryAtomic",
+      "token": "fsp.rm",
+      "reason": "Central binary atomic write helper cleans up only its generated temp file after a failed atomic write."
+    },
+    {
       "file": "src/core/harness-conflicts.ts",
       "symbol": "repairSksGeneratedArtifacts",
       "token": "fsp.rm",

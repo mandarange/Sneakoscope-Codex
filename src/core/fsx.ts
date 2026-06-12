@@ -147,6 +147,27 @@ export async function writeJsonAtomic<T>(p: string, data: T): Promise<void> {
   await writeTextAtomic(p, `${JSON.stringify(data, null, 2)}\n`);
 }
 
+export async function writeBinaryAtomic(p: string, data: Buffer): Promise<void> {
+  await ensureDir(path.dirname(p));
+  try {
+    if ((await fsp.readFile(p)).equals(data)) return;
+  } catch {}
+  const tmp = `${p}.${process.pid}.${randomId(6)}.tmp`;
+  try {
+    const handle = await fsp.open(tmp, 'w');
+    try {
+      await handle.writeFile(data);
+      await handle.sync().catch(() => {});
+    } finally {
+      await handle.close().catch(() => {});
+    }
+    await fsp.rename(tmp, p);
+  } catch (err: unknown) {
+    await fsp.rm(tmp, { force: true }).catch(() => {});
+    throw err;
+  }
+}
+
 export async function appendJsonl(p: string, obj: unknown): Promise<void> {
   await ensureDir(path.dirname(p));
   await fsp.appendFile(p, `${JSON.stringify(obj)}\n`, 'utf8');
