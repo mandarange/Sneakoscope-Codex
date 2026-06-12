@@ -1967,11 +1967,24 @@ async function ensureGlobalContext7DuringInstall() {
   const codex = await getCodexInfo().catch(() => EMPTY_CODEX_INFO);
   if (!codex.bin) return { status: 'codex_missing' };
   const env = withoutSecretEnv(['CODEX_LB_API_KEY']);
-  const list = await runProcess(codex.bin, ['mcp', 'list'], { env, timeoutMs: 8000, maxOutputBytes: 32 * 1024 }).catch((err: any) => ({ code: 1, stderr: err.message, stdout: '' }));
-  if (list.code === 0 && /context7/i.test(`${list.stdout}\n${list.stderr}`)) return { status: 'present' };
+  const existing = await context7GlobalMcpStatus(codex.bin, env);
+  if (existing.present) return { status: 'present' };
   const add = await runProcess(codex.bin, ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'], { env, timeoutMs: 30000, maxOutputBytes: 64 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err.message }));
   if (add.code === 0) return { status: 'installed' };
   return { status: 'failed', error: `${add.stderr || add.stdout || 'codex mcp add failed'}`.trim() };
+}
+
+export async function context7GlobalMcpStatus(codexBin: any, env: any = process.env) {
+  const list = await runProcess(codexBin, ['mcp', 'list'], { env, timeoutMs: 8000, maxOutputBytes: 32 * 1024 })
+    .catch((err: any) => ({ code: 1, stderr: err.message, stdout: '' }));
+  const output = `${list.stdout || ''}\n${list.stderr || ''}`;
+  return {
+    checked: true,
+    ok: list.code === 0,
+    present: list.code === 0 && /context7/i.test(output),
+    stdout: list.stdout || '',
+    stderr: list.stderr || ''
+  };
 }
 
 function withoutSecretEnv(keys: any = []) {
@@ -2293,10 +2306,7 @@ export async function ensureProjectContext7Config(root: any, transport: any = 'l
   const block = context7ConfigToml(transport).trim();
   const existingBlock = /(^|\n)\[mcp_servers\.context7\]\n[\s\S]*?(?=\n\[[^\]]+\]|\s*$)/;
   if (existingBlock.test(current)) {
-    const next = current.replace(existingBlock, `$1${block}\n`);
-    if (next === current) return false;
-    await writeTextAtomic(configPath, next.endsWith('\n') ? next : `${next}\n`);
-    return true;
+    return false;
   }
   if (hasContext7ConfigText(current)) return false;
   await writeTextAtomic(configPath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}\n`);

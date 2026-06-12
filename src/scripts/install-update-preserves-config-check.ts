@@ -13,6 +13,8 @@ import path from 'node:path';
 import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
 
 const helpers = await importDist('cli/install-helpers.js');
+const init = await importDist('core/init.js');
+const context7 = await importDist('cli/context7-command.js');
 
 const results = [];
 
@@ -84,6 +86,87 @@ const results = [];
   const second = await helpers.ensureGlobalCodexFastModeDuringInstall({ home: dir, configPath: cfg });
   const ok = second.status === 'present';
   results.push({ case: 'idempotent_second_run_noop', ok, status: second.status });
+}
+
+// --- Case 5: project Context7 setup preserves user API key args/env instead of resetting the block ---
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context7-project-'));
+  const cfg = path.join(dir, '.codex', 'config.toml');
+  await fs.mkdir(path.dirname(cfg), { recursive: true });
+  const userConfig = [
+    '[mcp_servers.context7]',
+    'command = "npx"',
+    'args = ["-y", "@upstash/context7-mcp@latest", "--api-key", "ctx7-user-key"]',
+    '',
+    '[mcp_servers.context7.env]',
+    'CONTEXT7_API_KEY = "ctx7-user-key"',
+    ''
+  ].join('\n');
+  await fs.writeFile(cfg, userConfig);
+  const changed = await helpers.ensureProjectContext7Config(dir, 'local');
+  const after = await fs.readFile(cfg, 'utf8');
+  const ok = changed === false && after === userConfig;
+  results.push({ case: 'context7_project_setup_preserves_existing_key_block', ok, changed });
+}
+
+// --- Case 6: setup/init regeneration preserves an existing Context7 block with custom credentials ---
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context7-init-'));
+  const cfg = path.join(dir, '.codex', 'config.toml');
+  await fs.mkdir(path.dirname(cfg), { recursive: true });
+  const customBlock = [
+    '[mcp_servers.context7]',
+    'url = "https://mcp.context7.com/mcp"',
+    'headers = { CONTEXT7_API_KEY = "ctx7-user-key" }',
+    ''
+  ].join('\n');
+  await fs.writeFile(cfg, customBlock);
+  await init.initProject(dir, { installScope: 'global' });
+  const after = await fs.readFile(cfg, 'utf8');
+  const ok =
+    /\[mcp_servers\.context7\]\nurl = "https:\/\/mcp\.context7\.com\/mcp"\nheaders = \{ CONTEXT7_API_KEY = "ctx7-user-key" \}/.test(after)
+    && !/args = \["-y", "@upstash\/context7-mcp@latest"\]/.test(after);
+  results.push({ case: 'context7_init_preserves_existing_key_block', ok });
+}
+
+// --- Case 7: global Context7 setup skips `codex mcp add` when context7 already exists ---
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-context7-global-'));
+  const binDir = path.join(dir, 'bin');
+  await fs.mkdir(binDir, { recursive: true });
+  const fakeCodex = path.join(binDir, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  const log = path.join(dir, 'codex.log');
+  await fs.writeFile(fakeCodex, [
+    '#!/bin/sh',
+    `printf '%s\\n' "$*" >> ${JSON.stringify(log)}`,
+    'if [ "$1" = "--version" ]; then echo "codex-cli 99.0.0"; exit 0; fi',
+    'if [ "$1" = "mcp" ] && [ "$2" = "list" ]; then echo "context7  configured"; exit 0; fi',
+    'if [ "$1" = "mcp" ] && [ "$2" = "add" ]; then echo "unexpected mcp add" >&2; exit 77; fi',
+    'echo "unexpected codex $*" >&2',
+    'exit 2',
+    ''
+  ].join('\n'));
+  await fs.chmod(fakeCodex, 0o755);
+  const previous = {
+    SKS_CODEX_BIN: process.env.SKS_CODEX_BIN,
+    CODEX_BIN: process.env.CODEX_BIN
+  };
+  process.env.SKS_CODEX_BIN = fakeCodex;
+  delete process.env.CODEX_BIN;
+  const previousConsoleLog = console.log;
+  try {
+    console.log = () => {};
+    await context7.context7Command('setup', ['--scope', 'global', '--json']);
+  } finally {
+    console.log = previousConsoleLog;
+    if (previous.SKS_CODEX_BIN === undefined) delete process.env.SKS_CODEX_BIN;
+    else process.env.SKS_CODEX_BIN = previous.SKS_CODEX_BIN;
+    if (previous.CODEX_BIN === undefined) delete process.env.CODEX_BIN;
+    else process.env.CODEX_BIN = previous.CODEX_BIN;
+  }
+  const calls = await fs.readFile(log, 'utf8');
+  const ok = /--version/.test(calls) && /mcp list/.test(calls) && !/mcp add/.test(calls);
+  results.push({ case: 'context7_global_setup_preserves_existing_entry', ok, calls: calls.trim().split(/\n+/) });
 }
 
 const ok = results.every((r) => r.ok);
