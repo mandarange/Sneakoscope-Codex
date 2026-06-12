@@ -617,6 +617,7 @@ function mergeManagedCodexConfigToml(existingContent: any = '') {
   next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_threads = 6');
   next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_depth = 1');
   for (const block of managedCodexConfigBlocks()) {
+    if (block.preserveExisting === true && hasTomlTable(next, block.table)) continue;
     next = upsertTomlTable(next, block.table, block.text);
   }
   // Plugin tables broke the Codex App UI by force-reverting user `enabled=false`.
@@ -806,7 +807,10 @@ function removeTomlTableKey(text: any, table: any, key: any) {
 
 function managedCodexConfigBlocks() {
   return [
-    { table: 'mcp_servers.context7', text: context7ConfigToml().trim() },
+    // Context7 credentials may live directly in this table as args/env/headers/url
+    // depending on the user's MCP client setup. Seed the default only when absent;
+    // never replace an existing Context7 block during setup/update.
+    { table: 'mcp_servers.context7', text: context7ConfigToml().trim(), preserveExisting: true },
     { table: 'agents.native_agent', text: agentConfigBlock('native_agent', 'Read-only SKS analysis agent.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']) },
     { table: 'agents.team_consensus', text: agentConfigBlock('team_consensus', 'SKS planning/debate agent.', './agents/team-consensus.toml', ['Consensus', 'Atlas']) },
     { table: 'agents.implementation_worker', text: agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']) },

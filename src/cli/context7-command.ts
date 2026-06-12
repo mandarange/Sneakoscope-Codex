@@ -3,7 +3,7 @@ import { getCodexInfo } from '../core/codex-adapter.js';
 import { context7Docs, context7Resolve, context7Text, context7Tools } from '../core/context7-client.js';
 import { context7Evidence, recordContext7Evidence } from '../core/pipeline.js';
 import { stateFile } from '../core/mission.js';
-import { checkContext7, ensureProjectContext7Config } from './install-helpers.js';
+import { checkContext7, context7GlobalMcpStatus, ensureProjectContext7Config } from './install-helpers.js';
 
 const flag = (args: any, name: any) => args.includes(name);
 
@@ -125,11 +125,19 @@ export async function context7Command(sub: any = 'check', args: any = []) {
     }
     const codex = await getCodexInfo();
     if (!codex.bin) throw new Error('Codex CLI missing. Install separately: npm i -g @openai/codex, or set SKS_CODEX_BIN.');
+    const env = { ...process.env };
+    env.CODEX_LB_API_KEY = '';
+    const existing = await context7GlobalMcpStatus(codex.bin, env);
+    if (existing.present) {
+      if (flag(args, '--json')) return console.log(JSON.stringify({ changed: false, status: 'present', codex_mcp_list: existing }, null, 2));
+      console.log('Context7 global MCP already configured; existing entry preserved.');
+      return;
+    }
     const cmdArgs = transport === 'remote'
       ? ['mcp', 'add', 'context7', '--url', 'https://mcp.context7.com/mcp']
       : ['mcp', 'add', 'context7', '--', 'npx', '-y', '@upstash/context7-mcp@latest'];
-    const result = await runProcess(codex.bin, cmdArgs, { timeoutMs: 30000, maxOutputBytes: 64 * 1024 });
-    if (flag(args, '--json')) return console.log(JSON.stringify({ command: `${codex.bin} ${cmdArgs.join(' ')}`, result }, null, 2));
+    const result = await runProcess(codex.bin, cmdArgs, { env, timeoutMs: 30000, maxOutputBytes: 64 * 1024 });
+    if (flag(args, '--json')) return console.log(JSON.stringify({ changed: result.code === 0, status: result.code === 0 ? 'installed' : 'failed', command: `${codex.bin} ${cmdArgs.join(' ')}`, result }, null, 2));
     if (result.code !== 0) throw new Error(result.stderr || result.stdout || 'codex mcp add failed');
     console.log('Context7 global MCP configured.');
     return;
