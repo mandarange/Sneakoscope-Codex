@@ -1,0 +1,74 @@
+import os from 'node:os';
+import type { SksLoopGraphProof, SksLoopNode, SksLoopProof } from './loop-schema.js';
+
+export interface SksLoopSchedule {
+  ok: boolean;
+  batches: SksLoopNode[][];
+  max_active_loops: number;
+  blockers: string[];
+}
+
+export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced'): SksLoopSchedule {
+  const pending = new Map(nodes.map((node) => [node.loop_id, node]));
+  const completed = new Set<string>();
+  const batches: SksLoopNode[][] = [];
+  const maxParallel = maxConcurrentLoops(nodes, parallelism);
+  const blockers: string[] = [];
+  while (pending.size) {
+    const ready = [...pending.values()].filter((node) => node.dependencies.every((dep) => completed.has(dep)));
+    if (!ready.length) {
+      blockers.push(`loop_dependency_cycle:${[...pending.keys()].join(',')}`);
+      break;
+    }
+    const batch = ready.slice(0, maxParallel);
+    batches.push(batch);
+    for (const node of batch) {
+      pending.delete(node.loop_id);
+      if (node.route !== '$Integration') completed.add(node.loop_id);
+      else completed.add(node.loop_id);
+    }
+  }
+  return { ok: blockers.length === 0, batches, max_active_loops: Math.max(0, ...batches.map((batch) => batch.length)), blockers };
+}
+
+export function maxConcurrentLoops(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced'): number {
+  const cores = Math.max(1, os.cpus().length || 1);
+  const base = parallelism === 'safe' ? 2 : parallelism === 'extreme' ? Math.min(16, cores) : Math.min(8, cores);
+  return nodes.some((node) => node.risk.level === 'critical' || node.risk.level === 'high') && parallelism !== 'extreme'
+    ? Math.max(1, Math.min(base, 3))
+    : Math.max(1, base);
+}
+
+export function graphProofFromLoopProofs(input: {
+  missionId: string;
+  proofs: SksLoopProof[];
+  maxActiveLoops: number;
+  maxActiveWorkers: number;
+  wallMs: number;
+}): SksLoopGraphProof {
+  const selected = [...new Set(input.proofs.flatMap((proof) => proof.gate_result.selected_gates))];
+  const passed = [...new Set(input.proofs.flatMap((proof) => proof.gate_result.passed_gates))];
+  const failed = [...new Set(input.proofs.flatMap((proof) => proof.gate_result.failed_gates))];
+  const skipped = [...new Set(input.proofs.flatMap((proof) => proof.gate_result.skipped_gates))];
+  const blockers = [...new Set(input.proofs.flatMap((proof) => proof.blockers))];
+  const sequential = Math.max(input.wallMs, input.proofs.length * Math.max(1, Math.floor(input.wallMs / Math.max(1, input.maxActiveLoops))));
+  return {
+    schema: 'sks.loop-graph-proof.v1',
+    mission_id: input.missionId,
+    ok: blockers.length === 0 && failed.length === 0,
+    total_loops: input.proofs.length,
+    completed_loops: input.proofs.filter((proof) => proof.status === 'completed').length,
+    blocked_loops: input.proofs.filter((proof) => proof.status === 'blocked').length,
+    failed_loops: input.proofs.filter((proof) => proof.status === 'failed').length,
+    handoff_loops: input.proofs.filter((proof) => proof.status === 'handoff').length,
+    parallelism: {
+      max_active_loops: input.maxActiveLoops,
+      max_active_workers: input.maxActiveWorkers,
+      wall_ms: input.wallMs,
+      sequential_estimate_ms: sequential,
+      speedup_ratio: Number((sequential / Math.max(1, input.wallMs)).toFixed(2))
+    },
+    gates: { selected, passed, failed, skipped },
+    blockers
+  };
+}

@@ -3,6 +3,7 @@ import { findLatestMission, missionDir } from '../mission.js'
 import { readJson, writeJsonAtomic } from '../fsx.js'
 import { readAgentMessageBus, type AgentMessageBusEntry } from './agent-message-bus.js'
 import { buildZellijWorkerPaneSummary, type ZellijWorkerPaneSummary } from '../zellij/zellij-worker-pane-summary.js'
+import { readLoopGraphProof, summarizeLoopGraphProof } from '../loops/loop-observability.js'
 
 export const RUNTIME_PROOF_SUMMARY_SCHEMA = 'sks.runtime-proof-summary.v1'
 
@@ -47,6 +48,15 @@ export interface RuntimeProofSummary {
     | 'pane_lock_held_p95_ms'
     | 'duplicate_slot_anchor_count'
   >
+  loops: {
+    total: number
+    running: number
+    completed: number
+    blocked: number
+    speedup_ratio: number
+    active_loop_ids: string[]
+    blocked_loop_ids: string[]
+  }
   blockers: string[]
 }
 
@@ -63,6 +73,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const messagesAll = await readAgentMessageBus(root, missionId, { max: 500 })
   const recentMessages = await readAgentMessageBus(root, missionId, { max: opts.maxMessages || 8 })
   const zellijSummary = await buildZellijWorkerPaneSummary(root, missionId).catch(() => null)
+  const loopSummary = summarizeLoopGraphProof(await readLoopGraphProof(root, missionId).catch(() => null))
   const failedMessages = messagesAll.filter((row) => row.event_type === 'worker_failed')
   const errorMessages = messagesAll.filter((row) => row.level === 'error')
   const telemetryAgeMs = telemetry?.updated_at ? Math.max(0, Date.now() - Date.parse(telemetry.updated_at)) : Number.MAX_SAFE_INTEGER
@@ -118,6 +129,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
       pane_lock_held_p95_ms: Number(zellijSummary?.pane_lock_held_p95_ms || 0),
       duplicate_slot_anchor_count: Number(zellijSummary?.duplicate_slot_anchor_count || 0)
     },
+    loops: loopSummary,
     blockers
   }
   await writeJsonAtomic(path.join(agentsDir, 'runtime-proof-summary.json'), summary)
@@ -137,6 +149,7 @@ export function renderRuntimeProofSummary(summary: RuntimeProofSummary): string 
     `Stack fallback: ${summary.zellij.stacked_fallback_count}`,
     `Pane lock wait p95: ${summary.zellij.pane_lock_wait_p95_ms}ms`,
     `SLOTS anchors: ${summary.zellij.duplicate_slot_anchor_count}`,
+    `Loops: ${summary.loops.total} total / ${summary.loops.completed} done / ${summary.loops.blocked} blocked / ${summary.loops.speedup_ratio}x`,
     ...(summary.messages.recent.length ? [
       'Recent worker messages:',
       ...summary.messages.recent.map((row) => `  ${messageStatusLabel(row)} ${row.slot_id || row.worker_id}: ${row.message}`)

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/loops/loop-node.schema.json",
+  "title": "SKS Loop Node",
+  "type": "object",
+  "required": ["schema", "loop_id", "mission_id", "level", "route", "owner_scope", "budget", "maker", "checker", "gates", "risk"],
+  "properties": {
+    "schema": { "const": "sks.loop-node.v1" },
+    "loop_id": { "type": "string" },
+    "mission_id": { "type": "string" },
+    "level": { "enum": ["L0-report", "L1-assisted", "L2-action", "L3-unattended"] },
+    "route": { "type": "string" },
+    "owner_scope": { "type": "object" },
+    "budget": { "type": "object" },
+    "maker": { "type": "object" },
+    "checker": { "type": "object" },
+    "gates": { "type": "object" },
+    "risk": { "type": "object" }
+  },
+  "additionalProperties": true
+}

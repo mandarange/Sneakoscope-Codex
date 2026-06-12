@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/loops/loop-proof.schema.json",
+  "title": "SKS Loop Proof",
+  "type": "object",
+  "required": ["schema", "mission_id", "loop_id", "status", "maker_result", "checker_result", "gate_result", "budget", "changed_files", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.loop-proof.v1" },
+    "mission_id": { "type": "string" },
+    "loop_id": { "type": "string" },
+    "status": { "type": "string" },
+    "maker_result": { "type": "object" },
+    "checker_result": { "type": "object" },
+    "gate_result": { "type": "object" },
+    "budget": { "type": "object" },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

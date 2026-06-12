@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/loops/loop-plan.schema.json",
+  "title": "SKS Loop Plan",
+  "type": "object",
+  "required": ["schema", "mission_id", "request", "planner", "graph", "integration_loop_id", "blockers"],
+  "properties": {
+    "schema": { "const": "sks.loop-plan.v1" },
+    "mission_id": { "type": "string" },
+    "request": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "planner": { "type": "object" },
+    "graph": { "type": "object" },
+    "global_budget": { "type": "object" },
+    "safety": { "type": "object" },
+    "integration_loop_id": { "type": "string" },
+    "compatibility": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

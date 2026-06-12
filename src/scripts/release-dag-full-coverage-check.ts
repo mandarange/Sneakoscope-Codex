@@ -176,7 +176,19 @@ const requiredReleasePresetIds = [
   'qa-loop:image-path-prompt-injection',
   'codex:model-metadata',
   'codex:effort-auto-discovery',
-  'codex:account-usage-autodiscovery'
+  'codex:account-usage-autodiscovery',
+  'loop:schema',
+  'loop:planner',
+  'loop:runtime',
+  'loop:gate-selector',
+  'loop:lease',
+  'loop:collision-blackbox',
+  'naruto:loop-mesh',
+  'naruto:loop-mesh-blackbox',
+  'loop:cli',
+  'loop:observability',
+  'goal:loop-runtime-default',
+  'goal:legacy-runtime-escape'
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',

@@ -5,6 +5,25 @@
 
 
 
+## [3.1.0] - 2026-06-11
+
+### Added
+- Naruto Loop Mesh dynamic loop runtime.
+- Goal-to-loop compiler.
+- Loop graph planner/decomposer.
+- Loop-local maker/checker mini swarms.
+- Loop owner lease and collision guard.
+- Loop-local affected gate selector.
+- Loop state/run-log/budget/proof artifacts.
+- Integration loop finalizer with GPT arbiter.
+- `sks loop plan/run/status/proof/kill/resume`.
+
+### Fixed
+- Heavy goal pipeline no longer runs as one monolithic execution graph.
+- Small changes use loop-local affected gates before integration gates.
+- Parallel workers are grouped into independent mini-loops with local checkers.
+- Goal command remains compatible but internal runtime compiles to loop graph by default.
+
 ## [3.0.4] - 2026-06-10
 
 ### Added
