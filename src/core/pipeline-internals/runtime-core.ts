@@ -1175,9 +1175,16 @@ export async function recordContext7Evidence(root: any, state: any, payload: any
   const stage = context7Stage(payload);
   if (!stage) return null;
   if (!await shouldWritePipelineEvidence(root, state)) return null;
-  const record = { ts: nowIso(), stage, tool: context7ToolName(payload), payload_keys: Object.keys(payload || {}).sort() };
   const id = state?.mission_id;
   const file = id ? path.join(missionDir(root, id), 'context7-evidence.jsonl') : path.join(root, '.sneakoscope', 'state', 'context7-evidence.jsonl');
+  const record = {
+    ts: nowIso(),
+    stage,
+    tool: context7ToolName(payload),
+    payload_keys: Object.keys(payload || {}).sort(),
+    dedupe_key: context7DedupeKey(stage, payload)
+  };
+  if (await hasContext7EvidenceRecord(file, record.dedupe_key)) return null;
   await appendJsonl(file, record);
   if (id) {
     const evidence = await context7Evidence(root, state);
@@ -1254,11 +1261,82 @@ function context7ToolName(payload: any) {
 }
 
 function context7Stage(payload: any) {
-  const hay = JSON.stringify(payload || {});
+  const tool = context7ToolName(payload);
+  const direct = context7DirectSignal(payload);
+  if (!direct && !context7ToolLooksRelevant(tool)) return null;
+  const hay = [tool, direct].filter(Boolean).join('\n');
   if (!/(context7|resolve[-_]?library[-_]?id|get[-_]?library[-_]?docs|query[-_]?docs)/i.test(hay)) return null;
   if (/resolve[-_]?library[-_]?id/i.test(hay)) return 'resolve-library-id';
   if (/get[-_]?library[-_]?docs|query[-_]?docs/i.test(hay)) return 'get-library-docs';
   return 'context7';
+}
+
+function context7ToolLooksRelevant(tool: any) {
+  return /(^|[_:/.-])(context7|resolve[-_]?library[-_]?id|get[-_]?library[-_]?docs|query[-_]?docs)($|[_:/.-])/i.test(String(tool || ''));
+}
+
+function context7DirectSignal(payload: any = {}) {
+  const source = String(payload.source || '');
+  const tool = context7ToolName(payload);
+  if (/^sks context7 evidence/i.test(source)) {
+    return [
+      tool,
+      source,
+      payload.library,
+      payload.library_id,
+      payload.docs_tool
+    ].filter(Boolean).join('\n');
+  }
+  if (context7ToolLooksRelevant(tool)) {
+    const input = payload.tool_input || payload.toolInput || payload.input || payload.tool?.input || {};
+    return JSON.stringify({
+      tool,
+      library: payload.library,
+      library_id: payload.library_id,
+      docs_tool: payload.docs_tool,
+      input: context7SafeInput(input)
+    });
+  }
+  return '';
+}
+
+function context7SafeInput(input: any) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input ?? null;
+  const out: Record<string, any> = {};
+  for (const key of ['name', 'tool', 'library', 'libraryName', 'library_id', 'libraryId', 'context7CompatibleLibraryID', 'query', 'topic', 'tokens']) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) out[key] = input[key];
+  }
+  return out;
+}
+
+function context7DedupeKey(stage: any, payload: any = {}) {
+  const input = payload.tool_input || payload.toolInput || payload.input || payload.tool?.input || {};
+  const library = payload.library_id
+    || payload.library
+    || input.libraryId
+    || input.context7CompatibleLibraryID
+    || input.libraryName
+    || input.library
+    || '';
+  const query = input.query || input.topic || payload.query || payload.topic || '';
+  return [
+    stage,
+    context7ToolName(payload),
+    String(library).trim().toLowerCase(),
+    String(query).trim().toLowerCase()
+  ].join('|');
+}
+
+async function hasContext7EvidenceRecord(file: any, key: any) {
+  const text = await readText(file, '');
+  for (const line of text.split(/\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line);
+      if (entry.dedupe_key === key) return true;
+    } catch {}
+  }
+  return false;
 }
 
 export async function context7Evidence(root: any, state: any) {

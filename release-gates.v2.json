@@ -2976,6 +2976,34 @@
       ]
     },
     {
+      "id": "context7:evidence-dedupe",
+      "command": "npm run context7:evidence-dedupe --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "core-skill:card-schema",
       "command": "npm run core-skill:card-schema --silent",
       "deps": [],
