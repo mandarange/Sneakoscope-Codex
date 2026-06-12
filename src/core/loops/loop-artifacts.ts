@@ -28,8 +28,28 @@ export function loopBudgetPath(root: string, missionId: string, loopId: string):
   return path.join(loopNodeRoot(root, missionId, loopId), 'loop-budget.json');
 }
 
+export function loopCheckpointPath(root: string, missionId: string, loopId: string, iteration: number, phase: string): string {
+  return path.join(loopNodeRoot(root, missionId, loopId), 'checkpoints', `${String(Math.max(1, Math.floor(iteration))).padStart(4, '0')}-${sanitizeArtifactPart(phase)}.json`);
+}
+
+export function loopLatestCheckpointPath(root: string, missionId: string, loopId: string): string {
+  return path.join(loopNodeRoot(root, missionId, loopId), 'checkpoint-latest.json');
+}
+
 export function loopGraphProofPath(root: string, missionId: string): string {
   return path.join(loopRoot(root, missionId), 'loop-graph-proof.json');
+}
+
+export function loopIntegrationMergePath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'integration-merge.json');
+}
+
+export function loopGptFinalArbiterPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'loop-gpt-final-arbiter.json');
+}
+
+export function loopKillRequestPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'kill-request.json');
 }
 
 export function loopGatePath(root: string, missionId: string, loopId: string, gateId: string): string {

@@ -376,6 +376,9 @@ async function narutoRun(parsed: NarutoArgs) {
     serviceTier: 'fast',
     noFast: false,
     writeMode: writeCapable ? parsed.writeMode || 'parallel' : 'off',
+    applyPatches: parsed.applyPatches,
+    dryRunPatches: parsed.dryRunPatches,
+    maxWriteAgents: parsed.maxWriteAgents,
     gitWorktreePolicy: worktreePolicy,
     narutoWorkGraph: workGraph,
     narutoAllocationPolicy: allocationPolicy,
@@ -495,6 +498,7 @@ async function narutoRun(parsed: NarutoArgs) {
       headless_workers: parallelRuntime.headless_workers,
       passed: parallelRuntime.passed
     } : null,
+    parallel_write_policy: result.parallel_write_policy || null,
     local_worker: localWorkerSummary,
     finalizer,
     proof: result.proof?.status || 'missing',
@@ -529,6 +533,7 @@ function compactNarutoRunResult(result: any) {
     mission_id: result?.mission_id || null,
     route: result?.route || NARUTO_ROUTE,
     backend: result?.backend || null,
+    parallel_write_policy: result?.parallel_write_policy || null,
     target_active_slots: result?.target_active_slots ?? null,
     proof: result?.proof ? {
       ok: result.proof.ok === true,
@@ -758,7 +763,7 @@ async function narutoHelp(parsed: NarutoArgs) {
     mode: 'NARUTO',
     description: 'Shadow Clone Swarm: fan out up to ' + MAX_NARUTO_AGENT_COUNT + ' parallel clone sessions.',
     usage: [
-      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama] [--local-model|--no-ollama] [--work-items N] [--real] [--readonly] [--json]',
+      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama] [--local-model|--no-ollama] [--work-items N] [--write-mode parallel|serial|off] [--apply-patches] [--dry-run-patches] [--real] [--readonly] [--json]',
       'sks naruto status [--mission <id>] [--json]',
       'sks naruto proof latest [--messages 20] [--json]'
     ],
@@ -787,6 +792,9 @@ interface NarutoArgs {
   ollamaModel: string | null
   ollamaBaseUrl: string | null
   writeMode: 'proof-safe' | 'parallel' | 'serial' | 'off' | null
+  applyPatches: boolean
+  dryRunPatches: boolean
+  maxWriteAgents: number
   json: boolean
   missionId: string
   noOpenZellij: boolean
@@ -816,6 +824,9 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')
   const writeModeRaw = String(readOption(args, '--write-mode', hasFlag(args, '--parallel-write') ? 'parallel' : '') || '')
   const writeMode = (['proof-safe', 'parallel', 'serial', 'off'].includes(writeModeRaw) ? writeModeRaw : null) as NarutoArgs['writeMode']
+  const applyPatches = hasFlag(args, '--apply-patches')
+  const dryRunPatches = hasFlag(args, '--dry-run-patches') || hasFlag(args, '--dry-run-patch')
+  const maxWriteAgents = Math.max(0, Math.floor(Number(readOption(args, '--max-write-agents', '0')) || 0))
   const positionalMission = action === 'dashboard' || action === 'workers' || action === 'status' || action === 'proof'
     ? positionalArgs(rest, new Set()).find((arg) => /^latest$|^M-/.test(arg))
     : null
@@ -827,9 +838,9 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const smoke = hasFlag(args, '--smoke')
   const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
   const messages = normalizeMessages(readOption(args, '--messages', '8'))
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
+  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
 }
 
 function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {

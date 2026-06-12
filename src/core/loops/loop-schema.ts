@@ -110,6 +110,17 @@ export interface SksLoopPlan {
     source_command: 'goal' | 'loop' | 'naruto' | 'qa-loop' | 'research';
   };
   blockers: string[];
+  integration_merge?: {
+    ok: boolean;
+    artifact_path?: string;
+    applied_loops?: string[];
+    conflict_loops?: string[];
+  };
+  gpt_final_arbiter?: {
+    ok: boolean;
+    artifact_path?: string;
+    verdict?: string;
+  };
 }
 
 export interface SksLoopSafetyPolicy {
@@ -168,12 +179,19 @@ export interface SksLoopProof {
     worker_count: number;
     artifacts: string[];
     patch_candidates: string[];
+    backend?: string;
+    changed_files?: string[];
+    runtime_proof_path?: string | null;
   };
   checker_result: {
     ok: boolean;
     worker_count: number;
     artifacts: string[];
     blockers: string[];
+    backend?: string;
+    checker_findings?: string[];
+    fresh_session?: boolean;
+    runtime_proof_path?: string | null;
   };
   gate_result: {
     ok: boolean;
@@ -181,6 +199,7 @@ export interface SksLoopProof {
     passed_gates: string[];
     failed_gates: string[];
     skipped_gates: string[];
+    blockers?: string[];
   };
   budget: {
     used: SksLoopState['budget_used'];
@@ -190,6 +209,17 @@ export interface SksLoopProof {
   patch_bytes: number;
   handoff: SksLoopState['handoff'];
   blockers: string[];
+  integration_merge?: {
+    ok: boolean;
+    artifact_path?: string;
+    applied_loops?: string[];
+    conflict_loops?: string[];
+  };
+  gpt_final_arbiter?: {
+    ok: boolean;
+    artifact_path?: string;
+    verdict?: string;
+  };
 }
 
 export interface SksLoopGraphProof {
@@ -215,6 +245,17 @@ export interface SksLoopGraphProof {
     skipped: string[];
   };
   blockers: string[];
+  integration_merge?: {
+    ok: boolean;
+    artifact_path?: string;
+    applied_loops?: string[];
+    conflict_loops?: string[];
+  };
+  gpt_final_arbiter?: {
+    ok: boolean;
+    artifact_path?: string;
+    verdict?: string;
+  };
 }
 
 export interface SksLoopGraphResult {

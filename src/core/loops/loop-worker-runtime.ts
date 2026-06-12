@@ -1,0 +1,320 @@
+import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
+import { ensureDir, nowIso, readJson, runProcess, writeJsonAtomic } from '../fsx.js';
+import type { NarutoWorkGraph, NarutoWorkItem } from '../naruto/naruto-work-item.js';
+import type { SksLoopNode, SksLoopPlan } from './loop-schema.js';
+import { loopNodeRoot } from './loop-artifacts.js';
+import { buildLoopCheckerPrompt, buildLoopMakerPrompt } from './loop-worker-prompts.js';
+
+export interface LoopWorkerRunInput {
+  root: string;
+  plan: SksLoopPlan;
+  node: SksLoopNode;
+  phase: 'maker' | 'checker';
+  worktree?: {
+    id: string | null;
+    path: string | null;
+    branch: string | null;
+  };
+  /** Read-only execution (checker phase). Does NOT imply fixture mode. */
+  noMutation?: boolean;
+  /** Deterministic fixture run (test-only / gate checks). */
+  fixture?: boolean;
+  timeoutMs?: number;
+  makerArtifacts?: string[];
+}
+
+export interface LoopWorkerRunResult {
+  schema: 'sks.loop-worker-run-result.v1';
+  ok: boolean;
+  mission_id: string;
+  loop_id: string;
+  phase: 'maker' | 'checker';
+  worker_count: number;
+  backend: 'native-agent-orchestrator' | 'deterministic-fixture' | 'mock';
+  artifacts: string[];
+  patch_candidates: string[];
+  checker_findings: string[];
+  changed_files: string[];
+  blockers: string[];
+  runtime_proof_path: string | null;
+  worker_ids: string[];
+  session_ids: string[];
+}
+
+export async function runLoopMakerWorkers(input: Omit<LoopWorkerRunInput, 'phase'>): Promise<LoopWorkerRunResult> {
+  return runLoopWorkers({ ...input, phase: 'maker' });
+}
+
+export async function runLoopCheckerWorkers(input: Omit<LoopWorkerRunInput, 'phase'>): Promise<LoopWorkerRunResult> {
+  return runLoopWorkers({ ...input, phase: 'checker', noMutation: true });
+}
+
+async function runLoopWorkers(input: LoopWorkerRunInput): Promise<LoopWorkerRunResult> {
+  if (shouldUseFixture(input)) return runLoopWorkerFixture(input);
+  return runLoopWorkerNative(input);
+}
+
+// `noMutation` used to force fixture mode here, which silently turned EVERY
+// checker run into a deterministic fixture (checkers always pass
+// noMutation: true for read-only semantics) — real model verification never
+// happened. Fixture mode is now an explicit, separate test-only signal.
+function shouldUseFixture(input: LoopWorkerRunInput): boolean {
+  const requested = input.fixture === true || process.env.SKS_LOOP_RUNTIME_FIXTURE === '1';
+  if (!requested) return false;
+  const allowed = loopFixtureAllowed(input);
+  if (!allowed.ok) {
+    throw new Error(`loop_fixture_runtime_forbidden:${allowed.reason}`);
+  }
+  return true;
+}
+
+async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorkerRunResult> {
+  const prompt = input.phase === 'maker'
+    ? buildLoopMakerPrompt({ plan: input.plan, node: input.node, worktreePath: input.worktree?.path || null })
+    : buildLoopCheckerPrompt({ plan: input.plan, node: input.node, makerArtifacts: input.makerArtifacts || [] });
+  const workerCount = input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count;
+  const workGraph = buildLoopNarutoWorkGraph(input, workerCount);
+  // Root-cause-1 fix: keep the ORCHESTRATOR root on the MAIN repo (input.root), not the
+  // loop worktree. All zellij/right-column/slot-telemetry state derives from the orchestrator
+  // root, so anchoring it on input.root makes the SLOTS snapshot land under
+  // <main repo>/.sneakoscope/missions/<missionId>/... where the main session's anchor + slot
+  // renderer panes watch it (previously it landed under the worktree and went permanently stale).
+  // The loop worktree is still where workers cwd + write: it is threaded through the per-worker
+  // `worktree` opt below, which launchWorker reads as ctx.opts.worktree -> workerCwd.
+  const insideZellij = Boolean(process.env.SKS_ZELLIJ_SESSION_NAME || process.env.ZELLIJ);
+  const visiblePaneCap = Math.min(resolveLoopVisiblePaneCap(workerCount), Math.max(1, workerCount));
+  const zellijPlacementOpts = insideZellij ? {
+    workerPlacement: 'zellij-pane' as const,
+    ...(process.env.SKS_ZELLIJ_SESSION_NAME ? { zellijSessionName: process.env.SKS_ZELLIJ_SESSION_NAME } : {}),
+    zellijVisiblePaneCap: visiblePaneCap
+  } : {};
+  const orchestrator = await runNativeAgentOrchestrator({
+    root: input.root,
+    missionId: input.plan.mission_id,
+    prompt,
+    route: '$Naruto',
+    backend: 'codex-sdk',
+    readonly: input.phase === 'checker',
+    workspaceWrite: input.phase === 'maker',
+    desiredWorkItemCount: workGraph.total_work_items,
+    minimumWorkItems: 1,
+    maxAgentCount: Math.max(1, workerCount),
+    targetActiveSlots: Math.max(1, workerCount),
+    visualLaneCount: visiblePaneCap,
+    narutoMode: true,
+    narutoWorkGraph: workGraph,
+    ...zellijPlacementOpts,
+    ...(input.worktree?.path ? {
+      worktree: {
+        id: input.worktree.id || `loop-${input.node.loop_id}-${input.phase}`,
+        path: input.worktree.path,
+        branch: input.worktree.branch || 'unknown',
+        main_repo_root: input.root
+      }
+    } : {}),
+    gitWorktreePolicy: input.worktree?.path ? {
+      mode: 'patch-envelope-only',
+      required: false,
+      main_repo_root: input.root,
+      worktree_root: input.worktree.path,
+      fallback_reason: null
+    } : null
+  });
+  return normalizeNativeResult(input, orchestrator);
+}
+
+async function normalizeNativeResult(input: LoopWorkerRunInput, result: any): Promise<LoopWorkerRunResult> {
+  const artifacts = collectArtifactPaths(result);
+  const changedFiles = stringArray(result?.changed_files || result?.proof?.changed_files || result?.results?.flatMap?.((row: any) => row?.changed_files || []));
+  const blockers = [
+    ...(result?.ok === true ? [] : ['loop_worker_native_orchestrator_not_ok']),
+    ...stringArray(result?.blockers || result?.proof?.blockers)
+  ];
+  const proofPath = path.join(loopNodeRoot(input.root, input.plan.mission_id, input.node.loop_id), input.phase, 'worker-runtime-result.json');
+  const normalized: LoopWorkerRunResult = {
+    schema: 'sks.loop-worker-run-result.v1',
+    ok: blockers.length === 0,
+    mission_id: input.plan.mission_id,
+    loop_id: input.node.loop_id,
+    phase: input.phase,
+    worker_count: input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count,
+    backend: 'native-agent-orchestrator',
+    artifacts,
+    patch_candidates: input.phase === 'maker' ? artifacts.filter((artifact) => artifact.includes('patch')) : [],
+    checker_findings: input.phase === 'checker' ? artifacts.filter((artifact) => artifact.includes('checker') || artifact.includes('finding')) : [],
+    changed_files: changedFiles,
+    blockers: [...new Set(blockers)],
+    runtime_proof_path: proofPath,
+    worker_ids: stringArray(result?.results?.map?.((row: any) => row?.agent_id || row?.id)),
+    session_ids: stringArray(result?.results?.map?.((row: any) => row?.session_id))
+  };
+  await writeJsonAtomic(proofPath, { ...normalized, native_result_summary: summarizeNativeResult(result), generated_at: nowIso() });
+  return normalized;
+}
+
+async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWorkerRunResult> {
+  const dir = path.join(loopNodeRoot(input.root, input.plan.mission_id, input.node.loop_id), input.phase);
+  await ensureDir(dir);
+  const resultPath = path.join(dir, 'worker-runtime-result.json');
+  const childInputPath = path.join(dir, 'worker-fixture-intake.json');
+  await writeJsonAtomic(childInputPath, {
+    schema: 'sks.loop-worker-fixture-intake.v1',
+    root: input.root,
+    mission_id: input.plan.mission_id,
+    loop_id: input.node.loop_id,
+    phase: input.phase,
+    worker_count: input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count,
+    result_path: resultPath,
+    owner_scope: input.node.owner_scope,
+    maker_artifacts: input.makerArtifacts || []
+  });
+  const child = await runProcess(process.execPath, [fixtureChildEntrypoint(), childInputPath], {
+    cwd: input.root,
+    timeoutMs: input.timeoutMs || 30000,
+    maxOutputBytes: 64 * 1024
+  });
+  const result = await readJson<LoopWorkerRunResult | null>(resultPath, null);
+  if (!result) {
+    return {
+      schema: 'sks.loop-worker-run-result.v1',
+      ok: false,
+      mission_id: input.plan.mission_id,
+      loop_id: input.node.loop_id,
+      phase: input.phase,
+      worker_count: 0,
+      backend: 'deterministic-fixture',
+      artifacts: [],
+      patch_candidates: [],
+      checker_findings: [],
+      changed_files: [],
+      blockers: [`loop_worker_fixture_child_missing_result:${child.code}`],
+      runtime_proof_path: resultPath,
+      worker_ids: [],
+      session_ids: []
+    };
+  }
+  return {
+    ...result,
+    ok: result.ok && child.code === 0,
+    blockers: [
+      ...result.blockers,
+      ...(child.code === 0 ? [] : [`loop_worker_fixture_child_exit:${child.code}`])
+    ]
+  };
+}
+
+function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number): NarutoWorkGraph {
+  const workItems: NarutoWorkItem[] = Array.from({ length: Math.max(1, workerCount) }, (_, index) => {
+    const id = `${input.node.loop_id}-${input.phase}-${index + 1}`;
+    const writeAllowed = input.phase === 'maker';
+    return {
+      id,
+      kind: writeAllowed ? 'code_modification' : 'verification',
+      title: `${input.phase} worker ${index + 1} for ${input.node.loop_id}`,
+      target_paths: [...input.node.owner_scope.files, ...input.node.owner_scope.directories],
+      readonly_paths: input.phase === 'checker' ? [...input.node.owner_scope.files, ...input.node.owner_scope.directories] : [],
+      write_paths: writeAllowed ? [...input.node.owner_scope.files, ...input.node.owner_scope.directories] : [],
+      required_role: input.phase,
+      write_allowed: writeAllowed,
+      verification_required: input.phase === 'checker',
+      dependencies: [],
+      can_run_in_parallel_with: [],
+      conflicts_with: [],
+      estimated_cost: { tokens: 8000, latency_ms: 30000, cpu_weight: 1, memory_mb: 512, gpu_weight: 0 },
+      lease_requirements: input.node.owner_scope.files.map((file) => ({ path: file, kind: writeAllowed ? 'write' as const : 'read' as const })),
+      acceptance: { requires_patch_envelope: writeAllowed, requires_verification: !writeAllowed, requires_gpt_final: input.node.risk.requires_gpt_final },
+      owner: input.node.loop_id,
+      allocation_reason: 'loop-worker-runtime',
+      allocation_score: 1,
+      allocation_hints: null,
+      lane: input.phase,
+      worktree: {
+        mode: input.worktree?.path ? 'patch-envelope-only' : 'git-worktree',
+        required: input.node.worktree.required,
+        allocation_required: false
+      }
+    };
+  });
+  return {
+    schema: 'sks.naruto-work-graph.v1',
+    route: '$Naruto',
+    requested_clones: workerCount,
+    total_work_items: workItems.length,
+    readonly: input.phase === 'checker',
+    write_capable: input.phase === 'maker',
+    work_items: workItems,
+    active_waves: [{ wave_id: `${input.node.loop_id}-${input.phase}`, work_item_ids: workItems.map((item) => item.id), write_paths: workItems.flatMap((item) => item.write_paths), conflict_count: 0 }],
+    mixed_work_kinds: [...new Set(workItems.map((item) => item.kind))],
+    write_allowed_count: workItems.filter((item) => item.write_allowed).length,
+    worktree_policy: {
+      mode: input.worktree?.path ? 'patch-envelope-only' : 'git-worktree',
+      required: input.node.worktree.required,
+      main_repo_root: input.root,
+      worktree_root: null,
+      fallback_reason: input.worktree?.path ? 'loop_worktree_already_allocated' : null
+    },
+    blockers: [],
+    ok: true
+  };
+}
+
+function collectArtifactPaths(result: any): string[] {
+  return stringArray([
+    result?.ledger_root,
+    result?.proof?.artifact,
+    ...(Array.isArray(result?.results) ? result.results.flatMap((row: any) => row?.artifacts || row?.patch_queue_refs || []) : [])
+  ]);
+}
+
+function summarizeNativeResult(result: any): Record<string, unknown> {
+  return {
+    ok: result?.ok === true,
+    status: result?.status || null,
+    mission_id: result?.mission_id || null,
+    backend: result?.backend || null,
+    result_count: Array.isArray(result?.results) ? result.results.length : 0,
+    blockers: stringArray(result?.blockers || result?.proof?.blockers).slice(0, 20)
+  };
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.flat().map((item) => String(item || '').trim()).filter(Boolean))];
+}
+
+// Visible pane cap for loop workers: defaults to min(4, workers) so the right
+// column stays readable; SKS_ZELLIJ_VISIBLE_PANE_CAP overrides for tall
+// terminals (overflow workers run headless and stay visible in SLOTS rows).
+function resolveLoopVisiblePaneCap(workerCount: number): number {
+  const fromEnv = Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || 0);
+  if (Number.isFinite(fromEnv) && fromEnv >= 1) return Math.floor(fromEnv);
+  return Math.min(4, Math.max(1, workerCount));
+}
+
+function fixtureChildEntrypoint(): string {
+  return fileURLToPath(new URL('../../scripts/loop-worker-fixture-child.js', import.meta.url));
+}
+
+function loopFixtureAllowed(input: LoopWorkerRunInput): { ok: boolean; reason: string } {
+  const argv = process.argv.join(' ');
+  const scriptIsCheck = /(?:^|\s)(?:.*[\/\\])?(?:dist|src)[\/\\]scripts[\/\\][^\s]*(?:check|blackbox)\.(?:js|ts)(?:\s|$)/.test(argv);
+  const explicitTestEnv = process.env.NODE_ENV === 'test'
+    || process.env.SKS_TEST_RUNTIME_FIXTURE_ALLOWED === '1'
+    || process.env.VITEST_WORKER_ID !== undefined
+    || process.env.JEST_WORKER_ID !== undefined
+    || process.env.NODE_V8_COVERAGE !== undefined;
+  const tempRoot = isUnderTempRoot(input.root) && /^M-check-/.test(input.plan.mission_id);
+  if (scriptIsCheck) return { ok: true, reason: 'release_check_script' };
+  if (explicitTestEnv) return { ok: true, reason: 'test_environment' };
+  if (tempRoot) return { ok: true, reason: 'hermetic_temp_loop_check' };
+  return { ok: false, reason: 'fixture_requires_test_context' };
+}
+
+function isUnderTempRoot(root: string): boolean {
+  const normalizedRoot = path.resolve(root);
+  const tempRoot = path.resolve(os.tmpdir());
+  return normalizedRoot === tempRoot || normalizedRoot.startsWith(`${tempRoot}${path.sep}`);
+}

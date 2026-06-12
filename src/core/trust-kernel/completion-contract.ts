@@ -1,4 +1,5 @@
 import { validateCompletionProof } from '../proof/validation.js';
+import { rootCauseAnalysisIssue } from '../proof/root-cause-policy.js';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -36,6 +37,8 @@ export function validateCompletionContract(contract: unknown = {}, proof: unknow
   if (highWrongness > 0 && !referenceOnlyPartial) issues.push('active_wrongness_high');
   if (proofRecord.status === 'verified' && activeWrongness > 0) issues.push('active_wrongness_requires_verified_partial');
   if (claimLinksActiveWrongness(proofRecord, wrongness)) issues.push('claim_linked_to_active_wrongness');
+  const rootCauseIssue = rootCauseAnalysisIssue(proofRecord, issues);
+  if (rootCauseIssue) issues.push(rootCauseIssue);
   const status = typeof proofRecord.status === 'string'
     ? proofRecord.status
     : typeof contractRecord.status === 'string'

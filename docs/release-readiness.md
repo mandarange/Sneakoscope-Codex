@@ -1,5 +1,7 @@
 # Release Readiness
 
+SKS 3.1.1 is the Naruto Loop Mesh hardening release. It keeps the Loop Graph as the execution SSOT for goals and loop commands, removes the runtime fixture shortcut from real checker execution, derives loop worker counts from scope/risk/parallelism instead of a fixed two-worker cap, adds configurable visible loop panes, and blocks problem-bearing completion proofs unless root-cause analysis plus corrective evidence is recorded.
+
 SKS 3.1.0 is the Naruto Loop Mesh release. It makes the Loop Graph the execution SSOT for goals and loop commands, adds loop-local maker/checker mini swarms, owner leases, affected gate selection, durable loop state/proof artifacts, compact Zellij loop observability, goal-to-loop compatibility, and release DAG coverage for the new loop runtime.
 
 SKS 3.0.4 is the actual Codex 0.139 real-probe closure release on top of 3.0.3. It keeps the hermetic 0.139 fixture gates and adds `codex:0139-real-probes`, `codex:0139-real-probe-summary`, `doctor:codex-0139-real-probes`, and strict real-check gates for web search, rich schema capture, doctor redaction, plugin marketplace/cache behavior, `-P` profile alias proof, interrupt-agent events, image referenced-path routing, and sandbox/proxy preservation. Publish readiness now surfaces the real-probe summary in doctor/release body output and blocks strict release when actual high-value probes are skipped or failed.

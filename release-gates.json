@@ -1326,6 +1326,19 @@
       "can_run_incremental": true
     },
     {
+      "id": "core-skill:trainer-loop",
+      "tier": "P0",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/skills/**",
+        "schemas/skills/**",
+        "src/scripts/core-skill-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "dfix:blackbox-fast",
       "tier": "P1",
       "cost": "hermetic",

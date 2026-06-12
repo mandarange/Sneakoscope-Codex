@@ -1,6 +1,8 @@
-import { writeJsonAtomic } from '../fsx.js';
+import path from 'node:path';
+import { readJson, runProcess, writeJsonAtomic } from '../fsx.js';
 import { allGateIds, type SksLoopGatePlan, type SksLoopNode } from './loop-schema.js';
-import { loopGatePath } from './loop-artifacts.js';
+import { loopBudgetPath, loopGatePath, loopStatePath } from './loop-artifacts.js';
+import { resolveLoopGate, type LoopGateDefinition } from './loop-gate-registry.js';
 
 export interface SksLoopGateRunResult {
   ok: boolean;
@@ -17,28 +19,123 @@ export async function runLoopGates(input: {
   node: SksLoopNode;
   gates: SksLoopGatePlan;
   timeoutMs?: number;
+  checkerArtifacts?: string[];
 }): Promise<SksLoopGateRunResult> {
-  const selected = allGateIds(input.gates).filter((gate) => gate !== 'release:check');
-  const failed: string[] = selected.filter((gate) => gate === 'human:handoff-required');
-  const passed = selected.filter((gate) => !failed.includes(gate));
+  const selected = allGateIds(input.gates);
+  const failed: string[] = [];
+  const passed: string[] = [];
+  const skipped: string[] = [];
+  const blockers: string[] = [];
   for (const gate of selected) {
-    await writeJsonAtomic(loopGatePath(input.root, input.missionId, input.node.loop_id, gate), {
-      schema: 'sks.loop-gate-result.v1',
-      ok: !failed.includes(gate),
-      gate_id: gate,
-      loop_id: input.node.loop_id,
-      timeout_ms: input.timeoutMs || 120000,
-      cached_allowed: true,
-      full_release_check_inside_loop: false,
-      generated_at: new Date().toISOString()
-    });
+    const result = await runOneGate(input, gate);
+    if (result.skipped) skipped.push(gate);
+    else if (result.ok) passed.push(gate);
+    else failed.push(gate);
+    blockers.push(...result.blockers);
   }
   return {
     ok: failed.length === 0,
     selected_gates: selected,
     passed_gates: passed,
     failed_gates: failed,
-    skipped_gates: selected.includes('release:check') ? ['release:check'] : [],
-    blockers: failed.map((gate) => `gate_failed:${gate}`)
+    skipped_gates: skipped,
+    blockers
   };
+}
+
+async function runOneGate(input: {
+  root: string;
+  missionId: string;
+  node: SksLoopNode;
+  timeoutMs?: number;
+  checkerArtifacts?: string[];
+}, gateId: string): Promise<{ ok: boolean; skipped: boolean; blockers: string[] }> {
+  const started = Date.now();
+  const definition = await resolveLoopGate(input.root, gateId);
+  const fullReleaseCheckInsideLoop = gateId === 'release:check' && input.node.route !== '$Integration';
+  const unknown = !definition;
+  const packageJson = unknown ? await readJson<any>(path.join(input.root, 'package.json'), null) : null;
+  const skipUnknownFixtureGate = unknown && !packageJson;
+  const blockers: string[] = [
+    ...(unknown && !skipUnknownFixtureGate ? [`unknown_loop_gate:${gateId}`] : []),
+    ...(fullReleaseCheckInsideLoop ? ['full_release_check_inside_non_integration_loop'] : [])
+  ];
+  let ok = blockers.length === 0;
+  let skipped = skipUnknownFixtureGate;
+  let exitCode: number | null = null;
+  let stdoutTail = '';
+  let stderrTail = '';
+  let timedOut = false;
+  const fixtureMode = process.env.SKS_LOOP_GATE_FIXTURE === '1';
+
+  if (definition && ok) {
+    if (fixtureMode && definition.source !== 'builtin-pseudo') {
+      ok = true;
+    } else if (definition.source === 'builtin-pseudo') {
+      const builtin = await runBuiltinGate(input.root, input.missionId, input.node.loop_id, definition, input.checkerArtifacts || []);
+      ok = builtin.ok;
+      skipped = builtin.skipped;
+      blockers.push(...builtin.blockers);
+    } else {
+      const command = definition.command;
+      const result = await runProcess(process.env.SHELL || '/bin/sh', ['-lc', command], {
+        cwd: input.root,
+        timeoutMs: input.timeoutMs || definition.timeout_ms,
+        maxOutputBytes: 512 * 1024,
+        env: {
+          SKS_LOOP_ID: input.node.loop_id,
+          SKS_MISSION_ID: input.missionId,
+          SKS_LOOP_GATE: gateId
+        }
+      });
+      exitCode = result.code;
+      stdoutTail = result.stdout.slice(-8000);
+      stderrTail = result.stderr.slice(-8000);
+      timedOut = result.timedOut;
+      ok = result.code === 0;
+      if (!ok) blockers.push(`gate_command_failed:${gateId}:${result.code}`);
+    }
+  }
+
+  const artifact = {
+    schema: 'sks.loop-gate-result.v1',
+    ok,
+    gate_id: gateId,
+    loop_id: input.node.loop_id,
+    command: definition?.command || null,
+    source: definition?.source || null,
+    exit_code: exitCode,
+    duration_ms: Math.max(1, Date.now() - started),
+    stdout_tail: stdoutTail,
+    stderr_tail: stderrTail,
+    cached_allowed: definition?.cache_allowed ?? false,
+    fixture_mode: fixtureMode,
+    skipped,
+    deferred_unknown_fixture_gate: skipUnknownFixtureGate,
+    timed_out: timedOut,
+    full_release_check_inside_loop: fullReleaseCheckInsideLoop,
+    generated_at: new Date().toISOString(),
+    blockers
+  };
+  await writeJsonAtomic(loopGatePath(input.root, input.missionId, input.node.loop_id, gateId), artifact);
+  return { ok, skipped, blockers };
+}
+
+async function runBuiltinGate(root: string, missionId: string, loopId: string, definition: LoopGateDefinition, checkerArtifacts: string[]): Promise<{ ok: boolean; skipped: boolean; blockers: string[] }> {
+  if (definition.id === 'gpt:final-arbiter') return { ok: true, skipped: true, blockers: [] };
+  if (definition.id === 'human:handoff-required') return { ok: false, skipped: false, blockers: ['human_handoff_required'] };
+  if (definition.id === 'loop:state-valid') {
+    const state = await readJson<any>(loopStatePath(root, missionId, loopId), null);
+    return state?.schema === 'sks.loop-state.v1' ? { ok: true, skipped: false, blockers: [] } : { ok: false, skipped: false, blockers: ['loop_state_invalid'] };
+  }
+  if (definition.id === 'loop:budget-valid') {
+    const budget = await readJson<any>(loopBudgetPath(root, missionId, loopId), null);
+    return budget && typeof budget === 'object' ? { ok: true, skipped: false, blockers: [] } : { ok: false, skipped: false, blockers: ['loop_budget_invalid'] };
+  }
+  if (definition.id === 'loop:checker-fresh-session') {
+    const artifacts = await Promise.all(checkerArtifacts.map((artifact) => readJson<any>(path.resolve(artifact), null)));
+    const fresh = artifacts.some((artifact) => artifact?.fresh_session === true && artifact?.approved === true);
+    return fresh ? { ok: true, skipped: false, blockers: [] } : { ok: false, skipped: false, blockers: ['loop_checker_fresh_session_missing'] };
+  }
+  return { ok: false, skipped: false, blockers: [`unknown_builtin_gate:${definition.id}`] };
 }

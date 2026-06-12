@@ -34,7 +34,7 @@ const teamRun = spawnSync(process.execPath, [
   '--json'
 ], { cwd: root, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 });
 const teamJson = parseJson(teamRun.stdout);
-const routePolicy = teamJson?.native_agent_run?.parallel_write_policy || null;
+const routePolicy = teamJson?.parallel_write_policy || teamJson?.run?.parallel_write_policy || teamJson?.native_agent_run?.parallel_write_policy || null;
 const report = { schema: 'sks.team-parallel-write-blackbox.v1', ok: merge.ok && applyResults.every((item) => item.ok) && teamRun.status === 0 && routePolicy?.route_level_flags_wired === true, merge, applyResults, route_command: { status: teamRun.status, stderr_tail: teamRun.stderr.slice(-2000), mission_id: teamJson?.mission_id || null, route_policy: routePolicy } };
 const out = path.join(root, '.sneakoscope', 'reports', 'team-parallel-write-blackbox.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });

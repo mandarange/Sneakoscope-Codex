@@ -46,9 +46,10 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
       ? 'now'
       : `${Math.max(1, Math.round(input.heartbeatAgeMs / 1000))}s ago`
   const files = firstNonEmptyList(input.changedFiles, input.patchFiles, input.plannedFiles, input.currentFile ? [input.currentFile] : [])
-  const events = (input.eventLines || []).filter(Boolean).slice(-3)
-  const stdout = (input.stdoutTail || []).filter(Boolean).slice(-2)
+  const events = (input.eventLines || []).filter(Boolean).slice(-10)
+  const stdout = (input.stdoutTail || []).filter(Boolean).slice(-6)
   const stderr = (input.stderrTail || []).filter(Boolean).slice(-1)
+  const fixtureLoopProof = String(input.backend || '').includes('fixture') || String(input.patchStatus || '').includes('fixture')
   const rows = [
     input.loopId ? `${trimInline(input.loopId, 28)} · ${trimInline(input.loopRole || input.role || 'worker', 14)} · ${input.slotId}` : null,
     `slot: ${input.slotId} / gen-${Math.max(1, Math.floor(Number(input.generationIndex) || 1))} / ${trimInline(input.status || 'running', 18)}`,
@@ -58,7 +59,8 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
     input.sessionId ? `session: ${trimInline(input.sessionId, 62)}` : null,
     `heartbeat: ${heartbeat}${input.heartbeatEvent ? `  event: ${trimInline(input.heartbeatEvent, 40)}` : ''}`,
     `doing: ${task}`,
-    input.loopGate ? `gate: ${trimInline(input.loopGate, 68)}` : null,
+    input.loopGate ? `gate: ${trimInline(input.loopGate, 68)}${input.verifyStatus ? ` · ${trimInline(input.verifyStatus, 18)}` : ''}` : null,
+    fixtureLoopProof ? 'fixture loop proof · not production execution' : null,
     `files: ${trimInline(files.length ? files.join(', ') : 'no changed file yet', 78)}`,
     `patch: ${trimInline(input.patchStatus || 'queued', 24)}  verify: ${trimInline(input.verifyStatus || 'queued', 24)}`,
     input.qaAppHandoffPending ? `QA app handoff pending: ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 55)}` : null,
@@ -139,7 +141,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
     path.join(artifactDir, 'python-codex-sdk-events.jsonl'),
     path.join(artifactDir, 'local-llm-events.jsonl'),
     path.join(artifactDir, 'zellij-worker-pane-events.jsonl')
-  ], 6)
+  ], 10)
   const patchFiles = patchPaths(patch || result)
   const changedFiles = normalizeList(result?.changed_files)
   const plannedFiles = normalizeList([
@@ -204,7 +206,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
     heartbeatEvent: heartbeatRows.length ? formatArtifactEvent(heartbeatRows[heartbeatRows.length - 1]) : null,
     worktreeId: result?.worktree?.id || intake?.worktree?.id || null,
     eventLines: eventRows.map(formatArtifactEvent).filter(Boolean),
-    stdoutTail: await readTextTailLines(path.join(artifactDir, 'worker.stdout.log'), 2),
+    stdoutTail: await readTextTailLines(path.join(artifactDir, 'worker.stdout.log'), 6),
     stderrTail: await readTextTailLines(path.join(artifactDir, 'worker.stderr.log'), 1),
     qaAppHandoffPending: ['pending', 'blocked_for_desktop_review'].includes(String(qaAppHandoff?.status || '')),
     qaAppHandoffArtifact: qaAppHandoff?.artifact_path || null,
@@ -244,6 +246,27 @@ export async function renderZellijSlotPaneStatusFromArtifacts(input: {
     telemetry_stale: status.telemetry_stale,
     telemetry_age_ms: status.telemetry_age_ms
   }
+}
+
+// Root-cause-3 fix: the watch loop never exited, so completed/failed panes lingered forever and
+// kept re-reporting staleness. Resolve whether this slot has reached a terminal state (status is
+// completed/failed/drained in telemetry) AND its worker-result.json exists, so the pane command
+// can render one final frame and exit instead of looping indefinitely.
+export async function resolveZellijSlotPaneExit(input: {
+  artifactDir: string
+  artifactRoot?: string
+  missionId?: string
+  slotId: string
+  generationIndex: number
+}): Promise<boolean> {
+  const resultExists = Boolean(await readJson(path.join(path.resolve(input.artifactDir), 'worker-result.json')))
+  if (!resultExists) return false
+  if (!input.missionId || input.missionId === 'latest') return true
+  const snapshot = await readZellijSlotTelemetrySnapshot(path.resolve(input.artifactRoot || input.artifactDir), input.missionId).catch(() => null)
+  if (!snapshot) return true
+  const slot = findTelemetrySlot(snapshot, input.slotId, input.generationIndex)
+  if (!slot) return true
+  return slot.status === 'completed' || slot.status === 'failed' || slot.status === 'drained'
 }
 
 export function buildZellijSlotPaneCommand(input: {
@@ -330,7 +353,7 @@ function artifactFallbackRows(text: string | null | undefined): string[] {
     .map((line) => line.replace(/^\|\s?/, '').replace(/\s?\|$/, '').trim())
     .filter((line) => /^(heartbeat|doing|files|event|out|err):\s+/i.test(line))
     .filter((line) => !/unknown|waiting for worker intake|no changed file yet/i.test(line))
-    .slice(-7)
+    .slice(-12)
     .map((line) => `live: ${trimInline(line, 72)}`)
 }
 
@@ -348,15 +371,18 @@ function telemetryStatus(snapshot: ZellijSlotTelemetrySnapshot | null) {
   const parsed = snapshot?.updated_at ? Date.parse(snapshot.updated_at) : NaN
   const telemetryAgeMs = Number.isFinite(parsed) ? Math.max(0, Date.now() - parsed) : Number.MAX_SAFE_INTEGER
   return {
-    telemetry_stale: telemetryAgeMs > 3000,
+    // Root-cause-3 fix: with a 1000ms+jitter flush throttle the old 3000ms threshold flapped
+    // constantly. Raise to 15000ms so brief gaps between flushes don't read as "stale", and only
+    // claim the worker may be gone after 60000ms of true silence.
+    telemetry_stale: telemetryAgeMs > 15000,
     telemetry_age_ms: telemetryAgeMs
   }
 }
 
 function staleTelemetryRows(ageMs: number): string[] {
   if (!Number.isFinite(ageMs)) return ['telemetry stale; worker may still be running']
-  if (ageMs > 10000) return ['telemetry stale; worker may still be running']
-  if (ageMs > 3000) return [`telemetry stale ${(ageMs / 1000).toFixed(1)}s`]
+  if (ageMs > 60000) return ['telemetry stale; worker may still be running']
+  if (ageMs > 15000) return [`telemetry stale ${(ageMs / 1000).toFixed(1)}s`]
   return []
 }
 
@@ -461,15 +487,17 @@ function lastEventLine(rows: any[]): string | null {
 function formatArtifactEvent(row: any): string {
   if (!row) return ''
   const status = trimInline(row.lane_status || row.status || row.event || row.event_type || row.type || row.sdk_event_type || 'event', 18)
+  // Prefer the latest LLM message text (message_tail/message) so the live pane shows what the
+  // model is actually saying, falling back to tool/file/blocker context when no message exists.
   const detail = firstText([
+    row.message_tail,
+    row.message,
     row.current_tool && row.current_file ? `tool ${row.current_tool} file ${row.current_file}` : null,
     row.current_file ? `file ${row.current_file}` : null,
     row.current_tool ? `tool ${row.current_tool}` : null,
-    row.message_tail,
     row.blocker ? `blocker ${row.blocker}` : null,
     row.request_id,
     row.pane_id ? `pane ${row.pane_id}` : null,
-    row.message,
     row.reason
   ])
   return trimInline(detail ? `${status}: ${detail}` : status, 96)

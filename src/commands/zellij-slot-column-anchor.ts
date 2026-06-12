@@ -8,7 +8,9 @@ export async function run(_command: string = 'zellij-slot-column-anchor', args: 
   const intervalMs = Math.max(250, Number(readOption(args, '--interval-ms', '1000') || 1000))
   for (;;) {
     const text = await renderZellijSlotColumnAnchorFromArtifacts({ artifactRoot, missionId, mode })
-    process.stdout.write('\x1Bc' + text + '\n')
+    // Cursor-home + clear-to-end redraw; `\x1Bc` (RIS) resets the pane's
+    // scrollback/modes every tick and intermittently breaks scrolling.
+    process.stdout.write('\x1b[H' + text + '\n\x1b[0J')
     if (!watch) break
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }

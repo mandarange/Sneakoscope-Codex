@@ -122,6 +122,7 @@ const tasks: VerificationTask[] = [
   task('core-skill:route-runtime-integration', 'npm run core-skill:route-runtime-integration --silent', { dependencies: ['build'] }),
   task('core-skill:promotion-side-effect-ledger', 'npm run core-skill:promotion-side-effect-ledger --silent', { dependencies: ['build'] }),
   task('core-skill:legacy-promotion-api-audit', 'npm run core-skill:legacy-promotion-api-audit --silent', { dependencies: ['build'] }),
+  task('core-skill:trainer-loop', 'npm run core-skill:trainer-loop --silent', { dependencies: ['build'] }),
   task('safety:side-effect-zero', 'npm run safety:side-effect-zero --silent', { dependencies: ['build'] }),
   task('safety:mutation-callsite-coverage', 'npm run safety:mutation-callsite-coverage --silent', { dependencies: ['build'] }),
   task('safety:mutation-callsite-coverage:repo-wide', 'npm run safety:mutation-callsite-coverage:repo-wide --silent', { dependencies: ['build'] }),

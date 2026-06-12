@@ -1,12 +1,11 @@
 {
   "schema": "sks.codex-0139-code-mode-web-search-policy.v1",
   "ok": true,
-  "generated_at": "2026-06-12T04:44:30.476Z",
   "allow_standalone_web_search_in_code_mode": true,
-  "real_probe_verified": true,
-  "evidence": {
-    "saw_web_search_event": true,
-    "saw_plaintext_result": true,
-    "result_contains_expected_marker": true
-  }
+  "actual_web_call_required_for_release": false,
+  "capability": {
+    "parsed_version": "0.139.0",
+    "supports_code_mode_web_search": true
+  },
+  "blockers": []
 }

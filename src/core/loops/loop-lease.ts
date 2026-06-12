@@ -1,5 +1,6 @@
 import { loopOwnerLedgerPath } from './loop-artifacts.js';
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js';
+import { withFileLock } from '../locks/file-lock.js';
 import type { SksLoopNode, SksLoopOwnerScope } from './loop-schema.js';
 
 export interface SksLoopLease {
@@ -22,32 +23,40 @@ interface SksLoopOwnerLedger {
 }
 
 export async function acquireLoopLease(root: string, plan: { mission_id: string }, node: SksLoopNode): Promise<SksLoopLease> {
-  const blockers = await detectLoopLeaseConflicts(root, plan.mission_id, node);
-  const lease: SksLoopLease = {
-    schema: 'sks.loop-lease.v1',
-    mission_id: plan.mission_id,
-    loop_id: node.loop_id,
-    owner_scope: node.owner_scope,
-    acquired_at: nowIso(),
-    expires_at: new Date(Date.now() + Math.max(60_000, node.budget.max_wall_ms)).toISOString(),
-    status: blockers.length ? 'conflict' : 'active',
-    worktree_id: node.worktree.required ? `sks-loop-${node.loop_id}` : null,
-    blockers
-  };
-  const ledger = await readLoopOwnerLedger(root, plan.mission_id);
-  const leases = ledger.leases.filter((row) => row.loop_id !== node.loop_id);
-  leases.push(lease);
-  await writeLoopOwnerLedger(root, plan.mission_id, leases);
-  return lease;
+  return withLoopOwnerLedgerLock(root, plan.mission_id, async () => {
+    const blockers = await detectLoopLeaseConflictsUnderLock(root, plan.mission_id, node);
+    const lease: SksLoopLease = {
+      schema: 'sks.loop-lease.v1',
+      mission_id: plan.mission_id,
+      loop_id: node.loop_id,
+      owner_scope: node.owner_scope,
+      acquired_at: nowIso(),
+      expires_at: new Date(Date.now() + Math.max(60_000, node.budget.max_wall_ms)).toISOString(),
+      status: blockers.length ? 'conflict' : 'active',
+      worktree_id: node.worktree.required ? `sks-loop-${node.loop_id}` : null,
+      blockers
+    };
+    const ledger = await readLoopOwnerLedger(root, plan.mission_id);
+    const leases = ledger.leases.filter((row) => row.loop_id !== node.loop_id);
+    leases.push(lease);
+    await writeLoopOwnerLedger(root, plan.mission_id, leases);
+    return lease;
+  });
 }
 
 export async function releaseLoopLease(root: string, missionId: string, loopId: string): Promise<void> {
-  const ledger = await readLoopOwnerLedger(root, missionId);
-  const leases = ledger.leases.map((lease) => lease.loop_id === loopId ? { ...lease, status: 'released' as const } : lease);
-  await writeLoopOwnerLedger(root, missionId, leases);
+  await withLoopOwnerLedgerLock(root, missionId, async () => {
+    const ledger = await readLoopOwnerLedger(root, missionId);
+    const leases = ledger.leases.map((lease) => lease.loop_id === loopId ? { ...lease, status: 'released' as const } : lease);
+    await writeLoopOwnerLedger(root, missionId, leases);
+  });
 }
 
 export async function detectLoopLeaseConflicts(root: string, missionId: string, node: SksLoopNode): Promise<string[]> {
+  return withLoopOwnerLedgerLock(root, missionId, () => detectLoopLeaseConflictsUnderLock(root, missionId, node));
+}
+
+async function detectLoopLeaseConflictsUnderLock(root: string, missionId: string, node: SksLoopNode): Promise<string[]> {
   const ledger = await readLoopOwnerLedger(root, missionId);
   const active = ledger.leases.filter((lease) => lease.status === 'active' && Date.parse(lease.expires_at) > Date.now());
   const blockers: string[] = [];
@@ -68,6 +77,14 @@ export async function detectLoopLeaseConflicts(root: string, missionId: string, 
     }
   }
   return [...new Set(blockers)];
+}
+
+async function withLoopOwnerLedgerLock<T>(root: string, missionId: string, fn: () => Promise<T>): Promise<T> {
+  return withFileLock({
+    lockPath: `${root}/.sneakoscope/locks/loop-owner-ledger-${missionId}.lock`,
+    timeoutMs: 30000,
+    staleMs: 5 * 60 * 1000
+  }, fn);
 }
 
 async function readLoopOwnerLedger(root: string, missionId: string): Promise<SksLoopOwnerLedger> {

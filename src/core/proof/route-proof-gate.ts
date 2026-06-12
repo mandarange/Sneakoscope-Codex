@@ -3,6 +3,7 @@ import { readRouteProof } from './proof-reader.js';
 import { validateCompletionProof } from './validation.js';
 import { normalizeProofRoute, proofStatusBlocks, routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from './route-proof-policy.js';
 import { routeRequiresAgentIntake } from '../agents/agent-plan.js';
+import { rootCauseAnalysisIssue } from './root-cause-policy.js';
 
 export async function validateRouteCompletionProof(root: any, { missionId = null, route = null, state = {}, visualClaim = undefined }: any = {}) {
   const proofRequired = state.proof_required === true || routeRequiresCompletionProof(route);
@@ -46,6 +47,8 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
   const imageUxReferenceOnlyPartial = proof.status === 'verified_partial' && proof.evidence?.image_ux_review?.reference_only === true;
   if (Number(wrongness?.high_severity_active || 0) > 0 && !imageUxReferenceOnlyPartial) issues.push('active_wrongness_high');
   if (proof.status === 'verified' && Number(wrongness?.active_count || 0) > 0) issues.push('active_wrongness_requires_partial');
+  const rootCauseIssue = rootCauseAnalysisIssue(proof, issues);
+  if (rootCauseIssue) issues.push(rootCauseIssue);
   return {
     ok: issues.length === 0,
     required: true,

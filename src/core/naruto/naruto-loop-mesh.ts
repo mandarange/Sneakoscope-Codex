@@ -8,6 +8,8 @@ export async function runNarutoLoopMesh(input: {
   root: string;
   plan: SksLoopPlan;
   parallelism: 'safe' | 'balanced' | 'extreme';
+  dryRun?: boolean;
+  noMutation?: boolean;
 }): Promise<SksLoopGraphResult> {
   const routes = input.plan.graph.nodes.flatMap((node) => [routeNarutoLoopWorker(node, 'maker'), routeNarutoLoopWorker(node, 'checker')]);
   const activeWorkerBudget = splitActiveWorkerBudget(input.plan, input.parallelism);
@@ -17,7 +19,13 @@ export async function runNarutoLoopMesh(input: {
     active_worker_budget: activeWorkerBudget,
     routes
   });
-  return runLoopPlan({ root: input.root, plan: input.plan, parallelism: input.parallelism });
+  return runLoopPlan({
+    root: input.root,
+    plan: input.plan,
+    parallelism: input.parallelism,
+    ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
+    ...(input.noMutation === undefined ? {} : { noMutation: input.noMutation })
+  });
 }
 
 export function splitActiveWorkerBudget(plan: SksLoopPlan, parallelism: 'safe' | 'balanced' | 'extreme'): {

@@ -44,6 +44,7 @@ test('native worker backend router launches ollama worker and marks local model 
   process.env.SKS_AGENT_WORKER = '1';
   process.env.SKS_OLLAMA_WORKERS = '1';
   process.env.SKS_LOCAL_MODEL_CONFIG = path.join(root, 'local-model.json');
+  await writeVerifiedLocalModelConfig(root);
   globalThis.fetch = async (_url, init) => {
     const body = JSON.parse(String(init?.body || '{}'));
     assert.equal(body.think, false);
@@ -107,6 +108,7 @@ test('ollama worker accepts worker JSON from thinking field', async () => {
   process.env.SKS_AGENT_WORKER = '1';
   process.env.SKS_OLLAMA_WORKERS = '1';
   process.env.SKS_LOCAL_MODEL_CONFIG = path.join(root, 'local-model.json');
+  await writeVerifiedLocalModelConfig(root);
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
@@ -157,6 +159,7 @@ test('ollama worker normalizes flat path content envelopes', async () => {
   process.env.SKS_AGENT_WORKER = '1';
   process.env.SKS_OLLAMA_WORKERS = '1';
   process.env.SKS_LOCAL_MODEL_CONFIG = path.join(root, 'local-model.json');
+  await writeVerifiedLocalModelConfig(root);
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
@@ -204,6 +207,11 @@ test('enabled local model auto-selects ollama for simple codex-sdk worker slice'
   process.env.SKS_AGENT_WORKER = '1';
   process.env.SKS_OLLAMA_WORKERS = '1';
   process.env.SKS_LOCAL_MODEL_CONFIG = path.join(root, 'local-model.json');
+  await writeVerifiedLocalModelConfig(root);
+  // Auto-select now routes through the local-llm control plane (selected
+  // backend 'local-llm', not 'ollama'), which enforces the full
+  // sks.agent-worker-result.v1 structured-output schema — the mock must
+  // return a schema-valid worker result, not the legacy flat ollama JSON.
   globalThis.fetch = async () => ({
     ok: true,
     status: 200,
@@ -211,9 +219,26 @@ test('enabled local model auto-selects ollama for simple codex-sdk worker slice'
       model: 'rafw007/qwen36-a3b-claude-coder:q4_K_M',
       done: true,
       response: JSON.stringify({
+        status: 'done',
         summary: 'auto local patch ready',
         findings: ['codex-sdk default auto-selected local worker'],
-        patch_envelopes: [{ path: 'owned.ts', content: 'export const AUTO_LOCAL_WORKER = true;\n' }]
+        changed_files: ['owned.ts'],
+        patch_envelopes: [{
+          schema: 'sks.agent-patch-envelope.v1',
+          source: 'model_authored',
+          agent_id: 'agent-ollama',
+          session_id: 'session-ollama',
+          slot_id: 'slot-001',
+          generation_index: 1,
+          task_slice_id: 'task-ollama',
+          lease_id: 'task-ollama',
+          allowed_paths: ['owned.ts'],
+          operations: [{ op: 'write', path: 'owned.ts', search: '', replace: '', content: 'export const AUTO_LOCAL_WORKER = true;\n', diff: '' }],
+          rationale: 'simple code write'
+        }],
+        verification: { status: 'passed', checks: ['local-worker-self-check'] },
+        rollback_notes: [],
+        blockers: []
       })
     })
   });
@@ -235,7 +260,7 @@ test('enabled local model auto-selects ollama for simple codex-sdk worker slice'
     });
     assert.equal(result.status, 'done');
     assert.equal(result.backend_router_report.requested_backend, 'codex-sdk');
-    assert.equal(result.backend_router_report.selected_backend, 'ollama');
+    assert.equal(result.backend_router_report.selected_backend, 'local-llm');
     assert.equal(result.patch_envelopes[0].operations[0].path, 'owned.ts');
   } finally {
     globalThis.fetch = oldFetch;
@@ -253,6 +278,24 @@ test('ollama worker policy blocks strategy and design work', () => {
   assert.equal(policy.ok, false);
   assert.match(policy.blockers.join('\n'), /strategy_planning_design|role_blocked/);
 });
+
+// The router only routes to the local model when the stored local-model config
+// is enabled AND verified by a fresh smoke run (status gate added after these
+// tests were written). Write a verified fixture so the tests exercise the
+// routing/policy logic instead of failing on `local_llm_enabled_unverified`.
+async function writeVerifiedLocalModelConfig(root) {
+  await fs.writeFile(path.join(root, 'local-model.json'), JSON.stringify({
+    schema: 'sks.local-model-config.v2',
+    enabled: true,
+    status: 'verified',
+    provider: 'ollama',
+    model: 'rafw007/qwen36-a3b-claude-coder:q4_K_M',
+    base_url: 'http://127.0.0.1:11434',
+    think: false,
+    capability: { api_reachable: true, model_installed: true },
+    last_smoke: { ok: true, schema_valid: true, ran_at: new Date().toISOString(), status: 'verified' }
+  }));
+}
 
 function snapshotEnv() {
   return {

@@ -84,7 +84,7 @@ await fs.mkdir(snapshotDir, { recursive: true })
 await fs.writeFile(path.join(snapshotDir, 'slot-telemetry.snapshot.json'), `${JSON.stringify({
   schema: 'sks.zellij-slot-telemetry-snapshot.v1',
   mission_id: missionId,
-  updated_at: new Date(Date.now() - 11000).toISOString(),
+  updated_at: new Date(Date.now() - 61000).toISOString(),
   flush_count: 1,
   slots: {
     'slot-003:g2': {

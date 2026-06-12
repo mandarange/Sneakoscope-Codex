@@ -3116,6 +3116,34 @@
       ]
     },
     {
+      "id": "core-skill:trainer-loop",
+      "command": "npm run core-skill:trainer-loop --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "core-skill:no-inference-optimizer",
       "command": "npm run core-skill:no-inference-optimizer --silent",
       "deps": [],
@@ -7133,6 +7161,7 @@
         "terminal:tui-output-stability",
         "test:no-orphan-dist-imports",
         "trust:check",
+        "proof:root-cause-policy",
         "ultra-router:auto-router",
         "ultra-router:classification",
         "wrongness:check",
@@ -9042,6 +9071,40 @@
       },
       "preset": [
         "release"
+      ]
+    },
+    {
+      "id": "proof:root-cause-policy",
+      "command": "npm run proof:root-cause-policy --silent",
+      "deps": [
+        "trust:check"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/proof/**",
+          "src/core/trust-kernel/**",
+          "src/scripts/proof-root-cause-policy-check.ts",
+          "test/unit/route-completion-contract.test.mjs",
+          "test/integration/route-proof-adapters.test.mjs"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release",
+        "affected"
       ]
     },
     {
@@ -11135,6 +11198,38 @@
         "loop:scheduler",
         "loop:lease",
         "loop:gate-selector"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**",
+          "docs/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release",
+        "affected"
+      ]
+    },
+    {
+      "id": "loop:fixture-safety",
+      "command": "npm run loop:fixture-safety --silent",
+      "deps": [
+        "loop:runtime"
       ],
       "resource": [
         "cpu-light",

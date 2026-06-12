@@ -2,6 +2,7 @@ import path from 'node:path';
 import { writeJsonAtomic } from '../fsx.js';
 import { missionDir } from '../mission.js';
 import { routeRequiresCompletionProof, routeRequiresImageVoxelAnchors } from '../proof/route-proof-policy.js';
+import { rootCauseAnalysisRequired } from '../proof/root-cause-policy.js';
 import { ROUTE_COMPLETION_CONTRACT_SCHEMA, normalizeTrustStatus, trustKernelMetadata } from './trust-kernel-schema.js';
 import { validateCompletionContract } from './completion-contract.js';
 
@@ -59,7 +60,8 @@ export function routeRequirements(route: unknown, proof: unknown = {}): RouteReq
     image_voxels: routeRequiresImageVoxelAnchors(route),
     db_safety: route === '$DB' || Boolean(evidence.db || evidence.db_safety),
     tests: Boolean(evidence.tests),
-    blackbox: JSON.stringify(evidence).includes('blackbox')
+    blackbox: JSON.stringify(evidence).includes('blackbox'),
+    root_cause_analysis: rootCauseAnalysisRequired(proofRecord)
   };
 }
 
@@ -76,6 +78,7 @@ function evidencePathsForContract(missionId: string | null, proof: unknown, evid
     tests: pathFromEvidence(proofEvidence.tests),
     db_safety: pathFromEvidence(proofEvidence.db || proofEvidence.db_safety),
     blackbox: pathFromEvidence(proofEvidence.blackbox),
+    root_cause_analysis: required.root_cause_analysis && base ? `${base}/completion-proof.json#failure_analysis` : null,
     evidence_index: base ? `${base}/evidence-index.json` : null,
     trust_report: base ? `${base}/trust-report.json` : null,
     evidence_records: asList(evidenceIndexRecord.records).map((entry) => {
@@ -102,6 +105,7 @@ export interface RouteRequirements {
   db_safety?: boolean;
   tests?: boolean;
   blackbox?: boolean;
+  root_cause_analysis?: boolean;
 }
 
 export interface RouteCompletionContract {

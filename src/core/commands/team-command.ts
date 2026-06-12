@@ -27,6 +27,7 @@ async function redirectTeamCreateToNaruto(args: any[] = []) {
       redirected_to: 'sks naruto run',
       route_command: '$Naruto',
       deprecated_route: '$Team',
+      parallel_write_policy: result?.parallel_write_policy || result?.run?.parallel_write_policy || null,
       created_at: nowIso(),
       args: list
     })

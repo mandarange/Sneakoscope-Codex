@@ -50,17 +50,27 @@ const snapshot = {
   },
   counts: { queued: 0, running: 1, verifying: 0, completed: 0, failed: 0, headless: 0 }
 }
+// New stale contract: 1000ms+jitter flush throttle means a brief gap is NOT staleness. A snapshot
+// only 3.5s old must read as FRESH (no stale row), preventing the flapping that produced bogus
+// multi-thousand-second staleness in the live UI.
 snapshot.updated_at = new Date(Date.now() - 3500).toISOString()
+await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
+const freshStatus = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
+assertGate(freshStatus.telemetry_stale === false, 'slot pane status JSON must treat 3.5s-old telemetry as fresh under new 15s threshold', freshStatus)
+
+// Between 15s and 60s the pane shows the numeric "telemetry stale Ns" warning row.
+snapshot.updated_at = new Date(Date.now() - 16000).toISOString()
 await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
 const staleText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
 const staleStatus = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
-assertGate(/telemetry stale 3\.\d+s/.test(staleText), 'slot pane must show 3s stale telemetry warning', { staleText, staleStatus })
-assertGate(staleStatus.telemetry_stale === true && staleStatus.telemetry_age_ms >= 3000, 'slot pane status JSON must expose stale telemetry', staleStatus)
+assertGate(/telemetry stale 1[0-9]\.\d+s/.test(staleText), 'slot pane must show numeric stale telemetry warning above 15s', { staleText, staleStatus })
+assertGate(staleStatus.telemetry_stale === true && staleStatus.telemetry_age_ms >= 15000, 'slot pane status JSON must expose stale telemetry above 15s', staleStatus)
 assertGate(staleText.includes('fresh worker stdout fallback') || staleText.includes('apply_patch'), 'stale slot pane must show fresh artifact/log fallback', { staleText })
 
-snapshot.updated_at = new Date(Date.now() - 11000).toISOString()
+// Past 60s the pane shows the "worker may still be running" blocker line.
+snapshot.updated_at = new Date(Date.now() - 61000).toISOString()
 await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
 const blockedText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
-assertGate(blockedText.includes('telemetry stale; worker may still be running'), 'slot pane must show >10s stale blocker line', { blockedText })
+assertGate(blockedText.includes('telemetry stale; worker may still be running'), 'slot pane must show >60s stale blocker line', { blockedText })
 assertGate(blockedText.includes('fresh worker stdout fallback') || blockedText.includes('apply_patch'), 'blocked stale slot pane must keep artifact/log fallback', { blockedText })
 emitGate('zellij:slot-pane-stale-detection', { stale_age_ms: staleStatus.telemetry_age_ms, artifact_fallback: true })

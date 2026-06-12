@@ -5,8 +5,8 @@
   "probe_timeout_ms": 3000,
   "probe_error_summary": [],
   "codex_bin": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/node_modules/.bin/codex",
-  "version_text": null,
-  "parsed_version": null,
+  "version_text": "codex-cli 0.137.0",
+  "parsed_version": "0.137.0",
   "supports_code_mode_web_search": false,
   "supports_code_mode_web_search_real_verified": false,
   "supports_rich_tool_schemas": false,
@@ -26,5 +26,5 @@
   "blockers": [
     "codex_0_139_required_for_search_schema_marketplace_features"
   ],
-  "generated_at": "2026-06-12T08:32:35.947Z"
+  "generated_at": "2026-06-12T14:47:40.198Z"
 }
