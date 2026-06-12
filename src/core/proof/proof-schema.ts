@@ -40,6 +40,12 @@ export function emptyCompletionProof(overrides: Record<string, unknown> = {}) {
     claims: [],
     unverified: [],
     blockers: [],
+    failure_analysis: {
+      status: 'not_required',
+      root_cause: null,
+      corrective_action: null,
+      evidence: []
+    },
     next_human_actions: [],
     ...overrides
   };
@@ -70,6 +76,13 @@ export interface ProofClaim {
   wrongness?: string[];
 }
 
+export interface ProofFailureAnalysis {
+  status?: 'not_required' | 'required' | 'complete' | 'completed' | 'corrected' | 'resolved' | 'fixed' | 'blocked';
+  root_cause?: string | null;
+  corrective_action?: string | null;
+  evidence?: unknown[] | string | Record<string, unknown>;
+}
+
 export interface CompletionProof {
   schema: typeof COMPLETION_PROOF_SCHEMA;
   mission_id: string | null;
@@ -79,6 +92,7 @@ export interface CompletionProof {
   claims: ProofClaim[];
   unverified: string[];
   blockers: string[];
+  failure_analysis?: ProofFailureAnalysis;
 }
 
 export function isCompletionProof(value: unknown): value is CompletionProof {

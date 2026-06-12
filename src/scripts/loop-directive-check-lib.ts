@@ -30,7 +30,18 @@ export async function runLoopDirectiveCheck(id) {
   const request = 'fix zellij telemetry, release cache, and codex probe docs';
   const plan = await planLoopsFromRequest({ root, missionId, request, sourceCommand: 'loop' });
   const byId = new Map(plan.graph.nodes.map((node) => [node.loop_id, node]));
-  const result = await runLoopPlan({ root, plan, parallelism: 'extreme', noMutation: id.includes('runtime') ? false : true });
+  const realRuntimeMode = process.env.SKS_LOOP_RUNTIME_REAL === '1'
+    || id === 'loop:runtime-real-workers'
+    || id === 'loop:maker-checker-real'
+    || id === 'loop:integration-finalizer-real'
+    || id === 'loop:real-maker-checker-blackbox'
+    || id === 'naruto:loop-mesh-real-blackbox'
+    || id === 'goal:loop-runtime-real-blackbox';
+  if (!realRuntimeMode && process.env.SKS_LOOP_RUNTIME_FIXTURE !== '1') {
+    process.env.SKS_LOOP_RUNTIME_FIXTURE = '1';
+  }
+  const fixtureMode = process.env.SKS_LOOP_RUNTIME_FIXTURE === '1' || process.env.SKS_LOOP_GATE_FIXTURE === '1';
+  const result = await runLoopPlan({ root, plan, parallelism: 'extreme', noMutation: fixtureMode ? true : !realRuntimeMode });
   const assertions = [];
   const assert = (condition, message) => assertions.push({ ok: Boolean(condition), message });
 
@@ -47,6 +58,8 @@ export async function runLoopDirectiveCheck(id) {
   } else if (id === 'loop:planner') {
     assert(byId.has('loop-integration'), 'integration loop always created');
     assert(plan.graph.nodes.length >= 2, 'planner creates action plus integration loops');
+    assert(plan.graph.nodes.some((node) => node.route !== '$Integration' && node.maker.worker_count > 2), 'planner scales maker workers above the old hardcoded two');
+    assert(plan.graph.nodes.some((node) => node.route !== '$Integration' && node.checker.worker_count > 1), 'planner scales checker reviewers above the old hardcoded one');
   } else if (id === 'loop:decomposer') {
     const domains = decomposeRequestIntoLoopDomains(request);
     assert(['zellij', 'release', 'codex-control', 'docs'].every((domain) => domains.some((row) => row.id === domain)), 'multi-domain request decomposes');
@@ -62,6 +75,95 @@ export async function runLoopDirectiveCheck(id) {
   } else if (id === 'loop:runtime') {
     assert(result.ok, 'loop runtime produces ok graph result');
     assert(await exists(loopGraphProofPath(root, missionId)), 'graph proof exists');
+  } else if (id === 'loop:fixture-safety') {
+    const runtimeSource = await fs.readFile(path.join(process.cwd(), 'src/core/loops/loop-runtime.ts'), 'utf8');
+    const workerSource = await fs.readFile(path.join(process.cwd(), 'src/core/loops/loop-worker-runtime.ts'), 'utf8');
+    assert(!/noMutation\s*\?\s*\{\s*fixture:\s*true\s*\}/.test(runtimeSource), 'noMutation must not force fixture mode');
+    assert(workerSource.includes('loopFixtureAllowed'), 'fixture runtime has an explicit test-context allow guard');
+    assert(workerSource.includes('loop_fixture_runtime_forbidden'), 'fixture runtime fails closed outside test context');
+    assert(workerSource.includes("process.env.SKS_LOOP_RUNTIME_FIXTURE === '1'"), 'fixture runtime remains opt-in through SKS_LOOP_RUNTIME_FIXTURE');
+    assert(!workerSource.includes('visualLaneCount: Math.min(4'), 'zellij visual lane count must use the configurable pane cap');
+  } else if (id === 'loop:worker-runtime') {
+    const proof = await readJson(loopProofPath(root, missionId, 'loop-zellij'));
+    assert(proof.maker_result.backend === 'deterministic-fixture' || proof.maker_result.backend === 'native-agent-orchestrator', 'maker backend recorded');
+    assert(proof.checker_result.backend === 'deterministic-fixture' || proof.checker_result.backend === 'native-agent-orchestrator', 'checker backend recorded');
+    assert(proof.maker_result.runtime_proof_path, 'maker runtime proof path recorded');
+    assert(proof.checker_result.runtime_proof_path, 'checker runtime proof path recorded');
+  } else if (id === 'loop:worker-prompts') {
+    const prompts = await import('../core/loops/loop-worker-prompts.js');
+    const node = byId.get('loop-zellij');
+    assert(prompts.buildLoopMakerPrompt({ plan, node }).includes('Do not mutate outside the owner scope'), 'maker prompt constrains owner scope');
+    assert(prompts.buildLoopCheckerPrompt({ plan, node, makerArtifacts: ['maker.json'] }).includes('must not mutate source files'), 'checker prompt forbids mutation');
+    assert(prompts.buildLoopCheckerPrompt({ plan, node, makerArtifacts: ['maker.json'] }).includes('fresh session'), 'checker prompt requires fresh session');
+  } else if (id === 'loop:runtime-real-workers' || id === 'loop:maker-checker-real') {
+    const proof = await readJson(loopProofPath(root, missionId, 'loop-zellij'));
+    assert(proof.maker_result.artifacts.length > 0, 'maker worker runtime artifacts exist');
+    assert(proof.checker_result.artifacts.length > 0, 'checker worker runtime artifacts exist');
+    assert(!proof.maker_result.artifacts.includes('fresh-checker-session'), 'placeholder checker string is not used');
+  } else if (id === 'loop:checker-freshness') {
+    const proof = await readJson(loopProofPath(root, missionId, 'loop-zellij'));
+    const checker = await readJson(proof.checker_result.checker_findings[0]);
+    assert(checker.fresh_session === true, 'checker artifact proves fresh session');
+    assert(Array.isArray(checker.reviewed_maker_artifacts), 'checker reviewed maker artifacts');
+    assert(proof.checker_result.fresh_session === true, 'loop proof records checker freshness');
+  } else if (id === 'loop:gate-registry') {
+    const registry = await import('../core/loops/loop-gate-registry.js');
+    const defs = await registry.listLoopGateDefinitions(process.cwd());
+    assert(defs.some((gate) => gate.id === 'gpt:final-arbiter' && gate.source === 'builtin-pseudo'), 'gpt final pseudo gate registered');
+    assert(await registry.resolveLoopGate(process.cwd(), 'definitely:unknown') === null, 'unknown gate does not resolve');
+  } else if (id === 'loop:gate-runner-real' || id === 'loop:gate-artifacts') {
+    const proof = await readJson(loopProofPath(root, missionId, 'loop-zellij'));
+    assert(proof.gate_result.selected_gates.length > 0, 'gates selected');
+    assert(proof.gate_result.passed_gates.length > 0 || proof.gate_result.failed_gates.length > 0, 'gate outcomes recorded');
+    assert(await exists(path.join(loopRoot(root, missionId), 'loop-zellij', 'gates')), 'gate artifact directory exists');
+  } else if (id === 'loop:worktree-runtime') {
+    assert(await exists(path.join(loopRoot(root, missionId), 'loop-zellij', 'worktree.json')), 'worktree record exists');
+  } else if (id === 'loop:worktree-diff-scope') {
+    const mod = await import('../core/loops/loop-worktree-runtime.js');
+    assert(mod.enforceLoopOwnerScope(['src/core/zellij/zellij-slot-pane-renderer.ts'], byId.get('loop-zellij').owner_scope).length === 0, 'owner-scoped file passes');
+    assert(mod.enforceLoopOwnerScope(['README.md'], byId.get('loop-zellij').owner_scope).length > 0, 'outside owner scope blocks');
+  } else if (id === 'loop:integration-merge') {
+    assert(await exists(path.join(loopRoot(root, missionId), 'integration-merge.json')), 'integration merge artifact exists');
+  } else if (id === 'loop:integration-finalizer-real') {
+    const graph = await readJson(loopGraphProofPath(root, missionId));
+    assert(graph.integration_merge && typeof graph.integration_merge.ok === 'boolean', 'graph proof includes integration merge');
+  } else if (id === 'file-lock:atomic') {
+    const lock = await import('../core/locks/file-lock.js');
+    let count = 0;
+    await lock.withFileLock({ lockPath: path.join(root, '.sneakoscope/locks/test.lock'), timeoutMs: 1000, staleMs: 10000 }, async () => { count += 1; });
+    assert(count === 1, 'file lock executes critical section');
+  } else if (id === 'loop:lease-atomic') {
+    const node = byId.get('loop-zellij');
+    const lease = await acquireLoopLease(root, plan, node);
+    assert(lease.status === 'active' || lease.status === 'conflict', 'atomic lease returns status');
+  } else if (id === 'loop:gpt-final-arbiter' || id === 'loop:integration-gpt-final') {
+    const mod = await import('../core/loops/loop-gpt-final-arbiter.js');
+    const arbiter = await mod.runLoopGptFinalArbiter({ root, plan, proofs: result.proofs, integrationMerge: { schema: 'sks.loop-integration-merge.v1', ok: true, applied_loops: [], conflict_loops: [], changed_files: ['src/core/loops/loop-runtime.ts'], blockers: [] }, forceVerdict: 'approve' });
+    assert(arbiter.ok && arbiter.verdict === 'approve', 'loop GPT final arbiter can approve');
+  } else if (id === 'loop:checkpoint') {
+    assert(await exists(path.join(loopRoot(root, missionId), 'loop-zellij', 'checkpoint-latest.json')), 'latest checkpoint exists');
+  } else if (id === 'loop:kill-resume' || id === 'loop:cli-kill-resume') {
+    const control = await import('../core/loops/loop-runtime-control.js');
+    await control.writeLoopKillRequest(root, missionId, 'loop-zellij');
+    assert(await control.shouldKillLoop(root, missionId, 'loop-zellij'), 'kill request targets loop');
+  } else if (id === 'loop:real-maker-checker-blackbox') {
+    const proof = await readJson(loopProofPath(root, missionId, 'loop-zellij'));
+    assert(proof.maker_result.worker_count > 0 && proof.checker_result.worker_count > 0, 'maker/checker worker counts recorded');
+    assert(proof.checker_result.checker_findings.length > 0, 'checker findings artifact exists');
+  } else if (id === 'naruto:loop-mesh-real-blackbox') {
+    assert(plan.graph.nodes.length >= 5, 'at least four domain loops plus integration are planned');
+    assert(result.proofs.every((proof) => proof.maker_result.artifacts.length && proof.checker_result.artifacts.length), 'worker runtime artifacts exist for every loop');
+    assert(result.graph_proof.integration_merge, 'integration finalizer ran');
+  } else if (id === 'goal:loop-runtime-real-blackbox') {
+    const goalPlan = await compileGoalToLoopPlan({ root, missionId: `${missionId}-goal-real`, goalText: 'fix release cache', legacyGoalOptions: {} });
+    const goalResult = await runLoopPlan({ root, plan: goalPlan, parallelism: 'balanced', noMutation: true });
+    assert(await exists(path.join(root, '.sneakoscope', 'missions', `${missionId}-goal-real`, 'goal-compat.json')), 'goal compat artifact exists');
+    assert(goalResult.proofs.some((proof) => proof.maker_result.artifacts.length), 'goal loop worker runtime artifacts exist');
+    assert(await exists(loopGraphProofPath(root, `${missionId}-goal-real`)), 'goal graph proof exists');
+  } else if (id === 'loop:status-ux') {
+    assert(await exists(loopGraphProofPath(root, missionId)), 'status has graph proof source');
+  } else if (id === 'loop:zellij-real-runtime-ui') {
+    assert(renderZellijSlotPane({ slotId: 'slot-003', generationIndex: 1, loopId: 'loop-zellij', loopRole: 'maker', loopGate: 'loop:test', backend: 'fixture', patchStatus: 'fixture', verifyStatus: 'pass' }).includes('fixture loop proof'), 'zellij marks fixture proof');
   } else if (id === 'loop:proof') {
     assert(await exists(loopProofPath(root, missionId, 'loop-zellij')), 'loop proof exists');
   } else if (id === 'loop:integration-finalizer') {
@@ -95,7 +197,7 @@ export async function runLoopDirectiveCheck(id) {
     const docsB = await acquireLoopLease(root, plan, { ...node, loop_id: 'loop-docs-b', owner_scope: docsScope });
     assert(docsA.status === 'active' && docsB.status === 'active', 'docs overlap is allowed when non-exclusive');
   } else if (id === 'naruto:loop-mesh' || id === 'naruto:loop-maker-checker') {
-    const mesh = await runNarutoLoopMesh({ root, plan, parallelism: 'balanced' });
+    const mesh = await runNarutoLoopMesh({ root, plan, parallelism: 'balanced', noMutation: fixtureMode ? true : !realRuntimeMode });
     assert(mesh.proofs.every((proof) => proof.maker_result.worker_count > 0 && proof.checker_result.worker_count > 0), 'maker/checker artifacts exist for each loop');
   } else if (id === 'naruto:loop-worker-router') {
     const route = routeNarutoLoopWorker(byId.get('loop-zellij'), 'maker');

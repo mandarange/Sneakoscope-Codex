@@ -229,6 +229,7 @@ const requiredScripts = [
   'core-skill:route-runtime-integration',
   'core-skill:promotion-side-effect-ledger',
   'core-skill:legacy-promotion-api-audit',
+  'core-skill:trainer-loop',
   'safety:side-effect-zero',
   'safety:mutation-callsite-coverage',
   'safety:mutation-callsite-coverage:repo-wide',

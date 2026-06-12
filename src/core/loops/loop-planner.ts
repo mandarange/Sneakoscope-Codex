@@ -13,7 +13,9 @@ export async function planLoopsFromRequest(input: {
   sourceCommand: 'goal' | 'loop' | 'naruto' | 'qa-loop' | 'research';
   mode?: 'deterministic' | 'codex-assisted';
   maxLoops?: number;
+  parallelism?: 'safe' | 'balanced' | 'extreme';
 }): Promise<SksLoopPlan> {
+  const parallelism = input.parallelism || 'balanced';
   const maxLoops = Math.max(1, Math.min(32, input.maxLoops || 8));
   const domains = decomposeRequestIntoLoopDomains(input.request).slice(0, maxLoops);
   const actionNodes = domains.map((domain): SksLoopNode => {
@@ -29,7 +31,8 @@ export async function planLoopsFromRequest(input: {
       dependencies: [],
       route: domain.id === 'docs' ? '$Loop' : '$Naruto',
       level: domain.id === 'docs' ? 'L1-assisted' : 'L2-action',
-      risk
+      risk,
+      parallelism
     });
     return { ...nodeBase, gates: selectLoopGates({ node: nodeBase, changedFiles: [...ownerScope.files, ...ownerScope.directories], risk }) };
   });
@@ -44,7 +47,8 @@ export async function planLoopsFromRequest(input: {
     dependencies: actionNodes.map((node) => node.loop_id),
     route: '$Integration',
     level: 'L1-assisted',
-    risk: integrationRisk
+    risk: integrationRisk,
+    parallelism
   });
   const integrationNode = {
     ...integrationBase,
@@ -104,9 +108,12 @@ function makeNode(input: {
   route: SksLoopNode['route'];
   level: SksLoopNode['level'];
   risk: SksLoopNode['risk'];
+  parallelism: 'safe' | 'balanced' | 'extreme';
 }): SksLoopNode {
+  const makerWorkerCount = dynamicMakerWorkerCount(input);
+  const checkerWorkerCount = dynamicCheckerWorkerCount(input);
   const budget = defaultLoopBudget({
-    max_subagents: input.route === '$Integration' ? 2 : 4,
+    max_subagents: input.route === '$Integration' ? 2 : Math.max(4, makerWorkerCount + checkerWorkerCount + 1),
     max_changed_files: input.ownerScope.files.length ? Math.max(4, input.ownerScope.files.length + 2) : 12
   });
   return {
@@ -124,14 +131,14 @@ function makeNode(input: {
     maker: {
       route: '$Naruto',
       role: input.route === '$Integration' ? 'planner' : input.loopId.includes('docs') ? 'writer' : 'implementer',
-      worker_count: input.route === '$Integration' ? 1 : 2,
+      worker_count: makerWorkerCount,
       backend_preference: ['codex-sdk', 'python-codex-sdk', 'local-llm'],
       local_draft_allowed: input.risk.level !== 'critical',
       gpt_final_required: input.risk.requires_gpt_final
     },
     checker: {
       route: input.loopId.includes('research') ? '$Research' : input.loopId.includes('docs') ? '$DFix' : '$QA-LOOP',
-      worker_count: input.route === '$Integration' ? 1 : 1,
+      worker_count: checkerWorkerCount,
       fresh_session_required: true,
       stronger_model_required: input.risk.level === 'high' || input.risk.level === 'critical',
       required_before_next_iteration: input.level === 'L2-action'
@@ -151,6 +158,42 @@ function makeNode(input: {
     },
     risk: input.risk
   };
+}
+
+// Maker parallelism scales with the loop's owned scope instead of a flat 2:
+// Naruto can fan out far wider, and a fixed count starved wide scopes while
+// over-provisioning single-file loops. Risk still clamps the ceiling so
+// critical work cannot stampede, and 'safe' mode keeps the old behavior.
+function dynamicMakerWorkerCount(input: {
+  route: SksLoopNode['route'];
+  ownerScope: SksLoopNode['owner_scope'];
+  risk: SksLoopNode['risk'];
+  parallelism: 'safe' | 'balanced' | 'extreme';
+}): number {
+  if (input.route === '$Integration') return 1;
+  const scopeSize = input.ownerScope.files.length + input.ownerScope.directories.length * 3;
+  const modeCap = input.parallelism === 'safe' ? 2 : input.parallelism === 'extreme' ? 8 : 6;
+  const riskCap = input.risk.level === 'critical' ? 2 : modeCap;
+  const riskFloor = input.risk.level === 'high' ? 3 : 2;
+  const scopeScaled = Math.max(riskFloor, Math.ceil(scopeSize / 3));
+  return Math.max(1, Math.min(modeCap, riskCap, scopeScaled));
+}
+
+// Checker workers are read-only GPT review lanes. They scale more conservatively
+// than makers, but wide/high-risk owner scopes get more than one fresh reviewer.
+function dynamicCheckerWorkerCount(input: {
+  route: SksLoopNode['route'];
+  ownerScope: SksLoopNode['owner_scope'];
+  risk: SksLoopNode['risk'];
+  parallelism: 'safe' | 'balanced' | 'extreme';
+}): number {
+  if (input.route === '$Integration') return 1;
+  const scopeSize = input.ownerScope.files.length + input.ownerScope.directories.length * 3;
+  const modeCap = input.parallelism === 'safe' ? 1 : input.parallelism === 'extreme' ? 4 : 3;
+  const riskFloor = input.risk.level === 'high' || input.risk.level === 'critical' ? 2 : 1;
+  const riskCap = input.risk.level === 'critical' ? Math.min(2, modeCap) : modeCap;
+  const scopeScaled = Math.max(riskFloor, Math.ceil(scopeSize / 6));
+  return Math.max(1, Math.min(modeCap, riskCap, scopeScaled));
 }
 
 function titleFromDomain(domainId: string): string {

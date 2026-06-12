@@ -122,6 +122,12 @@ export interface AgentRunOptions {
   zellijSessionName?: string | null
   zellijPaneWorker?: boolean
   zellijVisiblePaneCap?: number
+  worktree?: {
+    id: string
+    path: string
+    branch?: string
+    main_repo_root?: string | null
+  } | null
   maxAgentCount?: number
   visualLaneCount?: number
   clones?: number

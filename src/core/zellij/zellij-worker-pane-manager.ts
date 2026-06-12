@@ -53,6 +53,7 @@ export interface ZellijWorkerPaneOpenInput {
   serviceTier?: string | null
   backend?: string | null
   statusLabel?: string | null
+  taskTitle?: string | null
   worktree?: {
     id: string
     path: string
@@ -136,11 +137,44 @@ export function buildWorkerPaneName(slotId: string, generationIndex: number) {
   return `${slotId}/gen-${Math.max(1, Math.floor(Number(generationIndex) || 1))}`
 }
 
-export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null, backend?: string | null, status?: string | null, worktree?: ZellijWorkerPaneOpenInput['worktree']) {
+export function buildWorkerPaneTitle(slotId: string, generationIndex: number, context?: ProviderContext | null, serviceTier?: string | null, backend?: string | null, status?: string | null, worktree?: ZellijWorkerPaneOpenInput['worktree'], taskTitle?: string | null) {
+  // When a task label is available, the pane title is JUST the label + status:
+  // users identify panes by what they are doing, not by slot ids. Slot/gen,
+  // backend, provider, and worktree details stay inside the pane body and the
+  // SLOTS anchor rows. The verbose format remains the fallback for callers
+  // that have no task context.
+  const task = shortWorkerTaskLabel(taskTitle)
+  if (task) return `${task} · ${workerBackendTag(backend, context?.provider)} · ${status || 'launching'}`
   const base = buildWorkerPaneName(slotId, generationIndex)
   const normalized = normalizePaneProviderContext(context, serviceTier)
   const wt = worktree ? ` · WT:${worktree.id} · branch:${worktree.branch}` : ''
   return `${base}${wt} · ${backend || 'codex-sdk'} · ${providerPaneLabel(normalized)} · ${status || 'launching'}`
+}
+
+// Local-LLM workers must be visually distinguishable from GPT/codex workers:
+// only trivial long-running edits belong on local models, while web research
+// and code review must run on GPT. The tag makes a misrouted task obvious.
+export function workerBackendTag(backend?: string | null, provider?: string | null): string {
+  const text = `${String(backend || '')} ${String(provider || '')}`.toLowerCase()
+  if (/ollama|local/.test(text)) return 'LOCAL'
+  if (/fake|fixture/.test(text)) return 'fixture'
+  return 'GPT'
+}
+
+// Lead the pane title with a 1-3 word task label so users can tell WHAT each
+// slot is doing at a glance instead of an anonymous "slot-002/gen-1".
+export function shortWorkerTaskLabel(value: unknown, maxChars = 24): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  const words = text.split(' ')
+  let label = ''
+  for (const word of words.slice(0, 3)) {
+    const next = label ? `${label} ${word}` : word
+    if (next.length > maxChars) break
+    label = next
+  }
+  if (!label) label = text.slice(0, maxChars)
+  return label
 }
 
 export function isRealZellijWorkerPaneIdSource(value: unknown) {
@@ -314,7 +348,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     })
     return record
   }
-  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null)
+  const paneName = buildWorkerPaneTitle(input.slotId, input.generationIndex, providerContext, input.serviceTier, input.backend, input.statusLabel || 'running', input.worktree || null, input.taskTitle || null)
   // CRITICAL: serialize anchor + worker pane creation per session. Workers
   // launch concurrently, and without this lock every worker raced past the
   // "does the SLOTS anchor exist yet?" check and created its OWN anchor with

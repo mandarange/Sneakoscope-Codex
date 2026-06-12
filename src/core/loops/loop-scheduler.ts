@@ -34,9 +34,16 @@ export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'b
 export function maxConcurrentLoops(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced'): number {
   const cores = Math.max(1, os.cpus().length || 1);
   const base = parallelism === 'safe' ? 2 : parallelism === 'extreme' ? Math.min(16, cores) : Math.min(8, cores);
-  return nodes.some((node) => node.risk.level === 'critical' || node.risk.level === 'high') && parallelism !== 'extreme'
-    ? Math.max(1, Math.min(base, 3))
-    : Math.max(1, base);
+  return Math.max(1, Math.min(base, riskAwareLoopCap(nodes, parallelism, cores)));
+}
+
+function riskAwareLoopCap(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme', cores: number): number {
+  if (parallelism === 'extreme') return Math.min(16, cores);
+  const hasCritical = nodes.some((node) => node.risk.level === 'critical');
+  const hasHigh = nodes.some((node) => node.risk.level === 'high');
+  if (hasCritical) return parallelism === 'safe' ? 1 : Math.max(2, Math.floor(cores / 4));
+  if (hasHigh) return parallelism === 'safe' ? 2 : Math.max(4, Math.floor(cores / 2));
+  return parallelism === 'safe' ? 2 : Math.min(8, cores);
 }
 
 export function graphProofFromLoopProofs(input: {

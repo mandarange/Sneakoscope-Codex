@@ -1,7 +1,7 @@
 {
   "schema": "sks.codex-0139-plugin-marketplace-real.v1",
   "ok": true,
-  "generated_at": "2026-06-12T04:44:41.285Z",
+  "generated_at": "2026-06-12T14:44:39.214Z",
   "command_line": [
     "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
     "plugin",
@@ -9,11 +9,11 @@
     "list",
     "--json"
   ],
-  "empty_marketplace_list": false,
-  "row_count": 3,
-  "rows_have_source": false,
+  "empty_marketplace_list": true,
+  "row_count": 0,
+  "rows_have_source": true,
   "rows_have_source_locator": true,
   "missing_source_rows": [],
-  "stdout_tail": "{\n  \"marketplaces\": [\n    {\n      \"name\": \"openai-primary-runtime\",\n      \"root\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\",\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime\"\n      }\n    },\n    {\n      \"name\": \"openai-bundled\",\n      \"root\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\",\n      \"marketplaceSource\": {\n        \"sourceType\": \"local\",\n        \"source\": \"/Users/weklem/.codex/.tmp/bundled-marketplaces/openai-bundled\"\n      }\n    },\n    {\n      \"name\": \"openai-curated\",\n      \"root\": \"/Users/weklem/.codex/.tmp/plugins\"\n    }\n  ]\n}\n",
+  "stdout_tail": "{\n  \"marketplaces\": []\n}\n",
   "stderr_tail": ""
 }

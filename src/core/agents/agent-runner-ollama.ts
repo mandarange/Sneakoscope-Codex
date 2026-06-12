@@ -135,19 +135,25 @@ export function classifyOllamaWorkerSlice(slice: any, input: { route?: string; a
     input.agent?.persona_id,
     slice?.role,
     slice?.domain,
+    slice?.kind,
     slice?.title,
     slice?.description,
     ...(Array.isArray(slice?.target_paths) ? slice.target_paths : [])
   ].map((value) => String(value || '')).join('\n')
-  const bannedRole = /(?:^|\b)(architect|verifier|safety|integrator|schema|release|ux|db)(?:\b|$)/i.test(String(input.agent?.role || slice?.role || ''))
+  const bannedRole = /(?:^|\b)(architect|verifier|checker|reviewer|researcher|safety|integrator|schema|release|ux|db)(?:\b|$)/i.test(String(input.agent?.role || slice?.role || ''))
   const collection = /\b(collect|gather|extract|inventory|list|scan|grep|tail|summarize|catalog)\b|수집|추출|목록|스캔|인벤토리/i.test(text)
   const coding = /\b(code|implement|patch|write|edit|fix|mechanical|simple)\b|코드|작성|수정|구현|패치|단순/i.test(text)
-  const banned = /\b(strategy|strategize|planning|plan|architecture|architect|design|review|verify|verification|safety|risk|consensus|debate|orchestrate|policy|decide|decision|migration|database|schema)\b|전략|기획|설계|디자인|검증|리뷰|안전|위험|합의|토론|결정|마이그레이션|데이터베이스/i.test(text)
-  const allowed = !bannedRole && !banned && (writePaths.length > 0 || collection || coding)
+  const banned = /\b(strategy|strategize|planning|plan|architecture|architect|design|review|verify|verification|audit|inspect|safety|risk|consensus|debate|orchestrate|policy|decide|decision|migration|database|schema)\b|전략|기획|설계|디자인|검증|검수|리뷰|감사|안전|위험|합의|토론|결정|마이그레이션|데이터베이스/i.test(text)
+  // Web research / external lookup must run on GPT, never on the local model:
+  // local LLMs hallucinate sources and cannot browse. This wins even over the
+  // collection allowlist (e.g. "web research and collect docs" stays on GPT).
+  const research = /\b(web|research|browse|browser|crawl|fetch docs|websearch|web search|search the web|investigate|context7)\b|웹|리서치|조사|웹서치|웹 ?검색|검색/i.test(text)
+  const allowed = !bannedRole && !banned && !research && (writePaths.length > 0 || collection || coding)
   const blockers = [
     ...(allowed ? [] : ['ollama_worker_task_not_simple_code_or_collection']),
     ...(bannedRole ? ['ollama_worker_role_blocked'] : []),
-    ...(banned ? ['ollama_worker_strategy_planning_design_blocked'] : [])
+    ...(banned ? ['ollama_worker_strategy_planning_design_blocked'] : []),
+    ...(research ? ['ollama_worker_web_research_blocked'] : [])
   ]
   return {
     schema: OLLAMA_WORKER_POLICY_SCHEMA,
@@ -159,6 +165,7 @@ export function classifyOllamaWorkerSlice(slice: any, input: { route?: string; a
     write_path_count: writePaths.length,
     collection_detected: collection,
     coding_detected: coding,
+    research_detected: research,
     blockers
   }
 }

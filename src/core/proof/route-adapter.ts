@@ -17,6 +17,7 @@ export async function writeRouteCompletionProof(root: any, {
   claims = [],
   unverified = [],
   blockers = [],
+  failureAnalysis = null,
   nextHumanActions = []
 }: any = {}) {
   const collected = await collectProofEvidence(root);
@@ -49,6 +50,7 @@ export async function writeRouteCompletionProof(root: any, {
     claims,
     unverified,
     blockers,
+    failure_analysis: normalizeFailureAnalysis(failureAnalysis || evidence.failure_analysis || evidence.root_cause_analysis),
     next_human_actions: nextHumanActions
   }, {
     command: {
@@ -79,6 +81,23 @@ export async function writeRouteCompletionProof(root: any, {
   const trust = await writeTrustArtifactsForProof(root, enriched.proof);
   const retention = await runPostRouteRetention(root, missionId);
   return { ...enriched, trust, retention };
+}
+
+function normalizeFailureAnalysis(value: any) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      status: 'not_required',
+      root_cause: null,
+      corrective_action: null,
+      evidence: []
+    };
+  }
+  return {
+    status: value.status || 'complete',
+    root_cause: value.root_cause || value.cause || null,
+    corrective_action: value.corrective_action || value.fix || value.correction || null,
+    evidence: value.evidence || value.proof || value.references || []
+  };
 }
 
 function normalizeRouteProofStatus(status: any, { route, evidence, blockers, unverified }: any) {

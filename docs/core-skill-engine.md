@@ -19,6 +19,9 @@ config, or global files — the model/agent itself is never changed.
 | Optimization epoch | **Core Skill Epoch** (one accepted candidate at most) | `core/skills/core-skill-epoch.ts` (`runSkillEpoch`) |
 | Zero inference-time optimizer calls | **Deployment Skill Snapshot** (immutable, read-only inference path) | `core/skills/core-skill-deployment.ts`, `core-skill-runtime.ts` |
 | Transfer across harnesses | **Harness-Portable artifact** (plain JSON card/patch/trace, no runtime state) | `core/skills/core-skill-types.ts` |
+| Reflection → aggregation → selection | **Skill Reflection stage** (deterministic, per-dimension lessons) | `core/skills/core-skill-reflection.ts` |
+| Epoch-wise meta-update (LR schedule) | **Learning-Rate Meta-Update** (decay on rejection, bounded regrowth on acceptance) | `core/skills/core-skill-meta-update.ts` |
+| Training loop / `best_skill.md` export | **Skill Trainer** (`trainSkill`, multi-epoch, exports `best-skill.json` + training report) | `core/skills/core-skill-trainer.ts` |
 
 The rollout scorer (`core/skills/core-skill-scorer.ts`) and rollout trace
 (`core/skills/core-rollout-trace.ts`) produce the evidence the optimizer and the
@@ -70,6 +73,7 @@ held-out split consume.
 | `core-skill:heldout-validation` | `scripts/core-skill-heldout-validation-check.mjs` |
 | `core-skill:deployment-snapshot` | `scripts/core-skill-deployment-snapshot-check.mjs` |
 | `core-skill:no-inference-optimizer` | `scripts/core-skill-no-inference-optimizer-check.mjs` |
+| `core-skill:trainer-loop` | `scripts/core-skill-trainer-check.mjs` |
 
 Each gate is mirrored by a packed blackbox test under
 `test/blackbox/core-skill-*-packed.test.mjs` that spawns the gate script and asserts
@@ -83,6 +87,8 @@ exit 0.
 - `.sneakoscope/skills/<route>/<skill_id>/deployed-history/v<N>.json` — archived snapshots for rollback.
 - `.sneakoscope/skills/rejected-skill-patches.jsonl` — the Rejected SkillPatch Buffer (one rejected entry per line, deduped by patch hash).
 - `.sneakoscope/reports/core-skill-rollout-score.json` — the latest persisted rollout score.
+- `.sneakoscope/skills/<route>/<skill_id>/best-skill.json` — the trainer's best held-out card (SkillOpt `best_skill.md` analogue).
+- `.sneakoscope/reports/core-skill-training-report.json` — per-epoch trainer record (accept/reject reason, score delta, learning rate).
 
 ## Schemas
 

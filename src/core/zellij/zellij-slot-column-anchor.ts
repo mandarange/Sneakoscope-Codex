@@ -1,6 +1,17 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { packageRoot } from '../fsx.js'
 import { readZellijSlotTelemetrySnapshot } from './zellij-slot-telemetry.js'
+import { workerBackendTag } from './zellij-worker-pane-manager.js'
+
+function readPackageVersion(): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(packageRoot(), 'package.json'), 'utf8'))
+    return String(pkg?.version || '?')
+  } catch {
+    return '?'
+  }
+}
 
 export interface ZellijSlotColumnAnchorInput {
   activeWorkers?: number
@@ -110,8 +121,34 @@ function renderTelemetryAnchor(snapshot: any, updateNotice: any = null, madDbCap
   const update = updateNotice?.update_available && updateNotice?.latest_version ? ` · update ${trimInline(String(updateNotice.latest_version), 18)} available` : ''
   const madDb = isMadDbActive(madDbCapability) ? ' · MAD-DB ACTIVE' : ''
   const qaHandoff = ['pending', 'blocked_for_desktop_review'].includes(String(appHandoff?.status || '')) ? ' · QA /app handoff pending' : ''
-  if (staleSeconds != null && staleSeconds > 10) return `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${madDb}${qaHandoff}`
-  return `SLOTS active ${active} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${madDb}${qaHandoff}`
+  // Compact SKS branding header: package version + mission id so the SLOTS column self-identifies.
+  const brand = `SKS v${readPackageVersion()} · mission ${trimInline(String(snapshot.mission_id || '-'), 28)}`
+  if (staleSeconds != null && staleSeconds > 60) {
+    return [brand, `SLOTS telemetry stale ${staleSeconds}s · active ?${update}${madDb}${qaHandoff}`].join('\n')
+  }
+  const countsLine = `SLOTS active ${active} · run ${Number(counts.running || 0)} · verify ${Number(counts.verifying || 0)} · headless ${Number(counts.headless || 0)} · done ${Number(counts.completed || 0)} · fail ${Number(counts.failed || 0)} · q ${Number(counts.queued || 0)}${update}${madDb}${qaHandoff}`
+  const slotRows = renderTelemetrySlotRows(snapshot)
+  return [brand, countsLine, ...slotRows].join('\n')
+}
+
+function renderTelemetrySlotRows(snapshot: any): string[] {
+  const slots = Object.values((snapshot?.slots || {}) as Record<string, any>)
+  if (!slots.length) return []
+  const ordered = slots.sort((a, b) => {
+    const statusDelta = statusWeight(a?.status) - statusWeight(b?.status)
+    if (statusDelta) return statusDelta
+    return String(a?.slot_id || '').localeCompare(String(b?.slot_id || ''))
+  }).slice(0, 12)
+  return ordered.map((slot) => {
+    const id = `${trimInline(String(slot?.slot_id || 'slot-?'), 12)} g${Math.max(1, Math.floor(Number(slot?.generation_index) || 1))}`
+    const task = trimInline(String(slot?.task_title || ''), 24)
+    const engine = workerBackendTag(slot?.backend, slot?.provider)
+    const role = trimInline(String(slot?.role || 'worker'), 10)
+    const status = trimInline(String(slot?.status || 'running'), 9)
+    const file = trimInline(String(slot?.current_file || '-'), 30)
+    const hb = slot?.latest_ts ? `${Math.max(0, Math.round((Date.now() - Date.parse(String(slot.latest_ts))) / 1000))}s` : '?'
+    return `${id}${task && task !== 'worker task' ? ` · ${task}` : ''} · ${engine} · ${role} · ${status} · ${file} · hb ${hb}`
+  })
 }
 
 function isMadDbActive(capability: any) {

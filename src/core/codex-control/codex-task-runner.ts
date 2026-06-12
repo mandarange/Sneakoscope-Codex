@@ -282,6 +282,15 @@ async function runLocalControlTask(root: string, task: CodexTaskInput, schema: R
     ...(validation.ok ? [] : ['local_llm_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)])
   ]
   const workerResult = normalizeWorkerResult(structuredOutput, task, finalBlockers, validation.ok, 'local-llm')
+  // Stamp the local-llm request id as backend proof on model-authored patch
+  // envelopes; without it agent-patch-schema rejects every local-llm patch
+  // with model_authored_backend_proof_missing (the model cannot know the id).
+  if (Array.isArray(workerResult.patch_envelopes)) {
+    workerResult.patch_envelopes = workerResult.patch_envelopes.map((envelope: any) => ({
+      ...envelope,
+      backend_ollama_request_id: envelope?.backend_ollama_request_id || adapterResult.requestId
+    }))
+  }
   const workerResultPath = path.join(root, 'local-llm-worker-result.json')
   await writeJsonAtomic(workerResultPath, workerResult)
   const patchEnvelopePath = Array.isArray(workerResult.patch_envelopes) && workerResult.patch_envelopes.length

@@ -83,10 +83,21 @@ export function renderProofMarkdown(proof: any = {}, validation: any = validateC
     `- Wrongness: ${proof.evidence?.wrongness?.active_count ?? 0} active (${proof.evidence?.wrongness?.high_severity_active ?? 0} high)`,
     `- Evidence router: ${proof.evidence?.evidence_router?.records ?? 0} record(s)`,
     `- Trust report: ${proof.evidence?.trust_report || 'not_recorded'}`,
-    '',
-    '## Unverified',
     ''
   ];
+  const failureAnalysis = proof.failure_analysis;
+  if (failureAnalysis && (failureAnalysis.status !== 'not_required' || failureAnalysis.root_cause || failureAnalysis.corrective_action)) {
+    lines.push(
+      '## Failure Analysis',
+      '',
+      `- Status: ${failureAnalysis.status || 'unknown'}`,
+      `- Root cause: ${failureAnalysis.root_cause || 'not_recorded'}`,
+      `- Corrective action: ${failureAnalysis.corrective_action || 'not_recorded'}`,
+      `- Evidence: ${Array.isArray(failureAnalysis.evidence) ? failureAnalysis.evidence.length : failureAnalysis.evidence ? 1 : 0}`,
+      ''
+    );
+  }
+  lines.push('## Unverified', '');
   const unverified = proof.unverified?.length ? proof.unverified : ['No unverified claims recorded.'];
   for (const item of unverified) lines.push(`- ${typeof item === 'string' ? item : JSON.stringify(item)}`);
   if (proof.blockers?.length) {

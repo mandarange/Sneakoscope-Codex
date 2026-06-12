@@ -401,6 +401,7 @@ class NativeCliSessionSwarmRecorder {
       serviceTier: this.input.fastModePolicy.service_tier,
       worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null,
       backend: this.input.backend,
+      taskTitle: String(input.ctx.slice?.title || input.ctx.slice?.description || input.ctx.slice?.id || '') || null,
       uiMode,
       projectRoot: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd,
       rightColumnMode: 'spawn-on-first-worker',
@@ -504,7 +505,23 @@ class NativeCliSessionSwarmRecorder {
       session_id: input.ctx.agent.session_id,
       worker_artifact_dir: input.workerDirRel
     })
-    const parsed = await waitForWorkerResult(path.join(this.root, input.resultRel), Number(process.env.SKS_ZELLIJ_WORKER_RESULT_TIMEOUT_MS || 120000))
+    const parsed = await this.waitForWorkerResultWithActivity({
+      resultPath: path.join(this.root, input.resultRel),
+      activityPaths: [
+        path.join(this.root, input.heartbeatRel),
+        path.join(this.root, input.stdoutRel),
+        path.join(this.root, input.stderrRel),
+        path.join(this.root, input.workerDirRel, 'codex-sdk-events.jsonl'),
+        path.join(this.root, input.workerDirRel, 'python-codex-sdk-events.jsonl'),
+        path.join(this.root, input.workerDirRel, 'local-llm-events.jsonl')
+      ],
+      stdoutPath: path.join(this.root, input.stdoutRel),
+      ctx: input.ctx,
+      heartbeatRel: input.heartbeatRel,
+      resultRel: input.resultRel,
+      stdoutRel: input.stdoutRel,
+      stderrRel: input.stderrRel
+    })
     const compactExit = processRun ? await processRun.wait(parsed ? 10000 : 1000) : null
     this.active.delete(activeToken)
     input.record.closed_at = nowIso()
@@ -611,6 +628,51 @@ class NativeCliSessionSwarmRecorder {
       blockers: input.record.blockers,
       artifacts: [...new Set([...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')])]
     })
+  }
+
+  // Root-cause-2 fix: a fixed 2-minute wall-clock result timeout killed live codex-sdk
+  // workers (real runs exceed 2 min), marking false zellij_worker_result_timeout failures and
+  // freezing the UI while the worker kept running. Replace it with an activity-aware wait: keep
+  // waiting as long as ANY worker artifact (heartbeat, stdout/stderr, sdk event jsonl) was touched
+  // recently. Only give up after SKS_ZELLIJ_WORKER_INACTIVITY_TIMEOUT_MS of silence (default 5min)
+  // OR an absolute cap SKS_ZELLIJ_WORKER_RESULT_TIMEOUT_MS (default 1h; 0 = no cap). While waiting,
+  // emit a heartbeat telemetry event every ~10s so the SLOTS snapshot updated_at stays fresh from
+  // the orchestrator side too.
+  private async waitForWorkerResultWithActivity(input: {
+    resultPath: string
+    activityPaths: string[]
+    stdoutPath: string
+    ctx: { agent: any; slice: any; opts: any }
+    heartbeatRel: string
+    resultRel: string
+    stdoutRel: string
+    stderrRel: string
+  }) {
+    const inactivityTimeoutMs = Math.max(1000, Number(process.env.SKS_ZELLIJ_WORKER_INACTIVITY_TIMEOUT_MS || 300000))
+    const absoluteCapRaw = Number(process.env.SKS_ZELLIJ_WORKER_RESULT_TIMEOUT_MS ?? 3600000)
+    const absoluteCapMs = Number.isFinite(absoluteCapRaw) ? absoluteCapRaw : 3600000
+    const start = Date.now()
+    let lastActivityMs = start
+    let lastHeartbeatEmit = 0
+    for (;;) {
+      const result = await readJson<any>(input.resultPath, null).catch(() => null)
+      if (result) return result
+      const now = Date.now()
+      const newestActivity = await newestMtimeMs(input.activityPaths)
+      if (newestActivity != null && newestActivity > lastActivityMs) lastActivityMs = newestActivity
+      if (absoluteCapMs > 0 && now - start >= absoluteCapMs) return null
+      if (now - lastActivityMs >= inactivityTimeoutMs) return null
+      if (now - lastHeartbeatEmit >= 10000) {
+        lastHeartbeatEmit = now
+        await this.telemetry(input.ctx, {
+          eventType: 'heartbeat',
+          status: 'running',
+          artifacts: [input.heartbeatRel, input.resultRel, input.stdoutRel, input.stderrRel],
+          logTail: await tailFile(input.stdoutPath, 600)
+        })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
   }
 
   async finalize() {
@@ -828,14 +890,17 @@ function buildPaneWorkerHeader(input: {
   ].join('\n')
 }
 
-async function waitForWorkerResult(file: string, timeoutMs: number) {
-  const deadline = Date.now() + Math.max(1000, timeoutMs)
-  while (Date.now() < deadline) {
-    const result = await readJson<any>(file, null).catch(() => null)
-    if (result) return result
-    await new Promise((resolve) => setTimeout(resolve, 250))
+async function newestMtimeMs(files: string[]): Promise<number | null> {
+  let newest: number | null = null
+  for (const file of files) {
+    try {
+      const mtime = (await fs.promises.stat(file)).mtimeMs
+      if (newest == null || mtime > newest) newest = mtime
+    } catch {
+      // missing file: no activity signal from it
+    }
   }
-  return null
+  return newest
 }
 
 async function waitForWorkerHeartbeat(file: string, timeoutMs: number) {
