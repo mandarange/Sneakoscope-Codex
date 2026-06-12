@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/loops/loop-state.schema.json",
+  "title": "SKS Loop State",
+  "type": "object",
+  "required": ["schema", "mission_id", "loop_id", "status", "iteration", "acting_on", "current_phase", "budget_used", "updated_at"],
+  "properties": {
+    "schema": { "const": "sks.loop-state.v1" },
+    "mission_id": { "type": "string" },
+    "loop_id": { "type": "string" },
+    "status": { "type": "string" },
+    "iteration": { "type": "number" },
+    "acting_on": { "type": "object" },
+    "current_phase": { "type": "string" },
+    "budget_used": { "type": "object" },
+    "updated_at": { "type": "string" }
+  },
+  "additionalProperties": true
+}

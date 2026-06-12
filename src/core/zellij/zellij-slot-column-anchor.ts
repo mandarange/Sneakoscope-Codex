@@ -13,6 +13,10 @@ export interface ZellijSlotColumnAnchorInput {
   madDbActive?: boolean
   qaAppHandoffPending?: boolean
   qaAppHandoffArtifact?: string | null
+  loopsTotal?: number
+  loopsRunning?: number
+  loopsBlocked?: number
+  loopsCompleted?: number
   mode?: string
   workerRows?: ZellijSlotColumnWorkerRow[]
   maxWorkerRows?: number
@@ -42,9 +46,12 @@ export function renderZellijSlotColumnAnchor(input: ZellijSlotColumnAnchorInput 
   const update = input.updateAvailableVersion ? ` · update ${trimInline(input.updateAvailableVersion, 18)} available` : ''
   const madDb = input.madDbActive ? ' · MAD-DB ACTIVE' : ''
   const appHandoff = input.qaAppHandoffPending ? ' · QA /app handoff pending' : ''
-  const header = done || fail
+  const loopHeader = input.loopsTotal != null
+    ? `LOOPS ${nonNegativeInt(input.loopsTotal, 0)} · running ${nonNegativeInt(input.loopsRunning, 0)} · blocked ${nonNegativeInt(input.loopsBlocked, 0)} · done ${nonNegativeInt(input.loopsCompleted, 0)} · workers ${active}`
+    : null
+  const header = loopHeader || (done || fail
     ? `SLOTS active ${active} · headless ${headless} · done ${done} · fail ${fail} · q ${queue}${update}${madDb}${appHandoff}`
-    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${madDb}${appHandoff}`
+    : `SLOTS active ${active}/${visible} · headless ${headless} · q ${queue}${update}${madDb}${appHandoff}`)
   const workers = Array.isArray(input.workerRows) ? input.workerRows : []
   const handoffLine = input.qaAppHandoffPending ? `QA app handoff pending · ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 64)}` : null
   if (!workers.length) return [header, handoffLine, 'visible slot panes stack below this anchor'].filter(Boolean).join('\n')

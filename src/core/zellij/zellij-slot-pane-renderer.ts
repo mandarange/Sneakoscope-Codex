@@ -30,6 +30,9 @@ export interface ZellijSlotPaneRenderInput {
   stderrTail?: string[] | null
   qaAppHandoffPending?: boolean | null
   qaAppHandoffArtifact?: string | null
+  loopId?: string | null
+  loopRole?: string | null
+  loopGate?: string | null
   mode?: 'compact-slots' | 'dashboard-plus-slots' | 'full-debug'
 }
 
@@ -47,6 +50,7 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
   const stdout = (input.stdoutTail || []).filter(Boolean).slice(-2)
   const stderr = (input.stderrTail || []).filter(Boolean).slice(-1)
   const rows = [
+    input.loopId ? `${trimInline(input.loopId, 28)} · ${trimInline(input.loopRole || input.role || 'worker', 14)} · ${input.slotId}` : null,
     `slot: ${input.slotId} / gen-${Math.max(1, Math.floor(Number(input.generationIndex) || 1))} / ${trimInline(input.status || 'running', 18)}`,
     `role: ${trimInline(input.role || 'worker', 18)}  backend: ${trimInline(input.backend || 'codex-sdk', 20)}  worktree: ${trimInline(input.worktreeId || '-', 18)}`,
     `runtime: fast ${formatFastMode(input.fastMode, input.serviceTier)}  tier: ${trimInline(input.serviceTier || 'unknown', 12)}  provider: ${trimInline(input.provider || 'unknown', 18)}`,
@@ -54,6 +58,7 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
     input.sessionId ? `session: ${trimInline(input.sessionId, 62)}` : null,
     `heartbeat: ${heartbeat}${input.heartbeatEvent ? `  event: ${trimInline(input.heartbeatEvent, 40)}` : ''}`,
     `doing: ${task}`,
+    input.loopGate ? `gate: ${trimInline(input.loopGate, 68)}` : null,
     `files: ${trimInline(files.length ? files.join(', ') : 'no changed file yet', 78)}`,
     `patch: ${trimInline(input.patchStatus || 'queued', 24)}  verify: ${trimInline(input.verifyStatus || 'queued', 24)}`,
     input.qaAppHandoffPending ? `QA app handoff pending: ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 55)}` : null,

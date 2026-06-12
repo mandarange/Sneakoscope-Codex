@@ -1,5 +1,30 @@
 # Post Route Reflection
 
+## 2026-06-12 SKS 3.1.0 Naruto Loop Mesh Reflection
+
+- Mission: M-20260612-165947-17a6
+- Route: Naruto with parent-owned integration
+- Outcome: Implemented the 3.1.0 Naruto Loop Mesh directive and verified the new loop/goal/naruto/docs/release gates.
+
+### Summary
+
+The directive required a dynamic Loop Graph runtime, loop-local state/proof artifacts, owner leases, affected gate selection, Naruto loop mesh routing, `sks loop` CLI, goal-to-loop default compatibility, docs, schema files, and 3.1.0 release metadata. The implementation added these surfaces and wired them into package scripts and `release-gates.v2.json`.
+
+### Evidence
+
+- `npm run build --silent` passed.
+- `npm run release:version-truth --silent` passed for 3.1.0 with zero warnings.
+- 32 new loop/naruto/goal/docs/release DAG scripts passed as a focused batch.
+- `npm run release:metadata --silent` passed after loopback doc/Rust version fixes.
+- `npm run release:check --silent` passed: 80 selected gates, 80 pass, 0 fail.
+- `sks wiki validate .sneakoscope/wiki/context-pack.json` passed with 32/32 trust anchors.
+
+### Lessons
+
+1. Release metadata can catch version surfaces that focused version truth misses, especially versioned docs and the Rust helper display string.
+2. A helper `$Naruto` live session that is interrupted or produces no native-session proof must not be promoted to final evidence; parent-owned release and focused gate proof should be reported separately.
+3. Large directive closeout should rerun the affected release wrapper after the last doc/version loopback, because readiness can transition from metadata failure to pass only after the final source edit.
+
 - Mission: SKS 1.18.11 Real Codex Parallel + Warp/Tmux Right-Lane closure
 - Route: Team with MAD authorization and native goal continuation
 - Reflected at: 2026-05-28T14:55:00Z
