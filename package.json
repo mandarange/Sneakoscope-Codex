@@ -445,6 +445,7 @@
     "mcp:readonly-runtime-scheduler": "node ./dist/scripts/mcp-readonly-runtime-scheduler-check.js",
     "codex:0.134-runner-truth": "node ./dist/scripts/codex-0-134-runner-truth-check.js",
     "source-intelligence:policy": "node ./dist/scripts/source-intelligence-policy-check.js",
+    "context7:evidence-dedupe": "node ./dist/scripts/context7-evidence-dedupe-check.js",
     "source-intelligence:codex-history-search": "node ./dist/scripts/codex-history-search-check.js",
     "source-intelligence:all-modes": "node ./dist/scripts/source-intelligence-all-modes-check.js",
     "codex-web:adapter": "node ./dist/scripts/codex-web-adapter-check.js",

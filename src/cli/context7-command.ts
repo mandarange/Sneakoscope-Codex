@@ -82,9 +82,24 @@ export async function context7Command(sub: any = 'check', args: any = []) {
       timeoutMs: readNumberOption(args, '--timeout-ms', 30000)
     });
     const state = { ...(await readJson(stateFile(root), {})), mission_id: missionId };
-    await recordContext7Evidence(root, state, { tool_name: 'resolve-library-id', library: libraryNameOrId, library_id: result.library_id, source: result.resolve ? 'sks context7 evidence' : 'sks context7 evidence explicit-library-id' });
+    const evidenceQuery = readOption(args, '--query', readOption(args, '--topic', libraryNameOrId));
+    const evidenceTopic = readOption(args, '--topic', libraryNameOrId);
+    await recordContext7Evidence(root, state, {
+      tool_name: 'resolve-library-id',
+      library: libraryNameOrId,
+      library_id: result.library_id,
+      query: evidenceQuery,
+      source: result.resolve ? 'sks context7 evidence' : 'sks context7 evidence explicit-library-id'
+    });
     if (result.docs_tool) {
-      await recordContext7Evidence(root, state, { tool_name: result.docs_tool, library_id: result.library_id, source: 'sks context7 evidence' });
+      await recordContext7Evidence(root, state, {
+        tool_name: result.docs_tool,
+        library_id: result.library_id,
+        query: evidenceQuery,
+        topic: evidenceTopic,
+        tokens: readNumberOption(args, '--tokens', 2000),
+        source: 'sks context7 evidence'
+      });
     }
     const evidence = await context7Evidence(root, state);
     const out = { ...result, mission_id: missionId, evidence };
