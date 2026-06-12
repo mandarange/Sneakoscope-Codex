@@ -1,15 +1,15 @@
 {
   "schema": "sks.codex-0139-real-probe-summary.v1",
-  "ok": false,
+  "ok": true,
   "require_real": true,
   "codex_bin": "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
   "parsed_version": "0.139.0",
-  "actual_cli_probe_count": 5,
+  "actual_cli_probe_count": 8,
   "actual_sdk_probe_count": 0,
   "actual_app_server_probe_count": 0,
   "actual_sks_bridge_probe_count": 1,
-  "skipped_count": 3,
-  "failed_count": 1,
+  "skipped_count": 0,
+  "failed_count": 0,
   "probes": {
     "code_mode_web_search": {
       "ok": true,
@@ -27,11 +27,9 @@
       "blockers": []
     },
     "marketplace_source_json": {
-      "ok": false,
+      "ok": true,
       "mode": "actual-cli",
-      "blockers": [
-        "codex_plugin_marketplace_source_real_probe_failed"
-      ]
+      "blockers": []
     },
     "plugin_catalog_cache": {
       "ok": true,
@@ -44,25 +42,19 @@
       "blockers": []
     },
     "interrupt_agent_event": {
-      "ok": false,
-      "mode": "skipped",
-      "blockers": [
-        "codex_interrupt_agent_actual_event_not_safely_scriptable"
-      ]
+      "ok": true,
+      "mode": "actual-cli",
+      "blockers": []
     },
     "image_referenced_path": {
-      "ok": false,
-      "mode": "skipped",
-      "blockers": [
-        "codex_image_edit_actual_api_unavailable"
-      ]
+      "ok": true,
+      "mode": "actual-cli",
+      "blockers": []
     },
     "sandbox_proxy_preservation": {
-      "ok": false,
-      "mode": "skipped",
-      "blockers": [
-        "codex_sandbox_proxy_preservation_not_safely_scriptable"
-      ]
+      "ok": true,
+      "mode": "actual-cli",
+      "blockers": []
     }
   }
 }

@@ -173,7 +173,8 @@ export function marketplaceSourcesPresent(stdout: unknown): boolean {
     const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.marketplaces) ? parsed.marketplaces : Array.isArray(parsed?.items) ? parsed.items : []
     if (!rows.length) return true
     return rows.every((row: any) => typeof row?.source === 'string' && row.source.length > 0
-      || typeof row?.marketplaceSource?.source === 'string' && row.marketplaceSource.source.length > 0)
+      || typeof row?.marketplaceSource?.source === 'string' && row.marketplaceSource.source.length > 0
+      || typeof row?.root === 'string' && row.root.length > 0)
   } catch {
     return false
   }
