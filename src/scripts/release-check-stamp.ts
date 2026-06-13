@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const stampPath = process.env.SKS_RELEASE_STAMP_PATH || path.join(root, '.sneakoscope', 'reports', 'release-check-stamp.json');
 const command = process.argv[2] || 'verify';
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function fail(message, detail = '') {
   console.error(`Release check stamp failed: ${message}`);
@@ -68,6 +69,25 @@ function fileDigestForPackageFiles(pkg) {
 function gitCommit() {
   const result = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
   return result.status === 0 ? result.stdout.trim() : null;
+}
+
+function runRefreshCommand() {
+  const override = process.env.SKS_RELEASE_CHECK_REFRESH_COMMAND;
+  if (override) {
+    return spawnSync(override, {
+      cwd: root,
+      encoding: 'utf8',
+      env: process.env,
+      shell: true,
+      stdio: 'inherit'
+    });
+  }
+  return spawnSync(npmCmd, ['run', 'release:check:full'], {
+    cwd: root,
+    encoding: 'utf8',
+    env: process.env,
+    stdio: 'inherit'
+  });
 }
 
 function releaseGateHash(pkg) {
@@ -176,7 +196,7 @@ function inspectStamp() {
     return {
       ok: false,
       message: 'missing release:check stamp',
-      detail: 'Run `npm run release:check` once, then rerun the publish command.'
+      detail: 'Run `npm run release:check:full` once, then rerun the publish command.'
     };
   }
   let stamp;
@@ -198,7 +218,7 @@ function inspectStamp() {
     return {
       ok: false,
       message: 'release:check stamp is stale',
-      detail: `${mismatches.join('\n')}\nRun \`npm run release:check\` again before publishing.`,
+      detail: `${mismatches.join('\n')}\nRun \`npm run release:check:full\` again before publishing.`,
       current
     };
   }
@@ -218,9 +238,15 @@ function ensureStamp() {
     console.log(`Release check stamp verified: ${path.relative(root, stampPath)} (${first.current.source_file_count} files)`);
     return;
   }
-  console.error('Release check stamp is not current; publish path will not run a full release:check refresh.');
+  console.error('Release check stamp is not current; running full `npm run release:check:full` refresh.');
   if (first.detail) console.error(first.detail.trim());
-  fail(first.message, 'Run `npm run release:check` outside the publish path to refresh the stamp.');
+
+  const refresh = runRefreshCommand();
+  if (refresh.status !== 0) process.exit(refresh.status || 1);
+
+  const second = inspectStamp();
+  if (!second.ok) fail(second.message, second.detail);
+  console.log(`Release check stamp verified: ${path.relative(root, stampPath)} (${second.current.source_file_count} files)`);
 }
 
 if (command === 'write') writeStamp();
