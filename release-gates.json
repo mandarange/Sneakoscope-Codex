@@ -366,6 +366,19 @@
       "can_run_incremental": true
     },
     {
+      "id": "agent:official-subagent-helper-policy",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/core/agents/**",
+        "src/core/commands/**",
+        "src/scripts/agent-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "agent:parallel-write-blackbox",
       "tier": "P1",
       "cost": "hermetic",

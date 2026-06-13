@@ -249,6 +249,7 @@ const requiredScripts = [
   'agent:native-cli-session-swarm-10',
   'agent:native-cli-session-swarm-20',
   'agent:no-subagent-scaling',
+  'agent:official-subagent-helper-policy',
   'agent:native-cli-session-proof',
   'agent:worker-backend-router',
   'agent:codex-child-overlap',
