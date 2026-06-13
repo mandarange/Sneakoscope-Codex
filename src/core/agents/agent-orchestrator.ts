@@ -50,6 +50,7 @@ import { applyFastModeToRoster, resolveFastModePolicy, writeFastModePropagationP
 import { createNativeCliSessionSwarmRecorder } from './native-cli-session-swarm.js'
 import { writeNativeCliSessionProof } from './native-cli-session-proof.js'
 import { writeNoSubagentScalingPolicy } from './no-subagent-scaling-policy.js'
+import { writeOfficialSubagentHelperPolicy } from './official-subagent-helper-policy.js'
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { resolveLocalCollaborationPolicy, localCollaborationParticipated } from '../local-llm/local-collaboration-policy.js'
@@ -482,7 +483,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     targetActiveSlots,
     totalWorkItems: partition.task_graph?.total_work_items || partition.slices.length
   })
-  const noSubagentScalingPolicy = await writeNoSubagentScalingPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof })
+  const officialSubagentHelperPolicy = await writeOfficialSubagentHelperPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof })
+  const noSubagentScalingPolicy = await writeNoSubagentScalingPolicy(ledgerRoot, { nativeProof: nativeCliSessionProof, officialSubagentHelperPolicy })
   const fastModePropagation = await writeFastModePropagationProof(ledgerRoot, { policy: fastModePolicy, backend, results })
   const localCollaborationPolicy = resolveLocalCollaborationPolicy()
   await writeJsonAtomic(path.join(ledgerRoot, 'local-collaboration-policy.json'), localCollaborationPolicy)
@@ -554,6 +556,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     ...(timeoutKill.killed_sessions || []).map((id: string) => 'timeout_killed:' + id),
     ...(recursion.ok ? [] : recursion.violations.map((id: string) => 'recursion:' + id)),
     ...(nativeCliSessionProof.ok ? [] : nativeCliSessionProof.blockers),
+    ...(officialSubagentHelperPolicy.ok ? [] : officialSubagentHelperPolicy.blockers),
     ...(noSubagentScalingPolicy.ok ? [] : noSubagentScalingPolicy.blockers),
     ...(fastModePropagation.ok ? [] : fastModePropagation.blockers),
     ...(gitWorktreeRuntime.required === true && gitWorktreeRuntime.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
@@ -591,6 +594,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     strategyGate,
     nativeCliSessionProof,
     noSubagentScalingPolicy,
+    officialSubagentHelperPolicy,
     fastModePolicy,
     fastModePropagation,
     gitWorktreeRuntime,
@@ -636,6 +640,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     parallel_write_policy: parallelWritePolicy,
     native_cli_session_proof: nativeCliSessionProof,
     no_subagent_scaling_policy: noSubagentScalingPolicy,
+    official_subagent_helper_policy: officialSubagentHelperPolicy,
     fast_mode_policy: fastModePolicy,
     fast_mode_propagation: fastModePropagation,
     git_worktree_runtime: gitWorktreeRuntime,

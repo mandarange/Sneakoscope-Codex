@@ -38,6 +38,7 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
   const result = JSON.parse(stdout);
   const proof = result.native_cli_session_proof || {};
   const noSubagent = result.no_subagent_scaling_policy || {};
+  const officialHelper = result.official_subagent_helper_policy || {};
   const fast = result.fast_mode_propagation || {};
   const policy = fast.policy || result.fast_mode_policy || {};
   const expectedFast = expectedFastMode === null || expectedFastMode === undefined ? Boolean(policy.fast_mode) : Boolean(expectedFastMode);
@@ -51,6 +52,7 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
     backend: result.backend,
     native_cli_session_proof: proof,
     no_subagent_scaling_policy: noSubagent,
+    official_subagent_helper_policy: officialHelper,
     fast_mode_propagation: fast,
     proof_status: result.proof?.status || null
   };
@@ -65,6 +67,9 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
   assertGate(Array.isArray(proof.process_ids) && proof.process_ids.length >= agents, 'process ids missing from native CLI proof', report);
   assertGate(proof.close_report_count >= agents, 'worker close report count below requested agents', report);
   assertGate(noSubagent.ok === true && noSubagent.subagent_events_counted_as_worker_sessions === false, 'no-subagent scaling policy must pass', report);
+  assertGate(officialHelper.ok === true && officialHelper.official_codex_subagent_helper_lane_enabled === true, 'official subagent helper policy must pass', report);
+  assertGate(officialHelper.worker_capacity_credit === 0 && officialHelper.subagent_events_counted_as_worker_sessions === false, 'official helper lane must not count toward worker capacity', report);
+  assertGate(noSubagent.official_codex_subagent_helper_lane_allowed === true && noSubagent.official_helper_lane_worker_capacity_credit === 0, 'no-subagent policy must allow helper lane with zero capacity credit', report);
   assertGate(fast.ok === true, 'fast mode propagation proof must pass', report);
   assertGate(fast.fast_mode === expectedFast && fast.service_tier === expectedTier, 'worker service tier must match the selected fast-mode policy', { ...report, expected_fast_mode: expectedFast, expected_service_tier: expectedTier });
   if (expectedFast) {

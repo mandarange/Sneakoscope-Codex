@@ -10,7 +10,7 @@ import { writeFakeRealProofPolicyReport } from '../proof/fake-real-proof-policy.
 import { buildRuntimeTruthMatrix, writeRuntimeTruthMatrix } from '../proof/runtime-truth-matrix.js'
 import { evaluateLocalCollaborationFinalGate, localCollaborationParticipated, resolveLocalCollaborationPolicy } from '../local-llm/local-collaboration-policy.js'
 
-export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; gitWorktreeRuntime?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any; localCollaborationPolicy?: any; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
+export async function writeAgentProofEvidence(root: string, input: { missionId: string; backend: string; route?: string; routeCommand?: string; routeBlackboxKind?: string; requestedWorkItems?: number; minimumWorkItems?: number; targetActiveSlots?: number; visualLaneCount?: number; realParallel?: boolean; roster?: any; partition?: any; consensus?: any; results?: any[]; cleanup?: any; janitor?: any; trust?: any; wrongness?: any; outputTails?: any; timeoutKill?: any; scheduler?: any; parallelWritePolicy?: any; gitWorktreeRuntime?: any; patchSwarm?: any; strategyGate?: any; nativeCliSessionProof?: any; noSubagentScalingPolicy?: any; officialSubagentHelperPolicy?: any; fastModePolicy?: any; fastModePropagation?: any; triwikiContext?: any; selectedCoreSkill?: any; localCollaborationPolicy?: any; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
   const lifecycle = await assertAllAgentSessionsClosed(root)
   const terminal = await assertAgentTerminalSessionsClosed(root)
   const generations = await assertAgentSessionGenerationsClosed(root)
@@ -52,6 +52,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
   })
   const nativeCliSessionProof = input.nativeCliSessionProof || await readJson<any>(path.join(root, 'native-cli-session-proof.json'), null)
   const noSubagentScalingPolicy = input.noSubagentScalingPolicy || await readJson<any>(path.join(root, 'no-subagent-scaling-policy.json'), null)
+  const officialSubagentHelperPolicy = input.officialSubagentHelperPolicy || await readJson<any>(path.join(root, 'official-subagent-helper-policy.json'), null)
   const fastModePropagation = input.fastModePropagation || await readJson<any>(path.join(root, 'fast-mode-propagation-proof.json'), null)
   const zellijPaneProof = await readJson<any>(path.join(root, 'zellij-pane-proof.json'), null)
   const cleanupProof = await readJson<any>(path.join(root, 'agent-cleanup-proof.json'), null)
@@ -180,6 +181,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(input.results || []).flatMap((result: any) => result.blockers || []),
     ...(nativeCliSessionProof?.ok === false ? nativeCliSessionProof.blockers || ['native_cli_session_proof_not_ok'] : []),
     ...(noSubagentScalingPolicy?.ok === false ? noSubagentScalingPolicy.blockers || ['no_subagent_scaling_policy_not_ok'] : []),
+    ...(officialSubagentHelperPolicy?.ok === false ? officialSubagentHelperPolicy.blockers || ['official_subagent_helper_policy_not_ok'] : []),
     ...(fastModePropagation?.ok === false ? fastModePropagation.blockers || ['fast_mode_propagation_not_ok'] : []),
     ...(patchSwarm?.ok === false ? patchSwarm.blockers || ['patch_swarm_not_ok'] : []),
     ...(gitWorktreeRuntime?.required === true && gitWorktreeRuntime?.ok === false ? gitWorktreeRuntime.blockers || ['git_worktree_runtime_not_ok'] : []),
@@ -226,6 +228,23 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     native_cli_session_proof: nativeCliSessionProof ? 'native-cli-session-proof.json' : null,
     native_cli_session_swarm: nativeCliSessionProof ? 'agent-native-cli-session-swarm.json' : null,
     no_subagent_scaling_policy: noSubagentScalingPolicy ? 'no-subagent-scaling-policy.json' : null,
+    official_subagent_helper_policy: officialSubagentHelperPolicy ? 'official-subagent-helper-policy.json' : null,
+    official_subagent_helper_lane_enabled: officialSubagentHelperPolicy?.official_codex_subagent_helper_lane_enabled === true,
+    official_subagent_helper_lane_ok: officialSubagentHelperPolicy?.ok === true,
+    official_subagent_helper_worker_capacity_credit: Number(officialSubagentHelperPolicy?.worker_capacity_credit || 0),
+    official_subagent_helper_observed_subagent_event_count: Number(officialSubagentHelperPolicy?.observed_subagent_event_count || 0),
+    official_subagent_helper_events_counted_as_worker_sessions: officialSubagentHelperPolicy?.subagent_events_counted_as_worker_sessions === true,
+    official_subagent_helper_capacity_source: officialSubagentHelperPolicy?.worker_capacity_source || null,
+    official_subagent_helper_parallel_allowed: officialSubagentHelperPolicy?.helper_lane_may_run_in_parallel_with_native_workers === true,
+    official_subagent_helper_capabilities: officialSubagentHelperPolicy?.codex_app_capabilities_allowed || [],
+    official_subagent_helper_builtin_agents: officialSubagentHelperPolicy?.built_in_agents_allowed || [],
+    official_subagent_helper_required_output_proof_for_generated_images: officialSubagentHelperPolicy?.required_output_proof_for_generated_images || [],
+    codex_builtin_imagegen_helper_allowed: officialSubagentHelperPolicy?.codex_builtin_imagegen_helper_allowed === true,
+    codex_builtin_imagegen_required_surface: officialSubagentHelperPolicy?.preferred_image_generation_surface || null,
+    codex_builtin_imagegen_evidence_class: officialSubagentHelperPolicy?.codex_app_builtin_evidence_class || null,
+    imagegen_api_fallback_evidence_class: officialSubagentHelperPolicy?.api_fallback_evidence_class || null,
+    imagegen_provider_surface_evidence_required: officialSubagentHelperPolicy?.provider_surface_evidence_required === true,
+    imagegen_api_fallback_counts_as_codex_app_evidence: officialSubagentHelperPolicy?.imagegen_api_fallback_counts_as_codex_app_evidence === true,
     fast_mode_policy: input.fastModePolicy || null,
     fast_mode_propagation: fastModePropagation ? 'fast-mode-propagation-proof.json' : null,
     native_cli_worker_process_count: Number(nativeCliSessionProof?.spawned_worker_process_count || 0),
@@ -404,6 +423,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
       , 'gpt-final-arbiter/gpt-final-arbiter.json': gptFinalArbiter
       , 'native-cli-session-proof.json': nativeCliSessionProof
       , 'no-subagent-scaling-policy.json': noSubagentScalingPolicy
+      , 'official-subagent-helper-policy.json': officialSubagentHelperPolicy
       , 'fast-mode-propagation-proof.json': fastModePropagation
     }
   })

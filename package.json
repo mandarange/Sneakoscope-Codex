@@ -539,6 +539,7 @@
     "agent:codex-child-overlap": "node ./dist/scripts/agent-codex-child-overlap-check.js",
     "agent:model-authored-patch-envelope": "node ./dist/scripts/agent-model-authored-patch-envelope-check.js",
     "agent:no-subagent-scaling": "node ./dist/scripts/agent-no-subagent-scaling-check.js",
+    "agent:official-subagent-helper-policy": "node ./dist/scripts/agent-official-subagent-helper-policy-check.js",
     "agent:native-cli-session-proof": "node ./dist/scripts/agent-native-cli-session-proof-check.js",
     "agent:fast-mode-default": "node ./dist/scripts/agent-fast-mode-default-check.js",
     "agent:fast-mode-worker-propagation": "node ./dist/scripts/agent-fast-mode-worker-propagation-check.js",

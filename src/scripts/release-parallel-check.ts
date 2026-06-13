@@ -142,6 +142,7 @@ const tasks: VerificationTask[] = [
   task('agent:native-cli-session-swarm-10', 'npm run agent:native-cli-session-swarm-10 --silent', { dependencies: ['build'] }),
   task('agent:native-cli-session-swarm-20', 'npm run agent:native-cli-session-swarm-20 --silent', { dependencies: ['build'] }),
   task('agent:no-subagent-scaling', 'npm run agent:no-subagent-scaling --silent', { dependencies: ['build'] }),
+  task('agent:official-subagent-helper-policy', 'npm run agent:official-subagent-helper-policy --silent', { dependencies: ['build'] }),
   task('agent:native-cli-session-proof', 'npm run agent:native-cli-session-proof --silent', { dependencies: ['build'] }),
   task('agent:worker-backend-router', 'npm run agent:worker-backend-router --silent', { dependencies: ['build'] }),
   task('agent:codex-child-overlap', 'npm run agent:codex-child-overlap --silent', { dependencies: ['build'] }),

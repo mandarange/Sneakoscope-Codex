@@ -285,6 +285,34 @@
       ]
     },
     {
+      "id": "agent:official-subagent-helper-policy",
+      "command": "npm run agent:official-subagent-helper-policy --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "agent:patch-conflict-rebase",
       "command": "npm run agent:patch-conflict-rebase --silent",
       "deps": [],
@@ -7021,6 +7049,7 @@
         "agent:native-cli-session-swarm-10",
         "agent:native-cli-session-swarm-20",
         "agent:no-subagent-scaling",
+        "agent:official-subagent-helper-policy",
         "agent:patch-conflict-rebase",
         "agent:patch-envelope-extraction",
         "agent:patch-proof-runtime",

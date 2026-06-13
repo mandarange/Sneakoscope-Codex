@@ -66,6 +66,7 @@ const checks = {
   agent_native_cli_session_swarm_10: scriptContains('release:check', 'agent:native-cli-session-swarm-10'),
   agent_native_cli_session_swarm_20: scriptContains('release:check', 'agent:native-cli-session-swarm-20'),
   agent_no_subagent_scaling: scriptContains('release:check', 'agent:no-subagent-scaling'),
+  agent_official_subagent_helper_policy: scriptContains('release:check', 'agent:official-subagent-helper-policy'),
   agent_native_cli_session_proof: scriptContains('release:check', 'agent:native-cli-session-proof'),
   agent_worker_backend_router: scriptContains('release:check', 'agent:worker-backend-router'),
   agent_codex_child_overlap: scriptContains('release:check', 'agent:codex-child-overlap'),
@@ -266,6 +267,7 @@ const runtimeReports = {
   agent_native_cli_session_swarm_10: readJson('.sneakoscope/reports/agent-native-cli-session-swarm-10.json', null),
   agent_native_cli_session_swarm_20: readJson('.sneakoscope/reports/agent-native-cli-session-swarm-20.json', null),
   agent_no_subagent_scaling: readJson('.sneakoscope/reports/agent-no-subagent-scaling.json', null),
+  agent_official_subagent_helper_policy: readJson('.sneakoscope/reports/agent-official-subagent-helper-policy.json', null),
   agent_native_cli_session_proof: readJson('.sneakoscope/reports/agent-native-cli-session-proof.json', null),
   agent_worker_backend_router: readJson('.sneakoscope/reports/agent-worker-backend-router.json', null),
   agent_codex_child_overlap: readJson('.sneakoscope/reports/agent-codex-child-overlap.json', null),
@@ -399,6 +401,7 @@ for (const [name, ok] of Object.entries({
   agent_native_cli_session_swarm_10: checks.agent_native_cli_session_swarm_10 && runtimeReports.agent_native_cli_session_swarm_10?.ok === true,
   agent_native_cli_session_swarm_20: checks.agent_native_cli_session_swarm_20 && runtimeReports.agent_native_cli_session_swarm_20?.ok === true,
   agent_no_subagent_scaling: checks.agent_no_subagent_scaling && runtimeReports.agent_no_subagent_scaling?.ok === true,
+  agent_official_subagent_helper_policy: checks.agent_official_subagent_helper_policy && runtimeReports.agent_official_subagent_helper_policy?.ok === true,
   agent_native_cli_session_proof: checks.agent_native_cli_session_proof && runtimeReports.agent_native_cli_session_proof?.ok === true,
   agent_worker_backend_router: checks.agent_worker_backend_router && runtimeReports.agent_worker_backend_router?.ok === true,
   agent_codex_child_overlap: checks.agent_codex_child_overlap && runtimeReports.agent_codex_child_overlap?.ok === true,
@@ -620,19 +623,39 @@ const report = {
       && checks.agent_native_cli_session_swarm_10
       && checks.agent_native_cli_session_swarm_20
       && checks.agent_no_subagent_scaling
+      && checks.agent_official_subagent_helper_policy
       && checks.agent_native_cli_session_proof
       && runtimeReports.agent_native_cli_session_swarm?.ok === true
       && runtimeReports.agent_native_cli_session_swarm_10?.ok === true
       && runtimeReports.agent_native_cli_session_swarm_20?.ok === true
       && runtimeReports.agent_no_subagent_scaling?.ok === true
+      && runtimeReports.agent_official_subagent_helper_policy?.ok === true
       && runtimeReports.agent_native_cli_session_proof?.ok === true ? 'present' : 'missing',
     swarm_5_report_ok: runtimeReports.agent_native_cli_session_swarm ? runtimeReports.agent_native_cli_session_swarm.ok === true : null,
     swarm_10_report_ok: runtimeReports.agent_native_cli_session_swarm_10 ? runtimeReports.agent_native_cli_session_swarm_10.ok === true : null,
     swarm_20_report_ok: runtimeReports.agent_native_cli_session_swarm_20 ? runtimeReports.agent_native_cli_session_swarm_20.ok === true : null,
     no_subagent_scaling_report_ok: runtimeReports.agent_no_subagent_scaling ? runtimeReports.agent_no_subagent_scaling.ok === true : null,
+    official_subagent_helper_policy_report_ok: runtimeReports.agent_official_subagent_helper_policy ? runtimeReports.agent_official_subagent_helper_policy.ok === true : null,
     native_cli_session_proof_report_ok: runtimeReports.agent_native_cli_session_proof ? runtimeReports.agent_native_cli_session_proof.ok === true : null,
     max_observed_10: runtimeReports.agent_native_cli_session_swarm_10?.native_cli_session_proof?.max_observed_worker_process_count || null,
     max_observed_20: runtimeReports.agent_native_cli_session_swarm_20?.native_cli_session_proof?.max_observed_worker_process_count || null
+  },
+  official_subagent_helper_lane_1_18_10: {
+    status: checks.agent_official_subagent_helper_policy
+      && runtimeReports.agent_official_subagent_helper_policy?.ok === true ? 'present' : 'missing',
+    helper_lane_enabled: runtimeReports.agent_official_subagent_helper_policy?.helper?.official_codex_subagent_helper_lane_enabled === true,
+    helper_lane_may_run_in_parallel_with_native_workers: runtimeReports.agent_official_subagent_helper_policy?.helper?.helper_lane_may_run_in_parallel_with_native_workers === true,
+    worker_capacity_credit: Number(runtimeReports.agent_official_subagent_helper_policy?.helper?.worker_capacity_credit || 0),
+    subagent_events_counted_as_worker_sessions: runtimeReports.agent_official_subagent_helper_policy?.helper?.subagent_events_counted_as_worker_sessions === true,
+    observed_subagent_event_count: Number(runtimeReports.agent_official_subagent_helper_policy?.helper?.observed_subagent_event_count || 0),
+    codex_builtin_imagegen_helper_allowed: runtimeReports.agent_official_subagent_helper_policy?.helper?.codex_builtin_imagegen_helper_allowed === true,
+    codex_app_builtin_evidence_class: runtimeReports.agent_official_subagent_helper_policy?.helper?.codex_app_builtin_evidence_class || null,
+    api_fallback_evidence_class: runtimeReports.agent_official_subagent_helper_policy?.helper?.api_fallback_evidence_class || null,
+    provider_surface_evidence_required: runtimeReports.agent_official_subagent_helper_policy?.helper?.provider_surface_evidence_required === true,
+    imagegen_api_fallback_counts_as_codex_app_evidence: runtimeReports.agent_official_subagent_helper_policy?.helper?.imagegen_api_fallback_counts_as_codex_app_evidence === true,
+    required_output_proof_for_generated_images: runtimeReports.agent_official_subagent_helper_policy?.helper?.required_output_proof_for_generated_images || [],
+    live_codex_app_output_proof_ran: runtimeReports.agent_official_subagent_helper_policy?.live_codex_app_output_proof_ran === true,
+    live_codex_app_output_proof_note: runtimeReports.agent_official_subagent_helper_policy?.live_codex_app_output_proof_note || null
   },
   real_codex_parallel_workers_1_18_11: {
     status: checks.agent_worker_backend_router
@@ -979,6 +1002,7 @@ for (const key of [
   'parallel_write_kernel_1_18_9',
   'patch_swarm_runtime_1_18_9',
   'native_cli_session_swarm_1_18_10',
+  'official_subagent_helper_lane_1_18_10',
   'real_codex_patch_envelope_smoke_1_18_11',
   'real_codex_parallel_workers_1_18_11',
   'fast_mode_default_1_18_10',
@@ -1132,6 +1156,7 @@ function renderMarkdown(report) {
 - Parallel write kernel ${RELEASE_VERSION}: \`${report.parallel_write_kernel_1_18_9.status}\`
 - Patch swarm runtime ${RELEASE_VERSION}: \`${report.patch_swarm_runtime_1_18_9.status}\`
 - Native CLI Session Swarm ${RELEASE_VERSION}: \`${report.native_cli_session_swarm_1_18_10.status}\`
+- Official Codex subagent helper lane ${RELEASE_VERSION}: \`${report.official_subagent_helper_lane_1_18_10.status}\` (worker credit ${report.official_subagent_helper_lane_1_18_10.worker_capacity_credit}, live image output proof ${report.official_subagent_helper_lane_1_18_10.live_codex_app_output_proof_ran ? 'ran' : 'not run'})
 - Fast mode default ${RELEASE_VERSION}: \`${report.fast_mode_default_1_18_10.status}\`
 - MAD-SKS actual executor closure: \`${report.mad_sks_actual_executor_closure.status}\`
 - Release native agent backend: \`${report.release_native_agent_backend.status}\`
