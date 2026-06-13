@@ -605,7 +605,6 @@ function mergeManagedCodexConfigToml(existingContent: any = '') {
   // upgrade never clobbers a user's chosen model/service_tier. model_reasoning_effort
   // is intentionally left untouched at the top level.
   next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
-  next = upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
   // Codex App feature flags: SET-IF-ABSENT only (see note above).
   for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
@@ -613,7 +612,7 @@ function mergeManagedCodexConfigToml(existingContent: any = '') {
   }
   next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
   next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
-  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+  next = removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
   next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_threads = 6');
   next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_depth = 1');
   for (const block of managedCodexConfigBlocks()) {

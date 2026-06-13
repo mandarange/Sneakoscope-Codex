@@ -67,7 +67,7 @@ export async function fastModeCommand(args: string[] = []) {
   if (action === 'on') console.log('Saved: fast mode on')
   else if (action === 'off') console.log('Saved: fast mode off')
   else if (action === 'clear') console.log(`Cleared: ${removed ? 'yes' : 'already default'}`)
-  else if (!preference) console.log('Preference: implicit fast')
+  else if (!preference) console.log('Preference: implicit standard')
   console.log('Dollar: $Fast-On | $Fast-Off | $Fast-Mode')
   return result
 }

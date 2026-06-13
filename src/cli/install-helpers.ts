@@ -1488,7 +1488,7 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
   next = opts.forceFastMode === true
     ? upsertTopLevelTomlString(next, 'service_tier', 'fast')
-    : upsertTopLevelTomlStringIfAbsent(next, 'service_tier', 'fast');
+    : next;
   // Codex App feature flags / fast-mode UI / suppress-warning are SET-IF-ABSENT: a fresh
   // config still gets SKS's defaults, but SKS NEVER overrides (re-enables) a feature the
   // user disabled in the App, and never rejects-then-hides UI by forcing an unrecognized
@@ -1507,11 +1507,10 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   } else {
     next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
     next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
-    next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+    next = removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
   }
-  // Keep ONLY the sks-fast-high config-profile table: the Codex App fast-mode
-  // (`[user.fast_mode] default_profile = "sks-fast-high"`) and the
-  // codex-app:ui-preservation gate still expect it. The other SKS config profiles are
+  // Keep ONLY the sks-fast-high config-profile table for explicit fast-mode opt-in
+  // and CLI `--profile` use. The other SKS config profiles are
   // no longer written as `[profiles.sks-*]` tables here (Codex 0.134+ deprecates them);
   // they are managed as per-file `<name>.config.toml` overlays by
   // migrateSksProfilesToPerFile (src/core/auto-review.ts), which also writes the
@@ -2833,7 +2832,7 @@ export async function selftestCodexLb(tmp: any) {
     }
   );
   if (brokenChain.ok || brokenChain.status !== 'previous_response_not_found' || brokenChain.chain_unhealthy !== true) throw new Error('selftest: codex-lb response chain health check did not detect previous_response_not_found');
-  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('service_tier = "fast"') || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('remote_control = true') || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('browser_use = true') || !codexLbConfig.includes('browser_use_external = true') || !codexLbConfig.includes('guardian_approval = true') || !codexLbConfig.includes('tool_suggest = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[plugins."latex@openai-bundled"]') || !codexLbConfig.includes('[plugins."documents@openai-primary-runtime"]') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !codexLbConfig.includes('default_profile = "sks-fast-high"') || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, default plugins, profile-scoped reasoning effort, Fast mode defaults, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
+  if (!/^model = "gpt-5\.5"/m.test(codexLbConfig) || !codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('remote_control = true') || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('browser_use = true') || !codexLbConfig.includes('browser_use_external = true') || !codexLbConfig.includes('guardian_approval = true') || !codexLbConfig.includes('tool_suggest = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[plugins."latex@openai-bundled"]') || !codexLbConfig.includes('[plugins."documents@openai-primary-runtime"]') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, default plugins, profile-scoped reasoning effort, explicit Fast profile, Codex Git commit generation, force GPT-5.5, or migrate the hooks feature flag');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
   const codexLbLaunch = `source ${path.join(tmp, '.codex', 'sks-codex-lb.env')} && codex '--model' 'gpt-5.5'`;
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: Zellij launch command does not source codex-lb env file');

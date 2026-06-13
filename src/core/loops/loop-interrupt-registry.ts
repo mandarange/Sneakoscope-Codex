@@ -1,5 +1,7 @@
 import process from 'node:process';
 import { appendJsonl, readText, writeJsonAtomic } from '../fsx.js';
+import { guardContextForRoute, guardedProcessKill } from '../safety/mutation-guard.js';
+import { createRequestedScopeContract } from '../safety/requested-scope-contract.js';
 import { loopActiveWorkerHandlesPath, loopInterruptResultPath } from './loop-artifacts.js';
 
 export interface LoopActiveWorkerHandle {
@@ -79,17 +81,24 @@ export async function interruptLoopWorkers(input: {
 }> {
   const handles = (await readLoopActiveWorkers(input.root, input.missionId))
     .filter((handle) => handle.status === 'running' && (input.target === 'all' || handle.loop_id === input.target || handle.worker_id === input.target));
+  const killContract = createRequestedScopeContract({
+    route: 'loop:interrupt-registry',
+    userRequest: 'Terminate only registered loop worker processes for an explicit loop interrupt request.',
+    projectRoot: input.root,
+    overrides: { codex_app_process: true }
+  });
+  const killGuard = guardContextForRoute(input.root, killContract, `loop worker interrupt:${input.missionId}:${input.target}`);
   const interrupted: string[] = [];
   const failed: string[] = [];
   const blockers: string[] = [];
   for (const handle of handles) {
     if (handle.pid && handle.interrupt_supported) {
       try {
-        process.kill(handle.pid, 'SIGTERM');
+        await guardedProcessKill(killGuard, handle.pid, { signal: 'SIGTERM', confirmed: true });
         await sleep(input.graceMs ?? 250);
         if (processStillExists(handle.pid)) {
           try {
-            process.kill(handle.pid, 'SIGKILL');
+            await guardedProcessKill(killGuard, handle.pid, { signal: 'SIGKILL', confirmed: true });
           } catch {}
         }
         await markLoopWorkerInterrupted(input.root, input.missionId, handle.worker_id, 'interrupted');

@@ -27,7 +27,7 @@ fs.writeFileSync(path.join(reportDir, 'worker-fast-mode.json'), `${JSON.stringif
   fast_mode: true,
   service_tier: 'fast'
 })}\n`);
-const proof = await fastMode.writeFastModePropagationProof(temp, { policy: fastMode.resolveFastModePolicy() });
+const proof = await fastMode.writeFastModePropagationProof(temp, { policy: fastMode.resolveFastModePolicy({ fastMode: true }) });
 const ok = args.includes('-c')
   && args.includes('service_tier=fast')
   && !args.includes('--full-auto')

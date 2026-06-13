@@ -5,6 +5,7 @@ import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { classifyOllamaWorkerSlice } from '../agents/agent-runner-ollama.js'
 import { buildNarutoCloneRoster, systemSafeNarutoConcurrency } from '../agents/agent-roster.js'
 import { DEFAULT_NARUTO_CLONES, MAX_NARUTO_AGENT_COUNT } from '../agents/agent-schema.js'
+import { normalizeServiceTier, type AgentServiceTier } from '../agents/fast-mode-policy.js'
 import { resolveOllamaWorkerConfig } from '../agents/ollama-worker-config.js'
 import { attachZellijSessionInteractive, launchZellijLayout } from '../zellij/zellij-launcher.js'
 import { maybePromptZellijUpdateForLaunch } from '../zellij/zellij-update.js'
@@ -371,10 +372,9 @@ async function narutoRun(parsed: NarutoArgs) {
     workerPlacement: parsed.json || parsed.noOpenZellij ? 'process' : 'zellij-pane',
     zellijPaneWorker: true,
     zellijVisiblePaneCap: zellijVisiblePanes,
-    // Shadow clones ALWAYS run in fast service tier — never honor --no-fast/standard.
-    fastMode: true,
-    serviceTier: 'fast',
-    noFast: false,
+    ...(parsed.fastMode === undefined ? {} : { fastMode: parsed.fastMode }),
+    ...(parsed.serviceTier === undefined ? {} : { serviceTier: parsed.serviceTier }),
+    noFast: parsed.noFast,
     writeMode: writeCapable ? parsed.writeMode || 'parallel' : 'off',
     applyPatches: parsed.applyPatches,
     dryRunPatches: parsed.dryRunPatches,
@@ -796,6 +796,9 @@ interface NarutoArgs {
   applyPatches: boolean
   dryRunPatches: boolean
   maxWriteAgents: number
+  fastMode: boolean | undefined
+  serviceTier: AgentServiceTier | undefined
+  noFast: boolean
   json: boolean
   missionId: string
   noOpenZellij: boolean
@@ -828,6 +831,10 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const applyPatches = hasFlag(args, '--apply-patches')
   const dryRunPatches = hasFlag(args, '--dry-run-patches') || hasFlag(args, '--dry-run-patch')
   const maxWriteAgents = Math.max(0, Math.floor(Number(readOption(args, '--max-write-agents', '0')) || 0))
+  const explicitServiceTier = String(readOption(args, '--service-tier', '') || '')
+  const serviceTier = normalizeServiceTier(explicitServiceTier, null) || undefined
+  const fastMode = hasFlag(args, '--no-fast') || serviceTier === 'standard' ? false : hasFlag(args, '--fast') ? true : undefined
+  const noFast = hasFlag(args, '--no-fast')
   const positionalMission = action === 'dashboard' || action === 'workers' || action === 'status' || action === 'proof'
     ? positionalArgs(rest, new Set()).find((arg) => /^latest$|^M-/.test(arg))
     : null
@@ -839,9 +846,9 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const smoke = hasFlag(args, '--smoke')
   const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
   const messages = normalizeMessages(readOption(args, '--messages', '8'))
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
+  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
 }
 
 function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {

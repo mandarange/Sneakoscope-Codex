@@ -32,8 +32,8 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   };
 
   const initial = run('status');
-  assert.equal(initial.fast_mode, true);
-  assert.equal(initial.service_tier, 'fast');
+  assert.equal(initial.fast_mode, false);
+  assert.equal(initial.service_tier, 'standard');
   assert.equal(initial.preference, null);
   assert.equal(await fileExists(stateFile), false);
 
@@ -104,7 +104,7 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   assert.equal(priorityAlias.preference.mode, 'fast');
 
   const cleared = run('clear');
-  assert.equal(cleared.fast_mode, true);
+  assert.equal(cleared.fast_mode, false);
   assert.equal(cleared.preference, null);
 });
 

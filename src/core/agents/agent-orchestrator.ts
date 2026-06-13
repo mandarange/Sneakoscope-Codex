@@ -256,7 +256,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
     service_tier: fastModePolicy.service_tier,
     fast_mode: fastModePolicy.fast_mode,
-    fast_mode_default: true,
+    fast_mode_default: fastModePolicy.default_fast_mode,
     backpressure: 'dynamic scheduler maintains target active slots until the work queue drains',
     rate_limit_delay_ms: backend === 'codex-sdk' ? 250 : 0,
     resource_pressure_warnings: roster.agent_count > roster.concurrency ? ['agents_exceed_concurrency_batches'] : []

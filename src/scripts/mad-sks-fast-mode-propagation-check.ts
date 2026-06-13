@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const mod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'agents', 'fast-mode-policy.js')).href);
-const policy = mod.resolveFastModePolicy({});
+const policy = mod.resolveFastModePolicy({ fastMode: true });
 const env = mod.fastModeEnv(policy);
 const report = {
   schema: 'sks.mad-sks-fast-mode-propagation-check.v1',

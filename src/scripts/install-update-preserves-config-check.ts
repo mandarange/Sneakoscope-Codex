@@ -4,7 +4,7 @@
 // Proves ensureGlobalCodexFastModeDuringInstall:
 //   1. PRESERVES user-set top-level model/service_tier/model_reasoning_effort on update,
 //   2. backs up the prior config before mutating,
-//   3. still seeds SKS defaults for a fresh (empty) config,
+//   3. still seeds SKS non-speed defaults for a fresh (empty) config,
 //   4. NEVER blind-overwrites an unparseable config (backs up + preserves),
 //   5. is idempotent (second run is a no-op 'present').
 import fs from 'node:fs/promises';
@@ -51,14 +51,15 @@ const results = [];
   results.push({ case: 'preserves_user_config', ok, status: res.status, backups, model_preserved: /gpt-5\.1-codex/.test(after) });
 }
 
-// --- Case 2: fresh/empty config gets SKS defaults ---
+// --- Case 2: fresh/empty config gets SKS defaults without forcing fast service tier ---
 {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-cfg-fresh-'));
   const cfg = path.join(dir, '.codex', 'config.toml');
   await fs.mkdir(path.dirname(cfg), { recursive: true });
   const res = await helpers.ensureGlobalCodexFastModeDuringInstall({ home: dir, configPath: cfg });
   const after = await fs.readFile(cfg, 'utf8');
-  const ok = res.status === 'updated' && /^model = "gpt-5\.5"/m.test(after) && /^service_tier = "fast"/m.test(after) && /\[features\]/.test(after);
+  const topLevel = String(after).split(/\n\s*\[/)[0] || '';
+  const ok = res.status === 'updated' && /^model = "gpt-5\.5"/m.test(topLevel) && !/^service_tier = "fast"/m.test(topLevel) && /\[features\]/.test(after);
   results.push({ case: 'fresh_config_seeds_defaults', ok, status: res.status });
 }
 

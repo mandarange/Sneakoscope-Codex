@@ -16,8 +16,8 @@ export interface FastModePolicy {
   fast_mode: boolean
   service_tier: AgentServiceTier
   codex_desktop_service_tier: CodexDesktopServiceTier
-  default_fast_mode: true
-  disabled_by: 'none' | 'no-fast' | 'service-tier-standard' | 'preference-standard'
+  default_fast_mode: boolean
+  disabled_by: 'none' | 'no-fast' | 'service-tier-standard' | 'preference-standard' | 'default-standard'
   explicit_fast: boolean
   explicit_no_fast: boolean
   explicit_service_tier: AgentServiceTier | null
@@ -49,15 +49,17 @@ export function resolveFastModePolicy(input: any = {}): FastModePolicy {
       ? 'standard'
       : preference?.mode === 'standard'
         ? 'standard'
-        : 'fast'
+        : explicitFast || explicitTier === 'fast' || preference?.mode === 'fast'
+          ? 'fast'
+          : 'standard'
   return {
     schema: FAST_MODE_POLICY_SCHEMA,
     generated_at: nowIso(),
     fast_mode: serviceTier === 'fast',
     service_tier: serviceTier,
     codex_desktop_service_tier: codexDesktopServiceTier(serviceTier),
-    default_fast_mode: true,
-    disabled_by: explicitNoFast ? 'no-fast' : explicitTier === 'standard' ? 'service-tier-standard' : preference?.mode === 'standard' ? 'preference-standard' : 'none',
+    default_fast_mode: false,
+    disabled_by: explicitNoFast ? 'no-fast' : explicitTier === 'standard' ? 'service-tier-standard' : preference?.mode === 'standard' ? 'preference-standard' : serviceTier === 'standard' ? 'default-standard' : 'none',
     explicit_fast: explicitFast,
     explicit_no_fast: explicitNoFast,
     explicit_service_tier: explicitTier,
@@ -160,7 +162,7 @@ export async function writeFastModePropagationProof(root: string, input: { polic
   const agentProcessReports = await collectNamedJson(root, 'agent-process-report.json')
   const zellijReports = await collectNamedJson(root, 'agent-zellij-report.json')
   const madReports = await collectNamedJson(root, 'mad-sks-worker-report.json')
-  const defaultFastExpected = input.policy.disabled_by === 'none'
+  const defaultFastExpected = input.policy.fast_mode === true
   const childReports = [...workerFastReports, ...workerProcessReports, ...agentProcessReports, ...zellijReports, ...madReports]
   const missingFast = defaultFastExpected
     ? childReports.filter((row) => row.json?.fast_mode !== true && row.json?.fast_mode !== 'true')
@@ -179,7 +181,7 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     ok: missingFast.length === 0 && missingTier.length === 0 && workerMissing.length === 0 && missingCliOverride.length === 0,
     policy: input.policy,
     backend: input.backend || null,
-    default_fast_mode: true,
+    default_fast_mode: input.policy.default_fast_mode,
     service_tier: input.policy.service_tier,
     fast_mode: input.policy.fast_mode,
     worker_fast_report_count: workerFastReports.length,

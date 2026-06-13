@@ -784,7 +784,6 @@ async function codexFastModeConfigStatus(opts: any = {}) {
   const fastMode = tomlTable(merged, 'user.fast_mode');
   if (!/(^|\n)\s*visible\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.visible_missing');
   if (!/(^|\n)\s*enabled\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.enabled_missing');
-  if (!/(^|\n)\s*default_profile\s*=\s*"sks-fast-high"\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.default_profile_missing');
   return {
     ok: blockers.length === 0,
     checked: true,
