@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { assertGate, root } from '../sks-1-18-gate-lib.js';
 
-export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName, backend = 'fake', extraArgs = [] }) {
+export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName, backend = 'fake', extraArgs = [], expectedFastMode = null }) {
   const distCli = path.join(root, 'dist', 'bin', 'sks.js');
   assertGate(fs.existsSync(distCli), 'dist CLI missing for native CLI swarm check', { distCli });
   const args = [
@@ -39,6 +39,9 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
   const proof = result.native_cli_session_proof || {};
   const noSubagent = result.no_subagent_scaling_policy || {};
   const fast = result.fast_mode_propagation || {};
+  const policy = fast.policy || result.fast_mode_policy || {};
+  const expectedFast = expectedFastMode === null || expectedFastMode === undefined ? Boolean(policy.fast_mode) : Boolean(expectedFastMode);
+  const expectedTier = expectedFast ? 'fast' : 'standard';
   const report = {
     schema: 'sks.native-cli-session-swarm-check.v1',
     ok: result.ok === true,
@@ -62,7 +65,11 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
   assertGate(Array.isArray(proof.process_ids) && proof.process_ids.length >= agents, 'process ids missing from native CLI proof', report);
   assertGate(proof.close_report_count >= agents, 'worker close report count below requested agents', report);
   assertGate(noSubagent.ok === true && noSubagent.subagent_events_counted_as_worker_sessions === false, 'no-subagent scaling policy must pass', report);
-  assertGate(fast.ok === true && fast.fast_mode === true && fast.service_tier === 'fast', 'fast mode must propagate by default', report);
+  assertGate(fast.ok === true, 'fast mode propagation proof must pass', report);
+  assertGate(fast.fast_mode === expectedFast && fast.service_tier === expectedTier, 'worker service tier must match the selected fast-mode policy', { ...report, expected_fast_mode: expectedFast, expected_service_tier: expectedTier });
+  if (expectedFast) {
+    assertGate(policy.explicit_fast === true || policy.preference_mode === 'fast' || policy.explicit_service_tier === 'fast', 'fast-mode propagation gate must use explicit fast opt-in', report);
+  }
   assertGate((proof.worker_command_lines || []).every((line) => line.includes('--agent') && line.includes('worker')), 'worker command lines must use --agent worker', report);
   return report;
 }

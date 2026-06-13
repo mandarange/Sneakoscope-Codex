@@ -32,6 +32,7 @@ assertGate(runner.includes('Promise.race') && scheduler.includes('pickLaunchable
 assertGate(runner.includes('readReleaseGateCacheRecord') && cache.includes('duration_ms') && cache.includes('RELEASE_GATE_CACHE_V2_SCHEMA'), 'DAG runner must use release gate cache v2 module with cached duration evidence')
 assertGate(runner.includes('cpu_time_saved_ms') && runner.includes('peak_running') && runner.includes('budget_snapshot'), 'DAG summary must include CPU time saved, peak running gates, and resource budget proof')
 assertGate(runner.includes('detached: process.platform') && runner.includes('killGateProcessTree') && runner.includes('timed_out'), 'DAG runner must kill timed-out gate process trees and record timeout evidence')
+assertGate(runner.includes('pruneOldReleaseGateRunDirs') && runner.includes('SKS_RELEASE_GATE_RUN_RETENTION'), 'DAG runner must prune stale release-gate run reports before they exhaust local disk')
 
 const dag = await importDist('core/release/release-gate-dag.js')
 const fsx = await importDist('core/fsx.js')
@@ -82,4 +83,30 @@ assertGate(secondCacheRun.ok === true && secondCacheRun.cached === 1, 'DAG cache
 assertGate(cachedDuration > 0, 'DAG cache fixture must retain nonzero cached duration evidence', secondCacheRun)
 assertGate(secondCacheRun.sum_gate_ms >= cachedDuration, 'DAG cache fixture must include cached duration in sum_gate_ms evidence', secondCacheRun)
 
+const retentionRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-dag-retention-'))
+const retentionBase = path.join(retentionRoot, '.sneakoscope', 'reports', 'release-gates')
+await fs.mkdir(retentionBase, { recursive: true })
+for (let i = 0; i < 5; i++) {
+  const dir = path.join(retentionBase, `rg-2026-06-01T00-00-0${i}-000Z-${i}`)
+  await fs.mkdir(dir, { recursive: true })
+  await fsx.writeJsonAtomic(path.join(dir, 'summary.json'), { ok: true, index: i })
+  const date = new Date(Date.UTC(2026, 5, 1, 0, 0, i))
+  await fs.utimes(path.join(dir, 'summary.json'), date, date)
+}
+await fsx.writeJsonAtomic(path.join(retentionBase, 'cache-v2.json'), {})
+const retention = await dag.pruneOldReleaseGateRunDirs(retentionRoot, { keep: 2, preserveRunId: 'rg-2026-06-01T00-00-00-000Z-0' })
+const remainingRetentionRuns = (await fs.readdir(retentionBase)).filter((name) => name.startsWith('rg-')).sort()
+assertGate(retention.removed === 2 && retention.kept === 3, 'DAG retention fixture must remove stale runs while preserving requested run', retention)
+assertGate(remainingRetentionRuns.length === 3 && remainingRetentionRuns.includes('rg-2026-06-01T00-00-00-000Z-0'), 'DAG retention fixture must keep newest runs and preserved current run', { remainingRetentionRuns, retention })
+assertGate(await exists(path.join(retentionBase, 'cache-v2.json')), 'DAG retention fixture must not remove cache-v2.json')
+
 emitGate('release:dag-runner', { gates: manifest.gates.length, default_script: releaseCheck, effective_script: effectiveReleaseCheck })
+
+async function exists(file) {
+  try {
+    await fs.stat(file)
+    return true
+  } catch {
+    return false
+  }
+}

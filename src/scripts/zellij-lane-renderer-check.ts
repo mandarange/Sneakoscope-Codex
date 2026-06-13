@@ -36,6 +36,20 @@ await fs.writeFile(path.join(tmp, 'sessions', 'slot-001', 'gen-1', 'worker', 'wo
 await fs.writeFile(path.join(tmp, 'lanes', 'slot-001', 'command-inbox.jsonl'), `${JSON.stringify({ schema: 'sks.zellij-lane-command.v1', id: 'cmd-fixture', kind: 'operator_text', payload: { text: 'hello' } })}\n`);
 const frame = await mod.renderZellijLaneFrame({ missionId: 'M-lane', slot: 'slot-001', ledgerRoot: tmp, once: true, color: false });
 const ackText = await fs.readFile(path.join(tmp, 'lanes', 'slot-001', 'command-ack.jsonl'), 'utf8');
+const fastProject = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-fast-on-'));
+const fastProjectLedger = path.join(fastProject, '.sneakoscope', 'missions', 'M-fast-on', 'agents');
+await fs.mkdir(path.join(fastProject, '.sneakoscope', 'state'), { recursive: true });
+await fs.mkdir(fastProjectLedger, { recursive: true });
+await fs.writeFile(path.join(fastProject, '.sneakoscope', 'state', 'fast-mode.json'), `${JSON.stringify({
+  schema: 'sks.fast-mode-preference.v1',
+  updated_at: '2026-06-01T00:00:00.000Z',
+  mode: 'fast',
+  fast_mode: true,
+  service_tier: 'fast',
+  codex_desktop_service_tier: 'priority',
+  source: 'zellij-lane-renderer-check'
+}, null, 2)}\n`);
+const fastFrame = await mod.renderZellijLaneFrame({ missionId: 'M-fast-on', slot: 'slot-001', ledgerRoot: fastProjectLedger, once: true, color: false });
 const project = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-fast-off-'));
 const projectLedger = path.join(project, '.sneakoscope', 'missions', 'M-fast-off', 'agents');
 await fs.mkdir(path.join(project, '.sneakoscope', 'state'), { recursive: true });
@@ -50,11 +64,12 @@ await fs.writeFile(path.join(project, '.sneakoscope', 'state', 'fast-mode.json')
   source: 'zellij-lane-renderer-check'
 }, null, 2)}\n`);
 const offFrame = await mod.renderZellijLaneFrame({ missionId: 'M-fast-off', slot: 'slot-001', ledgerRoot: projectLedger, once: true, color: false });
-const required = ['SKS Lane', 'Mission', 'Mode', 'Fast', 'on · service_tier=fast', 'Workers', 'slot-001 gen-1 running', 'Codex child', 'live running · result done', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:', 'src/core/example.ts', 'fixture_blocker_visible', 'live worker:', 'native worker says hello', 'worker stderr tail visible'];
+const required = ['SKS Lane', 'Mission', 'Mode', 'Fast', 'off · service_tier=standard', 'Workers', 'slot-001 gen-1 running', 'Codex child', 'live running · result done', 'Current', 'Queue', 'Safety', 'Blockers', 'Reports', 'Keys:', 'src/core/example.ts', 'fixture_blocker_visible', 'live worker:', 'native worker says hello', 'worker stderr tail visible'];
+const fastRequired = ['Fast', 'on · service_tier=fast'];
 const offRequired = ['Fast', 'off · service_tier=standard'];
 const commandBusOk = frame.report.command_bus?.mode === 'jsonl_nonblocking' && frame.report.command_bus?.newly_acked_count === 1 && ackText.includes('cmd-fixture');
-const ok = required.every((item) => frame.frame.includes(item)) && offRequired.every((item) => offFrame.frame.includes(item)) && frame.report.stdout_only === true && commandBusOk;
-const report = { schema: 'sks.zellij-lane-renderer-check.v1', ok, frame: frame.report, fast_off_frame: offFrame.report, command_bus_ok: commandBusOk };
+const ok = required.every((item) => frame.frame.includes(item)) && fastRequired.every((item) => fastFrame.frame.includes(item)) && offRequired.every((item) => offFrame.frame.includes(item)) && frame.report.stdout_only === true && commandBusOk;
+const report = { schema: 'sks.zellij-lane-renderer-check.v1', ok, frame: frame.report, fast_on_frame: fastFrame.report, fast_off_frame: offFrame.report, command_bus_ok: commandBusOk };
 await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
 await fs.writeFile(path.join(root, '.sneakoscope', 'reports', 'zellij-lane-renderer.json'), `${JSON.stringify(report, null, 2)}\n`);
 emit(report);

@@ -19,7 +19,11 @@ assertGate(graph.test_inventory_count > 0, 'test inventory must be populated', g
 assertGate(graph.critical_path.length > 0, 'critical path must be computed', graph.critical_path);
 assertGate(graph.parallelizable_groups.length > 0, 'parallelizable groups must be computed', graph);
 assertGate(graph.work_graph_quality_score >= 0.55, 'work graph quality score too low for release gate', graph);
-for (const file of ['agent-intelligent-work-graph.json', 'agent-test-ownership-map.json', 'agent-critical-path.json', 'agent-integration-bottlenecks.json']) {
-  await fs.access(path.join(out, file));
+let totalArtifactBytes = 0;
+for (const file of ['agent-intelligent-work-graph.json', 'agent-test-ownership-map.json', 'agent-source-test-ownership-v2.json', 'agent-symbol-ownership-map.json', 'agent-critical-path.json', 'agent-integration-bottlenecks.json']) {
+  const stat = await fs.stat(path.join(out, file));
+  totalArtifactBytes += stat.size;
+  assertGate(stat.size < 2 * 1024 * 1024, 'intelligent work graph artifacts must stay bounded per file', { file, bytes: stat.size });
 }
-emitGate('agent:intelligent-work-graph', { score: graph.work_graph_quality_score, critical_path_length: graph.critical_path.length });
+assertGate(totalArtifactBytes < 8 * 1024 * 1024, 'intelligent work graph artifacts must stay bounded as a set', { totalArtifactBytes });
+emitGate('agent:intelligent-work-graph', { score: graph.work_graph_quality_score, critical_path_length: graph.critical_path.length, total_artifact_bytes: totalArtifactBytes });
