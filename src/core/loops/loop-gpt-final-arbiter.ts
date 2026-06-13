@@ -1,8 +1,10 @@
 import { runGptFinalArbiter } from '../codex-control/gpt-final-arbiter.js';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { loopGptFinalArbiterPath } from './loop-artifacts.js';
+import { decideLoopFixturePolicy, writeLoopFixturePolicyDecision } from './loop-fixture-policy.js';
 import type { LoopIntegrationMergeResult } from './loop-integration-merge.js';
 import type { SksLoopPlan, SksLoopProof } from './loop-schema.js';
+import type { LoopSideEffectReport } from './loop-side-effect-scanner.js';
 
 export interface LoopGptFinalArbiterResult {
   schema: 'sks.loop-gpt-final-arbiter.v1';
@@ -21,6 +23,7 @@ export async function runLoopGptFinalArbiter(input: {
   plan: SksLoopPlan;
   proofs: SksLoopProof[];
   integrationMerge: LoopIntegrationMergeResult;
+  sideEffectReport?: LoopSideEffectReport;
   forceVerdict?: 'approve' | 'revise' | 'reject';
 }): Promise<LoopGptFinalArbiterResult> {
   const artifactPath = loopGptFinalArbiterPath(input.root, input.plan.mission_id);
@@ -29,10 +32,28 @@ export async function runLoopGptFinalArbiter(input: {
     ...input.proofs.flatMap((proof) => proof.changed_files)
   ])];
   const reviewedLoopIds = input.proofs.map((proof) => proof.loop_id);
-  if (process.env.SKS_LOOP_GPT_FINAL_FIXTURE === '1' || input.forceVerdict) {
+  const fixtureRequested = process.env.SKS_LOOP_GPT_FINAL_FIXTURE === '1' || Boolean(input.forceVerdict);
+  const fixtureDecision = decideLoopFixturePolicy({
+    root: input.root,
+    missionId: input.plan.mission_id,
+    mode: 'gpt-final',
+    requested: fixtureRequested
+  });
+  if (fixtureRequested) await writeLoopFixturePolicyDecision(input.root, input.plan.mission_id, fixtureDecision).catch(() => undefined);
+  if (fixtureRequested && !fixtureDecision.allowed) {
+    const result = buildResult(input.plan.mission_id, reviewedLoopIds, changedFiles, 'reject', [], artifactPath, [...fixtureDecision.blockers, 'loop_gpt_final_fixture_forbidden_in_production']);
+    await writeJsonAtomic(artifactPath, { ...result, generated_at: nowIso(), backend: 'fixture-forbidden', fixture_policy: fixtureDecision });
+    return result;
+  }
+  if (fixtureRequested) {
     const verdict = input.forceVerdict || (process.env.SKS_LOOP_GPT_FINAL_REJECT === '1' ? 'reject' : 'approve');
     const result = buildResult(input.plan.mission_id, reviewedLoopIds, changedFiles, verdict, verdict === 'approve' ? [] : ['fixture_revision_required'], artifactPath, []);
-    await writeJsonAtomic(artifactPath, { ...result, generated_at: nowIso(), backend: 'fixture' });
+    await writeJsonAtomic(artifactPath, { ...result, generated_at: nowIso(), backend: 'fixture', fixture_policy: fixtureDecision, fixture_allowed_reason: fixtureDecision.reason, side_effect_report: input.sideEffectReport || null });
+    return result;
+  }
+  if (input.sideEffectReport && !input.sideEffectReport.ok) {
+    const result = buildResult(input.plan.mission_id, reviewedLoopIds, changedFiles, 'reject', [], artifactPath, input.sideEffectReport.blockers);
+    await writeJsonAtomic(artifactPath, { ...result, generated_at: nowIso(), backend: 'side-effect-block', side_effect_report: input.sideEffectReport });
     return result;
   }
   const arbiter = await runGptFinalArbiter({
@@ -48,17 +69,17 @@ export async function runLoopGptFinalArbiter(input: {
       changed_files: proof.changed_files,
       blockers: proof.blockers
     })),
-    candidate_diff: JSON.stringify({ changed_files: changedFiles, integration_merge: input.integrationMerge }),
+    candidate_diff: JSON.stringify({ changed_files: changedFiles, integration_merge: input.integrationMerge, side_effect_report: input.sideEffectReport || null }),
     verification_results: input.proofs.map((proof) => ({ id: proof.loop_id, ok: proof.status === 'completed', blockers: proof.blockers })),
-    side_effect_report: { schema: 'sks.loop-side-effect-report.v1', ok: true, changed_files: changedFiles },
-    mutation_ledger: { schema: 'sks.loop-mutation-ledger.v1', proofs: input.proofs },
+    side_effect_report: input.sideEffectReport || { schema: 'sks.loop-side-effect-report.v1', ok: true, changed_files: changedFiles },
+    mutation_ledger: { schema: 'sks.loop-mutation-ledger.v1', proofs: input.proofs, path: input.sideEffectReport?.mutation_ledger_path || null },
     rollback_plan: { schema: 'sks.loop-rollback-plan.v1', strategy: 'git-worktree-or-human-handoff' }
   }, { cwd: input.root, mutationLedgerRoot: `${input.root}/.sneakoscope/missions/${input.plan.mission_id}/loops/gpt-final-arbiter` });
   const status = String((arbiter as any).result?.status || '');
   const verdict: LoopGptFinalArbiterResult['verdict'] = status === 'approved' || status === 'modified' ? 'approve' : status === 'needs_more_work' ? 'revise' : 'reject';
   const blockers = stringArray((arbiter as any).blockers);
   const result = buildResult(input.plan.mission_id, reviewedLoopIds, changedFiles, verdict, stringArray((arbiter as any).result?.required_followup_work), artifactPath, blockers);
-  await writeJsonAtomic(artifactPath, { ...result, generated_at: nowIso(), backend: (arbiter as any).backend || null, arbiter });
+  await writeJsonAtomic(artifactPath, { ...result, generated_at: nowIso(), backend: (arbiter as any).backend || null, side_effect_report: input.sideEffectReport || null, arbiter });
   return result;
 }
 

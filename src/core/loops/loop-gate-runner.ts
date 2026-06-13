@@ -4,6 +4,8 @@ import { readJson, runProcess, writeJsonAtomic } from '../fsx.js';
 import { allGateIds, type SksLoopGatePlan, type SksLoopNode } from './loop-schema.js';
 import { loopBudgetPath, loopGatePath, loopStatePath } from './loop-artifacts.js';
 import { resolveLoopGate, type LoopGateDefinition } from './loop-gate-registry.js';
+import { decideLoopFixturePolicy, writeLoopFixturePolicyDecision } from './loop-fixture-policy.js';
+import { loopFinalArbiterGateContractRelativePath, writeLoopFinalArbiterGateContract } from './loop-final-arbiter-contract.js';
 
 export interface SksLoopGateRunResult {
   ok: boolean;
@@ -50,16 +52,25 @@ async function runOneGate(input: {
   node: SksLoopNode;
   timeoutMs?: number;
   checkerArtifacts?: string[];
-}, gateId: string): Promise<{ ok: boolean; skipped: boolean; blockers: string[] }> {
+}, gateId: string): Promise<{ ok: boolean; skipped: boolean; blockers: string[]; handled_by?: 'loop-finalizer'; deferred_contract_path?: string; deferred_reason?: string }> {
   const started = Date.now();
   const definition = await resolveLoopGate(input.root, gateId);
   const fullReleaseCheckInsideLoop = gateId === 'release:check' && input.node.route !== '$Integration';
   const unknown = !definition;
   const packageJson = unknown ? await readJson<any>(path.join(input.root, 'package.json'), null) : null;
-  const skipUnknownFixtureGate = unknown && !packageJson;
+  const fixtureMode = process.env.SKS_LOOP_GATE_FIXTURE === '1';
+  const fixtureDecision = decideLoopFixturePolicy({
+    root: input.root,
+    missionId: input.missionId,
+    mode: 'gate',
+    requested: fixtureMode || (unknown && !packageJson)
+  });
+  if (fixtureDecision.requested) await writeLoopFixturePolicyDecision(input.root, input.missionId, fixtureDecision).catch(() => undefined);
+  const skipUnknownFixtureGate = unknown && !packageJson && fixtureDecision.allowed;
   const blockers: string[] = [
     ...(unknown && !skipUnknownFixtureGate ? [`unknown_loop_gate:${gateId}`] : []),
-    ...(fullReleaseCheckInsideLoop ? ['full_release_check_inside_non_integration_loop'] : [])
+    ...(fullReleaseCheckInsideLoop ? ['full_release_check_inside_non_integration_loop'] : []),
+    ...(fixtureMode && !fixtureDecision.allowed ? [...fixtureDecision.blockers, 'loop_gate_fixture_forbidden_in_production'] : [])
   ];
   let ok = blockers.length === 0;
   let skipped = skipUnknownFixtureGate;
@@ -67,16 +78,23 @@ async function runOneGate(input: {
   let stdoutTail = '';
   let stderrTail = '';
   let timedOut = false;
-  const fixtureMode = process.env.SKS_LOOP_GATE_FIXTURE === '1';
+  let handledBy: 'loop-finalizer' | undefined;
+  let deferredContractPath: string | undefined;
+  let deferredReason: string | undefined;
 
   if (definition && ok) {
-    if (fixtureMode && definition.source !== 'builtin-pseudo') {
+    if (fixtureMode && !fixtureDecision.allowed) {
+      ok = false;
+    } else if (fixtureMode && definition.source !== 'builtin-pseudo') {
       ok = true;
     } else if (definition.source === 'builtin-pseudo') {
       const builtin = await runBuiltinGate(input.root, input.missionId, input.node.loop_id, definition, input.checkerArtifacts || []);
       ok = builtin.ok;
       skipped = builtin.skipped;
       blockers.push(...builtin.blockers);
+      handledBy = builtin.handled_by;
+      deferredContractPath = builtin.deferred_contract_path;
+      deferredReason = builtin.deferred_reason;
     } else {
       const command = definition.command;
       const result = await runProcess(process.env.SHELL || '/bin/sh', ['-lc', command], {
@@ -111,7 +129,12 @@ async function runOneGate(input: {
     stderr_tail: stderrTail,
     cached_allowed: definition?.cache_allowed ?? false,
     fixture_mode: fixtureMode,
+    fixture_policy: fixtureDecision,
+    fixture_allowed_reason: fixtureDecision.allowed ? fixtureDecision.reason : null,
     skipped,
+    handled_by: handledBy,
+    deferred_contract_path: deferredContractPath,
+    deferred_reason: deferredReason,
     deferred_unknown_fixture_gate: skipUnknownFixtureGate,
     timed_out: timedOut,
     full_release_check_inside_loop: fullReleaseCheckInsideLoop,
@@ -119,11 +142,28 @@ async function runOneGate(input: {
     blockers
   };
   await writeJsonAtomic(loopGatePath(input.root, input.missionId, input.node.loop_id, gateId), artifact);
-  return { ok, skipped, blockers };
+  return {
+    ok,
+    skipped,
+    blockers,
+    ...(handledBy ? { handled_by: handledBy } : {}),
+    ...(deferredContractPath ? { deferred_contract_path: deferredContractPath } : {}),
+    ...(deferredReason ? { deferred_reason: deferredReason } : {})
+  };
 }
 
-async function runBuiltinGate(root: string, missionId: string, loopId: string, definition: LoopGateDefinition, checkerArtifacts: string[]): Promise<{ ok: boolean; skipped: boolean; blockers: string[] }> {
-  if (definition.id === 'gpt:final-arbiter') return { ok: true, skipped: true, blockers: [] };
+async function runBuiltinGate(root: string, missionId: string, loopId: string, definition: LoopGateDefinition, checkerArtifacts: string[]): Promise<{ ok: boolean; skipped: boolean; blockers: string[]; handled_by?: 'loop-finalizer'; deferred_contract_path?: string; deferred_reason?: string }> {
+  if (definition.id === 'gpt:final-arbiter') {
+    await writeLoopFinalArbiterGateContract(root, missionId);
+    return {
+      ok: true,
+      skipped: true,
+      blockers: [],
+      handled_by: 'loop-finalizer',
+      deferred_contract_path: loopFinalArbiterGateContractRelativePath(missionId),
+      deferred_reason: 'gpt_final_arbiter_runs_after_integration_merge'
+    };
+  }
   if (definition.id === 'human:handoff-required') return { ok: false, skipped: false, blockers: ['human_handoff_required'] };
   if (definition.id === 'loop:state-valid') {
     const state = await readJson<any>(loopStatePath(root, missionId, loopId), null);

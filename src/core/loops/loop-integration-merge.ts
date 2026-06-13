@@ -1,10 +1,10 @@
 import path from 'node:path';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
-import { runGitCommand } from '../git/git-worktree-runner.js';
 import { guardedWriteFile, guardContextForRoute } from '../safety/mutation-guard.js';
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js';
 import type { SksLoopPlan, SksLoopProof } from './loop-schema.js';
 import { loopIntegrationMergePath } from './loop-artifacts.js';
+import { mergeSingleLoopWorktree, type LoopMergeStrategyResult } from './loop-merge-strategy.js';
 
 export interface LoopIntegrationMergeResult {
   schema: 'sks.loop-integration-merge.v1';
@@ -13,6 +13,14 @@ export interface LoopIntegrationMergeResult {
   conflict_loops: string[];
   changed_files: string[];
   blockers: string[];
+  merge_attempts?: Record<string, LoopMergeStrategyResult>;
+  strategy_summary?: {
+    apply_count: number;
+    apply_3way_count: number;
+    cherry_pick_count: number;
+    merge_no_commit_count: number;
+    handoff_count: number;
+  };
 }
 
 export async function mergeLoopWorktrees(input: {
@@ -26,6 +34,7 @@ export async function mergeLoopWorktrees(input: {
   const conflictLoops = new Set<string>();
   const changedFiles = new Set<string>();
   const owners = new Map<string, string>();
+  const mergeAttempts: Record<string, LoopMergeStrategyResult> = {};
 
   for (const proof of completed) {
     for (const file of proof.changed_files) {
@@ -44,22 +53,16 @@ export async function mergeLoopWorktrees(input: {
     for (const proof of completed) {
       const worktreePath = proof.worktree.path;
       if (!worktreePath) continue;
-      const diff = await runGitCommand(worktreePath, ['diff', '--binary', '--full-index', 'HEAD'], { timeoutMs: 60000 }).catch(() => null);
-      if (!diff?.ok) {
-        blockers.push(`loop_integration_diff_failed:${proof.loop_id}`);
+      const merge = await mergeSingleLoopWorktree({ root: input.root, proof, worktreePath, allowBranchMerge: true });
+      mergeAttempts[proof.loop_id] = merge;
+      if (!merge.ok) {
+        blockers.push(...merge.blockers, `loop_integration_merge_conflict:${proof.loop_id}`);
         conflictLoops.add(proof.loop_id);
-        continue;
-      }
-      if (!diff.stdout.trim()) continue;
-      const apply = await runGitCommand(input.root, ['apply', '--whitespace=nowarn', '-'], { input: diff.stdout, timeoutMs: 60000 }).catch(() => null);
-      if (!apply?.ok) {
-        blockers.push(`loop_integration_apply_conflict:${proof.loop_id}`);
-        conflictLoops.add(proof.loop_id);
-        await writeHandoff(input.root, proof.loop_id, apply?.stderr_tail || apply?.stdout_tail || 'git apply failed');
+        await writeHandoff(input.root, proof.loop_id, merge.blockers.join('\n') || 'loop merge strategy failed');
         continue;
       }
       appliedLoops.push(proof.loop_id);
-      for (const file of proof.changed_files) changedFiles.add(file);
+      for (const file of merge.changed_files) changedFiles.add(file);
     }
   }
 
@@ -69,10 +72,22 @@ export async function mergeLoopWorktrees(input: {
     applied_loops: appliedLoops,
     conflict_loops: [...conflictLoops],
     changed_files: [...changedFiles],
-    blockers: [...new Set(blockers)]
+    blockers: [...new Set(blockers)],
+    merge_attempts: mergeAttempts,
+    strategy_summary: summarizeStrategies(Object.values(mergeAttempts))
   };
   await writeJsonAtomic(loopIntegrationMergePath(input.root, input.plan.mission_id), { ...result, generated_at: nowIso() });
   return result;
+}
+
+function summarizeStrategies(results: LoopMergeStrategyResult[]): NonNullable<LoopIntegrationMergeResult['strategy_summary']> {
+  return {
+    apply_count: results.filter((row) => row.selected_strategy === 'apply').length,
+    apply_3way_count: results.filter((row) => row.selected_strategy === 'apply-3way').length,
+    cherry_pick_count: results.filter((row) => row.selected_strategy === 'cherry-pick').length,
+    merge_no_commit_count: results.filter((row) => row.selected_strategy === 'merge-no-commit').length,
+    handoff_count: results.filter((row) => row.selected_strategy === 'handoff' || !row.ok).length
+  };
 }
 
 async function writeHandoff(root: string, loopId: string, detail: string): Promise<void> {

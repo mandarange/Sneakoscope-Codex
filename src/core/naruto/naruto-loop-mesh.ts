@@ -1,4 +1,5 @@
 import { writeJsonAtomic } from '../fsx.js';
+import { computeLoopConcurrencyBudget } from '../loops/loop-concurrency-budget.js';
 import { loopRoot } from '../loops/loop-artifacts.js';
 import { runLoopPlan } from '../loops/loop-runtime.js';
 import type { SksLoopGraphResult, SksLoopPlan } from '../loops/loop-schema.js';
@@ -13,10 +14,12 @@ export async function runNarutoLoopMesh(input: {
 }): Promise<SksLoopGraphResult> {
   const routes = input.plan.graph.nodes.flatMap((node) => [routeNarutoLoopWorker(node, 'maker'), routeNarutoLoopWorker(node, 'checker')]);
   const activeWorkerBudget = splitActiveWorkerBudget(input.plan, input.parallelism);
+  const loopConcurrencyBudget = computeLoopConcurrencyBudget({ plan: input.plan, parallelism: input.parallelism });
   await writeJsonAtomic(`${loopRoot(input.root, input.plan.mission_id)}/naruto-loop-worker-routes.json`, {
     schema: 'sks.naruto-loop-worker-routes.v1',
     mission_id: input.plan.mission_id,
     active_worker_budget: activeWorkerBudget,
+    loop_concurrency_budget: loopConcurrencyBudget,
     routes
   });
   return runLoopPlan({

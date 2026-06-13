@@ -115,11 +115,19 @@ export interface SksLoopPlan {
     artifact_path?: string;
     applied_loops?: string[];
     conflict_loops?: string[];
+    strategy_summary?: Record<string, number>;
   };
   gpt_final_arbiter?: {
     ok: boolean;
     artifact_path?: string;
     verdict?: string;
+    gate_contract_path?: string;
+    handled_by?: 'loop-finalizer';
+  };
+  side_effect_report?: {
+    ok: boolean;
+    artifact_path?: string;
+    blockers?: string[];
   };
 }
 
@@ -214,11 +222,19 @@ export interface SksLoopProof {
     artifact_path?: string;
     applied_loops?: string[];
     conflict_loops?: string[];
+    strategy_summary?: Record<string, number>;
   };
   gpt_final_arbiter?: {
     ok: boolean;
     artifact_path?: string;
     verdict?: string;
+    gate_contract_path?: string;
+    handled_by?: 'loop-finalizer';
+  };
+  side_effect_report?: {
+    ok: boolean;
+    artifact_path?: string;
+    blockers?: string[];
   };
 }
 
@@ -250,11 +266,19 @@ export interface SksLoopGraphProof {
     artifact_path?: string;
     applied_loops?: string[];
     conflict_loops?: string[];
+    strategy_summary?: Record<string, number>;
   };
   gpt_final_arbiter?: {
     ok: boolean;
     artifact_path?: string;
     verdict?: string;
+    gate_contract_path?: string;
+    handled_by?: 'loop-finalizer';
+  };
+  side_effect_report?: {
+    ok: boolean;
+    artifact_path?: string;
+    blockers?: string[];
   };
 }
 

@@ -49,6 +49,34 @@ export function loopGptFinalArbiterPath(root: string, missionId: string): string
   return path.join(loopRoot(root, missionId), 'loop-gpt-final-arbiter.json');
 }
 
+export function loopFinalArbiterGateContractPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'gpt-final-arbiter-gate-contract.json');
+}
+
+export function loopFixturePolicyPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'fixture-policy.json');
+}
+
+export function loopMutationLedgerPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'mutation-ledger.jsonl');
+}
+
+export function loopSideEffectReportPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'loop-side-effect-report.json');
+}
+
+export function loopActiveWorkerHandlesPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'active-worker-handles.jsonl');
+}
+
+export function loopInterruptResultPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'interrupt-result.json');
+}
+
+export function loopConcurrencyBudgetPath(root: string, missionId: string): string {
+  return path.join(loopRoot(root, missionId), 'concurrency-budget.json');
+}
+
 export function loopKillRequestPath(root: string, missionId: string): string {
   return path.join(loopRoot(root, missionId), 'kill-request.json');
 }

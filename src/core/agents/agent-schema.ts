@@ -113,6 +113,7 @@ export interface AgentRunOptions {
   maxWriteAgents?: number
   fastMode?: boolean
   serviceTier?: AgentServiceTier
+  env?: NodeJS.ProcessEnv
   noFast?: boolean
   nativeCliSwarm?: boolean
   ollamaEnabled?: boolean

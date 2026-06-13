@@ -83,7 +83,7 @@ export async function runLoopDirectiveCheck(id) {
     const runtimeSource = await fs.readFile(path.join(process.cwd(), 'src/core/loops/loop-runtime.ts'), 'utf8');
     const workerSource = await fs.readFile(path.join(process.cwd(), 'src/core/loops/loop-worker-runtime.ts'), 'utf8');
     assert(!/noMutation\s*\?\s*\{\s*fixture:\s*true\s*\}/.test(runtimeSource), 'noMutation must not force fixture mode');
-    assert(workerSource.includes('loopFixtureAllowed'), 'fixture runtime has an explicit test-context allow guard');
+    assert(workerSource.includes('decideLoopFixturePolicy'), 'fixture runtime has an explicit shared test-context policy guard');
     assert(workerSource.includes('loop_fixture_runtime_forbidden'), 'fixture runtime fails closed outside test context');
     assert(workerSource.includes("process.env.SKS_LOOP_RUNTIME_FIXTURE === '1'"), 'fixture runtime remains opt-in through SKS_LOOP_RUNTIME_FIXTURE');
     assert(!workerSource.includes('visualLaneCount: Math.min(4'), 'zellij visual lane count must use the configurable pane cap');

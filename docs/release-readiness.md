@@ -1,5 +1,7 @@
 # Release Readiness
 
+SKS 3.1.2 is the Loop Mesh production hardening release. It blocks production fixture misuse across worker, gate, and GPT Final paths; records a finalizer-owned GPT Final Arbiter contract for deferred gate handling; applies loop worktrees through an audited merge ladder before handoff; writes mutation-ledger and side-effect-scan evidence into completion proof; interrupts active worker handles when kill or resume safety requires it; and bounds loop concurrency with a global budget surfaced in runtime and proof artifacts.
+
 SKS 3.1.1 is the Naruto Loop Mesh hardening release. It keeps the Loop Graph as the execution SSOT for goals and loop commands, removes the runtime fixture shortcut from real checker execution, derives loop worker counts from scope/risk/parallelism instead of a fixed two-worker cap, adds configurable visible loop panes, and blocks problem-bearing completion proofs unless root-cause analysis plus corrective evidence is recorded.
 
 SKS 3.1.0 is the Naruto Loop Mesh release. It makes the Loop Graph the execution SSOT for goals and loop commands, adds loop-local maker/checker mini swarms, owner leases, affected gate selection, durable loop state/proof artifacts, compact Zellij loop observability, goal-to-loop compatibility, and release DAG coverage for the new loop runtime.
