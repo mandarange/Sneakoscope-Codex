@@ -164,6 +164,12 @@ export function enhanceTaskGraphWithIntelligence(taskGraph: any, graph: Intellig
 
 export async function writeIntelligentWorkGraphArtifacts(root: string, graph: IntelligentWorkGraph) {
   const compact = compactIntelligentWorkGraph(graph)
+  const symbolOwnership = compactSymbolOwnershipMap(graph)
+  const routeOwnership = limitRecordOfArrays(graph.route_to_module_ownership, graphRecordLimit(), graphArrayLimit())
+  const commandOwnership = limitRecordOfArrays(graph.command_to_module_ownership, graphRecordLimit(), graphArrayLimit())
+  const testOwnership = compactTestOwnershipMap(graph.test_ownership_map)
+  const criticalPath = compactCriticalPath(graph.critical_path)
+  const integrationBottlenecks = compactIntegrationBottlenecks(graph.integration_bottlenecks)
   await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph.json'), compact)
   await writeJsonAtomic(path.join(root, 'agent-intelligent-work-graph-v2.json'), compact)
   await writeJsonAtomic(path.join(root, 'agent-symbol-ownership-map.json'), {
@@ -171,23 +177,19 @@ export async function writeIntelligentWorkGraphArtifacts(root: string, graph: In
     generated_at: graph.generated_at,
     ok: Object.keys(graph.symbol_to_files).length > 0,
     ast_coverage: graph.ast_coverage,
-    file_to_symbols: graph.file_to_symbols,
-    symbol_to_files: graph.symbol_to_files,
-    exported_symbols: graph.exported_symbols,
-    imported_symbols: graph.imported_symbols,
-    exported_api_ownership: graph.exported_api_ownership
+    ...symbolOwnership
   })
   await writeJsonAtomic(path.join(root, 'agent-route-ownership-map.json'), {
     schema: 'sks.agent-route-ownership-map.v1',
     generated_at: graph.generated_at,
     ok: Object.keys(graph.route_to_module_ownership).length > 0,
-    route_to_module_ownership: graph.route_to_module_ownership
+    route_to_module_ownership: routeOwnership
   })
   await writeJsonAtomic(path.join(root, 'agent-command-ownership-map.json'), {
     schema: 'sks.agent-command-ownership-map.v1',
     generated_at: graph.generated_at,
     ok: Object.keys(graph.command_to_module_ownership).length > 0,
-    command_to_module_ownership: graph.command_to_module_ownership
+    command_to_module_ownership: commandOwnership
   })
   await writeJsonAtomic(path.join(root, 'agent-test-ownership-map.json'), {
     schema: 'sks.agent-test-ownership-map.v1',
@@ -195,7 +197,7 @@ export async function writeIntelligentWorkGraphArtifacts(root: string, graph: In
     ok: graph.test_ownership_map.unmapped_sources.length < Math.max(10, graph.source_inventory_count),
     ast_coverage: graph.ast_coverage,
     test_ownership_confidence: graph.test_ownership_confidence,
-    ...graph.test_ownership_map
+    ...testOwnership
   })
   await writeJsonAtomic(path.join(root, 'agent-source-test-ownership-v2.json'), {
     schema: 'sks.agent-source-test-ownership.v2',
@@ -203,14 +205,14 @@ export async function writeIntelligentWorkGraphArtifacts(root: string, graph: In
     ok: graph.test_ownership_confidence > 0,
     ast_coverage: graph.ast_coverage,
     test_ownership_confidence: graph.test_ownership_confidence,
-    source_to_test_relations: graph.source_to_test_relations,
-    ...graph.test_ownership_map
+    source_to_test_relations: testOwnership.relations,
+    ...testOwnership
   })
   await writeJsonAtomic(path.join(root, 'agent-critical-path.json'), {
     schema: 'sks.agent-critical-path.v1',
     generated_at: graph.generated_at,
     ok: graph.critical_path.path.length > 0,
-    ...graph.critical_path
+    ...criticalPath
   })
   await writeJsonAtomic(path.join(root, 'agent-critical-path-v2.json'), {
     schema: 'sks.agent-critical-path.v2',
@@ -218,21 +220,21 @@ export async function writeIntelligentWorkGraphArtifacts(root: string, graph: In
     ok: graph.critical_path.path.length > 0,
     ast_coverage: graph.ast_coverage,
     critical_path_confidence: graph.critical_path.confidence || graph.test_ownership_confidence,
-    ...graph.critical_path
+    ...criticalPath
   })
   await writeJsonAtomic(path.join(root, 'agent-integration-bottlenecks.json'), {
     schema: 'sks.agent-integration-bottlenecks.v1',
     generated_at: graph.generated_at,
     ok: true,
     critical_path_confidence: graph.critical_path.confidence || null,
-    ...graph.integration_bottlenecks
+    ...integrationBottlenecks
   })
   await writeJsonAtomic(path.join(root, 'agent-integration-bottlenecks-v2.json'), {
     schema: 'sks.agent-integration-bottlenecks.v2',
     generated_at: graph.generated_at,
     ok: true,
     critical_path_confidence: graph.critical_path.confidence || null,
-    ...graph.integration_bottlenecks
+    ...integrationBottlenecks
   })
 }
 
@@ -275,6 +277,90 @@ export function compactIntelligentWorkGraph(graph: IntelligentWorkGraph) {
 
 function limitArray<T>(items: T[] | undefined, limit: number) {
   return Array.isArray(items) ? items.slice(0, limit) : []
+}
+
+function graphRecordLimit() {
+  return Math.max(50, Math.floor(Number(process.env.SKS_WORK_GRAPH_RECORD_LIMIT || 500) || 500))
+}
+
+function graphArrayLimit() {
+  return Math.max(10, Math.floor(Number(process.env.SKS_WORK_GRAPH_ARRAY_LIMIT || 50) || 50))
+}
+
+function graphRelationLimit() {
+  return Math.max(100, Math.floor(Number(process.env.SKS_WORK_GRAPH_RELATION_LIMIT || 1000) || 1000))
+}
+
+function limitRecordOfArrays(record: Record<string, any> | undefined, entryLimit: number, arrayLimit: number) {
+  const out: Record<string, any> = {}
+  for (const [key, value] of Object.entries(record || {}).slice(0, entryLimit)) {
+    out[key] = Array.isArray(value) ? value.slice(0, arrayLimit) : value
+  }
+  return out
+}
+
+function compactSymbolOwnershipMap(graph: IntelligentWorkGraph) {
+  const entryLimit = graphRecordLimit()
+  const arrayLimit = graphArrayLimit()
+  const exportedApiOwnership: Record<string, string> = {}
+  for (const [symbol, file] of Object.entries(graph.exported_api_ownership || {}).slice(0, entryLimit)) exportedApiOwnership[symbol] = String(file)
+  return {
+    compact: true,
+    limits: { record_entries: entryLimit, array_items: arrayLimit },
+    original_counts: {
+      file_to_symbols: Object.keys(graph.file_to_symbols || {}).length,
+      symbol_to_files: Object.keys(graph.symbol_to_files || {}).length,
+      exported_symbols: Object.keys(graph.exported_symbols || {}).length,
+      imported_symbols: Object.keys(graph.imported_symbols || {}).length,
+      exported_api_ownership: Object.keys(graph.exported_api_ownership || {}).length
+    },
+    file_to_symbols: limitRecordOfArrays(graph.file_to_symbols, entryLimit, arrayLimit),
+    symbol_to_files: limitRecordOfArrays(graph.symbol_to_files, entryLimit, arrayLimit),
+    exported_symbols: limitRecordOfArrays(graph.exported_symbols, entryLimit, arrayLimit),
+    imported_symbols: limitRecordOfArrays(graph.imported_symbols, entryLimit, arrayLimit),
+    exported_api_ownership: exportedApiOwnership
+  }
+}
+
+function compactTestOwnershipMap(map: any = {}) {
+  const entryLimit = graphRecordLimit()
+  const arrayLimit = graphArrayLimit()
+  const relationLimit = graphRelationLimit()
+  const relations = limitArray((Array.isArray(map.relations) ? map.relations : []).map((row: any) => ({
+    ...row,
+    symbol_overlap: limitArray(row?.symbol_overlap, arrayLimit)
+  })), relationLimit)
+  return {
+    compact: true,
+    limits: { owner_entries: entryLimit, owner_items: arrayLimit, relations: relationLimit },
+    original_counts: {
+      owner_by_source: Object.keys(map.owner_by_source || {}).length,
+      unmapped_sources: Array.isArray(map.unmapped_sources) ? map.unmapped_sources.length : 0,
+      relations: Array.isArray(map.relations) ? map.relations.length : 0
+    },
+    owner_by_source: limitRecordOfArrays(map.owner_by_source, entryLimit, arrayLimit),
+    mapped_source_count: Number(map.mapped_source_count || 0),
+    unmapped_sources: limitArray(map.unmapped_sources, entryLimit),
+    relations
+  }
+}
+
+function compactCriticalPath(criticalPath: any = {}) {
+  return {
+    ...criticalPath,
+    path: limitArray(criticalPath.path, 500),
+    compact: true,
+    original_path_length: Array.isArray(criticalPath.path) ? criticalPath.path.length : 0
+  }
+}
+
+function compactIntegrationBottlenecks(bottlenecks: any = {}) {
+  return {
+    ...bottlenecks,
+    bottlenecks: limitArray(bottlenecks.bottlenecks, 200),
+    changed_bottlenecks: limitArray(bottlenecks.changed_bottlenecks, 200),
+    compact: true
+  }
 }
 
 function buildTestOwnershipMap(sourceFiles: string[], testFiles: string[], ast: any, dependencyGraph: any = {}) {

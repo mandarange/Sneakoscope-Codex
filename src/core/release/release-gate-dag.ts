@@ -10,6 +10,7 @@ import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGa
 import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
+import { rmrf } from '../fsx.js'
 
 export interface ReleaseGateDagRunResult {
   schema: 'sks.release-gate-dag-run.v1'
@@ -38,6 +39,17 @@ export interface ReleaseGateDagRunResult {
   budget_summary: string
   report_dir: string
   failures: Array<{ id: string; exit_code: number | null; stderr_tail: string; timed_out: boolean; signal: NodeJS.Signals | null }>
+  retention?: ReleaseGateRunRetention
+}
+
+export interface ReleaseGateRunRetention {
+  schema: 'sks.release-gate-run-retention.v1'
+  keep: number
+  scanned: number
+  kept: number
+  removed: number
+  preserve_run_id: string | null
+  removed_run_ids: string[]
 }
 
 export function loadReleaseGateManifest(root: string, file = 'release-gates.v2.json'): ReleaseGateManifestV2 {
@@ -72,9 +84,11 @@ export async function runReleaseGateDag(input: {
     ? new Set(selected.flatMap((gate) => gate.deps || []).filter((dep) => !selectedIds.has(dep)))
     : new Set<string>()
   const runId = `rg-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
+  const retentionBefore = await pruneOldReleaseGateRunDirs(root)
   const reportDir = path.join(root, '.sneakoscope', 'reports', 'release-gates', runId)
   fs.mkdirSync(reportDir, { recursive: true })
   const timeline = path.join(reportDir, 'timeline.jsonl')
+  appendReleaseGateJsonl(timeline, { event: 'retention', phase: 'before_run', ...retentionBefore, at: new Date().toISOString() })
   const started = Date.now()
   const pending = new Map(selected.map((gate) => [gate.id, gate]))
   const running = new Map<string, { gate: ReleaseGateNode; promise: Promise<GateRunResult> }>()
@@ -205,7 +219,11 @@ export async function runReleaseGateDag(input: {
   }
 
   const result = writeSummarySnapshot(true)
-  return result
+  const retentionAfter = await pruneOldReleaseGateRunDirs(root, { preserveRunId: runId })
+  const finalResult = { ...result, retention: mergeReleaseGateRetention(retentionBefore, retentionAfter) }
+  appendReleaseGateJsonl(timeline, { event: 'retention', phase: 'after_run', ...retentionAfter, at: new Date().toISOString() })
+  writeReleaseGateJson(path.join(reportDir, 'summary.json'), finalResult)
+  return finalResult
 }
 
 export function selectReleaseGatePreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
@@ -308,4 +326,52 @@ function estimateCriticalPath(gates: ReleaseGateNode[], completed: Map<string, G
 
 function tail(value: string, limit = 1200): string {
   return value.length > limit ? value.slice(-limit) : value
+}
+
+export async function pruneOldReleaseGateRunDirs(root: string, opts: { keep?: number; preserveRunId?: string | null } = {}): Promise<ReleaseGateRunRetention> {
+  const keep = Math.max(1, Math.floor(Number(opts.keep ?? process.env.SKS_RELEASE_GATE_RUN_RETENTION ?? 20) || 20))
+  const preserveRunId = opts.preserveRunId || null
+  const base = path.join(root, '.sneakoscope', 'reports', 'release-gates')
+  const report: ReleaseGateRunRetention = {
+    schema: 'sks.release-gate-run-retention.v1',
+    keep,
+    scanned: 0,
+    kept: 0,
+    removed: 0,
+    preserve_run_id: preserveRunId,
+    removed_run_ids: []
+  }
+  if (!fs.existsSync(base)) return report
+  const runs = fs.readdirSync(base, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^rg-\d{4}-/.test(entry.name))
+    .map((entry) => {
+      const dir = path.join(base, entry.name)
+      const summary = path.join(dir, 'summary.json')
+      const stat = fs.statSync(fs.existsSync(summary) ? summary : dir)
+      return { id: entry.name, dir, mtimeMs: stat.mtimeMs }
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs)
+  report.scanned = runs.length
+  const keepIds = new Set(runs.slice(0, keep).map((run) => run.id))
+  if (preserveRunId) keepIds.add(preserveRunId)
+  for (const run of runs) {
+    if (keepIds.has(run.id)) {
+      report.kept += 1
+      continue
+    }
+    await rmrf(run.dir)
+    report.removed += 1
+    report.removed_run_ids.push(run.id)
+  }
+  return report
+}
+
+function mergeReleaseGateRetention(before: ReleaseGateRunRetention, after: ReleaseGateRunRetention): ReleaseGateRunRetention {
+  return {
+    ...after,
+    scanned: Math.max(before.scanned, after.scanned),
+    kept: after.kept,
+    removed: before.removed + after.removed,
+    removed_run_ids: [...before.removed_run_ids, ...after.removed_run_ids]
+  }
 }
