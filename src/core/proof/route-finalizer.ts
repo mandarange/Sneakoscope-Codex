@@ -90,6 +90,24 @@ export async function finalizeRouteWithProof(root: any, {
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
     : visualComputerUseDowngrade ? 'verified_partial'
     : statusHint;
+  const finalUnverified = [
+    ...unverified,
+    ...(imageEvidence?.mock ? ['Image voxel evidence is mock fixture evidence and does not claim a real visual run.'] : []),
+    ...(Number(wrongnessEvidence?.medium_severity_active || 0) > 0 ? ['Active medium-severity wrongness memory remains and prevents full verification claims.'] : [])
+  ];
+  const resolvedFailureAnalysis = failureAnalysis || inferRouteFailureAnalysis({
+    missionId,
+    route: policy.route,
+    status,
+    blockers: localBlockers,
+    unverified: finalUnverified,
+    wrongnessEvidence,
+    imageEvidence,
+    agentEvidence,
+    computerUse,
+    computerUseLive,
+    visualComputerUseDowngrade
+  });
   const evidence = {
     ...collected,
     ...(dbEvidence ? { db: dbEvidence } : {}),
@@ -133,13 +151,9 @@ export async function finalizeRouteWithProof(root: any, {
     artifacts,
     evidence,
     claims,
-    unverified: [
-      ...unverified,
-      ...(imageEvidence?.mock ? ['Image voxel evidence is mock fixture evidence and does not claim a real visual run.'] : []),
-      ...(Number(wrongnessEvidence?.medium_severity_active || 0) > 0 ? ['Active medium-severity wrongness memory remains and prevents full verification claims.'] : [])
-    ],
+    unverified: finalUnverified,
     blockers: localBlockers,
-    failureAnalysis,
+    failureAnalysis: resolvedFailureAnalysis,
     summary: {
       files_changed: collected.files?.length || 0,
       commands_run: evidence.commands?.length || 0,
@@ -148,4 +162,66 @@ export async function finalizeRouteWithProof(root: any, {
       manual_review_required: status !== 'verified'
     }
   });
+}
+
+function inferRouteFailureAnalysis({
+  missionId,
+  route,
+  status,
+  blockers,
+  unverified,
+  wrongnessEvidence,
+  imageEvidence,
+  agentEvidence,
+  computerUse,
+  computerUseLive,
+  visualComputerUseDowngrade
+}: any = {}) {
+  if (status === 'verified' && !blockers?.length && !unverified?.length) return null;
+  const evidence = [
+    missionId ? `.sneakoscope/missions/${missionId}/completion-proof.json#unverified` : 'completion-proof.json#unverified',
+    ...(wrongnessEvidence?.mission_ledger ? [wrongnessEvidence.mission_ledger] : []),
+    ...(agentEvidence ? [missionId ? `.sneakoscope/missions/${missionId}/agents/agent-proof-evidence.json` : 'agents/agent-proof-evidence.json'] : []),
+    ...(imageEvidence?.ledger ? ['image_voxels'] : []),
+    ...(computerUse ? ['computer_use_status'] : []),
+    ...(computerUseLive?.path ? [computerUseLive.path] : [])
+  ];
+  if (blockers?.length) {
+    return {
+      status: 'complete',
+      root_cause: `Route ${route || 'unknown'} could not be fully verified because finalization recorded blocking conditions: ${blockers.join(', ')}.`,
+      corrective_action: 'Preserved the non-verified completion status, recorded blockers in Completion Proof, and linked the available route evidence instead of claiming full completion.',
+      evidence
+    };
+  }
+  if (Number(wrongnessEvidence?.medium_severity_active || 0) > 0) {
+    return {
+      status: 'complete',
+      root_cause: `Route ${route || 'unknown'} remains verified_partial because active medium-severity wrongness memory is still present even though no high-severity blocker remains.`,
+      corrective_action: 'Kept the Completion Proof at verified_partial, recorded the wrongness caveat in unverified evidence, and avoided a full verified claim until the memory is resolved or explicitly accepted.',
+      evidence
+    };
+  }
+  if (visualComputerUseDowngrade) {
+    return {
+      status: 'complete',
+      root_cause: 'Native Computer Use visual confidence was downgraded because live capture or Image Voxel linkage was unavailable or incomplete.',
+      corrective_action: 'Kept the Completion Proof at verified_partial and recorded the missing native visual evidence instead of claiming high-confidence visual verification.',
+      evidence
+    };
+  }
+  if (imageEvidence?.mock) {
+    return {
+      status: 'complete',
+      root_cause: 'Visual evidence was produced from a mock fixture, which cannot support a real fully verified visual route claim.',
+      corrective_action: 'Kept the Completion Proof at verified_partial and recorded the mock-evidence caveat in unverified evidence.',
+      evidence
+    };
+  }
+  return {
+    status: 'complete',
+    root_cause: `Route ${route || 'unknown'} generated a non-verified completion status because unresolved caveats remained in final unverified evidence.`,
+    corrective_action: 'Recorded those caveats in Completion Proof and preserved the partial status instead of upgrading the route to verified.',
+    evidence
+  };
 }
