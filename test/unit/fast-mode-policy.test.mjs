@@ -13,19 +13,19 @@ import {
   clearFastModePreference
 } from '../../dist/core/agents/fast-mode-policy.js';
 
-test('fast mode policy defaults to fast without explicit opt-in', () => {
+test('fast mode policy does not force fast without explicit opt-in', () => {
   const policy = resolveFastModePolicy({});
-  assert.equal(policy.fast_mode, true);
-  assert.equal(policy.service_tier, 'fast');
-  assert.equal(policy.default_fast_mode, true);
-  assert.equal(policy.disabled_by, 'none');
+  assert.equal(policy.fast_mode, false);
+  assert.equal(policy.service_tier, 'standard');
+  assert.equal(policy.default_fast_mode, false);
+  assert.equal(policy.disabled_by, 'default-standard');
   assert.equal(policy.explicit_fast, false);
   assert.equal(policy.explicit_service_tier, null);
   assert.deepEqual(fastModeEnv(policy), {
-    SKS_FAST_MODE: '1',
-    SKS_SERVICE_TIER: 'fast',
-    SKS_CODEX_DESKTOP_SERVICE_TIER: 'priority',
-    SKS_REASONING_PROFILE_SUFFIX: 'fast'
+    SKS_FAST_MODE: '0',
+    SKS_SERVICE_TIER: 'standard',
+    SKS_CODEX_DESKTOP_SERVICE_TIER: 'default',
+    SKS_REASONING_PROFILE_SUFFIX: 'standard'
   });
 });
 
@@ -90,7 +90,7 @@ test('fast mode preference toggles project default while explicit flags still wi
 
   const cleared = await clearFastModePreference(root);
   assert.equal(cleared.removed, true);
-  assert.equal(resolveFastModePolicy({ root }).service_tier, 'fast');
+  assert.equal(resolveFastModePolicy({ root }).service_tier, 'standard');
 });
 
 test('fast mode policy rewrites roster reasoning profiles and service tier', () => {
@@ -98,7 +98,7 @@ test('fast mode policy rewrites roster reasoning profiles and service tier', () 
     roster: [{ id: 'agent_1', reasoning_profile: 'sks-agent-medium-standard' }],
     effort_policy: { decisions: [{ agent_id: 'agent_1', reasoning_profile: 'sks-agent-high-standard' }] }
   };
-  const applied = applyFastModeToRoster(roster, resolveFastModePolicy());
+  const applied = applyFastModeToRoster(roster, resolveFastModePolicy({ fastMode: true }));
   assert.equal(applied.service_tier, 'fast');
   assert.equal(applied.fast_mode, true);
   assert.equal(applied.roster[0].reasoning_profile, 'sks-agent-medium-fast');
@@ -121,7 +121,7 @@ test('fast mode proof accepts Codex SDK service tier propagation evidence', asyn
     service_tier: 'fast'
   }));
 
-  const proof = await writeFastModePropagationProof(root, { policy: resolveFastModePolicy() });
+  const proof = await writeFastModePropagationProof(root, { policy: resolveFastModePolicy({ fastMode: true }) });
   assert.equal(proof.ok, true);
   assert.equal(proof.codex_sdk_process_report_count, 1);
 });
