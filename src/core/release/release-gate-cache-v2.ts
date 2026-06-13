@@ -6,6 +6,16 @@ import { normalizeReleaseCacheInputForBehavior } from './release-cache-key.js'
 
 export const RELEASE_GATE_CACHE_V2_SCHEMA = 'sks.release-gate-cache.v2'
 
+export interface ReleaseGateCacheV2Record {
+  ok: boolean
+  gate_id: string
+  command: string
+  resource: string[]
+  preset: string[]
+  duration_ms: number
+  recorded_at: string
+}
+
 export function releaseGateCacheFile(root: string): string {
   return path.join(root, '.sneakoscope', 'reports', 'release-gates', 'cache-v2.json')
 }
@@ -113,15 +123,29 @@ export function hashDirectoryRecursive(dir: string): string[] {
 }
 
 export function readReleaseGateCacheHit(root: string, gate: ReleaseGateNode): boolean {
+  return Boolean(readReleaseGateCacheRecord(root, gate))
+}
+
+export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode): ReleaseGateCacheV2Record | null {
   try {
     const parsed = JSON.parse(fs.readFileSync(releaseGateCacheFile(root), 'utf8'))
-    return parsed.schema === RELEASE_GATE_CACHE_V2_SCHEMA && parsed.records?.[releaseGateCacheKey(root, gate)]?.ok === true
+    const record = parsed.schema === RELEASE_GATE_CACHE_V2_SCHEMA ? parsed.records?.[releaseGateCacheKey(root, gate)] : null
+    if (record?.ok !== true) return null
+    return {
+      ok: true,
+      gate_id: String(record.gate_id || gate.id),
+      command: String(record.command || gate.command),
+      resource: Array.isArray(record.resource) ? record.resource.map(String) : gate.resource,
+      preset: Array.isArray(record.preset) ? record.preset.map(String) : gate.preset,
+      duration_ms: Math.max(0, Math.floor(Number(record.duration_ms) || 0)),
+      recorded_at: String(record.recorded_at || '')
+    }
   } catch {
-    return false
+    return null
   }
 }
 
-export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode): void {
+export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, durationMs = 0): void {
   const file = releaseGateCacheFile(root)
   let parsed: any = { schema: RELEASE_GATE_CACHE_V2_SCHEMA, records: {} }
   try {
@@ -135,6 +159,7 @@ export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode): v
     command: gate.command,
     resource: gate.resource,
     preset: gate.preset,
+    duration_ms: Math.max(0, Math.floor(Number(durationMs) || 0)),
     recorded_at: new Date().toISOString()
   }
   fs.mkdirSync(path.dirname(file), { recursive: true })

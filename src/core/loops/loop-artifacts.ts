@@ -1,11 +1,12 @@
 import path from 'node:path';
 
 export function loopRoot(root: string, missionId: string): string {
-  return path.join(root, '.sneakoscope', 'missions', missionId, 'loops');
+  const missionsRoot = path.resolve(root, '.sneakoscope', 'missions');
+  return containedJoin(missionsRoot, safeArtifactId('mission', missionId), 'loops');
 }
 
 export function loopNodeRoot(root: string, missionId: string, loopId: string): string {
-  return path.join(loopRoot(root, missionId), loopId);
+  return containedJoin(loopRoot(root, missionId), safeArtifactId('loop', loopId));
 }
 
 export function loopPlanPath(root: string, missionId: string): string {
@@ -70,4 +71,20 @@ export function loopOwnerLedgerPath(root: string, missionId: string): string {
 
 export function sanitizeArtifactPart(value: string): string {
   return String(value || 'artifact').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'artifact';
+}
+
+function safeArtifactId(kind: string, value: string): string {
+  const text = String(value || '').trim();
+  const sanitized = sanitizeArtifactPart(text);
+  if (!text || sanitized !== text) throw new Error(`invalid_loop_${kind}_id:${text || 'empty'}`);
+  return sanitized;
+}
+
+function containedJoin(base: string, ...parts: string[]): string {
+  const resolvedBase = path.resolve(base);
+  const target = path.resolve(resolvedBase, ...parts);
+  if (target !== resolvedBase && !target.startsWith(`${resolvedBase}${path.sep}`)) {
+    throw new Error(`loop_artifact_path_escape:${target}`);
+  }
+  return target;
 }

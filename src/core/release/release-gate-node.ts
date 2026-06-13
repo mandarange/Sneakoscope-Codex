@@ -14,7 +14,8 @@ export const RELEASE_GATE_RESOURCE_CLASSES = [
   'network',
   'global-config',
   'publish',
-  'fs-read'
+  'fs-read',
+  'timing-sensitive'
 ] as const
 
 export type ReleaseGateResourceClass = typeof RELEASE_GATE_RESOURCE_CLASSES[number]

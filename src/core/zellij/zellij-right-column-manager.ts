@@ -215,6 +215,16 @@ export async function recordWorkerPaneInRightColumn(input: {
   record: ZellijWorkerPaneRecord
   yOrder?: number | null
 }) {
+  return withRightColumnLock(input.root, input.missionId, async () => recordWorkerPaneInRightColumnUnlocked(input))
+}
+
+async function recordWorkerPaneInRightColumnUnlocked(input: {
+  root: string
+  projectRoot?: string
+  missionId: string
+  record: ZellijWorkerPaneRecord
+  yOrder?: number | null
+}) {
   const paths = resolveRightColumnPaths(input.root, input.missionId, input.projectRoot)
   const state = await readRightColumnState(input.root, input.missionId, input.projectRoot)
   if (!state) return null
@@ -233,6 +243,7 @@ export async function recordWorkerPaneInRightColumn(input: {
     ...state,
     updated_at: nowIso(),
     right_anchor_pane_id: input.record.pane_id || state.right_anchor_pane_id,
+    slot_column_anchor_pane_id: input.record.slot_column_anchor_pane_id || state.slot_column_anchor_pane_id || null,
     visible_worker_panes: rows.sort((a, b) => a.y_order - b.y_order),
     blockers: [...new Set([...state.blockers, ...(input.record.blockers || [])])]
   })
@@ -253,6 +264,16 @@ export async function recordWorkerPaneInRightColumn(input: {
 }
 
 export async function recordSlotColumnAnchorInRightColumn(input: {
+  root: string
+  projectRoot?: string
+  missionId: string
+  sessionName: string
+  paneId: string | null
+}) {
+  return withRightColumnLock(input.root, input.missionId, async () => recordSlotColumnAnchorInRightColumnUnlocked(input))
+}
+
+async function recordSlotColumnAnchorInRightColumnUnlocked(input: {
   root: string
   projectRoot?: string
   missionId: string
@@ -343,6 +364,18 @@ async function recordHeadlessWorkerInRightColumnUnlocked(input: {
 }
 
 export async function closeWorkerInRightColumn(input: {
+  root: string
+  projectRoot?: string
+  missionId: string
+  slotId: string
+  generationIndex: number
+  paneId: string | null
+  status: 'closed' | 'failed' | 'draining'
+}) {
+  return withRightColumnLock(input.root, input.missionId, async () => closeWorkerInRightColumnUnlocked(input))
+}
+
+async function closeWorkerInRightColumnUnlocked(input: {
   root: string
   projectRoot?: string
   missionId: string
@@ -457,12 +490,13 @@ async function withRightColumnLock<T>(root: string, missionId: string, fn: () =>
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
-  rightColumnLocks.set(key, previous.then(() => current, () => current))
+  const chained = previous.then(() => current, () => current)
+  rightColumnLocks.set(key, chained)
   await previous.catch(() => undefined)
   try {
     return await fn()
   } finally {
     release()
-    if (rightColumnLocks.get(key) === current) rightColumnLocks.delete(key)
+    if (rightColumnLocks.get(key) === chained) rightColumnLocks.delete(key)
   }
 }

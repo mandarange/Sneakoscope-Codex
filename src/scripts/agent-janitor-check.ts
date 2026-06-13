@@ -13,6 +13,8 @@ for (const rel of ['src/core/agents/agent-janitor.ts', 'src/core/agents/agent-or
 if (!read('src/core/agents/agent-orchestrator.ts').includes('runAgentJanitor')) issues.push('orchestrator_not_running_janitor');
 if (!read('src/core/agents/agent-orchestrator.ts').includes('periodic_janitor_blocked')) issues.push('orchestrator_not_running_periodic_janitor');
 if (!read('src/core/agents/agent-proof-evidence.ts').includes('janitor_ok')) issues.push('proof_missing_janitor_ok');
+const janitorSrc = read('src/core/agents/agent-janitor.ts');
+if (!janitorSrc.includes("error?.code === 'ENOENT'") || !janitorSrc.includes("error?.code === 'ENOTDIR'")) issues.push('janitor_list_files_missing_disappearing_dir_guard');
 
 await runFixture();
 

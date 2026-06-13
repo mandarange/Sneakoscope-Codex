@@ -1,6 +1,7 @@
 import path from 'node:path'
 import fsp from 'node:fs/promises'
-import { appendJsonlBounded, ensureDir, nowIso, readJson, readText } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, readJson, readText, writeTextAtomic } from '../fsx.js'
+import { withFileLock } from '../locks/file-lock.js'
 
 export const ZELLIJ_SLOT_TELEMETRY_EVENT_SCHEMA = 'sks.zellij-slot-telemetry-event.v1'
 export const ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA = 'sks.zellij-slot-telemetry-snapshot.v1'
@@ -160,7 +161,7 @@ export function mergeTelemetrySnapshots(base: ZellijSlotTelemetrySnapshot, overl
   const slots: ZellijSlotTelemetrySnapshot['slots'] = { ...(base.slots || {}) }
   for (const [key, row] of Object.entries(overlay.slots || {})) {
     const existing = slots[key]
-    slots[key] = !existing || telemetryTsMs(row.latest_ts) >= telemetryTsMs(existing.latest_ts) ? row : existing
+    slots[key] = !existing ? row : newerSlotTelemetry(existing, row)
   }
   const baseTs = Date.parse(String(base.updated_at || '')) || 0
   const overlayTs = Date.parse(String(overlay.updated_at || '')) || 0
@@ -179,6 +180,21 @@ function telemetryTsMs(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function newerSlotTelemetry(
+  current: ZellijSlotTelemetrySnapshot['slots'][string],
+  incoming: ZellijSlotTelemetrySnapshot['slots'][string]
+): ZellijSlotTelemetrySnapshot['slots'][string] {
+  const currentTs = telemetryTsMs(current.latest_ts)
+  const incomingTs = telemetryTsMs(incoming.latest_ts)
+  const currentTerminal = isTelemetryTerminalStatus(current.status)
+  const incomingTerminal = isTelemetryTerminalStatus(incoming.status)
+  if (currentTerminal && !incomingTerminal) return current
+  if (!currentTerminal && incomingTerminal) return incoming
+  if (incomingTs > currentTs) return incoming
+  if (incomingTs < currentTs) return current
+  return incoming
+}
+
 async function statTelemetryFile(file: string): Promise<{ mtimeMs: number; size: number } | null> {
   try {
     const st = await fsp.stat(file)
@@ -190,17 +206,17 @@ async function statTelemetryFile(file: string): Promise<{ mtimeMs: number; size:
 
 export function applyTelemetryEventToSnapshot(snapshot: ZellijSlotTelemetrySnapshot, event: ZellijSlotTelemetryEvent): ZellijSlotTelemetrySnapshot {
   const key = slotTelemetryKey(event.slot_id || event.worker_id, event.generation_index)
-  const slots = {
-    ...(snapshot.slots || {}),
-    [key]: mergeSlotTelemetry(snapshot.slots?.[key], event)
-  }
+  const previous = snapshot.slots?.[key]
+  const nextSlot = mergeSlotTelemetry(previous, event)
+  const slots = snapshot.slots || {}
+  slots[key] = nextSlot
   return {
     schema: ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA,
     mission_id: event.mission_id || snapshot.mission_id,
     updated_at: nowIso(),
     flush_count: snapshot.flush_count || 0,
     slots,
-    counts: countSlotTelemetry(slots)
+    counts: adjustSlotTelemetryCounts(snapshot.counts || countSlotTelemetry(snapshot.slots || {}), previous, nextSlot)
   }
 }
 
@@ -269,11 +285,21 @@ function normalizeTelemetryEvent(event: ZellijSlotTelemetryEvent): ZellijSlotTel
 }
 
 function mergeSlotTelemetry(previous: ZellijSlotTelemetrySnapshot['slots'][string] | undefined, event: ZellijSlotTelemetryEvent): ZellijSlotTelemetrySnapshot['slots'][string] {
+  const previousTs = telemetryTsMs(previous?.latest_ts)
+  const eventTs = telemetryTsMs(event.ts)
+  const previousTerminal = isTelemetryTerminalStatus(previous?.status)
+  const eventTerminal = isTelemetryTerminalStatus(event.status)
+  const terminalRegression = Boolean(previous && previousTerminal && !eventTerminal)
+  const stale = Boolean(previous && (
+    terminalRegression
+    || (!eventTerminal && eventTs < previousTs)
+    || (previousTerminal && eventTerminal && eventTs < previousTs)
+  ))
   return {
-    slot_id: event.slot_id,
-    generation_index: event.generation_index,
-    worker_id: event.worker_id,
-    status: event.status,
+    slot_id: stale ? previous!.slot_id : event.slot_id,
+    generation_index: stale ? previous!.generation_index : event.generation_index,
+    worker_id: stale ? previous!.worker_id : event.worker_id,
+    status: stale ? previous!.status : event.status,
     role: event.role || previous?.role || 'worker',
     backend: event.backend || previous?.backend || 'unknown',
     provider: event.provider || previous?.provider || 'unknown',
@@ -281,28 +307,57 @@ function mergeSlotTelemetry(previous: ZellijSlotTelemetrySnapshot['slots'][strin
     worktree_id: event.worktree_id ?? previous?.worktree_id ?? null,
     worktree_path: event.worktree_path ?? previous?.worktree_path ?? null,
     task_title: event.task_title || previous?.task_title || 'waiting for task',
-    current_file: event.current_file ?? previous?.current_file ?? null,
-    latest_event_type: event.event_type,
-    latest_ts: event.ts,
-    progress: event.progress || previous?.progress || null,
+    current_file: stale ? previous!.current_file ?? (terminalRegression ? null : event.current_file ?? null) : event.current_file ?? previous?.current_file ?? null,
+    latest_event_type: stale ? previous!.latest_event_type : event.event_type,
+    latest_ts: stale ? previous!.latest_ts : event.ts,
+    progress: stale ? previous!.progress || (terminalRegression ? null : event.progress || null) : event.progress || previous?.progress || null,
     artifact_paths: unique([...(previous?.artifact_paths || []), ...(event.artifact_paths || [])]),
     blockers: unique([...(previous?.blockers || []), ...(event.blockers || [])]),
-    log_tail: event.log_tail || previous?.log_tail || ''
+    log_tail: stale ? previous!.log_tail || (terminalRegression ? '' : event.log_tail || '') : event.log_tail || previous?.log_tail || ''
   }
 }
 
 function countSlotTelemetry(slots: ZellijSlotTelemetrySnapshot['slots']): ZellijSlotTelemetrySnapshot['counts'] {
   const counts = { queued: 0, running: 0, verifying: 0, completed: 0, failed: 0, headless: 0 }
   for (const row of Object.values(slots)) {
-    const status = normalizeStatus(row.status)
-    if (status === 'queued' || status === 'launching') counts.queued += 1
-    else if (status === 'running') counts.running += 1
-    else if (status === 'verifying') counts.verifying += 1
-    else if (status === 'completed' || status === 'drained') counts.completed += 1
-    else if (status === 'failed') counts.failed += 1
-    else if (status === 'headless') counts.headless += 1
+    const bucket = slotTelemetryCountBucket(row.status)
+    counts[bucket] += 1
   }
   return counts
+}
+
+function adjustSlotTelemetryCounts(
+  current: ZellijSlotTelemetrySnapshot['counts'],
+  previous: ZellijSlotTelemetrySnapshot['slots'][string] | undefined,
+  next: ZellijSlotTelemetrySnapshot['slots'][string]
+): ZellijSlotTelemetrySnapshot['counts'] {
+  const counts = { ...current }
+  const nextBucket = slotTelemetryCountBucket(next.status)
+  if (previous) {
+    const previousBucket = slotTelemetryCountBucket(previous.status)
+    if (previousBucket !== nextBucket) {
+      counts[previousBucket] = Math.max(0, Number(counts[previousBucket] || 0) - 1)
+      counts[nextBucket] = Number(counts[nextBucket] || 0) + 1
+    }
+    return counts
+  }
+  counts[nextBucket] = Number(counts[nextBucket] || 0) + 1
+  return counts
+}
+
+function slotTelemetryCountBucket(status: unknown): keyof ZellijSlotTelemetrySnapshot['counts'] {
+  const normalized = normalizeStatus(status)
+  if (normalized === 'queued' || normalized === 'launching') return 'queued'
+  if (normalized === 'verifying') return 'verifying'
+  if (normalized === 'completed' || normalized === 'drained') return 'completed'
+  if (normalized === 'failed') return 'failed'
+  if (normalized === 'headless') return 'headless'
+  return 'running'
+}
+
+function isTelemetryTerminalStatus(status: unknown): boolean {
+  const normalized = normalizeStatus(status)
+  return normalized === 'completed' || normalized === 'failed' || normalized === 'drained'
 }
 
 function normalizeStatus(value: unknown): ZellijSlotTelemetryStatus {
@@ -349,19 +404,25 @@ function tail(value: unknown, max: number) {
 
 async function writeTelemetrySnapshotFast(file: string, snapshot: ZellijSlotTelemetrySnapshot) {
   await ensureDir(path.dirname(file))
-  const flushCount = Number(telemetrySnapshotFlushCounts.get(file) || 0) + 1
-  telemetrySnapshotFlushCounts.set(file, flushCount)
-  telemetrySnapshotLastFlushMs.set(file, Date.now())
-  // Merge with the on-disk snapshot before overwriting: multiple processes
-  // (orchestrator + worker children) flush this file concurrently and a plain
-  // overwrite would drop slots that only the other process has observed.
-  const disk = await readJson(file, null) as ZellijSlotTelemetrySnapshot | null
-  const merged = disk?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? mergeTelemetrySnapshots(disk, snapshot) : snapshot
-  const next = { ...merged, flush_count: Math.max(flushCount, Number(merged.flush_count || 0)) }
-  telemetrySnapshotCache.set(file, next)
-  await fsp.writeFile(file, `${JSON.stringify(next)}\n`, 'utf8')
-  const stat = await statTelemetryFile(file)
-  if (stat) telemetrySnapshotDiskStat.set(file, stat)
+  await withFileLock({
+    lockPath: `${file}.lock`,
+    timeoutMs: 30000,
+    staleMs: 2 * 60 * 1000
+  }, async () => {
+    const flushCount = Number(telemetrySnapshotFlushCounts.get(file) || 0) + 1
+    telemetrySnapshotFlushCounts.set(file, flushCount)
+    telemetrySnapshotLastFlushMs.set(file, Date.now())
+    // Multiple processes (orchestrator + worker children) flush this file.
+    // Serialize the read/merge/write critical section so a slower writer
+    // cannot overwrite a newer slot observed by a different process.
+    const disk = await readJson(file, null) as ZellijSlotTelemetrySnapshot | null
+    const merged = disk?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? mergeTelemetrySnapshots(disk, snapshot) : snapshot
+    const next = { ...merged, flush_count: Math.max(flushCount, Number(merged.flush_count || 0)) }
+    telemetrySnapshotCache.set(file, next)
+    await writeTextAtomic(file, `${JSON.stringify(next)}\n`)
+    const stat = await statTelemetryFile(file)
+    if (stat) telemetrySnapshotDiskStat.set(file, stat)
+  })
 }
 
 function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEvent) {
@@ -382,6 +443,7 @@ function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEv
     || event.event_type === 'worker_failed'
     || event.status === 'completed'
     || event.status === 'failed'
+    || event.status === 'drained'
   const should =
     next === 1
     || important

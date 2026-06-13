@@ -1,3 +1,4 @@
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { readJson, runProcess, writeJsonAtomic } from '../fsx.js';
 import { allGateIds, type SksLoopGatePlan, type SksLoopNode } from './loop-schema.js';
@@ -133,9 +134,64 @@ async function runBuiltinGate(root: string, missionId: string, loopId: string, d
     return budget && typeof budget === 'object' ? { ok: true, skipped: false, blockers: [] } : { ok: false, skipped: false, blockers: ['loop_budget_invalid'] };
   }
   if (definition.id === 'loop:checker-fresh-session') {
-    const artifacts = await Promise.all(checkerArtifacts.map((artifact) => readJson<any>(path.resolve(artifact), null)));
+    const artifacts = await Promise.all(checkerArtifacts.map((artifact) => readCheckerArtifact(root, missionId, artifact)));
     const fresh = artifacts.some((artifact) => artifact?.fresh_session === true && artifact?.approved === true);
     return fresh ? { ok: true, skipped: false, blockers: [] } : { ok: false, skipped: false, blockers: ['loop_checker_fresh_session_missing'] };
   }
   return { ok: false, skipped: false, blockers: [`unknown_builtin_gate:${definition.id}`] };
+}
+
+async function readCheckerArtifact(root: string, missionId: string, artifact: string): Promise<any | null> {
+  for (const candidate of checkerArtifactPathCandidates(root, missionId, artifact)) {
+    const readable = await checkerArtifactReadablePath(root, missionId, candidate);
+    if (!readable) continue;
+    const row = await readJson<any>(readable, null);
+    if (row) return row;
+  }
+  return null;
+}
+
+function checkerArtifactPathCandidates(root: string, missionId: string, artifact: string): string[] {
+  const raw = String(artifact || '').trim();
+  if (!raw) return [];
+  const missionRoot = path.join(root, '.sneakoscope', 'missions', missionId);
+  const resolvedMissionRoot = path.resolve(missionRoot);
+  if (path.isAbsolute(raw)) {
+    return [path.resolve(raw)];
+  }
+  return uniqueStrings([
+    safeResolveWithin(path.join(resolvedMissionRoot, 'agents'), raw),
+    safeResolveWithin(resolvedMissionRoot, raw),
+    safeResolveWithin(path.join(resolvedMissionRoot, 'loops'), raw)
+  ].filter((value): value is string => Boolean(value)));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+async function checkerArtifactReadablePath(root: string, missionId: string, candidate: string): Promise<string | null> {
+  const resolvedMissionRoot = path.resolve(root, '.sneakoscope', 'missions', missionId);
+  const resolvedCandidate = path.resolve(candidate);
+  try {
+    const [realMissionRoot, realCandidate] = await Promise.all([
+      fsp.realpath(resolvedMissionRoot),
+      fsp.realpath(resolvedCandidate)
+    ]);
+    return isWithinPath(realMissionRoot, realCandidate) ? realCandidate : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeResolveWithin(base: string, target: string): string | null {
+  const resolvedBase = path.resolve(base);
+  const resolvedTarget = path.resolve(resolvedBase, target);
+  return isWithinPath(resolvedBase, resolvedTarget) ? resolvedTarget : null;
+}
+
+function isWithinPath(base: string, target: string): boolean {
+  const resolvedBase = path.resolve(base);
+  const resolvedTarget = path.resolve(target);
+  return resolvedTarget === resolvedBase || resolvedTarget.startsWith(`${resolvedBase}${path.sep}`);
 }

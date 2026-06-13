@@ -1,7 +1,10 @@
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import type { ReleaseGateNode } from './release-gate-node.js'
+import { createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
 import { writeReleaseGateJson } from './release-gate-report.js'
+import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
+import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 
 export interface ReleaseGateBatchResult {
   schema: 'sks.release-gate-batch-result.v1'
@@ -9,10 +12,10 @@ export interface ReleaseGateBatchResult {
   batch_size: number
   completed: number
   failed: number
-  results: Array<{ id: string; ok: boolean; exit_code: number | null; duration_ms: number }>
+  results: Array<{ id: string; ok: boolean; exit_code: number | null; signal: NodeJS.Signals | null; timed_out: boolean; duration_ms: number; report_dir?: string }>
 }
 
-const DISALLOWED_BATCH_RESOURCES = new Set(['zellij-real', 'git-worktree', 'local-llm-real', 'remote-model-real', 'publish', 'global-config'])
+const DISALLOWED_BATCH_RESOURCES = new Set(['zellij-real', 'git-worktree', 'local-llm-real', 'remote-model-real', 'publish', 'global-config', 'timing-sensitive'])
 
 export function isReleaseGateBatchable(gate: ReleaseGateNode): boolean {
   if (gate.side_effect !== 'hermetic') return false
@@ -22,6 +25,8 @@ export function isReleaseGateBatchable(gate: ReleaseGateNode): boolean {
 
 export async function runReleaseGateBatch(root: string, gates: ReleaseGateNode[], input: { concurrency?: number; reportRoot?: string } = {}): Promise<ReleaseGateBatchResult> {
   const concurrency = Math.max(1, Math.floor(Number(input.concurrency || process.env.SKS_RELEASE_BATCH_CONCURRENCY || 4)))
+  const runId = `rgb-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
+  const reportRoot = input.reportRoot || path.join(root, '.sneakoscope', 'reports', 'release-gate-batches', runId)
   const nonBatchable = gates.filter((gate) => !isReleaseGateBatchable(gate))
   if (nonBatchable.length) {
     return {
@@ -30,7 +35,7 @@ export async function runReleaseGateBatch(root: string, gates: ReleaseGateNode[]
       batch_size: gates.length,
       completed: 0,
       failed: nonBatchable.length,
-      results: nonBatchable.map((gate) => ({ id: gate.id, ok: false, exit_code: null, duration_ms: 0 }))
+      results: nonBatchable.map((gate) => ({ id: gate.id, ok: false, exit_code: null, signal: null, timed_out: false, duration_ms: 0 }))
     }
   }
   const queue = [...gates]
@@ -39,7 +44,7 @@ export async function runReleaseGateBatch(root: string, gates: ReleaseGateNode[]
     while (queue.length) {
       const gate = queue.shift()
       if (!gate) continue
-      const result = await runOne(root, gate)
+      const result = await runOne(root, runId, reportRoot, gate)
       results.push(result)
       if (input.reportRoot) writeChildResult(input.reportRoot, result)
     }
@@ -56,20 +61,60 @@ export async function runReleaseGateBatch(root: string, gates: ReleaseGateNode[]
   }
 }
 
-function runOne(root: string, gate: ReleaseGateNode): Promise<ReleaseGateBatchResult['results'][number]> {
+function runOne(root: string, runId: string, reportRoot: string, gate: ReleaseGateNode): Promise<ReleaseGateBatchResult['results'][number]> {
   const started = Date.now()
+  const hermetic = createReleaseGateHermeticEnv({ root, runId, gate, reportRoot })
   return new Promise((resolve) => {
-    const child = spawn(gate.command, { cwd: root, shell: true, stdio: ['ignore', 'ignore', 'ignore'] })
-    const timer = setTimeout(() => child.kill('SIGTERM'), gate.timeout_ms)
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      resolve({ id: gate.id, ok: code === 0, exit_code: code, duration_ms: Date.now() - started })
+    const child = spawn(gate.command, { cwd: root, shell: true, env: hermetic.env, stdio: ['ignore', 'ignore', 'ignore'], detached: process.platform !== 'win32' })
+    let timedOut = false
+    let timeoutCleanup: Promise<void> | null = null
+    const timer = setTimeout(() => {
+      timedOut = true
+      timeoutCleanup = cleanupTimedOutGateProcessTree(root, child)
+    }, gate.timeout_ms)
+    timer.unref?.()
+    child.on('close', (code, signal) => {
+      void (async () => {
+        clearTimeout(timer)
+        if (timeoutCleanup) await timeoutCleanup
+        const exitCode = timedOut ? 124 : code
+        resolve({ id: gate.id, ok: exitCode === 0, exit_code: exitCode, signal, timed_out: timedOut, duration_ms: Date.now() - started, report_dir: hermetic.report_dir })
+      })()
     })
   })
 }
 
+async function cleanupTimedOutGateProcessTree(root: string, child: ChildProcess): Promise<void> {
+  await killGateProcessTree(root, child, 'SIGTERM')
+  await sleep(1500)
+  await killGateProcessTree(root, child, 'SIGKILL')
+  await sleep(100)
+}
+
+async function killGateProcessTree(root: string, child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
+  if (!child.pid) return
+  const pid = process.platform !== 'win32' ? -child.pid : child.pid
+  const contract = createRequestedScopeContract({
+    route: 'release:gate-batch-runner',
+    userRequest: 'Terminate only the batched release gate child process tree after its configured timeout.',
+    projectRoot: root,
+    overrides: { codex_app_process: true }
+  })
+  try {
+    await guardedProcessKill(guardContextForRoute(root, contract, 'release gate batch timeout cleanup'), pid, { signal, confirmed: true })
+  } catch {
+    try {
+      child.kill(signal)
+    } catch {}
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function writeChildResult(reportRoot: string, result: ReleaseGateBatchResult['results'][number]) {
-  const dir = path.join(reportRoot, result.id.replace(/[^A-Za-z0-9_.:-]/g, '_'))
+  const dir = result.report_dir || path.join(reportRoot, result.id.replace(/[^A-Za-z0-9_.:-]/g, '_'))
   writeReleaseGateJson(path.join(dir, 'result.json'), {
     schema: 'sks.release-gate-batch-child-result.v1',
     ...result
