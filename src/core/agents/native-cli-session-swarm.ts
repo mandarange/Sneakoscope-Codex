@@ -12,6 +12,7 @@ import { resolveZellijWorkerPaneUiMode } from '../zellij/zellij-ui-mode.js'
 import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type ZellijSlotTelemetryStatus } from '../zellij/zellij-slot-telemetry.js'
 import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
 import { appendAgentMessage } from './agent-message-bus.js'
+import { markLoopWorkerInterrupted, registerLoopActiveWorker } from '../loops/loop-interrupt-registry.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
 
@@ -188,6 +189,13 @@ class NativeCliSessionSwarmRecorder {
     })
     record.pid = child.pid || null
     record.process_id = child.pid || null
+    const loopHandle = await registerLoopWorkerHandle({
+      root: ctx.opts.projectRoot || this.input.projectRoot || ctx.opts.cwd || packageRoot(),
+      env: ctx.opts.env || {},
+      agentId: String(ctx.agent.id || ctx.agent.session_id || 'agent'),
+      sessionId: ctx.agent.session_id || null,
+      pid: child.pid || null
+    })
 	    record.status = 'running'
 	    await appendParallelRuntimeEvent(this.root, this.input.missionId, {
 	      event_type: 'worker_process_spawned',
@@ -221,6 +229,14 @@ class NativeCliSessionSwarmRecorder {
     record.exit_code = exit.code
     record.signal = exit.signal
     record.status = exit.code === 0 ? 'closed' : 'failed'
+    if (loopHandle) {
+      await markLoopWorkerInterrupted(
+        ctx.opts.projectRoot || this.input.projectRoot || ctx.opts.cwd || packageRoot(),
+        loopHandle.mission_id,
+        loopHandle.worker_id,
+        record.status === 'closed' ? 'completed' : 'failed'
+      ).catch(() => undefined)
+    }
     if (record.worker_placement === 'headless') {
       await closeWorkerInRightColumn({
         root: this.root,
@@ -365,6 +381,13 @@ class NativeCliSessionSwarmRecorder {
         stdoutRel: input.stdoutRel,
         stderrRel: input.stderrRel
       })
+    let loopHandle = await registerLoopWorkerHandle({
+      root: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd || packageRoot(),
+      env: input.ctx.opts.env || {},
+      agentId: String(input.ctx.agent.id || input.ctx.agent.session_id || 'agent'),
+      sessionId: input.ctx.agent.session_id || null,
+      pid: processRun?.pid || null
+    })
     if (processRun?.pid) {
       input.record.pid = processRun.pid
       input.record.process_id = processRun.pid
@@ -562,6 +585,15 @@ class NativeCliSessionSwarmRecorder {
 	    }
     input.record.pid = Number(workerProcessReport?.pid || processRun?.pid) || null
     input.record.process_id = input.record.pid
+    if (!loopHandle && input.record.pid) {
+      loopHandle = await registerLoopWorkerHandle({
+        root: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd || packageRoot(),
+        env: input.ctx.opts.env || {},
+        agentId: String(input.ctx.agent.id || input.ctx.agent.session_id || 'agent'),
+        sessionId: input.ctx.agent.session_id || null,
+        pid: input.record.pid
+      })
+    }
     input.record.compact_worker_exit_code = compactExit?.code ?? null
     input.record.compact_worker_signal = compactExit?.signal ?? null
     input.record.sdk_thread_id = sdkThreadId
@@ -570,6 +602,14 @@ class NativeCliSessionSwarmRecorder {
     input.record.structured_output_valid = workerProcessReport?.structured_output_valid === true || workerProcessReport?.backend_router_report?.structured_output_valid === true
     input.record.exit_code = parsed ? (parsed.status === 'done' ? 0 : 1) : 1
     input.record.status = parsed?.status === 'done' ? 'closed' : 'failed'
+    if (loopHandle) {
+      await markLoopWorkerInterrupted(
+        input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd || packageRoot(),
+        loopHandle.mission_id,
+        loopHandle.worker_id,
+        input.record.status === 'closed' ? 'completed' : 'failed'
+      ).catch(() => undefined)
+    }
     const heartbeatOk = await hasHeartbeat(path.join(this.root, input.heartbeatRel))
 	    input.record.blockers = [
       ...(parsed ? parsed.blockers || [] : ['zellij_worker_result_timeout']),
@@ -972,6 +1012,28 @@ function normalizeParallelPlacement(value: unknown) {
   const text = String(value || '')
   if (text === 'zellij-pane' || text === 'process' || text === 'headless') return text
   return 'unknown'
+}
+
+async function registerLoopWorkerHandle(input: {
+  root: string
+  env: NodeJS.ProcessEnv
+  agentId: string
+  sessionId: string | null
+  pid: number | null
+}) {
+  const missionId = String(input.env.SKS_MISSION_ID || input.env.SKS_PARENT_MISSION_ID || '').trim()
+  const loopId = String(input.env.SKS_LOOP_ID || '').trim()
+  const phase = String(input.env.SKS_LOOP_PHASE || '').trim()
+  if (!missionId || !loopId || (phase !== 'maker' && phase !== 'checker')) return null
+  return registerLoopActiveWorker(input.root, {
+    mission_id: missionId,
+    loop_id: loopId,
+    phase,
+    worker_id: input.agentId,
+    session_id: input.sessionId,
+    pid: input.pid,
+    interrupt_supported: Boolean(input.pid || input.sessionId)
+  }).catch(() => null)
 }
 
 async function tailFile(file: string, max: number) {

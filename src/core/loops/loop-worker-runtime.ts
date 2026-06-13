@@ -1,11 +1,12 @@
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { ensureDir, nowIso, readJson, runProcess, writeJsonAtomic } from '../fsx.js';
 import type { NarutoWorkGraph, NarutoWorkItem } from '../naruto/naruto-work-item.js';
 import type { SksLoopNode, SksLoopPlan } from './loop-schema.js';
 import { loopNodeRoot } from './loop-artifacts.js';
+import { computeLoopConcurrencyBudget, loopWorkerBudgetFor } from './loop-concurrency-budget.js';
+import { decideLoopFixturePolicy, writeLoopFixturePolicyDecision, type LoopFixturePolicyDecision } from './loop-fixture-policy.js';
 import { buildLoopCheckerPrompt, buildLoopMakerPrompt } from './loop-worker-prompts.js';
 
 export interface LoopWorkerRunInput {
@@ -42,6 +43,8 @@ export interface LoopWorkerRunResult {
   runtime_proof_path: string | null;
   worker_ids: string[];
   session_ids: string[];
+  fixture_policy?: LoopFixturePolicyDecision;
+  fixture_allowed_reason?: string | null;
 }
 
 export async function runLoopMakerWorkers(input: Omit<LoopWorkerRunInput, 'phase'>): Promise<LoopWorkerRunResult> {
@@ -64,9 +67,15 @@ async function runLoopWorkers(input: LoopWorkerRunInput): Promise<LoopWorkerRunR
 function shouldUseFixture(input: LoopWorkerRunInput): boolean {
   const requested = input.fixture === true || process.env.SKS_LOOP_RUNTIME_FIXTURE === '1';
   if (!requested) return false;
-  const allowed = loopFixtureAllowed(input);
-  if (!allowed.ok) {
-    throw new Error(`loop_fixture_runtime_forbidden:${allowed.reason}`);
+  const decision = decideLoopFixturePolicy({
+    root: input.root,
+    missionId: input.plan.mission_id,
+    mode: 'worker',
+    requested
+  });
+  void writeLoopFixturePolicyDecision(input.root, input.plan.mission_id, decision).catch(() => undefined);
+  if (!decision.allowed) {
+    throw new Error(`loop_fixture_runtime_forbidden:${decision.reason}:${decision.blockers.join(',')}`);
   }
   return true;
 }
@@ -75,7 +84,7 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
   const prompt = input.phase === 'maker'
     ? buildLoopMakerPrompt({ plan: input.plan, node: input.node, worktreePath: input.worktree?.path || null })
     : buildLoopCheckerPrompt({ plan: input.plan, node: input.node, makerArtifacts: input.makerArtifacts || [] });
-  const workerCount = input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count;
+  const workerCount = effectiveLoopWorkerCount(input);
   const workGraph = buildLoopNarutoWorkGraph(input, workerCount);
   // Root-cause-1 fix: keep the ORCHESTRATOR root on the MAIN repo (input.root), not the
   // loop worktree. All zellij/right-column/slot-telemetry state derives from the orchestrator
@@ -107,6 +116,12 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
     narutoMode: true,
     narutoWorkGraph: workGraph,
     ...zellijPlacementOpts,
+    env: {
+      SKS_LOOP_ID: input.node.loop_id,
+      SKS_LOOP_PHASE: input.phase,
+      SKS_LOOP_MAIN_ROOT: input.root,
+      SKS_LOOP_WORKER_BUDGET: String(workerCount)
+    },
     ...(input.worktree?.path ? {
       worktree: {
         id: input.worktree.id || `loop-${input.node.loop_id}-${input.phase}`,
@@ -140,7 +155,7 @@ async function normalizeNativeResult(input: LoopWorkerRunInput, result: any): Pr
     mission_id: input.plan.mission_id,
     loop_id: input.node.loop_id,
     phase: input.phase,
-    worker_count: input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count,
+    worker_count: effectiveLoopWorkerCount(input),
     backend: 'native-agent-orchestrator',
     artifacts,
     patch_candidates: input.phase === 'maker' ? artifacts.filter((artifact) => artifact.includes('patch')) : [],
@@ -156,6 +171,12 @@ async function normalizeNativeResult(input: LoopWorkerRunInput, result: any): Pr
 }
 
 async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWorkerRunResult> {
+  const fixturePolicy = decideLoopFixturePolicy({
+    root: input.root,
+    missionId: input.plan.mission_id,
+    mode: 'worker',
+    requested: true
+  });
   const dir = path.join(loopNodeRoot(input.root, input.plan.mission_id, input.node.loop_id), input.phase);
   await ensureDir(dir);
   const resultPath = path.join(dir, 'worker-runtime-result.json');
@@ -193,7 +214,9 @@ async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWork
       blockers: [`loop_worker_fixture_child_missing_result:${child.code}`],
       runtime_proof_path: resultPath,
       worker_ids: [],
-      session_ids: []
+      session_ids: [],
+      fixture_policy: fixturePolicy,
+      fixture_allowed_reason: fixturePolicy.allowed ? fixturePolicy.reason : null
     };
   }
   return {
@@ -202,7 +225,9 @@ async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWork
     blockers: [
       ...result.blockers,
       ...(child.code === 0 ? [] : [`loop_worker_fixture_child_exit:${child.code}`])
-    ]
+    ],
+    fixture_policy: fixturePolicy,
+    fixture_allowed_reason: fixturePolicy.allowed ? fixturePolicy.reason : null
   };
 }
 
@@ -298,23 +323,8 @@ function fixtureChildEntrypoint(): string {
   return fileURLToPath(new URL('../../scripts/loop-worker-fixture-child.js', import.meta.url));
 }
 
-function loopFixtureAllowed(input: LoopWorkerRunInput): { ok: boolean; reason: string } {
-  const argv = process.argv.join(' ');
-  const scriptIsCheck = /(?:^|\s)(?:.*[\/\\])?(?:dist|src)[\/\\]scripts[\/\\][^\s]*(?:check|blackbox)\.(?:js|ts)(?:\s|$)/.test(argv);
-  const explicitTestEnv = process.env.NODE_ENV === 'test'
-    || process.env.SKS_TEST_RUNTIME_FIXTURE_ALLOWED === '1'
-    || process.env.VITEST_WORKER_ID !== undefined
-    || process.env.JEST_WORKER_ID !== undefined
-    || process.env.NODE_V8_COVERAGE !== undefined;
-  const tempRoot = isUnderTempRoot(input.root) && /^M-check-/.test(input.plan.mission_id);
-  if (scriptIsCheck) return { ok: true, reason: 'release_check_script' };
-  if (explicitTestEnv) return { ok: true, reason: 'test_environment' };
-  if (tempRoot) return { ok: true, reason: 'hermetic_temp_loop_check' };
-  return { ok: false, reason: 'fixture_requires_test_context' };
-}
-
-function isUnderTempRoot(root: string): boolean {
-  const normalizedRoot = path.resolve(root);
-  const tempRoot = path.resolve(os.tmpdir());
-  return normalizedRoot === tempRoot || normalizedRoot.startsWith(`${tempRoot}${path.sep}`);
+function effectiveLoopWorkerCount(input: LoopWorkerRunInput): number {
+  const requested = input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count;
+  const budget = computeLoopConcurrencyBudget({ plan: input.plan });
+  return loopWorkerBudgetFor(budget, input.node.loop_id, input.phase, requested);
 }

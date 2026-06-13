@@ -4,13 +4,44 @@
 
 
 
+## [3.1.2] - 2026-06-13
+
+### Added
+
+- Production fixture misuse guard for loop workers and gates.
+- Finalizer-owned GPT final arbiter gate contract.
+- Loop integration merge strategy ladder.
+- Loop side-effect scanner and mutation ledger integration.
+- Native worker/session interrupt for loop kill.
+- Loop global concurrency budget.
+- Real blackboxes for fixture guard, merge strategy, side effects, kill interrupt, and production e2e blackbox coverage.
+
+### Fixed
+
+- Non-builtin loop gates can no longer synthetic-pass in production via `SKS_LOOP_GATE_FIXTURE=1`.
+- `gpt:final-arbiter` gate artifacts now explicitly point to finalizer-owned arbiter proof.
+- Integration merge is no longer plain `git apply` only.
+- GPT final arbiter receives a real side-effect report.
+- Loop kill now attempts to interrupt active native worker sessions and records proof.
+- 3.1.1 productionization changes are documented accurately; this release corrects underdocumented 3.1.1 Loop Mesh productionization.
+
 
 
 ## [3.1.1] - 2026-06-12
 
+### Added
+
+- Real maker/checker worker runtime invocation for Loop Mesh.
+- Real loop gate command execution and unknown-gate failure.
+- Worktree-required loop allocation with diff, patch byte, and owner-scope proof.
+- Integration loop finalizer path with GPT final arbiter trigger for source mutation.
+- Atomic owner lease and checkpoint/kill/resume foundation.
+
 ### Fixed
 
 - Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Checker `noMutation` semantics are separated from fixture mode.
+- Non-integration loops block accidental full `release:check` execution.
 
 ## [3.1.0] - 2026-06-11
 

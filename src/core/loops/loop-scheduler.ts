@@ -1,4 +1,5 @@
 import os from 'node:os';
+import type { LoopConcurrencyBudget } from './loop-concurrency-budget.js';
 import type { SksLoopGraphProof, SksLoopNode, SksLoopProof } from './loop-schema.js';
 
 export interface SksLoopSchedule {
@@ -8,11 +9,11 @@ export interface SksLoopSchedule {
   blockers: string[];
 }
 
-export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced'): SksLoopSchedule {
+export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced', budget?: LoopConcurrencyBudget): SksLoopSchedule {
   const pending = new Map(nodes.map((node) => [node.loop_id, node]));
   const completed = new Set<string>();
   const batches: SksLoopNode[][] = [];
-  const maxParallel = maxConcurrentLoops(nodes, parallelism);
+  const maxParallel = budget?.max_active_loops || maxConcurrentLoops(nodes, parallelism);
   const blockers: string[] = [];
   while (pending.size) {
     const ready = [...pending.values()].filter((node) => node.dependencies.every((dep) => completed.has(dep)));

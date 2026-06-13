@@ -188,7 +188,21 @@ const requiredReleasePresetIds = [
   'loop:cli',
   'loop:observability',
   'goal:loop-runtime-default',
-  'goal:legacy-runtime-escape'
+  'goal:legacy-runtime-escape',
+  'loop:fixture-policy',
+  'loop:fixture-production-misuse-blackbox',
+  'loop:final-arbiter-contract',
+  'loop:gpt-final-contract-crossref',
+  'loop:merge-strategy',
+  'loop:merge-strategy-blackbox',
+  'loop:side-effect-scanner',
+  'loop:side-effect-blackbox',
+  'loop:worker-interrupt',
+  'loop:kill-interrupt-real-blackbox',
+  'loop:concurrency-budget',
+  'loop:concurrency-oversubscription-blackbox',
+  'loop:mesh-production-e2e-blackbox',
+  'changelog:loop-productionization'
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',

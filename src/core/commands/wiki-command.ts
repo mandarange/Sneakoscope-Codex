@@ -103,7 +103,17 @@ export async function wikiCommand(sub: any, args: any = []) {
       const { id, dir } = await createMission(root, { mode: 'wiki', prompt: 'sks wiki refresh' });
       const gate = { schema_version: 1, passed: validation.result.ok, ok: validation.result.ok, context_pack: '.sneakoscope/wiki/context-pack.json', anchors: wikiAnchorCount(pack.wiki), voxels: wikiVoxelRowCount(pack.wiki) };
       await writeJsonAtomic(path.join(dir, 'wiki-gate.json'), gate);
-      await maybeFinalizeRoute(root, { missionId: id, route: '$Wiki', gateFile: 'wiki-gate.json', gate, artifacts: ['wiki-gate.json', 'completion-proof.json'], statusHint: validation.result.ok ? 'verified_partial' : 'blocked', blockers: validation.result.ok ? [] : validation.result.issues, command: { cmd: 'sks wiki refresh', status: exitCode } });
+      await maybeFinalizeRoute(root, {
+        missionId: id,
+        route: '$Wiki',
+        gateFile: 'wiki-gate.json',
+        gate,
+        artifacts: ['wiki-gate.json', 'completion-proof.json'],
+        statusHint: validation.result.ok ? 'verified_partial' : 'blocked',
+        blockers: validation.result.ok ? [] : validation.result.issues,
+        command: { cmd: 'sks wiki refresh', status: exitCode },
+        failureAnalysis: wikiRefreshFailureAnalysis(validation.result, gate)
+      });
     }
     if (flag(args, '--json')) {
       process.exitCode = exitCode;
@@ -172,6 +182,31 @@ export async function wikiCommand(sub: any, args: any = []) {
   }
   console.error('Usage: sks wiki coords|pack|refresh|publish|rebuild-index|rebuild-summary|validate|validate-shared|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
   process.exitCode = 1;
+}
+
+function wikiRefreshFailureAnalysis(validationResult: any, gate: any = {}) {
+  if (validationResult?.ok) {
+    return {
+      status: 'complete',
+      root_cause: 'Wiki refresh intentionally finalizes as verified_partial because a context-pack refresh can verify TriWiki schema and anchors, but active wrongness memory may still prevent full trust verification.',
+      corrective_action: 'The Wiki route records the fresh context-pack validation, wiki gate counts, and completion-proof evidence while keeping the route below full verified status until wrongness memory is separately resolved.',
+      evidence: [
+        '.sneakoscope/wiki/context-pack.json',
+        'wiki-gate.json',
+        { anchors: gate.anchors || 0, voxels: gate.voxels || 0 }
+      ]
+    };
+  }
+  return {
+    status: 'complete',
+    root_cause: `Wiki context-pack validation failed during refresh: ${(validationResult?.issues || []).join(', ') || 'unknown validation issue'}.`,
+    corrective_action: 'The Wiki route finalized as blocked and preserved validation issues in the completion proof so the context pack can be corrected before any completion claim.',
+    evidence: [
+      '.sneakoscope/wiki/context-pack.json',
+      'wiki-gate.json',
+      ...(validationResult?.issues || [])
+    ]
+  };
 }
 
 async function wikiImageIngest(args: any = []) {

@@ -1,6 +1,7 @@
 import { readJson, writeJsonAtomic } from '../fsx.js';
 import { loopKillRequestPath, loopProofPath, loopStatePath } from './loop-artifacts.js';
 import { writeLoopCheckpoint } from './loop-checkpoint.js';
+import { interruptLoopWorkers } from './loop-interrupt-registry.js';
 import type { SksLoopNode } from './loop-schema.js';
 
 export interface SksLoopKillRequest {
@@ -13,6 +14,7 @@ export interface SksLoopKillRequest {
 export async function writeLoopKillRequest(root: string, missionId: string, target: string): Promise<SksLoopKillRequest> {
   const request = { schema: 'sks.loop-kill-request.v1' as const, mission_id: missionId, target, requested_at: new Date().toISOString() };
   await writeJsonAtomic(loopKillRequestPath(root, missionId), request);
+  await interruptLoopWorkers({ root, missionId, target }).catch(() => undefined);
   return request;
 }
 

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { printJson } from '../../cli/output.js';
 import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js';
 import { readJson, sksRoot } from '../fsx.js';
-import { loopLatestCheckpointPath, loopPlanPath, loopProofPath, loopRoot } from '../loops/loop-artifacts.js';
+import { loopActiveWorkerHandlesPath, loopIntegrationMergePath, loopLatestCheckpointPath, loopPlanPath, loopProofPath, loopRoot, loopSideEffectReportPath } from '../loops/loop-artifacts.js';
 import { finalizeLoopGraph } from '../loops/loop-finalizer.js';
 import { readLoopGraphProof } from '../loops/loop-observability.js';
 import { planLoopsFromRequest } from '../loops/loop-planner.js';
@@ -76,7 +76,10 @@ async function loopStatus(args: string[]): Promise<void> {
   const states = await Promise.all((plan?.graph.nodes || []).map((node) => readJson(path.join(loopRoot(root, missionId), node.loop_id, 'loop-state.json'), null)));
   const proofs = await Promise.all((plan?.graph.nodes || []).map((node) => readJson<SksLoopProof | null>(loopProofPath(root, missionId, node.loop_id), null)));
   const checkpoints = await Promise.all((plan?.graph.nodes || []).map((node) => readJson(loopLatestCheckpointPath(root, missionId, node.loop_id), null)));
-  const result = { schema: 'sks.loop-status-command.v1', mission_id: missionId, plan_ok: Boolean(plan && plan.blockers.length === 0), graph: proof, states, proofs, checkpoints };
+  const activeWorkerHandles = await readJsonl(loopActiveWorkerHandlesPath(root, missionId));
+  const merge = await readJson(loopIntegrationMergePath(root, missionId), null);
+  const sideEffects = await readJson(loopSideEffectReportPath(root, missionId), null);
+  const result = { schema: 'sks.loop-status-command.v1', mission_id: missionId, plan_ok: Boolean(plan && plan.blockers.length === 0), graph: proof, states, proofs, checkpoints, active_worker_handles: activeWorkerHandles, merge, side_effects: sideEffects };
   if (flag(args, '--json')) return printJson(result);
   console.log(`Loop status: ${missionId}`);
   for (const state of states.filter(Boolean) as Array<Record<string, unknown>>) {
@@ -87,8 +90,13 @@ async function loopStatus(args: string[]): Promise<void> {
     const gates = nodeProof?.gate_result ? `${nodeProof.gate_result.passed_gates.length}/${nodeProof.gate_result.selected_gates.length}` : '-';
     const worktree = nodeProof?.worktree?.id || (state.acting_on as any)?.worktree_id || '-';
     const resumable = checkpoint?.resumable ? `resumable:${checkpoint.phase}` : 'resumable:-';
-    console.log(`  ${loopId.padEnd(18)} ${String(state.status).padEnd(10)} backend ${String(backend).padEnd(24)} gates ${gates.padEnd(5)} worktree ${String(worktree).padEnd(18)} ${resumable}`);
+    const active = activeWorkerHandles.filter((row: any) => row.loop_id === loopId && row.status === 'running').length;
+    const mergeStatus = merge?.merge_attempts?.[loopId]?.selected_strategy || '-';
+    console.log(`  ${loopId.padEnd(18)} ${String(state.status).padEnd(10)} backend ${String(backend).padEnd(24)} workers ${String(active).padEnd(2)} gates ${gates.padEnd(5)} worktree ${String(worktree).padEnd(18)} merge ${String(mergeStatus).padEnd(14)} ${resumable}`);
   }
+  if (merge) console.log(`Merge: ${merge.ok ? 'passed' : 'blocked'} strategy=${JSON.stringify(merge.strategy_summary || {})}`);
+  if (sideEffects) console.log(`Side effects: ${sideEffects.ok ? 'passed' : 'blocked'} blockers=${sideEffects.blockers?.length || 0}`);
+  if (proof?.gpt_final_arbiter) console.log(`Final arbiter: ${proof.gpt_final_arbiter.verdict || 'unknown'} handled_by=${proof.gpt_final_arbiter.handled_by || 'loop-finalizer'}`);
 }
 
 async function loopProof(args: string[]): Promise<void> {
@@ -99,6 +107,9 @@ async function loopProof(args: string[]): Promise<void> {
   if (!proof) throw new Error(`Loop graph proof missing: ${missionId}`);
   if (flag(args, '--json')) return printJson(proof);
   console.log(renderLoopProofSummary(proof));
+  if (proof.integration_merge) console.log(`Merge: ${proof.integration_merge.ok ? 'passed' : 'blocked'} ${JSON.stringify(proof.integration_merge.strategy_summary || {})}`);
+  if (proof.side_effect_report) console.log(`Side effects: ${proof.side_effect_report.ok ? 'passed' : 'blocked'} ${proof.side_effect_report.blockers?.join(', ') || 'none'}`);
+  if (proof.gpt_final_arbiter) console.log(`Final arbiter: ${proof.gpt_final_arbiter.verdict || 'unknown'} contract=${proof.gpt_final_arbiter.gate_contract_path || 'missing'}`);
 }
 
 async function loopGraph(args: string[]): Promise<void> {
@@ -161,4 +172,19 @@ async function resolveLoopMission(root: string, arg?: string): Promise<string | 
 
 function normalizeParallelism(value: unknown): 'safe' | 'balanced' | 'extreme' {
   return value === 'safe' || value === 'extreme' ? value : 'balanced';
+}
+
+async function readJsonl(file: string): Promise<any[]> {
+  const text = await import('node:fs/promises').then((fs) => fs.readFile(file, 'utf8')).catch(() => '');
+  return String(text).split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
 }

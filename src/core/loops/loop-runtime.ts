@@ -1,5 +1,6 @@
 import { writeJsonAtomic } from '../fsx.js';
 import { loopBudgetPath, loopProofPath, loopStatePath } from './loop-artifacts.js';
+import { computeLoopConcurrencyBudget, writeLoopConcurrencyBudget } from './loop-concurrency-budget.js';
 import { writeLoopCheckpoint } from './loop-checkpoint.js';
 import { finalizeLoopGraph } from './loop-finalizer.js';
 import { runLoopGates } from './loop-gate-runner.js';
@@ -19,7 +20,9 @@ export async function runLoopPlan(input: {
   noMutation?: boolean;
 }): Promise<SksLoopGraphResult> {
   const started = Date.now();
-  const schedule = scheduleLoopGraph(input.plan.graph.nodes, input.parallelism || 'balanced');
+  const concurrencyBudget = computeLoopConcurrencyBudget({ plan: input.plan, parallelism: input.parallelism || 'balanced' });
+  await writeLoopConcurrencyBudget(input.root, concurrencyBudget);
+  const schedule = scheduleLoopGraph(input.plan.graph.nodes, input.parallelism || 'balanced', concurrencyBudget);
   const proofs: SksLoopProof[] = [];
   for (const batch of schedule.batches) {
     if (await shouldKillLoop(input.root, input.plan.mission_id, 'all')) break;
@@ -35,8 +38,8 @@ export async function runLoopPlan(input: {
     root: input.root,
     plan: input.plan,
     proofs,
-    maxActiveLoops: schedule.max_active_loops,
-    maxActiveWorkers: Math.max(1, proofs.reduce((sum, proof) => sum + proof.maker_result.worker_count + proof.checker_result.worker_count, 0)),
+    maxActiveLoops: concurrencyBudget.max_active_loops,
+    maxActiveWorkers: concurrencyBudget.max_active_workers,
     wallMs: Math.max(1, Date.now() - started)
   });
   return {

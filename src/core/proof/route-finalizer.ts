@@ -28,7 +28,8 @@ export async function finalizeRouteWithProof(root: any, {
   requireRelation = false,
   visualClaim = undefined,
   agents = undefined,
-  allowActiveWrongnessPartial = false
+  allowActiveWrongnessPartial = false,
+  failureAnalysis = null
 }: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
@@ -138,6 +139,7 @@ export async function finalizeRouteWithProof(root: any, {
       ...(Number(wrongnessEvidence?.medium_severity_active || 0) > 0 ? ['Active medium-severity wrongness memory remains and prevents full verification claims.'] : [])
     ],
     blockers: localBlockers,
+    failureAnalysis,
     summary: {
       files_changed: collected.files?.length || 0,
       commands_run: evidence.commands?.length || 0,
