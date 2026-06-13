@@ -44,7 +44,7 @@ function packageFilesListHash(pkg) {
 function main() {
   // No stamp -> not eligible; print and exit 1.
   if (!fs.existsSync(stampPath)) {
-    console.log(JSON.stringify({ ok: false, reason: 'no_release_stamp', hint: 'run npm run release:check' }));
+    console.log(JSON.stringify({ ok: false, reason: 'no_release_stamp', hint: 'run npm run release:check:full' }));
     process.exit(1);
   }
 
