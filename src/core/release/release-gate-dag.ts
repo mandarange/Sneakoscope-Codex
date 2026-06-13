@@ -1,13 +1,15 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
 import { appendReleaseGateJsonl, writeReleaseGateJson } from './release-gate-report.js'
 import { findReadyReleaseGateNodes, findReleaseGatesBlockedByFailedDeps, pickReadyLaunchableReleaseGates } from './release-gate-scheduler.js'
-import { readReleaseGateCacheHit, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
+import { readReleaseGateCacheRecord, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
 import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGateManifestV2, type ReleaseGateNode } from './release-gate-node.js'
 import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
 import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
+import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
+import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 
 export interface ReleaseGateDagRunResult {
   schema: 'sks.release-gate-dag-run.v1'
@@ -35,7 +37,7 @@ export interface ReleaseGateDagRunResult {
   budget_snapshot: ReleaseGateBudget
   budget_summary: string
   report_dir: string
-  failures: Array<{ id: string; exit_code: number | null; stderr_tail: string }>
+  failures: Array<{ id: string; exit_code: number | null; stderr_tail: string; timed_out: boolean; signal: NodeJS.Signals | null }>
 }
 
 export function loadReleaseGateManifest(root: string, file = 'release-gates.v2.json'): ReleaseGateManifestV2 {
@@ -88,7 +90,7 @@ export async function runReleaseGateDag(input: {
 
   const writeSummarySnapshot = (finished = false): ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } => {
     const wallMs = Date.now() - started
-    const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail }))
+    const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail, timed_out: row.timed_out, signal: row.signal }))
     const snapshot: ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } = {
       schema: 'sks.release-gate-dag-run.v1',
       ok: failures.length === 0,
@@ -139,14 +141,15 @@ export async function runReleaseGateDag(input: {
     let progressed = false
     for (const gate of launchable) {
       pending.delete(gate.id)
-      const cacheHit = !input.noCache && gate.cache.enabled && readReleaseGateCacheHit(root, gate)
+      const cacheHit = !input.noCache && gate.cache.enabled ? readReleaseGateCacheRecord(root, gate) : null
       if (cacheHit) {
-	        const result: GateRunResult = { id: gate.id, ok: true, exit_code: 0, duration_ms: 0, cached: true, stderr_tail: '' }
+		        const result: GateRunResult = { id: gate.id, ok: true, exit_code: 0, signal: null, timed_out: false, duration_ms: cacheHit.duration_ms, cached: true, stderr_tail: '' }
 	        completed.set(gate.id, result)
 	        cached += 1
 	        cachedGates.push(gate.id)
+        sumGateMs += result.duration_ms
 	        progressed = true
-        appendReleaseGateJsonl(timeline, { event: 'cache_hit', gate_id: gate.id, at: new Date().toISOString() })
+        appendReleaseGateJsonl(timeline, { event: 'cache_hit', gate_id: gate.id, duration_ms: result.duration_ms, at: new Date().toISOString() })
         writeSummarySnapshot(false)
         continue
 	      }
@@ -169,6 +172,8 @@ export async function runReleaseGateDag(input: {
             id: gate.id,
             ok: false,
             exit_code: null,
+            signal: null,
+            timed_out: false,
             duration_ms: 0,
             cached: false,
             stderr_tail: `blocked by failed dependency: ${gate.deps.filter((dep) => failed.has(dep)).join(', ')}`
@@ -188,7 +193,7 @@ export async function runReleaseGateDag(input: {
     if (result.ok) {
       completed.set(result.id, result)
       const gate = selected.find((row) => row.id === result.id)
-      if (gate?.cache.enabled && !input.noCache) writeReleaseGateCacheHit(root, gate)
+      if (gate?.cache.enabled && !input.noCache) writeReleaseGateCacheHit(root, gate, result.duration_ms)
     } else {
       failed.set(result.id, result)
       if (input.failFast) {
@@ -212,6 +217,8 @@ interface GateRunResult {
   id: string
   ok: boolean
   exit_code: number | null
+  signal: NodeJS.Signals | null
+  timed_out: boolean
   duration_ms: number
   cached: boolean
   stderr_tail: string
@@ -225,21 +232,63 @@ function runGate(root: string, runId: string, reportRoot: string, gate: ReleaseG
   const out = fs.createWriteStream(stdoutFile)
   const err = fs.createWriteStream(stderrFile)
   return new Promise((resolve) => {
-    const child = spawn(gate.command, { cwd: root, shell: true, env: hermetic.env, stdio: ['ignore', 'pipe', 'pipe'] })
-    const timer = setTimeout(() => child.kill('SIGTERM'), gate.timeout_ms)
+    const child = spawn(gate.command, { cwd: root, shell: true, env: hermetic.env, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' })
+    let timedOut = false
+    let timeoutCleanup: Promise<void> | null = null
+    const timer = setTimeout(() => {
+      timedOut = true
+      timeoutCleanup = cleanupTimedOutGateProcessTree(root, child)
+    }, gate.timeout_ms)
+    timer.unref?.()
     child.stdout.pipe(out)
     child.stderr.pipe(err)
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      out.end()
-      err.end()
-      const durationMs = Date.now() - started
-      const stderrTail = tail(fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile, 'utf8') : '')
-      const result = { id: gate.id, ok: code === 0, exit_code: code, duration_ms: durationMs, cached: false, stderr_tail: stderrTail }
-      writeReleaseGateJson(path.join(hermetic.report_dir, 'result.json'), { schema: 'sks.release-gate-result.v1', ...result, stdout_log: stdoutFile, stderr_log: stderrFile })
-      resolve(result)
+    child.on('close', (code, signal) => {
+      void (async () => {
+        clearTimeout(timer)
+        if (timeoutCleanup) await timeoutCleanup
+        out.end()
+        err.end()
+        const durationMs = Date.now() - started
+        const stderrText = fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile, 'utf8') : ''
+        const timeoutTail = timedOut ? `release_gate_timeout:${gate.id}:${gate.timeout_ms}ms` : ''
+        const signalTail = !timedOut && signal ? `release_gate_signal:${gate.id}:${signal}` : ''
+        const stderrTail = tail([stderrText, timeoutTail, signalTail].filter(Boolean).join('\n'))
+        const exitCode = timedOut ? 124 : code
+        const result = { id: gate.id, ok: exitCode === 0, exit_code: exitCode, signal, timed_out: timedOut, duration_ms: durationMs, cached: false, stderr_tail: stderrTail }
+        writeReleaseGateJson(path.join(hermetic.report_dir, 'result.json'), { schema: 'sks.release-gate-result.v1', ...result, stdout_log: stdoutFile, stderr_log: stderrFile })
+        resolve(result)
+      })()
     })
   })
+}
+
+async function cleanupTimedOutGateProcessTree(root: string, child: ChildProcess): Promise<void> {
+  await killGateProcessTree(root, child, 'SIGTERM')
+  await sleep(1500)
+  await killGateProcessTree(root, child, 'SIGKILL')
+  await sleep(100)
+}
+
+async function killGateProcessTree(root: string, child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
+  if (!child.pid) return
+  const pid = process.platform !== 'win32' ? -child.pid : child.pid
+  const contract = createRequestedScopeContract({
+    route: 'release:gate-runner',
+    userRequest: 'Terminate only the release gate child process tree after its configured timeout.',
+    projectRoot: root,
+    overrides: { codex_app_process: true }
+  })
+  try {
+    await guardedProcessKill(guardContextForRoute(root, contract, 'release gate timeout cleanup'), pid, { signal, confirmed: true })
+  } catch {
+    try {
+      child.kill(signal)
+    } catch {}
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function estimateCriticalPath(gates: ReleaseGateNode[], completed: Map<string, GateRunResult>): number {

@@ -472,6 +472,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     visiblePanes: visualLaneCount,
     expectedWorkerRuntimeMs: targetActiveSlots >= 10 ? 8000 : targetActiveSlots >= 2 ? 2000 : 25,
     minActiveWorkers: Math.min(targetActiveSlots, desiredWorkItemCount),
+    ...(backend === 'codex-sdk' && opts.real === true ? { minSpeedupRatio: 3 } : {}),
     proofMode: opts.mock === true ? 'mock-process' : 'production',
     requireWorkerPids: opts.nativeCliSwarm !== false && targetActiveSlots >= 16
   })

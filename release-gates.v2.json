@@ -7,7 +7,8 @@
       "deps": [],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 300000,
@@ -232,7 +233,8 @@
       "deps": [],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,
@@ -2441,7 +2443,8 @@
       ],
       "resource": [
         "network",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "real-env",
       "timeout_ms": 180000,
@@ -3405,7 +3408,8 @@
       "deps": [],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,
@@ -5379,7 +5383,8 @@
       ],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 600000,
@@ -5969,7 +5974,8 @@
       ],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 240000,
@@ -8726,7 +8732,8 @@
       "deps": [],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 60000,
@@ -10188,7 +10195,8 @@
       ],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,

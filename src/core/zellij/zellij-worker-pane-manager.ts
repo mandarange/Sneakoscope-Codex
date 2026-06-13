@@ -902,7 +902,8 @@ async function withZellijPaneCreationLock<T>(input: ZellijWorkerPaneOpenInput, f
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
-  zellijPaneCreationLocks.set(key, previous.then(() => current, () => current))
+  const chained = previous.then(() => current, () => current)
+  zellijPaneCreationLocks.set(key, chained)
   await previous.catch(() => undefined)
   const acquiredAt = nowIso()
   const acquiredMs = Date.now()
@@ -947,7 +948,7 @@ async function withZellijPaneCreationLock<T>(input: ZellijWorkerPaneOpenInput, f
       meta: { wait_ms: metrics.wait_ms, held_ms: metrics.held_ms }
     }).catch(() => undefined)
     release()
-    if (zellijPaneCreationLocks.get(key) === current) zellijPaneCreationLocks.delete(key)
+    if (zellijPaneCreationLocks.get(key) === chained) zellijPaneCreationLocks.delete(key)
   }
 }
 

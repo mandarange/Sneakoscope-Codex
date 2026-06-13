@@ -414,18 +414,6 @@ async function narutoRun(parsed: NarutoArgs) {
     blockers: [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate'])],
     updated_at: nowIso()
   })
-  await setCurrent(root, {
-    mission_id: mission.id,
-    route: 'Naruto',
-    route_command: '$Naruto',
-    mode: 'NARUTO',
-    phase: result.ok === true ? 'NARUTO_COMPLETE_OR_REVIEW' : 'NARUTO_BLOCKED',
-    native_sessions_verified: nativeProofOk,
-    subagents_verified: nativeProofOk,
-    naruto_gate_file: 'naruto-gate.json',
-    stop_gate: 'naruto-gate.json',
-    prompt: parsed.prompt
-  })
   const clones = result.roster?.agent_count ?? roster.agent_count
   const localWorkerSummary = summarizeNarutoLocalWorkerResult(localWorker, result)
   // Finalizer policy: when local LLM workers contributed patches, the GPT
@@ -433,16 +421,29 @@ async function narutoRun(parsed: NarutoArgs) {
   const finalizer = evaluateNarutoFinalizer({
     localParticipated: Number(localWorkerSummary?.selected_worker_count || 0) > 0,
     gptFinalStatus: result.proof?.gpt_final_status || null,
-    applyPatches: writeCapable
+    applyPatches: parsed.applyPatches
   })
   await writeJsonAtomic(path.join(mission.dir, 'naruto-finalizer.json'), {
     ...finalizer,
     generated_at: nowIso(),
     mission_id: mission.id
   })
+  const summaryOk = result.ok === true && (parsed.applyPatches === true ? finalizer.ok === true : finalizer.run_ok === true)
+  await setCurrent(root, {
+    mission_id: mission.id,
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mode: 'NARUTO',
+    phase: summaryOk ? 'NARUTO_COMPLETE_OR_REVIEW' : 'NARUTO_BLOCKED',
+    native_sessions_verified: nativeProofOk,
+    subagents_verified: nativeProofOk,
+    naruto_gate_file: 'naruto-gate.json',
+    stop_gate: 'naruto-gate.json',
+    prompt: parsed.prompt
+  })
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
-    ok: result.ok === true,
+    ok: summaryOk,
     mode: 'NARUTO',
     jutsu: 'kage_bunshin_no_jutsu',
     mission_id: result.mission_id,

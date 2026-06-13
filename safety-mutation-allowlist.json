@@ -870,12 +870,6 @@
       "symbol": "allocateWorkerWorktree",
       "token": "fsp.rm",
       "reason": "Retry cleanup removes only the scoped partial worker worktree path before recreating it."
-    },
-    {
-      "file": "src/core/zellij/zellij-slot-telemetry.ts",
-      "symbol": "writeTelemetrySnapshotFast",
-      "token": "fsp.writeFile",
-      "reason": "High-frequency Zellij telemetry snapshot flush writes only the scoped snapshot cache; JSONL events remain authoritative."
     }
   ]
 }

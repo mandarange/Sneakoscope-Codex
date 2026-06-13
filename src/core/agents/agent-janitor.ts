@@ -183,7 +183,14 @@ async function listNamedFiles(dir: string, name: string): Promise<string[]> {
 async function listFiles(dir: string): Promise<string[]> {
   const out: string[] = []
   if (!(await exists(dir))) return out
-  for (const entry of await fsp.readdir(dir, { withFileTypes: true })) {
+  let entries: Array<import('node:fs').Dirent>
+  try {
+    entries = await fsp.readdir(dir, { withFileTypes: true })
+  } catch (error: any) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return out
+    throw error
+  }
+  for (const entry of entries) {
     const file = path.join(dir, entry.name)
     if (entry.isDirectory()) out.push(...await listFiles(file))
     else if (entry.isFile()) out.push(file)

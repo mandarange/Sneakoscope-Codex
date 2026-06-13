@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { COMMANDS } from '../cli/command-registry.js';
+import { runProcess } from '../core/fsx.js';
 import { compileGoalToLoopPlan } from '../core/loops/goal-to-loop-compat.js';
 import { loopGraphProofPath, loopPlanPath, loopProofPath, loopRoot, loopStatePath } from '../core/loops/loop-artifacts.js';
 import { decomposeRequestIntoLoopDomains } from '../core/loops/loop-decomposer.js';
@@ -53,6 +54,9 @@ export async function runLoopDirectiveCheck(id) {
     assert(plan.graph.nodes.every((node) => node.schema === 'sks.loop-node.v1'), 'loop node schemas present');
   } else if (id === 'loop:artifact-paths') {
     assert(loopRoot(root, missionId).includes('.sneakoscope/missions'), 'artifact root layout matches directive');
+    assert(throws(() => loopRoot(root, '../../escape')), 'loop artifact root rejects mission traversal');
+    assert(throws(() => loopRoot(root, 'bad/mission')), 'loop artifact root rejects path separators in mission id');
+    assert(throws(() => loopStatePath(root, missionId, '../loop-escape')), 'loop node artifact path rejects loop traversal');
   } else if (id === 'loop:state') {
     assert(await exists(loopStatePath(root, missionId, 'loop-zellij')), 'loop state exists');
   } else if (id === 'loop:planner') {
@@ -83,6 +87,8 @@ export async function runLoopDirectiveCheck(id) {
     assert(workerSource.includes('loop_fixture_runtime_forbidden'), 'fixture runtime fails closed outside test context');
     assert(workerSource.includes("process.env.SKS_LOOP_RUNTIME_FIXTURE === '1'"), 'fixture runtime remains opt-in through SKS_LOOP_RUNTIME_FIXTURE');
     assert(!workerSource.includes('visualLaneCount: Math.min(4'), 'zellij visual lane count must use the configurable pane cap');
+    const negative = await productionFixtureNegativeCheck();
+    assert(negative.code === 0 && negative.stdout.includes('loop_fixture_runtime_forbidden'), 'production fixture request is blocked at runtime');
   } else if (id === 'loop:worker-runtime') {
     const proof = await readJson(loopProofPath(root, missionId, 'loop-zellij'));
     assert(proof.maker_result.backend === 'deterministic-fixture' || proof.maker_result.backend === 'native-agent-orchestrator', 'maker backend recorded');
@@ -178,6 +184,48 @@ export async function runLoopDirectiveCheck(id) {
     const node = byId.get('loop-zellij');
     const gates = await runLoopGates({ root, missionId, node, gates: node.gates });
     assert(gates.skipped_gates.includes('release:check') === false, 'gate runner avoids full release check inside loop');
+    const checkerDir = path.join(root, '.sneakoscope', 'missions', missionId, 'agents', 'sessions');
+    await fs.mkdir(checkerDir, { recursive: true });
+    await fs.writeFile(path.join(checkerDir, 'checker-findings.json'), JSON.stringify({ fresh_session: true, approved: true }));
+    const checkerGate = await runLoopGates({
+      root,
+      missionId,
+      node,
+      gates: { triage: [], local: [], checker: ['loop:checker-fresh-session'], integration: [], final: [] },
+      checkerArtifacts: ['sessions/checker-findings.json']
+    });
+    assert(checkerGate.ok, 'builtin checker gate resolves mission-ledger relative artifacts');
+    const foreignChecker = path.join(path.dirname(root), `${missionId}-foreign-checker-findings.json`);
+    await fs.writeFile(foreignChecker, JSON.stringify({ fresh_session: true, approved: true }));
+    const foreignRelative = path.relative(path.join(root, '.sneakoscope', 'missions', missionId, 'agents'), foreignChecker);
+    const unsafeCheckerGate = await runLoopGates({
+      root,
+      missionId,
+      node,
+      gates: { triage: [], local: [], checker: ['loop:checker-fresh-session'], integration: [], final: [] },
+      checkerArtifacts: [foreignRelative, foreignChecker]
+    });
+    assert(!unsafeCheckerGate.ok && unsafeCheckerGate.blockers.includes('loop_checker_fresh_session_missing'), 'builtin checker gate rejects foreign absolute and traversal artifacts');
+    const repoLocalChecker = path.join(root, 'repo-local-checker-findings.json');
+    await fs.writeFile(repoLocalChecker, JSON.stringify({ fresh_session: true, approved: true }));
+    const repoLocalCheckerGate = await runLoopGates({
+      root,
+      missionId,
+      node,
+      gates: { triage: [], local: [], checker: ['loop:checker-fresh-session'], integration: [], final: [] },
+      checkerArtifacts: ['repo-local-checker-findings.json', repoLocalChecker]
+    });
+    assert(!repoLocalCheckerGate.ok && repoLocalCheckerGate.blockers.includes('loop_checker_fresh_session_missing'), 'builtin checker gate rejects repo-local non-mission artifacts');
+    const symlinkChecker = path.join(checkerDir, 'checker-findings-symlink.json');
+    await fs.symlink(repoLocalChecker, symlinkChecker);
+    const symlinkCheckerGate = await runLoopGates({
+      root,
+      missionId,
+      node,
+      gates: { triage: [], local: [], checker: ['loop:checker-fresh-session'], integration: [], final: [] },
+      checkerArtifacts: ['sessions/checker-findings-symlink.json']
+    });
+    assert(!symlinkCheckerGate.ok && symlinkCheckerGate.blockers.includes('loop_checker_fresh_session_missing'), 'builtin checker gate rejects mission-local symlinks that escape the mission root');
   } else if (id === 'loop:gate-ladder') {
     const node = byId.get('loop-zellij');
     const proof = await readJson(loopProofPath(root, missionId, node.loop_id));
@@ -240,6 +288,59 @@ async function exists(file) {
   }
 }
 
+function throws(fn) {
+  try {
+    fn();
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function readJson(file) {
   return JSON.parse(await fs.readFile(file, 'utf8'));
+}
+
+async function productionFixtureNegativeCheck() {
+  const code = `
+import { runLoopMakerWorkers } from './dist/core/loops/loop-worker-runtime.js';
+const node = {
+  mission_id: 'M-production-fixture-negative',
+  loop_id: 'loop-production-fixture-negative',
+  owner_scope: { files: ['README.md'], directories: [], package_scripts: [], release_gate_ids: [], exclusive: true, collision_policy: 'handoff' },
+  maker: { worker_count: 1 },
+  checker: { worker_count: 1 },
+  risk: { requires_gpt_final: false },
+  worktree: { required: false }
+};
+const plan = { mission_id: 'M-production-fixture-negative' };
+try {
+  await runLoopMakerWorkers({ root: process.cwd(), plan, node, fixture: true });
+  console.error('fixture unexpectedly allowed outside test context');
+  process.exit(1);
+} catch (err) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!message.includes('loop_fixture_runtime_forbidden')) {
+    console.error(message);
+    process.exit(2);
+  }
+  console.log(message);
+}
+`;
+  return runProcess('/usr/bin/env', [
+    '-u', 'NODE_ENV',
+    '-u', 'SKS_TEST_RUNTIME_FIXTURE_ALLOWED',
+    '-u', 'VITEST_WORKER_ID',
+    '-u', 'JEST_WORKER_ID',
+    '-u', 'NODE_V8_COVERAGE',
+    'SKS_LOOP_RUNTIME_FIXTURE=1',
+    process.execPath,
+    '--input-type=module',
+    '-e',
+    code
+  ], {
+    cwd: process.cwd(),
+    timeoutMs: 30000,
+    maxOutputBytes: 8192
+  });
 }
