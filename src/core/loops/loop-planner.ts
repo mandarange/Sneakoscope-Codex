@@ -5,7 +5,7 @@ import { selectLoopGates } from './loop-gate-selector.js';
 import { inferLoopOwnerScope } from './loop-owner-inference.js';
 import { classifyLoopRisk } from './loop-risk-classifier.js';
 import { defaultLoopBudget, validateLoopPlan, type SksLoopNode, type SksLoopPlan } from './loop-schema.js';
-import { readInitDeepMemory } from '../codex-app/codex-init-deep.js';
+import { readInitDeepMemory, readInitDeepMemoryHints, type InitDeepMemoryHint } from '../codex-app/codex-init-deep.js';
 
 export async function planLoopsFromRequest(input: {
   root: string;
@@ -62,6 +62,11 @@ export async function planLoopsFromRequest(input: {
     })
   };
   const nodes = [...actionNodes, integrationNode];
+  const memoryHints = await readInitDeepMemoryHints(input.root, scopePathsForNodes(nodes)).catch(() => []);
+  const nodesWithMemory = nodes.map((node) => {
+    const hints = memoryHints.filter((hint) => hintAppliesToNode(hint, node)).slice(0, 5);
+    return hints.length ? { ...node, memory_hints: hints } : node;
+  });
   const plan: SksLoopPlan = {
     schema: 'sks.loop-plan.v1',
     mission_id: input.missionId,
@@ -73,12 +78,12 @@ export async function planLoopsFromRequest(input: {
       confidence: actionNodes.length ? 'high' : 'medium'
     },
     graph: {
-      nodes,
+      nodes: nodesWithMemory,
       edges: actionNodes.map((node) => ({ from: node.loop_id, to: integrationNode.loop_id, reason: 'integration_after_loop_proof' }))
     },
     global_budget: defaultLoopBudget({
-      max_iterations: Math.max(...nodes.map((node) => node.budget.max_iterations)),
-      max_subagents: nodes.reduce((sum, node) => sum + node.budget.max_subagents, 0)
+      max_iterations: Math.max(...nodesWithMemory.map((node) => node.budget.max_iterations)),
+      max_subagents: nodesWithMemory.reduce((sum, node) => sum + node.budget.max_subagents, 0)
     }),
     safety: {
       no_unrequested_fallback_code: true,
@@ -95,7 +100,7 @@ export async function planLoopsFromRequest(input: {
   };
   const projectMemory = await readInitDeepMemory(input.root).catch(() => null);
   if (projectMemory) {
-    (plan as any).project_memory = {
+    plan.project_memory = {
       source: projectMemory.path,
       injected: true,
       summary: projectMemory.text.split(/\r?\n/).filter((line) => /^##\s+/.test(line)).slice(0, 8)
@@ -207,4 +212,17 @@ function dynamicCheckerWorkerCount(input: {
 
 function titleFromDomain(domainId: string): string {
   return domainId === 'loop-general-coding' ? 'General coding loop' : `${domainId} loop`;
+}
+
+function scopePathsForNodes(nodes: SksLoopNode[]): string[] {
+  return nodes.flatMap((node) => [
+    ...node.owner_scope.files,
+    ...node.owner_scope.directories
+  ]).filter(Boolean);
+}
+
+function hintAppliesToNode(hint: InitDeepMemoryHint, node: SksLoopNode): boolean {
+  if (hint.scope === '.') return true;
+  const scopes = [...node.owner_scope.files, ...node.owner_scope.directories].map((value) => value.replace(/^\.?\//, ''));
+  return scopes.some((scope) => scope === hint.scope || scope.startsWith(`${hint.scope}/`) || hint.scope.startsWith(`${scope}/`));
 }

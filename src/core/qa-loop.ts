@@ -2,6 +2,7 @@ import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
 import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
 import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
+import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
@@ -332,6 +333,10 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     image_artifact_path_contract_present: false,
     image_artifact_path_contract_artifact: null,
     image_artifact_path_contract_blockers: [],
+    codex_app_execution_profile: opts.executionProfile ? compactExecutionProfile(opts.executionProfile) : null,
+    codex_app_execution_profile_artifact: opts.executionProfile ? 'qa-loop/execution-profile.json' : null,
+    codex_app_hooks_approval_required: opts.executionProfile?.hooks_approval_required === true,
+    codex_app_agent_role_strategy: opts.executionProfile?.agent_role_strategy || null,
     api_e2e_required: apiRequired,
     unsafe_external_side_effects: false,
     corrective_loop_enabled: corrective,
@@ -351,16 +356,20 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
   const a = contract.answers || {};
   const checklist = qaChecklist(a);
   const reportFile = qaReportFilename();
+  const root = missionRootFromDir(dir);
+  const executionProfile = root ? await resolveCodexAppExecutionProfile({ root }).catch(() => null) : null;
+  if (executionProfile) await writeJsonAtomic(path.join(dir, 'qa-loop', 'execution-profile.json'), executionProfile).catch(() => undefined);
   await writeJsonAtomic(path.join(dir, 'qa-ledger.json'), {
     schema_version: 1,
     generated_at: nowIso(),
     mission_id: mission.id,
     qa_report_file: reportFile,
+    codex_app_execution_profile: executionProfile ? compactExecutionProfile(executionProfile) : null,
     target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
     safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_chrome_extension_first_required_for_web_ui_e2e' },
     checklist
   });
-  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile }));
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile, executionProfile }));
   await writeTextAtomic(path.join(dir, reportFile), qaReportTemplate(mission, contract, checklist));
   return { checklist_count: checklist.length, report_file: reportFile };
 }
@@ -425,6 +434,10 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
     image_artifact_path_contract_present: previousGate.image_artifact_path_contract_present === true,
     image_artifact_path_contract_artifact: previousGate.image_artifact_path_contract_artifact || null,
     image_artifact_path_contract_blockers: previousGate.image_artifact_path_contract_blockers || [],
+    codex_app_execution_profile: previousGate.codex_app_execution_profile || null,
+    codex_app_execution_profile_artifact: previousGate.codex_app_execution_profile_artifact || null,
+    codex_app_hooks_approval_required: previousGate.codex_app_hooks_approval_required === true,
+    codex_app_agent_role_strategy: previousGate.codex_app_agent_role_strategy || null,
     blockers: previousGate.blockers || [],
     passed: !uiRequired,
     qa_report_written: true,
@@ -447,13 +460,16 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
   return evaluateQaGate(dir);
 }
 
-export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile, imagePathContract, appHandoff }: any) {
+export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile, imagePathContract, appHandoff, executionProfile }: any) {
   const report = reportFile && isQaReportFilename(reportFile) ? reportFile : 'the date/version-prefixed report named by qa-gate.json.qa_report_file';
   const imageContractText = imagePathContract
     ? `\nIMAGE PATH CONTRACT:\n${JSON.stringify(imagePathContract, null, 2)}\nUse model_visible_path values for follow-up image edits; do not invent generated image paths.\n`
     : '';
   const appHandoffText = appHandoff
     ? `\nCODEX DESKTOP /app HANDOFF:\n${JSON.stringify(appHandoff, null, 2)}\nThis is desktop-app review status only and is not web UI evidence.\n`
+    : '';
+  const executionProfileText = executionProfile
+    ? `\nCODEX APP EXECUTION PROFILE:\n${JSON.stringify(compactExecutionProfile(executionProfile), null, 2)}\nUse this routing profile for agent role strategy and app/headless assumptions.\n`
     : '';
   return `SKS QA-LOOP
 MISSION: ${id}
@@ -467,7 +483,7 @@ GATE: passed=false while unresolved_findings or unresolved_fixable_findings > 0,
 ARTIFACTS: update qa-ledger.json, ${report}, qa-gate.json, and qa-loop/cycle-${cycle}/.
 CONTRACT:
 ${JSON.stringify(contract, null, 2)}
-${imageContractText}${appHandoffText}
+${imageContractText}${appHandoffText}${executionProfileText}
 Previous tail:
 ${String(previous || '').slice(-2500)}
 `;
@@ -481,7 +497,8 @@ export async function qaStatus(dir: any) {
   const imagePathContract = await readJson(path.join(dir, 'qa-loop', 'image-artifact-path-contract.json'), null);
   const reportFile = qaReportFileFromGate(gate?.gate || gate || {}) || ledger?.qa_report_file || null;
   const report = reportFile && isQaReportFilename(reportFile) ? await readText(path.join(dir, reportFile), '') : '';
-  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()), desktop_app_handoff: appHandoff, desktop_app_confirmation: appConfirmation, desktop_review_complete: appConfirmation?.verdict === 'pass', image_path_contract: imagePathContract };
+  const executionProfile = await readJson(path.join(dir, 'qa-loop', 'execution-profile.json'), null);
+  return { gate, checklist_count: ledger?.checklist?.length ?? null, report_file: reportFile, report_written: Boolean(report.trim()), desktop_app_handoff: appHandoff, desktop_app_confirmation: appConfirmation, desktop_review_complete: appConfirmation?.verdict === 'pass', image_path_contract: imagePathContract, codex_app_execution_profile: executionProfile };
 }
 
 function qaChecklist(a: any) {
@@ -518,6 +535,25 @@ function qaChecklist(a: any) {
   );
   cases.push(['report.evidence', 'Record pass/fail/blocked/skipped with evidence.'], ['report.corrective_loop', 'Record fixes, rechecks, unresolved findings, deferred blockers.'], ['report.honest', 'Run Honest Mode.']);
   return cases.map(([id, title]: any) => ({ id, title, status: 'pending', evidence: [] }));
+}
+
+function missionRootFromDir(dir: string): string | null {
+  const normalized = path.resolve(String(dir || ''));
+  const marker = `${path.sep}.sneakoscope${path.sep}missions${path.sep}`;
+  const idx = normalized.indexOf(marker);
+  return idx > 0 ? normalized.slice(0, idx) : null;
+}
+
+function compactExecutionProfile(profile: any) {
+  return profile ? {
+    mode: profile.mode || 'unknown',
+    agent_role_strategy: profile.agent_role_strategy || 'message-role',
+    hooks_approval_required: profile.hooks_approval_required === true,
+    hook_approval_state: profile.hook_approval_state || 'unknown',
+    app_handoff_ready: profile.app_handoff_ready === true,
+    plugin_mcp_inventory_ready: profile.plugin_mcp_inventory_ready === true,
+    artifact_path: profile.artifact_path || '.sneakoscope/reports/codex-app-execution-profile.json'
+  } : null;
 }
 
 function qaReportTemplate(mission: any, contract: any, checklist: any) {

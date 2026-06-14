@@ -133,7 +133,7 @@ async function runSourceShardStage(input: StageInput, startedAt: string): Promis
     const validation = validateResearchSourceShardOutput(output)
     await writeJsonAtomic(path.join(input.dir, artifact), output)
     await writeTextAtomic(path.join(input.dir, 'research', `cycle-${input.cycle}`, 'source-notes', `${layer.id}.md`), `# Source shard: ${layer.label}\n\n${output.sources.map((source) => `- ${source.id}: ${source.title}`).join('\n')}\n`)
-    return baseResult(input, startedAt, 'source_shard', validation.ok ? 'passed' : 'blocked', [artifact, `research/cycle-${input.cycle}/source-notes/${layer.id}.md`], validation.blockers, { layer_id: layer.id, source_count: output.sources.length })
+    return baseResult(input, startedAt, 'source_shard', validation.ok ? 'passed' : 'blocked', [artifact, `research/cycle-${input.cycle}/source-notes/${layer.id}.md`], validation.blockers, { layer_id: layer.id, source_count: output.sources.length, source_tool_route: researchSourceToolRoute(input.plan) })
   }
   const codex = await runResearchCodexStage({
     root: input.root,
@@ -388,8 +388,16 @@ function baseResult(input: StageInput, startedAt: string, stageKind: ResearchSta
     backend: input.backend,
     worker_result_path: typeof metrics.worker_result_path === 'string' ? metrics.worker_result_path : null,
     blockers: [...new Set(blockers.map(String).filter(Boolean))],
-    metrics
+    metrics: {
+      ...metrics,
+      codex_app_execution_profile: input.plan?.codex_app_execution_profile || null,
+      source_tool_route: metrics.source_tool_route || researchSourceToolRoute(input.plan)
+    }
   }
+}
+
+function researchSourceToolRoute(plan: any): string {
+  return plan?.web_research_policy?.source_tool_routing?.mode || (plan?.codex_app_execution_profile?.plugin_mcp_inventory_ready ? 'plugin-mcp-inventory-first' : 'codex-cli-or-web-fallback')
 }
 
 async function buildResearchGateSeed(dir: string, plan: any) {

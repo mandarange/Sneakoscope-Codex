@@ -29,16 +29,48 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
 
   const cleanArgs = stripMadLaunchOnlyArgs(args);
-  if (args.includes('--json')) {
+  const rawArgs = (args || []).map((arg: any) => String(arg));
+  const dryRun = rawArgs.includes('--dry-run');
+  if (args.includes('--json') && !dryRun) {
     const profile = buildMadHighLaunchProfileNoWrite();
     return console.log(JSON.stringify(profile, null, 2));
   }
   const update = { status: 'notice_only', non_blocking: true };
-  const rawArgs = (args || []).map((arg: any) => String(arg));
   const headlessZellij = rawArgs.includes('--headless') || process.env.SKS_MAD_ALLOW_HEADLESS === '1';
   const skipZellijRepair = rawArgs.includes('--skip-zellij-repair') || rawArgs.includes('--no-auto-install-zellij');
   const launchRoot = process.cwd();
   if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
+  if (dryRun) {
+    const zellijPlan = skipZellijRepair
+      ? { schema: 'sks.zellij-self-heal.v1', ok: true, status: 'skipped', dry_run: true, planned_mutations: [], command: null, blockers: [], warnings: ['zellij_repair_skipped'] }
+      : await repairZellijForSks({
+          root: launchRoot,
+          requestedBy: 'sks --mad',
+          fixRequested: true,
+          autoApprove: rawArgs.includes('--yes') || rawArgs.includes('-y'),
+          interactive: false,
+          installHomebrew: rawArgs.includes('--install-homebrew'),
+          allowHeadlessFallback: headlessZellij,
+          dryRun: true
+        });
+    const report = {
+      schema: 'sks.mad-sks-zellij-dry-run.v1',
+      ok: (zellijPlan as any).ok === true,
+      status: (zellijPlan as any).ok === true ? 'dry_run' : 'repair_required',
+      generated_at: nowIso(),
+      launch_skipped: true,
+      zellij_repair: zellijPlan
+    };
+    await writeJsonAtomic(path.join(launchRoot, '.sneakoscope', 'reports', 'mad-sks-zellij-dry-run.json'), report);
+    if (rawArgs.includes('--json')) console.log(JSON.stringify(report, null, 2));
+    else {
+      console.log(`SKS MAD dry-run: launch_skipped=true status=${report.status}`);
+      const planned = Array.isArray((zellijPlan as any).planned_mutations) ? (zellijPlan as any).planned_mutations : [];
+      for (const row of planned) console.log(`- plan: ${row.command}`);
+      if ((zellijPlan as any).command && planned.length === 0) console.log(`- run: ${(zellijPlan as any).command}`);
+    }
+    return report;
+  }
   const codexUpdate = deps.maybePromptCodexUpdateForLaunch ? await deps.maybePromptCodexUpdateForLaunch(args, { label: 'MAD launch' }) : { status: 'skipped' };
   if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
     console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);

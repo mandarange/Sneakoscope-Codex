@@ -1,4 +1,3 @@
-// @ts-nocheck
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { ensureDir, nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
@@ -8,48 +7,19 @@ import { mutationLedgerPath } from '../safety/mutation-ledger.js'
 import { checkZellijCapability, ZELLIJ_MIN_VERSION, type ZellijCapabilityReport } from './zellij-capability.js'
 import { compareVersionLike } from './zellij-command.js'
 import { askHomebrewInstallAllowed, HOMEBREW_INSTALL_COMMAND, resolveHomebrewInstallPolicy } from './homebrew-policy.js'
+import type {
+  ZellijCompactCapability,
+  ZellijPlannedMutation,
+  ZellijSelfHealRequestedBy,
+  ZellijSelfHealResult,
+  ZellijSelfHealStrategy
+} from './zellij-self-heal-types.js'
 
-export interface ZellijSelfHealResult {
-  schema: 'sks.zellij-self-heal.v1'
-  ok: boolean
-  requested_by: 'doctor --fix' | 'sks --mad' | 'sks deps check --yes' | 'sks zellij update' | 'setup'
-  fix_requested: boolean
-  auto_approved: boolean
-  install_homebrew_allowed: boolean
-  before: {
-    status: string
-    version: string | null
-    bin: string | null
-  }
-  latest_version: string | null
-  strategy:
-    | 'none-current'
-    | 'brew-install-zellij'
-    | 'brew-upgrade-zellij'
-    | 'brew-install-homebrew-then-zellij'
-    | 'manual-required'
-    | 'headless-fallback'
-    | 'failed'
-  command: string | null
-  after: {
-    status: string
-    version: string | null
-    bin: string | null
-  }
-  mutation_guard_artifact: string | null
-  homebrew: {
-    present: boolean
-    bin: string | null
-    install_attempted: boolean
-    install_allowed: boolean
-  }
-  blockers: string[]
-  warnings: string[]
-}
+export type { ZellijSelfHealResult } from './zellij-self-heal-types.js'
 
-export async function repairZellijForSks(input: {
+interface ZellijSelfHealInput {
   root: string
-  requestedBy: ZellijSelfHealResult['requested_by']
+  requestedBy: ZellijSelfHealRequestedBy
   fixRequested: boolean
   autoApprove?: boolean
   interactive?: boolean
@@ -57,10 +27,29 @@ export async function repairZellijForSks(input: {
   allowHeadlessFallback?: boolean
   missionDir?: string | null
   env?: NodeJS.ProcessEnv
-}): Promise<ZellijSelfHealResult> {
+  dryRun?: boolean
+}
+
+interface BrewDiscovery {
+  present: boolean
+  bin: string | null
+}
+
+interface ProcessRunResult {
+  code: number | null
+  stdout: string
+  stderr: string
+}
+
+type PartialPersistedSelfHealResult =
+  Omit<ZellijSelfHealResult, 'dry_run' | 'planned_mutations'> &
+  Partial<Pick<ZellijSelfHealResult, 'dry_run' | 'planned_mutations'>>
+
+export async function repairZellijForSks(input: ZellijSelfHealInput): Promise<ZellijSelfHealResult> {
   const root = path.resolve(input.root || process.cwd())
   const env = input.env || process.env
   const autoApproved = input.autoApprove === true
+  const dryRun = input.dryRun === true
   const beforeReport = await capabilitySnapshot(root, env, 'before')
   const before = compactCapability(beforeReport)
   const latest = await latestZellijVersion(env)
@@ -91,6 +80,10 @@ export async function repairZellijForSks(input: {
 
   if (input.fixRequested !== true) {
     return manualResult(root, input, env, before, latest, brew, 'fix_not_requested')
+  }
+
+  if (dryRun) {
+    return dryRunResult(root, input, env, before, latest, brew, mutationArtifact)
   }
 
   if (!autoApproved && input.interactive !== true) {
@@ -231,7 +224,7 @@ async function capabilitySnapshot(root: string, env: NodeJS.ProcessEnv, phase: s
       : (env.SKS_ZELLIJ_SELF_HEAL_AFTER_VERSION || fallbackVersion || '0.44.0')
     return fakeCapability(String(fakeStatus), version)
   }
-  return checkZellijCapability({ root, require: false, writeReport: false, env }).catch((err: any) => ({
+  return checkZellijCapability({ root, require: false, writeReport: false, env }).catch((err: unknown) => ({
     schema: 'sks.zellij-capability.v1',
     generated_at: nowIso(),
     ok: false,
@@ -240,10 +233,10 @@ async function capabilitySnapshot(root: string, env: NodeJS.ProcessEnv, phase: s
     require_zellij: false,
     min_version: ZELLIJ_MIN_VERSION,
     version: null,
-    bin: null,
+    bin: 'zellij',
     command: ['zellij', '--version'],
     docs_evidence: [],
-    blockers: [`zellij_capability_check_failed:${tail(err?.message || String(err))}`],
+    blockers: [`zellij_capability_check_failed:${tail(errorMessage(err))}`],
     warnings: [],
     operator_actions: ['Resolve the Zellij capability check failure, then rerun `sks doctor --fix --yes`.']
   }))
@@ -269,7 +262,7 @@ function fakeCapability(status: string, version: string | null): ZellijCapabilit
   }
 }
 
-function compactCapability(report: ZellijCapabilityReport, fallbackVersion?: string | null) {
+function compactCapability(report: ZellijCapabilityReport, fallbackVersion?: string | null): ZellijCompactCapability {
   return {
     status: report.status,
     version: report.version || fallbackVersion || null,
@@ -285,7 +278,7 @@ async function latestZellijVersion(env: NodeJS.ProcessEnv): Promise<string | nul
   return result?.version || null
 }
 
-async function findBrew(env: NodeJS.ProcessEnv): Promise<{ present: boolean; bin: string | null }> {
+async function findBrew(env: NodeJS.ProcessEnv): Promise<BrewDiscovery> {
   if (env.SKS_ZELLIJ_SELF_HEAL_BREW_PRESENT === '0') return { present: false, bin: null }
   if (env.SKS_FAKE_BREW_BIN) return { present: true, bin: String(env.SKS_FAKE_BREW_BIN) }
   for (const dir of String(env.PATH || process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
@@ -299,7 +292,7 @@ async function findBrew(env: NodeJS.ProcessEnv): Promise<{ present: boolean; bin
   return { present: false, bin: null }
 }
 
-async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: string, args: string[], command: string) {
+async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: string, args: string[], command: string): Promise<ProcessRunResult> {
   if (env.SKS_ZELLIJ_SELF_HEAL_FAKE_RUN === '1') {
     await appendFakeBrewLog(env, args)
     return { code: Number(env.SKS_ZELLIJ_SELF_HEAL_FAKE_RUN_CODE || 0), stdout: 'fake brew ok', stderr: '' }
@@ -317,10 +310,10 @@ async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: stri
     env,
     timeoutMs: 180000,
     maxOutputBytes: 256 * 1024
-  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }))
+  }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: errorMessage(err) }))
 }
 
-async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv) {
+async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv): Promise<ProcessRunResult> {
   if (env.SKS_ZELLIJ_SELF_HEAL_FAKE_RUN === '1') {
     await appendFakeBrewLog(env, ['install-homebrew'])
     return { code: Number(env.SKS_ZELLIJ_SELF_HEAL_FAKE_HOMEBREW_CODE || 0), stdout: 'fake homebrew install ok', stderr: '' }
@@ -338,7 +331,7 @@ async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv) {
     env,
     timeoutMs: 600000,
     maxOutputBytes: 256 * 1024
-  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }))
+  }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: errorMessage(err) }))
 }
 
 async function appendFakeBrewLog(env: NodeJS.ProcessEnv, args: string[]) {
@@ -347,7 +340,66 @@ async function appendFakeBrewLog(env: NodeJS.ProcessEnv, args: string[]) {
   await fs.appendFile(env.SKS_FAKE_BREW_LOG, `${args.join(' ')}\n`, 'utf8')
 }
 
-async function manualResult(root: string, input: any, env: NodeJS.ProcessEnv, before: any, latest: string | null, brew: any, reason: string) {
+async function dryRunResult(
+  root: string,
+  input: ZellijSelfHealInput,
+  env: NodeJS.ProcessEnv,
+  before: ZellijCompactCapability,
+  latest: string | null,
+  brew: BrewDiscovery,
+  mutationArtifact: string
+): Promise<ZellijSelfHealResult> {
+  const policy = !brew.present
+    ? resolveHomebrewInstallPolicy({
+      env,
+      installHomebrew: input.installHomebrew === true,
+      autoApprove: input.autoApprove === true,
+      interactiveAccepted: false
+    })
+    : null
+  if (!brew.present && policy?.allowed !== true) {
+    return input.allowHeadlessFallback === true
+      ? headlessResult(root, input, before, latest, brew, policy?.blockers[0] || 'homebrew_missing')
+      : manualResult(root, input, env, before, latest, brew, policy?.blockers[0] || 'homebrew_missing')
+  }
+  const planned: ZellijPlannedMutation[] = []
+  if (!brew.present) {
+    planned.push({
+      command: HOMEBREW_INSTALL_COMMAND,
+      reason: 'homebrew_missing_for_zellij_repair'
+    })
+  }
+  const install = before.status === 'missing'
+  const zellijCommand = install ? 'brew install zellij' : 'brew upgrade zellij'
+  planned.push({
+    command: zellijCommand,
+    reason: install ? 'zellij_missing' : 'zellij_too_old_or_stale'
+  })
+  const strategy: ZellijSelfHealStrategy = !brew.present ? 'brew-install-homebrew-then-zellij'
+    : install ? 'brew-install-zellij'
+      : 'brew-upgrade-zellij'
+  return persistSelfHeal(root, input.missionDir, {
+    schema: 'sks.zellij-self-heal.v1',
+    ok: true,
+    requested_by: input.requestedBy,
+    fix_requested: true,
+    auto_approved: input.autoApprove === true,
+    install_homebrew_allowed: policy?.allowed === true,
+    dry_run: true,
+    planned_mutations: planned,
+    before,
+    latest_version: latest,
+    strategy,
+    command: planned.map((row) => row.command).join(' && '),
+    after: before,
+    mutation_guard_artifact: `${mutationArtifact}#planned`,
+    homebrew: { present: brew.present, bin: brew.bin, install_attempted: false, install_allowed: policy?.allowed === true },
+    blockers: [],
+    warnings: ['dry_run_no_mutation_performed']
+  })
+}
+
+async function manualResult(root: string, input: ZellijSelfHealInput, env: NodeJS.ProcessEnv, before: ZellijCompactCapability, latest: string | null, brew: BrewDiscovery, reason: string): Promise<ZellijSelfHealResult> {
   const command = brew.present ? 'sks doctor --fix --yes' : 'sks doctor --fix --install-homebrew --yes'
   return persistSelfHeal(root, input.missionDir, {
     schema: 'sks.zellij-self-heal.v1',
@@ -368,7 +420,7 @@ async function manualResult(root: string, input: any, env: NodeJS.ProcessEnv, be
   })
 }
 
-async function headlessResult(root: string, input: any, before: any, latest: string | null, brew: any, reason: string) {
+async function headlessResult(root: string, input: ZellijSelfHealInput, before: ZellijCompactCapability, latest: string | null, brew: BrewDiscovery, reason: string): Promise<ZellijSelfHealResult> {
   return persistSelfHeal(root, input.missionDir, {
     schema: 'sks.zellij-self-heal.v1',
     ok: true,
@@ -388,10 +440,15 @@ async function headlessResult(root: string, input: any, before: any, latest: str
   })
 }
 
-async function persistSelfHeal(root: string, missionDir: string | null | undefined, result: ZellijSelfHealResult): Promise<ZellijSelfHealResult> {
-  await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'zellij-self-heal.json'), result).catch(() => undefined)
-  if (missionDir) await writeJsonAtomic(path.join(missionDir, 'zellij-self-heal.json'), result).catch(() => undefined)
-  return result
+async function persistSelfHeal(root: string, missionDir: string | null | undefined, result: PartialPersistedSelfHealResult): Promise<ZellijSelfHealResult> {
+  const normalized: ZellijSelfHealResult = {
+    ...result,
+    dry_run: result.dry_run === true,
+    planned_mutations: result.planned_mutations || []
+  }
+  await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'zellij-self-heal.json'), normalized).catch(() => undefined)
+  if (missionDir) await writeJsonAtomic(path.join(missionDir, 'zellij-self-heal.json'), normalized).catch(() => undefined)
+  return normalized
 }
 
 async function askZellijRepairAllowed(question: string): Promise<boolean> {
@@ -406,6 +463,10 @@ async function askZellijRepairAllowed(question: string): Promise<boolean> {
   }
 }
 
-function tail(value: unknown, limit = 1000) {
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+function tail(value: unknown, limit = 1000): string {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(-limit)
 }

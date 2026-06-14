@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { repairZellijForSks, type ZellijSelfHealResult } from '../zellij/zellij-self-heal.js'
 
 export async function runDoctorZellijRepair(input: {
@@ -14,6 +13,7 @@ export async function runDoctorZellijRepair(input: {
     fixRequested: true,
     autoApprove: args.includes('--yes') || args.includes('-y'),
     installHomebrew: args.includes('--install-homebrew') || process.env.SKS_ALLOW_HOMEBREW_INSTALL === '1',
+    dryRun: args.includes('--dry-run'),
     interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.SKS_NO_QUESTION !== '1'),
     allowHeadlessFallback: false,
     env: process.env
@@ -22,6 +22,10 @@ export async function runDoctorZellijRepair(input: {
 
 export function doctorZellijRepairConsoleLine(result: ZellijSelfHealResult | null): string | null {
   if (!result) return null
+  if (result.dry_run) {
+    const planned = result.planned_mutations.map((row) => row.command).join(' && ') || result.command || 'none'
+    return `Zellij repair: dry_run planned ${planned}`
+  }
   if (result.strategy === 'none-current') return `Zellij repair: current ${result.after.version || ''}`.trim()
   if (result.ok && (result.strategy === 'brew-install-zellij' || result.strategy === 'brew-install-homebrew-then-zellij')) {
     return `Zellij repair: installed ${result.after.version || 'latest'} via ${result.command || 'brew install zellij'}`

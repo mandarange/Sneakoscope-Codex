@@ -35,7 +35,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.4** makes `doctor --fix` a real Zellij dependency self-healer, lets `sks --mad` repair or explicitly run headless without contradictory optional/blocking messages, and adds Codex App Harness Matrix reporting for plugins, hooks, skills, agent roles, init-deep memory, and execution profile decisions.
+SKS **3.1.5** productionizes the Codex App harness with typed probe surfaces, dry-run Zellij self-heal planning, hook approval and `agent_type` evidence, LazyCodex live-source analysis, init-deep directory memory hints, and execution profile routing across Loop, QA, Research, and Naruto artifacts.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 

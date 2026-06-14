@@ -67,6 +67,12 @@ export interface SksLoopWorktreePolicy {
   cleanup: 'on-success' | 'keep-on-failure' | 'always-keep';
 }
 
+export interface SksLoopMemoryHint {
+  path: string;
+  scope: string;
+  summary: string;
+}
+
 export interface SksLoopNode {
   schema: 'sks.loop-node.v1';
   loop_id: string;
@@ -86,6 +92,7 @@ export interface SksLoopNode {
   handoff_policy: SksLoopHandoffPolicy;
   worktree: SksLoopWorktreePolicy;
   risk: SksLoopRisk;
+  memory_hints?: SksLoopMemoryHint[];
 }
 
 export interface SksLoopPlan {
@@ -110,6 +117,11 @@ export interface SksLoopPlan {
     source_command: 'goal' | 'loop' | 'naruto' | 'qa-loop' | 'research';
   };
   blockers: string[];
+  project_memory?: {
+    source: string;
+    injected: boolean;
+    summary: string[];
+  };
   integration_merge?: {
     ok: boolean;
     artifact_path?: string;

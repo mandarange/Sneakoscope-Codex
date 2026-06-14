@@ -1,4 +1,5 @@
 import type { NarutoTaskHints } from './naruto-task-hints.js'
+import type { CodexAppExecutionProfile } from '../codex-app/codex-app-types.js'
 
 export type NarutoWorkKind =
   | 'implementation'
@@ -73,6 +74,7 @@ export interface NarutoWorkItem {
     required: boolean
     allocation_required: boolean
   }
+  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
 }
 
 export interface NarutoWorkGraph {
@@ -87,6 +89,7 @@ export interface NarutoWorkGraph {
   mixed_work_kinds: NarutoWorkKind[]
   write_allowed_count: number
   worktree_policy: NarutoWorktreePolicy
+  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
   blockers: string[]
   ok: boolean
 }

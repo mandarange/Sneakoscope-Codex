@@ -9,6 +9,7 @@ import { computeLoopConcurrencyBudget, loopWorkerBudgetFor } from './loop-concur
 import { decideLoopFixturePolicy, writeLoopFixturePolicyDecision, type LoopFixturePolicyDecision } from './loop-fixture-policy.js';
 import { buildLoopCheckerPrompt, buildLoopMakerPrompt } from './loop-worker-prompts.js';
 import { resolveCodexAppExecutionProfile } from '../codex-app/codex-app-execution-profile.js';
+import type { CodexAppExecutionProfile } from '../codex-app/codex-app-types.js';
 
 export interface LoopWorkerRunInput {
   root: string;
@@ -44,6 +45,7 @@ export interface LoopWorkerRunResult {
   runtime_proof_path: string | null;
   worker_ids: string[];
   session_ids: string[];
+  codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>;
   fixture_policy?: LoopFixturePolicyDecision;
   fixture_allowed_reason?: string | null;
 }
@@ -86,7 +88,8 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
     ? buildLoopMakerPrompt({ plan: input.plan, node: input.node, worktreePath: input.worktree?.path || null })
     : buildLoopCheckerPrompt({ plan: input.plan, node: input.node, makerArtifacts: input.makerArtifacts || [] });
   const workerCount = effectiveLoopWorkerCount(input);
-  const workGraph = buildLoopNarutoWorkGraph(input, workerCount);
+  const executionProfile = await resolveCodexAppExecutionProfile({ root: input.root }).catch(() => null);
+  const workGraph = buildLoopNarutoWorkGraph(input, workerCount, executionProfile);
   // Root-cause-1 fix: keep the ORCHESTRATOR root on the MAIN repo (input.root), not the
   // loop worktree. All zellij/right-column/slot-telemetry state derives from the orchestrator
   // root, so anchoring it on input.root makes the SLOTS snapshot land under
@@ -95,7 +98,6 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
   // The loop worktree is still where workers cwd + write: it is threaded through the per-worker
   // `worktree` opt below, which launchWorker reads as ctx.opts.worktree -> workerCwd.
   const insideZellij = Boolean(process.env.SKS_ZELLIJ_SESSION_NAME || process.env.ZELLIJ);
-  const executionProfile = await resolveCodexAppExecutionProfile({ root: input.root }).catch(() => null);
   const visiblePaneCap = Math.min(resolveLoopVisiblePaneCap(workerCount), Math.max(1, workerCount));
   const zellijPlacementOpts = insideZellij ? {
     workerPlacement: 'zellij-pane' as const,
@@ -142,10 +144,10 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
       fallback_reason: null
     } : null
   });
-  return normalizeNativeResult(input, orchestrator);
+  return normalizeNativeResult(input, orchestrator, executionProfile);
 }
 
-async function normalizeNativeResult(input: LoopWorkerRunInput, result: any): Promise<LoopWorkerRunResult> {
+async function normalizeNativeResult(input: LoopWorkerRunInput, result: any, executionProfile: CodexAppExecutionProfile | null): Promise<LoopWorkerRunResult> {
   const artifacts = collectArtifactPaths(result);
   const changedFiles = stringArray(result?.changed_files || result?.proof?.changed_files || result?.results?.flatMap?.((row: any) => row?.changed_files || []));
   const blockers = [
@@ -168,7 +170,15 @@ async function normalizeNativeResult(input: LoopWorkerRunInput, result: any): Pr
     blockers: [...new Set(blockers)],
     runtime_proof_path: proofPath,
     worker_ids: stringArray(result?.results?.map?.((row: any) => row?.agent_id || row?.id)),
-    session_ids: stringArray(result?.results?.map?.((row: any) => row?.session_id))
+    session_ids: stringArray(result?.results?.map?.((row: any) => row?.session_id)),
+    ...(executionProfile ? {
+      codex_app_execution_profile: {
+        mode: executionProfile.mode,
+        agent_role_strategy: executionProfile.agent_role_strategy,
+        artifact_path: executionProfile.artifact_path,
+        agent_type_probe_artifact_path: executionProfile.agent_type_probe_artifact_path
+      }
+    } : {})
   };
   await writeJsonAtomic(proofPath, { ...normalized, native_result_summary: summarizeNativeResult(result), generated_at: nowIso() });
   return normalized;
@@ -235,7 +245,13 @@ async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWork
   };
 }
 
-function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number): NarutoWorkGraph {
+function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number, executionProfile: CodexAppExecutionProfile | null): NarutoWorkGraph {
+  const profilePayload = executionProfile ? {
+    mode: executionProfile.mode,
+    agent_role_strategy: executionProfile.agent_role_strategy,
+    artifact_path: executionProfile.artifact_path,
+    agent_type_probe_artifact_path: executionProfile.agent_type_probe_artifact_path
+  } : undefined;
   const workItems: NarutoWorkItem[] = Array.from({ length: Math.max(1, workerCount) }, (_, index) => {
     const id = `${input.node.loop_id}-${input.phase}-${index + 1}`;
     const writeAllowed = input.phase === 'maker';
@@ -264,7 +280,8 @@ function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number
         mode: input.worktree?.path ? 'patch-envelope-only' : 'git-worktree',
         required: input.node.worktree.required,
         allocation_required: false
-      }
+      },
+      ...(profilePayload ? { codex_app_execution_profile: profilePayload } : {})
     };
   });
   return {
@@ -285,6 +302,7 @@ function buildLoopNarutoWorkGraph(input: LoopWorkerRunInput, workerCount: number
       worktree_root: null,
       fallback_reason: input.worktree?.path ? 'loop_worktree_already_allocated' : null
     },
+    ...(profilePayload ? { codex_app_execution_profile: profilePayload } : {}),
     blockers: [],
     ok: true
   };

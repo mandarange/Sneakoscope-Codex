@@ -51,7 +51,7 @@ async function researchPrepare(args: any) {
   const context7Required = routeNeedsContext7(route, prompt);
   const reasoning = routeReasoning(route, prompt);
   const autoresearch = flag(args, '--autoresearch');
-  const plan = await writeResearchPlan(dir, prompt, { depth: readFlagValue(args, '--depth', 'frontier'), missionId: id, autoresearch });
+  const plan = await writeResearchPlan(dir, prompt, { root, depth: readFlagValue(args, '--depth', 'frontier'), missionId: id, autoresearch });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: prompt, required: context7Required, ambiguity: { required: false, status: 'direct_research_cli' } });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), {
     route: route.id,
@@ -111,7 +111,7 @@ async function researchRun(args: any) {
   if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--max-cycles N] [--cycle-timeout-minutes N]');
   const { dir, mission } = await loadMission(root, id);
   const planPath = path.join(dir, 'research-plan.json');
-  if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', { missionId: id, autoresearch: flag(args, '--autoresearch') });
+  if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', { root, missionId: id, autoresearch: flag(args, '--autoresearch') });
   const plan: any = await readJson(planPath);
   const dbScan = await scanDbSafety(root);
   if (!dbScan.ok) {

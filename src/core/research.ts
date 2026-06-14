@@ -17,6 +17,7 @@ import { writeResearchHandoffArtifacts } from './research/research-handoff.js';
 import { RESEARCH_WORK_GRAPH_ARTIFACT, writeResearchWorkGraph } from './research/research-work-graph.js';
 import { researchPromptContractText, validateResearchPromptContract } from './research/research-prompt-contract.js';
 import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research/research-realistic-report.js';
+import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
 
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
 export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
@@ -266,6 +267,7 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
   const createdAt = nowIso();
   const paperArtifact = researchPaperArtifactName(prompt, createdAt, opts);
   const nativeAgentPlan = researchNativeAgentPlan(prompt, { paperArtifact, missionId: opts.missionId });
+  const executionProfile = opts.executionProfile || null;
   return {
     schema_version: 1,
     mission_id: opts.missionId || null,
@@ -276,6 +278,7 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
     paper_artifact: paperArtifact,
     quality_contract: DEFAULT_RESEARCH_QUALITY_CONTRACT,
     native_agent_plan: nativeAgentPlan,
+    codex_app_execution_profile: executionProfile ? compactExecutionProfile(executionProfile) : null,
     agent_sessions: nativeAgentPlan.personas,
     agent_batches: nativeAgentPlan.batches,
     autoresearch_cycle_policy: nativeAgentPlan.autoresearch_cycle_policy,
@@ -332,6 +335,12 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
     web_research_policy: {
       mode: 'layered_source_retrieval_and_triangulation',
       requirement: 'Use every safely available public web/source route before synthesis, separated into source layers so the final claim is not dominated by one corpus or platform.',
+      source_tool_routing: {
+        mode: executionProfile?.plugin_mcp_inventory_ready ? 'plugin-mcp-inventory-first' : 'codex-cli-or-web-fallback',
+        plugin_mcp_inventory_ready: executionProfile?.plugin_mcp_inventory_ready === true,
+        execution_profile_artifact: executionProfile?.artifact_path || '.sneakoscope/reports/codex-app-execution-profile.json',
+        rule: 'Prefer verified plugin/MCP inventory when available; otherwise record source-tool blockers instead of assuming live search coverage.'
+      },
       query_sets: [
         'first-principles and theory sources',
         'plain-language explanations and empirical examples',
@@ -432,6 +441,9 @@ export function researchPlanMarkdown(plan: any) {
   lines.push(`Depth: ${plan.depth}`);
   lines.push(`Methodology: ${plan.methodology}`);
   lines.push(`Research paper: ${researchPaperArtifactForPlan(plan)}`);
+  if (plan.codex_app_execution_profile) {
+    lines.push(`Execution profile: ${plan.codex_app_execution_profile.mode}; agent role strategy ${plan.codex_app_execution_profile.agent_role_strategy}`);
+  }
   if (plan.execution_policy) {
     lines.push(`Execution: ${plan.execution_policy.normal_run}; default cycle timeout ${plan.execution_policy.default_cycle_timeout_minutes} minutes`);
     if (plan.execution_policy.default_max_cycles) lines.push(`Consensus loop: repeat until unanimous agent consensus; default safety cap ${plan.execution_policy.default_max_cycles} cycles`);
@@ -479,6 +491,7 @@ export function researchPlanMarkdown(plan: any) {
     lines.push('## Web Research Policy');
     lines.push(`Mode: ${plan.web_research_policy.mode}`);
     lines.push(`Requirement: ${plan.web_research_policy.requirement}`);
+    if (plan.web_research_policy.source_tool_routing) lines.push(`Source tool routing: ${plan.web_research_policy.source_tool_routing.mode}`);
     for (const querySet of plan.web_research_policy.query_sets || []) lines.push(`- query set: ${querySet}`);
     if (plan.web_research_policy.skill_creator?.artifact) lines.push(`- source skill artifact: ${plan.web_research_policy.skill_creator.artifact}`);
     for (const layer of plan.web_research_policy.source_layers || []) {
@@ -547,7 +560,9 @@ export function countGeniusOpinionSummaries(text: any = '') {
 }
 
 export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
-  const plan = createResearchPlan(prompt, opts);
+  const root = opts.root || missionRootFromDir(String(dir || ''));
+  const executionProfile = opts.executionProfile || (root ? await resolveCodexAppExecutionProfile({ root }).catch(() => null) : null);
+  const plan = createResearchPlan(prompt, { ...opts, executionProfile });
   const noveltyLedger = {
     schema_version: 1,
     entries: [],
@@ -563,6 +578,7 @@ export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
   const experimentPlan = defaultExperimentPlan(plan);
   const replicationPack = defaultReplicationPack(plan);
   await writeJsonAtomic(path.join(dir, 'research-plan.json'), plan);
+  if (executionProfile) await writeJsonAtomic(path.join(dir, 'research', 'execution-profile.json'), executionProfile).catch(() => undefined);
   await writeTextAtomic(path.join(dir, 'research-plan.md'), researchPlanMarkdown(plan));
   await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
   await writeResearchQualityContract(dir, plan.quality_contract);
@@ -583,6 +599,24 @@ export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
   if (opts.missionId) await writeResearchNativeAgentLedger(dir, plan, { missionId: opts.missionId });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.plan.created', depth: plan.depth });
   return plan;
+}
+
+function missionRootFromDir(dir: string): string | null {
+  const normalized = path.resolve(String(dir || ''));
+  const marker = `${path.sep}.sneakoscope${path.sep}missions${path.sep}`;
+  const idx = normalized.indexOf(marker);
+  return idx > 0 ? normalized.slice(0, idx) : null;
+}
+
+function compactExecutionProfile(profile: any) {
+  return profile ? {
+    mode: profile.mode || 'unknown',
+    agent_role_strategy: profile.agent_role_strategy || 'message-role',
+    hooks_approval_required: profile.hooks_approval_required === true,
+    hook_approval_state: profile.hook_approval_state || 'unknown',
+    plugin_mcp_inventory_ready: profile.plugin_mcp_inventory_ready === true,
+    artifact_path: profile.artifact_path || '.sneakoscope/reports/codex-app-execution-profile.json'
+  } : null;
 }
 
 export async function writeResearchNativeAgentLedger(dir: any, plan: any, opts: any = {}) {

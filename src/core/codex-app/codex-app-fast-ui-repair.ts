@@ -10,8 +10,9 @@ import { assertCodexAppUiMutationAllowed } from './codex-app-ui-clobber-guard.js
 
 export const CODEX_APP_FAST_UI_REPAIR_SCHEMA = 'sks.codex-app-fast-ui-repair.v1'
 
-const HOST_OWNED_TOP_LEVEL_RE = /^\s*(openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|notify|profile|experimental_realtime_ws_base_url|service_tier)\s*=/
-const HOST_OWNED_TABLE_RE = /^\s*\[(model_providers(?:[.\]].*)?|profiles(?:[.\]].*)?|otel(?:[.\]].*)?|user\.fast_mode(?:[.\]].*)?)\]\s*$/
+const FAST_UI_TOP_LEVEL_RE = /^\s*service_tier\s*=/
+const FAST_UI_FEATURE_LINE_RE = /^\s*fast_mode\s*=/
+const FAST_UI_USER_TABLE_LINE_RE = /^\s*(enabled|visible|locked|hidden|disabled)\s*=/
 const SKS_CAUSED_RE = /(?:SKS|Sneakoscope|codex-lb|sks-mad|sks fast)/i
 
 export async function repairCodexAppFastUi(root: string = process.cwd(), input: {
@@ -133,8 +134,10 @@ function stripProjectLocalForbiddenKeys(text: string) {
 
 function stripSksCausedHostOwnedLines(text: string) {
   return stripMatchingLines(text, (line, table, previous, next) => {
-    const isHostOwned = HOST_OWNED_TOP_LEVEL_RE.test(line) || HOST_OWNED_TABLE_RE.test(line) || Boolean(table && /^(model_providers|profiles|otel|user\.fast_mode)/.test(table))
-    return isHostOwned && (SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(previous) || SKS_CAUSED_RE.test(next))
+    const isFastUiLine = FAST_UI_TOP_LEVEL_RE.test(line)
+      || (table === 'features' && FAST_UI_FEATURE_LINE_RE.test(line))
+      || (table === 'user.fast_mode' && FAST_UI_USER_TABLE_LINE_RE.test(line))
+    return isFastUiLine && (SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(previous) || SKS_CAUSED_RE.test(next))
   })
 }
 
