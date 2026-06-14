@@ -139,6 +139,16 @@ const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clon
 const smallParsed = parseJson(small.stdout);
 assertGate(small.status === 0 && smallParsed?.target_active_slots === 2, 'a 2-clone run must run 2 concurrently (no over-throttle)', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
 
+// 8) Naruto clones always run fast. Per-route --no-fast / standard-tier requests
+//    are intentionally not honored for shadow clones.
+const standardOptOut = spawnSync(process.execPath, [cli, 'naruto', 'run', 'fast opt-out ignored', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--no-fast', '--service-tier', 'standard', '--json', '--no-open-zellij'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
+const standardOptOutParsed = parseJson(standardOptOut.stdout);
+assertGate(standardOptOut.status === 0 && standardOptOutParsed?.fast_mode_policy?.fast_mode === true && standardOptOutParsed?.fast_mode_policy?.service_tier === 'fast', 'naruto --no-fast / --service-tier standard must still run clones in fast mode', {
+  status: standardOptOut.status,
+  fast_mode_policy: standardOptOutParsed?.fast_mode_policy,
+  stderr: tail(standardOptOut.stderr)
+});
+
 emitGate('naruto:shadow-clone-swarm', {
   max_naruto_agent_count: schema.MAX_NARUTO_AGENT_COUNT,
   standard_ceiling: schema.MAX_AGENT_COUNT,
@@ -152,6 +162,7 @@ emitGate('naruto:shadow-clone-swarm', {
   low_free_capable_cap: lowFreeButCapable.cap,
   cores: heavySafe.cores,
   completed_count: state.completed_count,
+  standard_opt_out_service_tier: standardOptOutParsed?.fast_mode_policy?.service_tier,
   mission_id: parsed.mission_id,
   isolated_worktree_root: isolatedWorktreeRoot
 });

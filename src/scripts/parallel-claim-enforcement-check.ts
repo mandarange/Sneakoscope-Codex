@@ -16,4 +16,5 @@ assertGate(readText('src/scripts/parallel-runtime-real-blackbox.ts').includes('s
 const narutoRealBlackbox = readText('src/scripts/naruto-real-parallelism-blackbox.ts')
 assertGate(!narutoRealBlackbox.includes("'--mock'") && !narutoRealBlackbox.includes('"--mock"'), 'Naruto real parallelism blackbox must not use --mock')
 assertGate(narutoRealBlackbox.includes("'--real'") && narutoRealBlackbox.includes("'--backend'") && narutoRealBlackbox.includes("'codex-sdk'"), 'Naruto real parallelism blackbox must request real codex-sdk backend evidence')
+assertGate(narutoRealBlackbox.includes('proofCacheTtlMs') && narutoRealBlackbox.includes('proof_signature') && narutoRealBlackbox.includes('forceRealRun'), 'Naruto real parallelism blackbox proof reuse must be TTL/signature bounded with a force-real bypass')
 emitGate('parallel:claim-enforcement')
