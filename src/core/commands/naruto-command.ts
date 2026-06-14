@@ -501,6 +501,14 @@ async function narutoRun(parsed: NarutoArgs) {
     } : null,
     parallel_write_policy: result.parallel_write_policy || null,
     local_worker: localWorkerSummary,
+    fast_mode_policy: result.fast_mode_policy || null,
+    fast_mode_propagation: result.fast_mode_propagation ? {
+      ok: result.fast_mode_propagation.ok === true,
+      fast_mode: result.fast_mode_propagation.fast_mode,
+      service_tier: result.fast_mode_propagation.service_tier,
+      worker_process_report_count: result.fast_mode_propagation.worker_process_report_count || 0,
+      blockers: result.fast_mode_propagation.blockers || []
+    } : null,
     finalizer,
     proof: result.proof?.status || 'missing',
     run: compactNarutoRunResult(result),
@@ -832,9 +840,18 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const dryRunPatches = hasFlag(args, '--dry-run-patches') || hasFlag(args, '--dry-run-patch')
   const maxWriteAgents = Math.max(0, Math.floor(Number(readOption(args, '--max-write-agents', '0')) || 0))
   const explicitServiceTier = String(readOption(args, '--service-tier', '') || '')
-  const serviceTier = normalizeServiceTier(explicitServiceTier, null) || undefined
-  const fastMode = hasFlag(args, '--no-fast') || serviceTier === 'standard' ? false : hasFlag(args, '--fast') ? true : undefined
-  const noFast = hasFlag(args, '--no-fast')
+  const requestedServiceTier = normalizeServiceTier(explicitServiceTier, null) || undefined
+  // Naruto clones always run in the fast service tier. The route-level skill and
+  // release docs explicitly treat --no-fast / standard as non-honored for clones.
+  const serviceTier = action === 'run' ? 'fast' : requestedServiceTier
+  const fastMode = action === 'run'
+    ? true
+    : hasFlag(args, '--no-fast') || requestedServiceTier === 'standard'
+      ? false
+      : hasFlag(args, '--fast')
+        ? true
+        : undefined
+  const noFast = action === 'run' ? false : hasFlag(args, '--no-fast')
   const positionalMission = action === 'dashboard' || action === 'workers' || action === 'status' || action === 'proof'
     ? positionalArgs(rest, new Set()).find((arg) => /^latest$|^M-/.test(arg))
     : null
