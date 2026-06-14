@@ -9,7 +9,6 @@ import { syncCodexAgentRoles } from '../core/codex-app/codex-agent-role-sync.js'
 import { runCodexInitDeep } from '../core/codex-app/codex-init-deep.js';
 import { buildCodexHookLifecycle } from '../core/codex-app/codex-hook-lifecycle.js';
 import { resolveCodexAppExecutionProfile } from '../core/codex-app/codex-app-execution-profile.js';
-import { buildLazyCodexInteropPolicy } from '../core/codex-app/lazycodex-interop-policy.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
@@ -20,11 +19,6 @@ export async function run(_command: any, args: any = []) {
   if (action === 'init-deep') return printCodexAppResult(args, await runCodexInitDeep({ root: await sksRoot(), apply: !flag(args, '--check-only') && !flag(args, '--dry-run') }));
   if (action === 'hook-lifecycle') return printCodexAppResult(args, await buildCodexHookLifecycle({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'execution-profile') return printCodexAppResult(args, await resolveCodexAppExecutionProfile({ root: await sksRoot() }));
-  if (action === 'interop' && args[1] === 'lazycodex') {
-    const modeArg = readOption(args, '--mode', 'coexist');
-    const mode = modeArg === 'sks-primary' || modeArg === 'handoff-to-omo' ? modeArg : 'coexist';
-    return printCodexAppResult(args, await buildLazyCodexInteropPolicy({ root: await sksRoot(), mode }));
-  }
   if (action === 'product-design' || action === 'design-product' || action === 'ensure-product-design') {
     const checkOnly = flag(args, '--check-only') || flag(args, '--no-install');
     const status = await codexProductDesignPluginStatus({
@@ -78,7 +72,7 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|interop lazycodex [--mode coexist]|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
   process.exitCode = 1;
 }
 
@@ -92,9 +86,4 @@ function printCodexAppResult(args: any[] = [], result: any) {
   for (const blocker of result?.blockers || []) console.log(`- blocker: ${blocker}`);
   for (const warning of result?.warnings || []) console.log(`- warning: ${warning}`);
   if (result?.ok === false) process.exitCode = 1;
-}
-
-function readOption(args: any[] = [], name: string, fallback: string) {
-  const index = args.indexOf(name);
-  return index >= 0 && args[index + 1] ? String(args[index + 1]) : fallback;
 }

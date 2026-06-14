@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { imageDimensions } from '../wiki-image/image-hash.js'
+import { resolveCodexNativeInvocationPlan, type CodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js'
 
 export interface ImageArtifactPathContract {
   schema: 'sks.image-artifact-path-contract.v1'
@@ -19,8 +20,10 @@ export interface ImageArtifactPathContract {
     width?: number | null
     height?: number | null
     model_visible_path: string
+    codex_native_followup_strategy: 'model-visible-path' | 'artifact-path'
     followup_edit_hint: string
   }>
+  codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'selected_strategy' | 'proof_policy' | 'blockers' | 'warnings'> | null
   blockers: string[]
 }
 
@@ -28,8 +31,15 @@ export async function buildImageArtifactPathContract(root: string, input: {
   missionId: string
   images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string; route?: string | null; stage?: string | null }>
 }): Promise<ImageArtifactPathContract> {
-  const images = []
+  const images: ImageArtifactPathContract['images'] = []
   const blockers: string[] = []
+  const invocationPlan = await resolveCodexNativeInvocationPlan({
+    root,
+    missionId: input.missionId,
+    route: '$Image',
+    desiredCapability: 'image-followup'
+  }).catch(() => null)
+  const followupStrategy: ImageArtifactPathContract['images'][number]['codex_native_followup_strategy'] = invocationPlan?.selected_strategy === 'codex-app-native' ? 'model-visible-path' : 'artifact-path'
   for (const [index, image] of input.images.entries()) {
     const filePath = path.resolve(root, image.filePath || '')
     const exists = await fileExists(filePath)
@@ -47,8 +57,11 @@ export async function buildImageArtifactPathContract(root: string, input: {
       width: dims?.width ?? null,
       height: dims?.height ?? null,
       model_visible_path: filePath,
+      codex_native_followup_strategy: followupStrategy,
       followup_edit_hint: exists
-        ? `Use this saved local path for follow-up image edits: ${filePath}`
+        ? followupStrategy === 'model-visible-path'
+          ? `Use this model-visible saved local path for follow-up image edits: ${filePath}`
+          : `Use this saved artifact path for follow-up image edits: ${filePath}`
         : 'Image file path missing; do not run visual QA until a real saved file path exists.'
     })
   }
@@ -58,6 +71,12 @@ export async function buildImageArtifactPathContract(root: string, input: {
     mission_id: input.missionId,
     generated_at: nowIso(),
     images,
+    codex_native_invocation_plan: invocationPlan ? {
+      selected_strategy: invocationPlan.selected_strategy,
+      proof_policy: invocationPlan.proof_policy,
+      blockers: invocationPlan.blockers,
+      warnings: invocationPlan.warnings
+    } : null,
     blockers: [...new Set(blockers)]
   }
 }

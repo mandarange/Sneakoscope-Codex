@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { ensureDir, mergeManagedBlock, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { guardContextForRoute, guardedRm } from '../safety/mutation-guard.js'
+import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 
 interface DirectoryScore {
   dir: string
@@ -21,6 +23,10 @@ interface DirectoryLocalAgentsReport {
   updated: string[]
   skipped: string[]
   backup_paths: string[]
+  backups_created: number
+  backups_pruned: string[]
+  unchanged_files: string[]
+  changed_only_backup: true
   blockers: string[]
 }
 
@@ -44,7 +50,8 @@ export async function runCodexInitDeep(input: { root?: string; apply?: boolean; 
   const contextDir = path.join(root, '.sneakoscope', 'context')
   const generatedPath = path.join(contextDir, 'AGENTS.generated.md')
   const markdown = renderGeneratedAgents(selected)
-  const directoryLocalAgents: DirectoryLocalAgentsReport = { created: [], updated: [], skipped: [], backup_paths: [], blockers: [] }
+  const directoryLocalAgents: DirectoryLocalAgentsReport = { created: [], updated: [], skipped: [], backup_paths: [], backups_created: 0, backups_pruned: [], unchanged_files: [], changed_only_backup: true, blockers: [] }
+  const backupRetention = Math.max(0, Number(process.env.SKS_INIT_DEEP_BACKUP_RETENTION || 5) || 5)
   if (input.apply === true) {
     await ensureDir(contextDir)
     await writeTextAtomic(generatedPath, markdown)
@@ -54,12 +61,22 @@ export async function runCodexInitDeep(input: { root?: string; apply?: boolean; 
         try {
           await ensureDir(path.dirname(agentsPath))
           const existing = await fs.readFile(agentsPath, 'utf8').catch(() => '')
+          const next = mergeManagedBlockPreview(existing, 'SKS INIT-DEEP MANAGED SECTION', renderDirectoryAgentsBlock(row))
+          if (existing === next) {
+            directoryLocalAgents.unchanged_files.push(path.relative(root, agentsPath))
+            continue
+          }
           if (existing.trim()) {
-            const backup = `${agentsPath}.sks-backup-${Date.now()}`
+            const beforeHash = hashText(existing)
+            const backup = `${agentsPath}.sks-backup-${beforeHash.slice(0, 12)}-${Date.now()}`
             await fs.copyFile(agentsPath, backup)
             directoryLocalAgents.backup_paths.push(path.relative(root, backup))
+            directoryLocalAgents.backups_created += 1
           }
-          const status = await mergeManagedBlock(agentsPath, 'SKS INIT-DEEP MANAGED SECTION', renderDirectoryAgentsBlock(row))
+          await writeTextAtomic(agentsPath, next)
+          const pruned = await pruneBackups(root, agentsPath, backupRetention)
+          directoryLocalAgents.backups_pruned.push(...pruned.map((file) => path.relative(root, file)))
+          const status = existing.trim() ? (existing.includes('BEGIN SKS INIT-DEEP MANAGED SECTION') ? 'updated' : 'appended') : 'created'
           if (status === 'created') directoryLocalAgents.created.push(path.relative(root, agentsPath))
           else directoryLocalAgents.updated.push(path.relative(root, agentsPath))
         } catch (err) {
@@ -83,6 +100,49 @@ export async function runCodexInitDeep(input: { root?: string; apply?: boolean; 
   }
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'codex-init-deep.json'), report).catch(() => undefined)
   return report
+}
+
+function mergeManagedBlockPreview(current: string, markerName: string, content: string): string {
+  const begin = `<!-- BEGIN ${markerName} -->`
+  const end = `<!-- END ${markerName} -->`
+  const block = `${begin}\n${content.trim()}\n${end}\n`
+  if (!current.trim()) return `${block}\n`
+  const beginIdx = current.indexOf(begin)
+  const endIdx = current.indexOf(end)
+  if (beginIdx >= 0 && endIdx >= beginIdx) {
+    const afterEnd = endIdx + end.length
+    return `${current.slice(0, beginIdx)}${block}${current.slice(afterEnd).replace(/^\n/, '')}`
+  }
+  return `${current.replace(/\s*$/, '\n\n')}${block}\n`
+}
+
+async function pruneBackups(root: string, agentsPath: string, keep: number): Promise<string[]> {
+  if (keep < 1) return []
+  const dir = path.dirname(agentsPath)
+  const base = path.basename(agentsPath)
+  const rows = await fs.readdir(dir).catch(() => [])
+  const backups = rows
+    .filter((name) => name.startsWith(`${base}.sks-backup-`))
+    .map((name) => path.join(dir, name))
+    .sort()
+  const remove = backups.slice(0, Math.max(0, backups.length - keep))
+  const contract = createRequestedScopeContract({
+    route: 'codex-app:init-deep',
+    userRequest: 'Prune only SKS init-deep AGENTS.md backup files after creating a fresh backup.',
+    projectRoot: root
+  })
+  const guard = guardContextForRoute(root, contract, 'prune SKS init-deep backup retention')
+  for (const file of remove) await guardedRm(guard, file, { force: true }).catch(() => undefined)
+  return remove
+}
+
+function hashText(text: string): string {
+  let hash = 2166136261
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 export async function readInitDeepMemory(root: string): Promise<{ path: string; text: string } | null> {
@@ -160,6 +220,7 @@ async function walk(dir: string, root: string, counts: Map<string, { file_count:
     if (row.isDirectory()) {
       if (!['node_modules', 'dist', '.git'].includes(row.name)) await walk(full, root, counts, depth + 1)
     } else if (row.isFile()) {
+      if (row.name.includes('.sks-backup-')) continue
       const relDir = path.relative(root, path.dirname(full)).split(path.sep).join('/')
       const entry = counts.get(relDir) || { file_count: 0, langs: new Set<string>() }
       entry.file_count += 1

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -19,13 +18,13 @@ const TARGET_TYPED_FILES = [
   'src/core/zellij/homebrew-policy.ts',
   'src/core/doctor/doctor-zellij-repair.ts',
   'src/core/codex-app/codex-app-harness-matrix.ts',
-  'src/core/codex-app/lazycodex-analysis.ts',
+  'src/core/codex-native/codex-native-pattern-analysis.ts',
   'src/core/codex-app/codex-skill-sync.ts',
   'src/core/codex-app/codex-agent-role-sync.ts',
   'src/core/codex-app/codex-init-deep.ts',
   'src/core/codex-app/codex-hook-lifecycle.ts',
   'src/core/codex-app/codex-app-execution-profile.ts',
-  'src/core/codex-app/lazycodex-interop-policy.ts',
+  'src/core/codex-native/codex-native-interop-policy.ts',
   'src/core/loops/loop-continuation-enforcer.ts'
 ]
 
@@ -36,7 +35,6 @@ export async function runDirective315Gate(id: string) {
   if (id.startsWith('zellij:')) return zellijGate(id)
   if (id.startsWith('codex-app:hook-approval')) return hookApprovalGate(id)
   if (id.startsWith('codex-app:agent-type')) return agentTypeGate(id)
-  if (id.startsWith('lazycodex:')) return lazycodexGate(id)
   if (id.includes('init-deep') || id.includes('planner-project-memory-deep')) return initDeepGate(id)
   if (id.includes('execution-profile-routing')) return executionProfileRoutingGate(id)
   if (id === 'codex-app:skill-rich-content') return richContentGate(id)
@@ -62,7 +60,7 @@ function codexAppTypeSafety(id: string) {
     'src/core/zellij/zellij-self-heal-types.ts',
     'src/core/codex-app/codex-hook-approval-probe.ts',
     'src/core/codex-app/codex-agent-type-probe.ts',
-    'src/core/codex-app/lazycodex-live-analyzer.ts'
+    'src/core/codex-native/codex-native-reference-source.ts'
   ]
   for (const file of [...required, ...TARGET_TYPED_FILES]) assertGate(fs.existsSync(path.join(root, file)), `missing ${file}`)
   for (const file of TARGET_TYPED_FILES) {
@@ -188,33 +186,6 @@ async function agentTypeGate(id: string) {
   }
 }
 
-async function lazycodexGate(id: string) {
-  const rootDir = await tempRoot(id)
-  const sourceDir = path.join(rootDir, 'lazycodex-source')
-  await fsp.mkdir(sourceDir, { recursive: true })
-  await fsp.writeFile(path.join(sourceDir, 'README.md'), [
-    '# LazyCodex fixture',
-    'npx lazycodex-ai install aliases npx --yes',
-    'codex plugin marketplace add omo@sisyphuslabs',
-    'hook approval requires startup review and trust.',
-    '$ulw-plan and $ulw-loop continue work.',
-    '$init-deep writes hierarchical AGENTS.md.',
-    'spawn_agent supports agent_type with message-role fallback.'
-  ].join('\n'))
-  const liveMod = await importDist('core/codex-app/lazycodex-live-analyzer.js')
-  const live = await liveMod.analyzeLazyCodexLiveSource({ root: rootDir, sourceDir, writeReport: id.includes('blackbox') })
-  assertGate(live.evidence.length >= 5, 'live LazyCodex analysis must collect hashed evidence', live)
-  if (id === 'lazycodex:analysis-with-evidence') {
-    const analysisMod = await importDist('core/codex-app/lazycodex-analysis.js')
-    const report = analysisMod.buildLazyCodexPatternAnalysis(live)
-    assertGate(report.patterns.some((row: any) => row.confidence === 'high' && row.live_evidence.length), 'static analysis must merge live evidence', report)
-  }
-  if (id.includes('blackbox')) {
-    assertGate(fs.existsSync(path.join(rootDir, '.sneakoscope', 'reports', 'lazycodex-live-analysis.json')), 'live analysis report missing')
-  }
-  emitGate(id, { evidence: live.evidence.length })
-}
-
 async function initDeepGate(id: string) {
   const rootDir = await tempRoot(id)
   await fsp.mkdir(path.join(rootDir, 'src/core/zellij'), { recursive: true })
@@ -283,7 +254,7 @@ async function richContentGate(id: string) {
     const codexHome = path.join(rootDir, 'codex-home')
     const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true })
     const role = fs.readFileSync(path.join(codexHome, 'agents', 'sks-checker.toml'), 'utf8')
-    assertGate(role.includes('SKS managed 3.1.5 directive role') && role.includes('Execution role strategy'), 'managed agent role must include rich 3.1.5 content', { role, report })
+    assertGate(role.includes('SKS managed 3.1.6 directive role') && role.includes('Execution role strategy'), 'managed agent role must include rich directive content', { role, report })
     emitGate(id, { roles: report.created.length })
   } finally {
     restoreEnv(previous)

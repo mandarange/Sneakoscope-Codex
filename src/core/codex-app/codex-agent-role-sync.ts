@@ -81,7 +81,7 @@ export async function syncCodexAgentRoles(input: {
     for (const role of DIRECTIVE_ROLES) {
       const file = path.join(targetDir, `${role}.toml`)
       const current = await fs.readFile(file, 'utf8').catch(() => '')
-      if (current && !current.includes('SKS managed 3.1.4 directive role') && !current.includes('SKS managed 3.1.5 directive role')) continue
+      if (current && !current.includes('SKS managed 3.1.4 directive role') && !current.includes('SKS managed 3.1.5 directive role') && !current.includes('SKS managed 3.1.6 directive role') && !current.includes('SKS managed 3.1.6 bounded role')) continue
       await writeTextAtomic(file, roleToml(role, rolePayloads[role]))
       created.push(file)
     }
@@ -111,15 +111,21 @@ function roleToml(role: string, payload: CodexAgentRolePayload | undefined): str
     : `message_role_prefix = "${escapeToml(payload?.message_role_prefix || `Role: ${role}.`)}"`
   return [
     `name = "${role}"`,
-    `description = "SKS managed 3.1.5 directive role: ${role}"`,
+    `description = "SKS managed 3.1.6 directive role: ${role}"`,
     strategyLine,
     'model_reasoning_effort = "medium"',
     role.includes('implementer') ? 'sandbox_mode = "workspace-write"' : 'sandbox_mode = "read-only"',
     'approval_policy = "never"',
     'developer_instructions = """',
-    `You are ${role}. SKS managed 3.1.5 directive role.`,
-    'Use the assigned scope only, cite concrete repo evidence, keep mutation surfaces bounded, and never clobber user files.',
-    'Report blockers as evidence-backed findings and write route artifacts before claiming completion.',
+    `You are ${role}. SKS managed 3.1.6 directive role with bounded ownership.`,
+    'Bounded ownership: use only the assigned owner files/directories and treat memory as guidance, not permission.',
+    role.includes('implementer') ? 'Maker/checker separation: implementer may patch only owner scope and cannot self-approve.' : 'Maker/checker separation: checker is read-only and must reject missing gates or missing proof artifacts.',
+    role.includes('release') ? 'Release verifier: verify version truth, release DAG coverage, package scripts, packlist, and changelog evidence.' : '',
+    role.includes('zellij') ? 'UI/Zellij verifier: inspect readiness status, headless fallback, repair_required, pane proof, and slot telemetry without mutating unrelated UI state.' : '',
+    role.includes('codex') ? 'Codex native verifier: inspect hook approval, agent_type, skill sync, plugin inventory, MCP candidates, and invocation plan artifacts.' : '',
+    'Side effects: no destructive shell, package publish, global config mutation, database mutation, or external service write unless the sealed route contract explicitly allows it.',
+    'Required proof artifacts: cite concrete repo paths, command outputs, and route-local JSON proof before claiming completion.',
+    'Final arbiter: parent integration owns final acceptance; this role supplies evidence and cannot override missing gates.',
     `Execution role strategy: ${payload?.strategy || 'message-role'}. Probe: ${payload?.probe_artifact_path || '.sneakoscope/reports/codex-agent-type-probe.json'}.`,
     '"""',
     ''

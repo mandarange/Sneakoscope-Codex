@@ -25,6 +25,7 @@ import { writeCodexPluginInventoryArtifacts, pluginAppTemplatePolicy } from '../
 import { writeMcpPluginInventoryArtifacts } from '../core/mcp/mcp-plugin-inventory.js';
 import { runDoctorZellijRepair, doctorZellijRepairConsoleLine } from '../core/doctor/doctor-zellij-repair.js';
 import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
+import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -208,6 +209,22 @@ export async function run(_command: any, args: any = []) {
     blockers: [err?.message || String(err)],
     warnings: []
   }));
+  const codexNativeFeatureMatrix = await buildCodexNativeFeatureMatrix({ root, applyRepairs: doctorFix }).catch((err: any) => ({
+    schema: 'sks.codex-native-feature-matrix.v1',
+    ok: false,
+    codex_cli: { available: Boolean(codex.bin), version: codex.version || null, bin: codex.bin || null },
+    features: {},
+    invocation_defaults: {
+      loop_worker_role_strategy: 'message-role',
+      qa_visual_review_strategy: 'blocked',
+      research_source_strategy: 'local-files',
+      image_followup_strategy: 'blocked',
+      hook_evidence_policy: 'unknown-do-not-count',
+      skill_bridge_strategy: 'cli-only'
+    },
+    blockers: [err?.message || String(err)],
+    warnings: []
+  }));
   const pkgBytes = await dirSize(root).catch(() => 0);
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,
@@ -234,6 +251,7 @@ export async function run(_command: any, args: any = []) {
     ]
   });
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
+  const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
   const result = {
     schema: 'sks.doctor-status.v1',
     ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false),
@@ -267,6 +285,8 @@ export async function run(_command: any, args: any = []) {
       mcp_plugin_inventory: (mcpPluginInventory as any)?.candidates || null
     },
     codex_app_harness_matrix: codexAppHarnessMatrix,
+    codex_native_feature_matrix: codexNativeFeatureMatrix,
+    runtime_readiness: runtimeReadiness,
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
@@ -298,6 +318,13 @@ export async function run(_command: any, args: any = []) {
   console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
+  console.log('SKS Runtime Readiness:');
+  console.log(`  Zellij: ${runtimeReadiness.zellij}`);
+  console.log(`  Codex Native: ${runtimeReadiness.codex_native}`);
+  console.log(`  Loop Mesh: ${runtimeReadiness.loop_mesh}`);
+  console.log(`  QA Visual: ${runtimeReadiness.qa_visual}`);
+  console.log(`  Research Sources: ${runtimeReadiness.research_sources}`);
+  for (const action of runtimeReadiness.repair_actions) console.log(`  Repair: ${action}`);
   console.log('Codex App Harness:');
   console.log(`  plugins: ${(codexAppHarnessMatrix as any).app_features?.plugin_json ? 'ok' : 'degraded'}`);
   console.log(`  hook approval: ${(codexAppHarnessMatrix as any).app_features?.hook_approval_state_detectable ? 'ok' : 'unknown'}`);
@@ -376,6 +403,39 @@ export async function run(_command: any, args: any = []) {
     for (const action of ready.next_actions) console.log(`  - ${action}`);
   }
   if (!result.ok) process.exitCode = 1;
+}
+
+function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
+  const defaults = matrix?.invocation_defaults || {};
+  const hookPolicy = defaults.hook_evidence_policy || 'unknown-do-not-count';
+  const agentStrategy = defaults.loop_worker_role_strategy || 'message-role';
+  const zellijStatus = zellijReadiness?.status === 'ok'
+    ? 'ok'
+    : zellijReadiness?.cli_ready ? 'headless_available' : 'repair_required';
+  const codexNative = matrix?.ok === true
+    ? 'ok'
+    : matrix?.codex_cli?.available ? 'degraded' : 'blocked';
+  const repairActions: string[] = [];
+  if (zellijStatus === 'repair_required') repairActions.push('sks doctor --fix --yes');
+  if (codexNative !== 'ok') repairActions.push('sks doctor --fix --repair-codex-native --yes');
+  if (matrix?.features?.project_memory?.ok !== true) repairActions.push('sks codex-native init-deep --apply --directory-local');
+  if (hookPolicy !== 'approved-only') repairActions.push('hook-derived evidence will not count until Codex hook approval is approved');
+  return {
+    schema: 'sks.runtime-readiness-story.v1',
+    zellij: zellijStatus,
+    codex_native: codexNative,
+    loop_mesh: agentStrategy === 'agent_type' ? 'ok' : 'fallback',
+    qa_visual: defaults.qa_visual_review_strategy || 'blocked',
+    research_sources: defaults.research_source_strategy || 'local-files',
+    hook_evidence_policy: hookPolicy,
+    agent_role_strategy: agentStrategy,
+    notes: [
+      ...(zellijStatus === 'headless_available' ? ['MAD can run with --headless; live panes require repair'] : []),
+      ...(hookPolicy !== 'approved-only' ? ['hook-derived evidence will not count'] : []),
+      ...(agentStrategy !== 'agent_type' ? ['message-role fallback active'] : [])
+    ],
+    repair_actions: repairActions
+  };
 }
 
 // Assemble the explicit Zellij readiness block for `doctor --json` from the

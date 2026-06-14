@@ -65,7 +65,12 @@ export async function planLoopsFromRequest(input: {
   const memoryHints = await readInitDeepMemoryHints(input.root, scopePathsForNodes(nodes)).catch(() => []);
   const nodesWithMemory = nodes.map((node) => {
     const hints = memoryHints.filter((hint) => hintAppliesToNode(hint, node)).slice(0, 5);
-    return hints.length ? { ...node, memory_hints: hints } : node;
+    return {
+      ...node,
+      ...(hints.length ? { memory_hints: hints } : {}),
+      memory_hints_used: hints.length,
+      memory_did_not_expand_scope: true as const
+    };
   });
   const plan: SksLoopPlan = {
     schema: 'sks.loop-plan.v1',
@@ -103,7 +108,8 @@ export async function planLoopsFromRequest(input: {
     plan.project_memory = {
       source: projectMemory.path,
       injected: true,
-      summary: projectMemory.text.split(/\r?\n/).filter((line) => /^##\s+/.test(line)).slice(0, 8)
+      summary: projectMemory.text.split(/\r?\n/).filter((line) => /^##\s+/.test(line)).slice(0, 8),
+      memory_did_not_expand_scope: true
     };
   }
   const validation = validateLoopPlan(plan);

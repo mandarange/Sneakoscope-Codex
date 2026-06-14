@@ -1,5 +1,6 @@
 import type { NarutoTaskHints } from './naruto-task-hints.js'
 import type { CodexAppExecutionProfile } from '../codex-app/codex-app-types.js'
+import type { CodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js'
 
 export type NarutoWorkKind =
   | 'implementation'
@@ -75,6 +76,7 @@ export interface NarutoWorkItem {
     allocation_required: boolean
   }
   codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
+  codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'route' | 'desired_capability' | 'selected_strategy' | 'required_artifacts' | 'proof_policy' | 'env' | 'blockers' | 'warnings'>
 }
 
 export interface NarutoWorkGraph {
@@ -90,6 +92,7 @@ export interface NarutoWorkGraph {
   write_allowed_count: number
   worktree_policy: NarutoWorktreePolicy
   codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
+  codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'route' | 'desired_capability' | 'selected_strategy' | 'required_artifacts' | 'proof_policy' | 'env' | 'blockers' | 'warnings'>
   blockers: string[]
   ok: boolean
 }
