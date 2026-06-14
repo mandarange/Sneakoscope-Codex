@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 
+## [3.1.5] - 2026-06-14
+
+### Added
+
+- Typed Codex App and Zellij self-heal contract surfaces for hook approval, `agent_type`, execution profile, and dry-run repair planning.
+- Live LazyCodex source evidence analysis with hashed snippets and merged confidence in the pattern analysis report.
+- Init-deep directory-local managed `AGENTS.md` sections, backups, and Loop node `memory_hints`.
+- Execution profile propagation through Loop/Naruto, QA-LOOP, and Research artifacts.
+- Release gates for no-`@ts-nocheck` core coverage, type-surface checks, probe blackboxes, rich skill/agent content, and execution-profile routing.
+
+### Fixed
+
+- `doctor --fix --dry-run` and `sks --mad --dry-run` now plan Zellij repair mutations without launching or installing.
+- Zellij launch repair status now distinguishes `headless_fallback` and `repair_required`.
+- Codex App harness matrix no longer hardcodes unknown hook approval or env-only `agent_type` support.
+- Core Codex App, Zellij, Doctor, Loop, and Naruto target files are typechecked without `@ts-nocheck`.
+
 
 ## [3.1.4] - 2026-06-13
 

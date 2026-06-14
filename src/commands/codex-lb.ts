@@ -268,16 +268,15 @@ async function resolveNewApiKey(args: any = []): Promise<string> {
 }
 
 function shapeCodexLbStatus(status: any = {}) {
-  const mode = status.env_loader?.api_key?.source === 'env-file'
-    ? 'durable_env_file'
-    : status.env_loader?.api_key?.source === 'keychain'
-      ? 'durable_keychain'
-      : status.env_loader?.api_key?.source === 'process.env'
-        ? 'process_only_ephemeral'
-        : 'none';
+  const modes: any[] = [];
+  if (status.env_file && status.env_key_configured) modes.push('durable_env_file');
+  if (status.env_loader?.api_key?.source === 'keychain' || status.env_loader?.keychain?.status === 'present') modes.push('durable_keychain');
+  if (status.launch_environment?.status === 'synced') modes.push('durable_launchctl');
+  if (!modes.length && status.env_loader?.api_key?.source === 'process.env') modes.push('process_only_ephemeral');
+  const mode = modes[0] || 'none';
   const persistence = codexLbPersistenceSummary({
-    selectedModes: mode === 'none' ? [] : [mode],
-    appliedModes: mode === 'none' ? ['none'] : [mode],
+    selectedModes: modes.length ? modes : [],
+    appliedModes: modes.length ? modes : mode === 'none' ? ['none'] : [mode],
     processOnly: mode === 'process_only_ephemeral'
   });
   return {

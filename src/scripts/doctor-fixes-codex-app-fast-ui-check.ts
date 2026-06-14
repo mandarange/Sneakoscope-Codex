@@ -9,12 +9,13 @@ const codexHome = path.join(root, 'home', '.codex')
 await fs.mkdir(path.join(root, '.codex'), { recursive: true })
 await fs.mkdir(codexHome, { recursive: true })
 await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n')
-await fs.writeFile(path.join(codexHome, 'config.toml'), '# SKS forced fast UI during legacy install\nservice_tier = "fast"\n[features]\nfast_mode = false # user disabled, must remain untouched\n')
+await fs.writeFile(path.join(codexHome, 'config.toml'), '# SKS forced fast UI during legacy install\nmodel_provider = "codex-lb"\nservice_tier = "fast"\n[features]\nfast_mode = false # user disabled, must remain untouched\n\n[profiles.sks-fast-high]\nmodel = "gpt-5.5"\nservice_tier = "fast"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false\n')
 
 const plan = await repairCodexAppFastUi(root, { codexHome, apply: false })
 const repaired = await repairCodexAppFastUi(root, { codexHome, apply: true })
 const projectAfter = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8')
 const homeAfter = await fs.readFile(path.join(codexHome, 'config.toml'), 'utf8')
+const homeTopLevel = homeAfter.split(/\n\s*\[/)[0] || ''
 const backups = repaired.actions.filter((action: any) => action.changed).map((action: any) => action.backup_path).filter(Boolean)
 const unsafeRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-doctor-fast-ui-unsafe-'))
 const unsafeCodexHome = path.join(unsafeRoot, 'home', '.codex')
@@ -28,8 +29,12 @@ const ok = plan.fast_selector === 'manual_action_required'
   && repaired.safe_auto_apply === true
   && backups.length >= 2
   && !/model_provider\s*=/.test(projectAfter)
-  && !/service_tier\s*=/.test(homeAfter)
+  && !/service_tier\s*=/.test(homeTopLevel)
   && /fast_mode = false/.test(homeAfter)
+  && /model_provider = "codex-lb"/.test(homeAfter)
+  && /\[profiles\.sks-fast-high\]/.test(homeAfter)
+  && /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/.test(homeAfter)
+  && /\[model_providers\.codex-lb\]/.test(homeAfter)
   && unsafePlan.requires_confirmation === true
   && unsafePlan.safe_auto_apply === false
 emit({ schema: 'sks.doctor-fixes-codex-app-fast-ui-check.v1', ok, plan, repaired, unsafe_plan: unsafePlan, project_after: projectAfter, home_after: homeAfter, blockers: ok ? [] : ['doctor_fixes_codex_app_fast_ui_check_failed'] })

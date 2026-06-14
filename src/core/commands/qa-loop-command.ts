@@ -138,6 +138,7 @@ async function qaLoopRun(args: any) {
   const mock = flag(args, '--mock');
   const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaGate.qa_report_file;
+  const executionProfile = await readJson(path.join(dir, 'qa-loop', 'execution-profile.json'), null);
   const uiRequired = qaUiRequired(contract.answers || {});
   const capabilityArtifact = await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
   const usageArtifact = await writeCodexAccountUsageArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), snapshot: null }));
@@ -263,7 +264,7 @@ async function qaLoopRun(args: any) {
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
   const nativeRoster = requestedAgents === 3 ? nativeAgentPlan : null;
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command' });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command', env: { SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown', SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role' } });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (mock) {
@@ -332,7 +333,7 @@ async function qaLoopRun(args: any) {
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     const cycleDir = path.join(dir, 'qa-loop', `cycle-${cycle}`);
     const outputFile = path.join(cycleDir, 'final.md');
-    const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile, imagePathContract: imagePathContract?.contract || null, appHandoff });
+    const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile, imagePathContract: imagePathContract?.contract || null, appHandoff, executionProfile });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.start', cycle });
     const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, logDir: cycleDir });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });

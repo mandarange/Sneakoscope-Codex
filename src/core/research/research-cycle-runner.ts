@@ -77,6 +77,7 @@ export async function runResearchCycle(inputOrDir: ResearchCycleInput | string, 
     blockers: [...new Set(blockers)],
     stages: stageResults.map((stage) => stage.stage_id),
     stage_results: stageResults,
+    codex_app_execution_profile: input.plan?.codex_app_execution_profile || null,
     parallelism: {
       max_parallel_stages: maxParallel,
       max_observed_parallel: maxObservedParallel,

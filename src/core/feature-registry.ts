@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS } from './routes.js';
+import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, ROUTES } from './routes.js';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.js';
 import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.js';
 import { PACKAGE_VERSION, exists, nowIso, packageRoot, readJson, readText, runProcess, writeJsonAtomic, writeTextAtomic, type JsonData } from './fsx.js';
@@ -52,6 +52,9 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   }
 
   for (const route of DOLLAR_COMMANDS) features.push(routeFeature(route));
+  for (const route of ROUTES.filter((entry: any) => entry.hidden === true)) {
+    features.push(routeFeature(route));
+  }
   features.push(nativeAgentIntakeFeature());
   features.push(agentProofEvidenceFeature());
   for (const skillName of skillNames) {

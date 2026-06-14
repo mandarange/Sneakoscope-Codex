@@ -1,4 +1,3 @@
-// @ts-nocheck
 import readline from 'node:readline'
 
 export interface HomebrewPolicyDecision {
@@ -39,7 +38,7 @@ export function resolveHomebrewInstallPolicy(input: {
   }
 }
 
-export function homebrewMissingDoctorMessage() {
+export function homebrewMissingDoctorMessage(): string {
   return [
     'Zellij repair: Homebrew missing. Run:',
     '  sks doctor --fix --install-homebrew --yes',

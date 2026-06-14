@@ -109,6 +109,7 @@ const FIXTURES = Object.freeze({
   'route-from-chat-img': fixture('mock', '$From-Chat-IMG visual work order route', ['from-chat-img-work-order.md', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass'),
   'route-ux-review': fixture('mock', '$UX-Review image UX alias route', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
   'route-db': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['completion-proof.json', 'db-operation-report.json'], 'pass'),
+  'route-mad-db': fixture('mock', '$MAD-DB one-cycle DB break-glass route contract', ['mad-db-capability.json', 'mad-db-ledger.jsonl', 'completion-proof.json'], 'pass'),
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'pass'),
   'route-sks': fixture('mock', '$SKS control-surface route', ['completion-proof.json'], 'pass'),

@@ -1,6 +1,6 @@
-// @ts-nocheck
 import path from 'node:path'
-import { nowIso, writeJsonAtomic } from '../fsx.js'
+import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { analyzeLazyCodexLiveSource, type LazyCodexLiveAnalysis } from './lazycodex-live-analyzer.js'
 
 export interface LazyCodexPatternAnalysis {
   schema: 'sks.lazycodex-pattern-analysis.v1'
@@ -13,11 +13,22 @@ export interface LazyCodexPatternAnalysis {
     sks_adoption: 'adopt' | 'adapt' | 'reject' | 'watch'
     rationale: string
     target_modules: string[]
+    confidence: 'low' | 'medium' | 'high'
+    live_evidence: string[]
   }>
   blockers: string[]
+  warnings: string[]
+  live_analysis_path: string | null
 }
 
-export function buildLazyCodexPatternAnalysis(): LazyCodexPatternAnalysis {
+export function buildLazyCodexPatternAnalysis(live: LazyCodexLiveAnalysis | null = null): LazyCodexPatternAnalysis {
+  const liveByPattern = new Map(live?.patterns.map((row) => [row.id, row]) || [])
+  const liveEvidenceByPattern = new Map<string, string[]>()
+  for (const row of live?.evidence || []) {
+    const list = liveEvidenceByPattern.get(row.pattern_id) || []
+    list.push(`${row.file}:${row.lines?.join('-') || 'unknown'}:${row.snippet_hash}`)
+    liveEvidenceByPattern.set(row.pattern_id, list)
+  }
   return {
     schema: 'sks.lazycodex-pattern-analysis.v1',
     source_repo: 'code-yeongyu/lazycodex',
@@ -37,33 +48,54 @@ export function buildLazyCodexPatternAnalysis(): LazyCodexPatternAnalysis {
       pattern('hook-continuation', 'Hook lifecycle and continuation enforcer', ['Directive: UserPromptSubmit, PreToolUse, PostToolUse, Stop, Notification map to pipeline actions.'], 'adopt', 'Map lifecycle and add Loop continuation proof adapter.', ['src/core/codex-app/codex-hook-lifecycle.ts', 'src/core/loops/loop-continuation-enforcer.ts']),
       pattern('skill-mcp-slashcommand', 'Skill MCP and slashcommand tool', ['Directive: OmO exposes skill MCP and slashcommand tools.'], 'adapt', 'Report MCP candidates and SKS route skill availability without assuming external plugin behavior.', ['src/core/codex-app/codex-app-harness-matrix.ts']),
       pattern('lsp-ast-grep', 'LSP/AST-grep optional tooling', ['Directive: LSP/AST-grep are optional-but-first-class loop gates/tools.'], 'watch', 'Use as future specialist gates; do not add unrequested fallback tooling now.', ['src/core/loops/loop-gate-selector.ts'])
-    ],
-    blockers: []
+    ].map((row) => {
+      const livePattern = liveByPattern.get(row.id)
+      const liveEvidence = liveEvidenceByPattern.get(row.id) || []
+      return {
+        ...row,
+        evidence: [...row.evidence, ...liveEvidence],
+        confidence: liveEvidence.length ? 'high' as const : livePattern ? 'medium' as const : 'low' as const,
+        live_evidence: liveEvidence
+      }
+    }),
+    blockers: live?.blockers || [],
+    warnings: live?.warnings || (live ? [] : ['live_analysis_not_available_static_only']),
+    live_analysis_path: live ? '.sneakoscope/reports/lazycodex-live-analysis.json' : null
   }
 }
 
 export async function writeLazyCodexPatternAnalysis(root: string): Promise<LazyCodexPatternAnalysis> {
-  const report = buildLazyCodexPatternAnalysis()
+  const live = await analyzeLazyCodexLiveSource({ root, writeReport: true }).catch(() => null)
+  const report = buildLazyCodexPatternAnalysis(live)
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'lazycodex-analysis.json'), report)
+  await writeTextAtomic(path.join(root, 'docs', 'lazycodex-analysis.md'), renderLazyCodexAnalysisMarkdown(report)).catch(() => undefined)
   return report
 }
 
 export function renderLazyCodexAnalysisMarkdown(report: LazyCodexPatternAnalysis): string {
-  const rows = report.patterns.map((p) => `| ${p.id} | ${p.sks_adoption} | ${p.rationale.replace(/\|/g, '\\|')} |`).join('\n')
+  const rows = report.patterns.map((p) => `| ${p.id} | ${p.sks_adoption} | ${p.confidence} | ${p.live_evidence.length} | ${p.rationale.replace(/\|/g, '\\|')} |`).join('\n')
   return [
     '# LazyCodex / OmO Pattern Analysis',
     '',
     `Source repo: \`${report.source_repo}\``,
     `Analyzed at: \`${report.analyzed_at}\``,
+    `Live analysis: \`${report.live_analysis_path || 'not available'}\``,
     '',
-    '| Pattern | Adoption | Rationale |',
-    '|---|---|---|',
+    '| Pattern | Adoption | Confidence | Live Evidence | Rationale |',
+    '|---|---|---|---:|---|',
     rows,
     '',
-    'This artifact is deterministic and based on the SKS 3.1.4 directive plus current SKS repository surfaces. Live LazyCodex runtime behavior remains a separate verification concern.'
+    'This artifact combines static directive mapping with hashed current-source evidence when available. Long source excerpts are intentionally omitted.'
   ].join('\n')
 }
 
-function pattern(id: string, title: string, evidence: string[], sks_adoption: LazyCodexPatternAnalysis['patterns'][number]['sks_adoption'], rationale: string, target_modules: string[]) {
+function pattern(
+  id: string,
+  title: string,
+  evidence: string[],
+  sks_adoption: LazyCodexPatternAnalysis['patterns'][number]['sks_adoption'],
+  rationale: string,
+  target_modules: string[]
+): Omit<LazyCodexPatternAnalysis['patterns'][number], 'confidence' | 'live_evidence'> {
   return { id, title, evidence, sks_adoption, rationale, target_modules }
 }

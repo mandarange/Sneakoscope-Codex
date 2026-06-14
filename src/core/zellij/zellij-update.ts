@@ -25,7 +25,7 @@ export interface ZellijUpdateNotice {
 }
 
 export interface ZellijUpgradeResult {
-  status: 'upgraded' | 'installed' | 'failed' | 'manual_required' | 'noop'
+  status: 'upgraded' | 'installed' | 'failed' | 'manual_required' | 'noop' | 'headless_fallback' | 'repair_required'
   before_version: string | null
   after_version: string | null
   latest_version: string | null
@@ -251,8 +251,9 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
   autoApprove?: boolean
   installHomebrew?: boolean
   allowHeadlessFallback?: boolean
+  dryRun?: boolean
 } = {}): Promise<{
-  status: 'skipped' | 'current' | 'missing' | 'available' | 'skipped_by_user' | 'upgraded' | 'installed' | 'manual_required' | 'failed' | 'noop'
+  status: 'skipped' | 'current' | 'missing' | 'available' | 'skipped_by_user' | 'upgraded' | 'installed' | 'manual_required' | 'failed' | 'noop' | 'headless_fallback' | 'repair_required'
   current: string | null
   latest: string | null
   command: string | null
@@ -284,14 +285,22 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
         interactive: mode === 'interactive-prompt',
         installHomebrew: opts.installHomebrew === true || list.includes('--install-homebrew'),
         allowHeadlessFallback: opts.allowHeadlessFallback === true,
+        dryRun: opts.dryRun === true || list.includes('--dry-run'),
         missionDir: opts.missionDir || null,
         env
       })
       if (repaired.strategy === 'headless-fallback') console.log('Zellij repair: headless fallback selected (live_panes=false).')
+      else if (repaired.dry_run) console.log(`Zellij repair: dry_run planned ${repaired.command || 'none'}`)
       else if (repaired.ok && repaired.command) console.log(`Zellij repair: ${repaired.strategy} via ${repaired.command}`)
       else if (!repaired.ok) console.log(`Zellij repair required. Run: ${repaired.command || notice.upgrade_command}`)
+      const repairedStatus =
+        repaired.strategy === 'headless-fallback' ? 'headless_fallback'
+          : !repaired.ok || repaired.strategy === 'manual-required' ? 'repair_required'
+            : repaired.strategy === 'brew-upgrade-zellij' ? 'upgraded'
+              : repaired.strategy === 'none-current' ? 'noop'
+                : 'installed'
       return {
-        status: repaired.ok ? (repaired.strategy === 'headless-fallback' ? 'missing' : 'installed') : 'manual_required',
+        status: repairedStatus,
         current: repaired.after.version || repaired.before.version,
         latest: repaired.latest_version,
         command: repaired.command,
