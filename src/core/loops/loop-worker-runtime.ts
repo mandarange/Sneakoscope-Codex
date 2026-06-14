@@ -8,6 +8,7 @@ import { loopNodeRoot } from './loop-artifacts.js';
 import { computeLoopConcurrencyBudget, loopWorkerBudgetFor } from './loop-concurrency-budget.js';
 import { decideLoopFixturePolicy, writeLoopFixturePolicyDecision, type LoopFixturePolicyDecision } from './loop-fixture-policy.js';
 import { buildLoopCheckerPrompt, buildLoopMakerPrompt } from './loop-worker-prompts.js';
+import { resolveCodexAppExecutionProfile } from '../codex-app/codex-app-execution-profile.js';
 
 export interface LoopWorkerRunInput {
   root: string;
@@ -94,6 +95,7 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
   // The loop worktree is still where workers cwd + write: it is threaded through the per-worker
   // `worktree` opt below, which launchWorker reads as ctx.opts.worktree -> workerCwd.
   const insideZellij = Boolean(process.env.SKS_ZELLIJ_SESSION_NAME || process.env.ZELLIJ);
+  const executionProfile = await resolveCodexAppExecutionProfile({ root: input.root }).catch(() => null);
   const visiblePaneCap = Math.min(resolveLoopVisiblePaneCap(workerCount), Math.max(1, workerCount));
   const zellijPlacementOpts = insideZellij ? {
     workerPlacement: 'zellij-pane' as const,
@@ -120,7 +122,9 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
       SKS_LOOP_ID: input.node.loop_id,
       SKS_LOOP_PHASE: input.phase,
       SKS_LOOP_MAIN_ROOT: input.root,
-      SKS_LOOP_WORKER_BUDGET: String(workerCount)
+      SKS_LOOP_WORKER_BUDGET: String(workerCount),
+      SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown',
+      SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role'
     },
     ...(input.worktree?.path ? {
       worktree: {

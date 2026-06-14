@@ -22,6 +22,7 @@ import { checkSksUpdateNotice } from '../update/update-notice.js';
 import { createMadDbCapability, MAD_DB_ACK } from '../mad-db/mad-db-capability.js';
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js';
+import { repairZellijForSks } from '../zellij/zellij-self-heal.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -33,19 +34,53 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return console.log(JSON.stringify(profile, null, 2));
   }
   const update = { status: 'notice_only', non_blocking: true };
+  const rawArgs = (args || []).map((arg: any) => String(arg));
+  const headlessZellij = rawArgs.includes('--headless') || process.env.SKS_MAD_ALLOW_HEADLESS === '1';
+  const skipZellijRepair = rawArgs.includes('--skip-zellij-repair') || rawArgs.includes('--no-auto-install-zellij');
+  const launchRoot = process.cwd();
+  if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
   const codexUpdate = deps.maybePromptCodexUpdateForLaunch ? await deps.maybePromptCodexUpdateForLaunch(args, { label: 'MAD launch' }) : { status: 'skipped' };
   if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
     console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
     process.exitCode = 1;
     return;
   }
-  // Zellij is checked the same way Codex is, but it stays NON-blocking: a
-  // failed or skipped zellij upgrade never prevents the MAD launch.
-  const zellijUpdate = deps.maybePromptZellijUpdateForLaunch ? await deps.maybePromptZellijUpdateForLaunch(args, { label: 'MAD launch' }).catch(() => ({ status: 'error' })) : { status: 'skipped' };
-  void zellijUpdate;
-  const depStatus = deps.ensureMadLaunchDependencies ? await deps.ensureMadLaunchDependencies(args) : { ready: true, actions: [] };
+  const zellijUpdate = skipZellijRepair
+    ? { status: 'skipped', command: 'sks doctor --fix --yes' }
+    : deps.maybePromptZellijUpdateForLaunch
+      ? await deps.maybePromptZellijUpdateForLaunch(args, {
+          label: 'MAD launch',
+          root: launchRoot,
+          selfHealOnMissing: true,
+          autoApprove: rawArgs.includes('--yes') || rawArgs.includes('-y'),
+          installHomebrew: rawArgs.includes('--install-homebrew'),
+          allowHeadlessFallback: headlessZellij
+        }).catch(() => ({ status: 'error', command: 'sks doctor --fix --yes' }))
+      : await repairZellijForSks({
+          root: launchRoot,
+          requestedBy: 'sks --mad',
+          fixRequested: true,
+          autoApprove: rawArgs.includes('--yes') || rawArgs.includes('-y'),
+          interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.SKS_NO_QUESTION !== '1'),
+          installHomebrew: rawArgs.includes('--install-homebrew'),
+          allowHeadlessFallback: headlessZellij
+        });
+  const zellijRepairBlocked = !headlessZellij && (
+    (zellijUpdate as any).status === 'manual_required'
+    || (zellijUpdate as any).strategy === 'manual-required'
+    || (zellijUpdate as any).ok === false
+  );
+  if (zellijRepairBlocked) {
+    console.error('SKS MAD launch blocked by Zellij repair_required.');
+    console.error(`Run: ${(zellijUpdate as any).command || 'sks doctor --fix --yes'}`);
+    process.exitCode = 1;
+    return { ok: false, status: 'repair_required', command: (zellijUpdate as any).command || 'sks doctor --fix --yes', zellij_repair: zellijUpdate };
+  }
+  const depStatus = skipZellijRepair && deps.ensureMadLaunchDependencies
+    ? await deps.ensureMadLaunchDependencies(args)
+    : { ready: true, actions: [] };
   if (!depStatus.ready) {
-    console.error('SKS MAD launch blocked by missing dependencies.');
+    console.error('SKS MAD launch blocked by required Zellij dependency.');
     for (const action of depStatus.actions) deps.printDepsInstallAction?.(action);
     process.exitCode = 1;
     return;
@@ -56,8 +91,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return;
   }
   const profile = buildMadHighLaunchProfileNoWrite();
-  const launchRoot = process.cwd();
-  if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
   const uiSnapshotId = Date.now().toString(36);
   const beforeUi = await writeCodexAppUiSnapshot(launchRoot, `mad-before-${uiSnapshotId}`).catch(() => null);
   // launchFast skips the redundant live-`codex exec` config probe (up to ~20s, run
@@ -65,7 +98,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // later when the Zellij session opens. All filesystem/permission/EPERM/symlink/ACL
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
-  const rawArgs = (args || []).map((arg: any) => String(arg));
   const madDbRequested = rawArgs.includes('--mad-db');
   const madDbAck = readOption(rawArgs, '--ack', '');
   if (madDbRequested && madDbAck !== MAD_DB_ACK) {
@@ -133,7 +165,9 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   };
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
   const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
-  const launch: any = await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+  const launch: any = headlessZellij
+    ? await writeMadHeadlessZellijFallback(madLaunch, workspace)
+    : await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const afterLaunchUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-launch-${uiSnapshotId}`).catch(() => null) : null;
   const launchUiDiff = beforeUi && afterLaunchUi ? diffCodexAppUiSnapshots(beforeUi, afterLaunchUi) : null;
   if (launchUiDiff) {
@@ -152,7 +186,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     schema: 'sks.zellij-initial-ui.v1',
     ok: true,
     mission_id: madLaunch.mission_id,
-    session_name: launch.session_name,
+    session_name: launch.session_name || null,
+    live_panes: !headlessZellij,
     initial_panes: 'main-only',
     dashboard_created: false,
     worker_panes_created: 0,
@@ -161,16 +196,16 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, profile, {
     env: {
       ...madSksEnv,
-      SKS_ZELLIJ_SESSION_NAME: launch.session_name
+      ...(launch.session_name ? { SKS_ZELLIJ_SESSION_NAME: launch.session_name } : {})
     },
-    zellijSessionName: launch.session_name,
-    workerPlacement: shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
+    zellijSessionName: launch.session_name || null,
+    workerPlacement: headlessZellij ? 'process' : shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
     zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || 8)
   });
   // The launcher only creates a detached background session. In an interactive
   // terminal, immediately attach so the session actually opens for the user
   // instead of leaving them to copy/paste the attach command by hand.
-  if (shouldAutoAttachZellij(args)) {
+  if (!headlessZellij && shouldAutoAttachZellij(args)) {
     console.log(`Opening Zellij session: ${launch.session_name} (detach with Ctrl+q, re-attach later with: ${launch.attach_command_with_env})`);
     const attached = attachZellijSessionInteractive(launch.session_name, { cwd: process.cwd(), configPath: launch.clipboard_config_path });
     if (!attached.ok) {
@@ -180,6 +215,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return launch;
   }
   if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
+  if (headlessZellij) console.log('MAD launch running headless: live_panes=false.');
   return launch;
 }
 
@@ -368,6 +404,28 @@ function formatMadZellijAction(launch: any) {
   return `${blockers}${detail}${report}`;
 }
 
+async function writeMadHeadlessZellijFallback(madLaunch: any, workspace: string) {
+  const report = {
+    schema: 'sks.zellij-session.v1',
+    generated_at: nowIso(),
+    ok: true,
+    kind: 'mad',
+    status: 'headless-fallback',
+    live_panes: false,
+    mission_id: madLaunch.mission_id,
+    session_name: null,
+    workspace,
+    root: madLaunch.root,
+    cwd: path.resolve(process.cwd()),
+    attach_command_with_env: null,
+    blockers: [],
+    warnings: ['zellij_headless_fallback_live_panes_false']
+  };
+  await writeJsonAtomic(path.join(madLaunch.dir, 'zellij-session.json'), report);
+  await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.zellij_headless_fallback', live_panes: false });
+  return report;
+}
+
 async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: any[] = []) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
@@ -466,6 +524,9 @@ function madLaunchOnlyFlags() {
     '--attach',
     '--no-attach',
     '--no-auto-install-zellij',
+    '--skip-zellij-repair',
+    '--install-homebrew',
+    '--headless',
     '--allow-system',
     '--allow-db-write',
     '--allow-package-install',
@@ -519,6 +580,7 @@ export function defaultMadSwarmBackend(args: any[] = [], opts: any = {}) {
   if (process.env.SKS_MAD_SWARM_BACKEND) return String(process.env.SKS_MAD_SWARM_BACKEND);
   if (opts.backend) return String(opts.backend);
   if (list.includes('--json') || list.includes('--no-attach') || opts.nonInteractive === true) return 'codex-sdk';
+  if (list.includes('--headless') || process.env.SKS_MAD_ALLOW_HEADLESS === '1') return 'codex-sdk';
   return 'zellij';
 }
 

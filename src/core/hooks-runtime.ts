@@ -14,6 +14,7 @@ import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard
 import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { appendMissionStatus } from './recallpulse.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
+import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
 import {
   buildCompactContinue,
   buildPermissionRequestAllow,
@@ -608,6 +609,18 @@ function clarificationPauseBlockReason(state: any = {}) {
 
 async function hookStop(root: any, state: any, payload: any, noQuestion: any) {
   const last = extractLastMessage(payload);
+  if (state?.mode === 'LOOP' || state?.route === 'Loop' || state?.route_command === '$Loop') {
+    const missionId = state?.mission_id;
+    if (missionId) {
+      const continuation = await evaluateLoopContinuation({ root, missionId }).catch(() => null);
+      if (continuation?.should_continue) {
+        return {
+          decision: 'block',
+          reason: `SKS Loop continuation required. Resume with: ${continuation.resume_instruction}`
+        };
+      }
+    }
+  }
   if (await consumeCodexGitActionStopBypass(root, payload)) {
     return {
       continue: true,

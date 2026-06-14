@@ -134,7 +134,7 @@ function compactReusableResult(result) {
 }
 
 function normalizedParallelRuntime(result) {
-  const proof = result.parallel_runtime || {}
+  const proof = hydrateParallelRuntimeProof(result.parallel_runtime || {})
   const safeActiveWorkers = Number(result.concurrency_governor?.safe_active_workers || 0)
   const requiredActiveWorkers = Math.max(16, Math.min(requestedWorkerCount, safeActiveWorkers || Number(result.target_active_slots || 0) || requestedWorkerCount))
   const requiredObservedActiveWorkers = requiredObservedWorkers(requiredActiveWorkers)
@@ -151,6 +151,19 @@ function normalizedParallelRuntime(result) {
     accepted_blockers: acceptedPeakOnly ? blockers : [],
     required_active_workers: requiredActiveWorkers,
     required_observed_active_workers: requiredObservedActiveWorkers
+  }
+}
+
+function hydrateParallelRuntimeProof(proof) {
+  if (!proof?.proof_path) return proof || {}
+  const safeRel = String(proof.proof_path || '').replace(/^\/+/, '')
+  const resolved = path.resolve(root, safeRel)
+  if (!resolved.startsWith(`${root}${path.sep}`) || !fs.existsSync(resolved)) return proof || {}
+  try {
+    const full = JSON.parse(fs.readFileSync(resolved, 'utf8'))
+    return { ...full, ...proof, blockers: proof.blockers || full.blockers || [] }
+  } catch {
+    return proof || {}
   }
 }
 

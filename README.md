@@ -35,7 +35,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.3** hardens Loop Mesh for production use: fixture workers/gates/final arbiters are test-only, `gpt:final-arbiter` is explicitly finalizer-owned, integration merge uses a strategy ladder, side-effect reports come from loop diffs and mutation ledgers, loop kill interrupts active worker sessions, and global loop concurrency budgets prevent worker/model-call oversubscription. It remains Codex 0.139-aware while bundling @openai/codex-sdk 0.138.0 at this release boundary; see [docs/codex-0.139-compat.md](docs/codex-0.139-compat.md), [docs/codex-0.139-real-probes.md](docs/codex-0.139-real-probes.md), [docs/loop-fixture-policy.md](docs/loop-fixture-policy.md), and [docs/loop-merge-strategy.md](docs/loop-merge-strategy.md).
+SKS **3.1.4** makes `doctor --fix` a real Zellij dependency self-healer, lets `sks --mad` repair or explicitly run headless without contradictory optional/blocking messages, and adds Codex App Harness Matrix reporting for plugins, hooks, skills, agent roles, init-deep memory, and execution profile decisions.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 

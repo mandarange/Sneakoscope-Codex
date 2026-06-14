@@ -115,7 +115,7 @@ export async function checkZellijUpdateNotice(input: {
       message: 'Zellij update notice disabled by environment.'
     })
   }
-  const capability = await checkZellijCapability({ require: false, writeReport: false }).catch(() => null)
+  const capability = await checkZellijCapability({ require: false, writeReport: false, env }).catch(() => null)
   const current = capability?.version || null
   const missing = capability?.status === 'missing' || !capability
   const fetchInput: Parameters<typeof fetchLatestZellijVersion>[0] = { env }
@@ -155,7 +155,7 @@ export async function upgradeZellijToLatest(input: {
   env?: NodeJS.ProcessEnv
   timeoutMs?: number
 } = {}): Promise<ZellijUpgradeResult> {
-  const before = await checkZellijCapability({ require: false, writeReport: false }).catch(() => null)
+  const before = await checkZellijCapability({ require: false, writeReport: false, env: input.env || process.env }).catch(() => null)
   const beforeVersion = before?.version || null
   const missing = before?.status === 'missing' || !before
   const latest = await fetchLatestZellijVersion({ env: input.env || process.env })
@@ -223,7 +223,7 @@ export async function upgradeZellijToLatest(input: {
       error: `${run.stderr || run.stdout || 'brew upgrade failed'}`.trim().slice(-1000)
     }
   }
-  const after = await checkZellijCapability({ require: false, writeReport: false }).catch(() => null)
+  const after = await checkZellijCapability({ require: false, writeReport: false, env: input.env || process.env }).catch(() => null)
   return {
     status: missing ? 'installed' : 'upgraded',
     before_version: beforeVersion,
@@ -246,6 +246,11 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
   label?: string
   env?: NodeJS.ProcessEnv
   missionDir?: string | null
+  root?: string
+  selfHealOnMissing?: boolean
+  autoApprove?: boolean
+  installHomebrew?: boolean
+  allowHeadlessFallback?: boolean
 } = {}): Promise<{
   status: 'skipped' | 'current' | 'missing' | 'available' | 'skipped_by_user' | 'upgraded' | 'installed' | 'manual_required' | 'failed' | 'noop'
   current: string | null
@@ -269,9 +274,31 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
   const notice = await checkZellijUpdateNotice(noticeInput).catch(() => null)
   if (!notice) return { status: 'skipped', current: null, latest: null, command: null }
   if (notice.zellij_missing) {
-    // Zellij is an optional integration; installation is owned by
-    // `sks deps check --yes` / `sks zellij update --yes`. Just surface the hint.
-    console.log(`Zellij not found (optional live panes disabled). Install with: ${notice.upgrade_command}`)
+    if (opts.selfHealOnMissing === true) {
+      const { repairZellijForSks } = await import('./zellij-self-heal.js')
+      const repaired = await repairZellijForSks({
+        root: opts.root || process.cwd(),
+        requestedBy: opts.label === 'MAD launch' ? 'sks --mad' : 'sks zellij update',
+        fixRequested: true,
+        autoApprove: opts.autoApprove === true || list.includes('--yes') || list.includes('-y'),
+        interactive: mode === 'interactive-prompt',
+        installHomebrew: opts.installHomebrew === true || list.includes('--install-homebrew'),
+        allowHeadlessFallback: opts.allowHeadlessFallback === true,
+        missionDir: opts.missionDir || null,
+        env
+      })
+      if (repaired.strategy === 'headless-fallback') console.log('Zellij repair: headless fallback selected (live_panes=false).')
+      else if (repaired.ok && repaired.command) console.log(`Zellij repair: ${repaired.strategy} via ${repaired.command}`)
+      else if (!repaired.ok) console.log(`Zellij repair required. Run: ${repaired.command || notice.upgrade_command}`)
+      return {
+        status: repaired.ok ? (repaired.strategy === 'headless-fallback' ? 'missing' : 'installed') : 'manual_required',
+        current: repaired.after.version || repaired.before.version,
+        latest: repaired.latest_version,
+        command: repaired.command,
+        error: repaired.blockers[0] || null
+      }
+    }
+    console.log(`Zellij missing, required for sks --mad. Repairable with: sks doctor --fix --yes`)
     return { status: 'missing', current: null, latest: notice.latest_version, command: notice.upgrade_command }
   }
   if (!notice.update_available) {

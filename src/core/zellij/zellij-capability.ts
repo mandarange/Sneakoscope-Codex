@@ -66,8 +66,10 @@ export function resolveZellijStackedPaneCapability(input: {
   }
 }
 
-export async function checkZellijStackedPaneCapability(opts: { writeReport?: boolean; root?: string } = {}): Promise<ZellijStackedPaneCapability> {
-  const versionRun = await runZellij(['--version'], { optional: true, timeoutMs: 5000 })
+export async function checkZellijStackedPaneCapability(opts: { writeReport?: boolean; root?: string; env?: NodeJS.ProcessEnv } = {}): Promise<ZellijStackedPaneCapability> {
+  const runOpts: { optional: boolean; timeoutMs: number; env?: NodeJS.ProcessEnv } = { optional: true, timeoutMs: 5000 }
+  if (opts.env !== undefined) runOpts.env = opts.env
+  const versionRun = await runZellij(['--version'], runOpts)
   const versionText = `${versionRun.stdout_tail}\n${versionRun.stderr_tail}`.trim()
   const report = resolveZellijStackedPaneCapability({
     ok: versionRun.ok,
@@ -82,9 +84,35 @@ export async function checkZellijStackedPaneCapability(opts: { writeReport?: boo
   return report
 }
 
-export async function checkZellijCapability(opts: { root?: string; require?: boolean; writeReport?: boolean } = {}): Promise<ZellijCapabilityReport> {
-  const requireZellij = opts.require === true || process.env.SKS_REQUIRE_ZELLIJ === '1'
-  const versionRun = await runZellij(['--version'], { optional: !requireZellij, timeoutMs: 5000 })
+export async function checkZellijCapability(opts: { root?: string; require?: boolean; writeReport?: boolean; env?: NodeJS.ProcessEnv } = {}): Promise<ZellijCapabilityReport> {
+  const env = opts.env || process.env
+  const requireZellij = opts.require === true || env.SKS_REQUIRE_ZELLIJ === '1'
+  if (env.SKS_ZELLIJ_CAPABILITY_FAKE_STATUS) {
+    const fakeStatus = String(env.SKS_ZELLIJ_CAPABILITY_FAKE_STATUS)
+    const status: ZellijCapabilityReport['status'] = fakeStatus === 'ok' || fakeStatus === 'missing' || fakeStatus === 'too_old' || fakeStatus === 'blocked' ? fakeStatus : 'blocked'
+    const report: ZellijCapabilityReport = {
+      schema: ZELLIJ_CAPABILITY_SCHEMA,
+      generated_at: nowIso(),
+      ok: status === 'ok',
+      status,
+      integration_optional: !requireZellij,
+      require_zellij: requireZellij,
+      min_version: ZELLIJ_MIN_VERSION,
+      version: status === 'missing' ? null : String(env.SKS_ZELLIJ_CAPABILITY_FAKE_VERSION || '0.40.0'),
+      bin: 'zellij',
+      command: ['zellij', '--version'],
+      docs_evidence: [],
+      blockers: requireZellij && status !== 'ok' ? [`zellij_${status}_required`] : [],
+      warnings: !requireZellij && status !== 'ok' ? [`zellij_${status}_optional_integration`] : [],
+      operator_actions: status === 'ok' ? [] : ['Install Zellij. On macOS: `brew install zellij`.']
+    }
+    if (opts.writeReport !== false) {
+      const root = opts.root || process.cwd()
+      await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'zellij-capability.json'), report)
+    }
+    return report
+  }
+  const versionRun = await runZellij(['--version'], { optional: !requireZellij, timeoutMs: 5000, env })
   const versionText = `${versionRun.stdout_tail}\n${versionRun.stderr_tail}`.trim()
   const version = parseZellijVersionText(versionText)
   const missing = !versionRun.ok && versionRun.blockers.includes('zellij_missing')
