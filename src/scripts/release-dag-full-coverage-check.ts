@@ -202,7 +202,22 @@ const requiredReleasePresetIds = [
   'loop:concurrency-budget',
   'loop:concurrency-oversubscription-blackbox',
   'loop:mesh-production-e2e-blackbox',
-  'changelog:loop-productionization'
+  'changelog:loop-productionization',
+  'zellij:self-heal',
+  'doctor:zellij-fix-blackbox',
+  'mad:zellij-self-heal-blackbox',
+  'mad:zellij-no-contradictory-output',
+  'lazycodex:analysis',
+  'codex-app:harness-matrix',
+  'doctor:codex-app-harness',
+  'codex-app:skill-sync',
+  'codex-app:agent-role-sync',
+  'codex-app:init-deep',
+  'codex-app:hook-lifecycle',
+  'codex-app:execution-profile',
+  'lazycodex:interop-policy',
+  'codex-app:harness-blackbox',
+  'lazycodex:pattern-adoption-blackbox'
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',

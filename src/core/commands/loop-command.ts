@@ -12,6 +12,7 @@ import { scheduleLoopGraph } from '../loops/loop-scheduler.js';
 import { writeLoopKillRequest } from '../loops/loop-runtime-control.js';
 import type { SksLoopPlan, SksLoopProof } from '../loops/loop-schema.js';
 import { flag, promptOf, readFlagValue } from './command-utils.js';
+import { runCodexInitDeep } from '../codex-app/codex-init-deep.js';
 
 export async function loopCommand(subcommand: string = 'help', args: string[] = []): Promise<void> {
   const action = subcommand || 'help';
@@ -22,6 +23,7 @@ export async function loopCommand(subcommand: string = 'help', args: string[] = 
   if (action === 'kill') return loopKill(args);
   if (action === 'resume') return loopResume(args);
   if (action === 'graph') return loopGraph(args);
+  if (action === 'init-deep') return loopInitDeep(args);
   console.log(`SKS Loop
 
 Usage:
@@ -32,7 +34,15 @@ Usage:
   sks loop kill <loop-id|all>
   sks loop resume latest [--rerun-completed]
   sks loop graph latest
+  sks loop init-deep [--json]
 `);
+}
+
+async function loopInitDeep(args: string[]): Promise<void> {
+  const root = await sksRoot();
+  const result = await runCodexInitDeep({ root, apply: !flag(args, '--check-only') && !flag(args, '--dry-run') });
+  if (flag(args, '--json')) return printJson(result);
+  console.log(`Loop init-deep: ${result.ok ? 'ok' : 'blocked'} ${result.generated_path || ''}`);
 }
 
 async function loopPlan(args: string[]): Promise<void> {

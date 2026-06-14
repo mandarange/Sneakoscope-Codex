@@ -50,6 +50,9 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (codex0139RealProbes?.real_probes_last_run_status === 'blocked') warnings.add('codex_0139_real_probes_blocked')
   if (codex0139RealProbes?.real_probes_last_run_status === 'not_run') warnings.add('codex_0139_real_probes_not_run')
   for (const warning of normalizeList(input.codex_plugin_app_template_policy?.doctor_warnings)) warnings.add(warning)
+  const codexAppHarness = input.codex_app_harness_matrix || null
+  for (const warning of normalizeList(codexAppHarness?.warnings)) warnings.add(warning)
+  if (codexAppHarness?.ok === false) for (const blocker of normalizeList(codexAppHarness.blockers)) warnings.add(`codex_app_harness:${blocker}`)
   if (input.codex_lb?.ok === false) warnings.add(`codex_lb_${input.codex_lb?.circuit?.state || 'blocked'}`)
   const localModel = input.local_model || {}
   const localStatus = String(localModel.status || (localModel.enabled ? 'enabled_unverified' : 'disabled'))
@@ -101,6 +104,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     codex_0139_real_probes: codex0139RealProbes,
     codex_plugin_inventory: input.codex_plugin_inventory || null,
     codex_plugin_app_template_policy: input.codex_plugin_app_template_policy || null,
+    codex_app_harness_matrix: codexAppHarness,
     fast_mode_ready: input.fast_mode_ready !== false,
     codex_app_ui: input.codex_app_ui || null,
     hooks_ready: input.hooks_ready !== false,

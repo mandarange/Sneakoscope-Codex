@@ -5,6 +5,7 @@ import { selectLoopGates } from './loop-gate-selector.js';
 import { inferLoopOwnerScope } from './loop-owner-inference.js';
 import { classifyLoopRisk } from './loop-risk-classifier.js';
 import { defaultLoopBudget, validateLoopPlan, type SksLoopNode, type SksLoopPlan } from './loop-schema.js';
+import { readInitDeepMemory } from '../codex-app/codex-init-deep.js';
 
 export async function planLoopsFromRequest(input: {
   root: string;
@@ -92,6 +93,14 @@ export async function planLoopsFromRequest(input: {
     },
     blockers: []
   };
+  const projectMemory = await readInitDeepMemory(input.root).catch(() => null);
+  if (projectMemory) {
+    (plan as any).project_memory = {
+      source: projectMemory.path,
+      injected: true,
+      summary: projectMemory.text.split(/\r?\n/).filter((line) => /^##\s+/.test(line)).slice(0, 8)
+    };
+  }
   const validation = validateLoopPlan(plan);
   plan.blockers = validation.blockers;
   await writeJsonAtomic(loopPlanPath(input.root, input.missionId), plan);

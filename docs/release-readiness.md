@@ -1,5 +1,7 @@
 # Release Readiness
 
+SKS 3.1.4 is the Doctor/Zellij and Codex App harness hardening release. It adds a policy-gated Zellij self-heal path with Homebrew consent controls, wires `doctor --fix` and `sks --mad` through consistent Zellij repair/headless behavior, removes contradictory optional-vs-blocking Zellij output, records LazyCodex adoption and interop decisions, and adds Codex App Harness Matrix coverage for skill sync, agent role sync, deep project initialization, hook lifecycle, loop continuation, execution profiles, and skill-agent blackbox evidence.
+
 SKS 3.1.3 keeps the Loop Mesh production hardening release metadata aligned. It blocks production fixture misuse across worker, gate, and GPT Final paths; records a finalizer-owned GPT Final Arbiter contract for deferred gate handling; applies loop worktrees through an audited merge ladder before handoff; writes mutation-ledger and side-effect-scan evidence into completion proof; interrupts active worker handles when kill or resume safety requires it; and bounds loop concurrency with a global budget surfaced in runtime and proof artifacts.
 
 SKS 3.1.1 is the Naruto Loop Mesh hardening release. It keeps the Loop Graph as the execution SSOT for goals and loop commands, removes the runtime fixture shortcut from real checker execution, derives loop worker counts from scope/risk/parallelism instead of a fixed two-worker cap, adds configurable visible loop panes, and blocks problem-bearing completion proofs unless root-cause analysis plus corrective evidence is recorded.

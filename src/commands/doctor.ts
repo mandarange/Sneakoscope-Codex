@@ -23,6 +23,8 @@ import { writeCodex0138CapabilityArtifacts } from '../core/codex-control/codex-0
 import { runCodex0138Doctor } from '../core/doctor/codex-0138-doctor.js';
 import { writeCodexPluginInventoryArtifacts, pluginAppTemplatePolicy } from '../core/codex-plugins/codex-plugin-json.js';
 import { writeMcpPluginInventoryArtifacts } from '../core/mcp/mcp-plugin-inventory.js';
+import { runDoctorZellijRepair, doctorZellijRepairConsoleLine } from '../core/doctor/doctor-zellij-repair.js';
+import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -151,6 +153,23 @@ export async function run(_command: any, args: any = []) {
         blockers: [err?.message || String(err)]
       }))
     : codexAppUiPlan;
+  const zellijRepair = await runDoctorZellijRepair({ root, args, doctorFix }).catch((err: any) => ({
+    schema: 'sks.zellij-self-heal.v1',
+    ok: false,
+    requested_by: 'doctor --fix',
+    fix_requested: doctorFix,
+    auto_approved: flag(args, '--yes') || flag(args, '-y'),
+    install_homebrew_allowed: false,
+    before: { status: 'unknown', version: null, bin: null },
+    latest_version: null,
+    strategy: 'failed',
+    command: 'sks doctor --fix --yes',
+    after: { status: 'unknown', version: null, bin: null },
+    mutation_guard_artifact: null,
+    homebrew: { present: false, bin: null, install_attempted: false, install_allowed: false },
+    blockers: [err?.message || String(err)],
+    warnings: []
+  }));
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const localModel = await readLocalModelConfig().catch(() => null);
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
@@ -180,6 +199,15 @@ export async function run(_command: any, args: any = []) {
   const mcpPluginInventory = (pluginInventory as any)?.report
     ? await writeMcpPluginInventoryArtifacts(root, { inventory: (pluginInventory as any).report }).catch((err: any) => ({ error: err?.message || String(err), candidates: null }))
     : null;
+  const codexAppHarnessMatrix = await buildCodexAppHarnessMatrix({ root, applyRepairs: doctorFix }).catch((err: any) => ({
+    schema: 'sks.codex-app-harness-matrix.v1',
+    ok: false,
+    codex_cli: { available: false, version: null },
+    app_features: {},
+    sks_integrations: {},
+    blockers: [err?.message || String(err)],
+    warnings: []
+  }));
   const pkgBytes = await dirSize(root).catch(() => 0);
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,
@@ -196,10 +224,12 @@ export async function run(_command: any, args: any = []) {
     codex_0138_doctor: codex0138Doctor,
     codex_plugin_inventory: (pluginInventory as any)?.report || null,
     codex_plugin_app_template_policy: pluginPolicy,
+    codex_app_harness_matrix: codexAppHarnessMatrix,
     require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     operator_actions: [
       ...(codexConfig.operator_actions || []),
       ...(configRepair?.operator_actions || []),
+      ...(zellijRepair && !(zellijRepair as any).ok && (zellijRepair as any).command ? [`Run: ${(zellijRepair as any).command}`] : []),
       ...(pluginPolicy?.doctor_warnings || [])
     ]
   });
@@ -219,6 +249,7 @@ export async function run(_command: any, args: any = []) {
     codex_doctor: codexDoctor,
     codex_doctor_diff: codexDoctorDiff,
     zellij,
+    zellij_repair: zellijRepair,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     zellij_readiness: zellijReadiness,
@@ -235,10 +266,11 @@ export async function run(_command: any, args: any = []) {
       plugin_app_template_policy: pluginPolicy,
       mcp_plugin_inventory: (mcpPluginInventory as any)?.candidates || null
     },
+    codex_app_harness_matrix: codexAppHarnessMatrix,
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -261,9 +293,19 @@ export async function run(_command: any, args: any = []) {
   console.log(`  pane proof:  ${zellijReadiness.pane_proof}`);
   console.log(`  screen proof:${zellijReadiness.screen_proof}`);
   console.log(`  tmux:        ${zellijReadiness.tmux_removed_runtime ? 'removed_runtime' : 'present'}`);
+  const zellijRepairLine = doctorZellijRepairConsoleLine(zellijRepair as any);
+  if (zellijRepairLine) console.log(zellijRepairLine);
   console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
+  console.log('Codex App Harness:');
+  console.log(`  plugins: ${(codexAppHarnessMatrix as any).app_features?.plugin_json ? 'ok' : 'degraded'}`);
+  console.log(`  hook approval: ${(codexAppHarnessMatrix as any).app_features?.hook_approval_state_detectable ? 'ok' : 'unknown'}`);
+  console.log(`  skills: ${(codexAppHarnessMatrix as any).sks_integrations?.dollar_skills_synced ? 'ok' : 'degraded'}`);
+  console.log(`  agent roles: ${(codexAppHarnessMatrix as any).sks_integrations?.agent_roles_synced ? 'ok' : 'degraded'}`);
+  console.log(`  native agent_type: ${(codexAppHarnessMatrix as any).app_features?.agent_type_supported ? 'ok' : 'fallback message-role'}`);
+  console.log(`  init-deep memory: ${(codexAppHarnessMatrix as any).sks_integrations?.init_deep_available ? 'available' : 'missing'}`);
+  console.log(`  loop mesh app profile: ${(codexAppHarnessMatrix as any).sks_integrations?.loop_mesh_app_profile_available ? 'available' : 'missing'}`);
   console.log('Codex App UI:');
   console.log(`  fast selector: ${codexAppUi.fast_selector || 'unknown'}`);
   console.log(`  provider selector: ${codexAppUi.provider_selector || 'unknown'}`);

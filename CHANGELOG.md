@@ -4,6 +4,25 @@
 
 
 
+## [3.1.4] - 2026-06-13
+
+### Added
+
+- Zellij doctor self-heal and install/upgrade transaction.
+- `sks --mad` Zellij preflight self-heal.
+- LazyCodex/OmO reverse-analysis artifact.
+- Codex App Harness Matrix.
+- Codex plugin/hook/skill/agent-role lifecycle health.
+- SKS init-deep project memory and AGENTS.md hierarchy.
+- Native Codex `agent_type` probe and fallback role message.
+
+### Fixed
+
+- `doctor --fix` no longer leaves Zellij missing/manual when repair is possible.
+- Missing Zellij no longer prints contradictory optional/blocking messages.
+- MAD launch attempts safe Zellij repair before blocking.
+- Codex App features are consumed through capability/proof artifacts instead of brittle assumptions.
+
 
 ## [3.1.3] - 2026-06-13
 
