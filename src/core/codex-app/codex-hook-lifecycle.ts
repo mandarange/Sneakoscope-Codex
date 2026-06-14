@@ -6,9 +6,12 @@ import { probeCodexHookApprovalState } from './codex-hook-approval-probe.js'
 import type { CodexHookApprovalProbe, CodexHookApprovalState } from './codex-app-types.js'
 
 interface HookLifecycleEvent {
+  event: string
   actions: string[]
+  sks_action: string
   installed: boolean
   approval_state: CodexHookApprovalState
+  counted_as_evidence: boolean
 }
 
 interface CodexHookLifecycleReport {
@@ -58,9 +61,12 @@ export async function buildCodexHookLifecycle(input: { root?: string; apply?: bo
     approval_state: probe.approval_state,
     approval_state_detectable: probe.detectable,
     lifecycle: Object.fromEntries(Object.entries(events).map(([event, actions]) => [event, {
+      event,
       actions,
+      sks_action: actions.join(','),
       installed: installedEvents.has(event),
-      approval_state: installedEvents.has(event) ? probe.approval_state : 'not_installed'
+      approval_state: installedEvents.has(event) ? probe.approval_state : 'not_installed',
+      counted_as_evidence: installedEvents.has(event) && probe.approval_state === 'approved'
     }])) as Record<string, HookLifecycleEvent>,
     actual_state: actual,
     install,

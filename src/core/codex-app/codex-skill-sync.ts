@@ -14,7 +14,7 @@ const SKS_SKILLS = [
   '$Computer-Use',
   '$Init-Deep'
 ]
-const LAZYCODEX_RESERVED = new Set(['ulw-loop', 'ulw-plan', 'start-work'])
+const EXTERNAL_ROUTE_RESERVED = new Set(['ulw-loop', 'ulw-plan', 'start-work'])
 
 interface CodexSkillSyncReport {
   schema: 'sks.codex-skill-sync.v1'
@@ -26,10 +26,10 @@ interface CodexSkillSyncReport {
   existing_skills: string[]
   created: string[]
   skipped: string[]
-  lazycodex_reserved_present: string[]
+  external_route_names_preserved: string[]
   interop: {
     mode: 'coexist'
-    clobbered_lazycodex: false
+    clobbered_external_routes: false
     clobbered_user_skills: false
   }
   blockers: string[]
@@ -43,14 +43,14 @@ export async function syncCodexSksSkills(input: {
   const root = path.resolve(input.root)
   const skillsRoot = input.skillsRoot || path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'skills')
   const existing = await listSkillNames(skillsRoot)
-  const collisions = existing.filter((name) => LAZYCODEX_RESERVED.has(name))
+  const collisions = existing.filter((name) => EXTERNAL_ROUTE_RESERVED.has(name))
   const desired = SKS_SKILLS.map((skill) => skillName(skill))
   const created: string[] = []
   const skipped: string[] = []
   if (input.apply === true) {
     await ensureDir(skillsRoot)
     for (const name of desired) {
-      if (LAZYCODEX_RESERVED.has(name)) {
+      if (EXTERNAL_ROUTE_RESERVED.has(name)) {
         skipped.push(name)
         continue
       }
@@ -77,10 +77,10 @@ export async function syncCodexSksSkills(input: {
     existing_skills: existing,
     created,
     skipped,
-    lazycodex_reserved_present: collisions,
+    external_route_names_preserved: collisions,
     interop: {
       mode: 'coexist',
-      clobbered_lazycodex: false,
+      clobbered_external_routes: false,
       clobbered_user_skills: false
     },
     blockers: []
@@ -110,10 +110,13 @@ function skillContent(name: string): string {
     `Command: ${profile.command}`,
     `Purpose: ${profile.purpose}`,
     `Use when: ${profile.when}`,
+    `Route: ${profile.command}`,
     `Evidence: ${profile.evidence}`,
-    'Safety: keep route state bounded, preserve user and LazyCodex/OmO skills, and stop on hard blockers instead of fabricating fallback behavior.',
+    'Safety: keep route state bounded, preserve user and external route assets, and stop on hard blockers instead of fabricating fallback behavior.',
+    'Proof paths: write the route-local mission artifact named in Evidence before claiming completion.',
+    'Failure recovery: if a proof path cannot be produced, record the blocker and continue only when the selected SKS route has another allowed evidence path.',
     `Fallback: ${profile.fallback}`,
-    `checksum: ${hash(name)}`,
+    `checksum: ${hash(`${name}:${profile.command}:${profile.evidence}:${profile.fallback}`)}`,
     '<!-- END SKS MANAGED SKILL -->',
     ''
   ].join('\n')

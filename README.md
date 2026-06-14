@@ -27,7 +27,7 @@ Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex
 
 ![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
 
-## LLM Init Prompt for Hermes / OpenClaw Agent Builders
+## LLM Init Prompt for Codex Native Agent Builders
 
 ```text
 Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-Codex](https://github.com/mandarange/Sneakoscope-Codex)] as the repo reference and [npm i -g sneakoscope] as the recommended global install command, then run the appropriate `sks` setup, doctor, Codex App, and proof checks for this repo. Keep generated SKS state out of source control unless documented, and record every version-facing change in CHANGELOG.md.
@@ -35,7 +35,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.5** productionizes the Codex App harness with typed probe surfaces, dry-run Zellij self-heal planning, hook approval and `agent_type` evidence, LazyCodex live-source analysis, init-deep directory memory hints, and execution profile routing across Loop, QA, Research, and Naruto artifacts.
+SKS **3.1.6** removes external reference branding from user-visible release surfaces and routes Codex-native feature decisions through one broker for Loop, QA, Research, Image, MAD, and Doctor.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 
@@ -292,7 +292,7 @@ sks selftest --mock
 
 ## 🎁 What Sneakoscope Adds
 
-`sks` adds a Zellij-backed Codex CLI runtime, Codex App `$` commands, Team/QA/PPT/Research/DB/GX/Wiki routes, OpenClaw and Hermes skill generation, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
+`sks` adds a Zellij-backed Codex CLI runtime, Codex App `$` commands, Codex Native broker routing, Team/QA/PPT/Research/DB/GX/Wiki routes, Context7-gated current docs, TriWiki context packs, DB safety, design SSOT policy, skill dreaming, release checks, and Honest Mode.
 
 ## Report-Only Planning Surfaces
 
@@ -618,43 +618,15 @@ SKS does not install Git pre-commit hooks. Release metadata is changed only by e
 
 TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim into future prompts. `sks harness fixture` validates the broader Harness Growth Factory contract: deliberate forgetting fixtures, skill card metadata, experiment schema, tool-error taxonomy, permission profiles, MultiAgentV2 defaults, and tmux cockpit view coverage. `sks code-structure scan` flags handwritten files above 1000/2000/3000-line thresholds so new logic can be extracted before command files become harder to maintain.
 
-## 🤖 OpenClaw And Hermes Agent Usage
-
-Sneakoscope can generate an OpenClaw skill package for agents that need to operate SKS-enabled repositories.
+## Codex Native Broker
 
 ```sh
-sks openclaw install
-sks openclaw path
+sks codex-native status --json
+sks codex-native invocation-plan --route '$Loop' --capability agent-role --json
+sks codex-native init-deep --apply --directory-local --json
 ```
 
-By default this writes `~/.openclaw/skills/sneakoscope-codex/` with `manifest.yaml`, `SKILL.md`, a README, and `openclaw-agent-config.example.yaml`. Set `OPENCLAW_HOME` or pass `--dir` for a custom location. Attach the skill with the built-in `shell` tool enabled and set `SKS_OPENCLAW=1` so SKS can auto-approve update/install prompts that would otherwise wait for `Y/n`.
-
-```sh
-SKS_OPENCLAW=1 sks root
-SKS_OPENCLAW=1 sks commands
-SKS_OPENCLAW=1 sks dollar-commands
-SKS_OPENCLAW=1 sks deps check
-SKS_OPENCLAW=1 sks proof-field scan --intent "small CLI change" --changed src/cli/main.ts
-```
-
-If OpenClaw runs in a sandbox, grant shell execution only for trusted workspaces. Database, migration, and destructive work still follows SKS safety routes.
-
-Sneakoscope can also generate a Hermes Agent skill package for the Hermes `/skills` surface.
-
-```sh
-sks hermes install
-sks hermes status --json
-sks hermes path
-```
-
-By default this writes `~/.hermes/skills/sneakoscope-codex/` with `SKILL.md`, a README, `hermes-config.example.yaml`, and `skill-bundle.example.yaml`. Set `HERMES_HOME` or pass `--dir` for a custom location. Hermes agents should invoke `/sneakoscope-codex` with the terminal toolset enabled and run shell commands with `SKS_HERMES=1`; this enables non-interactive dependency/update prompts while leaving SKS DB, migration, and destructive-operation safety routes intact. If you use Hermes `skills.external_dirs`, remember writable external directories can be updated by Hermes, so protect shared skill folders with filesystem permissions when needed.
-
-```sh
-SKS_HERMES=1 sks root --json
-SKS_HERMES=1 sks commands --json
-SKS_HERMES=1 sks dollar-commands --json
-SKS_HERMES=1 sks status --json
-```
+The broker records Codex-native feature availability, invocation defaults, neutral pattern evidence, and managed memory setup without exposing reference implementation branding in user-facing artifacts.
 
 ## 💬 Prompt `$` Commands
 

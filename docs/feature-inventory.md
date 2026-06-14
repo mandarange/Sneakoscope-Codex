@@ -29,7 +29,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-commands` | core-cli | stable | sks commands [--json] | execute:pass | runtime_verified | none recorded |
 | `cli-run` | core-cli | labs | sks run "task" [--visual\|--research\|--db] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-status` | core-cli | labs | sks status [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|git\|codex\|codex-app\|hooks\|features\|all-features\|openclaw\|hermes\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
+| `cli-usage` | core-cli | stable | sks usage [install\|setup\|bootstrap\|root\|deps\|tmux\|auto-review\|team\|qa-loop\|ppt\|image-ux-review\|goal\|research\|db\|git\|codex\|codex-app\|codex-native\|hooks\|features\|all-features\|dfix\|commit\|commit-and-push\|design\|imagegen\|dollar\|context7\|pipeline\|reasoning\|guard\|conflicts\|versioning\|eval\|harness\|hproof\|gx\|wiki\|wrongness\|code-structure\|proof-field\|skill-dream\|rust] | execute:pass | runtime_verified | none recorded |
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | none recorded |
 | `cli-bootstrap` | install | labs | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | execute:pass | runtime_verified | none recorded |
@@ -39,8 +39,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay\|codex-validate\|warning-check ... [--json] | mock:pass | runtime_mock_verified | mobile/event payload details remain unknown |
 | `cli-codex-lb` | integration | beta | sks codex-lb status\|health\|metrics\|doctor\|circuit\|repair\|setup ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-auth` | integration | labs | sks auth status\|health\|repair\|setup --host <domain> --api-key <key> | mock:pass | runtime_mock_verified | none recorded |
-| `cli-openclaw` | integration | labs | sks openclaw install\|path\|print [--dir path] [--force] [--json] | mock:pass | runtime_mock_verified | none recorded |
-| `cli-hermes` | integration | labs | sks hermes install\|status\|path\|print [--dir path] [--force] [--json] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-codex-native` | integration | beta | sks codex-native status\|feature-broker\|invocation-plan\|init-deep [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-zellij` | core-cli | labs | sks \| sks --mad \| sks team open-zellij\|attach-zellij\|cleanup-zellij [mission] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-mad` | core-cli | labs | sks --mad [--high] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-auto-review` | core-cli | labs | sks auto-review status\|enable\|start [--high] \| sks --Auto-review --high | mock:pass | runtime_mock_verified | none recorded |

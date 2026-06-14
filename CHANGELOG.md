@@ -3,12 +3,27 @@
 ## [Unreleased]
 
 
+## [3.1.6] - 2026-06-14
+
+### Added
+
+- Codex Native Feature Broker, invocation router, neutral pattern evidence, and release gates for Loop, QA, Research, Image, MAD, and Doctor routing.
+- `sks codex-native` for broker status, invocation planning, init-deep, hook lifecycle, pattern analysis, and reference evidence.
+- Brand-neutrality, init-deep backup hygiene, doctor readiness UX, and release-script type-safety checks for the 3.1.6 release DAG.
+
+### Fixed
+
+- Removed external reference branding from user-visible docs, release gates, package scripts, generated reports, and artifact paths.
+- Routed Codex-native feature decisions through one broker instead of scattered profile probes.
+- Preserved directory-local memory without expanding Loop owner scope.
+
+
 ## [3.1.5] - 2026-06-14
 
 ### Added
 
 - Typed Codex App and Zellij self-heal contract surfaces for hook approval, `agent_type`, execution profile, and dry-run repair planning.
-- Live LazyCodex source evidence analysis with hashed snippets and merged confidence in the pattern analysis report.
+- Live Codex Native reference source evidence analysis with hashed snippets and merged confidence in the pattern analysis report.
 - Init-deep directory-local managed `AGENTS.md` sections, backups, and Loop node `memory_hints`.
 - Execution profile propagation through Loop/Naruto, QA-LOOP, and Research artifacts.
 - Release gates for no-`@ts-nocheck` core coverage, type-surface checks, probe blackboxes, rich skill/agent content, and execution-profile routing.
@@ -27,7 +42,7 @@
 
 - Zellij doctor self-heal and install/upgrade transaction.
 - `sks --mad` Zellij preflight self-heal.
-- LazyCodex/OmO reverse-analysis artifact.
+- Codex Native reference/neutral reference reverse-analysis artifact.
 - Codex App Harness Matrix.
 - Codex plugin/hook/skill/agent-role lifecycle health.
 - SKS init-deep project memory and AGENTS.md hierarchy.
@@ -2396,14 +2411,14 @@ Final hardening release: closes the remaining legacy-upgrade, publish, postinsta
 
 ### Fixed
 
-- Keep the Codex CLI update preflight release-ready after the version hook advanced the package again, including OpenClaw auto-approve coverage and the extracted install helper path.
+- Keep the Codex CLI update preflight release-ready after the version hook advanced the package again, including agent prompt auto-approve coverage and the extracted install helper path.
 
 ## [0.7.28] - 2026-05-08
 
 ### Changed
 
 - Check npm `@openai/codex@latest` before tmux launches, prompt `Y/n` when the installed Codex CLI is missing or outdated, and continue the same launch with the updated binary after approval.
-- Treat `SKS_OPENCLAW=1` OpenClaw runs as auto-approved for SKS update/install prompts, and include that environment flag in generated OpenClaw guidance.
+- Treat non-interactive agent runs as auto-approved for SKS update/install prompts, and include that environment flag in generated agent guidance.
 - Document the Codex CLI update preflight in the README default tmux runtime flow.
 
 ## [0.7.27] - 2026-05-08
@@ -2417,9 +2432,9 @@ Final hardening release: closes the remaining legacy-upgrade, publish, postinsta
 
 ### Added
 
-- Add `sks openclaw install|path|print` to generate an OpenClaw skill package that lets OpenClaw agents attach `sneakoscope-codex`, enable the shell tool, and discover/use SKS workflows from a target repo root.
-- Document OpenClaw agent setup, config YAML, sandbox note, and useful SKS commands in the README.
-- Raise the package file-count budget to 54 for the new OpenClaw generator and CLI handler modules while keeping packed and unpacked byte budgets unchanged.
+- Add a generated agent skill package that lets attached agents enable the shell tool and discover/use SKS workflows from a target repo root.
+- Document generated agent setup, config YAML, sandbox note, and useful SKS commands in the README.
+- Raise the package file-count budget to 54 for the generated agent helper modules while keeping packed and unpacked byte budgets unchanged.
 
 ## [0.7.25] - 2026-05-08
 

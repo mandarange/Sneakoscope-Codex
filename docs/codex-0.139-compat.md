@@ -1,6 +1,6 @@
 # Codex 0.139 Compatibility
 
-SKS 3.1.5 keeps the Codex 0.139 compatibility baseline while productionizing the Codex App harness around typed evidence. Hook approval, `agent_type`, LazyCodex source analysis, rich skill/agent content, and execution-profile routing now use typed probes or source-backed reports instead of environment-only assumptions.
+SKS 3.1.6 keeps the Codex 0.139 compatibility baseline while productionizing the Codex App harness around typed evidence. Hook approval, `agent_type`, Codex Native reference source analysis, rich skill/agent content, and execution-profile routing now use typed probes or source-backed reports instead of environment-only assumptions.
 
 SKS 3.1.4 is Codex 0.139-aware: it bundles @openai/codex-sdk 0.138.0 at this release boundary, and it detects Codex 0.139 features from the external Codex CLI when that CLI is installed and supports them. The minimum supported baseline stays `rust-v0.136.0`; 0.139 features are detected, recorded, and used opportunistically rather than assumed for every environment. The release gates include hermetic fixtures plus actual real-probe artifacts; `codex:0139-real-probes:require-real` fails when high-value 0.139 probes are skipped or failed. See [Codex 0.139 Real Probes](codex-0.139-real-probes.md).
 

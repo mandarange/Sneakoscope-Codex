@@ -93,6 +93,8 @@ export interface SksLoopNode {
   worktree: SksLoopWorktreePolicy;
   risk: SksLoopRisk;
   memory_hints?: SksLoopMemoryHint[];
+  memory_hints_used?: number;
+  memory_did_not_expand_scope?: true;
 }
 
 export interface SksLoopPlan {
@@ -121,6 +123,7 @@ export interface SksLoopPlan {
     source: string;
     injected: boolean;
     summary: string[];
+    memory_did_not_expand_scope?: true;
   };
   integration_merge?: {
     ok: boolean;

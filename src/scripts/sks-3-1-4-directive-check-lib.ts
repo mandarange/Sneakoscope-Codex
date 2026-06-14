@@ -1,20 +1,16 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
 import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js'
 
 export async function runDirective314Gate(id: string) {
   if (id.startsWith('zellij:')) return zellijGate(id)
   if (id.startsWith('doctor:zellij')) return doctorZellijGate(id)
   if (id.startsWith('mad:zellij')) return madZellijGate(id)
-  if (id === 'lazycodex:analysis') return lazycodexAnalysisGate(id)
   if (id.startsWith('codex-app:') || id === 'doctor:codex-app-harness') return codexAppGate(id)
   if (id.startsWith('loop:')) return loopGate(id)
-  if (id === 'lazycodex:interop-policy' || id === 'lazycodex:pattern-adoption-blackbox') return lazycodexInteropGate(id)
   throw new Error(`unknown_gate:${id}`)
 }
 
@@ -92,15 +88,6 @@ async function madZellijGate(id: string) {
   emitGate(id, { source_checked: true })
 }
 
-async function lazycodexAnalysisGate(id: string) {
-  const mod = await importDist('core/codex-app/lazycodex-analysis.js')
-  const report = await mod.writeLazyCodexPatternAnalysis(root)
-  assertGate(report.patterns.length >= 14, 'LazyCodex analysis must include required patterns', report)
-  const docs = mod.renderLazyCodexAnalysisMarkdown(report)
-  await fsp.writeFile(path.join(root, 'docs', 'lazycodex-analysis.md'), `${docs}\n`, 'utf8')
-  emitGate(id, { patterns: report.patterns.length })
-}
-
 async function codexAppGate(id: string) {
   const rootDir = await tempRoot(`sks-${id.replace(/[:/]/g, '-')}-`)
   const previous = swapEnv({
@@ -127,7 +114,7 @@ async function codexAppGate(id: string) {
       const skillsRoot = path.join(rootDir, 'skills')
       await fsp.mkdir(path.join(skillsRoot, 'ulw-loop'), { recursive: true })
       const report = await mod.syncCodexSksSkills({ root: rootDir, skillsRoot, apply: true })
-      assertGate(report.interop.clobbered_lazycodex === false && report.lazycodex_reserved_present.includes('ulw-loop'), 'skill sync must preserve LazyCodex skills', report)
+      assertGate(report.interop.clobbered_external_routes === false && report.external_route_names_preserved.includes('ulw-loop'), 'skill sync must preserve existing external route skills', report)
       return emitGate(id, { desired: report.desired_skills.length })
     }
     if (id === 'codex-app:agent-role-sync') {
@@ -180,21 +167,6 @@ async function loopGate(id: string) {
   const report = await mod.evaluateLoopContinuation({ root: rootDir, missionId: 'M-loop-cont' })
   assertGate(report.should_continue === true, 'loop continuation should request resume when proof missing', report)
   emitGate(id, { should_continue: report.should_continue })
-}
-
-async function lazycodexInteropGate(id: string) {
-  const rootDir = await tempRoot(`sks-${id.replace(/[:/]/g, '-')}-`)
-  const previous = swapEnv({ SKS_CODEX_PLUGIN_JSON_FAKE: '1' })
-  try {
-    const mod = await importDist('core/codex-app/lazycodex-interop-policy.js')
-    const skillsRoot = path.join(rootDir, '.codex', 'skills')
-    await fsp.mkdir(path.join(skillsRoot, 'start-work'), { recursive: true })
-    const report = await mod.buildLazyCodexInteropPolicy({ root: rootDir, codexHome: path.join(rootDir, '.codex') })
-    assertGate(report.policy.clobber_lazycodex_skills === false, 'interop policy must not clobber LazyCodex skills', report)
-    emitGate(id, { detected: report.lazycodex_detected, collisions: report.detection.collisions.length })
-  } finally {
-    restoreEnv(previous)
-  }
 }
 
 function fakeZellijEnv(status: string, opts: { brew?: boolean } = {}) {

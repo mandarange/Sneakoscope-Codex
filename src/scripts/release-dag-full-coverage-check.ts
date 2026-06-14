@@ -1,14 +1,38 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import fs from 'node:fs'
 import path from 'node:path'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 
-const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-gates.v2.json'), 'utf8'))
-const legacy = String(pkg.scripts['release:check:legacy'] || '')
-const legacyIds = [...new Set([...legacy.matchAll(/npm run ([^\s&]+)/g)].map((match) => match[1]).filter((id) => pkg.scripts[id]))]
-const allowlist = new Map([
+interface PackageJsonShape {
+  scripts?: Record<string, string>
+}
+
+interface ReleaseGate {
+  id: string
+  command: string
+  deps: string[]
+  resource: string[]
+  side_effect: string
+  timeout_ms: number
+  cache: unknown
+  isolation: unknown
+  preset: string[]
+}
+
+interface ReleaseGateManifest {
+  gates: ReleaseGate[]
+}
+
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as PackageJsonShape
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-gates.v2.json'), 'utf8')) as ReleaseGateManifest
+const scripts = pkg.scripts || {}
+const legacy = String(scripts['release:check:legacy'] || '')
+const legacyIds = [...new Set<string>(
+  [...legacy.matchAll(/npm run ([^\s&]+)/g)]
+    .map((match: RegExpMatchArray) => String(match[1] || ''))
+    .filter((id: string) => Boolean(scripts[id]))
+)]
+const allowlist = new Map<string, string>([
   ['release:check:parallel', 'legacy aggregate superseded by release-gates.v2 DAG'],
   ['codex-app:fast-ui-preservation', 'Codex App UI real-environment preservation gate'],
   ['codex-control:keepalive-no-cot-leak', 'long-running remote keepalive/debug gate'],
@@ -16,9 +40,9 @@ const allowlist = new Map([
   ['publish:packlist-performance', 'publish/package performance gate'],
   ['release:dynamic-performance', 'performance budget gate covered by release:parallel-speed-budget']
 ])
-const gateIds = new Set(manifest.gates.map((gate) => gate.id))
-const releasePresetIds = new Set(manifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release')).map((gate) => gate.id))
-const realCheckPresetIds = new Set(manifest.gates.filter((gate) => Array.isArray(gate.preset) && (gate.preset.includes('real-check') || gate.preset.includes('strict-release'))).map((gate) => gate.id))
+const gateIds = new Set<string>(manifest.gates.map((gate: ReleaseGate) => gate.id))
+const releasePresetIds = new Set<string>(manifest.gates.filter((gate: ReleaseGate) => Array.isArray(gate.preset) && gate.preset.includes('release')).map((gate: ReleaseGate) => gate.id))
+const realCheckPresetIds = new Set<string>(manifest.gates.filter((gate: ReleaseGate) => Array.isArray(gate.preset) && (gate.preset.includes('real-check') || gate.preset.includes('strict-release'))).map((gate: ReleaseGate) => gate.id))
 const requiredReleasePresetIds = [
   'zellij:first-slot-down-stack',
   'zellij:slot-renderer-proof-semantics',
@@ -213,10 +237,30 @@ const requiredReleasePresetIds = [
   'doctor:zellij-fix-blackbox',
   'mad:zellij-self-heal-blackbox',
   'mad:zellij-no-contradictory-output',
-  'lazycodex:analysis',
-  'lazycodex:live-analysis',
-  'lazycodex:analysis-with-evidence',
-  'lazycodex:live-analysis-blackbox',
+  'brand-neutrality:zero-leakage',
+  'brand-neutrality:zero-leakage-blackbox',
+  'docs:brand-neutrality',
+  'codex-native:feature-broker',
+  'codex-native:invocation-router',
+  'codex-native:route-map',
+  'pipeline:codex-native-loop-routing',
+  'pipeline:codex-native-qa-routing',
+  'pipeline:codex-native-research-routing',
+  'pipeline:codex-native-image-routing',
+  'pipeline:codex-native-doctor-mad-routing',
+  'codex-native:pattern-analysis',
+  'codex-native:reference-evidence',
+  'codex-native:pattern-analysis-blackbox',
+  'codex-native:skill-content',
+  'codex-native:agent-role-content',
+  'codex-native:hook-lifecycle-proof',
+  'init-deep:backup-retention',
+  'init-deep:memory-scope-safety',
+  'release-scripts:type-safe',
+  'lint:no-ts-nocheck-release-scripts',
+  'doctor:codex-native-readiness-ux',
+  'codex-native:feature-broker-blackbox',
+  'pipeline:codex-native-e2e-blackbox',
   'codex-app:harness-matrix',
   'codex-app:hook-approval-probe',
   'codex-app:hook-approval-matrix',
@@ -239,9 +283,12 @@ const requiredReleasePresetIds = [
   'qa-loop:execution-profile-routing',
   'research:execution-profile-routing',
   'pipeline:execution-profile-routing-blackbox',
-  'lazycodex:interop-policy',
+  'codex-native:harness-compat',
+  'codex-native:invocation-defaults',
+  'codex-native:interop-policy',
+  'doctor:codex-native-repair-actions',
   'codex-app:harness-blackbox',
-  'lazycodex:pattern-adoption-blackbox'
+  'brand-neutrality:rename-map'
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',
@@ -255,14 +302,14 @@ const requiredRealCheckPresetIds = [
   'codex:0139-image-path-real',
   'codex:0139-sandbox-proxy-real'
 ]
-const missing = legacyIds.filter((id) => !gateIds.has(id) && !allowlist.has(id))
-const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
-const missingRequiredRealCheckPreset = requiredRealCheckPresetIds.filter((id) => !gateIds.has(id) || !realCheckPresetIds.has(id))
-const codex0139RequiredGates = requiredReleasePresetIds.filter((id) => id.startsWith('codex:0139'))
-const codex0139MissingRequiredGates = codex0139RequiredGates.filter((id) => !gateIds.has(id) || !releasePresetIds.has(id))
-const allowed = legacyIds.filter((id) => allowlist.has(id)).map((id) => ({ id, reason: allowlist.get(id) }))
+const missing = legacyIds.filter((id: string) => !gateIds.has(id) && !allowlist.has(id))
+const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id: string) => !gateIds.has(id) || !releasePresetIds.has(id))
+const missingRequiredRealCheckPreset = requiredRealCheckPresetIds.filter((id: string) => !gateIds.has(id) || !realCheckPresetIds.has(id))
+const codex0139RequiredGates = requiredReleasePresetIds.filter((id: string) => id.startsWith('codex:0139'))
+const codex0139MissingRequiredGates = codex0139RequiredGates.filter((id: string) => !gateIds.has(id) || !releasePresetIds.has(id))
+const allowed = legacyIds.filter((id: string) => allowlist.has(id)).map((id: string) => ({ id, reason: allowlist.get(id) }))
 const coverage = legacyIds.length ? (legacyIds.length - missing.length) / legacyIds.length : 1
-const schemaComplete = manifest.gates.every((gate) => gate.id && gate.command && Array.isArray(gate.deps) && Array.isArray(gate.resource) && gate.side_effect && gate.timeout_ms && gate.cache && gate.isolation && Array.isArray(gate.preset))
+const schemaComplete = manifest.gates.every((gate: ReleaseGate) => gate.id && gate.command && Array.isArray(gate.deps) && Array.isArray(gate.resource) && gate.side_effect && gate.timeout_ms && gate.cache && gate.isolation && Array.isArray(gate.preset))
 const report = {
   schema: 'sks.release-dag-full-coverage-check.v1',
   ok: missing.length === 0 && missingRequiredReleasePreset.length === 0 && missingRequiredRealCheckPreset.length === 0 && coverage >= 0.95 && schemaComplete,

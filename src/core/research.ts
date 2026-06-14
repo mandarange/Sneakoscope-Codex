@@ -18,6 +18,7 @@ import { RESEARCH_WORK_GRAPH_ARTIFACT, writeResearchWorkGraph } from './research
 import { researchPromptContractText, validateResearchPromptContract } from './research/research-prompt-contract.js';
 import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research/research-realistic-report.js';
 import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
+import { resolveCodexNativeInvocationPlan } from './codex-native/codex-native-invocation-router.js';
 
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
 export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
@@ -268,6 +269,14 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
   const paperArtifact = researchPaperArtifactName(prompt, createdAt, opts);
   const nativeAgentPlan = researchNativeAgentPlan(prompt, { paperArtifact, missionId: opts.missionId });
   const executionProfile = opts.executionProfile || null;
+  const codexNativeInvocation = opts.codexNativeInvocation || null;
+  const sourceStrategy = codexNativeInvocation?.mcp_source?.selected_strategy === 'codex-app-native'
+    ? 'mcp-plugin-candidates'
+    : codexNativeInvocation?.web_search?.selected_strategy === 'codex-cli-headless'
+      ? 'web-sources'
+      : executionProfile?.plugin_mcp_inventory_ready
+        ? 'mcp-plugin-candidates'
+        : 'local-files';
   return {
     schema_version: 1,
     mission_id: opts.missionId || null,
@@ -279,6 +288,7 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
     quality_contract: DEFAULT_RESEARCH_QUALITY_CONTRACT,
     native_agent_plan: nativeAgentPlan,
     codex_app_execution_profile: executionProfile ? compactExecutionProfile(executionProfile) : null,
+    codex_native_invocation: codexNativeInvocation,
     agent_sessions: nativeAgentPlan.personas,
     agent_batches: nativeAgentPlan.batches,
     autoresearch_cycle_policy: nativeAgentPlan.autoresearch_cycle_policy,
@@ -336,10 +346,11 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       mode: 'layered_source_retrieval_and_triangulation',
       requirement: 'Use every safely available public web/source route before synthesis, separated into source layers so the final claim is not dominated by one corpus or platform.',
       source_tool_routing: {
-        mode: executionProfile?.plugin_mcp_inventory_ready ? 'plugin-mcp-inventory-first' : 'codex-cli-or-web-fallback',
+        mode: sourceStrategy,
         plugin_mcp_inventory_ready: executionProfile?.plugin_mcp_inventory_ready === true,
         execution_profile_artifact: executionProfile?.artifact_path || '.sneakoscope/reports/codex-app-execution-profile.json',
-        rule: 'Prefer verified plugin/MCP inventory when available; otherwise record source-tool blockers instead of assuming live search coverage.'
+        codex_native_invocation_artifact: codexNativeInvocation ? 'research/codex-native-invocation.json' : null,
+        rule: 'Prefer verified plugin/MCP candidates when available; otherwise record source-tool blockers instead of assuming live search coverage.'
       },
       query_sets: [
         'first-principles and theory sources',
@@ -562,7 +573,9 @@ export function countGeniusOpinionSummaries(text: any = '') {
 export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
   const root = opts.root || missionRootFromDir(String(dir || ''));
   const executionProfile = opts.executionProfile || (root ? await resolveCodexAppExecutionProfile({ root }).catch(() => null) : null);
-  const plan = createResearchPlan(prompt, { ...opts, executionProfile });
+  const missionId = opts.missionId || path.basename(String(dir || ''));
+  const codexNativeInvocation = root ? await resolveResearchCodexNativeInvocation(root, missionId).catch(() => null) : null;
+  const plan = createResearchPlan(prompt, { ...opts, executionProfile, codexNativeInvocation });
   const noveltyLedger = {
     schema_version: 1,
     entries: [],
@@ -579,6 +592,7 @@ export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
   const replicationPack = defaultReplicationPack(plan);
   await writeJsonAtomic(path.join(dir, 'research-plan.json'), plan);
   if (executionProfile) await writeJsonAtomic(path.join(dir, 'research', 'execution-profile.json'), executionProfile).catch(() => undefined);
+  if (codexNativeInvocation) await writeJsonAtomic(path.join(dir, 'research', 'codex-native-invocation.json'), codexNativeInvocation).catch(() => undefined);
   await writeTextAtomic(path.join(dir, 'research-plan.md'), researchPlanMarkdown(plan));
   await writeTextAtomic(path.join(dir, RESEARCH_SOURCE_SKILL_ARTIFACT), researchSourceSkillMarkdown(plan));
   await writeResearchQualityContract(dir, plan.quality_contract);
@@ -599,6 +613,25 @@ export async function writeResearchPlan(dir: any, prompt: any, opts: any = {}) {
   if (opts.missionId) await writeResearchNativeAgentLedger(dir, plan, { missionId: opts.missionId });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.plan.created', depth: plan.depth });
   return plan;
+}
+
+async function resolveResearchCodexNativeInvocation(root: string, missionId: string) {
+  const [pluginSource, mcpSource, webSearch] = await Promise.all([
+    resolveCodexNativeInvocationPlan({ root, missionId, route: '$Research', desiredCapability: 'plugin-source' }),
+    resolveCodexNativeInvocationPlan({ root, missionId, route: '$Research', desiredCapability: 'mcp-source' }),
+    resolveCodexNativeInvocationPlan({ root, missionId, route: '$Research', desiredCapability: 'web-search' })
+  ]);
+  return {
+    plugin_source: pluginSource,
+    mcp_source: mcpSource,
+    web_search: webSearch,
+    selected_source_strategy: mcpSource.selected_strategy === 'codex-app-native'
+      ? 'mcp-plugin-candidates'
+      : webSearch.selected_strategy === 'codex-cli-headless'
+        ? 'web-sources'
+        : 'local-files',
+    hook_derived_source_evidence_allowed: false
+  };
 }
 
 function missionRootFromDir(dir: string): string | null {

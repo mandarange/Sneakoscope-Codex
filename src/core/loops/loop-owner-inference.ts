@@ -44,6 +44,10 @@ export function detectOwnerScopeCollisions(scopes: Array<{ loop_id: string; owne
   return blockers;
 }
 
+export function memoryHintMayExpandOwnerScope(): false {
+  return false;
+}
+
 function inferPackageScripts(domainId: string): string[] {
   if (domainId === 'docs') return ['docs:loop-runtime'];
   if (domainId === 'naruto') return ['naruto:loop-mesh'];

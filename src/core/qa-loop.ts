@@ -3,6 +3,7 @@ import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, P
 import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
 import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
 import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
+import { resolveCodexNativeInvocationPlan } from './codex-native/codex-native-invocation-router.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
 const QA_REPORT_SUFFIX = 'qa-report.md';
@@ -337,6 +338,7 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     codex_app_execution_profile_artifact: opts.executionProfile ? 'qa-loop/execution-profile.json' : null,
     codex_app_hooks_approval_required: opts.executionProfile?.hooks_approval_required === true,
     codex_app_agent_role_strategy: opts.executionProfile?.agent_role_strategy || null,
+    codex_native_invocation: opts.codexNativeInvocation || null,
     api_e2e_required: apiRequired,
     unsafe_external_side_effects: false,
     corrective_loop_enabled: corrective,
@@ -358,18 +360,21 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
   const reportFile = qaReportFilename();
   const root = missionRootFromDir(dir);
   const executionProfile = root ? await resolveCodexAppExecutionProfile({ root }).catch(() => null) : null;
+  const codexNativeInvocation = root ? await resolveQaCodexNativeInvocation(root, mission.id).catch(() => null) : null;
   if (executionProfile) await writeJsonAtomic(path.join(dir, 'qa-loop', 'execution-profile.json'), executionProfile).catch(() => undefined);
+  if (codexNativeInvocation) await writeJsonAtomic(path.join(dir, 'qa-loop', 'codex-native-invocation.json'), codexNativeInvocation).catch(() => undefined);
   await writeJsonAtomic(path.join(dir, 'qa-ledger.json'), {
     schema_version: 1,
     generated_at: nowIso(),
     mission_id: mission.id,
     qa_report_file: reportFile,
     codex_app_execution_profile: executionProfile ? compactExecutionProfile(executionProfile) : null,
+    codex_native_invocation: codexNativeInvocation,
     target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
     safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_chrome_extension_first_required_for_web_ui_e2e' },
     checklist
   });
-  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile, executionProfile }));
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile, executionProfile, codexNativeInvocation }));
   await writeTextAtomic(path.join(dir, reportFile), qaReportTemplate(mission, contract, checklist));
   return { checklist_count: checklist.length, report_file: reportFile };
 }
@@ -438,6 +443,7 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
     codex_app_execution_profile_artifact: previousGate.codex_app_execution_profile_artifact || null,
     codex_app_hooks_approval_required: previousGate.codex_app_hooks_approval_required === true,
     codex_app_agent_role_strategy: previousGate.codex_app_agent_role_strategy || null,
+    codex_native_invocation: previousGate.codex_native_invocation || null,
     blockers: previousGate.blockers || [],
     passed: !uiRequired,
     qa_report_written: true,
@@ -458,6 +464,23 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
     notes: ['No live UI/API verification was claimed.']
   });
   return evaluateQaGate(dir);
+}
+
+async function resolveQaCodexNativeInvocation(root: string, missionId: string) {
+  const [visualReview, hookEvidence, imageFollowup] = await Promise.all([
+    resolveCodexNativeInvocationPlan({ root, missionId, route: '$QA-LOOP', desiredCapability: 'visual-review' }),
+    resolveCodexNativeInvocationPlan({ root, missionId, route: '$QA-LOOP', desiredCapability: 'hook-evidence' }),
+    resolveCodexNativeInvocationPlan({ root, missionId, route: '$Image', desiredCapability: 'image-followup' })
+  ]);
+  return {
+    visual_review: visualReview.selected_strategy,
+    visual_review_plan: visualReview,
+    hook_evidence_policy: hookEvidence.env.SKS_CODEX_NATIVE_HOOK_EVIDENCE_POLICY,
+    hook_evidence_plan: hookEvidence,
+    image_path_strategy: imageFollowup.selected_strategy === 'codex-app-native' ? 'model-visible-path' : 'artifact-path',
+    image_followup_plan: imageFollowup,
+    hook_derived_evidence_counted: hookEvidence.selected_strategy !== 'blocked'
+  };
 }
 
 export function buildQaLoopPrompt({ id, mission, contract, cycle, previous, reportFile, imagePathContract, appHandoff, executionProfile }: any) {
