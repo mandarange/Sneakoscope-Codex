@@ -1,5 +1,7 @@
 # Release Proof Truth
 
+SKS 3.1.7 extends release proof truth to Codex Native hardening evidence: five real route blackboxes, bounded reference-cache artifacts, read-only broker proof, explicit repair-transaction reports, read/repair split blackboxes, generated-artifact neutrality, and 3.1.7 release DAG coverage must be traceable from release checks and generated reports.
+
 SKS 3.1.6 extends release proof truth to the Codex-native harness brand-neutrality evidence: external reference branding leakage checks, Codex-native feature broker reports, invocation router/default proof, route-map coverage, reference-source evidence, init-deep backup and memory-scope safety, doctor readiness UX, and release-script type-safety gates must be traceable from release checks and generated reports.
 
 SKS 3.1.4 extends release proof truth to the Doctor/Zellij and Codex App harness closure evidence: Zellij self-heal decisions, Homebrew install consent, doctor/MAD repair outcomes, headless fallback markers, Codex Native reference interop policy, Codex App Harness Matrix status, skill/agent sync reports, hook lifecycle checks, loop continuation enforcement, and execution-profile decisions must be traceable from release gates and generated reports.

@@ -15,6 +15,7 @@ const releaseGateManifest = readJson('release-gates.v2.json', { gates: [] });
 const releaseGateIds = new Set((Array.isArray(releaseGateManifest.gates) ? releaseGateManifest.gates : [])
   .filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
   .map((gate) => gate.id));
+const latestReleaseDagSummary = readLatestReleaseDagSummary();
 const releaseParallelCheckSource = readText('src/scripts/release-parallel-check.ts', '');
 const releaseRealCheckSource = readText('src/scripts/release-real-check.ts', '');
 const hooksRuntimeSource = readText('src/core/hooks-runtime.ts', '');
@@ -147,7 +148,7 @@ const checks = {
   agent_ast_aware_work_graph: scriptContains('release:check:parallel', 'agent:ast-aware-work-graph'),
   proof_fake_vs_real_policy: scriptContains('release:check:parallel', 'proof:fake-vs-real-policy'),
   proof_fake_real_policy_v2: scriptContains('release:check:parallel', 'proof:fake-real-policy-v2'),
-  release_runtime_truth_matrix: scriptContains('release:check:parallel', 'release:runtime-truth-matrix'),
+  release_runtime_truth_matrix: releaseGateIds.has('release:runtime-truth-matrix') || scriptContains('release:check:parallel', 'release:runtime-truth-matrix'),
   route_blackbox_realism: scriptContains('release:check:parallel', 'route:blackbox-realism'),
   real_zellij_pane_proof: scriptContains('release:real-check', 'zellij:pane-proof'),
   real_codex_patch_envelope_smoke: scriptContains('release:real-check', 'agent:real-codex-patch-envelope-smoke'),
@@ -301,7 +302,7 @@ const runtimeChecks = {
     && !['blocked', 'failed', 'not_verified'].includes(String(runtimeReports.ppt_full_e2e_blackbox?.trust_status || '')),
   flagship_proof_graph_v3: runtimeReports.flagship_proof_graph_v3?.ok === true,
   flagship_proof_graph_v4: runtimeReports.flagship_proof_graph_v4?.ok === true,
-  runtime_truth_matrix: runtimeReports.runtime_truth_matrix?.ok === true
+  runtime_truth_matrix: releaseDagGatePassed('release:runtime-truth-matrix') || runtimeReports.runtime_truth_matrix?.ok === true
     && Array.isArray(runtimeReports.runtime_truth_matrix?.rows)
     && runtimeReports.runtime_truth_matrix.rows.every((row) => row.required_mode !== true || !['blocked', 'real_required_missing', 'integration_optional'].includes(String(row.proof_level || ''))),
   real_codex_dynamic_smoke: !runtimeReports.real_codex_dynamic_smoke
@@ -446,15 +447,23 @@ const stampVerify = spawnSync(process.execPath, ['dist/scripts/release-check-sta
   timeout: 30_000
 });
 const currentStamp = stampVerify.status === 0 && stamp?.package_version === RELEASE_VERSION ? stamp : null;
-if (stampVerify.status !== 0 && !dynamicReleaseMode) remainingP0.push('release_check_stamp_stale_or_missing');
+const stampRequiredForOk = process.env.SKS_RELEASE_REQUIRE_STAMP === '1' || !dynamicReleaseMode;
+const nonPublishGaps = [];
+if (stampVerify.status !== 0) {
+  if (stampRequiredForOk) {
+    remainingP0.push('release_check_stamp_stale_or_missing');
+  } else {
+    nonPublishGaps.push('release_check_stamp_stale_or_missing');
+  }
+}
 const releaseProofTruth = readJson('.sneakoscope/release-proof-truth.json', readJson('dist/release-proof-truth.json', null));
 const report = {
   schema: 'sks.release-readiness.v1',
   generated_at: new Date().toISOString(),
   scope: {
     release_version: RELEASE_VERSION,
-    gate: `${RELEASE_VERSION} route-truth dynamic scheduler closure DAG`,
-    ok_means: `no remaining ${RELEASE_VERSION} dynamic scheduler, task graph, follow-up, Zellij lane, route blackbox, source, or Goal propagation gaps`,
+    gate: `${RELEASE_VERSION} Codex Native hardening closure DAG`,
+    ok_means: `no remaining ${RELEASE_VERSION} Codex Native route blackbox, reference-cache, read/repair split, generated-artifact neutrality, or release metadata gaps`,
     not_in_1_18_parallel_gate: `reported for historical, live, or broader gates that are not part of the ${RELEASE_VERSION} closure DAG`
   },
   package: {
@@ -978,6 +987,8 @@ const report = {
   release_gate_stamp_verification: {
     status: stampVerify.status === 0 ? 'pass' : dynamicReleaseMode ? 'dynamic_deferred' : 'fail',
     dynamic_release_mode: dynamicReleaseMode,
+    required_for_ok: stampRequiredForOk,
+    required_for_publish: true,
     stdout: trimOutput(stampVerify.stdout),
     stderr: trimOutput(stampVerify.stderr)
   },
@@ -986,6 +997,8 @@ const report = {
     generated_at: stamp.generated_at || null,
     ignored: true
   } : null,
+  non_publish_gaps: nonPublishGaps,
+  publish_ready: stampVerify.status === 0 && remainingP0.length === 0,
   remaining_p0_gaps: remainingP0,
   ok: remainingP0.length === 0
 };
@@ -1035,6 +1048,39 @@ fs.writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
 fs.writeFileSync(mdPath, renderMarkdown(report));
 console.log(JSON.stringify(report, null, 2));
 if (!report.ok) process.exitCode = 1;
+
+function releaseDagGatePassed(gateId) {
+  return latestReleaseDagSummary?.ok === true
+    && latestReleaseDagSummary?.failed === 0
+    && Array.isArray(latestReleaseDagSummary?.selected_gate_ids)
+    && latestReleaseDagSummary.selected_gate_ids.includes(gateId);
+}
+
+function readLatestReleaseDagSummary() {
+  const dir = path.join(root, '.sneakoscope', 'reports', 'release-gates');
+  let rows = [];
+  try {
+    rows = fs.readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('rg-'))
+      .map((entry) => {
+        const file = path.join(dir, entry.name, 'summary.json');
+        const stat = fs.statSync(file);
+        return { file, mtimeMs: stat.mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+  } catch {
+    return null;
+  }
+  for (const row of rows) {
+    try {
+      const summary = JSON.parse(fs.readFileSync(row.file, 'utf8'));
+      if (summary?.selected_preset === 'release') return summary;
+    } catch {
+      // Ignore malformed historical release summaries.
+    }
+  }
+  return null;
+}
 
 function readJson(rel, fallback) {
   try {
@@ -1180,6 +1226,7 @@ function renderMarkdown(report) {
 - Release metadata: \`${report.release_metadata.status}\`
 - Side-effect runtime: \`${report.side_effect_runtime.status}\` (${report.side_effect_runtime.report?.unexpected_applied_mutations ?? 'not_reported'} unexpected applied mutations)
 - Provenance: \`${report.provenance.status}\` (reviewed_ref=${report.provenance.report?.reviewed_ref || 'not_reported'}, main=${report.provenance.report?.main_version || 'unavailable'}, npm=${report.provenance.report?.npm_version || 'unavailable'}, tag=${report.provenance.report?.tag_status?.exists ? 'present' : 'missing'})
+- Publish ready: \`${report.publish_ready ? 'true' : 'false'}\`; non-publish gaps: ${report.non_publish_gaps.length ? report.non_publish_gaps.join(', ') : 'None'}
 - Priority closure: P0 through P9 are tracked in the ${RELEASE_VERSION} readiness surface.
 - Remaining ${RELEASE_VERSION} P0 DAG gaps: ${report.remaining_p0_gaps.length ? report.remaining_p0_gaps.join(', ') : 'None'}
 

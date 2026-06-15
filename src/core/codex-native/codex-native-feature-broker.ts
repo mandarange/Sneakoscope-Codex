@@ -1,10 +1,9 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { findCodexBinary } from '../codex-adapter.js'
 import { codexAppIntegrationStatus } from '../codex-app.js'
-import { syncCodexAgentRoles } from '../codex-app/codex-agent-role-sync.js'
 import { probeCodexAgentTypeSupport } from '../codex-app/codex-agent-type-probe.js'
 import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-probe.js'
-import { syncCodexSksSkills } from '../codex-app/codex-skill-sync.js'
 import { detectCodex0138Capability } from '../codex-control/codex-0138-capability.js'
 import { detectCodex0139Capability } from '../codex-control/codex-0139-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
@@ -13,13 +12,20 @@ import { buildMcpPluginServerCandidates } from '../mcp/mcp-plugin-inventory.js'
 import { codexNativeFeatureState, computeCodexNativeInvocationDefaults, type CodexNativeFeatureMatrix, type CodexNativeFeatureState } from './codex-native-feature-matrix.js'
 
 const REPORT_PATH = '.sneakoscope/reports/codex-native-feature-matrix.json'
+const REQUIRED_SKILL_NAMES = ['loop', 'naruto', 'qa-loop', 'research', 'dfix', 'image-ux-review', 'computer-use', 'init-deep']
+const REQUIRED_AGENT_ROLES = ['sks-explorer', 'sks-planner', 'sks-implementer', 'sks-checker', 'sks-release-verifier', 'sks-zellij-ui-verifier', 'sks-codex-probe-verifier']
 
 export async function buildCodexNativeFeatureMatrix(input: {
   root: string
   missionDir?: string | null
   applyRepairs?: boolean
+  repairManagedAssets?: boolean
+  mode?: 'read-only' | 'repair'
 } = { root: process.cwd() }): Promise<CodexNativeFeatureMatrix> {
   const root = path.resolve(input.root || process.cwd())
+  const deprecatedApplyRepairs = input.applyRepairs === true
+  const mode = input.mode || (deprecatedApplyRepairs || input.repairManagedAssets === true ? 'repair' : 'read-only')
+  const repairManagedAssets = mode === 'repair' && (input.repairManagedAssets === true || deprecatedApplyRepairs)
   const fixtureMode = process.env.SKS_CODEX_0138_FAKE === '1' || process.env.SKS_CODEX_0139_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
   const version = codexBin ? await codexVersion(codexBin) : null
@@ -63,8 +69,8 @@ export async function buildCodexNativeFeatureMatrix(input: {
     blockers: [messageOf(err)],
     warnings: ['agent_type_probe_failed_message_role_fallback']
   }))
-  const skillSync = await syncCodexSksSkills({ root, apply: input.applyRepairs === true }).catch((err: unknown) => ({ ok: false, blockers: [messageOf(err)] }))
-  const agentRoles = await syncCodexAgentRoles({ root, apply: input.applyRepairs === true }).catch((err: unknown) => ({ ok: false, blockers: [messageOf(err)] }))
+  const skillSync = await inspectManagedSkillState(root)
+  const agentRoles = await inspectManagedAgentRoleState(root)
   const appRecord: Record<string, unknown> = isRecord(app) ? app : {}
   const requiredSkills = isRecord(appRecord.required_skills) ? appRecord.required_skills : {}
   const skills = isRecord(appRecord.skills) ? appRecord.skills : {}
@@ -97,7 +103,7 @@ export async function buildCodexNativeFeatureMatrix(input: {
       unavailableStatus: 'fallback'
     }),
     mcp_inventory: codexNativeFeatureState({
-      ok: mcpCandidates.candidates.length > 0 || Array.isArray(plugins.plugins),
+      ok: mcpCandidates.candidates.length > 0,
       source: 'plugin-inventory',
       artifact_path: '.sneakoscope/mcp-plugin-server-candidates.json',
       evidence: [`candidate_count:${mcpCandidates.candidates.length}`],
@@ -140,7 +146,11 @@ export async function buildCodexNativeFeatureMatrix(input: {
       ...(!codexBin ? ['codex_cli_missing'] : []),
       ...Object.values(features).flatMap((feature) => feature.blockers)
     ],
-    warnings: Object.values(features).flatMap((feature) => feature.warnings)
+    warnings: [
+      ...Object.values(features).flatMap((feature) => feature.warnings),
+      ...(deprecatedApplyRepairs ? ['deprecated_apply_repairs_input'] : []),
+      ...(mode === 'repair' && !repairManagedAssets ? ['repair_mode_without_managed_asset_repair'] : [])
+    ]
   }
   const matrix: CodexNativeFeatureMatrix = {
     ...matrixBase,
@@ -149,6 +159,64 @@ export async function buildCodexNativeFeatureMatrix(input: {
   }
   await writeCodexNativeFeatureMatrix(root, matrix, input.missionDir)
   return matrix
+}
+
+async function inspectManagedSkillState(root: string): Promise<{ ok: boolean; apply: false; artifact_path: string; existing_count: number; managed_count: number; missing_required: string[]; blockers: string[]; warnings: string[] }> {
+  const skillRoots = [
+    path.join(root, '.agents', 'skills'),
+    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'skills')] : [])
+  ]
+  let existingCount = 0
+  const managed = new Set<string>()
+  for (const dir of skillRoots) {
+    const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+    existingCount += rows.filter((row) => row.isDirectory()).length
+    for (const name of REQUIRED_SKILL_NAMES) {
+      if (managed.has(name)) continue
+      const text = await fs.readFile(path.join(dir, name, 'SKILL.md'), 'utf8').catch(() => '')
+      if (text.includes('BEGIN SKS MANAGED SKILL')) managed.add(name)
+    }
+  }
+  const missing = REQUIRED_SKILL_NAMES.filter((name) => !managed.has(name))
+  return {
+    ok: missing.length === 0,
+    apply: false,
+    artifact_path: '.sneakoscope/reports/codex-skill-sync.json',
+    existing_count: existingCount,
+    managed_count: managed.size,
+    missing_required: missing,
+    blockers: missing.length ? [`managed_skills_missing:${missing.join(',')}`] : [],
+    warnings: existingCount > managed.size ? ['non_sks_skill_dirs_ignored'] : []
+  }
+}
+
+async function inspectManagedAgentRoleState(root: string): Promise<{ ok: boolean; apply: false; artifact_path: string; existing_count: number; managed_count: number; missing_required: string[]; blockers: string[]; warnings: string[] }> {
+  const dirs = [
+    path.join(root, '.codex', 'agents'),
+    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'agents')] : [])
+  ]
+  let existingCount = 0
+  const managed = new Set<string>()
+  for (const dir of dirs) {
+    const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+    existingCount += rows.filter((row) => row.isFile() && row.name.endsWith('.toml')).length
+    for (const role of REQUIRED_AGENT_ROLES) {
+      if (managed.has(role)) continue
+      const text = await fs.readFile(path.join(dir, `${role}.toml`), 'utf8').catch(() => '')
+      if (text.includes('SKS managed 3.1.7 directive role')) managed.add(role)
+    }
+  }
+  const missing = REQUIRED_AGENT_ROLES.filter((role) => !managed.has(role))
+  return {
+    ok: missing.length === 0,
+    apply: false,
+    artifact_path: '.sneakoscope/reports/codex-agent-role-sync.json',
+    existing_count: existingCount,
+    managed_count: managed.size,
+    missing_required: missing,
+    blockers: missing.length ? [`managed_agent_roles_missing:${missing.join(',')}`] : [],
+    warnings: existingCount > managed.size ? ['non_sks_agent_roles_ignored'] : []
+  }
 }
 
 export async function writeCodexNativeFeatureMatrix(root: string, matrix: CodexNativeFeatureMatrix, missionDir?: string | null): Promise<void> {

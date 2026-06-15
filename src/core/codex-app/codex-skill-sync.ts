@@ -31,6 +31,8 @@ interface CodexSkillSyncReport {
     mode: 'coexist'
     clobbered_external_routes: false
     clobbered_user_skills: false
+    skipped_user_skills: string[]
+    managed_skills: string[]
   }
   blockers: string[]
 }
@@ -81,7 +83,9 @@ export async function syncCodexSksSkills(input: {
     interop: {
       mode: 'coexist',
       clobbered_external_routes: false,
-      clobbered_user_skills: false
+      clobbered_user_skills: false,
+      skipped_user_skills: skipped,
+      managed_skills: desired
     },
     blockers: []
   }
@@ -112,7 +116,7 @@ function skillContent(name: string): string {
     `Use when: ${profile.when}`,
     `Route: ${profile.command}`,
     `Evidence: ${profile.evidence}`,
-    'Safety: keep route state bounded, preserve user and external route assets, and stop on hard blockers instead of fabricating fallback behavior.',
+    'Safety rules: keep route state bounded, preserve user and external route assets, and stop on hard blockers instead of fabricating fallback behavior.',
     'Proof paths: write the route-local mission artifact named in Evidence before claiming completion.',
     'Failure recovery: if a proof path cannot be produced, record the blocker and continue only when the selected SKS route has another allowed evidence path.',
     `Fallback: ${profile.fallback}`,

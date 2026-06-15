@@ -12,15 +12,16 @@ import { resolveCodexNativeInvocationPlan } from '../core/codex-native/codex-nat
 import { buildCodexNativeInteropPolicy } from '../core/codex-native/codex-native-interop-policy.js';
 import { analyzeCodexNativeReferenceSource } from '../core/codex-native/codex-native-reference-evidence.js';
 import { writeCodexNativePatternAnalysis } from '../core/codex-native/codex-native-pattern-analysis.js';
+import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await sksRoot();
   const action = String(args[0] || 'status');
   if (action === 'status' || action === 'check' || action === 'feature-broker' || action === 'feature-matrix') {
-    return printCodexNativeResult(args, await buildCodexNativeFeatureMatrix({ root, applyRepairs: flag(args, '--fix') || flag(args, '--apply') }));
+    return printCodexNativeResult(args, await maybeRepairThenReadOnlyMatrix(args, root, () => buildCodexNativeFeatureMatrix({ root, mode: 'read-only' })));
   }
   if (action === 'harness-matrix' || action === 'harness-compat') {
-    return printCodexNativeResult(args, await buildCodexAppHarnessMatrix({ root, applyRepairs: flag(args, '--fix') || flag(args, '--apply') }));
+    return printCodexNativeResult(args, await maybeRepairThenReadOnlyMatrix(args, root, () => buildCodexAppHarnessMatrix({ root, mode: 'read-only' })));
   }
   if (action === 'skill-sync') return printCodexNativeResult(args, await syncCodexSksSkills({ root, apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'agent-role-sync') return printCodexNativeResult(args, await syncCodexAgentRoles({ root, apply: flag(args, '--apply') || flag(args, '--fix') }));
@@ -38,6 +39,21 @@ export async function run(_command: any, args: any = []) {
   }
   console.error('Usage: sks codex-native status|feature-broker|harness-compat|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|interop-policy|reference-evidence|pattern-analysis|invocation-plan [--json]');
   process.exitCode = 1;
+}
+
+async function maybeRepairThenReadOnlyMatrix(args: any[] = [], root: string, matrixFn: () => Promise<any>) {
+  const wantsRepair = flag(args, '--fix') || flag(args, '--apply') || flag(args, '--repair-codex-native');
+  if (!wantsRepair) return matrixFn();
+  const repair = await repairCodexNativeManagedAssets({ root, requestedBy: 'manual', yes: flag(args, '--yes') });
+  const matrix = await matrixFn();
+  return {
+    schema: 'sks.codex-native-read-repair-split.v1',
+    ok: repair.ok && matrix?.ok !== false,
+    repair,
+    matrix,
+    blockers: [...(repair.blockers || []), ...(matrix?.blockers || [])],
+    warnings: [...(repair.warnings || []), 'matrix_probe_after_explicit_repair_transaction']
+  };
 }
 
 function printCodexNativeResult(args: any[] = [], result: any) {

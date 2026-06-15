@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { analyzeCodexNativeReferenceSource, renderCodexNativeReferenceMarkdown, type CodexNativeReferenceEvidenceReport } from './codex-native-reference-source.js'
 
@@ -8,6 +9,8 @@ export interface CodexNativePatternAnalysis {
   source_kind: 'external-reference-source'
   source_ref: string
   source_sha: string | null
+  source_url_hash?: string | null
+  cache_report_path?: string | null
   patterns: Array<{
     id: string
     title: string
@@ -44,28 +47,44 @@ export async function buildCodexNativePatternAnalysis(input: {
   const root = path.resolve(input.root)
   const evidence = input.evidence || await analyzeCodexNativeReferenceSource({ root, sourceDir: input.sourceDir || null, writeReport: true }).catch(() => null)
   const evidenceByPattern = new Map<string, string[]>()
+  const confidenceByPattern = new Map<string, CodexNativePatternAnalysis['patterns'][number]['confidence']>()
   for (const item of evidence?.evidence || []) {
     const list = evidenceByPattern.get(item.pattern_id) || []
     list.push(item.snippet_hash)
     evidenceByPattern.set(item.pattern_id, list)
+    confidenceByPattern.set(item.pattern_id, strongerConfidence(confidenceByPattern.get(item.pattern_id), item.confidence))
   }
   return {
     schema: 'sks.codex-native-pattern-analysis.v1',
     generated_at: nowIso(),
     source_kind: 'external-reference-source',
-    source_ref: evidence?.source_ref || input.sourceDir || '.sneakoscope/cache/codex-native-reference',
+    source_ref: evidence?.source_ref || neutralSourceRef(input.sourceDir || '.sneakoscope/cache/codex-native-reference'),
     source_sha: evidence?.source_sha || null,
+    source_url_hash: evidence?.source_url_hash || null,
+    cache_report_path: evidence?.cache_report_path || null,
     patterns: PATTERN_ROWS.map((pattern) => {
       const hashes = evidenceByPattern.get(pattern.id) || []
       return {
         ...pattern,
-        confidence: hashes.length ? 'high' as const : evidence ? 'medium' as const : 'low' as const,
+        confidence: confidenceByPattern.get(pattern.id) || (hashes.length ? 'medium' as const : evidence ? 'low' as const : 'low' as const),
         evidence_hashes: hashes
       }
     }),
     blockers: evidence?.blockers || ['source_snapshot_missing'],
     warnings: evidence?.warnings || ['reference_evidence_unavailable']
   }
+}
+
+function neutralSourceRef(value: string): string {
+  return `source:${createHash('sha256').update(value).digest('hex').slice(0, 16)}`
+}
+
+function strongerConfidence(
+  current: CodexNativePatternAnalysis['patterns'][number]['confidence'] | undefined,
+  next: CodexNativePatternAnalysis['patterns'][number]['confidence']
+): CodexNativePatternAnalysis['patterns'][number]['confidence'] {
+  const rank = { low: 0, medium: 1, high: 2 } as const
+  return current && rank[current] >= rank[next] ? current : next
 }
 
 export async function writeCodexNativePatternAnalysis(root: string, input: { sourceDir?: string | null } = {}): Promise<CodexNativePatternAnalysis> {

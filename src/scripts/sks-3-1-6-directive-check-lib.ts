@@ -324,7 +324,7 @@ async function initDeepMemoryScopeSafety(id: string): Promise<void> {
 }
 
 async function releaseScriptsTypeSafe(id: string): Promise<void> {
-  for (const rel of ['src/scripts/release-dag-full-coverage-check.ts', 'src/scripts/sks-3-1-5-directive-check-lib.ts', 'src/scripts/sks-3-1-6-directive-check-lib.ts']) {
+  for (const rel of ['src/scripts/release-dag-full-coverage-check.ts', 'src/scripts/sks-3-1-5-directive-check-lib.ts', 'src/scripts/sks-3-1-6-directive-check-lib.ts', 'src/scripts/sks-3-1-7-directive-check-lib.ts']) {
     const text = readText(rel)
     assertGate(!/^\s*\/\/\s*@ts-nocheck\b/m.test(text), `release helper still has ts-nocheck:${rel}`)
   }
@@ -338,7 +338,7 @@ async function noTsNoCheckReleaseScripts(id: string): Promise<void> {
   const checked = listFiles(path.join(root, 'src/scripts')).filter((file) => {
     const rel = path.relative(root, file).split(path.sep).join('/')
     return /^src\/scripts\/release-dag-full-coverage-check\.ts$/.test(rel)
-      || /^src\/scripts\/sks-3-1-[56]-directive-check-lib\.ts$/.test(rel)
+      || /^src\/scripts\/sks-3-1-[567]-directive-check-lib\.ts$/.test(rel)
       || /^src\/scripts\/no-ts-nocheck-release-scripts-check\.ts$/.test(rel)
       || /^src\/scripts\/release-script-type-safety-check\.ts$/.test(rel)
   })

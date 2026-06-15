@@ -2412,7 +2412,9 @@
     {
       "id": "codex-native:reference-evidence",
       "command": "npm run codex-native:reference-evidence --silent",
-      "deps": [],
+      "deps": [
+        "codex-native:reference-cache"
+      ],
       "resource": [
         "cpu-light",
         "fs-read"
@@ -9946,11 +9948,13 @@
       "id": "pipeline:codex-native-e2e-blackbox",
       "command": "npm run pipeline:codex-native-e2e-blackbox --silent",
       "deps": [
-        "codex-native:feature-broker-blackbox",
-        "pipeline:codex-native-loop-routing",
-        "pipeline:codex-native-qa-routing",
-        "pipeline:codex-native-research-routing",
-        "pipeline:codex-native-image-routing"
+        "codex-native:feature-broker",
+        "codex-native:invocation-router",
+        "pipeline:codex-native-loop-routing-real-blackbox",
+        "pipeline:codex-native-qa-routing-real-blackbox",
+        "pipeline:codex-native-research-routing-real-blackbox",
+        "pipeline:codex-native-image-routing-real-blackbox",
+        "pipeline:codex-native-doctor-mad-routing-real-blackbox"
       ],
       "resource": [
         "cpu-light",
@@ -11011,7 +11015,7 @@
       "cache": {
         "enabled": false,
         "inputs": [
-          "src/scripts/release-dag-full-coverage.ts",
+          "src/scripts/release-dag-full-coverage-check.ts",
           "src/core/zellij/**",
           "src/core/naruto/**",
           "src/core/release/**",
@@ -15074,6 +15078,365 @@
       },
       "preset": [
         "real-check"
+      ]
+    },
+    {
+      "id": "pipeline:codex-native-loop-routing-real-blackbox",
+      "command": "npm run pipeline:codex-native-loop-routing-real-blackbox --silent",
+      "deps": [
+        "codex-native:feature-broker",
+        "codex-native:invocation-router"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "pipeline:codex-native-qa-routing-real-blackbox",
+      "command": "npm run pipeline:codex-native-qa-routing-real-blackbox --silent",
+      "deps": [
+        "codex-native:feature-broker",
+        "codex-native:invocation-router"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "pipeline:codex-native-research-routing-real-blackbox",
+      "command": "npm run pipeline:codex-native-research-routing-real-blackbox --silent",
+      "deps": [
+        "codex-native:feature-broker",
+        "codex-native:invocation-router"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "pipeline:codex-native-image-routing-real-blackbox",
+      "command": "npm run pipeline:codex-native-image-routing-real-blackbox --silent",
+      "deps": [
+        "codex-native:feature-broker",
+        "codex-native:invocation-router"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "pipeline:codex-native-doctor-mad-routing-real-blackbox",
+      "command": "npm run pipeline:codex-native-doctor-mad-routing-real-blackbox --silent",
+      "deps": [
+        "codex-native:feature-broker",
+        "codex-native:invocation-router"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-native:reference-cache",
+      "command": "npm run codex-native:reference-cache --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-native:reference-cache-blackbox",
+      "command": "npm run codex-native:reference-cache-blackbox --silent",
+      "deps": [
+        "codex-native:reference-cache"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-native:broker-read-only",
+      "command": "npm run codex-native:broker-read-only --silent",
+      "deps": [
+        "codex-native:feature-broker"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-native:repair-transaction",
+      "command": "npm run codex-native:repair-transaction --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-native:read-repair-split-blackbox",
+      "command": "npm run codex-native:read-repair-split-blackbox --silent",
+      "deps": [
+        "codex-native:broker-read-only",
+        "codex-native:repair-transaction"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "brand-neutrality:generated-artifacts",
+      "command": "npm run brand-neutrality:generated-artifacts --silent",
+      "deps": [
+        "brand-neutrality:zero-leakage",
+        "codex-native:reference-cache",
+        "codex-native:reference-evidence",
+        "codex-native:pattern-analysis",
+        "codex-native:feature-broker",
+        "codex-native:invocation-router"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
       ]
     }
   ]

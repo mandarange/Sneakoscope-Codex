@@ -1,3 +1,3 @@
 #!/usr/bin/env node
-import { runDirective316Gate } from './sks-3-1-6-directive-check-lib.js';
-await runDirective316Gate('pipeline:codex-native-doctor-mad-routing');
+import { runCodexNativeDoctorMadRoutingRealBlackbox } from './pipeline-codex-native-doctor-mad-routing-real-blackbox.js'
+await runCodexNativeDoctorMadRoutingRealBlackbox()

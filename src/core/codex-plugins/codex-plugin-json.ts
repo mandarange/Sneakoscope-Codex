@@ -58,7 +58,8 @@ export async function buildCodexPluginInventory(): Promise<CodexPluginInventory>
   })
   const blockers = [
     ...(capability.supports_plugin_json ? [] : ['codex_0_138_plugin_json_unavailable']),
-    ...normalizeList(listJson?.blockers)
+    ...normalizeList(listJson?.blockers),
+    ...(process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1' ? ['fixture_mcp_candidates_disabled'] : [])
   ]
   return {
     schema: 'sks.codex-plugin-inventory.v1',
@@ -201,7 +202,9 @@ function fakePluginDetail(pluginId: string) {
     installed: true,
     enabled: true,
     default_prompts: ['Use the fixture plugin safely.'],
-    remote_mcp_servers: [{ name: 'fixture-db-docs', url: 'https://mcp.example.test', auth_type: 'oauth' }],
+    remote_mcp_servers: process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1'
+      ? []
+      : [{ name: 'fixture-db-docs', url: 'https://mcp.example.test', auth_type: 'oauth' }],
     unavailable_app_templates: ['fixture-desktop-template']
   }
 }

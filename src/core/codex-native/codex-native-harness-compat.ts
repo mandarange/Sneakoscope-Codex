@@ -6,6 +6,8 @@ export async function buildCodexAppHarnessMatrixFromNative(input: {
   root: string
   missionDir?: string | null
   applyRepairs?: boolean
+  repairManagedAssets?: boolean
+  mode?: 'read-only' | 'repair'
 }): Promise<CodexAppHarnessMatrix> {
   const matrix = await buildCodexNativeFeatureMatrix(input)
   return codexAppHarnessMatrixFromNative(matrix)

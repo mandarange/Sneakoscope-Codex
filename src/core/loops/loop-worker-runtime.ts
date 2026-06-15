@@ -207,6 +207,12 @@ async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWork
   });
   const dir = path.join(loopNodeRoot(input.root, input.plan.mission_id, input.node.loop_id), input.phase);
   await ensureDir(dir);
+  const invocationPlan = await resolveCodexNativeInvocationPlan({
+    root: input.root,
+    missionId: input.plan.mission_id,
+    route: '$Loop',
+    desiredCapability: 'agent-role'
+  }).catch(() => null);
   const resultPath = path.join(dir, 'worker-runtime-result.json');
   const childInputPath = path.join(dir, 'worker-fixture-intake.json');
   await writeJsonAtomic(childInputPath, {
@@ -218,7 +224,8 @@ async function runLoopWorkerFixture(input: LoopWorkerRunInput): Promise<LoopWork
     worker_count: input.phase === 'maker' ? input.node.maker.worker_count : input.node.checker.worker_count,
     result_path: resultPath,
     owner_scope: input.node.owner_scope,
-    maker_artifacts: input.makerArtifacts || []
+    maker_artifacts: input.makerArtifacts || [],
+    codex_native_invocation_plan: invocationPlan ? compactInvocationPlan(invocationPlan) : null
   });
   const child = await runProcess(process.execPath, [fixtureChildEntrypoint(), childInputPath], {
     cwd: input.root,

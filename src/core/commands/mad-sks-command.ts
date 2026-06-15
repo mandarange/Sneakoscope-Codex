@@ -22,6 +22,7 @@ import { checkSksUpdateNotice } from '../update/update-notice.js';
 import { createMadDbCapability, MAD_DB_ACK } from '../mad-db/mad-db-capability.js';
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js';
+import { resolveCodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js';
 import { repairZellijForSks } from '../zellij/zellij-self-heal.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
@@ -469,6 +470,13 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: 'sks --mad Zellij scoped high-power maintenance session' });
   await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch(() => null);
   await writeCodex0139CapabilityArtifacts(root, { missionId: id }).catch(() => null);
+  const codexNativeInvocation = await resolveCodexNativeInvocationPlan({
+    root,
+    missionId: id,
+    route: '$MAD',
+    desiredCapability: 'hook-evidence'
+  }).catch(() => null);
+  if (codexNativeInvocation) await writeJsonAtomic(path.join(dir, 'mad-codex-native-invocation.json'), codexNativeInvocation).catch(() => undefined);
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
   // The interactive launch 'before' snapshot is only persisted (env + policy json)
   // and is never compared against an 'after' snapshot during the session, so the
@@ -512,6 +520,13 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
     protected_core_policy: protectedCorePolicyPath,
     protected_core_before: protectedCoreBeforePath,
     protected_core_digest: protectedCoreBefore.digest,
+    codex_native_invocation_plan: codexNativeInvocation ? {
+      selected_strategy: codexNativeInvocation.selected_strategy,
+      hook_evidence_policy: codexNativeInvocation.env.SKS_CODEX_NATIVE_HOOK_EVIDENCE_POLICY,
+      blockers: codexNativeInvocation.blockers,
+      warnings: codexNativeInvocation.warnings,
+      artifact_path: 'mad-codex-native-invocation.json'
+    } : null,
     activated_by: 'sks --mad',
     cwd: path.resolve(cwd || process.cwd())
   };

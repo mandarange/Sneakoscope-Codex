@@ -1,10 +1,12 @@
-# Codex Native Pattern Evidence
+# SKS Codex Native Patterns
 
-This document records SKS-owned Codex Native usage patterns without exposing reference implementation branding.
+This document records reference-derived Codex-native patterns in SKS-owned vocabulary. It stores line anchors and snippet hashes only.
 
-Pattern reports are generated from hashed source evidence and written to:
+Generated at: `2026-06-15T00:31:19.122Z`
+Source kind: `external-reference-source`
+Source URL hash: `none`
+Source SHA: `none`
 
-- `.sneakoscope/reports/codex-native-reference-evidence.json`
-- `.sneakoscope/reports/codex-native-pattern-analysis.json`
-
-The public summary uses neutral pattern identifiers, file paths, line ranges, and snippet hashes. Long source excerpts and reference-specific names are intentionally omitted.
+| Pattern | File | Lines | Snippet Hash | Confidence |
+|---|---|---:|---|---|
+| none | - | - | - | low |
