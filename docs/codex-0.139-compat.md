@@ -1,6 +1,8 @@
 # Codex 0.139 Compatibility
 
-SKS 3.1.9 keeps the Codex 0.139 compatibility baseline while advancing the publish candidate beyond the already-published 3.1.8 release.
+SKS 3.1.11 keeps the Codex 0.139 compatibility baseline while closing the MAD Zellij stacked-pane minimum, Context7 MCP remote repair, and stale Codex startup config repair gates.
+
+SKS 3.1.10 keeps the Codex 0.139 compatibility baseline while closing the release-ready hardening gates for wiring parity, native capability postchecks, duplicate skill proof, and secret rollback.
 
 SKS 3.1.8 keeps the Codex 0.139 compatibility baseline while closing core skill immutability, native capability repair, duplicate skill dedupe, and Supabase/secret preservation release gates.
 

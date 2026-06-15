@@ -24,14 +24,23 @@ import { runCodex0138Doctor } from '../core/doctor/codex-0138-doctor.js';
 import { writeCodexPluginInventoryArtifacts, pluginAppTemplatePolicy } from '../core/codex-plugins/codex-plugin-json.js';
 import { writeMcpPluginInventoryArtifacts } from '../core/mcp/mcp-plugin-inventory.js';
 import { runDoctorZellijRepair, doctorZellijRepairConsoleLine } from '../core/doctor/doctor-zellij-repair.js';
+import { runDoctorContext7Repair } from '../core/doctor/doctor-context7-repair.js';
+import { runDoctorCodexStartupRepair } from '../core/doctor/doctor-codex-startup-repair.js';
 import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
 import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 import { runDoctorNativeCapabilityRepair } from '../core/doctor/doctor-native-capability-repair.js';
 import { runDoctorCommandAliasCleanup } from '../core/doctor/command-alias-cleanup.js';
+import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 
 export async function run(_command: any, args: any = []) {
+  const root = await projectRoot();
   const doctorFix = flag(args, '--fix');
+  if (doctorFix) return withSecretPreservationGuard(root, 'doctor-fix', () => runDoctor(args, root, doctorFix));
+  return runDoctor(args, root, doctorFix);
+}
+
+async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   let setupRepair = null;
   const sksUpdate = doctorFix
     ? {
@@ -70,7 +79,6 @@ export async function run(_command: any, args: any = []) {
         : await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
     };
   }
-  const root = await projectRoot();
   const commandAliasCleanup = await runDoctorCommandAliasCleanup({
     root,
     fix: doctorFix
@@ -112,6 +120,19 @@ export async function run(_command: any, args: any = []) {
     requireActualCodex: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     codexBin: codexBin || undefined
   };
+  const codexStartupRepair = await runDoctorCodexStartupRepair({ root, fix: doctorFix }).catch((err: any) => ({
+    schema: 'sks.doctor-codex-startup-repair.v1',
+    ok: false,
+    generated_at: new Date().toISOString(),
+    fix: doctorFix,
+    configs: [],
+    agent_role_files: { sanitized: [], created: [], blockers: [err?.message || String(err)] },
+    actions: [],
+    manual_actions: [],
+    blockers: [err?.message || String(err)],
+    warnings: [],
+    report_path: `${root}/.sneakoscope/reports/doctor-codex-startup-repair.json`
+  }));
   const codexDoctorBefore = flag(args, '--fix') ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') }).catch(() => null) : null;
   const configRepair = flag(args, '--fix') ? await repairCodexConfigEperm(root, { fix: true, ...configProbeOpts }) : null;
   const migrationJournal = flag(args, '--fix')
@@ -208,6 +229,18 @@ export async function run(_command: any, args: any = []) {
     blockers: [err?.message || String(err)],
     warnings: []
   }));
+  const context7Repair = await runDoctorContext7Repair({ root, fix: doctorFix }).catch((err: any) => ({
+    schema: 'sks.doctor-context7-repair.v1',
+    ok: false,
+    generated_at: new Date().toISOString(),
+    fix: doctorFix,
+    preferred_transport: 'remote',
+    configs: [],
+    actions: [],
+    blockers: [err?.message || String(err)],
+    warnings: [],
+    report_path: `${root}/.sneakoscope/reports/doctor-context7-repair.json`
+  }));
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const localModel = await readLocalModelConfig().catch(() => null);
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
@@ -287,6 +320,8 @@ export async function run(_command: any, args: any = []) {
     codex_doctor: codexDoctor,
     require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     zellij,
+    context7_repair: context7Repair,
+    codex_startup_repair: codexStartupRepair,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
@@ -300,6 +335,7 @@ export async function run(_command: any, args: any = []) {
       ...(codexConfig.operator_actions || []),
       ...(configRepair?.operator_actions || []),
       ...(zellijRepair && !(zellijRepair as any).ok && (zellijRepair as any).command ? [`Run: ${(zellijRepair as any).command}`] : []),
+      ...((codexStartupRepair as any).manual_actions || []),
       ...(pluginPolicy?.doctor_warnings || [])
     ]
   });
@@ -307,7 +343,7 @@ export async function run(_command: any, args: any = []) {
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
   const result = {
     schema: 'sks.doctor-status.v1',
-    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false,
+    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false,
     root,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
     codex,
@@ -321,6 +357,8 @@ export async function run(_command: any, args: any = []) {
     codex_doctor_diff: codexDoctorDiff,
     zellij,
     zellij_repair: zellijRepair,
+    context7_repair: context7Repair,
+    codex_startup_repair: codexStartupRepair,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     zellij_readiness: zellijReadiness,
@@ -344,7 +382,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -369,6 +407,16 @@ export async function run(_command: any, args: any = []) {
   console.log(`  tmux:        ${zellijReadiness.tmux_removed_runtime ? 'removed_runtime' : 'present'}`);
   const zellijRepairLine = doctorZellijRepairConsoleLine(zellijRepair as any);
   if (zellijRepairLine) console.log(zellijRepairLine);
+  console.log('Context7 MCP:');
+  console.log(`  transport: ${(context7Repair as any).preferred_transport || 'remote'}`);
+  console.log(`  repair: ${(context7Repair as any).ok ? 'ok' : 'blocked'}`);
+  for (const action of (context7Repair as any).actions || []) console.log(`  - ${action}`);
+  for (const warning of (context7Repair as any).warnings || []) console.log(`  warning: ${warning}`);
+  console.log('Codex startup config:');
+  console.log(`  repair: ${(codexStartupRepair as any).ok ? 'ok' : 'blocked'}`);
+  for (const action of (codexStartupRepair as any).actions || []) console.log(`  - ${action}`);
+  for (const action of (codexStartupRepair as any).manual_actions || []) console.log(`  manual: ${action}`);
+  for (const warning of (codexStartupRepair as any).warnings || []) console.log(`  warning: ${warning}`);
   console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
@@ -395,6 +443,11 @@ export async function run(_command: any, args: any = []) {
   console.log(`  app screenshot: ${nativeCapabilityStatus(nativeCapabilityRows, 'codex_app_screenshot', 'degraded')}`);
   console.log(`  app handoff: ${nativeCapabilityStatus(nativeCapabilityRows, 'app_handoff', 'unavailable')}`);
   console.log(`  image path exposure: ${nativeCapabilityStatus(nativeCapabilityRows, 'image_path_exposure', 'fallback')}`);
+  const nativeManualActions = uniqueNativeManualActions(nativeCapabilityRows);
+  if (nativeManualActions.length) {
+    console.log('  manual next actions:');
+    for (const action of nativeManualActions) console.log(`    - ${action}`);
+  }
   console.log('SKS Skills:');
   console.log(`  core skills: ${doctorSkillStatus((doctorNativeCapabilityRepair as any)?.core_skills)}`);
   console.log(`  duplicate project skills: ${doctorDedupeStatus((doctorNativeCapabilityRepair as any)?.skill_dedupe)}`);
@@ -405,7 +458,7 @@ export async function run(_command: any, args: any = []) {
   if ((commandAliasCleanup as any).report_path) console.log(`  report: ${(commandAliasCleanup as any).report_path}`);
   console.log('Secret preservation:');
   console.log(`  Supabase keys: ${(doctorNativeCapabilityRepair as any)?.ok === false && String(((doctorNativeCapabilityRepair as any)?.blockers || []).join(' ')).includes('secret_preservation_failed') ? 'blocked' : 'preserved'}`);
-  console.log('  secret values: redacted');
+  console.log('  raw secret values: never recorded');
   console.log(`  migration journal: ${(doctorNativeCapabilityRepair as any)?.secret_preservation_guard || '.sneakoscope/reports/secret-preservation-guard.json'}`);
   console.log('Codex App Harness:');
   console.log(`  plugins: ${(codexAppHarnessMatrix as any).app_features?.plugin_json ? 'ok' : 'degraded'}`);
@@ -527,11 +580,23 @@ function nativeCapabilityStatus(rows: any[], id: string, fallback: string): stri
   const row = rows.find((entry: any) => entry?.id === id);
   if (!row) return fallback;
   if (row.after === 'verified' || row.before === 'verified') return 'verified';
+  if (id === 'image_path_exposure') {
+    if (row.before === 'degraded' || row.after === 'degraded' || row.repairability === 'doctor-fix') return 'fallback';
+    return fallback;
+  }
+  if (id === 'app_handoff') return 'unavailable';
   if (row.repairability === 'manual-required') return 'manual_required';
   if (row.before === 'degraded' || row.after === 'degraded') return 'degraded';
   if (row.repairability === 'doctor-fix') return row.after === 'blocked' ? 'blocked' : 'repair_required';
   if (row.repairability === 'unavailable') return 'unavailable';
   return fallback;
+}
+
+function uniqueNativeManualActions(rows: any[]): string[] {
+  return [...new Set(rows
+    .filter((row: any) => row?.repairability === 'manual-required' && row?.after !== 'verified')
+    .flatMap((row: any) => Array.isArray(row.repair_actions) ? row.repair_actions : [])
+    .filter((action: any) => typeof action === 'string' && action.trim()))];
 }
 
 function doctorSkillStatus(coreSkills: any): string {

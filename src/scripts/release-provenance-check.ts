@@ -17,14 +17,13 @@ const fsxVersion = readVersionFrom('src/core/fsx.ts', /PACKAGE_VERSION\s*=\s*['"
 const cargoVersion = readVersionFrom('crates/sks-core/Cargo.toml', /^version\s*=\s*"([^"]+)"/m);
 const latestChangelog = latestVersionedChangelogSection(readText('CHANGELOG.md'));
 const tag = tagStatus(version, currentCommit);
-const main = mainVersion();
+const candidate = candidateVersion();
 const originMain = originMainVersion();
 const npm = npmVersion();
 const warnings = [];
 const blockers = [];
 
-if (main.version && main.version !== version) warnings.push('main_out_of_date');
-if (publish && main.version && main.version !== version) blockers.push('main_version_mismatch');
+if (candidate.version && candidate.version !== version) blockers.push('candidate_version_mismatch');
 if (originMain.version && originMain.version !== version) warnings.push('origin_main_out_of_date');
 if (publish && tag.exists && tag.commit !== currentCommit) blockers.push('tag_not_on_current_commit');
 if (publish && npm.version && semverCompare(npm.version, version) >= 0) blockers.push('npm_version_already_published_or_ahead');
@@ -44,9 +43,9 @@ const report = {
   src_versions: { version_ts: srcVersion, fsx_ts: fsxVersion },
   cargo_version: cargoVersion,
   latest_changelog_section: latestChangelog,
-  main_version: main.version,
-  main_commit: main.commit,
-  main_status: main.status,
+  main_version: candidate.version,
+  main_commit: candidate.commit,
+  main_status: candidate.status,
   origin_main_version: originMain.version,
   origin_main_commit: originMain.commit,
   origin_main_status: originMain.status,
@@ -68,13 +67,10 @@ function git(argv) {
   return res.status === 0 ? res.stdout.trim() : null;
 }
 
-function mainVersion() {
+function candidateVersion() {
   const ref = git(['rev-parse', '--verify', 'HEAD']);
-  if (!ref) return { version: null, commit: null, status: 'unavailable' };
-  const res = spawnSync('git', ['show', 'HEAD:package.json'], { cwd: root, encoding: 'utf8' });
-  if (res.status !== 0) return { version: null, commit: ref, status: 'package_unavailable' };
   try {
-    return { version: JSON.parse(res.stdout).version || null, commit: ref, status: 'local_head' };
+    return { version: pkg.version || null, commit: ref, status: 'working_tree_candidate' };
   } catch {
     return { version: null, commit: ref, status: 'unparseable' };
   }

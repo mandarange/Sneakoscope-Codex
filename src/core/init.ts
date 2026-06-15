@@ -11,7 +11,8 @@ import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.js';
 import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
-import { buildSksCoreSkillManifest, isCoreSkillName, renderCoreSkillTemplate } from './codex-native/core-skill-manifest.js';
+import { buildSksCoreSkillManifest, isCoreSkillName } from './codex-native/core-skill-manifest.js';
+import { syncCoreSkillsIntegrity } from './codex-native/core-skill-integrity.js';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const SKS_GENERATED_GIT_PATTERNS = [
@@ -1099,23 +1100,44 @@ export async function installSkills(root: any) {
     'design-ui-editor': `---\nname: design-ui-editor\ndescription: Legacy fallback UI/UX editor for existing design.md systems when Product Design plugin is unavailable.\n---\n\nUse Product Design plugin first. When falling back, read \`design.md\`, inspect relevant UI/assets/tests, consult getdesign-reference when improving the design system, apply the smallest design-system-conformant change, use imagegen for image/logo/raster assets, and verify render quality. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} If design.md is missing and Product Design is unavailable, use design-system-builder as fallback.\n`,
     'design-artifact-expert': `---\nname: design-artifact-expert\ndescription: Legacy fallback for high-fidelity HTML/UI/prototype artifacts when Product Design plugin cannot be used.\n---\n\nUse Product Design plugin first for design/UI/prototype work. When falling back, read design.md when present, consult getdesign-reference for design-system grounding, build the usable artifact first, preserve state, verify overlap/readability/responsiveness, and use imagegen for required assets. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`
   };
-  for (const skill of buildSksCoreSkillManifest().skills) {
-    (skills as Record<string, string>)[skill.canonical_name] = renderCoreSkillTemplate(skill.canonical_name);
-  }
+  const nonCoreSkillNames = Object.keys(skills).filter((name) => !isCoreSkillName(name));
   for (const [name, content] of Object.entries(skills)) {
+    if (isCoreSkillName(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillContent = isCoreSkillName(name) ? content : enrichSkillContent(name, content);
+    const skillContent = enrichSkillContent(name, content);
     await ensureDir(dir);
     await writeTextAtomic(path.join(dir, 'SKILL.md'), `${skillContent.trim()}\n`);
     await writeSkillMetadata(dir, name);
   }
-  const skillNames = Object.keys(skills);
+  const coreManifest = buildSksCoreSkillManifest();
+  const coreByName = new Map(coreManifest.skills.map((skill) => [skill.canonical_name, skill.content_sha256]));
+  const coreIntegrity = await syncCoreSkillsIntegrity({
+    root,
+    apply: true,
+    skillsRoot: path.join(root, '.agents', 'skills'),
+    reportPath: path.join(root, '.sneakoscope', 'reports', 'core-skill-integrity.json')
+  });
+  const managedCoreSkillNames = coreIntegrity.rows
+    .filter((row) => row.after_sha256 === coreByName.get(row.canonical_name) && row.action !== 'skip-user-authored')
+    .map((row) => row.canonical_name);
+  for (const name of managedCoreSkillNames) {
+    await writeSkillMetadata(path.join(root, '.agents', 'skills', name), name);
+  }
+  const skillNames = [...nonCoreSkillNames, ...managedCoreSkillNames];
   const removedStaleGeneratedSkills = await removeStaleGeneratedSkillsFromManifest(root, skillNames);
   const removedPluginSkillCollisions = await removeGeneratedPluginSkillCollisions(root);
   await writeGeneratedSkillManifest(root, skillNames);
   return {
     installed_skills: skillNames,
     generated_files: generatedSkillFiles(skillNames),
+    core_skill_integrity: {
+      ok: coreIntegrity.ok,
+      template_version: coreIntegrity.template_version,
+      installed_count: coreIntegrity.installed_count,
+      restored_count: coreIntegrity.restored_count,
+      user_collision_count: coreIntegrity.user_collision_count,
+      report: '.sneakoscope/reports/core-skill-integrity.json'
+    },
     removed_stale_generated_skills: [...removedStaleGeneratedSkills, ...removedPluginSkillCollisions].sort(),
     removed_agent_skill_aliases: await removeGeneratedAgentSkillAliases(root, skillNames),
     removed_codex_skill_mirrors: await removeGeneratedCodexSkillMirrors(root, skillNames)
@@ -1154,6 +1176,7 @@ async function removeStaleGeneratedSkillsFromManifest(root: any, skillNames: any
   for (const name of previousSkills) {
     const skillName = String(name || '').trim();
     if (!skillName || current.has(skillName) || !/^[a-z0-9-]+$/.test(skillName)) continue;
+    if (isCoreSkillName(skillName)) continue;
     const dir = path.join(root, '.agents', 'skills', skillName);
     if (!(await exists(dir))) continue;
     await fsp.rm(dir, { recursive: true, force: true });

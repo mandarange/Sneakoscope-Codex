@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { buildSksCoreSkillManifest, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
+import { CORE_SKILL_TEMPLATE_VERSION, buildSksCoreSkillManifest, isSksManagedCoreSkillContent, renderCoreSkillTemplate } from './core-skill-manifest.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
 export type CoreSkillSyncAction =
@@ -29,7 +29,12 @@ export interface CoreSkillIntegrityReport {
   root: string;
   apply: boolean;
   skills_root: string;
+  template_version: string;
   manifest_sha256: string;
+  drift_detected_count: number;
+  restored_count: number;
+  installed_count: number;
+  user_collision_count: number;
   rows: CoreSkillIntegrityRow[];
   installed: string[];
   restored: string[];
@@ -104,7 +109,12 @@ export async function syncCoreSkillsIntegrity(input: {
     root,
     apply,
     skills_root: skillsRoot,
+    template_version: CORE_SKILL_TEMPLATE_VERSION,
     manifest_sha256: sha256(JSON.stringify(manifest.skills.map((skill) => [skill.canonical_name, skill.content_sha256]))),
+    drift_detected_count: rows.filter((row) => row.action === 'restore-corrupted-managed-copy' || row.action === 'skip-user-authored').length,
+    restored_count: restored.length,
+    installed_count: installed.length,
+    user_collision_count: skippedUserAuthored.length,
     rows,
     installed,
     restored,

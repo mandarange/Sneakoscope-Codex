@@ -325,7 +325,11 @@ const requiredReleasePresetIds = [
   'secret:supabase-preservation-blackbox',
   'update:preserves-supabase-keys',
   'update:secret-preservation-guard',
-  'update:secret-migration-journal'
+  'update:secret-migration-journal',
+  'release:gate-script-parity',
+  'release:wiring-3110-blackbox',
+  'config:managed-merge-callsite-coverage',
+  'sks:3110-all-feature-regression'
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',

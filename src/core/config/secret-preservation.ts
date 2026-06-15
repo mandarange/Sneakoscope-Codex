@@ -25,11 +25,25 @@ export interface SecretPreservationGuardReport {
   ok: boolean;
   operation: string;
   before_path: string;
-  after_path: string;
+  after_path: string | null;
   restored_keys_count: number;
+  changed_or_missing: ChangedOrMissingSecret[];
   missing_after: Array<{ key: string; source: string }>;
+  rollback_attempted: boolean;
+  rollback_ok: boolean;
+  backup_paths: string[];
   raw_values_recorded: false;
 }
+
+export interface ChangedOrMissingSecret {
+  key: string;
+  source: string;
+  before_sha256: string | null;
+  after_sha256: string | null;
+  reason: 'missing' | 'changed';
+}
+
+const activeGuardRoots = new Set<string>();
 
 export async function captureSecretPreservationSnapshot(input: {
   root: string;
@@ -64,56 +78,81 @@ export async function withSecretPreservationGuard<T>(
   fn: () => Promise<T>
 ): Promise<T> {
   const resolvedRoot = path.resolve(root);
+  if (activeGuardRoots.has(resolvedRoot)) return fn();
+  activeGuardRoots.add(resolvedRoot);
   const reportDir = path.join(resolvedRoot, '.sneakoscope', 'reports');
   await ensureDir(reportDir);
   const beforePath = path.join(reportDir, 'secret-preservation-before.json');
   const afterPath = path.join(reportDir, 'secret-preservation-after.json');
   const guardPath = path.join(reportDir, 'secret-preservation-guard.json');
   const before = await captureSecretPreservationSnapshot({ root: resolvedRoot, artifactPath: beforePath });
+  const backup = await backupSecretBearingSources(resolvedRoot, operationName, before);
   let result: T;
+  let operationError: unknown = null;
   try {
     result = await fn();
   } catch (err: unknown) {
-    await writeJsonAtomic(guardPath, {
-      schema: 'sks.secret-preservation-guard.v1',
-      generated_at: nowIso(),
-      ok: false,
-      operation: operationName,
-      before_path: beforePath,
-      after_path: null,
-      restored_keys_count: 0,
-      missing_after: [],
-      raw_values_recorded: false,
-      operation_error: err instanceof Error ? err.message : String(err)
-    }).catch(() => undefined);
-    throw err;
+    operationError = err;
   }
-  const after = await captureSecretPreservationSnapshot({ root: resolvedRoot, artifactPath: afterPath });
-  const missing = missingProtectedSecrets(before, after);
-  const report: SecretPreservationGuardReport = {
-    schema: 'sks.secret-preservation-guard.v1',
-    generated_at: nowIso(),
-    ok: missing.length === 0,
-    operation: operationName,
-    before_path: beforePath,
-    after_path: afterPath,
-    restored_keys_count: 0,
-    missing_after: missing,
-    raw_values_recorded: false
-  };
-  await writeJsonAtomic(guardPath, report).catch(() => undefined);
-  if (missing.length) {
-    throw new Error(`secret_preservation_failed:${missing.map((item) => `${item.source}:${item.key}`).join(',')}`);
+  try {
+    const after = await captureSecretPreservationSnapshot({ root: resolvedRoot, artifactPath: afterPath });
+    const changedOrMissing = changedOrMissingProtectedSecrets(before, after);
+    let rollbackAttempted = false;
+    let rollbackOk = false;
+    let restoredKeysCount = 0;
+    if (changedOrMissing.length) {
+      rollbackAttempted = true;
+      await restoreChangedSecretSources(changedOrMissing, backup.bySource);
+      const restored = await captureSecretPreservationSnapshot({
+        root: resolvedRoot,
+        artifactPath: path.join(reportDir, 'secret-preservation-after-restore.json')
+      });
+      const remaining = changedOrMissingProtectedSecrets(before, restored);
+      rollbackOk = remaining.length === 0;
+      restoredKeysCount = rollbackOk ? changedOrMissing.length : 0;
+      if (!rollbackOk) {
+        const failedReport = guardReport(operationName, beforePath, afterPath, changedOrMissing, restoredKeysCount, rollbackAttempted, false, backup.paths);
+        await writeJsonAtomic(guardPath, operationError ? { ...failedReport, ok: false, operation_error: sanitizeErrorMessage(operationError) } : failedReport).catch(() => undefined);
+        throw new Error(`secret_preservation_rollback_failed:${changedOrMissing.map((item) => `${safeSourceForError(resolvedRoot, item.source)}:${item.key}:${item.reason}`).join(',')}`);
+      }
+    }
+    const report: SecretPreservationGuardReport & { operation_error?: string } = guardReport(operationName, beforePath, afterPath, changedOrMissing, restoredKeysCount, rollbackAttempted, rollbackAttempted ? rollbackOk : true, backup.paths);
+    if (operationError) {
+      report.ok = false;
+      report.operation_error = sanitizeErrorMessage(operationError);
+    }
+    await writeJsonAtomic(guardPath, report).catch(() => undefined);
+    if (operationError) throw operationError;
+    if (operationName === 'doctor-fix' && rollbackAttempted) {
+      throw new Error(`secret_preservation_restored:${changedOrMissing.map((item) => `${safeSourceForError(resolvedRoot, item.source)}:${item.key}:${item.reason}`).join(',')}`);
+    }
+    return result!;
+  } finally {
+    activeGuardRoots.delete(resolvedRoot);
   }
-  return result;
 }
 
 export function missingProtectedSecrets(before: SecretPreservationSnapshot, after: SecretPreservationSnapshot): Array<{ key: string; source: string }> {
+  return changedOrMissingProtectedSecrets(before, after)
+    .filter((item) => item.reason === 'missing')
+    .map((item) => ({ key: item.key, source: item.source }));
+}
+
+export function changedOrMissingProtectedSecrets(before: SecretPreservationSnapshot, after: SecretPreservationSnapshot): ChangedOrMissingSecret[] {
   const afterMap = new Map(after.fingerprints.filter((fp) => fp.present).map((fp) => [`${fp.source}\0${fp.key}`, fp]));
   return before.fingerprints
     .filter((fp) => fp.present && fp.value_sha256)
-    .filter((fp) => !afterMap.has(`${fp.source}\0${fp.key}`))
-    .map((fp) => ({ key: fp.key, source: fp.source }));
+    .map((fp): ChangedOrMissingSecret | null => {
+      const afterFp = afterMap.get(`${fp.source}\0${fp.key}`);
+      if (!afterFp) {
+        return { key: fp.key, source: fp.source, before_sha256: fp.value_sha256, after_sha256: null, reason: 'missing' };
+      }
+      if (afterFp.value_sha256 !== fp.value_sha256) {
+        return { key: fp.key, source: fp.source, before_sha256: fp.value_sha256, after_sha256: afterFp.value_sha256, reason: 'changed' };
+      }
+      return null;
+    })
+    .filter((item): item is ChangedOrMissingSecret => Boolean(item));
 }
 
 function secretSources(root: string): string[] {
@@ -124,8 +163,13 @@ function secretSources(root: string): string[] {
     '.env.development',
     '.env.production',
     '.sneakoscope/config.json',
-    '.codex/config.toml'
-  ].map((rel) => path.join(root, rel)).concat(path.join(home, '.codex', 'config.toml'));
+    '.codex/config.toml',
+    '.cursor/mcp.json',
+    'mcp.json'
+  ].map((rel) => path.join(root, rel)).concat(
+    path.join(home, '.codex', 'config.toml'),
+    path.join(home, '.config', 'sks', 'config.json')
+  );
 }
 
 function fingerprintsFromText(text: string, source: string): SecretFingerprint[] {
@@ -135,6 +179,7 @@ function fingerprintsFromText(text: string, source: string): SecretFingerprint[]
     if (!value) continue;
     rows.push(fingerprint(String(key), source, value));
   }
+  rows.push(...fingerprintsFromTomlSections(text, source));
   for (const envKey of PROTECTED_SUPABASE_ENV_KEYS) {
     const value = readAssignment(text, envKey);
     if (value) rows.push(fingerprint(envKey, source, value));
@@ -148,6 +193,24 @@ function fingerprintsFromObject(value: unknown, source: string): SecretFingerpri
   for (const [key, raw] of Object.entries(flat)) {
     if (!PROTECTED_SECRET_KEYS.includes(key as never)) continue;
     rows.push(fingerprint(key, source, String(raw)));
+  }
+  return rows;
+}
+
+function fingerprintsFromTomlSections(text: string, source: string): SecretFingerprint[] {
+  const rows: SecretFingerprint[] = [];
+  let section = '';
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const sectionMatch = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (sectionMatch) {
+      section = String(sectionMatch[1] || '').trim();
+      continue;
+    }
+    const kv = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=\s*(.+?)\s*$/);
+    if (!kv || !section) continue;
+    const key = `${section}.${kv[1]}`;
+    if (!PROTECTED_SECRET_KEYS.includes(key as never)) continue;
+    rows.push(fingerprint(key, source, unquote(String(kv[2] || ''))));
   }
   return rows;
 }
@@ -178,9 +241,7 @@ function unquote(value: string): string {
 function redactPreview(value: string): string {
   const text = String(value || '');
   if (!text) return '';
-  const head = text.slice(0, Math.min(3, text.length));
-  const tail = text.length > 6 ? text.slice(-3) : '';
-  return `${head}...${tail || 'redacted'}(${text.length})`;
+  return `sha256:${sha256(text).slice(0, 12)}(${text.length})`;
 }
 
 function flattenObject(value: unknown, prefix = ''): Record<string, string> {
@@ -198,4 +259,76 @@ function dedupeFingerprints(fingerprints: SecretFingerprint[]): SecretFingerprin
   const byKey = new Map<string, SecretFingerprint>();
   for (const fp of fingerprints) byKey.set(`${fp.source}\0${fp.key}`, fp);
   return [...byKey.values()].sort((a, b) => a.source.localeCompare(b.source) || a.key.localeCompare(b.key));
+}
+
+function guardReport(
+  operation: string,
+  beforePath: string,
+  afterPath: string,
+  changedOrMissing: ChangedOrMissingSecret[],
+  restoredKeysCount: number,
+  rollbackAttempted: boolean,
+  rollbackOk: boolean,
+  backupPaths: string[]
+): SecretPreservationGuardReport {
+  return {
+    schema: 'sks.secret-preservation-guard.v1',
+    generated_at: nowIso(),
+    ok: changedOrMissing.length === 0 || rollbackOk,
+    operation,
+    before_path: beforePath,
+    after_path: afterPath,
+    restored_keys_count: restoredKeysCount,
+    changed_or_missing: changedOrMissing,
+    missing_after: changedOrMissing.filter((item) => item.reason === 'missing').map((item) => ({ key: item.key, source: item.source })),
+    rollback_attempted: rollbackAttempted,
+    rollback_ok: rollbackOk,
+    backup_paths: backupPaths,
+    raw_values_recorded: false
+  };
+}
+
+async function backupSecretBearingSources(root: string, operationName: string, snapshot: SecretPreservationSnapshot): Promise<{ bySource: Map<string, string>; paths: string[] }> {
+  const bySource = new Map<string, string>();
+  const sources = [...new Set(snapshot.fingerprints.filter((fp) => fp.present).map((fp) => fp.source))];
+  if (!sources.length) return { bySource, paths: [] };
+  const backupRoot = path.join(root, '.sneakoscope', 'backups', 'secrets', sanitizeSegment(operationName), new Date().toISOString().replace(/[:.]/g, '-'));
+  for (const source of sources) {
+    const backupPath = path.join(backupRoot, sanitizeSourcePath(root, source));
+    await ensureDir(path.dirname(backupPath));
+    await fs.copyFile(source, backupPath);
+    bySource.set(source, backupPath);
+  }
+  return { bySource, paths: [...bySource.values()] };
+}
+
+async function restoreChangedSecretSources(changedOrMissing: ChangedOrMissingSecret[], backups: Map<string, string>): Promise<void> {
+  for (const source of [...new Set(changedOrMissing.map((item) => item.source))]) {
+    const backup = backups.get(source);
+    if (!backup) continue;
+    await ensureDir(path.dirname(source));
+    await fs.copyFile(backup, source);
+  }
+}
+
+function sanitizeSegment(value: string): string {
+  return String(value || 'operation').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'operation';
+}
+
+function sanitizeSourcePath(root: string, source: string): string {
+  return safeSourceForError(root, source).replace(/[^A-Za-z0-9._/-]+/g, '_').replace(/^\/+/, '');
+}
+
+function safeSourceForError(root: string, source: string): string {
+  const rel = path.relative(root, source);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) return rel;
+  const home = process.env.HOME || os.homedir();
+  const homeRel = path.relative(home, source);
+  if (homeRel && !homeRel.startsWith('..') && !path.isAbsolute(homeRel)) return `~/${homeRel}`;
+  return path.basename(source);
+}
+
+function sanitizeErrorMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.replace(/([A-Za-z0-9_]*(?:SECRET|TOKEN|KEY|PASSWORD)[A-Za-z0-9_]*=)[^\s,;]+/gi, '$1<redacted>');
 }

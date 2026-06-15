@@ -1,6 +1,8 @@
 # Release Proof Truth
 
-SKS 3.1.9 keeps release proof truth aligned with the 3.1.8 hardening evidence while moving the publish candidate to an unpublished npm version.
+SKS 3.1.11 keeps release proof truth aligned with the MAD repair evidence for Zellij stacked-pane minimum enforcement, Context7 remote MCP migration, and Codex startup config repair reports.
+
+SKS 3.1.10 keeps release proof truth aligned with the hardening evidence for release wiring parity, immutable core skills, native capability postchecks, duplicate skill proof, and secret rollback.
 
 SKS 3.1.8 extends release proof truth to immutable core skills, duplicate skill dedupe, native capability repair, doctor repair output, Supabase/secret preservation, update secret migration journals, and 3.1.8 release DAG coverage.
 

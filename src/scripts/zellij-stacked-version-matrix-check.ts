@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { resolveZellijStackedPaneCapability } from '../core/zellij/zellij-capability.js'
+import { resolveZellijStackedPaneCapability, ZELLIJ_MIN_VERSION, ZELLIJ_STACKED_PANE_MIN_VERSION } from '../core/zellij/zellij-capability.js'
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
 
 const fixtures = [
@@ -12,6 +12,11 @@ const fixtures = [
   ['zellij 0.41.0', false],
   ['unknown', false]
 ]
+
+assertGate(ZELLIJ_MIN_VERSION === ZELLIJ_STACKED_PANE_MIN_VERSION, 'doctor minimum zellij version must match stacked-pane support minimum', {
+  ZELLIJ_MIN_VERSION,
+  ZELLIJ_STACKED_PANE_MIN_VERSION
+})
 
 for (const [versionText, expected] of fixtures) {
   const report = resolveZellijStackedPaneCapability({ ok: true, versionText })

@@ -19,6 +19,9 @@ export interface ProjectSkillDedupeReport {
   fix: boolean;
   yes: boolean;
   actions: ProjectSkillDedupeAction[];
+  active_unique_by_canonical_name: boolean;
+  active_entries: SkillRegistryEntry[];
+  duplicate_active_canonical_names: string[];
   duplicate_canonical_names: string[];
   unresolved_user_duplicates: string[];
   blockers: string[];
@@ -44,7 +47,14 @@ export async function dedupeProjectSkills(input: {
     const userEntries = group.filter((entry) => !entry.managed_by_sks);
     const managedEntries = group.filter((entry) => entry.managed_by_sks);
     if (userEntries.length > 0 && managedEntries.length > 0) {
-      for (const user of userEntries) actions.push(actionRow(canonical, 'kept', user, null, 'user-authored skill preserved'));
+      const keepUser = userEntries[0];
+      if (keepUser) actions.push(actionRow(canonical, 'kept', keepUser, null, 'user-authored skill preserved'));
+      const shouldMoveUserDuplicates = fix && yes && input.quarantineUserDuplicates === true;
+      for (const duplicateUser of userEntries.slice(1)) {
+        const quarantine = shouldMoveUserDuplicates ? await quarantineSkill(root, canonical, duplicateUser, 'user-authored duplicate skill') : null;
+        actions.push(actionRow(canonical, quarantine ? 'quarantined' : 'reported', duplicateUser, quarantine, 'user-authored duplicate skill requires --quarantine-user-duplicates --yes'));
+      }
+      if (userEntries.length > 1 && !shouldMoveUserDuplicates) unresolvedUserDuplicates.push(canonical);
       for (const managed of managedEntries) {
         const quarantine = await maybeQuarantine(root, canonical, managed, fix, 'managed collision with user-authored skill');
         actions.push(actionRow(canonical, quarantine ? 'quarantined' : 'reported', managed, quarantine, 'managed collision with user-authored skill'));
@@ -72,7 +82,11 @@ export async function dedupeProjectSkills(input: {
     }
   }
   const duplicateNames = [...new Set(actions.filter((action) => action.action !== 'kept').map((action) => action.canonical_name))].sort();
-  const blockers = unresolvedUserDuplicates.map((name) => `user_duplicate_requires_confirmation:${name}`);
+  const afterLedger = await buildSkillRegistryLedger({ root, reportPath: null });
+  const blockers = [
+    ...unresolvedUserDuplicates.map((name) => `user_duplicate_requires_confirmation:${name}`),
+    ...afterLedger.duplicate_active_canonical_names.map((name) => `duplicate_active_skill_name:${name}`)
+  ];
   const report: ProjectSkillDedupeReport = {
     schema: 'sks.project-skill-dedupe.v1',
     generated_at: nowIso(),
@@ -81,6 +95,9 @@ export async function dedupeProjectSkills(input: {
     fix,
     yes,
     actions,
+    active_unique_by_canonical_name: afterLedger.active_unique_by_canonical_name,
+    active_entries: afterLedger.active_entries,
+    duplicate_active_canonical_names: afterLedger.duplicate_active_canonical_names,
     duplicate_canonical_names: duplicateNames,
     unresolved_user_duplicates: unresolvedUserDuplicates,
     blockers

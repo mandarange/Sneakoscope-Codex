@@ -146,7 +146,7 @@ async function stateForCapability(root: string, id: NativeCapabilityId, imageCap
       warnings: envVerified ? [] : ['manual_os_permission_required']
     };
   }
-  const chromeReady = process.env.SKS_CHROME_EXTENSION_READY === '1' || featureOk(nativeFeatureMatrix, 'plugin_json');
+  const chromeReady = process.env.SKS_CHROME_EXTENSION_READY === '1';
   return {
     id,
     before: chromeReady ? 'verified' : 'unknown',

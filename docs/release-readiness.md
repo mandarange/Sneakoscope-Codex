@@ -1,6 +1,8 @@
 # Release Readiness
 
-SKS 3.1.9 is the publish-candidate follow-up to 3.1.8. It keeps the 3.1.8 hardening scope and advances release metadata so npm publish gates can require an unpublished package version.
+SKS 3.1.11 is the MAD launch repair release. It closes the Zellij stacked-pane minimum at 0.43.0, adds `doctor --fix` recovery for local stdio Context7 MCP stalls, and repairs stale Codex startup config by fixing SKS agent role paths, removing unsupported managed role fields, preserving optional `supabase_sauron`, and pruning missing-command `node_repl` MCP blocks.
+
+SKS 3.1.10 is the release-ready hardening follow-up. It closes release wiring parity, core skill immutability, duplicate skill active-name proof, capability-specific native postchecks, protected secret rollback, and the all-feature regression blackbox.
 
 SKS 3.1.8 is the core skill/native capability/secret preservation hardening release. It adds immutable core-skill manifest and no-drift gates, duplicate skill canonicalization and dedupe checks, native capability repair/postcheck evidence for doctor output, and Supabase/secret preservation guards for setup/update/doctor paths.
 

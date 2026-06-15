@@ -25,6 +25,9 @@ export interface SkillRegistryLedger {
   ok: boolean;
   root: string;
   entries: SkillRegistryEntry[];
+  active_unique_by_canonical_name: boolean;
+  active_entries: SkillRegistryEntry[];
+  duplicate_active_canonical_names: string[];
   duplicate_canonical_names: string[];
   blockers: string[];
 }
@@ -82,13 +85,20 @@ export async function buildSkillRegistryLedger(input: {
       if (group.length > 1 && index > 0) entry.status = entry.status === 'user-owned' ? 'duplicate' : 'duplicate';
     });
   }
-  const blockers = duplicates.map((name) => `duplicate_skill_name:${name}`);
+  const activeEntries = entries.filter((entry) => entry.status !== 'quarantined');
+  const activeGrouped = groupByCanonical(activeEntries);
+  const duplicateActiveNames = [...activeGrouped.entries()].filter(([, group]) => group.length > 1).map(([name]) => name).sort();
+  const activeUnique = duplicateActiveNames.length === 0;
+  const blockers = duplicateActiveNames.map((name) => `duplicate_active_skill_name:${name}`);
   const ledger: SkillRegistryLedger = {
     schema: 'sks.skill-registry-ledger.v1',
     generated_at: nowIso(),
-    ok: blockers.length === 0,
+    ok: activeUnique,
     root,
     entries,
+    active_unique_by_canonical_name: activeUnique,
+    active_entries: activeEntries,
+    duplicate_active_canonical_names: duplicateActiveNames,
     duplicate_canonical_names: duplicates,
     blockers
   };
