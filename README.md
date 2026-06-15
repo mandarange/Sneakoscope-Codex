@@ -35,14 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.9** hardens update/setup/doctor safety around four operator-facing failure modes: immutable core skills, duplicate project skills, real native capability repair status, and Supabase/secret preservation.
+SKS **3.1.11** is a release-ready repair pass for MAD Zellij stacked panes, Context7 MCP doctor recovery, and stale Codex startup config.
 
-What changed in 3.1.8:
+What changed in 3.1.11:
 
-- **Core SKS skills are content-addressed and immutable.** The eight built-in route skills now have a manifest and no-drift gates; setup/update/doctor may install missing managed copies or restore corrupted managed copies, but they do not overwrite user-authored collisions.
-- **Duplicate skills are detected and repaired safely.** Canonical skill names collapse variants such as `Loop`, `loop`, and `loop/SKILL.md`; SKS-managed duplicates can be quarantined automatically, while user-authored duplicates require explicit confirmation.
-- **`sks doctor --fix` reports native capability truthfully.** Image generation, image follow-up edit paths, Computer Use, Chrome/web review, app screenshots, app handoff, and image path exposure now run through a repair matrix and postcheck instead of capability assumptions.
-- **Supabase keys survive setup/update/doctor.** Protected secret surfaces are fingerprinted before and after guarded operations; reports store only redacted previews and hashes, never raw values.
+- **MAD Zellij panes require native stacked-pane support.** `sks doctor --fix` now treats Zellij 0.43.0 as the minimum interactive runtime so `sks --mad` can use native stacked worker panes instead of fragmenting into plain splits.
+- **Context7 stdio lockups are doctor-repairable.** `sks doctor --fix` detects local `@upstash/context7-mcp` stdio config and migrates it to the remote Context7 MCP endpoint so Codex launches do not stall at the stdio server banner.
+- **Codex startup warnings are doctor-repairable.** `sks doctor --fix` rewrites stale SKS agent `config_file` paths to existing absolute files, removes unsupported managed `message_role_prefix` role fields, preserves optional `supabase_sauron`, and drops missing-command `node_repl` MCP blocks that would otherwise spam startup.
+- **Doctor JSON exposes the Context7 and startup repair reports.** `context7_repair`, `codex_startup_repair`, and their `repair.*` entries carry migration status, backups, actions, warnings, and any manual auth actions.
+- **Release metadata is aligned for 3.1.11.** Package, lockfile, CLI version constants, Rust helper metadata, README, and changelog all point at the same release.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 

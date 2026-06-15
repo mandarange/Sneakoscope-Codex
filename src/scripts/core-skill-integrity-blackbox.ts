@@ -4,6 +4,7 @@ import path from 'node:path';
 import { assertGate, emitGate, makeTempRoot, writeText, writeUserSkill } from './sks-3-1-8-check-lib.js';
 import { syncCoreSkillsIntegrity } from '../core/codex-native/core-skill-integrity.js';
 import { renderCoreSkillTemplate } from '../core/codex-native/core-skill-manifest.js';
+import { initProject } from '../core/init.js';
 
 const root = await makeTempRoot('sks-core-blackbox-');
 const skillsRoot = path.join(root, '.agents', 'skills');
@@ -15,8 +16,17 @@ const restoredText = await fs.readFile(path.join(skillsRoot, 'research', 'SKILL.
 const userRoot = path.join(root, 'user-skills');
 await writeUserSkill(root, 'user-skills', 'research', 'research');
 const user = await syncCoreSkillsIntegrity({ root, apply: true, skillsRoot: userRoot });
+const setupRoot = await makeTempRoot('sks-core-setup-blackbox-');
+const setup = await initProject(setupRoot, { force: true, installScope: 'project', localOnly: true, globalCommand: 'sks' });
+const setupIntegrity = await syncCoreSkillsIntegrity({ root: setupRoot, apply: false, skillsRoot: path.join(setupRoot, '.agents', 'skills') });
+await writeText(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md'), `${renderCoreSkillTemplate('loop')}\nmutated by setup blackbox\n`);
+const setupRestore = await initProject(setupRoot, { force: true, installScope: 'project', localOnly: true, globalCommand: 'sks' });
+const restoredSetupText = await fs.readFile(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md'), 'utf8');
 assertGate(first.installed.length === 8, 'blackbox A: first sync installs missing core skills', first);
 assertGate(second.installed.length === 0 && second.restored.length === 0, 'blackbox B: second sync changes nothing', second);
 assertGate(third.restored.length === 1 && restoredText === renderCoreSkillTemplate('research'), 'blackbox C: managed drift restored exactly', third);
 assertGate(user.skipped_user_authored.length === 1, 'blackbox D: user skill is not overwritten', user);
+assertGate(setup.skill_install?.core_skill_integrity?.installed_count > 0, 'blackbox E: setup installs core skills through integrity sync', setup.skill_install);
+assertGate(setupIntegrity.restored.length === 0 && setupIntegrity.skipped_user_authored.length === 0, 'blackbox F: setup-produced core skills are current', setupIntegrity);
+assertGate(setupRestore.skill_install?.core_skill_integrity?.restored_count > 0 && restoredSetupText === renderCoreSkillTemplate('loop'), 'blackbox G: setup restores managed core drift through integrity sync', setupRestore.skill_install);
 emitGate('core-skill:integrity-blackbox');

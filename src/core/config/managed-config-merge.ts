@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { ensureDir, nowIso, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { isProtectedSecretKey, PROTECTED_SECRET_KEYS } from './supabase-secret-preservation.js';
 
 export interface ManagedConfigMergeResult {
@@ -12,6 +12,8 @@ export interface ManagedConfigMergeResult {
   changed: boolean;
   backup_path: string | null;
   protected_keys_preserved: string[];
+  preserved_secret_lines_sha256: string[];
+  idempotent: boolean;
   blockers: string[];
 }
 
@@ -38,11 +40,12 @@ export async function writeManagedEnvConfig(file: string, currentText: string, m
   return writeMergedText(file, currentText, next, 'env', protectedKeysInText(currentText));
 }
 
-export function safeMergeObject(current: Record<string, unknown>, managed: Record<string, unknown>): Record<string, unknown> {
+export function safeMergeObject(current: Record<string, unknown>, managed: Record<string, unknown>, prefix = ''): Record<string, unknown> {
   const out: Record<string, unknown> = { ...current };
   for (const [key, value] of Object.entries(managed)) {
-    if (isProtectedSecretKey(key) && current[key] != null) continue;
-    if (isPlainObject(value) && isPlainObject(current[key])) out[key] = safeMergeObject(current[key] as Record<string, unknown>, value);
+    const dotted = prefix ? `${prefix}.${key}` : key;
+    if (isProtectedSecretKey(dotted) && current[key] != null) continue;
+    if (isPlainObject(value) && isPlainObject(current[key])) out[key] = safeMergeObject(current[key] as Record<string, unknown>, value, dotted);
     else out[key] = value;
   }
   return out;
@@ -62,11 +65,20 @@ function upsertTomlBlockPreservingSecrets(text: string, block: string): string {
       break;
     }
   }
-  const existingSecretLines = lines.slice(start + 1, end).filter((line) => {
-    const key = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1] || '';
-    return isProtectedSecretKey(`${header}.${key}`) || isProtectedSecretKey(key);
-  });
-  lines.splice(start, end - start, ...blockLines, ...existingSecretLines.filter((line) => !blockLines.includes(line)));
+  const existingBody = lines.slice(start + 1, end);
+  const nextBody = [...existingBody];
+  for (const managedLine of blockLines.slice(1)) {
+    const managedKey = managedLine.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1] || '';
+    if (!managedKey) {
+      if (!nextBody.includes(managedLine)) nextBody.push(managedLine);
+      continue;
+    }
+    const existingIndex = nextBody.findIndex((line) => (line.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1] || '') === managedKey);
+    const protectedLine = isProtectedSecretKey(`${header}.${managedKey}`) || isProtectedSecretKey(managedKey);
+    if (existingIndex === -1) nextBody.push(managedLine);
+    else if (!protectedLine) nextBody[existingIndex] = managedLine;
+  }
+  lines.splice(start, end - start, blockLines[0] || `[${header}]`, ...nextBody);
   return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
@@ -86,6 +98,7 @@ async function writeMergedText(
     }
     await writeTextAtomic(file, after);
   }
+  const preservedSecretLineHashes = protectedSecretLineHashes(before);
   return {
     schema: 'sks.managed-config-merge.v1',
     generated_at: nowIso(),
@@ -95,6 +108,8 @@ async function writeMergedText(
     changed: before !== after,
     backup_path: backupPath,
     protected_keys_preserved: preserved,
+    preserved_secret_lines_sha256: preservedSecretLineHashes,
+    idempotent: before === after || protectedSecretLineHashes(after).every((hash) => preservedSecretLineHashes.includes(hash)),
     blockers: []
   };
 }
@@ -106,7 +121,37 @@ function protectedKeysPresent(value: Record<string, unknown>): string[] {
 }
 
 function protectedKeysInText(text: string): string[] {
-  return PROTECTED_SECRET_KEYS.filter((key) => new RegExp(`(^|\\n)\\s*(?:export\\s+)?${String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`).test(text)).map(String);
+  const found = new Set<string>();
+  for (const key of PROTECTED_SECRET_KEYS) {
+    if (new RegExp(`(^|\\n)\\s*(?:export\\s+)?${String(key).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`).test(text)) found.add(String(key));
+  }
+  let section = '';
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const sectionMatch = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (sectionMatch) {
+      section = String(sectionMatch[1] || '');
+      continue;
+    }
+    const key = line.match(/^\s*([A-Za-z0-9_.-]+)\s*=/)?.[1] || '';
+    if (key && section && isProtectedSecretKey(`${section}.${key}`)) found.add(`${section}.${key}`);
+  }
+  return [...found].sort();
+}
+
+function protectedSecretLineHashes(text: string): string[] {
+  const hashes: string[] = [];
+  let section = '';
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const sectionMatch = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (sectionMatch) {
+      section = String(sectionMatch[1] || '');
+      continue;
+    }
+    const key = line.match(/^\s*(?:export\s+)?([A-Za-z0-9_.-]+)\s*=/)?.[1] || '';
+    if (!key) continue;
+    if (isProtectedSecretKey(key) || (section && isProtectedSecretKey(`${section}.${key}`))) hashes.push(sha256(line));
+  }
+  return hashes.sort();
 }
 
 function lookupPath(value: Record<string, unknown>, dotted: string): unknown {

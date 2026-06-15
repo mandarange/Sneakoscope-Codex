@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js';
 import { buildSksCoreSkillManifest } from '../codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from '../codex-native/core-skill-integrity.js';
 import { dedupeProjectSkills } from '../codex-native/project-skill-dedupe.js';
@@ -30,6 +30,7 @@ interface CodexSkillSyncReport {
 }
 
 const EXTERNAL_ROUTE_RESERVED = new Set(['ulw-loop', 'ulw-plan', 'start-work']);
+const SKILL_SYNC_LOCK_STALE_AFTER_MS = 30000;
 
 export async function syncCodexSksSkills(input: {
   root: string;
@@ -99,6 +100,7 @@ export async function withSkillSyncLock<T>(root: string, fn: () => Promise<T>): 
     } catch (err: unknown) {
       const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
       if (code !== 'EEXIST') throw err;
+      if (await recoverStaleSkillSyncLock(lockPath)) continue;
       if (Date.now() - started > 30000) throw new Error(`Timed out waiting for skill sync lock: ${lockPath}`);
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
@@ -107,11 +109,42 @@ export async function withSkillSyncLock<T>(root: string, fn: () => Promise<T>): 
     await writeJsonAtomic(path.join(lockPath, 'owner.json'), {
       schema: 'sks.skill-sync-lock.v1',
       pid: process.pid,
-      acquired_at: nowIso()
+      acquired_at: nowIso(),
+      stale_after_ms: SKILL_SYNC_LOCK_STALE_AFTER_MS
     }).catch(() => undefined);
     return await fn();
   } finally {
     await fs.rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function recoverStaleSkillSyncLock(lockPath: string): Promise<boolean> {
+  const ownerPath = path.join(lockPath, 'owner.json');
+  const stat = await fs.stat(lockPath).catch(() => null);
+  const owner = await readJson(ownerPath, null).catch(() => null) as { schema?: string; pid?: number; acquired_at?: string; stale_after_ms?: number } | null;
+  const staleAfterMs = Number(owner?.stale_after_ms || SKILL_SYNC_LOCK_STALE_AFTER_MS);
+  const acquiredAt = owner?.acquired_at ? Date.parse(owner.acquired_at) : NaN;
+  const ageMs = Number.isFinite(acquiredAt) ? Date.now() - acquiredAt : stat ? Date.now() - stat.mtimeMs : 0;
+  if (owner?.schema === 'sks.skill-sync-lock.v1' && Number.isFinite(owner.pid)) {
+    if (ageMs <= staleAfterMs || pidAlive(Number(owner.pid))) return false;
+    await fs.rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+    return true;
+  }
+  if (stat && Date.now() - stat.mtimeMs > staleAfterMs) {
+    await fs.rm(lockPath, { recursive: true, force: true }).catch(() => undefined);
+    return true;
+  }
+  return false;
+}
+
+function pidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: unknown) {
+    const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : '';
+    return code === 'EPERM';
   }
 }
 

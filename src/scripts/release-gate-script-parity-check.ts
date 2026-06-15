@@ -1,0 +1,140 @@
+#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { assertGate, emitGate, readJson, root } from './sks-1-18-gate-lib.js';
+import { writeJsonAtomic } from '../core/fsx.js';
+
+interface ReleaseGateScriptParityReport {
+  schema: 'sks.release-gate-script-parity.v1';
+  ok: boolean;
+  release_gate_count: number;
+  package_script_count: number;
+  missing_scripts: string[];
+  missing_gates: string[];
+  missing_release_preset: string[];
+  wrong_commands: Array<{ id: string; expected: string; actual: string }>;
+  missing_source_targets: string[];
+  missing_dist_targets: string[];
+}
+
+interface PackageJson {
+  scripts?: Record<string, string>;
+}
+
+interface ReleaseGate {
+  id: string;
+  command: string;
+  preset?: string[];
+}
+
+interface ReleaseGateManifest {
+  gates?: ReleaseGate[];
+}
+
+export const REQUIRED_3110_RELEASE_IDS = [
+  'core-skill:manifest',
+  'core-skill:immutable-sync',
+  'core-skill:no-drift',
+  'core-skill:integrity-blackbox',
+  'skill:name-canonicalizer',
+  'skill:registry-ledger',
+  'skill:dedupe',
+  'skill:sync-atomic',
+  'skill:dedupe-blackbox',
+  'native-capability:repair-matrix',
+  'native-capability:repair',
+  'native-capability:postcheck',
+  'native:image-generation-repair',
+  'native:computer-use-repair',
+  'native:chrome-web-review-repair',
+  'native:app-screenshot-repair',
+  'doctor:native-capability-repair',
+  'doctor:native-repair-output',
+  'doctor:native-capability-repair-blackbox',
+  'secret:preservation',
+  'config:managed-merge',
+  'secret:preservation-guard',
+  'secret:supabase-preservation-blackbox',
+  'update:preserves-supabase-keys',
+  'update:secret-preservation-guard',
+  'update:secret-migration-journal',
+  'config:managed-merge-callsite-coverage',
+  'release:gate-script-parity',
+  'release:wiring-3110-blackbox',
+  'sks:3110-all-feature-regression'
+];
+
+if (isMain()) {
+  main().catch((err: unknown) => {
+    console.error(err instanceof Error ? err.stack || err.message : String(err));
+    process.exit(1);
+  });
+}
+
+export async function main(): Promise<void> {
+  const report = buildReleaseGateScriptParityReport();
+  const out = path.join(root, '.sneakoscope', 'reports', 'release-gate-script-parity.json');
+  await writeJsonAtomic(out, report);
+
+  assertGate(report.ok, 'release gate script parity failed', report);
+  emitGate('release:gate-script-parity', {
+    release_gate_count: report.release_gate_count,
+    checked_3110_ids: REQUIRED_3110_RELEASE_IDS.length
+  });
+}
+
+export function buildReleaseGateScriptParityReport(): ReleaseGateScriptParityReport {
+  const pkg = readJson('package.json') as PackageJson;
+  const manifest = readJson('release-gates.v2.json') as ReleaseGateManifest;
+  const scripts = pkg.scripts || {};
+  const gates = Array.isArray(manifest.gates) ? manifest.gates : [];
+  const gateById = new Map(gates.map((gate) => [gate.id, gate]));
+  const releaseGateIds = gates.filter((gate) => gate.preset?.includes('release')).map((gate) => gate.id);
+  const missingScripts = [...new Set([
+    ...releaseGateIds.filter((id) => !scripts[id]),
+    ...REQUIRED_3110_RELEASE_IDS.filter((id) => !scripts[id])
+  ])].sort();
+  const missingGates = REQUIRED_3110_RELEASE_IDS.filter((id) => !gateById.has(id)).sort();
+  const missingReleasePreset = REQUIRED_3110_RELEASE_IDS.filter((id) => !gateById.get(id)?.preset?.includes('release')).sort();
+  const wrongCommands = REQUIRED_3110_RELEASE_IDS
+    .map((id) => ({ id, expected: `npm run ${id} --silent`, actual: gateById.get(id)?.command || '' }))
+    .filter((row) => row.actual !== row.expected);
+  const missingSourceTargets = REQUIRED_3110_RELEASE_IDS
+    .map((id) => ({ id, source: sourceTargetForScript(scripts[id]) }))
+    .filter((row) => row.source && !fs.existsSync(path.join(root, row.source)))
+    .map((row) => row.source as string)
+    .sort();
+  const missingDistTargets = REQUIRED_3110_RELEASE_IDS
+    .map((id) => ({ id, dist: distTargetForScript(scripts[id]) }))
+    .filter((row) => row.dist && !fs.existsSync(path.join(root, row.dist)))
+    .map((row) => row.dist as string)
+    .sort();
+  return {
+    schema: 'sks.release-gate-script-parity.v1',
+    ok: missingScripts.length === 0 && missingGates.length === 0 && missingReleasePreset.length === 0 && wrongCommands.length === 0 && missingSourceTargets.length === 0 && missingDistTargets.length === 0,
+    release_gate_count: releaseGateIds.length,
+    package_script_count: Object.keys(scripts).length,
+    missing_scripts: missingScripts,
+    missing_gates: missingGates,
+    missing_release_preset: missingReleasePreset,
+    wrong_commands: wrongCommands,
+    missing_source_targets: missingSourceTargets,
+    missing_dist_targets: missingDistTargets
+  };
+}
+
+function distTargetForScript(script: string | undefined): string | null {
+  const match = String(script || '').match(/node\s+\.\/dist\/scripts\/([^\s]+\.js)/);
+  return match ? `dist/scripts/${match[1]}` : null;
+}
+
+function sourceTargetForScript(script: string | undefined): string | null {
+  const dist = distTargetForScript(script);
+  if (!dist) return null;
+  return dist.replace(/^dist\/scripts\//, 'src/scripts/').replace(/\.js$/, '.ts');
+}
+
+function isMain(): boolean {
+  return path.resolve(process.argv[1] || '') === fileURLToPath(import.meta.url);
+}

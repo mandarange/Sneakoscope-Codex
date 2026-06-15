@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [3.1.11] - 2026-06-16
+
+### Fixed
+
+- `sks doctor --fix` now treats Zellij 0.43.0 as the minimum interactive runtime so `sks --mad` can use native stacked panes instead of falling back to fragmented splits.
+- `sks doctor --fix` detects local stdio Context7 MCP config and migrates it to the remote Context7 MCP endpoint, avoiding launches that appear stuck at the Context7 stdio server banner.
+- `sks doctor --fix` repairs stale Codex startup config by making SKS agent `config_file` paths absolute/existing, removing unsupported managed `message_role_prefix` role fields, preserving optional `supabase_sauron`, and dropping missing-command `node_repl` MCP blocks.
+
+
+## [3.1.10] - 2026-06-15
+
+### Added
+
+- Release wiring parity gate for package scripts, release gates, required DAG ids, and built dist targets.
+- Capability-specific native postchecks for image generation, follow-up edit paths, Computer Use, Chrome/web review, screenshots, app handoff, image path exposure, and saved artifact contracts.
+- Secret value hash preservation with backup rollback for protected Supabase and MCP token sources.
+- Doctor full mutation guard around `doctor --fix` setup, config, UI, Zellij, native repair, and capability repair paths.
+- Skill duplicate active-name proof and the 3.1.10 all-feature regression blackbox.
+
+### Fixed
+
+- All hardening gates are wired in package scripts and release gates.
+- Native capability repair no longer false-verifies manual-only surfaces or saved-artifact fallback as native path exposure.
+- Supabase keys are protected against deletion and value mutation.
+- Doctor/setup/update mutations are guarded by secret preservation.
 
 
 ## [3.1.9] - 2026-06-15

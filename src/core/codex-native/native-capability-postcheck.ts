@@ -1,27 +1,21 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
-import { writeJsonAtomic } from '../fsx.js';
+import { ensureDir, readJson, writeJsonAtomic } from '../fsx.js';
 import { buildNativeCapabilityRepairMatrix, type NativeCapabilityRepairMatrix, type NativeCapabilityRepairState } from './native-capability-repair-matrix.js';
+
+type FixtureMode = 'all-repairable' | 'manual-required' | false;
 
 export async function postcheckNativeCapabilities(input: {
   root: string;
   matrix?: NativeCapabilityRepairMatrix | null;
-  fixture?: 'all-repairable' | 'manual-required' | false;
+  fixture?: FixtureMode;
   reportPath?: string | null;
 }): Promise<NativeCapabilityRepairMatrix> {
   const root = path.resolve(input.root);
-  const matrix = input.matrix || await buildNativeCapabilityRepairMatrix({ root, fixture: input.fixture || false, reportPath: null });
-  const capabilities = matrix.capabilities.map((state): NativeCapabilityRepairState => {
-    const verifiedAfterRepair = state.repairability === 'auto' || state.repairability === 'doctor-fix';
-    if (state.id === 'computer_use' && process.env.SKS_COMPUTER_USE_CAPABILITY !== 'verified') {
-      return { ...state, after: 'unknown', blockers: ['computer_use_os_permission_or_capability_unknown'] };
-    }
-    if (state.id === 'chrome_web_review' && process.env.SKS_CHROME_EXTENSION_READY !== '1' && input.fixture !== 'all-repairable') {
-      return { ...state, after: 'unknown', blockers: ['codex_chrome_extension_readiness_not_verified'] };
-    }
-    if (state.blockers.length === 0 || verifiedAfterRepair) return { ...state, after: state.repairability === 'manual-required' ? 'unknown' : 'verified', blockers: state.repairability === 'manual-required' ? state.blockers : [] };
-    return { ...state, after: 'blocked' };
-  });
-  const blockers = capabilities.flatMap((state) => state.after === 'verified' ? [] : state.blockers);
+  const fixture = input.fixture || false;
+  const matrix = input.matrix || await buildNativeCapabilityRepairMatrix({ root, fixture, reportPath: null });
+  const capabilities = await Promise.all(matrix.capabilities.map((state) => postcheckCapability(root, state, fixture)));
+  const blockers = capabilities.flatMap((state) => state.after === 'verified' || state.after === 'degraded' ? [] : state.blockers);
   const checked: NativeCapabilityRepairMatrix = {
     ...matrix,
     generated_at: new Date().toISOString(),
@@ -35,4 +29,131 @@ export async function postcheckNativeCapabilities(input: {
     : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'native-capability-postcheck.json');
   if (reportPath) await writeJsonAtomic(reportPath, checked).catch(() => undefined);
   return checked;
+}
+
+async function postcheckCapability(root: string, state: NativeCapabilityRepairState, fixture: FixtureMode): Promise<NativeCapabilityRepairState> {
+  if (state.id === 'image_generation') return postcheckImageGeneration(state, fixture);
+  if (state.id === 'image_followup_edit') return postcheckImageFollowupEdit(root, state);
+  if (state.id === 'computer_use') return postcheckComputerUse(state, fixture);
+  if (state.id === 'chrome_web_review') return postcheckChromeWebReview(state, fixture);
+  if (state.id === 'codex_app_screenshot') return postcheckAppScreenshot(root, state);
+  if (state.id === 'app_handoff') return postcheckAppHandoff(state, fixture);
+  if (state.id === 'image_path_exposure') return postcheckImagePathExposure(root, state, fixture);
+  if (state.id === 'saved_artifact_path_contract') return postcheckSavedArtifactPathContract(root, state);
+  return { ...state, after: 'blocked', blockers: [...state.blockers, `unknown_capability:${state.id}`] };
+}
+
+function postcheckImageGeneration(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
+  if (fixture === 'all-repairable' || state.before === 'verified') return verified(state);
+  return {
+    ...state,
+    after: 'unknown',
+    blockers: ['imagegen_auth_or_codex_app_builtin_missing'],
+    warnings: [...new Set([...state.warnings, 'image_generation_not_verified_without_real_capability'])]
+  };
+}
+
+async function postcheckImageFollowupEdit(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {
+  const contract = await validateSavedArtifactPathContract(root);
+  if (!contract.ok) return { ...state, after: 'blocked', blockers: contract.blockers };
+  const sample = path.join(contract.imageArtifacts, 'postcheck-followup-sample.txt');
+  if (!(await writeReadSample(sample))) return { ...state, after: 'blocked', blockers: ['image_followup_sample_artifact_unwritable'] };
+  return verified(state);
+}
+
+function postcheckComputerUse(state: NativeCapabilityRepairState, _fixture: FixtureMode): NativeCapabilityRepairState {
+  if (process.env.SKS_COMPUTER_USE_CAPABILITY === 'verified') return verified(state);
+  return {
+    ...state,
+    after: 'unknown',
+    blockers: ['computer_use_os_permission_or_capability_unknown'],
+    warnings: [...new Set([...state.warnings, 'manual_os_permission_required'])]
+  };
+}
+
+function postcheckChromeWebReview(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
+  if (fixture === 'all-repairable' || process.env.SKS_CHROME_EXTENSION_READY === '1') return verified(state);
+  return {
+    ...state,
+    after: 'unknown',
+    blockers: ['codex_chrome_extension_readiness_not_verified'],
+    warnings: [...new Set([...state.warnings, 'manual_chrome_extension_setup_required'])]
+  };
+}
+
+async function postcheckAppScreenshot(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {
+  const dir = path.join(root, '.sneakoscope', 'app-screenshots');
+  const registry = path.join(dir, 'screenshot-registry.json');
+  if (!(await writeReadSample(path.join(dir, 'postcheck-screenshot-sample.txt')))) {
+    return { ...state, after: 'blocked', blockers: ['app_screenshot_directory_unwritable'] };
+  }
+  await writeJsonAtomic(registry, { schema: 'sks.app-screenshot-registry.v1', generated_at: new Date().toISOString(), screenshots: [] }).catch(() => undefined);
+  const json = await readJson(registry, {}).catch(() => ({})) as { schema?: string };
+  if (json.schema !== 'sks.app-screenshot-registry.v1') return { ...state, after: 'blocked', blockers: ['app_screenshot_registry_invalid'] };
+  return verified(state);
+}
+
+function postcheckAppHandoff(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
+  if (fixture === 'all-repairable' || state.before === 'verified') return verified(state);
+  return {
+    ...state,
+    after: 'unknown',
+    blockers: ['codex_app_handoff_not_verified'],
+    warnings: [...new Set([...state.warnings, 'manual_app_handoff_approval_required'])]
+  };
+}
+
+async function postcheckImagePathExposure(root: string, state: NativeCapabilityRepairState, fixture: FixtureMode): Promise<NativeCapabilityRepairState> {
+  if (fixture === 'all-repairable' || state.before === 'verified') return verified(state);
+  const contract = await validateSavedArtifactPathContract(root);
+  if (contract.ok) {
+    return {
+      ...state,
+      after: 'degraded',
+      blockers: [],
+      warnings: [...new Set([...state.warnings, 'using_saved_artifact_path_contract_fallback'])]
+    };
+  }
+  return { ...state, after: 'blocked', blockers: ['image_path_exposure_missing_without_fallback_contract', ...contract.blockers] };
+}
+
+async function postcheckSavedArtifactPathContract(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {
+  const contract = await validateSavedArtifactPathContract(root);
+  if (!contract.ok) return { ...state, after: 'blocked', blockers: contract.blockers };
+  if (!(await writeReadSample(path.join(contract.imageArtifacts, 'postcheck-contract-image.txt')))) return { ...state, after: 'blocked', blockers: ['image_artifacts_directory_unwritable'] };
+  if (!(await writeReadSample(path.join(contract.appScreenshots, 'postcheck-contract-screenshot.txt')))) return { ...state, after: 'blocked', blockers: ['app_screenshots_directory_unwritable'] };
+  return verified(state);
+}
+
+function verified(state: NativeCapabilityRepairState): NativeCapabilityRepairState {
+  return { ...state, after: 'verified', blockers: [] };
+}
+
+async function validateSavedArtifactPathContract(root: string): Promise<{ ok: boolean; imageArtifacts: string; appScreenshots: string; blockers: string[] }> {
+  const contractPath = path.join(root, '.sneakoscope', 'reports', 'saved-artifact-path-contract.json');
+  const contract = await readJson(contractPath, null).catch(() => null) as { schema?: string; image_artifacts?: string; app_screenshots?: string } | null;
+  const imageArtifacts = String(contract?.image_artifacts || path.join(root, '.sneakoscope', 'image-artifacts'));
+  const appScreenshots = String(contract?.app_screenshots || path.join(root, '.sneakoscope', 'app-screenshots'));
+  const blockers: string[] = [];
+  if (contract?.schema !== 'sks.saved-artifact-path-contract.v1') blockers.push('saved_artifact_path_contract_schema_invalid');
+  for (const dir of [imageArtifacts, appScreenshots]) {
+    try {
+      await ensureDir(dir);
+      await fs.access(dir);
+    } catch {
+      blockers.push(`directory_unwritable:${path.basename(dir)}`);
+    }
+  }
+  return { ok: blockers.length === 0, imageArtifacts, appScreenshots, blockers };
+}
+
+async function writeReadSample(file: string): Promise<boolean> {
+  try {
+    await ensureDir(path.dirname(file));
+    await fs.writeFile(file, 'sks-native-capability-postcheck\n', 'utf8');
+    const text = await fs.readFile(file, 'utf8');
+    return text === 'sks-native-capability-postcheck\n';
+  } catch {
+    return false;
+  }
 }

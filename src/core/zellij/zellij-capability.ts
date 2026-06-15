@@ -3,7 +3,7 @@ import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { compareVersionLike, parseZellijVersionText, runZellij } from './zellij-command.js'
 
 export const ZELLIJ_CAPABILITY_SCHEMA = 'sks.zellij-capability.v1'
-export const ZELLIJ_MIN_VERSION = '0.41.0'
+export const ZELLIJ_MIN_VERSION = '0.43.0'
 export const ZELLIJ_STACKED_PANE_CAPABILITY_SCHEMA = 'sks.zellij-stacked-pane-capability.v1'
 export const ZELLIJ_STACKED_PANE_MIN_VERSION = '0.43.0'
 

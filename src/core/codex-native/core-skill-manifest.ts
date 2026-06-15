@@ -31,7 +31,7 @@ export interface SksCoreSkillManifest {
   skills: SksCoreSkillTemplate[];
 }
 
-export const CORE_SKILL_TEMPLATE_VERSION = '3.1.8-core-skill-template.v1';
+export const CORE_SKILL_TEMPLATE_VERSION = 'sks-core-skill-template.v1';
 export const CORE_SKILL_MANAGED_BEGIN = '<!-- BEGIN SKS IMMUTABLE CORE SKILL -->';
 export const CORE_SKILL_MANAGED_END = '<!-- END SKS IMMUTABLE CORE SKILL -->';
 

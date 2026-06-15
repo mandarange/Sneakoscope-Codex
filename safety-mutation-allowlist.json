@@ -128,10 +128,22 @@
       "reason": "Skill sync lock cleanup removes only the scoped .sneakoscope/locks/skill-sync.lock directory after the critical section exits."
     },
     {
+      "file": "src/core/codex-app/codex-skill-sync.ts",
+      "symbol": "recoverStaleSkillSyncLock",
+      "token": "fs.rm",
+      "reason": "Stale skill sync lock recovery removes only a dead or invalid scoped .sneakoscope/locks/skill-sync.lock directory before reacquiring it."
+    },
+    {
       "file": "src/core/codex-native/core-skill-integrity.ts",
       "symbol": "syncCoreSkillsIntegrity",
       "token": "fs.writeFile",
       "reason": "Core skill integrity repair writes a scoped backup under .sneakoscope/backups before restoring a managed immutable skill."
+    },
+    {
+      "file": "src/core/codex-native/native-capability-postcheck.ts",
+      "symbol": "writeReadSample",
+      "token": "fs.writeFile",
+      "reason": "Native capability postcheck writes a fixed sample only inside the selected artifact directory to prove write/read capability."
     },
     {
       "file": "src/core/codex-native/project-skill-dedupe.ts",
@@ -270,6 +282,18 @@
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/doctor-context7-repair-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes only mkdtemp project/global Codex config fixtures to prove Context7 doctor migration without mutating user config."
+    },
+    {
+      "file": "src/scripts/doctor-codex-startup-repair-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes only mkdtemp project/global Codex config fixtures to prove startup repair without mutating user config."
     },
     {
       "file": "src/scripts/fast-codex-service-tier-proof-check.ts",

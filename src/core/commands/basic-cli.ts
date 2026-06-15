@@ -190,7 +190,9 @@ export async function initCommand(args: any = []) {
 export async function fixPathCommand(args: any = []) {
   const root = await projectRoot();
   const installScope = installScopeFromArgs(args);
-  await initProject(root, { installScope, localOnly: flag(args, '--local-only'), globalCommand: 'sks', force: true });
+  await withSecretPreservationGuard(root, 'fix-path-command', async () => {
+    await initProject(root, { installScope, localOnly: flag(args, '--local-only'), globalCommand: 'sks', force: true });
+  });
   const result = {
     schema: 'sks.fix-path.v1',
     ok: true,

@@ -84,7 +84,7 @@ export async function syncCodexAgentRoles(input: {
     for (const role of DIRECTIVE_ROLES) {
       const file = path.join(targetDir, `${role}.toml`)
       const current = await fs.readFile(file, 'utf8').catch(() => '')
-      if (current && !current.includes('SKS managed 3.1.4 directive role') && !current.includes('SKS managed 3.1.5 directive role') && !current.includes('SKS managed 3.1.6 directive role') && !current.includes('SKS managed 3.1.6 bounded role') && !current.includes('SKS managed 3.1.7 directive role')) continue
+      if (current && !isSksManagedDirectiveRole(current)) continue
       await writeTextAtomic(file, roleToml(role, rolePayloads[role]))
       created.push(file)
     }
@@ -112,13 +112,9 @@ export async function syncCodexAgentRoles(input: {
 }
 
 function roleToml(role: string, payload: CodexAgentRolePayload | undefined): string {
-  const strategyLine = payload?.strategy === 'agent_type'
-    ? `agent_type = "${payload.agent_type || role}"`
-    : `message_role_prefix = "${escapeToml(payload?.message_role_prefix || `Role: ${role}.`)}"`
   return [
     `name = "${role}"`,
-    `description = "SKS managed 3.1.7 directive role: ${role}"`,
-    strategyLine,
+    `description = "SKS managed 3.1.11 directive role: ${role}"`,
     'model_reasoning_effort = "medium"',
     role.includes('implementer') ? 'sandbox_mode = "workspace-write"' : 'sandbox_mode = "read-only"',
     'approval_policy = "never"',
@@ -137,6 +133,11 @@ function roleToml(role: string, payload: CodexAgentRolePayload | undefined): str
     '"""',
     ''
   ].join('\n')
+}
+
+function isSksManagedDirectiveRole(text: string): boolean {
+  return /SKS managed 3\.1\.(?:4|5|6|7|11) (?:directive|bounded) role/.test(text)
+    || /\bmessage_role_prefix\s*=/.test(text) && /SKS managed 3\.1\./.test(text)
 }
 
 function blockersOf(value: unknown): string[] {
