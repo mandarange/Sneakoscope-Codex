@@ -1,5 +1,7 @@
 # Release Readiness
 
+SKS 3.1.9 is the publish-candidate follow-up to 3.1.8. It keeps the 3.1.8 hardening scope and advances release metadata so npm publish gates can require an unpublished package version.
+
 SKS 3.1.8 is the core skill/native capability/secret preservation hardening release. It adds immutable core-skill manifest and no-drift gates, duplicate skill canonicalization and dedupe checks, native capability repair/postcheck evidence for doctor output, and Supabase/secret preservation guards for setup/update/doctor paths.
 
 SKS 3.1.7 is the Codex-native harness runtime-proof hardening release. It keeps external reference branding out of user-visible release surfaces, routes Codex-native feature decisions through a read-only broker plus explicit repair transaction, adds neutral reference cache refresh, and upgrades Loop, QA, Research, Image, MAD, and Doctor checks to runtime fixture artifacts with selected strategy proof.
