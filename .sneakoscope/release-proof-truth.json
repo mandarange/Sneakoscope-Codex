@@ -1,8 +1,8 @@
 {
   "schema": "sks.release-proof-truth.v1",
-  "generated_at": "2026-06-15T20:14:30.600Z",
+  "generated_at": "2026-06-15T20:25:29.019Z",
   "package_version": "3.1.11",
-  "git_commit_sha": "fd1603cf6ec801098fbacca4e61d2ea97220c06f",
+  "git_commit_sha": "b2aac145b6c013a3da51c02a035e8e60b7189bf2",
   "git_branch": "codex/sks-pipeline-release-readiness",
   "git_status_clean": false,
   "package_json_sha256": "6ab291dfa972070eca6b3e51de0745dffbd69b567f7d23b64d40090f1e742f49",
@@ -11,5 +11,5 @@
   "changelog_sha256": "bfce10da857063108cbd4862c737d35111588e0492720125b91e78b6e41351e5",
   "release_gates_sha256": "91d258725f72dc0c3fba86ba6b40f1d64cf1faeec7e10914f943b5adb95a216f",
   "npm_packlist_count": 943,
-  "npm_packlist_bytes": 6215861
+  "npm_packlist_bytes": 6217650
 }

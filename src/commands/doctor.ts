@@ -120,7 +120,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     requireActualCodex: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     codexBin: codexBin || undefined
   };
-  const codexStartupRepair = await runDoctorCodexStartupRepair({ root, fix: doctorFix }).catch((err: any) => ({
+  let codexStartupRepair = await runDoctorCodexStartupRepair({ root, fix: doctorFix }).catch((err: any) => ({
     schema: 'sks.doctor-codex-startup-repair.v1',
     ok: false,
     generated_at: new Date().toISOString(),
@@ -141,6 +141,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const codexConfig = configRepair?.after || await inspectCodexConfigReadability(root, configProbeOpts);
   const codexDoctor = await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') });
   const codexDoctorDiff = compareCodexDoctorBridge(codexDoctorBefore, codexDoctor);
+  codexStartupRepair = mergeObservedCodexStartupWarnings(codexStartupRepair, codexDoctor);
   const codex = codexBin
     ? { bin: codexBin, version: 'fixture-or-explicit', available: true }
     : await getCodexInfo().catch(() => ({ bin: null, version: null, available: false }));
@@ -732,4 +733,31 @@ function installScopeFromArgs(args: any = []) {
 function readOption(args: any = [], name: string, fallback: any = null) {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+}
+
+function mergeObservedCodexStartupWarnings(startupRepair: any, codexDoctor: any) {
+  const text = `${codexDoctor?.stdout_tail || ''}\n${codexDoctor?.stderr_tail || ''}`;
+  const manual = new Set<string>(Array.isArray(startupRepair?.manual_actions) ? startupRepair.manual_actions : []);
+  const warnings = new Set<string>(Array.isArray(startupRepair?.warnings) ? startupRepair.warnings : []);
+  const blockers = new Set<string>(Array.isArray(startupRepair?.blockers) ? startupRepair.blockers : []);
+  if (/codex_apps[\s\S]{0,500}token_expired|token_expired[\s\S]{0,500}codex_apps/i.test(text)) {
+    manual.add('Codex Apps MCP token is expired; sign in to Codex App/CLI again so the connector can mint a fresh token.');
+    warnings.add('codex_apps_token_expired_observed');
+    blockers.add('codex_apps_token_expired_manual_reauth_required');
+  }
+  if (/SUPABASE_ACCESS_TOKEN[\s\S]{0,500}mcp server ['"`]?supabase['"`]?|mcp server ['"`]?supabase['"`]?[\s\S]{0,500}SUPABASE_ACCESS_TOKEN/i.test(text)) {
+    manual.add('Supabase MCP uses SUPABASE_ACCESS_TOKEN but the variable is unset; export the token or migrate that server to a read-only remote URL.');
+    warnings.add('supabase_access_token_missing_observed');
+    blockers.add('supabase_access_token_missing_manual_auth_required');
+  }
+  if (/node_repl[\s\S]{0,500}No such file or directory|No such file or directory[\s\S]{0,500}node_repl/i.test(text)) {
+    warnings.add('node_repl_missing_command_observed');
+  }
+  return {
+    ...startupRepair,
+    ok: blockers.size === 0 && startupRepair?.ok !== false,
+    manual_actions: [...manual],
+    warnings: [...warnings],
+    blockers: [...blockers]
+  };
 }
