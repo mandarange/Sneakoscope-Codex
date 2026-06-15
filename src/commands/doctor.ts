@@ -27,6 +27,7 @@ import { runDoctorZellijRepair, doctorZellijRepairConsoleLine } from '../core/do
 import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
 import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
+import { runDoctorNativeCapabilityRepair } from '../core/doctor/doctor-native-capability-repair.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -69,6 +70,23 @@ export async function run(_command: any, args: any = []) {
     };
   }
   const root = await projectRoot();
+  const doctorNativeCapabilityRepair = await runDoctorNativeCapabilityRepair({
+    root,
+    fix: doctorFix || flag(args, '--repair-native-capabilities'),
+    yes: flag(args, '--yes') || flag(args, '-y'),
+    flags: args.map((arg: any) => String(arg))
+  }).catch((err: any) => ({
+    schema: 'sks.doctor-native-capability-repair.v1',
+    ok: false,
+    root,
+    fix: doctorFix,
+    yes: flag(args, '--yes') || flag(args, '-y'),
+    core_skills: null,
+    skill_dedupe: null,
+    native_capabilities: null,
+    secret_preservation_guard: '.sneakoscope/reports/secret-preservation-guard.json',
+    blockers: [err?.message || String(err)]
+  }));
   const codexBin = readOption(args, '--codex-bin', process.env.SKS_DOCTOR_CODEX_BIN || '');
   const configProbeOpts = {
     codexProbe: flag(args, '--fix') || flag(args, '--actual-codex') || Boolean(codexBin),
@@ -307,7 +325,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, codex_native: codexNativeRepair }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -347,6 +365,24 @@ export async function run(_command: any, args: any = []) {
     console.log('Repair actions:');
     for (const action of runtimeReadiness.repair_actions) console.log(`  - ${action}`);
   }
+  const nativeCapabilityRows = Array.isArray((doctorNativeCapabilityRepair as any)?.native_capabilities?.capabilities)
+    ? (doctorNativeCapabilityRepair as any).native_capabilities.capabilities
+    : [];
+  console.log('SKS Native Capabilities:');
+  console.log(`  image generation: ${nativeCapabilityStatus(nativeCapabilityRows, 'image_generation', 'repair_required')}`);
+  console.log(`  image follow-up edit: ${nativeCapabilityStatus(nativeCapabilityRows, 'image_followup_edit', 'degraded')}`);
+  console.log(`  computer use: ${nativeCapabilityStatus(nativeCapabilityRows, 'computer_use', 'manual_required')}`);
+  console.log(`  Chrome/web review: ${nativeCapabilityStatus(nativeCapabilityRows, 'chrome_web_review', 'manual_required')}`);
+  console.log(`  app screenshot: ${nativeCapabilityStatus(nativeCapabilityRows, 'codex_app_screenshot', 'degraded')}`);
+  console.log(`  app handoff: ${nativeCapabilityStatus(nativeCapabilityRows, 'app_handoff', 'unavailable')}`);
+  console.log(`  image path exposure: ${nativeCapabilityStatus(nativeCapabilityRows, 'image_path_exposure', 'fallback')}`);
+  console.log('SKS Skills:');
+  console.log(`  core skills: ${doctorSkillStatus((doctorNativeCapabilityRepair as any)?.core_skills)}`);
+  console.log(`  duplicate project skills: ${doctorDedupeStatus((doctorNativeCapabilityRepair as any)?.skill_dedupe)}`);
+  console.log('Secret preservation:');
+  console.log(`  Supabase keys: ${(doctorNativeCapabilityRepair as any)?.ok === false && String(((doctorNativeCapabilityRepair as any)?.blockers || []).join(' ')).includes('secret_preservation_failed') ? 'blocked' : 'preserved'}`);
+  console.log('  secret values: redacted');
+  console.log(`  migration journal: ${(doctorNativeCapabilityRepair as any)?.secret_preservation_guard || '.sneakoscope/reports/secret-preservation-guard.json'}`);
   console.log('Codex App Harness:');
   console.log(`  plugins: ${(codexAppHarnessMatrix as any).app_features?.plugin_json ? 'ok' : 'degraded'}`);
   console.log(`  hook approval: ${(codexAppHarnessMatrix as any).app_features?.hook_approval_state_detectable ? 'ok' : 'unknown'}`);
@@ -461,6 +497,31 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     ],
     repair_actions: [...new Set(repairActions)]
   };
+}
+
+function nativeCapabilityStatus(rows: any[], id: string, fallback: string): string {
+  const row = rows.find((entry: any) => entry?.id === id);
+  if (!row) return fallback;
+  if (row.after === 'verified' || row.before === 'verified') return 'verified';
+  if (row.repairability === 'manual-required') return 'manual_required';
+  if (row.before === 'degraded' || row.after === 'degraded') return 'degraded';
+  if (row.repairability === 'doctor-fix') return row.after === 'blocked' ? 'blocked' : 'repair_required';
+  if (row.repairability === 'unavailable') return 'unavailable';
+  return fallback;
+}
+
+function doctorSkillStatus(coreSkills: any): string {
+  if (!coreSkills) return 'drift_detected';
+  if (Array.isArray(coreSkills.restored) && coreSkills.restored.length) return 'repaired';
+  if (Array.isArray(coreSkills.blockers) && coreSkills.blockers.length) return 'drift_detected';
+  return 'current';
+}
+
+function doctorDedupeStatus(skillDedupe: any): string {
+  if (!skillDedupe) return 'manual_required';
+  if (Array.isArray(skillDedupe.actions) && skillDedupe.actions.some((action: any) => action.action === 'quarantined')) return 'repaired';
+  if (Array.isArray(skillDedupe.blockers) && skillDedupe.blockers.length) return 'manual_required';
+  return 'none';
 }
 
 // Assemble the explicit Zellij readiness block for `doctor --json` from the

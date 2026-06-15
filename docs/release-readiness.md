@@ -1,5 +1,7 @@
 # Release Readiness
 
+SKS 3.1.8 is the core skill/native capability/secret preservation hardening release. It adds immutable core-skill manifest and no-drift gates, duplicate skill canonicalization and dedupe checks, native capability repair/postcheck evidence for doctor output, and Supabase/secret preservation guards for setup/update/doctor paths.
+
 SKS 3.1.7 is the Codex-native harness runtime-proof hardening release. It keeps external reference branding out of user-visible release surfaces, routes Codex-native feature decisions through a read-only broker plus explicit repair transaction, adds neutral reference cache refresh, and upgrades Loop, QA, Research, Image, MAD, and Doctor checks to runtime fixture artifacts with selected strategy proof.
 
 SKS 3.1.4 is the Doctor/Zellij and Codex App harness hardening release. It adds a policy-gated Zellij self-heal path with Homebrew consent controls, wires `doctor --fix` and `sks --mad` through consistent Zellij repair/headless behavior, removes contradictory optional-vs-blocking Zellij output, records Codex Native reference adoption and interop decisions, and adds Codex App Harness Matrix coverage for skill sync, agent role sync, deep project initialization, hook lifecycle, loop continuation, execution profiles, and skill-agent blackbox evidence.

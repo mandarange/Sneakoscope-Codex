@@ -11,6 +11,7 @@ import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.js';
 import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
+import { buildSksCoreSkillManifest, isCoreSkillName, renderCoreSkillTemplate } from './codex-native/core-skill-manifest.js';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const SKS_GENERATED_GIT_PATTERNS = [
@@ -1098,9 +1099,12 @@ export async function installSkills(root: any) {
     'design-ui-editor': `---\nname: design-ui-editor\ndescription: Legacy fallback UI/UX editor for existing design.md systems when Product Design plugin is unavailable.\n---\n\nUse Product Design plugin first. When falling back, read \`design.md\`, inspect relevant UI/assets/tests, consult getdesign-reference when improving the design system, apply the smallest design-system-conformant change, use imagegen for image/logo/raster assets, and verify render quality. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY} If design.md is missing and Product Design is unavailable, use design-system-builder as fallback.\n`,
     'design-artifact-expert': `---\nname: design-artifact-expert\ndescription: Legacy fallback for high-fidelity HTML/UI/prototype artifacts when Product Design plugin cannot be used.\n---\n\nUse Product Design plugin first for design/UI/prototype work. When falling back, read design.md when present, consult getdesign-reference for design-system grounding, build the usable artifact first, preserve state, verify overlap/readability/responsiveness, and use imagegen for required assets. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`
   };
+  for (const skill of buildSksCoreSkillManifest().skills) {
+    (skills as Record<string, string>)[skill.canonical_name] = renderCoreSkillTemplate(skill.canonical_name);
+  }
   for (const [name, content] of Object.entries(skills)) {
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillContent = enrichSkillContent(name, content);
+    const skillContent = isCoreSkillName(name) ? content : enrichSkillContent(name, content);
     await ensureDir(dir);
     await writeTextAtomic(path.join(dir, 'SKILL.md'), `${skillContent.trim()}\n`);
     await writeSkillMetadata(dir, name);

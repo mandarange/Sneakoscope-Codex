@@ -54,8 +54,8 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 - `@openai/codex` is no longer bundled. Users install Codex separately or set `SKS_CODEX_BIN`.
 - Optional Rust source is in `crates/sks-core/` and is included in the npm package as source only. Build artifacts under `target/` stay excluded.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
-- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=1024 KiB` packed, `<=5120 KiB` unpacked, `<=1200` package files, and `<=384 KiB` per tracked file by default.
-- The GPT-5.5 performance budget file uses a 1024KB packed package cap because the TypeScript-built `dist` runtime measures about 876 KiB packed and 4.4 MiB unpacked in `1.0.1`; shrinking that cap requires measured justification.
+- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=1536 KiB` packed, `<=6144 KiB` unpacked, `<=1200` package files, and `<=384 KiB` per tracked file by default.
+- The packed package cap is 1536 KiB to match the publish dry-run and packlist performance gates while keeping the TypeScript-built `dist` runtime bounded; shrinking that cap requires measured justification.
 
 ## Memory leaks
 

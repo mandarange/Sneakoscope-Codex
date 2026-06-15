@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 
+## [3.1.8] - 2026-06-15
+
+### Added
+
+- Immutable SKS core skill manifest.
+- Project skill duplicate detector and doctor repair.
+- Native capability repair matrix for image/computer/Chrome/app screenshot/app handoff.
+- Supabase secret preservation contract.
+- Update/setup secret snapshot and rollback guard.
+
+### Fixed
+
+- SKS built-in skills no longer drift during doctor/setup/update.
+- Project no longer accumulates duplicate active skills with the same canonical name.
+- `sks doctor --fix` repairs native image/computer/Chrome/app screenshot capability where possible.
+- Supabase keys and secret-like config are preserved across updates.
+
 
 ## [3.1.7] - 2026-06-14
 
