@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 3.1.9 keeps the Codex 0.139 compatibility baseline while advancing the publish candidate beyond the already-published 3.1.8 release.
+
 SKS 3.1.8 keeps the Codex 0.139 compatibility baseline while closing core skill immutability, native capability repair, duplicate skill dedupe, and Supabase/secret preservation release gates.
 
 SKS 3.1.7 keeps the Codex 0.139 compatibility baseline and hardens Codex Native runtime proof around real route blackboxes, bounded reference caching, read-only feature brokerage, explicit managed-asset repair transactions, and generated-artifact neutrality checks.

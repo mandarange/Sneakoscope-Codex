@@ -35,7 +35,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.8** hardens update/setup/doctor safety around four operator-facing failure modes: immutable core skills, duplicate project skills, real native capability repair status, and Supabase/secret preservation.
+SKS **3.1.9** hardens update/setup/doctor safety around four operator-facing failure modes: immutable core skills, duplicate project skills, real native capability repair status, and Supabase/secret preservation.
 
 What changed in 3.1.8:
 
