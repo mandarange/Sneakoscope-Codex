@@ -1,13 +1,17 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
-import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
 import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
 import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
 import { resolveCodexNativeInvocationPlan } from './codex-native/codex-native-invocation-router.js';
+import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
+export const QA_LOOP_VISUAL_EVIDENCE_ARTIFACT = 'qa-loop/visual-evidence.json';
 const QA_REPORT_SUFFIX = 'qa-report.md';
 const UI_CHROME_EXTENSION_FIRST_ACK = 'use_codex_chrome_extension_first_no_computer_use_for_web_ui_or_mark_unverified';
+const GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK = 'yes_gpt_image_2_annotated_review';
+const IMAGE_FILE_RE = /\.(png|jpe?g|webp|gif)$/i;
 
 export const QA_NATIVE_AGENT_PERSONAS = Object.freeze([
   {
@@ -114,6 +118,10 @@ function lowerPrompt(prompt: any = '') {
   return promptText(prompt).toLowerCase();
 }
 
+function qaPromptWantsGptImage2AnnotatedReview(prompt: any = '') {
+  return /(gpt-image-2|gpt\s*image\s*2|imagegen|\$imagegen|annotated\s+review|annotated\s+image|callout|generated\s+review\s+image|이미지\s*리뷰|생성\s*이미지|주석\s*이미지|콜아웃)/i.test(promptText(prompt));
+}
+
 function firstUrl(prompt: any = '') {
   return promptText(prompt).match(/https?:\/\/[^\s)\]}>,]+/i)?.[0] || '';
 }
@@ -158,6 +166,14 @@ export function inferQaLoopAnswers(prompt: any = '') {
   const local = environment === 'local_dev_server';
   const login = loginPolicyFromPrompt(text);
   const scope = qaScopeFromPrompt(text);
+  const wantsGptImage2Review = isUiScope(scope) && qaPromptWantsGptImage2AnnotatedReview(text);
+  const acceptance = [
+    '앱 첫 화면 또는 지정된 대상이 정상 로드된다.',
+    '주요 내비게이션과 핵심 화면 진입에서 콘솔/화면상 치명 오류가 없다.',
+    '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
+  ];
+  if (isUiScope(scope)) acceptance.push('UI E2E 통과 증거는 실제 Codex Chrome Extension screenshot artifact path와 sha256을 기록해야 한다.');
+  if (wantsGptImage2Review) acceptance.push('gpt-image-2 annotated review image가 필요한 경우 실제 Codex App $imagegen/gpt-image-2 출력 파일 path, sha256, model, provider를 기록해야 한다.');
   return {
     GOAL_PRECISE: text ? `현재 요청 범위에서 QA-LOOP를 안전하게 실행한다: ${text}` : '현재 로컬 개발 환경에서 핵심 사용자 흐름을 안전하게 QA한다.',
     QA_SCOPE: scope,
@@ -171,13 +187,10 @@ export function inferQaLoopAnswers(prompt: any = '') {
     ...login,
     CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
     UI_CHROME_EXTENSION_ACK: UI_CHROME_EXTENSION_FIRST_ACK,
+    QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED: wantsGptImage2Review ? GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK : 'not_required',
     TEAM_MODE_ALLOWED: 'no_parent_only',
     MAX_QA_CYCLES: '1',
-    ACCEPTANCE_CRITERIA: [
-      '앱 첫 화면 또는 지정된 대상이 정상 로드된다.',
-      '주요 내비게이션과 핵심 화면 진입에서 콘솔/화면상 치명 오류가 없다.',
-      '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
-    ],
+    ACCEPTANCE_CRITERIA: acceptance,
     NON_GOALS: [
       '결제, 실제 이메일/SMS 발송, 관리자 권한 변경, 데이터 삭제, 프로덕션 데이터 변경은 테스트하지 않는다.'
     ],
@@ -302,10 +315,20 @@ export function qaApiRequired(a: any = {}) {
   return a.QA_SCOPE === 'all_available' ? hasApiTarget(a) : isApiScope(a.QA_SCOPE);
 }
 
+export function qaGptImage2AnnotatedReviewRequired(contractOrAnswers: any = {}, prompt: any = '') {
+  const answers = contractOrAnswers?.answers || contractOrAnswers || {};
+  if (!qaUiRequired(answers)) return false;
+  const explicit = String(answers.QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED || answers.GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED || '').trim();
+  if (/^(yes|true|required|yes_gpt_image_2_annotated_review)$/i.test(explicit)) return true;
+  if (/^(no|false|not_required|none)$/i.test(explicit)) return false;
+  return qaPromptWantsGptImage2AnnotatedReview(`${prompt || ''}\n${answers.GOAL_PRECISE || ''}\n${JSON.stringify(answers.ACCEPTANCE_CRITERIA || [])}`);
+}
+
 export function defaultQaGate(contract: any = {}, opts: any = {}) {
   const a = contract.answers || {};
   const uiRequired = qaUiRequired(a);
   const apiRequired = qaApiRequired(a);
+  const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, contract.prompt);
   const reportFile = opts.reportFile || qaReportFilename();
   const corrective = a.QA_CORRECTIVE_POLICY !== 'report_only_no_code_changes';
   return {
@@ -323,6 +346,17 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     ui_chrome_extension_evidence: !uiRequired,
     ui_computer_use_evidence: false,
     ui_evidence_source: uiRequired ? null : 'not_required',
+    ui_chrome_extension_screenshot_required: uiRequired,
+    ui_chrome_extension_screenshot_captured: !uiRequired,
+    ui_chrome_extension_screenshot_artifact: null,
+    ui_chrome_extension_screenshot_sha256: null,
+    gpt_image_2_annotated_review_required: gptImage2ReviewRequired,
+    gpt_image_2_annotated_review_generated: !gptImage2ReviewRequired,
+    gpt_image_2_annotated_review_artifact: null,
+    gpt_image_2_annotated_review_sha256: null,
+    gpt_image_2_annotated_review_model: gptImage2ReviewRequired ? null : 'not_required',
+    gpt_image_2_annotated_review_provider: gptImage2ReviewRequired ? null : 'not_required',
+    qa_visual_evidence_artifact: QA_LOOP_VISUAL_EVIDENCE_ARTIFACT,
     desktop_app_handoff_required: false,
     desktop_app_handoff_status: 'not_requested',
     desktop_app_handoff_artifact: null,
@@ -371,12 +405,46 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
     codex_app_execution_profile: executionProfile ? compactExecutionProfile(executionProfile) : null,
     codex_native_invocation: codexNativeInvocation,
     target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
-    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_chrome_extension_first_required_for_web_ui_e2e' },
+    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_chrome_extension_first_required_for_web_ui_e2e', visual_review: 'gpt_image_2_annotated_review_required_when_contract_requests_it' },
     checklist
   });
+  await writeJsonAtomic(path.join(dir, QA_LOOP_VISUAL_EVIDENCE_ARTIFACT), buildQaLoopVisualEvidenceArtifact(mission, contract));
   await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile, executionProfile, codexNativeInvocation }));
   await writeTextAtomic(path.join(dir, reportFile), qaReportTemplate(mission, contract, checklist));
   return { checklist_count: checklist.length, report_file: reportFile };
+}
+
+export async function ensureQaLoopVisualEvidenceContract(dir: any, mission: any = {}, contract: any = {}) {
+  const visualPath = path.join(dir, QA_LOOP_VISUAL_EVIDENCE_ARTIFACT);
+  if (!(await exists(visualPath))) {
+    await writeJsonAtomic(visualPath, buildQaLoopVisualEvidenceArtifact(mission, contract));
+  }
+  const gatePath = path.join(dir, 'qa-gate.json');
+  const gate = await readJson(gatePath, null);
+  if (!gate) return;
+  const defaults = defaultQaGate(contract, { reportFile: qaReportFileFromGate(gate) || qaReportFilename() });
+  const keys = [
+    'ui_chrome_extension_screenshot_required',
+    'ui_chrome_extension_screenshot_captured',
+    'ui_chrome_extension_screenshot_artifact',
+    'ui_chrome_extension_screenshot_sha256',
+    'gpt_image_2_annotated_review_required',
+    'gpt_image_2_annotated_review_generated',
+    'gpt_image_2_annotated_review_artifact',
+    'gpt_image_2_annotated_review_sha256',
+    'gpt_image_2_annotated_review_model',
+    'gpt_image_2_annotated_review_provider',
+    'qa_visual_evidence_artifact'
+  ];
+  const next = { ...gate };
+  let changed = false;
+  for (const key of keys) {
+    if (next[key] === undefined) {
+      next[key] = (defaults as any)[key];
+      changed = true;
+    }
+  }
+  if (changed) await writeJsonAtomic(gatePath, next);
 }
 
 export async function evaluateQaGate(dir: any) {
@@ -400,6 +468,9 @@ export async function evaluateQaGate(dir: any) {
     if (gate.ui_evidence_source !== CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE) reasons.push('ui_evidence_source_not_codex_chrome_extension');
     if (evidenceMentionsForbiddenBrowserAutomation({ evidence: gate.evidence, notes: gate.notes, ui_evidence_source: gate.ui_evidence_source })) reasons.push('forbidden_browser_automation_evidence');
     if (evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
+    reasons.push(...await missingQaLoopVisualEvidence(dir, gate));
+  } else if (gate.gpt_image_2_annotated_review_required === true) {
+    reasons.push(...await missingQaLoopVisualEvidence(dir, gate));
   }
   if (gate.desktop_app_handoff_required === true) {
     if (!['pending', 'launched_pending_confirmation', 'completed'].includes(String(gate.desktop_app_handoff_status || ''))) reasons.push('desktop_app_handoff_missing');
@@ -414,8 +485,9 @@ export async function evaluateQaGate(dir: any) {
   else if (!isQaReportFilename(reportFile)) reasons.push('qa_report_filename_prefix_invalid');
   else if (!(await exists(path.join(dir, reportFile)))) reasons.push('qa_report_missing');
   if (!(await exists(path.join(dir, 'qa-ledger.json')))) reasons.push('qa_ledger_missing');
-  const passed = gate.passed === true && reasons.length === 0;
-  const result = { checked_at: nowIso(), passed, reasons, gate };
+  const uniqueReasons = [...new Set(reasons)];
+  const passed = gate.passed === true && uniqueReasons.length === 0;
+  const result = { checked_at: nowIso(), passed, reasons: uniqueReasons, gate };
   await writeJsonAtomic(path.join(dir, 'qa-gate.evaluated.json'), result);
   return result;
 }
@@ -507,13 +579,20 @@ ARTIFACTS: update qa-ledger.json, ${report}, qa-gate.json, and qa-loop/cycle-${c
 CONTRACT:
 ${JSON.stringify(contract, null, 2)}
 ${imageContractText}${appHandoffText}${executionProfileText}
+VISUAL EVIDENCE CONTRACT:
+- For web UI QA, do not set chrome_extension_preflight_passed/ui_chrome_extension_evidence to true unless the Codex Chrome Extension path is ready and ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} records a real saved Chrome Extension screenshot artifact with path, sha256, and dimensions.
+- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK}, use Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the Chrome Extension screenshot. Record its path, sha256, model=gpt-image-2, provider=Codex App $imagegen, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
+- Do not substitute prose-only critique, Playwright/Selenium/Puppeteer/Browser Use screenshots, Computer Use browser screenshots, placeholder images, fake fixtures, or direct API fallback as full web UI visual evidence.
 Previous tail:
 ${String(previous || '').slice(-2500)}
 `;
 }
 
 export async function qaStatus(dir: any) {
-  const gate = await readJson(path.join(dir, 'qa-gate.evaluated.json'), await readJson(path.join(dir, 'qa-gate.json'), null));
+  const mission = await readJson(path.join(dir, 'mission.json'), {});
+  const contract = await readJson(path.join(dir, 'decision-contract.json'), { prompt: mission.prompt, answers: {}, sealed_hash: null });
+  await ensureQaLoopVisualEvidenceContract(dir, mission, contract).catch(() => undefined);
+  const gate = await evaluateQaGate(dir).catch(async () => await readJson(path.join(dir, 'qa-gate.evaluated.json'), await readJson(path.join(dir, 'qa-gate.json'), null)));
   const ledger = await readJson(path.join(dir, 'qa-ledger.json'), null);
   const appHandoff = await readJson(path.join(dir, 'qa-loop', 'app-handoff.json'), null);
   const appConfirmation = await readJson(path.join(dir, 'qa-loop', 'app-handoff-confirmation.json'), null);
@@ -560,6 +639,156 @@ function qaChecklist(a: any) {
   return cases.map(([id, title]: any) => ({ id, title, status: 'pending', evidence: [] }));
 }
 
+export function buildQaLoopVisualEvidenceArtifact(mission: any = {}, contract: any = {}) {
+  const answers = contract.answers || {};
+  const uiRequired = qaUiRequired(answers);
+  const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, contract.prompt || mission.prompt);
+  return {
+    schema: 'sks.qa-loop-visual-evidence.v1',
+    generated_at: nowIso(),
+    mission_id: mission.id || contract.mission_id || null,
+    contract_hash: contract.sealed_hash || null,
+    required: uiRequired || gptImage2ReviewRequired,
+    chrome_extension_screenshot: {
+      required: uiRequired,
+      status: uiRequired ? 'pending' : 'not_required',
+      evidence_source: CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE,
+      artifact_path: null,
+      sha256: null,
+      width: null,
+      height: null,
+      privacy: 'local-only'
+    },
+    gpt_image_2_annotated_review: {
+      required: gptImage2ReviewRequired,
+      status: gptImage2ReviewRequired ? 'pending' : 'not_required',
+      model: gptImage2ReviewRequired ? 'gpt-image-2' : 'not_required',
+      provider: gptImage2ReviewRequired ? 'Codex App $imagegen' : 'not_required',
+      source_screenshot_artifact: null,
+      artifact_path: null,
+      sha256: null,
+      width: null,
+      height: null,
+      required_output: gptImage2ReviewRequired ? 'generated_annotated_review_image_with_numbered_callouts_severity_labels_and_visual_marks' : 'not_required',
+      docs_url: CODEX_APP_IMAGE_GENERATION_DOC_URL,
+      privacy: 'local-only'
+    },
+    blockers: uiRequired ? ['chrome_extension_screenshot_missing'] : [],
+    notes: [
+      'QA-LOOP web visual evidence must be backed by real saved local image files.',
+      CODEX_WEB_VERIFICATION_POLICY,
+      CODEX_IMAGEGEN_REQUIRED_POLICY
+    ]
+  };
+}
+
+async function missingQaLoopVisualEvidence(dir: any, gate: any = {}) {
+  const visual = await readJson(path.join(dir, QA_LOOP_VISUAL_EVIDENCE_ARTIFACT), null);
+  const reasons: string[] = [];
+  const uiRequired = gate.ui_e2e_required === true;
+  if (uiRequired) {
+    const screenshot = visual?.chrome_extension_screenshot || {};
+    if (gate.ui_chrome_extension_screenshot_captured !== true && !positiveVisualStatus(screenshot.status, ['captured', 'attached', 'verified'])) reasons.push('ui_chrome_extension_screenshot_missing');
+    const screenshotPath = firstNonEmpty(
+      gate.ui_chrome_extension_screenshot_artifact,
+      gate.chrome_extension_screenshot_artifact,
+      gate.ui_chrome_extension_screenshot?.path,
+      gate.chrome_extension_screenshot?.path,
+      screenshot.artifact_path,
+      screenshot.path
+    );
+    const screenshotSha = firstNonEmpty(
+      gate.ui_chrome_extension_screenshot_sha256,
+      gate.chrome_extension_screenshot_sha256,
+      gate.ui_chrome_extension_screenshot?.sha256,
+      gate.chrome_extension_screenshot?.sha256,
+      screenshot.sha256
+    );
+    const screenshotDims = {
+      width: firstNonEmpty(gate.ui_chrome_extension_screenshot_width, gate.ui_chrome_extension_screenshot?.width, gate.chrome_extension_screenshot?.width, screenshot.width),
+      height: firstNonEmpty(gate.ui_chrome_extension_screenshot_height, gate.ui_chrome_extension_screenshot?.height, gate.chrome_extension_screenshot?.height, screenshot.height)
+    };
+    if (!screenshotPath) reasons.push('ui_chrome_extension_screenshot_artifact_missing');
+    else reasons.push(...await imageEvidenceFileReasons(dir, screenshotPath, screenshotSha, 'ui_chrome_extension_screenshot', screenshotDims));
+    const screenshotSource = firstNonEmpty(gate.ui_chrome_extension_screenshot_source, screenshot.evidence_source, gate.ui_evidence_source);
+    if (screenshotSource !== CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE) reasons.push('ui_chrome_extension_screenshot_source_not_codex_chrome_extension');
+  }
+
+  const review = visual?.gpt_image_2_annotated_review || {};
+  const gptImage2ReviewRequired = gate.gpt_image_2_annotated_review_required === true || review.required === true;
+  if (gptImage2ReviewRequired) {
+    if (gate.gpt_image_2_annotated_review_generated !== true && !positiveVisualStatus(review.status, ['generated', 'attached', 'verified'])) reasons.push('gpt_image_2_annotated_review_image_missing');
+    const reviewPath = firstNonEmpty(
+      gate.gpt_image_2_annotated_review_artifact,
+      gate.imagegen_annotated_review_artifact,
+      gate.gpt_image_2_annotated_review?.path,
+      gate.gpt_image_2_annotated_review_image?.path,
+      review.artifact_path,
+      review.path
+    );
+    const reviewSha = firstNonEmpty(
+      gate.gpt_image_2_annotated_review_sha256,
+      gate.gpt_image_2_annotated_review?.sha256,
+      gate.gpt_image_2_annotated_review_image?.sha256,
+      review.sha256
+    );
+    const reviewDims = {
+      width: firstNonEmpty(gate.gpt_image_2_annotated_review_width, gate.gpt_image_2_annotated_review?.width, gate.gpt_image_2_annotated_review_image?.width, review.width),
+      height: firstNonEmpty(gate.gpt_image_2_annotated_review_height, gate.gpt_image_2_annotated_review?.height, gate.gpt_image_2_annotated_review_image?.height, review.height)
+    };
+    if (!reviewPath) reasons.push('gpt_image_2_annotated_review_artifact_missing');
+    else reasons.push(...await imageEvidenceFileReasons(dir, reviewPath, reviewSha, 'gpt_image_2_annotated_review', reviewDims));
+    const model = firstNonEmpty(gate.gpt_image_2_annotated_review_model, gate.gpt_image_2_annotated_review?.model, gate.gpt_image_2_annotated_review_image?.model, review.model, review.provider?.model);
+    if (model !== 'gpt-image-2') reasons.push('gpt_image_2_annotated_review_model_missing');
+    const provider = firstNonEmpty(gate.gpt_image_2_annotated_review_provider, gate.gpt_image_2_annotated_review?.provider, gate.gpt_image_2_annotated_review_image?.provider, review.provider, review.provider_surface);
+    if (!provider || !/codex\s+app|\$imagegen|codex_app_imagegen/i.test(String(provider))) reasons.push('gpt_image_2_annotated_review_provider_not_codex_app_imagegen');
+    if (/mock|fake|fixture|placeholder|text[-_ ]?only|direct\s+api|openai_images_api|responses_image_generation/i.test(String(provider))) reasons.push('gpt_image_2_annotated_review_provider_forbidden');
+    const sourceScreenshot = firstNonEmpty(
+      gate.gpt_image_2_source_screenshot_artifact,
+      gate.gpt_image_2_annotated_review?.source_screenshot_artifact,
+      gate.gpt_image_2_annotated_review_image?.source_screenshot_artifact,
+      review.source_screenshot_artifact,
+      gate.ui_chrome_extension_screenshot_artifact
+    );
+    if (!sourceScreenshot) reasons.push('gpt_image_2_source_screenshot_artifact_missing');
+  }
+  return [...new Set(reasons)];
+}
+
+function positiveVisualStatus(status: any, accepted: string[]) {
+  return accepted.includes(String(status || '').trim().toLowerCase());
+}
+
+function firstNonEmpty(...values: any[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (value && typeof value !== 'string') return value;
+  }
+  return null;
+}
+
+async function imageEvidenceFileReasons(dir: any, artifactPath: any, declaredSha: any, prefix: string, declaredDims: any = {}) {
+  const reasons: string[] = [];
+  const resolved = resolveEvidencePath(dir, artifactPath);
+  if (!resolved) return [`${prefix}_artifact_path_invalid`];
+  if (!IMAGE_FILE_RE.test(resolved)) reasons.push(`${prefix}_artifact_not_image_file`);
+  if (!(await exists(resolved))) return [...reasons, `${prefix}_artifact_file_missing`];
+  const sha = await sha256File(resolved).catch(() => null);
+  if (!declaredSha) reasons.push(`${prefix}_sha256_missing`);
+  else if (sha && String(declaredSha) !== sha) reasons.push(`${prefix}_sha256_mismatch`);
+  const dims = await imageDimensions(resolved).catch(() => null);
+  const width = Number(dims?.width ?? declaredDims?.width);
+  const height = Number(dims?.height ?? declaredDims?.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) reasons.push(`${prefix}_dimensions_missing`);
+  return reasons;
+}
+
+function resolveEvidencePath(dir: any, artifactPath: any) {
+  const value = String(artifactPath || '').trim().replace(/^file:\/\//i, '');
+  if (!value || /^https?:\/\//i.test(value)) return null;
+  return path.isAbsolute(value) ? value : path.resolve(dir, value);
+}
+
 function missionRootFromDir(dir: string): string | null {
   const normalized = path.resolve(String(dir || ''));
   const marker = `${path.sep}.sneakoscope${path.sep}missions${path.sep}`;
@@ -581,7 +810,7 @@ function compactExecutionProfile(profile: any) {
 
 function qaReportTemplate(mission: any, contract: any, checklist: any) {
   const a = contract.answers || {};
-  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_WEB_VERIFICATION_POLICY}\n\n## Checklist\n\n${checklist.map((item: any) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
+  return `# QA-LOOP Report\n\nMission: ${mission.id}\nTarget: ${a.TARGET_BASE_URL || 'unset'}\nScope: ${a.QA_SCOPE || 'unset'}\nEnvironment: ${a.TARGET_ENVIRONMENT || 'unset'}\n\n## Safety\n\n- Deployed destructive tests: never\n- Credentials: temp-only, never saved\n- UI evidence: ${CODEX_WEB_VERIFICATION_POLICY}\n- Visual evidence ledger: ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT}\n\n## Checklist\n\n${checklist.map((item: any) => `- [ ] ${item.id}: ${item.title}`).join('\n')}\n\n## Findings\n\nTBD\n\n## Corrections And Rechecks\n\nTBD\n\n## Honest Mode\n\nTBD\n`;
 }
 
 function positiveCount(value: any) {

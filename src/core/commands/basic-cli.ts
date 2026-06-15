@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMMANDS, type CommandEntry } from '../../cli/command-registry.js';
+import { COMMANDS, LEGACY_COMMAND_ALIASES, type CommandEntry } from '../../cli/command-registry.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
@@ -62,6 +62,8 @@ export function dollarCommandsCommand(args: any = []) {
 export function aliasesCommand() {
   console.log('Aliases');
   console.log('- sks, sneakoscope');
+  console.log('- CLI compatibility aliases:');
+  for (const [alias, canonical] of Object.entries(LEGACY_COMMAND_ALIASES)) console.log(`  sks ${alias} -> sks ${canonical}`);
   console.log('- $ aliases:');
   for (const entry of DOLLAR_COMMAND_ALIASES) console.log(`  ${entry.app_skill} -> ${entry.canonical}`);
 }

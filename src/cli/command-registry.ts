@@ -156,21 +156,16 @@ export const COMMANDS = {
   'codex-app': entry('beta', 'Check Codex App readiness', 'dist/commands/codex-app.js', directCommand(() => import('../commands/codex-app.js'), 'dist/commands/codex-app.js')),
   'codex-native': entry('beta', 'Inspect Codex Native broker and routing readiness', 'dist/commands/codex-native.js', directCommand(() => import('../commands/codex-native.js'), 'dist/commands/codex-native.js')),
   'codex-lb': entry('beta', 'Inspect codex-lb status and circuit health', 'dist/commands/codex-lb.js', directCommand(() => import('../commands/codex-lb.js'), 'dist/commands/codex-lb.js')),
-  auth: entry('beta', 'Alias for codex-lb auth commands', 'dist/commands/codex-lb.js', directCommand(() => import('../commands/codex-lb.js'), 'dist/commands/codex-lb.js')),
   hooks: entry('beta', 'Explain and inspect Codex hooks', 'dist/commands/hooks.js', directCommand(() => import('../commands/hooks.js'), 'dist/commands/hooks.js')),
   tmux: entry('beta', 'Show removed-runtime migration notice', 'dist/commands/tmux.js', directCommand(() => import('../commands/tmux.js'), 'dist/commands/tmux.js')),
   'zellij-lane': entry('beta', 'Render a Zellij lane frame for SKS sessions', 'dist/commands/zellij-lane.js', directCommand(() => import('../commands/zellij-lane.js'), 'dist/commands/zellij-lane.js')),
   'zellij-slot-pane': entry('beta', 'Render a compact Zellij worker slot pane', 'dist/commands/zellij-slot-pane.js', directCommand(() => import('../commands/zellij-slot-pane.js'), 'dist/commands/zellij-slot-pane.js')),
   'zellij-slot-column-anchor': entry('beta', 'Render the compact SLOTS anchor pane for first-slot-down Zellij stacks', 'dist/commands/zellij-slot-column-anchor.js', directCommand(() => import('../commands/zellij-slot-column-anchor.js'), 'dist/commands/zellij-slot-column-anchor.js')),
   zellij: entry('beta', 'Inspect Zellij runtime status and explain repair (no auto-install)', 'dist/commands/zellij.js', directCommand(() => import('../commands/zellij.js'), 'dist/commands/zellij.js')),
-  mad: entry('beta', 'MAD-SKS Zellij permission launcher', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),
   'mad-sks': entry('beta', 'MAD-SKS scoped permission modifier', 'dist/commands/mad-sks.js', directCommand(() => import('../commands/mad-sks.js'), 'dist/commands/mad-sks.js')),
   'mad-db': entry('beta', 'Create or inspect one-cycle Mad-DB break-glass capability tokens', 'dist/commands/mad-db.js', directCommand(() => import('../commands/mad-db.js'), 'dist/commands/mad-db.js')),
   'auto-review': entry('beta', 'Manage auto-review profile', 'dist/commands/auto-review.js', directCommand(() => import('../commands/auto-review.js'), 'dist/commands/auto-review.js')),
-  autoreview: entry('beta', 'Alias for auto-review', 'dist/commands/auto-review.js', directCommand(() => import('../commands/auto-review.js'), 'dist/commands/auto-review.js')),
   'dollar-commands': entry('stable', 'List Codex App dollar commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
-  dollars: entry('stable', 'Alias for dollar-commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
-  '$': entry('stable', 'Alias for dollar-commands', 'dist/core/commands/basic-cli.js', basicArgs('dollarCommandsCommand')),
   'fast-mode': entry('stable', 'Toggle SKS Fast mode default for dollar-command routes', 'dist/core/commands/fast-mode-command.js', argsCommand(() => import('../core/commands/fast-mode-command.js'), 'fastModeCommand', 'dist/core/commands/fast-mode-command.js')),
   commit: entry('stable', 'Create a simple git commit', 'dist/commands/commit.js', directCommand(() => import('../commands/commit.js'), 'dist/commands/commit.js')),
   'commit-and-push': entry('stable', 'Create a simple git commit and push', 'dist/commands/commit-and-push.js', directCommand(() => import('../commands/commit-and-push.js'), 'dist/commands/commit-and-push.js')),
@@ -185,14 +180,9 @@ export const COMMANDS = {
   autoresearch: entry('labs', 'Alias for research/autoresearch route', 'dist/core/commands/autoresearch-command.js', subcommand(() => import('../core/commands/autoresearch-command.js'), 'autoresearchCommand', 'dist/core/commands/autoresearch-command.js', 'status')),
   ppt: entry('labs', 'Inspect/build PPT artifacts', 'dist/core/commands/ppt-command.js', commandArgsCommand(() => import('../core/commands/ppt-command.js'), 'pptCommand', 'dist/core/commands/ppt-command.js')),
   'image-ux-review': entry('labs', 'Inspect image UX artifacts', 'dist/core/commands/image-ux-review-command.js', commandArgsCommand(() => import('../core/commands/image-ux-review-command.js'), 'imageUxReviewCommand', 'dist/core/commands/image-ux-review-command.js')),
-  'ux-review': entry('labs', 'Alias for image UX review', 'dist/core/commands/image-ux-review-command.js', commandArgsCommand(() => import('../core/commands/image-ux-review-command.js'), 'imageUxReviewCommand', 'dist/core/commands/image-ux-review-command.js')),
-  'visual-review': entry('labs', 'Alias for image UX review', 'dist/core/commands/image-ux-review-command.js', commandArgsCommand(() => import('../core/commands/image-ux-review-command.js'), 'imageUxReviewCommand', 'dist/core/commands/image-ux-review-command.js')),
-  'ui-ux-review': entry('labs', 'Alias for image UX review', 'dist/core/commands/image-ux-review-command.js', commandArgsCommand(() => import('../core/commands/image-ux-review-command.js'), 'imageUxReviewCommand', 'dist/core/commands/image-ux-review-command.js')),
   'computer-use': entry('beta', 'Record native Mac/non-web Computer Use visual evidence', 'dist/core/commands/computer-use-command.js', commandArgsCommand(() => import('../core/commands/computer-use-command.js'), 'computerUseCommand', 'dist/core/commands/computer-use-command.js')),
-  cu: entry('beta', 'Alias for native Computer Use', 'dist/core/commands/computer-use-command.js', commandArgsCommand(() => import('../core/commands/computer-use-command.js'), 'computerUseCommand', 'dist/core/commands/computer-use-command.js')),
   context7: entry('beta', 'Context7 checks and docs', 'dist/cli/context7-command.js', subcommand(() => import('./context7-command.js'), 'context7Command', 'dist/cli/context7-command.js', 'check')),
   xai: entry('beta', 'Set up and check xAI/Grok search MCP integration', 'dist/cli/xai-command.js', subcommand(() => import('./xai-command.js'), 'xaiCommand', 'dist/cli/xai-command.js', 'check')),
-  grok: entry('beta', 'Alias for xAI/Grok search setup', 'dist/cli/xai-command.js', subcommand(() => import('./xai-command.js'), 'xaiCommand', 'dist/cli/xai-command.js', 'check')),
   recallpulse: entry('labs', 'RecallPulse evidence route', 'dist/commands/recallpulse.js', directCommand(() => import('../commands/recallpulse.js'), 'dist/commands/recallpulse.js')),
   pipeline: entry('beta', 'Inspect pipeline missions', 'dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'), 'dist/commands/pipeline.js')),
   guard: entry('beta', 'Check harness guard', 'dist/commands/guard.js', directCommand(() => import('../commands/guard.js'), 'dist/commands/guard.js')),
@@ -213,7 +203,6 @@ export const COMMANDS = {
   'skill-dream': entry('labs', 'Track skill dream counters', 'dist/core/commands/skill-dream-command.js', subcommand(() => import('../core/commands/skill-dream-command.js'), 'skillDreamCommand', 'dist/core/commands/skill-dream-command.js', 'status')),
   'code-structure': entry('labs', 'Scan source structure', 'dist/core/commands/code-structure-command.js', subcommand(() => import('../core/commands/code-structure-command.js'), 'codeStructureCommand', 'dist/core/commands/code-structure-command.js', 'scan')),
   rust: entry('beta', 'Inspect optional Rust accelerator status and smoke parity', 'dist/commands/rust.js', directCommand(() => import('../commands/rust.js'), 'dist/commands/rust.js')),
-  memory: entry('labs', 'Run retention checks', 'dist/core/commands/gc-command.js', subcommand(() => import('../core/commands/gc-command.js'), 'memoryCommand', 'dist/core/commands/gc-command.js')),
   gx: entry('labs', 'Render/validate GX cartridges', 'dist/core/commands/gx-command.js', subcommand(() => import('../core/commands/gx-command.js'), 'gxCommand', 'dist/core/commands/gx-command.js', 'validate')),
   db: entry('beta', 'Inspect DB safety policy', 'dist/core/commands/db-command.js', subcommand(() => import('../core/commands/db-command.js'), 'dbCommand', 'dist/core/commands/db-command.js', 'policy')),
   eval: entry('labs', 'Run eval reports', 'dist/core/commands/eval-command.js', subcommand(() => import('../core/commands/eval-command.js'), 'evalCommand', 'dist/core/commands/eval-command.js', 'run')),
@@ -229,19 +218,34 @@ export const COMMANDS = {
 
 export const TYPED_COMMANDS = COMMANDS;
 
+export type CommandName = Extract<keyof typeof COMMANDS, string>;
+
+export const LEGACY_COMMAND_ALIASES = {
+  auth: 'codex-lb',
+  mad: 'mad-sks',
+  autoreview: 'auto-review',
+  dollars: 'dollar-commands',
+  '$': 'dollar-commands',
+  'ux-review': 'image-ux-review',
+  'visual-review': 'image-ux-review',
+  'ui-ux-review': 'image-ux-review',
+  cu: 'computer-use',
+  grok: 'xai',
+  memory: 'gc'
+} as const satisfies Record<string, CommandName>;
+
 export const COMMAND_ALIASES = {
+  ...LEGACY_COMMAND_ALIASES,
   '--help': 'help',
   '-h': 'help',
   '--version': 'version',
   '-v': 'version',
-  '--mad': 'mad',
-  '--MAD': 'mad',
+  '--mad': 'mad-sks',
+  '--MAD': 'mad-sks',
   '--mad-sks': 'mad-sks',
   '--agent': 'agent',
   '--naruto': 'naruto'
-} as const;
-
-export type CommandName = Extract<keyof typeof COMMANDS, string>;
+} as const satisfies Record<string, CommandName>;
 
 export function commandNames(): CommandName[] {
   return Object.keys(COMMANDS).sort() as CommandName[];

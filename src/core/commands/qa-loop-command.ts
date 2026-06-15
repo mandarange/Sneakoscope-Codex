@@ -5,7 +5,7 @@ import { getCodexInfo, runCodexExec } from '../codex-adapter.js';
 import { createMission, loadMission, setCurrent, stateFile } from '../mission.js';
 import { writeQuestions } from '../questions.js';
 import { sealContract } from '../decision-contract.js';
-import { buildQaLoopQuestionSchema, buildQaLoopPrompt, evaluateQaGate, qaStatus, qaUiRequired, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.js';
+import { buildQaLoopQuestionSchema, buildQaLoopPrompt, ensureQaLoopVisualEvidenceContract, evaluateQaGate, qaGptImage2AnnotatedReviewRequired, qaStatus, qaUiRequired, writeMockQaResult, writeQaLoopArtifacts, writeQaNativeAgentLedger } from '../qa-loop.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { ROUTES, routePrompt, stripVisibleDecisionAnswerBlocks } from '../routes.js';
 import { codexChromeExtensionStatus } from '../codex-app.js';
@@ -116,6 +116,7 @@ async function qaLoopRun(args: any) {
   if (!(await exists(contractPath))) throw new Error('QA-LOOP cannot run: decision-contract.json is missing.');
   const contract = await readJson(contractPath, {});
   if (!(await exists(path.join(dir, 'qa-ledger.json')))) await writeQaLoopArtifacts(dir, mission, contract);
+  else await ensureQaLoopVisualEvidenceContract(dir, mission, contract);
   const safetyScan = await scanDbSafety(root);
   if (!safetyScan.ok) {
     console.error('QA-LOOP cannot run: SKS safety scan found unsafe project data-tool configuration.');
@@ -140,6 +141,7 @@ async function qaLoopRun(args: any) {
   const reportFile = qaGate.qa_report_file;
   const executionProfile = await readJson(path.join(dir, 'qa-loop', 'execution-profile.json'), null);
   const uiRequired = qaUiRequired(contract.answers || {});
+  const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, mission.prompt);
   const capabilityArtifact = await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
   const usageArtifact = await writeCodexAccountUsageArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), snapshot: null }));
   const budgetPolicy = buildQaLoopBudgetPolicy({ usage: (usageArtifact as any)?.snapshot || null, provider: 'codex-sdk' });
@@ -244,6 +246,16 @@ async function qaLoopRun(args: any) {
         ui_chrome_extension_evidence: false,
         ui_computer_use_evidence: false,
         ui_evidence_source: 'blocked_chrome_extension_setup_required',
+        ui_chrome_extension_screenshot_required: true,
+        ui_chrome_extension_screenshot_captured: false,
+        ui_chrome_extension_screenshot_artifact: null,
+        ui_chrome_extension_screenshot_sha256: null,
+        gpt_image_2_annotated_review_required: gptImage2ReviewRequired,
+        gpt_image_2_annotated_review_generated: false,
+        gpt_image_2_annotated_review_artifact: null,
+        gpt_image_2_annotated_review_sha256: null,
+        gpt_image_2_annotated_review_model: gptImage2ReviewRequired ? null : 'not_required',
+        gpt_image_2_annotated_review_provider: gptImage2ReviewRequired ? null : 'not_required',
         blocker: 'codex_chrome_extension_setup_required',
         blockers: Array.from(new Set([...(qaGate.blockers || []), 'codex_chrome_extension_setup_required', ...(chrome.blockers || [])])),
         evidence: [...(qaGate.evidence || []), 'Codex Chrome Extension preflight failed before web QA execution.'],
@@ -267,6 +279,27 @@ async function qaLoopRun(args: any) {
   const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command', env: { SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown', SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role' } });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
+  if (flag(args, '--native-proof-only')) {
+    const proofOnlyGate = {
+      schema: 'sks.qa-native-proof-only-gate.v1',
+      ok: nativeAgentRun.proof?.ok === true,
+      native_agent_proof: nativeAgentRun.proof?.ok === true,
+      proof_status: nativeAgentRun.proof?.status || null,
+      blockers: nativeAgentRun.proof?.blockers || []
+    };
+    if (flag(args, '--json')) return console.log(JSON.stringify({
+      schema: 'sks.qa-loop-run.v1',
+      ok: proofOnlyGate.ok,
+      status: proofOnlyGate.ok ? 'native_proof_ready' : 'blocked',
+      mission_id: id,
+      gate: proofOnlyGate,
+      proof: nativeAgentRun.proof,
+      native_agent_run: nativeAgentRun,
+      native_proof_only: true
+    }, null, 2));
+    console.log(`QA-LOOP native proof ready: ${id}`);
+    return;
+  }
   if (mock) {
     let gate = await writeMockQaResult(dir, mission, contract);
     const needsVisual = uiRequired;

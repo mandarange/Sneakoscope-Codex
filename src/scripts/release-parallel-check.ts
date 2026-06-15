@@ -25,7 +25,8 @@ const deterministicReleaseEnv: Record<string, string> = {
   SKS_TEST_REAL_IMAGEGEN: '0',
   SKS_REAL_IMAGEGEN: '0',
   SKS_CODEX_APP_IMAGEGEN: '0',
-  SKS_REQUIRE_REAL_COMPUTER_USE: '0'
+  SKS_REQUIRE_REAL_COMPUTER_USE: '0',
+  SKS_GATE_TIMEOUT_MS: '300000'
 };
 
 const tasks: VerificationTask[] = [

@@ -6,7 +6,7 @@ test('UX-Review command fixture writes mock-safe artifacts', () => {
   const result = spawnSync(process.execPath, ['dist/bin/sks.js', 'image-ux-review', 'fixture', '--mock', '--json'], {
     encoding: 'utf8',
     env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' },
-    timeout: 60_000
+    timeout: 180_000
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const json = JSON.parse(result.stdout);

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readJson, writeJsonAtomic, nowIso, sha256 } from './fsx.js';
 import { validateQaLoopAnswers } from './qa-loop.js';
-import { inferAnswersForPrompt } from './questions.js';
+import { buildRequestIntake, inferAnswersForPrompt, REQUEST_INTAKE_ARTIFACT } from './questions.js';
 import { bindMistakeRecallToAnswers, buildMistakeRecallLedger, mistakeRecallContractSummary, writeMistakeRecallArtifacts } from './mistake-recall.js';
 
 function isEmptyAnswer(v: any, slot: any = {}) {
@@ -39,7 +39,7 @@ export function validateAnswers(schema: any, answers: any) {
   return { ok: errors.length === 0, errors, resolved, totalRequired: schema.slots.filter((s: any) => s.required).length };
 }
 
-export function buildDecisionContract({ mission, schema, answers, mistakeRecall = null }: any) {
+export function buildDecisionContract({ mission, schema, answers, mistakeRecall = null, requestIntake = null }: any) {
   const madSks = answers.MAD_SKS_MODE === 'explicit_invocation_only';
   const defaults = {
     if_multiple_valid_implementations: 'choose_smallest_reversible_change',
@@ -113,6 +113,14 @@ export function buildDecisionContract({ mission, schema, answers, mistakeRecall 
     acceptance_criteria: Array.isArray(answers.ACCEPTANCE_CRITERIA) ? answers.ACCEPTANCE_CRITERIA : String(answers.ACCEPTANCE_CRITERIA || '').split('\n').map((x: any) => x.trim()).filter(Boolean),
     non_goals: Array.isArray(answers.NON_GOALS) ? answers.NON_GOALS : String(answers.NON_GOALS || '').split('\n').map((x: any) => x.trim()).filter(Boolean),
     test_scope: answers.TEST_SCOPE,
+    request_intake: requestIntake ? {
+      artifact: REQUEST_INTAKE_ARTIFACT,
+      prompt_hash: requestIntake.prompt_hash || null,
+      interpreted_intent: requestIntake.interpreted_intent || null,
+      requirements: requestIntake.requirements || [],
+      transformed_prompt: requestIntake.transformed_prompt || null,
+      wiki_context_used: requestIntake.wiki_context_used || null
+    } : null,
     triwiki_mistake_recall: mistakeRecallContractSummary(mistakeRecall),
     approved_defaults: defaults,
     decision_ladder: [
@@ -134,6 +142,7 @@ export function buildDecisionContract({ mission, schema, answers, mistakeRecall 
 }
 
 export async function sealContract(missionDir: any, mission: any): Promise<any> {
+  const root = rootFromMissionDir(missionDir);
   const schema = await readJson(path.join(missionDir, 'required-answers.schema.json'), {});
   const explicitAnswers = await readJson(path.join(missionDir, 'answers.json'), {});
   const inferred = inferAnswersForPrompt(mission?.prompt || schema?.prompt || '', explicitAnswers);
@@ -142,7 +151,7 @@ export async function sealContract(missionDir: any, mission: any): Promise<any> 
     ...inferred.answers,
     ...explicitAnswers
   };
-  const root = rootFromMissionDir(missionDir);
+  const requestIntake = await readOrBuildRequestIntake(missionDir, root, mission?.prompt || schema?.prompt || '', baseAnswers);
   const mistakeRecall = await buildMistakeRecallLedger(root, {
     prompt: mission?.prompt || schema?.prompt || '',
     answers: baseAnswers
@@ -150,7 +159,7 @@ export async function sealContract(missionDir: any, mission: any): Promise<any> 
   const answers = bindMistakeRecallToAnswers(baseAnswers, mistakeRecall);
   const validation = validateAnswers(schema, answers);
   if (!validation.ok) return { ok: false, validation };
-  const contract = buildDecisionContract({ mission, schema, answers, mistakeRecall });
+  const contract = buildDecisionContract({ mission, schema, answers, mistakeRecall, requestIntake });
   const mistakeRecallConsumption = await writeMistakeRecallArtifacts(missionDir, mistakeRecall, contract);
   await writeJsonAtomic(path.join(missionDir, 'resolved-answers.json'), {
     explicit_answers: explicitAnswers,
@@ -161,11 +170,26 @@ export async function sealContract(missionDir: any, mission: any): Promise<any> 
       artifact: 'mistake-recall-ledger.json',
       consumed: mistakeRecallConsumption.ok,
       required: mistakeRecall.required
+    },
+    request_intake: {
+      artifact: REQUEST_INTAKE_ARTIFACT,
+      prompt_hash: requestIntake?.prompt_hash || null,
+      transformed_prompt_available: Boolean(requestIntake?.transformed_prompt)
     }
   });
   await writeJsonAtomic(path.join(missionDir, 'decision-contract.json'), contract);
   await writeJsonAtomic(path.join(missionDir, 'answer-validation.json'), validation);
   return { ok: true, validation, contract };
+}
+
+async function readOrBuildRequestIntake(missionDir: any, root: any, prompt: any, answers: any = {}) {
+  const file = path.join(missionDir, REQUEST_INTAKE_ARTIFACT);
+  const existing = await readJson(file, null);
+  if (existing) return existing;
+  const wikiContext = await readJson(path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'), null);
+  const intake = buildRequestIntake(prompt, answers, { wikiContext });
+  await writeJsonAtomic(file, intake);
+  return intake;
 }
 
 function rootFromMissionDir(missionDir: any) {

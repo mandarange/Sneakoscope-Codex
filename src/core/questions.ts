@@ -1,7 +1,9 @@
 import path from 'node:path';
-import { writeJsonAtomic, writeTextAtomic } from './fsx.js';
+import { nowIso, sha256, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { buildQaLoopQuestionSchema } from './qa-loop.js';
 import { CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, hasFromChatImgSignal } from './routes.js';
+
+export const REQUEST_INTAKE_ARTIFACT = 'request-intake.json';
 
 export function buildQuestionSchemaForRoute(route: any, prompt: any) {
   if (String(route?.id || '') === 'QALoop') return buildQaLoopQuestionSchema(prompt);
@@ -225,6 +227,8 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   const versionWork = /버전|version|bump|release|publish:dry|npm\s+pack/.test(lower);
   const installWork = /bootstrap|postinstall|doctor|deps|tmux|homebrew|first install|최초\s*설치|설치\s*ux|셋업|setup/.test(lower);
   const questionGateWork = /모호|ambiguity|clarification|질문|triwiki|추론|infer|predict|예측|answers?\.json|decision-contract/.test(lower);
+  const requestIntakeWork = /(모호|ambiguity|ambiguous|vague|rough|의도|intent|요청사항|requirements?|프롬프트|prompt|triwiki|위키|wiki)/.test(lower)
+    && /(파이프라인|pipeline|변환|transform|rewrite|compile|리스트|list|누락|missing|의도|intent|request[- ]?intake|intake)/.test(lower);
   const uiuxWork = /\b(ui|modal|screen|button|visual|design|layout|component|prototype|frontend)\b|화면|버튼|모달|디자인|레이아웃|컴포넌트|프론트|시각|발표자료|디자인\s*시스템/.test(lower);
   const presentationWork = looksLikePresentationArtifactPrompt(lower);
   const dbWork = new RegExp(["\\bdb\\b", "database", "schema", "migration", "tab" + "le", "col" + "umn", "rls", "supabase", "postgres", "sql", "테이블", "마이그레이션", "스키마", "컬럼", "열", "행", "데이터베이스"].join("|")).test(lower);
@@ -250,12 +254,13 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
     && !versionWork
     && !presentationWork
     && !chatCaptureWork;
-  const kind = versionWork ? 'version' : chatCaptureWork ? 'chat_capture' : triwikiAuditWork ? 'triwiki_audit' : effectivePrioritySignalWork ? 'priority' : questionGateWork ? 'questions' : installWork ? 'install' : null;
+  const kind = versionWork ? 'version' : chatCaptureWork ? 'chat_capture' : triwikiAuditWork ? 'triwiki_audit' : effectivePrioritySignalWork ? 'priority' : requestIntakeWork ? 'request_intake' : questionGateWork ? 'questions' : installWork ? 'install' : null;
   const goals = {
     version: version ? `sneakoscope 버전을 ${version}로 올린다` : 'sneakoscope 버전을 다음 patch 버전으로 올린다',
     chat_capture: 'From-Chat-IMG로 채팅 요구사항과 첨부 원본 이미지를 매칭해 고객사 작업 지시서를 만들고 반영한다',
     triwiki_audit: 'TriWiki가 반복 실수를 막는지 검수하고, 실패 경로를 코드와 검증으로 개선한다',
     priority: '강한 불만과 반복 요청을 TriWiki 우선순위 신호로 기록한다',
+    request_intake: '모호한 사용자 요청을 TriWiki 기반 request-intake로 해석하고, 누락 없는 요구사항 목록과 실행용 변환 프롬프트를 pipeline에 전달한다',
     questions: '예측 가능한 답은 추론하고 실제 모호한 항목만 질문한다',
     presentation: '청중과 STP 전략에 맞는 HTML 기반 발표자료/PDF 산출물을 만든다',
     install: 'SKS 최초 설치와 bootstrap을 한 번에 준비 상태까지 연결한다'
@@ -265,6 +270,7 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
     chat_capture: ['From-Chat-IMG activates chat-image intake only here', 'all visible chat requirements are listed before implementation', `${FROM_CHAT_IMG_COVERAGE_ARTIFACT} maps every customer request, screenshot region, and attachment to work-order item(s)`, `${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} is updated as each request, image match, work item, scoped QA-LOOP, and verification step is completed`, `${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} records temporary TriWiki-backed session context with retention metadata`, `${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} proves QA-LOOP ran over the exact customer-request work-order range after implementation`, 'unresolved_items is empty before Team completion', 'scoped_qa_loop_completed is true with zero unresolved QA findings', 'Web/browser visual inspection uses Codex Chrome Extension readiness first; native Mac/non-web visual inspection uses Codex Computer Use when available', CODEX_WEB_VERIFICATION_POLICY, CODEX_COMPUTER_USE_ONLY_POLICY, 'client requests follow normal SKS gates and verification'],
     triwiki_audit: ['TriWiki ingestion, voxel attention, and contract consumption paths are inspected against current code', 'repeat-mistake prevention gaps are fixed in the relevant code path or blocked with evidence', 'regression coverage proves fresh/high-weight mistake memory can influence future missions', 'final status separates supported behavior from anything still unverified'],
     priority: ['strong feedback raises required_weight', 'request topics are counted in wiki packs', 'future inference uses priority signals'],
+    request_intake: ['request-intake.json records original prompt, interpreted intent, source-order requirements, wiki context used, and transformed prompt', 'pipeline-plan.json attaches request_intake metadata and execution_prompt from request-intake.transformed_prompt', 'decision-contract.json preserves the same request-intake artifact when a contract is sealed'],
     questions: ['predictable answers are inferred', 'partial answers can seal contracts', 'only unresolved changing slots remain visible'],
     presentation: ['audience profile and STP strategy are explicit before artifact creation', 'target pain points map to proposed solution moments', 'decision context and likely objections are sealed before storyboarding', 'presentation format, device, and delivery context are fixed before design work'],
     install: ['bootstrap/deps initialize readiness', 'missing runtime deps show repair actions', 'readiness output is concrete']
@@ -452,6 +458,216 @@ export function inferAnswersForPrompt(prompt: any, explicitAnswers: any = {}) {
   return { answers: inferred, notes };
 }
 
+export function buildRequestIntake(prompt: any, explicitAnswers: any = {}, opts: any = {}) {
+  const originalPrompt = String(prompt || '').trim();
+  const inferred = inferAnswersForPrompt(originalPrompt, explicitAnswers);
+  const answers = { ...(inferred.answers || {}), ...(explicitAnswers || {}) };
+  const ambiguity = buildAmbiguityAssessment(originalPrompt, explicitAnswers);
+  const wikiContext = summarizeWikiContext(opts.wikiContext);
+  const promptRequirements = promptRequirementItems(originalPrompt);
+  const semanticRequirements = semanticRequirementItems(originalPrompt);
+  const acceptance = toStringList(answers.ACCEPTANCE_CRITERIA);
+  const constraints = toStringList(answers.RISK_BOUNDARY);
+  const nonGoals = toStringList(answers.NON_GOALS);
+  const requirements = dedupeRequirementItems([
+    ...promptRequirements,
+    ...semanticRequirements,
+    ...acceptance.map((text: any, index: any) => requirementItem('acceptance', index + 1, text, 'inferred_acceptance_criteria')),
+    ...constraints.map((text: any, index: any) => requirementItem('constraint', index + 1, text, 'inferred_safety_constraint'))
+  ]);
+  const goal = String(answers.GOAL_PRECISE || originalPrompt || '사용자 요청을 현재 코드 기준으로 구현한다').trim();
+  const targetSignals = extractTargetSignals(originalPrompt);
+  const riskSignals = extractRiskSignals(originalPrompt, constraints);
+  const transformedPrompt = buildTransformedPrompt({
+    originalPrompt,
+    goal,
+    wikiContext,
+    requirements,
+    constraints,
+    acceptance,
+    nonGoals,
+    targetSignals,
+    riskSignals,
+    ambiguity
+  });
+  return {
+    schema: 'sks.request-intake.v1',
+    generated_at: nowIso(),
+    prompt_hash: sha256(originalPrompt).slice(0, 16),
+    original_prompt: originalPrompt,
+    interpreted_intent: {
+      goal,
+      source: 'prompt_plus_triwiki_current_code_defaults',
+      confidence: ambiguity.ready_for_contract ? 'high' : ambiguity.overall_score <= 0.35 ? 'medium' : 'needs_human_only_if_scope_changes'
+    },
+    ambiguity_assessment: ambiguity,
+    wiki_context_used: wikiContext,
+    request_items: requirements,
+    requirements,
+    constraints,
+    acceptance_criteria: acceptance,
+    non_goals: nonGoals,
+    target_signals: targetSignals,
+    risk_signals: riskSignals,
+    transformed_prompt: transformedPrompt,
+    pipeline_usage: {
+      artifact: REQUEST_INTAKE_ARTIFACT,
+      read_before_pipeline_stage: true,
+      use_transformed_prompt_for_execution: true,
+      preserve_original_prompt: true,
+      ask_user_only_for_scope_safety_behavior_or_acceptance_changes: true
+    }
+  };
+}
+
+function summarizeWikiContext(wikiContext: any = null) {
+  const claims = Array.isArray(wikiContext?.claims) ? wikiContext.claims : [];
+  const useFirstIds = new Set((wikiContext?.attention?.use_first || []).map((row: any) => Array.isArray(row) ? row[0] : row?.id).filter(Boolean));
+  const hydrateFirstIds = new Set((wikiContext?.attention?.hydrate_first || []).map((row: any) => Array.isArray(row) ? row[0] : row?.id).filter(Boolean));
+  return {
+    source: wikiContext ? '.sneakoscope/wiki/context-pack.json' : 'unavailable',
+    attention_mode: wikiContext?.attention?.mode || null,
+    use_first_ids: [...useFirstIds].slice(0, 8),
+    hydrate_first_ids: [...hydrateFirstIds].slice(0, 8),
+    claims: claims.slice(0, 8).map((claim: any) => ({
+      id: claim.id || claim.claim_id || null,
+      trust: claim.trust_score || claim.trust || null,
+      source: claim.source || claim.source_path || null,
+      summary: String(claim.claim || claim.summary || claim.text || '').slice(0, 320)
+    }))
+  };
+}
+
+function promptRequirementItems(prompt: string) {
+  const cleaned = prompt
+    .replace(/(?:^|\s)\$[A-Za-z0-9_-]+(?:\s|$)/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return [];
+  const sourceChunks = cleaned
+    .split(/\n+|(?:^|\s)[-*]\s+/)
+    .flatMap((chunk) => splitLooseClauses(chunk))
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const chunks = sourceChunks.length ? sourceChunks : [cleaned];
+  return chunks.slice(0, 12).map((text, index) => requirementItem('prompt', index + 1, text, 'source_prompt_order'));
+}
+
+function splitLooseClauses(text: string) {
+  const compact = String(text || '').trim();
+  if (compact.length < 80) return [compact].filter(Boolean);
+  const pieces = compact.split(/\s+(?=(?:그리고|또|또한|그걸로|해당|이거는|이건|너가|우리|다음|then|and)\b)/i);
+  return pieces.length > 1 ? pieces : [compact];
+}
+
+function semanticRequirementItems(prompt: string) {
+  const text = String(prompt || '');
+  const lower = text.toLowerCase();
+  const items: any[] = [];
+  const add = (text: string, confidence = 0.88) => items.push({
+    id: `REQ-S${String(items.length + 1).padStart(2, '0')}`,
+    kind: 'semantic_requirement',
+    source: 'semantic_prompt_signal',
+    text,
+    required: true,
+    confidence
+  });
+  if (/모호|ambiguous|rough|대충|애매/.test(lower)) add('모호한 사용자 입력을 그대로 실행하지 말고 intent intake 단계에서 명확한 실행 요청으로 해석한다.');
+  if (/위키|triwiki|wiki|memory|기억/.test(lower)) add('TriWiki/context-pack과 현재 코드 기본값을 참고해 사용자 의도와 반복 선호를 보강한다.');
+  if (/의도|intent|목적/.test(lower) && /명확|파악|extract|understand/.test(lower)) add('사용자 의도를 Goal, Context, Constraints, Done-when 형태로 명확히 정리한다.');
+  if (/리스트|list|누락|빠짐|requirements?|요청사항/.test(lower)) add('요청사항을 source order 기준으로 누락 없이 리스트업하고 각 항목을 실행 작업으로 매핑한다.');
+  if (/프롬프트|prompt/.test(lower) && /변환|바꿔|rewrite|transform|compile|최적/.test(lower)) add('원문 요청을 파이프라인 실행에 적합한 transformed prompt로 변환한다.');
+  if (/파이프라인|pipeline/.test(lower) && /(태워|전달|route|run|execute|투입)/.test(lower)) add('변환된 prompt와 request-intake artifact를 실제 route pipeline에 전달한다.');
+  return items;
+}
+
+function requirementItem(kind: string, index: number, text: any, source: string) {
+  return {
+    id: `REQ-${String(index).padStart(3, '0')}`,
+    kind,
+    source,
+    text: String(text || '').trim(),
+    required: true,
+    confidence: source === 'source_prompt_order' ? 1 : 0.86
+  };
+}
+
+function dedupeRequirementItems(items: any[] = []) {
+  const seen = new Set();
+  const out: any[] = [];
+  for (const item of items) {
+    const text = String(item.text || '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...item, id: `REQ-${String(out.length + 1).padStart(3, '0')}`, text });
+  }
+  return out;
+}
+
+function toStringList(value: any): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  const text = String(value || '').trim();
+  if (!text) return [];
+  return text.split(/\n+/).map((item) => item.trim()).filter(Boolean);
+}
+
+function extractTargetSignals(prompt: string) {
+  const text = String(prompt || '');
+  const paths = [...text.matchAll(/(?:src|test|tests|scripts|docs|README|CHANGELOG|package\.json|\.sneakoscope|\.agents|\.codex)\/?[A-Za-z0-9._/\-]*/g)].map((m) => m[0]);
+  const commands = [...text.matchAll(/\$[A-Za-z0-9_-]+/g)].map((m) => m[0]);
+  const urls = [...text.matchAll(/https?:\/\/[^\s)\]}>,]+/g)].map((m) => m[0]);
+  return {
+    paths: [...new Set(paths)].slice(0, 12),
+    dollar_commands: [...new Set(commands)].slice(0, 12),
+    urls: [...new Set(urls)].slice(0, 8)
+  };
+}
+
+function extractRiskSignals(prompt: string, constraints: string[] = []) {
+  const lower = String(prompt || '').toLowerCase();
+  const risks: string[] = [];
+  if (promptHasRisk(lower)) risks.push('high_risk_surface_detected');
+  if (promptNeedsExplicitRiskBoundary(lower)) risks.push('explicit_risk_boundary_required');
+  if (/db|database|supabase|postgres|sql|schema|migration|데이터베이스|스키마|마이그레이션/.test(lower)) risks.push('database_safety');
+  if (/browser|webapp|localhost|chrome|스크린샷|화면|ui|ux|visual|웹/.test(lower)) risks.push('visual_or_browser_evidence');
+  if (/publish|release|version|배포|릴리즈|버전/.test(lower)) risks.push('release_surface');
+  return {
+    risks: [...new Set(risks)],
+    constraints
+  };
+}
+
+function buildTransformedPrompt(input: any) {
+  const requirementLines = (input.requirements || []).map((item: any, index: number) => `${index + 1}. ${item.text}`);
+  const wikiLines = (input.wikiContext?.claims || []).slice(0, 5).map((claim: any) => `- ${claim.id || 'wiki-claim'}: ${claim.summary}`);
+  return [
+    '# SKS Wiki-Informed Execution Prompt',
+    '',
+    '## Goal',
+    input.goal,
+    '',
+    '## Original Prompt',
+    input.originalPrompt || '(empty)',
+    '',
+    '## Wiki Context To Use First',
+    ...(wikiLines.length ? wikiLines : ['- No current TriWiki claims were available; rely on current code and conservative SKS defaults.']),
+    '',
+    '## Requirements',
+    ...(requirementLines.length ? requirementLines : ['1. Implement the user request using current code context.']),
+    '',
+    '## Constraints',
+    ...((input.constraints || []).length ? input.constraints.map((row: any) => `- ${row}`) : ['- Preserve existing behavior unless the request explicitly changes it.', '- Do not create unrequested fallback implementation code.', '- Do not run destructive or live-data mutation commands.']),
+    '',
+    '## Done When',
+    ...((input.acceptance || []).length ? input.acceptance.map((row: any) => `- ${row}`) : ['- Relevant implementation is complete.', '- Focused verification passes or unavailable checks are explicitly justified.', '- Final response states changed, verified, and unverified items.']),
+    '',
+    '## Pipeline Instruction',
+    'Read request-intake.json first, execute this transformed prompt through the selected SKS route, refresh/validate TriWiki after findings or artifact changes, and finish with SKS Honest Mode.'
+  ].join('\n');
+}
+
 export function buildQuestionSchema(prompt: any) {
   const lower = String(prompt || '').toLowerCase();
   const domainHints: any[] = [];
@@ -524,6 +740,7 @@ export function buildQuestionSchema(prompt: any) {
     );
   }
   const inferred = inferAnswersForPrompt(prompt);
+  const requestIntake = buildRequestIntake(prompt, inferred.answers);
   const inferredSlots = new Set(Object.keys(inferred.answers));
   const askedSlots: any[] = [];
   return {
@@ -532,6 +749,7 @@ export function buildQuestionSchema(prompt: any) {
     prompt,
     domain_hints: domainHints,
     ambiguity_assessment: ambiguity,
+    request_intake: requestIntake,
     inferred_answers: inferred.answers,
     inference_notes: inferred.notes,
     slots: askedSlots
@@ -562,6 +780,20 @@ export function questionsMarkdown(schema: any) {
     lines.push(`- score: ${schema.ambiguity_assessment.overall_score} (ready threshold <= ${schema.ambiguity_assessment.threshold})`);
     lines.push(`- unresolved dimensions: ${(schema.ambiguity_assessment.unresolved_dimensions || []).join(', ') || 'none'}`);
     lines.push(`- legacy question budget ignored: ${schema.ambiguity_assessment.question_budget}`);
+  }
+  if (schema.request_intake) {
+    const intake = schema.request_intake;
+    lines.push('');
+    lines.push('## Request Intake');
+    lines.push('');
+    lines.push(`- artifact: ${REQUEST_INTAKE_ARTIFACT}`);
+    lines.push(`- interpreted goal: ${intake.interpreted_intent?.goal || '(none)'}`);
+    lines.push(`- requirement count: ${(intake.requirements || []).length}`);
+    lines.push(`- wiki context: ${intake.wiki_context_used?.source || 'unavailable'}`);
+    lines.push('');
+    lines.push('```markdown');
+    lines.push(intake.transformed_prompt || '');
+    lines.push('```');
   }
   if (schema.inferred_answers && Object.keys(schema.inferred_answers).length) {
     lines.push('');

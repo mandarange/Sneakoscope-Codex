@@ -25,6 +25,7 @@ export interface BuildNarutoWorkGraphInput {
   prompt?: string
   requestedClones?: number
   totalWorkItems?: number
+  honorExplicitTotalWorkItems?: boolean
   readonly?: boolean
   writeCapable?: boolean
   targetPaths?: string[]
@@ -66,7 +67,10 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
   const readonly = input.readonly === true
   const writeCapable = input.writeCapable !== false && !readonly
   const minimumFanout = writeCapable ? requestedClones * 2 : requestedClones
-  const totalWorkItems = Math.max(minimumFanout, normalizePositiveInt(input.totalWorkItems, minimumFanout))
+  const requestedWorkItems = normalizePositiveInt(input.totalWorkItems, minimumFanout)
+  const totalWorkItems = input.honorExplicitTotalWorkItems === true
+    ? Math.max(requestedClones, requestedWorkItems)
+    : Math.max(minimumFanout, requestedWorkItems)
   const kindCycle = writeCapable ? WRITE_CAPABLE_KIND_CYCLE : READONLY_KIND_CYCLE
   const basePath = normalizeNarutoPath(input.leaseBasePath || '.sneakoscope/naruto/patch-envelopes')
   const targetPaths = normalizePaths(input.targetPaths || [])

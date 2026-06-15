@@ -221,27 +221,40 @@ function assertReleaseScripts() {
   for (const name of required) {
     assertGate(Boolean(pkg.scripts?.[name]), `package script missing ${name}`);
   }
-  assertGate(String(pkg.scripts?.['release:check'] || '').includes('release:check:parallel'), 'release:check must delegate to the parallel P0 DAG');
+  const releaseCheck = String(pkg.scripts?.['release:check'] || '');
+  const affectedReleaseCheck = String(pkg.scripts?.['release:check:affected'] || '');
+  const delegatesToParallel = releaseCheck.includes('release:check:parallel');
+  const delegatesToAffectedDag = releaseCheck.includes('release:check:affected')
+    && affectedReleaseCheck.includes('release-gate-dag-runner')
+    && /--preset\s+affected/.test(affectedReleaseCheck);
+  const delegatesDirectlyToDag = releaseCheck.includes('release-gate-dag-runner')
+    && /--preset\s+(?:release|affected)/.test(releaseCheck);
+  assertGate(
+    delegatesToParallel || delegatesToAffectedDag || delegatesDirectlyToDag,
+    'release:check must delegate to the parallel P0 DAG or v2 affected/release DAG',
+    { release_check: releaseCheck, release_check_affected: affectedReleaseCheck }
+  );
 }
 
 
 function assertRouteNativeBlackbox(routeName) {
+  const routeFixtureArgs = ['--agents', '5', '--work-items', '8', '--target-active-slots', '5', '--minimum-work-items', '5', '--max-queue-expansion', '10', '--mock', '--json'];
   if (routeName === 'team') {
-    const result = runSksJson(['team', 'native backend fixture', '--mock', '--json']);
+    const result = runSksJson(['team', 'native backend fixture', ...routeFixtureArgs, '--no-open-zellij']);
     assertGate(result.mock === true, 'Team mock blackbox did not execute', result);
     assertGate(result.native_agent_run?.proof?.ok === true, 'Team blackbox missing native agent proof', result.native_agent_run?.proof);
     assertGate(!JSON.stringify(result).includes('analysis_scout'), 'Team runtime artifact leaked legacy analysis_scout');
   }
   if (routeName === 'research') {
     const prepared = runSksJson(['research', 'prepare', 'native backend fixture', '--json']);
-    const result = runSksJson(['research', 'run', prepared.mission_id, '--mock', '--json']);
+    const result = runSksJson(['research', 'run', prepared.mission_id, ...routeFixtureArgs, '--native-proof-only']);
     assertGate(result.ok === true, 'Research mock blackbox did not pass', result);
     assertGate(result.gate?.gate?.native_agent_proof === true || result.gate?.native_agent_proof === true || result.proof?.ok === true, 'Research proof missing native agent evidence artifact', result);
     assertGate(!JSON.stringify(result).includes('scout-ledger'), 'Research runtime artifact leaked scout-ledger as SSOT');
   }
   if (routeName === 'qa') {
     const prepared = runSksJson(['qa-loop', 'prepare', 'native backend API fixture', '--json']);
-    const result = runSksJson(['qa-loop', 'run', prepared.mission_id, '--mock', '--json']);
+    const result = runSksJson(['qa-loop', 'run', prepared.mission_id, ...routeFixtureArgs, '--native-proof-only']);
     assertGate(result.ok === true, 'QA mock blackbox did not pass', result);
     assertGate(result.gate?.gate?.native_agent_proof === true || result.gate?.native_agent_proof === true || result.proof?.ok === true, 'QA proof missing native agent evidence artifact', result);
   }

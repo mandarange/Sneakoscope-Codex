@@ -4,6 +4,7 @@ import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { missionDir } from '../mission.js';
 import { evaluateResearchGate } from '../research.js';
+import { evaluateQaGate } from '../qa-loop.js';
 import { PPT_REQUIRED_GATE_FIELDS } from '../ppt.js';
 import { validateFinalHonestModeReport } from '../artifact-schemas.js';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, IMAGE_UX_REVIEW_REFERENCE_GATE_FIELDS, IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT, imageUxReviewGateAllowsReferenceCloseout } from '../image-ux-review.js';
@@ -376,7 +377,8 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
   }
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
     const required = ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete'];
-    if (gate.ui_e2e_required === true) required.push('chrome_extension_preflight_passed', 'ui_chrome_extension_evidence');
+    if (gate.ui_e2e_required === true) required.push('chrome_extension_preflight_passed', 'ui_chrome_extension_evidence', 'ui_chrome_extension_screenshot_captured');
+    if (gate.gpt_image_2_annotated_review_required === true) required.push('gpt_image_2_annotated_review_generated');
     return required.filter((key: any) => gate[key] !== true);
   }
   if (file === 'ppt-gate.json' || mode === 'PPT') {
@@ -402,6 +404,11 @@ async function missingRequiredGateArtifacts(root: any, file: any, state: any, ga
     const evaluated = await evaluateResearchGate(missionDir(root, state.mission_id));
     if (evaluated.passed === true) return [];
     return (evaluated.reasons || ['research_gate_blocked']).map((reason: any) => `research-gate:${reason}`);
+  }
+  if (file === 'qa-gate.json' || mode === 'QALOOP') {
+    const evaluated = await evaluateQaGate(missionDir(root, state.mission_id));
+    if (evaluated.passed === true) return [];
+    return (evaluated.reasons || ['qa_gate_blocked']).map((reason: any) => `qa-gate:${reason}`);
   }
   if (file === IMAGE_UX_REVIEW_GATE_ARTIFACT || mode === 'IMAGE_UX_REVIEW') return missingImageUxReviewArtifacts(root, state, gate);
   if (file === 'naruto-gate.json' || mode === 'NARUTO') return missingNarutoArtifacts(root, state, gate);

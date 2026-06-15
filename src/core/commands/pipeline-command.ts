@@ -1,7 +1,7 @@
 import path from 'node:path';
-import { projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
+import { projectRoot, readJson } from '../fsx.js';
 import { missionDir, stateFile } from '../mission.js';
-import { buildPipelinePlan, PIPELINE_PLAN_ARTIFACT, projectGateStatus } from '../pipeline.js';
+import { PIPELINE_PLAN_ARTIFACT, projectGateStatus, writePipelinePlan } from '../pipeline.js';
 import { routePrompt } from '../routes.js';
 import { flag, positionalArgs, readFlagValue, resolveMissionId } from './command-utils.js';
 
@@ -32,14 +32,13 @@ export async function pipelineCommand(args: any = []) {
         force: flag(args, '--force-agents'),
         noAgents: flag(args, '--no-agents')
       };
-      const plan = buildPipelinePlan({
+      const plan = await writePipelinePlan(dir, {
         missionId: id,
         route,
         task: routeContext.task || mission.prompt || state.prompt || '',
         required: Boolean(routeContext.context7_required || state.context7_required),
         agents
       });
-      await writeJsonAtomic(path.join(dir, PIPELINE_PLAN_ARTIFACT), plan);
       if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.pipeline-plan.v1', ok: true, mission_id: id, plan }, null, 2));
       console.log(`Pipeline plan written: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}`);
       return;

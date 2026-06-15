@@ -34,7 +34,7 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
       const maxAgentCount = normalizedRoute === '$Naruto' ? 100 : 20;
       const agentCount = Number(agents.agent_count || 0);
       if (agentCount < 5) issues.push('agent_count_below_5');
-      if (agentCount > maxAgentCount) issues.push(`agent_count_above_${maxAgentCount}`);
+      if (agentCount > maxAgentCount) issues.push(normalizedRoute === '$Naruto' ? 'agent_count_above_100' : 'agent_count_above_20');
       if (agents.all_sessions_closed !== true) issues.push('agent_sessions_not_closed');
       if (agents.no_overlap_ok !== true) issues.push('agent_no_overlap_not_ok');
       if (agents.ledger_hash_chain_ok !== true) issues.push('agent_ledger_hash_chain_not_ok');

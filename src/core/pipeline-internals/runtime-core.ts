@@ -3,7 +3,7 @@ import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
 import { createMission, missionDir, setCurrent } from '../mission.js';
-import { buildQuestionSchemaForRoute, writeQuestions } from '../questions.js';
+import { buildQuestionSchemaForRoute, buildRequestIntake, REQUEST_INTAKE_ARTIFACT, writeQuestions } from '../questions.js';
 import { sealContract } from '../decision-contract.js';
 import { scanDbSafety } from '../db-safety.js';
 import { GOAL_WORKFLOW_ARTIFACT, writeGoalWorkflow } from '../goal-workflow.js';
@@ -86,6 +86,8 @@ function reflectionInstructionText(commandPrefix: any = 'sks') {
 export function buildPipelinePlan(input: any = {}) {
   const route = input.route || routePrompt(input.task || '$SKS');
   const task = String(input.task || '').trim();
+  const requestIntake = input.requestIntake || null;
+  const executionPrompt = String(requestIntake?.transformed_prompt || task || '').trim();
   const ambiguity = normalizeAmbiguity(input.ambiguity, route);
   const proof = normalizeProofField(input.proofField);
   const lane = selectPipelineLane(route, task, proof);
@@ -111,6 +113,18 @@ export function buildPipelinePlan(input: any = {}) {
       reflection_required: reflectionRequiredForRoute(route)
     },
     task,
+    request_intake: requestIntake ? {
+      artifact: REQUEST_INTAKE_ARTIFACT,
+      prompt_hash: requestIntake.prompt_hash || null,
+      interpreted_goal: requestIntake.interpreted_intent?.goal || null,
+      requirement_count: Array.isArray(requestIntake.requirements) ? requestIntake.requirements.length : 0,
+      transformed_prompt_available: Boolean(requestIntake.transformed_prompt),
+      wiki_context_used: requestIntake.wiki_context_used?.source || null
+    } : {
+      artifact: REQUEST_INTAKE_ARTIFACT,
+      status: 'not_attached'
+    },
+    execution_prompt: executionPrompt,
     ambiguity_gate: ambiguity,
     runtime_lane: lane,
     stages,
@@ -136,9 +150,36 @@ export function buildPipelinePlan(input: any = {}) {
 }
 
 export async function writePipelinePlan(dir: any, input: any = {}) {
-  const plan = buildPipelinePlan(input);
+  const requestIntake = input.requestIntake || await writeRequestIntakeArtifact(dir, input);
+  const plan = buildPipelinePlan({ ...input, requestIntake });
   await writeJsonAtomic(path.join(dir, PIPELINE_PLAN_ARTIFACT), plan);
   return plan;
+}
+
+export async function writeRequestIntakeArtifact(dir: any, input: any = {}) {
+  const file = path.join(dir, REQUEST_INTAKE_ARTIFACT);
+  if (!input.requestIntake && !input.forceRequestIntakeRewrite) {
+    const existing = await readJson(file, null);
+    if (existing) return existing;
+  }
+  const root = input.root || rootFromMissionDir(dir);
+  const wikiContext = input.wikiContext !== undefined
+    ? input.wikiContext
+    : await readJson(path.join(root, '.sneakoscope', 'wiki', 'context-pack.json'), null);
+  const intake = input.requestIntake || buildRequestIntake(input.task || '', {}, {
+    wikiContext,
+    route: input.route || null
+  });
+  await writeJsonAtomic(file, intake);
+  return intake;
+}
+
+function rootFromMissionDir(dir: any) {
+  const resolved = path.resolve(dir);
+  const parts = resolved.split(path.sep);
+  const idx = parts.lastIndexOf('.sneakoscope');
+  if (idx > 0) return parts.slice(0, idx).join(path.sep) || path.sep;
+  return path.resolve(resolved, '..', '..', '..');
 }
 
 export function validatePipelinePlan(plan: any = {}) {
@@ -310,12 +351,13 @@ function planVerification(route: any, proof: any) {
 function planNextActions(route: any, task: any, ambiguity: any, lane: any, agentPolicy: any = normalizeAgentPolicy(route, task, {})) {
   if (ambiguity.required && !ambiguity.passed) {
     return [
+      `read ${REQUEST_INTAKE_ARTIFACT} and preserve its source-order requirements`,
       'auto-seal execution contract from inferred answers',
       ...(looksLikeProblemSolvingRequest(task) ? ['run Solution Scout web search for similar fixes before editing'] : []),
       'continue with decision-contract.json'
     ];
   }
-  const actions = ['read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
+  const actions = [`read ${REQUEST_INTAKE_ARTIFACT} and use its transformed_prompt`, 'read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
   if (agentPolicy.required) actions.splice(1, 0, 'run sks agents run latest --json before implementation');
   if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) {
     actions.splice(1, 0, route?.id === 'Naruto'
@@ -345,6 +387,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     'Hook visibility limit: hooks can inject context/status or block/continue a turn, but they cannot create arbitrary live chat bubbles; use team events, mission files, or normal assistant updates for live transcript details.',
     'Ambient Goal continuation: even without an explicit $Goal keyword, use Codex native /goal persistence when it helps keep long work resumable and complete; do not let it replace or skip the selected SKS route gates.',
     'Route contract: execution routes infer contract answers from the prompt, TriWiki/current-code defaults, and conservative SKS policy. DFix and Answer bypass stateful execution because they do not start implementation.',
+    `Wiki-informed request intake: when a mission exists, read ${REQUEST_INTAKE_ARTIFACT} before execution; preserve every source-order requirement, apply TriWiki attention/use_first and hydrate_first context, and execute request_intake.transformed_prompt through the selected route instead of relying on the vague original wording alone.`,
     'Plan-first interaction: when ambiguity questions are truly required, show the user only the missing human decision(s), then seal the decision contract internally and execute/verify.',
     'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Naruto, not Answer.',
     'Best-practice prompt shape: extract Goal, Context, Constraints, and Done-when before implementation; keep questions compact and only ask for answers that can change scope, safety, user-facing behavior, or acceptance criteria.',
@@ -610,7 +653,8 @@ async function activePipelinePlanNote(root: any, state: any = {}) {
   const kept = plan.stage_summary?.kept ?? plan.kept_stages?.length ?? 0;
   const skipped = plan.stage_summary?.skipped ?? plan.skipped_stages?.length ?? 0;
   const next = Array.isArray(plan.next_actions) && plan.next_actions.length ? ` Next planned action: ${plan.next_actions[0]}.` : '';
-  return ` Pipeline plan: .sneakoscope/missions/${state.mission_id}/${PIPELINE_PLAN_ARTIFACT} (${lane}; kept=${kept}, skipped=${skipped}).${next}`;
+  const intake = plan.request_intake?.artifact ? ` Request intake: .sneakoscope/missions/${state.mission_id}/${plan.request_intake.artifact}; execution prompt=${plan.request_intake.transformed_prompt_available ? 'available' : 'missing'}.` : '';
+  return ` Pipeline plan: .sneakoscope/missions/${state.mission_id}/${PIPELINE_PLAN_ARTIFACT} (${lane}; kept=${kept}, skipped=${skipped}).${intake}${next}`;
 }
 
 async function prepareGoal(root: any, route: any, task: any, required: any): Promise<any> {
@@ -1109,6 +1153,8 @@ function routeContext(route: any, id: any, task: any, required: any, next: any) 
 ${route.command} route prepared.
 Mission: ${id}
 Task: ${visibleTask}
+Request intake: .sneakoscope/missions/${id}/${REQUEST_INTAKE_ARTIFACT}
+Execution prompt: request-intake.transformed_prompt
 Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Required skills: ${route.requiredSkills.join(', ')}
 Stop gate: ${route.stopGate}
