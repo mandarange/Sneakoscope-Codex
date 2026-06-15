@@ -45,6 +45,7 @@ export async function detectCodex0138Capability(input: { codexBin?: string | nul
       }
   const pluginJsonOk = atLeast138 && (probeMode === 'version-only' || featureProbeResults.plugin_json !== 'failed')
   const appHandoffOk = atLeast138 && (probeMode === 'version-only' || featureProbeResults.app_handoff_platform === 'passed')
+  const imagePathExposureOk = atLeast138 && process.env.SKS_CODEX_0138_FAKE_IMAGE_PATH_FAIL !== '1'
   const blockers = [
     ...(!codexBin ? ['codex_cli_missing'] : []),
     ...(atLeast138 ? [] : ['codex_0_138_required_for_app_plugin_features']),
@@ -59,7 +60,7 @@ export async function detectCodex0138Capability(input: { codexBin?: string | nul
     parsed_version: parsed,
     supports_app_handoff: appHandoffOk,
     supports_plugin_json: pluginJsonOk,
-    supports_image_path_exposure: atLeast138,
+    supports_image_path_exposure: imagePathExposureOk,
     supports_model_defined_efforts: atLeast138,
     supports_app_server_token_usage: atLeast138,
     supports_v2_pat_auth: atLeast138,
@@ -105,7 +106,9 @@ async function probeCodex0138Features(codexBin: string | null, opts: { fake?: bo
   if (opts.fake) {
     return {
       plugin_json: process.env.SKS_CODEX_0138_FAKE_PLUGIN_JSON_FAIL === '1' ? 'failed' : 'passed',
-      app_handoff_platform: process.platform === 'darwin' || process.platform === 'win32' ? 'passed' : 'failed',
+      app_handoff_platform: process.env.SKS_CODEX_0138_FAKE_APP_HANDOFF_FAIL === '1'
+        ? 'failed'
+        : process.platform === 'darwin' || process.platform === 'win32' ? 'passed' : 'failed',
       image_path_exposure_contract: 'sks-enforced'
     }
   }

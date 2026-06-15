@@ -68,7 +68,7 @@ export async function planLoopsFromRequest(input: {
     return {
       ...node,
       ...(hints.length ? { memory_hints: hints } : {}),
-      memory_hints_used: hints.length,
+      memory_hints_used: hints,
       memory_did_not_expand_scope: true as const
     };
   });

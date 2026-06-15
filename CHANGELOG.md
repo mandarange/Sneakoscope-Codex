@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 
+
+## [3.1.7] - 2026-06-14
+
+### Added
+
+- Runtime E2E Codex Native pipeline blackboxes.
+- Neutral reference source cache refresh.
+- Read-only feature matrix and explicit repair transaction split.
+- Final brand-neutrality zero-leakage scan.
+- Typed release helper scripts.
+- Doctor unified readiness final UX.
+
+### Fixed
+
+- `release-scripts:type-safe` no longer contradicts `release-dag-full-coverage-check.ts`.
+- Source-token pipeline routing checks are replaced by real fixture runtime artifact checks.
+- Reference evidence does not require manual cache setup.
+- Feature matrix read path no longer performs managed asset repairs.
+- Invocation strategy is always written into runtime proof artifacts.
+
 ## [3.1.6] - 2026-06-14
 
 ### Added

@@ -49,5 +49,6 @@ await fs.writeFile(intake.result_path, `${JSON.stringify({
   blockers: [],
   runtime_proof_path: intake.result_path,
   worker_ids: workerIds,
-  session_ids: sessionIds
+  session_ids: sessionIds,
+  codex_native_invocation_plan: intake.codex_native_invocation_plan || null
 }, null, 2)}\n`);

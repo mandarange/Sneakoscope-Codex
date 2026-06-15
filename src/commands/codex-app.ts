@@ -9,11 +9,15 @@ import { syncCodexAgentRoles } from '../core/codex-app/codex-agent-role-sync.js'
 import { runCodexInitDeep } from '../core/codex-app/codex-init-deep.js';
 import { buildCodexHookLifecycle } from '../core/codex-app/codex-hook-lifecycle.js';
 import { resolveCodexAppExecutionProfile } from '../core/codex-app/codex-app-execution-profile.js';
+import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
   if (action === 'remote-control' || action === 'remote') return codexAppRemoteControlCommand(args.slice(1));
-  if (action === 'harness-matrix') return printCodexAppResult(args, await buildCodexAppHarnessMatrix({ root: await sksRoot(), applyRepairs: flag(args, '--fix') || flag(args, '--apply') }));
+  if (action === 'harness-matrix') {
+    const root = await sksRoot();
+    return printCodexAppResult(args, await maybeRepairThenReadOnlyHarness(args, root));
+  }
   if (action === 'skill-sync') return printCodexAppResult(args, await syncCodexSksSkills({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'agent-role-sync') return printCodexAppResult(args, await syncCodexAgentRoles({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'init-deep') return printCodexAppResult(args, await runCodexInitDeep({ root: await sksRoot(), apply: !flag(args, '--check-only') && !flag(args, '--dry-run') }));
@@ -86,4 +90,19 @@ function printCodexAppResult(args: any[] = [], result: any) {
   for (const blocker of result?.blockers || []) console.log(`- blocker: ${blocker}`);
   for (const warning of result?.warnings || []) console.log(`- warning: ${warning}`);
   if (result?.ok === false) process.exitCode = 1;
+}
+
+async function maybeRepairThenReadOnlyHarness(args: any[] = [], root: string) {
+  const wantsRepair = flag(args, '--fix') || flag(args, '--apply') || flag(args, '--repair-codex-native');
+  if (!wantsRepair) return buildCodexAppHarnessMatrix({ root, mode: 'read-only' });
+  const repair = await repairCodexNativeManagedAssets({ root, requestedBy: 'manual', yes: flag(args, '--yes') });
+  const matrix = await buildCodexAppHarnessMatrix({ root, mode: 'read-only' });
+  return {
+    schema: 'sks.codex-app-harness-read-repair-split.v1',
+    ok: repair.ok && matrix?.ok !== false,
+    repair,
+    matrix,
+    blockers: [...(repair.blockers || []), ...(matrix?.blockers || [])],
+    warnings: [...(repair.warnings || []), 'harness_probe_after_explicit_repair_transaction']
+  };
 }

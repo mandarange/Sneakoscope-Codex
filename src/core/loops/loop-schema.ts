@@ -93,7 +93,7 @@ export interface SksLoopNode {
   worktree: SksLoopWorktreePolicy;
   risk: SksLoopRisk;
   memory_hints?: SksLoopMemoryHint[];
-  memory_hints_used?: number;
+  memory_hints_used?: SksLoopMemoryHint[];
   memory_did_not_expand_scope?: true;
 }
 

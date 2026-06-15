@@ -26,6 +26,7 @@ import { writeMcpPluginInventoryArtifacts } from '../core/mcp/mcp-plugin-invento
 import { runDoctorZellijRepair, doctorZellijRepairConsoleLine } from '../core/doctor/doctor-zellij-repair.js';
 import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
 import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
+import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -200,7 +201,23 @@ export async function run(_command: any, args: any = []) {
   const mcpPluginInventory = (pluginInventory as any)?.report
     ? await writeMcpPluginInventoryArtifacts(root, { inventory: (pluginInventory as any).report }).catch((err: any) => ({ error: err?.message || String(err), candidates: null }))
     : null;
-  const codexAppHarnessMatrix = await buildCodexAppHarnessMatrix({ root, applyRepairs: doctorFix }).catch((err: any) => ({
+  const repairCodexNative = doctorFix && flag(args, '--repair-codex-native');
+  const codexNativeRepair = repairCodexNative
+    ? await repairCodexNativeManagedAssets({
+        root,
+        requestedBy: 'doctor --fix',
+        yes: flag(args, '--yes') || flag(args, '-y')
+      }).catch((err: any) => ({
+        schema: 'sks.codex-native-repair-transaction.v1',
+        ok: false,
+        generated_at: new Date().toISOString(),
+        requested_by: 'doctor --fix',
+        repaired: [],
+        blockers: [err?.message || String(err)],
+        warnings: []
+      }))
+    : null;
+  const codexAppHarnessMatrix = await buildCodexAppHarnessMatrix({ root, mode: 'read-only' }).catch((err: any) => ({
     schema: 'sks.codex-app-harness-matrix.v1',
     ok: false,
     codex_cli: { available: false, version: null },
@@ -209,7 +226,7 @@ export async function run(_command: any, args: any = []) {
     blockers: [err?.message || String(err)],
     warnings: []
   }));
-  const codexNativeFeatureMatrix = await buildCodexNativeFeatureMatrix({ root, applyRepairs: doctorFix }).catch((err: any) => ({
+  const codexNativeFeatureMatrix = await buildCodexNativeFeatureMatrix({ root, mode: 'read-only' }).catch((err: any) => ({
     schema: 'sks.codex-native-feature-matrix.v1',
     ok: false,
     codex_cli: { available: Boolean(codex.bin), version: codex.version || null, bin: codex.bin || null },
@@ -290,7 +307,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, codex_native: codexNativeRepair }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -324,7 +341,12 @@ export async function run(_command: any, args: any = []) {
   console.log(`  Loop Mesh: ${runtimeReadiness.loop_mesh}`);
   console.log(`  QA Visual: ${runtimeReadiness.qa_visual}`);
   console.log(`  Research Sources: ${runtimeReadiness.research_sources}`);
-  for (const action of runtimeReadiness.repair_actions) console.log(`  Repair: ${action}`);
+  console.log(`  Image Follow-up: ${runtimeReadiness.image_followup}`);
+  for (const note of runtimeReadiness.notes) console.log(`  ${note}`);
+  if (runtimeReadiness.repair_actions.length) {
+    console.log('Repair actions:');
+    for (const action of runtimeReadiness.repair_actions) console.log(`  - ${action}`);
+  }
   console.log('Codex App Harness:');
   console.log(`  plugins: ${(codexAppHarnessMatrix as any).app_features?.plugin_json ? 'ok' : 'degraded'}`);
   console.log(`  hook approval: ${(codexAppHarnessMatrix as any).app_features?.hook_approval_state_detectable ? 'ok' : 'unknown'}`);
@@ -416,10 +438,12 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     ? 'ok'
     : matrix?.codex_cli?.available ? 'degraded' : 'blocked';
   const repairActions: string[] = [];
-  if (zellijStatus === 'repair_required') repairActions.push('sks doctor --fix --yes');
-  if (codexNative !== 'ok') repairActions.push('sks doctor --fix --repair-codex-native --yes');
-  if (matrix?.features?.project_memory?.ok !== true) repairActions.push('sks codex-native init-deep --apply --directory-local');
-  if (hookPolicy !== 'approved-only') repairActions.push('hook-derived evidence will not count until Codex hook approval is approved');
+  if (zellijStatus !== 'ok') {
+    repairActions.push('Zellij: sks doctor --fix --yes');
+    repairActions.push('Homebrew + Zellij: sks doctor --fix --install-homebrew --yes');
+  }
+  if (codexNative !== 'ok') repairActions.push('Codex Native managed assets: sks doctor --fix --repair-codex-native --yes');
+  if (matrix?.features?.project_memory?.ok !== true) repairActions.push('Project memory: sks codex-native init-deep --apply --directory-local');
   return {
     schema: 'sks.runtime-readiness-story.v1',
     zellij: zellijStatus,
@@ -427,6 +451,7 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     loop_mesh: agentStrategy === 'agent_type' ? 'ok' : 'fallback',
     qa_visual: defaults.qa_visual_review_strategy || 'blocked',
     research_sources: defaults.research_source_strategy || 'local-files',
+    image_followup: defaults.image_followup_strategy || 'blocked',
     hook_evidence_policy: hookPolicy,
     agent_role_strategy: agentStrategy,
     notes: [
@@ -434,7 +459,7 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
       ...(hookPolicy !== 'approved-only' ? ['hook-derived evidence will not count'] : []),
       ...(agentStrategy !== 'agent_type' ? ['message-role fallback active'] : [])
     ],
-    repair_actions: repairActions
+    repair_actions: [...new Set(repairActions)]
   };
 }
 

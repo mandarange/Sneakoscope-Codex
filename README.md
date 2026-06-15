@@ -35,7 +35,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.6** removes external reference branding from user-visible release surfaces and routes Codex-native feature decisions through one broker for Loop, QA, Research, Image, MAD, and Doctor.
+SKS **3.1.7** closes Codex-native runtime-proof gaps with real routing blackboxes, neutral reference cache refresh, read-only broker checks, explicit managed-asset repair transactions, and final brand-neutral artifact scans.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 
@@ -79,7 +79,7 @@ npm run runtime:ts-python-boundary
 npm run codex-control:all-pipelines
 ```
 
-Broader release checks still live behind `npm run release:check`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
+Change-aware release checks live behind `npm run release:check`; publish-authorizing full DAG checks use `npm run release:check:full`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## 🍥 Parallelism, UX, And Integrations
 

@@ -116,6 +116,12 @@
       "reason": "Codex App UI repair writes a scoped backup file before applying explicit user-approved repair."
     },
     {
+      "file": "src/core/codex-native/codex-native-reference-cache.ts",
+      "symbol": "ensureCodexNativeReferenceSnapshot",
+      "token": "fs.rm",
+      "reason": "Codex Native reference refresh removes only the scoped .sneakoscope/cache/codex-native-reference snapshot before a fresh clone."
+    },
+    {
       "file": "src/scripts/codex-app-fast-ui-preservation-check.ts",
       "symbol": "module",
       "token": "codex config write",
@@ -186,6 +192,36 @@
       "symbol": "module",
       "token": "fs.writeFile",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
+    },
+    {
+      "file": "src/scripts/codex-native-broker-read-only-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Codex Native broker read-only gate writes decoy user skill and agent files only inside the mkdtemp runtime fixture."
+    },
+    {
+      "file": "src/scripts/codex-native-reference-cache-blackbox.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Codex Native reference-cache blackbox writes only mkdtemp cache/source fixture files for offline and local-git proof."
+    },
+    {
+      "file": "src/scripts/codex-native-reference-cache-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Codex Native reference-cache gate writes only a mkdtemp offline cache fixture used to verify cache reuse."
+    },
+    {
+      "file": "src/scripts/codex-native-repair-transaction-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Codex Native repair transaction gate writes only a mkdtemp source fixture file before exercising confirmed repair behavior."
+    },
+    {
+      "file": "src/scripts/codex-native-runtime-e2e-fixture.ts",
+      "symbol": "createCodexNativeRuntimeFixture",
+      "token": "fs.writeFile",
+      "reason": "Codex Native runtime E2E helper writes only package, source, and docs files inside a fresh mkdtemp fixture root."
     },
     {
       "file": "src/scripts/doctor-fix-recovers-corrupted-config-check.ts",
@@ -822,6 +858,12 @@
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Release/check script writes the scoped stability proof report under .sneakoscope/reports."
+    },
+    {
+      "file": "src/scripts/pipeline-codex-native-image-routing-real-blackbox.ts",
+      "symbol": "imageScenario",
+      "token": "fs.writeFile",
+      "reason": "Codex Native image routing blackbox writes only a tiny PNG fixture inside the mkdtemp mission directory."
     },
     {
       "file": "src/scripts/zellij-worker-pane-real-ui-blackbox.ts",

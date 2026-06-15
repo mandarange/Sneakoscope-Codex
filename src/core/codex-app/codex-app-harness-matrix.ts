@@ -7,6 +7,8 @@ export async function buildCodexAppHarnessMatrix(input: {
   root: string
   missionDir?: string | null
   applyRepairs?: boolean
+  repairManagedAssets?: boolean
+  mode?: 'read-only' | 'repair'
 } = { root: process.cwd() }): Promise<CodexAppHarnessMatrix> {
   const matrix = await buildCodexAppHarnessMatrixFromNative(input)
   await writeCodexAppHarnessMatrix(path.resolve(input.root || process.cwd()), matrix, input.missionDir)

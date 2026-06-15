@@ -1,6 +1,6 @@
 # Release DAG
 
-`release-gates.v2.json` is the source of truth for public release checks. `npm run release:check` builds the project, runs the release preset DAG, and writes the release stamp only after the DAG completes.
+`release-gates.v2.json` is the source of truth for public release checks. `npm run release:check` runs the change-aware affected DAG for ordinary local checks. Publish-authorizing verification is `npm run release:check:full`; it builds the project, runs the full release preset DAG, and writes the release stamp only after the DAG completes.
 
 Gates declare resources, side-effect class, cache inputs, timeout, isolation, and preset. Hermetic gates run in temporary home and Codex home directories. Real checks use the `real-check` preset and require operator-controlled environment variables.
 

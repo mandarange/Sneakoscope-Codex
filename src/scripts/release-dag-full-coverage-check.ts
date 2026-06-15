@@ -23,8 +23,8 @@ interface ReleaseGateManifest {
   gates: ReleaseGate[]
 }
 
-const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as PackageJsonShape
-const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-gates.v2.json'), 'utf8')) as ReleaseGateManifest
+const pkg = readPackageJson(path.join(root, 'package.json'))
+const manifest = readReleaseGateManifest(path.join(root, 'release-gates.v2.json'))
 const scripts = pkg.scripts || {}
 const legacy = String(scripts['release:check:legacy'] || '')
 const legacyIds = [...new Set<string>(
@@ -288,7 +288,18 @@ const requiredReleasePresetIds = [
   'codex-native:interop-policy',
   'doctor:codex-native-repair-actions',
   'codex-app:harness-blackbox',
-  'brand-neutrality:rename-map'
+  'brand-neutrality:rename-map',
+  'pipeline:codex-native-loop-routing-real-blackbox',
+  'pipeline:codex-native-qa-routing-real-blackbox',
+  'pipeline:codex-native-research-routing-real-blackbox',
+  'pipeline:codex-native-image-routing-real-blackbox',
+  'pipeline:codex-native-doctor-mad-routing-real-blackbox',
+  'codex-native:reference-cache',
+  'codex-native:reference-cache-blackbox',
+  'codex-native:broker-read-only',
+  'codex-native:repair-transaction',
+  'codex-native:read-repair-split-blackbox',
+  'brand-neutrality:generated-artifacts'
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',
@@ -328,3 +339,48 @@ const report = {
 }
 assertGate(report.ok, 'release-gates.v2 must cover legacy hermetic release gates', report)
 emitGate('release:dag-full-coverage', report)
+
+function readPackageJson(file: string): PackageJsonShape {
+  const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+  if (!isRecord(parsed)) return {}
+  const scripts = parsed.scripts
+  if (!isRecord(scripts)) return {}
+  return { scripts: Object.fromEntries(Object.entries(scripts).map(([key, value]) => [key, String(value)])) }
+}
+
+function readReleaseGateManifest(file: string): ReleaseGateManifest {
+  const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+  assertGate(isRecord(parsed), 'release gate manifest must be an object', { file })
+  if (!isRecord(parsed)) return { gates: [] }
+  const gatesValue = parsed.gates
+  assertGate(Array.isArray(gatesValue), 'release gate manifest missing gates array', { file })
+  if (!Array.isArray(gatesValue)) return { gates: [] }
+  const gatesRaw: unknown[] = gatesValue
+  const gates = gatesRaw.filter(isReleaseGate)
+  assertGate(gates.length === gatesRaw.length, 'release gate manifest contains invalid gates', {
+    file,
+    invalid_count: gatesRaw.length - gates.length
+  })
+  return { gates }
+}
+
+function isReleaseGate(value: unknown): value is ReleaseGate {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'string'
+    && typeof value.command === 'string'
+    && typeof value.side_effect === 'string'
+    && typeof value.timeout_ms === 'number'
+    && normalizeStringList(value.deps).length === (Array.isArray(value.deps) ? value.deps.length : 0)
+    && normalizeStringList(value.resource).length === (Array.isArray(value.resource) ? value.resource.length : 0)
+    && normalizeStringList(value.preset).length === (Array.isArray(value.preset) ? value.preset.length : 0)
+    && value.cache !== undefined
+    && value.isolation !== undefined
+}
+
+function normalizeStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean) : []
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
