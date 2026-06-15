@@ -35,7 +35,14 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.7** closes Codex-native runtime-proof gaps with real routing blackboxes, neutral reference cache refresh, read-only broker checks, explicit managed-asset repair transactions, and final brand-neutral artifact scans.
+SKS **3.1.8** hardens update/setup/doctor safety around four operator-facing failure modes: immutable core skills, duplicate project skills, real native capability repair status, and Supabase/secret preservation.
+
+What changed in 3.1.8:
+
+- **Core SKS skills are content-addressed and immutable.** The eight built-in route skills now have a manifest and no-drift gates; setup/update/doctor may install missing managed copies or restore corrupted managed copies, but they do not overwrite user-authored collisions.
+- **Duplicate skills are detected and repaired safely.** Canonical skill names collapse variants such as `Loop`, `loop`, and `loop/SKILL.md`; SKS-managed duplicates can be quarantined automatically, while user-authored duplicates require explicit confirmation.
+- **`sks doctor --fix` reports native capability truthfully.** Image generation, image follow-up edit paths, Computer Use, Chrome/web review, app screenshots, app handoff, and image path exposure now run through a repair matrix and postcheck instead of capability assumptions.
+- **Supabase keys survive setup/update/doctor.** Protected secret surfaces are fingerprinted before and after guarded operations; reports store only redacted previews and hashes, never raw values.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 
@@ -622,7 +629,7 @@ TriWiki is intentionally sparse: `sks wiki sweep` records demote, soft-forget, a
 
 ```sh
 sks codex-native status --json
-sks codex-native invocation-plan --route '$Loop' --capability agent-role --json
+sks codex-native invocation-plan --route Loop --capability agent-role --json
 sks codex-native init-deep --apply --directory-local --json
 ```
 

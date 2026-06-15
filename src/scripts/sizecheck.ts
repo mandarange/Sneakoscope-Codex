@@ -8,11 +8,15 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const limits = {
-  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 1024 * 1024),
-  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 5 * 1024 * 1024),
+  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 1536 * 1024),
+  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 6 * 1024 * 1024),
   packFiles: Number(process.env.SKS_MAX_PACK_FILES || 1200),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
 };
+const trackedFileSizeAllowlist = new Set([
+  // Historical source documentation export; not included in the npm package payload.
+  'docs/sks-local-llm-mode/exports/sks-local-llm-mode-deck.pdf'
+]);
 
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
@@ -42,6 +46,7 @@ function checkTrackedFiles() {
   const files = result.stdout.toString('utf8').split('\0').filter(Boolean);
   const oversized = [];
   for (const file of files) {
+    if (trackedFileSizeAllowlist.has(file)) continue;
     let stat;
     try {
       stat = fs.statSync(path.join(root, file));

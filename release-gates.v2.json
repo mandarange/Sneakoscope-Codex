@@ -15438,6 +15438,860 @@
       "preset": [
         "release"
       ]
+    },
+    {
+      "id": "core-skill:manifest",
+      "command": "npm run core-skill:manifest --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "core-skill:immutable-sync",
+      "command": "npm run core-skill:immutable-sync --silent",
+      "deps": [
+        "core-skill:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "core-skill:no-drift",
+      "command": "npm run core-skill:no-drift --silent",
+      "deps": [
+        "core-skill:manifest",
+        "core-skill:immutable-sync"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "core-skill:integrity-blackbox",
+      "command": "npm run core-skill:integrity-blackbox --silent",
+      "deps": [
+        "core-skill:manifest",
+        "core-skill:immutable-sync",
+        "core-skill:no-drift"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "skill:name-canonicalizer",
+      "command": "npm run skill:name-canonicalizer --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "skill:registry-ledger",
+      "command": "npm run skill:registry-ledger --silent",
+      "deps": [
+        "skill:name-canonicalizer"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "skill:dedupe",
+      "command": "npm run skill:dedupe --silent",
+      "deps": [
+        "skill:name-canonicalizer",
+        "skill:registry-ledger"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "skill:sync-atomic",
+      "command": "npm run skill:sync-atomic --silent",
+      "deps": [
+        "skill:name-canonicalizer",
+        "skill:registry-ledger",
+        "skill:dedupe"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "skill:dedupe-blackbox",
+      "command": "npm run skill:dedupe-blackbox --silent",
+      "deps": [
+        "skill:name-canonicalizer",
+        "skill:registry-ledger",
+        "skill:dedupe",
+        "skill:sync-atomic"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native-capability:repair-matrix",
+      "command": "npm run native-capability:repair-matrix --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native-capability:repair",
+      "command": "npm run native-capability:repair --silent",
+      "deps": [
+        "native-capability:repair-matrix"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native-capability:postcheck",
+      "command": "npm run native-capability:postcheck --silent",
+      "deps": [
+        "native-capability:repair-matrix",
+        "native-capability:repair"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native:image-generation-repair",
+      "command": "npm run native:image-generation-repair --silent",
+      "deps": [
+        "native-capability:repair-matrix",
+        "native-capability:repair",
+        "native-capability:postcheck"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native:computer-use-repair",
+      "command": "npm run native:computer-use-repair --silent",
+      "deps": [
+        "native-capability:repair-matrix",
+        "native-capability:repair",
+        "native-capability:postcheck"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native:chrome-web-review-repair",
+      "command": "npm run native:chrome-web-review-repair --silent",
+      "deps": [
+        "native-capability:repair-matrix",
+        "native-capability:repair",
+        "native-capability:postcheck"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "native:app-screenshot-repair",
+      "command": "npm run native:app-screenshot-repair --silent",
+      "deps": [
+        "native-capability:repair-matrix",
+        "native-capability:repair",
+        "native-capability:postcheck"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "doctor:native-capability-repair",
+      "command": "npm run doctor:native-capability-repair --silent",
+      "deps": [
+        "core-skill:integrity-blackbox",
+        "skill:dedupe-blackbox",
+        "native-capability:repair"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "doctor:native-repair-output",
+      "command": "npm run doctor:native-repair-output --silent",
+      "deps": [
+        "doctor:native-capability-repair"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "doctor:native-capability-repair-blackbox",
+      "command": "npm run doctor:native-capability-repair-blackbox --silent",
+      "deps": [
+        "native-capability:repair-matrix",
+        "native-capability:repair",
+        "native-capability:postcheck"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "secret:preservation",
+      "command": "npm run secret:preservation --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "config:managed-merge",
+      "command": "npm run config:managed-merge --silent",
+      "deps": [
+        "secret:preservation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "secret:preservation-guard",
+      "command": "npm run secret:preservation-guard --silent",
+      "deps": [
+        "secret:preservation",
+        "config:managed-merge"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "secret:supabase-preservation-blackbox",
+      "command": "npm run secret:supabase-preservation-blackbox --silent",
+      "deps": [
+        "secret:preservation",
+        "config:managed-merge",
+        "secret:preservation-guard"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "update:preserves-supabase-keys",
+      "command": "npm run update:preserves-supabase-keys --silent",
+      "deps": [
+        "secret:preservation",
+        "config:managed-merge",
+        "secret:preservation-guard"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "update:secret-preservation-guard",
+      "command": "npm run update:secret-preservation-guard --silent",
+      "deps": [
+        "secret:preservation",
+        "config:managed-merge",
+        "secret:preservation-guard"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "update:secret-migration-journal",
+      "command": "npm run update:secret-migration-journal --silent",
+      "deps": [
+        "secret:preservation",
+        "secret:preservation-guard"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
     }
   ]
 }

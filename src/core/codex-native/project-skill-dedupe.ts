@@ -1,0 +1,139 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
+import { buildSkillRegistryLedger, groupByCanonical, type SkillRegistryEntry } from './skill-registry-ledger.js';
+
+export interface ProjectSkillDedupeAction {
+  canonical_name: string;
+  action: 'kept' | 'quarantined' | 'reported';
+  path: string;
+  quarantine_path: string | null;
+  reason: string;
+}
+
+export interface ProjectSkillDedupeReport {
+  schema: 'sks.project-skill-dedupe.v1';
+  generated_at: string;
+  ok: boolean;
+  root: string;
+  fix: boolean;
+  yes: boolean;
+  actions: ProjectSkillDedupeAction[];
+  duplicate_canonical_names: string[];
+  unresolved_user_duplicates: string[];
+  blockers: string[];
+}
+
+export async function dedupeProjectSkills(input: {
+  root: string;
+  fix?: boolean;
+  yes?: boolean;
+  quarantineUserDuplicates?: boolean;
+  reportPath?: string | null;
+}): Promise<ProjectSkillDedupeReport> {
+  const root = path.resolve(input.root);
+  const fix = input.fix === true;
+  const yes = input.yes === true;
+  const ledger = await buildSkillRegistryLedger({ root });
+  const grouped = groupByCanonical(ledger.entries);
+  const actions: ProjectSkillDedupeAction[] = [];
+  const unresolvedUserDuplicates: string[] = [];
+  for (const [canonical, group] of grouped.entries()) {
+    if (group.length <= 1) continue;
+    group.sort(compareSkillPriority);
+    const userEntries = group.filter((entry) => !entry.managed_by_sks);
+    const managedEntries = group.filter((entry) => entry.managed_by_sks);
+    if (userEntries.length > 0 && managedEntries.length > 0) {
+      for (const user of userEntries) actions.push(actionRow(canonical, 'kept', user, null, 'user-authored skill preserved'));
+      for (const managed of managedEntries) {
+        const quarantine = await maybeQuarantine(root, canonical, managed, fix, 'managed collision with user-authored skill');
+        actions.push(actionRow(canonical, quarantine ? 'quarantined' : 'reported', managed, quarantine, 'managed collision with user-authored skill'));
+      }
+      continue;
+    }
+    if (managedEntries.length > 1) {
+      const current = managedEntries.find((entry) => entry.status === 'managed-current') || managedEntries[0];
+      if (current) actions.push(actionRow(canonical, 'kept', current, null, 'highest-priority SKS-managed skill kept'));
+      for (const duplicate of managedEntries.filter((entry) => entry !== current)) {
+        const quarantine = await maybeQuarantine(root, canonical, duplicate, fix, 'duplicate SKS-managed skill');
+        actions.push(actionRow(canonical, quarantine ? 'quarantined' : 'reported', duplicate, quarantine, 'duplicate SKS-managed skill'));
+      }
+      continue;
+    }
+    if (userEntries.length > 1) {
+      const keep = userEntries[0];
+      if (keep) actions.push(actionRow(canonical, 'kept', keep, null, 'highest-priority user-authored skill kept'));
+      const shouldMove = fix && yes && input.quarantineUserDuplicates === true;
+      for (const duplicate of userEntries.slice(1)) {
+        const quarantine = shouldMove ? await quarantineSkill(root, canonical, duplicate, 'user-authored duplicate skill') : null;
+        actions.push(actionRow(canonical, quarantine ? 'quarantined' : 'reported', duplicate, quarantine, 'user-authored duplicate skill requires --quarantine-user-duplicates --yes'));
+      }
+      if (!shouldMove) unresolvedUserDuplicates.push(canonical);
+    }
+  }
+  const duplicateNames = [...new Set(actions.filter((action) => action.action !== 'kept').map((action) => action.canonical_name))].sort();
+  const blockers = unresolvedUserDuplicates.map((name) => `user_duplicate_requires_confirmation:${name}`);
+  const report: ProjectSkillDedupeReport = {
+    schema: 'sks.project-skill-dedupe.v1',
+    generated_at: nowIso(),
+    ok: blockers.length === 0,
+    root,
+    fix,
+    yes,
+    actions,
+    duplicate_canonical_names: duplicateNames,
+    unresolved_user_duplicates: unresolvedUserDuplicates,
+    blockers
+  };
+  const reportPath = input.reportPath === null
+    ? null
+    : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'project-skill-dedupe.json');
+  if (reportPath) await writeJsonAtomic(reportPath, report).catch(() => undefined);
+  return report;
+}
+
+function compareSkillPriority(a: SkillRegistryEntry, b: SkillRegistryEntry): number {
+  const currentA = a.status === 'managed-current' ? 1 : 0;
+  const currentB = b.status === 'managed-current' ? 1 : 0;
+  return currentB - currentA || b.active_priority - a.active_priority || a.path.localeCompare(b.path);
+}
+
+function actionRow(
+  canonicalName: string,
+  action: ProjectSkillDedupeAction['action'],
+  entry: SkillRegistryEntry,
+  quarantinePath: string | null,
+  reason: string
+): ProjectSkillDedupeAction {
+  return {
+    canonical_name: canonicalName,
+    action,
+    path: entry.path,
+    quarantine_path: quarantinePath,
+    reason
+  };
+}
+
+async function maybeQuarantine(root: string, canonical: string, entry: SkillRegistryEntry, fix: boolean, reason: string): Promise<string | null> {
+  if (!fix) return null;
+  return quarantineSkill(root, canonical, entry, reason);
+}
+
+async function quarantineSkill(root: string, canonical: string, entry: SkillRegistryEntry, reason: string): Promise<string> {
+  const sourceDir = path.dirname(entry.path);
+  const stamp = `${Date.now()}-${process.pid}`;
+  const target = path.join(root, '.sneakoscope', 'quarantine', 'skills', canonical, stamp, path.basename(sourceDir));
+  await ensureDir(path.dirname(target));
+  await fs.cp(sourceDir, target, { recursive: true, force: false });
+  await fs.rm(sourceDir, { recursive: true, force: true });
+  await writeJsonAtomic(path.join(target, 'quarantine-record.json'), {
+    schema: 'sks.skill-quarantine-record.v1',
+    generated_at: nowIso(),
+    source_path: sourceDir,
+    quarantine_path: target,
+    canonical_name: canonical,
+    reason,
+    content_sha256: entry.content_sha256
+  });
+  return target;
+}

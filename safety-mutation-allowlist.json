@@ -122,6 +122,30 @@
       "reason": "Codex Native reference refresh removes only the scoped .sneakoscope/cache/codex-native-reference snapshot before a fresh clone."
     },
     {
+      "file": "src/core/codex-app/codex-skill-sync.ts",
+      "symbol": "withSkillSyncLock",
+      "token": "fs.rm",
+      "reason": "Skill sync lock cleanup removes only the scoped .sneakoscope/locks/skill-sync.lock directory after the critical section exits."
+    },
+    {
+      "file": "src/core/codex-native/core-skill-integrity.ts",
+      "symbol": "syncCoreSkillsIntegrity",
+      "token": "fs.writeFile",
+      "reason": "Core skill integrity repair writes a scoped backup under .sneakoscope/backups before restoring a managed immutable skill."
+    },
+    {
+      "file": "src/core/codex-native/project-skill-dedupe.ts",
+      "symbol": "quarantineSkill",
+      "token": "fs.rm",
+      "reason": "Project skill dedupe removes only a skill directory after copying it into the scoped .sneakoscope/quarantine/skills evidence path."
+    },
+    {
+      "file": "src/core/config/managed-config-merge.ts",
+      "symbol": "writeMergedText",
+      "token": "fs.writeFile",
+      "reason": "Managed config merge writes a same-directory backup before applying a protected-key-preserving managed config update."
+    },
+    {
       "file": "src/scripts/codex-app-fast-ui-preservation-check.ts",
       "symbol": "module",
       "token": "codex config write",

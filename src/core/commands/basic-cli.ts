@@ -11,6 +11,7 @@ import { hooksExplainReport } from '../../cli/feature-commands.js';
 import { writeSelftestRouteProof } from '../proof/selftest-proof-fixtures.js';
 import { createMission } from '../mission.js';
 import { formatSksUpdateCheckText, runSksUpdateCheck, runSksUpdateNow } from '../update-check.js';
+import { withSecretPreservationGuard } from '../config/config-migration-journal.js';
 
 interface CommandRow {
   name: string;
@@ -127,12 +128,13 @@ export async function updateCommand(sub: any = 'check', args: any = []) {
     process.exitCode = 1;
     return;
   }
-  const result = await runSksUpdateNow({
+  const root = await projectRoot();
+  const result = await withSecretPreservationGuard(root, 'update-now', async () => runSksUpdateNow({
     version: valueAfter(args, '--version') || valueAfter(args, '-v'),
     dryRun: flag(args, '--dry-run'),
     timeoutMs: 10 * 60 * 1000,
     maxOutputBytes: 128 * 1024
-  });
+  }));
   if (flag(args, '--json')) return printJson(result);
   console.log(`${sksTextLogo()}\n`);
   console.log(`SKS update ${result.status}`);
@@ -145,14 +147,18 @@ export async function updateCommand(sub: any = 'check', args: any = []) {
 export async function setupCommand(args: any = []) {
   const root = await projectRoot();
   const installScope = installScopeFromArgs(args);
-  const res = await initProject(root, {
-    force: flag(args, '--force'),
-    installScope,
-    localOnly: flag(args, '--local-only'),
-    globalCommand: 'sks'
+  let res: any = null;
+  let cliTools: any = null;
+  await withSecretPreservationGuard(root, 'setup-command', async () => {
+    res = await initProject(root, {
+      force: flag(args, '--force'),
+      installScope,
+      localOnly: flag(args, '--local-only'),
+      globalCommand: 'sks'
+    });
+    const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
+    cliTools = await ensureRelatedCliTools(args);
   });
-  const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
-  const cliTools = await ensureRelatedCliTools(args);
   const result = {
     schema: 'sks.setup.v1',
     ok: true,

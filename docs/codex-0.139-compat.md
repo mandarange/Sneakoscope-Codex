@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 3.1.8 keeps the Codex 0.139 compatibility baseline while closing core skill immutability, native capability repair, duplicate skill dedupe, and Supabase/secret preservation release gates.
+
 SKS 3.1.7 keeps the Codex 0.139 compatibility baseline and hardens Codex Native runtime proof around real route blackboxes, bounded reference caching, read-only feature brokerage, explicit managed-asset repair transactions, and generated-artifact neutrality checks.
 
 SKS 3.1.6 keeps the Codex 0.139 compatibility baseline while productionizing the Codex App harness around typed evidence. Hook approval, `agent_type`, Codex Native reference source analysis, rich skill/agent content, and execution-profile routing now use typed probes or source-backed reports instead of environment-only assumptions.
