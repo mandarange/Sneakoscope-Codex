@@ -111,6 +111,7 @@ async function narutoRun(parsed: NarutoArgs) {
     prompt: parsed.prompt,
     requestedClones: roster.agent_count,
     totalWorkItems: parsed.workItems,
+    honorExplicitTotalWorkItems: parsed.workItemsExplicit,
     readonly: parsed.readonly,
     writeCapable,
     leaseBasePath: patchEnvelopeBasePath,
@@ -124,6 +125,7 @@ async function narutoRun(parsed: NarutoArgs) {
     prompt: parsed.prompt,
     requestedClones: roster.agent_count,
     totalWorkItems: parsed.workItems,
+    honorExplicitTotalWorkItems: parsed.workItemsExplicit,
     readonly: parsed.readonly,
     writeCapable,
     leaseBasePath: patchEnvelopeBasePath,
@@ -790,6 +792,7 @@ interface NarutoArgs {
   prompt: string
   clones: number
   workItems: number
+  workItemsExplicit: boolean
   concurrency: number | null
   backend: string
   backendExplicit: boolean
@@ -825,6 +828,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const json = hasFlag(args, '--json')
   const requestedClones = Number(readOption(args, '--clones', readOption(args, '--agents', DEFAULT_NARUTO_CLONES)))
   const clones = clampClones(requestedClones)
+  const workItemsExplicit = hasOption(args, '--work-items')
   const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones * 2)), clones)
   const concurrency = normalizeConcurrency(readOption(args, '--concurrency', readOption(args, '--target-active-slots', null)), clones)
   const useOllama = hasFlag(args, '--ollama') || hasFlag(args, '--local-model')
@@ -865,7 +869,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const messages = normalizeMessages(readOption(args, '--messages', '8'))
   const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
+  return { action, prompt, clones, workItems, workItemsExplicit, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
 }
 
 function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {

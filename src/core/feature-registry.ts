@@ -840,7 +840,7 @@ function slug(value: any) {
 function commandCategory(name: any) {
   if (['team', 'pipeline', 'goal', 'hproof', 'proof-field', 'validate-artifacts'].includes(name)) return 'proof-route';
   if (['qa-loop', 'research', 'recallpulse', 'skill-dream', 'eval', 'perf'].includes(name)) return 'loop';
-  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'auth', 'hooks', 'context7'].includes(name)) return 'integration';
+  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'context7', 'computer-use'].includes(name)) return 'integration';
   if (['db', 'guard', 'conflicts', 'harness', 'versioning'].includes(name)) return 'safety';
   if (['wiki', 'wrongness', 'gx', 'image-ux-review', 'ppt'].includes(name)) return 'visual-memory';
   if (['setup', 'bootstrap', 'doctor', 'deps', 'init', 'postinstall', 'fix-path'].includes(name)) return 'install';
@@ -849,7 +849,7 @@ function commandCategory(name: any) {
 
 function commandMaturity(name: any) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check', 'fast-mode'].includes(name)) return 'stable';
-  if (['codex', 'codex-app', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard'].includes(name)) return 'beta';
+  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'computer-use', 'mad-sks'].includes(name)) return 'beta';
   return 'labs';
 }
 

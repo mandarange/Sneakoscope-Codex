@@ -28,6 +28,7 @@ import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-
 import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native-feature-broker.js';
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 import { runDoctorNativeCapabilityRepair } from '../core/doctor/doctor-native-capability-repair.js';
+import { runDoctorCommandAliasCleanup } from '../core/doctor/command-alias-cleanup.js';
 
 export async function run(_command: any, args: any = []) {
   const doctorFix = flag(args, '--fix');
@@ -70,6 +71,23 @@ export async function run(_command: any, args: any = []) {
     };
   }
   const root = await projectRoot();
+  const commandAliasCleanup = await runDoctorCommandAliasCleanup({
+    root,
+    fix: doctorFix
+  }).catch((err: any) => ({
+    schema: 'sks.command-alias-cleanup.v1',
+    ok: false,
+    status: 'blocked',
+    root,
+    fix: doctorFix,
+    report_path: `${root}/.sneakoscope/reports/command-alias-cleanup.json`,
+    canonical_command_count: 0,
+    legacy_alias_count: 0,
+    aliases: [],
+    detected: { registered_alias_commands: [], catalog_alias_rows: [], missing_canonical_targets: [] },
+    actions: [],
+    blockers: [err?.message || String(err)]
+  }));
   const doctorNativeCapabilityRepair = await runDoctorNativeCapabilityRepair({
     root,
     fix: doctorFix || flag(args, '--repair-native-capabilities'),
@@ -289,7 +307,7 @@ export async function run(_command: any, args: any = []) {
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
   const result = {
     schema: 'sks.doctor-status.v1',
-    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false),
+    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false,
     root,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
     codex,
@@ -307,6 +325,7 @@ export async function run(_command: any, args: any = []) {
     agent_role_config: agentRoleConfigRepair,
     zellij_readiness: zellijReadiness,
     codex_permission_profiles: permissionProfiles,
+    command_aliases: commandAliasCleanup,
     imagegen: {
       ok: (imagegen as any).auth_readiness?.available_paths?.length > 0,
       auth_readiness: (imagegen as any).auth_readiness || null,
@@ -325,7 +344,7 @@ export async function run(_command: any, args: any = []) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
   };
   if (flag(args, '--json')) {
     printJson(result);
@@ -379,6 +398,11 @@ export async function run(_command: any, args: any = []) {
   console.log('SKS Skills:');
   console.log(`  core skills: ${doctorSkillStatus((doctorNativeCapabilityRepair as any)?.core_skills)}`);
   console.log(`  duplicate project skills: ${doctorDedupeStatus((doctorNativeCapabilityRepair as any)?.skill_dedupe)}`);
+  console.log('SKS Command Aliases:');
+  console.log(`  status: ${(commandAliasCleanup as any).status || ((commandAliasCleanup as any).ok ? 'clean' : 'blocked')}`);
+  console.log(`  canonical commands: ${(commandAliasCleanup as any).canonical_command_count ?? 0}`);
+  console.log(`  compatibility aliases: ${(commandAliasCleanup as any).legacy_alias_count ?? 0}`);
+  if ((commandAliasCleanup as any).report_path) console.log(`  report: ${(commandAliasCleanup as any).report_path}`);
   console.log('Secret preservation:');
   console.log(`  Supabase keys: ${(doctorNativeCapabilityRepair as any)?.ok === false && String(((doctorNativeCapabilityRepair as any)?.blockers || []).join(' ')).includes('secret_preservation_failed') ? 'blocked' : 'preserved'}`);
   console.log('  secret values: redacted');

@@ -41,6 +41,40 @@ export async function autoresearchCommand(sub: any, args: any = []) {
   return researchCommand(sub || 'status', args);
 }
 
+function hasFlagOption(args: any[] = [], name: string) {
+  return args.includes(name) || args.some((arg: any) => String(arg).startsWith(`${name}=`));
+}
+
+function limitResearchNativeWorkGraph(graph: any, limit: number) {
+  const count = Math.max(1, Math.min(Number(graph?.work_items?.length || 0) || 1, Math.floor(Number(limit) || 1)));
+  const workItems = (graph.work_items || []).slice(0, count).map((item: any) => {
+    const selectedIds = new Set((graph.work_items || []).slice(0, count).map((row: any) => String(row.id || '')));
+    return {
+      ...item,
+      dependencies: (item.dependencies || []).map(String).filter((id: string) => selectedIds.has(id)),
+      can_run_in_parallel_with: (item.can_run_in_parallel_with || []).map(String).filter((id: string) => selectedIds.has(id))
+    };
+  });
+  const selectedIds = new Set(workItems.map((item: any) => String(item.id || '')));
+  const activeWaves = (graph.active_waves || [])
+    .map((wave: any) => ({
+      ...wave,
+      work_item_ids: (wave.work_item_ids || []).map(String).filter((id: string) => selectedIds.has(id)),
+      write_paths: (wave.write_paths || []).map(String),
+      conflict_count: Number(wave.conflict_count || 0)
+    }))
+    .filter((wave: any) => wave.work_item_ids.length > 0);
+  return {
+    ...graph,
+    requested_clones: Math.min(Number(graph.requested_clones || count), count),
+    total_work_items: workItems.length,
+    work_items: workItems,
+    active_waves: activeWaves,
+    mixed_work_kinds: [...new Set(workItems.map((item: any) => item.kind))],
+    write_allowed_count: workItems.filter((item: any) => item.write_allowed === true).length
+  };
+}
+
 async function researchPrepare(args: any) {
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
@@ -136,16 +170,46 @@ async function researchRun(args: any) {
   const mock = flag(args, '--mock');
   const researchWorkGraph = await writeResearchWorkGraph(dir, plan);
   const graphWorkItemCount = Math.max(1, Number(researchWorkGraph.total_work_items || researchWorkGraph.work_items?.length || 0));
+  const explicitWorkItems = hasFlagOption(args, '--work-items');
+  const effectiveDesiredWorkItemCount = explicitWorkItems ? desiredWorkItemCount : Math.max(desiredWorkItemCount, graphWorkItemCount);
+  const effectiveMinimumWorkItems = Math.min(
+    effectiveDesiredWorkItemCount,
+    explicitWorkItems ? minimumWorkItems : Math.max(minimumWorkItems, Math.min(graphWorkItemCount, targetActiveSlots))
+  );
+  const nativeResearchWorkGraph = explicitWorkItems
+    ? limitResearchNativeWorkGraph(researchWorkGraph, effectiveDesiredWorkItemCount)
+    : researchWorkGraph;
   await runResearchCycle(dir, researchWorkGraph, { cycle: 0, status: mock ? 'mock_native_orchestrator_planned' : 'native_orchestrator_planned' });
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount: Math.max(desiredWorkItemCount, graphWorkItemCount), minimumWorkItems: Math.max(minimumWorkItems, Math.min(graphWorkItemCount, targetActiveSlots)), maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, profile, writeMode: writeMode as any, applyPatches: false, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command', narutoWorkGraph: researchWorkGraph });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount: effectiveDesiredWorkItemCount, minimumWorkItems: effectiveMinimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: true, profile, writeMode: writeMode as any, applyPatches: false, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command', narutoWorkGraph: nativeResearchWorkGraph });
   await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (!nativeAgentRun.ok) {
     await maybeFinalizeRoute(root, { missionId: id, route: '$Research', gateFile: 'research-gate.json', gate: await readJson(path.join(dir, 'research-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'research-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nativeAgentRun.proof?.blockers || ['native_agent_backend_blocked'], command: { cmd: `sks research run ${id}`, status: 2 } });
     await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_BLOCKED_NATIVE_AGENTS', questions_allowed: true, implementation_allowed: false, blocker: 'agents/agent-proof-evidence.json' });
     process.exitCode = 2;
+    return;
+  }
+  if (flag(args, '--native-proof-only')) {
+    const proofOnlyGate = {
+      schema: 'sks.research-native-proof-only-gate.v1',
+      ok: nativeAgentRun.proof?.ok === true,
+      native_agent_proof: nativeAgentRun.proof?.ok === true,
+      proof_status: nativeAgentRun.proof?.status || null,
+      blockers: nativeAgentRun.proof?.blockers || []
+    };
+    if (flag(args, '--json')) return console.log(JSON.stringify({
+      schema: flag(args, '--autoresearch') ? 'sks.autoresearch-run.v1' : 'sks.research-run.v1',
+      ok: proofOnlyGate.ok,
+      mission_id: id,
+      gate: proofOnlyGate,
+      proof: nativeAgentRun.proof,
+      native_agent_run: nativeAgentRun,
+      research_work_graph: nativeResearchWorkGraph,
+      native_proof_only: true
+    }, null, 2));
+    console.log(`Research native proof ready: ${id}`);
     return;
   }
   const legacyResearchCycle = flag(args, '--legacy-research-cycle') || process.env.SKS_RESEARCH_LEGACY_CYCLE === '1';

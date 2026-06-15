@@ -31,6 +31,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
 
   const cleanArgs = stripMadLaunchOnlyArgs(args);
   const rawArgs = (args || []).map((arg: any) => String(arg));
+  const madDbGrant = resolveMadLaunchMadDbGrant(rawArgs);
   const dryRun = rawArgs.includes('--dry-run');
   if (args.includes('--json') && !dryRun) {
     const profile = buildMadHighLaunchProfileNoWrite();
@@ -131,13 +132,6 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // later when the Zellij session opens. All filesystem/permission/EPERM/symlink/ACL
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
-  const madDbRequested = rawArgs.includes('--mad-db');
-  const madDbAck = readOption(rawArgs, '--ack', '');
-  if (madDbRequested && madDbAck !== MAD_DB_ACK) {
-    console.error(`SKS MAD-DB launch blocked. Required --ack ${JSON.stringify(MAD_DB_ACK)}`);
-    process.exitCode = 2;
-    return { ok: false, status: 'blocked', reason: 'mad_db_ack_phrase_required', required_ack: MAD_DB_ACK };
-  }
   const allowMadRepair = rawArgs.includes('--repair-config') || rawArgs.includes('--fix') || rawArgs.includes('--yes-repair');
   const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: allowMadRepair, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
   const afterPreflightUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-preflight-${uiSnapshotId}`).catch(() => null) : null;
@@ -156,18 +150,38 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return launchPreflight;
   }
   const madLaunch = await activateMadZellijPermissionState(process.cwd(), args);
-  const madDbCapability = madDbRequested
-    ? await createMadDbCapability(madLaunch.root, { missionId: madLaunch.mission_id, ack: madDbAck, cwd: process.cwd() })
+  const madDbCapability = madDbGrant.enabled
+    ? await createMadDbCapability(madLaunch.root, { missionId: madLaunch.mission_id, ack: madDbGrant.ack, cwd: process.cwd() })
     : null;
   if (madDbCapability) {
+    const grantReport = {
+      schema: 'sks.mad-sks-launch-grants.v1',
+      generated_at: nowIso(),
+      mission_id: madLaunch.mission_id,
+      mad_sks_active: true,
+      mad_db_active: true,
+      mad_db_default_grant: madDbGrant.source === 'sks_mad_default',
+      mad_db_grant_source: madDbGrant.source,
+      mad_db_one_cycle_only: true,
+      mad_db_capability_file: 'mad-db-capability.json',
+      mad_db_cycle_id: madDbCapability.cycle_id,
+      mad_db_expires_at: madDbCapability.expires_at,
+      standalone_mad_db_enable_still_requires_ack: true
+    };
+    await writeJsonAtomic(path.join(madLaunch.dir, 'mad-sks-launch-grants.json'), grantReport);
     await setCurrent(madLaunch.root, {
       mission_id: madLaunch.mission_id,
       mad_db_active: true,
       mad_db_cycle_id: madDbCapability.cycle_id,
       mad_db_capability_file: 'mad-db-capability.json',
-      mad_db_break_glass: true
+      mad_db_break_glass: true,
+      mad_db_default_grant: madDbGrant.source === 'sks_mad_default',
+      mad_db_grant_source: madDbGrant.source,
+      mad_db_one_cycle_only: true,
+      mad_db_priority_override_active: true,
+      mad_sks_launch_grants_file: 'mad-sks-launch-grants.json'
     });
-    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.capability_created', cycle_id: madDbCapability.cycle_id, expires_at: madDbCapability.expires_at });
+    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.capability_created', grant_source: madDbGrant.source, cycle_id: madDbCapability.cycle_id, expires_at: madDbCapability.expires_at });
   }
   const updateNotice = await checkSksUpdateNotice({
     packageName: deps.packageName || 'sneakoscope',
@@ -187,9 +201,9 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   }));
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${madHighProfileName()} | gate ${madLaunch.mission_id}`);
-  if (madDbCapability) console.log(`MAD-DB one-cycle capability active; expires ${madDbCapability.expires_at}.`);
+  if (madDbCapability) console.log(`MAD-DB one-cycle capability active (${madDbGrant.source}); expires ${madDbCapability.expires_at}.`);
   if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
-  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, DB writes, or system/admin scopes. Catastrophic guards remain.');
+  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. MAD-DB one-cycle DB break-glass is already active for this launch; protected-core, audit, and one-cycle bounds remain.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
   const madSksEnv = {
     SKS_PROTECTED_CORE_POLICY: madLaunch.gate.protected_core_policy,
@@ -250,6 +264,16 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
   if (headlessZellij) console.log('MAD launch running headless: live_panes=false.');
   return launch;
+}
+
+export function resolveMadLaunchMadDbGrant(args: any[] = []) {
+  const list = (args || []).map((arg: any) => String(arg));
+  return {
+    enabled: true,
+    source: list.includes('--mad-db') ? 'sks_mad_explicit_redundant_flag' : 'sks_mad_default',
+    ack: MAD_DB_ACK,
+    one_cycle_only: true
+  };
 }
 
 export async function startMadNativeSwarm(root: string, madLaunch: any, args: any[] = [], profile: any = {}, opts: any = {}) {

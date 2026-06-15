@@ -68,7 +68,14 @@ function alwaysOn(id) {
 }
 
 function scopedRuntimeBoundary(id) {
-  return id === 'runtime:no-mjs-scripts' || id === 'runtime:ts-python-boundary';
+  return [
+    'runtime:no-mjs-scripts',
+    'runtime:ts-python-boundary',
+    'runtime:proof-summary',
+    'runtime:proof-summary-cli',
+    'runtime:proof-summary-messages',
+    'runtime:proof-zellij-stacked-summary'
+  ].includes(id);
 }
 
 function readJson(rel, fallback) {
