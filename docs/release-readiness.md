@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 3.1.11 is the MAD launch repair release. It closes the Zellij stacked-pane minimum at 0.43.0, adds `doctor --fix` recovery for local stdio Context7 MCP stalls, and repairs stale Codex startup config by fixing SKS agent role paths, removing unsupported managed role fields, preserving optional `supabase_sauron`, and pruning missing-command `node_repl` MCP blocks.
+SKS 3.1.12 is the MAD launch and Codex startup repair release. It keeps the Zellij stacked-pane minimum at 0.43.0, reconciles visible MAD worker panes with Zellij `stack-panes`, keeps `doctor --fix` recovery for local stdio Context7 MCP stalls, and repairs stale Codex startup config by fixing SKS agent role paths, removing unsupported managed role fields, preserving optional `supabase_sauron`, and either restoring `node_repl` to a valid Codex App command or removing the whole stale parent/child MCP block.
 
 SKS 3.1.10 is the release-ready hardening follow-up. It closes release wiring parity, core skill immutability, duplicate skill active-name proof, capability-specific native postchecks, protected secret rollback, and the all-feature regression blackbox.
 

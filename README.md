@@ -35,15 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.11** is a release-ready repair pass for MAD Zellij stacked panes, Context7 MCP doctor recovery, and stale Codex startup config.
+SKS **3.1.12** is a release-ready repair pass for `sks doctor --fix` Codex startup recovery and MAD Zellij right-column stack reliability.
 
-What changed in 3.1.11:
+What changed in 3.1.12:
 
-- **MAD Zellij panes require native stacked-pane support.** `sks doctor --fix` now treats Zellij 0.43.0 as the minimum interactive runtime so `sks --mad` can use native stacked worker panes instead of fragmenting into plain splits.
+- **MAD Zellij panes are stack-reconciled.** Second and later visible workers still launch with native `new-pane --stacked`, then SKS calls Zellij `stack-panes` with the observed worker pane ids so the right column stays one stack instead of drifting into automatic split geometry.
 - **Context7 stdio lockups are doctor-repairable.** `sks doctor --fix` detects local `@upstash/context7-mcp` stdio config and migrates it to the remote Context7 MCP endpoint so Codex launches do not stall at the stdio server banner.
-- **Codex startup warnings are doctor-repairable.** `sks doctor --fix` rewrites stale SKS agent `config_file` paths to existing absolute files, removes unsupported managed `message_role_prefix` role fields, preserves optional `supabase_sauron`, and drops missing-command `node_repl` MCP blocks that would otherwise spam startup.
+- **Codex startup warnings are repaired more completely.** `sks doctor --fix` rewrites stale SKS agent `config_file` paths, removes unsupported managed `message_role_prefix` role fields, preserves optional `supabase_sauron`, and now repairs `node_repl` to a valid Codex App command when available or removes both the stale parent table and child env table when it is not.
 - **Doctor JSON exposes the Context7 and startup repair reports.** `context7_repair`, `codex_startup_repair`, and their `repair.*` entries carry migration status, backups, actions, warnings, and any manual auth actions.
-- **Release metadata is aligned for 3.1.11.** Package, lockfile, CLI version constants, Rust helper metadata, README, and changelog all point at the same release.
+- **Release metadata is aligned for 3.1.12.** Package, lockfile, CLI version constants, Rust helper metadata, README, and changelog all point at the same release.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 

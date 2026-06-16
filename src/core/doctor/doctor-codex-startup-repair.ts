@@ -40,6 +40,7 @@ export interface DoctorCodexStartupRepairResult {
     backup_path: string | null
     agent_config_files_repaired: string[]
     stale_mcp_blocks_removed: string[]
+    mcp_blocks_repaired: string[]
     optional_mcp_blocks_ignored: string[]
     blockers: string[]
     warnings: string[]
@@ -60,6 +61,8 @@ export async function runDoctorCodexStartupRepair(input: {
   root: string
   fix: boolean
   codexHome?: string
+  nodeReplCommandCandidates?: string[]
+  includeDefaultNodeReplCandidates?: boolean
 }): Promise<DoctorCodexStartupRepairResult> {
   const root = path.resolve(input.root || process.cwd())
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex')
@@ -71,7 +74,7 @@ export async function runDoctorCodexStartupRepair(input: {
     { scope: 'project' as const, path: path.join(root, '.codex', 'config.toml'), agentDir: path.join(root, '.codex', 'agents') },
     { scope: 'global' as const, path: path.join(codexHome, 'config.toml'), agentDir: path.join(codexHome, 'agents') }
   ]) {
-    configs.push(await inspectOrRepairConfig(candidate, input.fix))
+    configs.push(await inspectOrRepairConfig(candidate, input.fix, input.nodeReplCommandCandidates || [], input.includeDefaultNodeReplCandidates !== false))
   }
   const blockers = [...roleFiles.blockers, ...configs.flatMap((entry) => entry.blockers.map((item) => `${entry.scope}:${item}`))]
   const warnings = configs.flatMap((entry) => entry.warnings.map((item) => `${entry.scope}:${item}`))
@@ -80,6 +83,7 @@ export async function runDoctorCodexStartupRepair(input: {
     ...roleFiles.created.map((file) => `created missing SKS agent role config ${file}`),
     ...configs.flatMap((entry) => [
       ...entry.agent_config_files_repaired.map((file) => `${entry.scope} agent config_file now points at ${file}`),
+      ...(entry.mcp_blocks_repaired || []).map((server) => `${entry.scope} MCP block repaired: ${server}`),
       ...entry.stale_mcp_blocks_removed.map((server) => `${entry.scope} stale MCP block removed: ${server}`)
     ])
   ]
@@ -109,7 +113,7 @@ export async function runDoctorCodexStartupRepair(input: {
   return report
 }
 
-async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; agentDir: string }, fix: boolean): Promise<DoctorCodexStartupRepairResult['configs'][number]> {
+async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; agentDir: string }, fix: boolean, nodeReplCommandCandidates: string[], includeDefaultNodeReplCandidates: boolean): Promise<DoctorCodexStartupRepairResult['configs'][number]> {
   const text = await readText(candidate.path, null)
   if (text == null) {
     return {
@@ -120,6 +124,7 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
       backup_path: null,
       agent_config_files_repaired: [],
       stale_mcp_blocks_removed: [],
+      mcp_blocks_repaired: [],
       optional_mcp_blocks_ignored: [],
       blockers: [],
       warnings: candidate.scope === 'global' ? ['codex_home_config_missing_optional'] : []
@@ -128,6 +133,7 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
   let next = text
   const agentConfigFilesRepaired: string[] = []
   const staleMcpBlocksRemoved: string[] = []
+  const mcpBlocksRepaired: string[] = []
   const optionalMcpBlocksIgnored: string[] = []
   const blockers: string[] = []
   const warnings: string[] = []
@@ -150,17 +156,11 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
     agentConfigFilesRepaired.push(target)
   }
 
-  for (const server of ['node_repl']) {
-    const table = tomlBlock(next, `mcp_servers.${server}`)
-    if (!table) continue
-    const command = stringValue(table.text, 'command')
-    if (!command || await commandExists(command)) continue
-    warnings.push(`stale_mcp_command_missing:${server}`)
-    if (fix) {
-      next = removeTomlBlock(next, table)
-      staleMcpBlocksRemoved.push(server)
-    }
-  }
+  const nodeReplRepair = await inspectOrRepairNodeRepl(next, fix, nodeReplCommandCandidates, includeDefaultNodeReplCandidates)
+  next = nodeReplRepair.text
+  warnings.push(...nodeReplRepair.warnings)
+  staleMcpBlocksRemoved.push(...nodeReplRepair.removed)
+  mcpBlocksRepaired.push(...nodeReplRepair.repaired)
 
   for (const server of ['supabase_sauron']) {
     if (tomlBlock(next, `mcp_servers.${server}`)) optionalMcpBlocksIgnored.push(server)
@@ -184,9 +184,60 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
     backup_path: backupPath,
     agent_config_files_repaired: agentConfigFilesRepaired,
     stale_mcp_blocks_removed: staleMcpBlocksRemoved,
+    mcp_blocks_repaired: mcpBlocksRepaired,
     optional_mcp_blocks_ignored: optionalMcpBlocksIgnored,
     blockers,
     warnings
+  }
+}
+
+async function inspectOrRepairNodeRepl(text: string, fix: boolean, extraCandidates: string[], includeDefaultCandidates: boolean) {
+  const server = 'node_repl'
+  const table = tomlBlock(text, `mcp_servers.${server}`)
+  const fullTable = tomlBlockWithChildren(text, `mcp_servers.${server}`)
+  const childBlocks = tomlChildBlocks(text, `mcp_servers.${server}`)
+  if (!table && childBlocks.length === 0) return { text, warnings: [] as string[], removed: [] as string[], repaired: [] as string[] }
+
+  const command = table ? stringValue(table.text, 'command') : null
+  if (command && await commandExists(command)) {
+    return { text, warnings: [] as string[], removed: [] as string[], repaired: [] as string[] }
+  }
+
+  const warnings = [table ? `stale_mcp_command_missing:${server}` : `stale_mcp_orphan_children:${server}`]
+  if (!fix) return { text, warnings, removed: [] as string[], repaired: [] as string[] }
+
+  const replacement = await firstExistingNodeReplCommand(text, extraCandidates, includeDefaultCandidates)
+  if (replacement) {
+    if (table) {
+      return {
+        text: replaceOrInsertKey(text, table, 'command', `"${escapeToml(replacement)}"`),
+        warnings,
+        removed: [] as string[],
+        repaired: [server]
+      }
+    }
+    if (childBlocks.length) {
+      const firstChild = childBlocks[0]
+      if (!firstChild) return { text, warnings, removed: [] as string[], repaired: [] as string[] }
+      const mainBlock = `[mcp_servers.${server}]\ncommand = "${escapeToml(replacement)}"\nargs = []\n\n`
+      return {
+        text: `${text.slice(0, firstChild.start).trimEnd()}${firstChild.start > 0 ? '\n\n' : ''}${mainBlock}${text.slice(firstChild.start).replace(/^\n+/, '')}`,
+        warnings,
+        removed: [] as string[],
+        repaired: [server]
+      }
+    }
+  }
+
+  const removalBlocks = [
+    ...(fullTable ? [fullTable] : table ? [table] : []),
+    ...childBlocks.filter((block) => !fullTable || block.start < fullTable.start || block.end > fullTable.end)
+  ]
+  return {
+    text: removeBlocks(text, removalBlocks),
+    warnings,
+    removed: [server],
+    repaired: [] as string[]
   }
 }
 
@@ -243,8 +294,39 @@ function tomlBlock(text: string, table: string): { start: number; end: number; t
   return { start, end, text: text.slice(start, end) }
 }
 
+function tomlBlockWithChildren(text: string, table: string): { start: number; end: number; text: string } | null {
+  const header = new RegExp(`(^|\\n)\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?(?:\\n|$)`, 'g')
+  const match = header.exec(text)
+  if (!match) return null
+  const start = match.index + (match[1] ? 1 : 0)
+  const rest = text.slice(header.lastIndex)
+  const nextHeader = rest.search(new RegExp(`\\n\\s*\\[(?!${escapeRegExp(table)}(?:\\.|\\]))[^\\]]+\\]\\s*(?:#.*)?(?:\\n|$)`))
+  const end = nextHeader >= 0 ? header.lastIndex + nextHeader : text.length
+  return { start, end, text: text.slice(start, end) }
+}
+
+function tomlChildBlocks(text: string, table: string): Array<{ start: number; end: number; text: string }> {
+  const blocks: Array<{ start: number; end: number; text: string }> = []
+  const header = new RegExp(`(^|\\n)\\s*\\[${escapeRegExp(table)}\\.[^\\]]+\\]\\s*(?:#.*)?(?:\\n|$)`, 'g')
+  let match: RegExpExecArray | null
+  while ((match = header.exec(text))) {
+    const start = match.index + (match[1] ? 1 : 0)
+    const rest = text.slice(header.lastIndex)
+    const nextHeader = rest.search(new RegExp(`\\n\\s*\\[(?!${escapeRegExp(table)}\\.)[^\\]]+\\]\\s*(?:#.*)?(?:\\n|$)`))
+    const end = nextHeader >= 0 ? header.lastIndex + nextHeader : text.length
+    blocks.push({ start, end, text: text.slice(start, end) })
+  }
+  return blocks
+}
+
 function removeTomlBlock(text: string, block: { start: number; end: number }): string {
   return `${text.slice(0, block.start).trimEnd()}${block.start > 0 ? '\n\n' : ''}${text.slice(block.end).replace(/^\n+/, '')}`
+}
+
+function removeBlocks(text: string, blocks: Array<{ start: number; end: number }>): string {
+  return [...blocks]
+    .sort((a, b) => b.start - a.start)
+    .reduce((current, block) => removeTomlBlock(current, block), text)
 }
 
 function replaceOrInsertKey(text: string, block: { start: number; end: number; text: string }, key: string, encodedValue: string): string {
@@ -267,6 +349,46 @@ async function commandExists(command: string): Promise<boolean> {
   const paths = String(process.env.PATH || '').split(path.delimiter).filter(Boolean)
   for (const dir of paths) if (await exists(path.join(dir, command))) return true
   return false
+}
+
+async function firstExistingNodeReplCommand(configText: string, extraCandidates: string[], includeDefaultCandidates: boolean): Promise<string | null> {
+  const candidates = [
+    ...extraCandidates,
+    ...(includeDefaultCandidates ? [
+      process.env.SKS_NODE_REPL_COMMAND,
+      process.env.NODE_REPL_COMMAND,
+      ...nodeReplCandidatesFromNodePaths([
+        ...stringValues(configText, 'NODE_REPL_NODE_PATH'),
+        process.env.NODE_REPL_NODE_PATH
+      ]),
+      '/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl',
+      '/Applications/Codex.app/Contents/Resources/node_repl'
+    ] : [])
+  ]
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+  for (const candidate of [...new Set(candidates)]) {
+    if (await commandExists(candidate)) return candidate
+  }
+  return null
+}
+
+function nodeReplCandidatesFromNodePaths(values: Array<string | undefined>): string[] {
+  const out: string[] = []
+  for (const value of values) {
+    const nodePath = String(value || '').trim()
+    if (!nodePath) continue
+    const dir = path.dirname(nodePath)
+    out.push(path.join(dir, 'node_repl'))
+    const resources = path.basename(dir) === 'bin' ? path.dirname(path.dirname(dir)) : dir
+    out.push(path.join(resources, 'cua_node', 'bin', 'node_repl'))
+  }
+  return out
+}
+
+function stringValues(text: string, key: string): string[] {
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"`, 'gm')
+  return [...text.matchAll(re)].map((match) => String(match[1] || '')).filter(Boolean)
 }
 
 async function backupConfig(configPath: string, text: string, label: string): Promise<string | null> {

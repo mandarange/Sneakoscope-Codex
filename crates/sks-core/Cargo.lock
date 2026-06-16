@@ -76,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "sks-core"
-version = "3.1.11"
+version = "3.1.12"
 dependencies = [
  "serde_json",
 ]

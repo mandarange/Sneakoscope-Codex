@@ -35,6 +35,9 @@ const staleConfig = [
   '',
   '[features]',
   'hooks = true',
+  '',
+  '[mcp_servers.node_repl.env]',
+  'NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/node"',
   ''
 ].join('\n')
 await writeTextAtomic(path.join(tmp, '.codex', 'config.toml'), staleConfig)
@@ -52,7 +55,7 @@ await writeTextAtomic(path.join(codexHome, 'agents', 'sks-checker.toml'), [
 const planned = await mod.runDoctorCodexStartupRepair({ root: tmp, codexHome, fix: false })
 assertGate(planned.configs.every((entry) => entry.warnings.some((warning) => warning.includes('agent_config_file_stale'))), 'dry inspect must detect stale agent config_file paths', planned)
 
-const repaired = await mod.runDoctorCodexStartupRepair({ root: tmp, codexHome, fix: true })
+const repaired = await mod.runDoctorCodexStartupRepair({ root: tmp, codexHome, fix: true, includeDefaultNodeReplCandidates: false })
 const projectText = await fs.readFile(path.join(tmp, '.codex', 'config.toml'), 'utf8')
 const globalText = await fs.readFile(path.join(codexHome, 'config.toml'), 'utf8')
 const checkerText = await fs.readFile(path.join(codexHome, 'agents', 'sks-checker.toml'), 'utf8')
@@ -64,6 +67,7 @@ for (const [scope, text, expectedDir] of [
   assertGate(!text.includes('/Users/alfredo/'), `${scope} config must drop stale home path`, text)
   assertGate(text.includes(`config_file = "${path.join(expectedDir, 'analysis-scout.toml').replace(/\\/g, '\\\\')}"`), `${scope} config_file must point at an existing absolute role file`, text)
   assertGate(!text.includes('[mcp_servers.node_repl]'), `${scope} stale node_repl MCP block must be removed`, text)
+  assertGate(!text.includes('[mcp_servers.node_repl.env]'), `${scope} stale node_repl child MCP block must be removed`, text)
   assertGate(text.includes('[mcp_servers.supabase_sauron]'), `${scope} optional sauron MCP block must be preserved`, text)
   assertGate(text.includes('[features]') && text.includes('hooks = true'), `${scope} unrelated tables must be preserved`, text)
 }
@@ -72,4 +76,34 @@ assertGate(!checkerText.includes('message_role_prefix'), 'managed directive agen
 assertGate(repaired.ok === true, 'startup repair must pass when only optional sauron remains', repaired)
 assertGate(repaired.configs.every((entry) => entry.changed === true && entry.backup_path), 'startup repair must back up changed configs', repaired)
 assertGate(repaired.agent_role_files.created.length >= 10, 'startup repair must create missing project/global role configs', repaired)
-emitGate('doctor:codex-startup-repair', { configs: repaired.configs.length, actions: repaired.actions.length })
+
+const tmpCandidate = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-startup-node-repl-'))
+const codexHomeCandidate = path.join(tmpCandidate, 'codex-home')
+const fakeNodeRepl = path.join(tmpCandidate, 'Codex.app', 'Contents', 'Resources', 'cua_node', 'bin', 'node_repl')
+await fs.mkdir(path.dirname(fakeNodeRepl), { recursive: true })
+await writeTextAtomic(fakeNodeRepl, '#!/bin/sh\n')
+await fs.mkdir(path.join(tmpCandidate, '.codex'), { recursive: true })
+await fs.mkdir(codexHomeCandidate, { recursive: true })
+const missingNodeReplConfig = [
+  '[mcp_servers.node_repl]',
+  'command = "/definitely/missing/node_repl"',
+  'args = []',
+  '',
+  '[mcp_servers.node_repl.env]',
+  'NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/node"',
+  ''
+].join('\n')
+await writeTextAtomic(path.join(tmpCandidate, '.codex', 'config.toml'), missingNodeReplConfig)
+await writeTextAtomic(path.join(codexHomeCandidate, 'config.toml'), missingNodeReplConfig)
+const candidateRepaired = await mod.runDoctorCodexStartupRepair({
+  root: tmpCandidate,
+  codexHome: codexHomeCandidate,
+  fix: true,
+  nodeReplCommandCandidates: [fakeNodeRepl],
+  includeDefaultNodeReplCandidates: false
+})
+const candidateText = await fs.readFile(path.join(tmpCandidate, '.codex', 'config.toml'), 'utf8')
+assertGate(candidateText.includes(`command = "${fakeNodeRepl.replace(/\\/g, '\\\\')}"`), 'node_repl must be repaired to an existing Codex App command when available', candidateText)
+assertGate(candidateText.includes('[mcp_servers.node_repl.env]'), 'node_repl env must be preserved when command is repaired', candidateText)
+assertGate(candidateRepaired.configs.every((entry) => entry.mcp_blocks_repaired.includes('node_repl')), 'node_repl repair action must be recorded', candidateRepaired)
+emitGate('doctor:codex-startup-repair', { configs: repaired.configs.length, actions: repaired.actions.length, node_repl_candidate_repaired: true })

@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+
+## [3.1.12] - 2026-06-16
+
+### Fixed
+
+- `sks doctor --fix` now repairs stale `node_repl` MCP config without leaving an orphan `[mcp_servers.node_repl.env]` child table. When the current Codex App `cua_node/bin/node_repl` command exists, doctor rewrites to that path and preserves env; otherwise it removes the whole stale parent/child block.
+- MAD Zellij visible worker panes now reconcile native stacked placement with `zellij action stack-panes` after pane ids are observed, keeping second and later workers in one right-column stack instead of relying only on focus-sensitive `new-pane --stacked`.
+- Release metadata is aligned for 3.1.12 across package, lockfile, CLI constants, Rust helper metadata, README, and changelog.
+
 ## [3.1.11] - 2026-06-16
 
 ### Fixed
