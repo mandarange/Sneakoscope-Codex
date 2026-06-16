@@ -1,7 +1,8 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { CONTEXT7_REMOTE_MCP_URL, mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock } from '../mcp/mcp-config-preservation.js';
+import { guardedWriteFile, guardContextForRoute } from '../safety/mutation-guard.js';
+import { createRequestedScopeContract } from '../safety/requested-scope-contract.js';
 
 export interface Context7McpRepairReport {
   schema: 'sks.doctor-context7-mcp-repair.v1';
@@ -33,7 +34,13 @@ export async function repairContext7Mcp(input: { root: string; apply?: boolean; 
   }
   if (input.apply && repaired) {
     await ensureDir(path.dirname(config.path));
-    await fs.writeFile(`${config.path}.context7-mcp-repair-${Date.now().toString(36)}.bak`, config.text, 'utf8').catch(() => undefined);
+    const backupPath = `${config.path}.context7-mcp-repair-${Date.now().toString(36)}.bak`;
+    const contract = createRequestedScopeContract({
+      route: '$Team',
+      userRequest: 'Write a scoped project backup before doctor Context7 MCP repair.',
+      projectRoot: root
+    });
+    await guardedWriteFile(guardContextForRoute(root, contract, 'doctor Context7 MCP repair backup'), backupPath, config.text).catch(() => undefined);
     await writeTextAtomic(config.path, afterText);
   }
   const after = input.apply && repaired ? await readProjectCodexConfig(root) : { text: afterText };
