@@ -23,6 +23,8 @@
   },
   "files": [
     "dist",
+    "!dist/*.json",
+    "!dist/.sks-build-stamp.json",
     "!dist/build-manifest.json",
     "!dist/**/*.d.ts",
     "!dist/**/*.d.ts.map",
