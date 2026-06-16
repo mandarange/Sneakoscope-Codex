@@ -31,6 +31,11 @@ import { buildCodexNativeFeatureMatrix } from '../core/codex-native/codex-native
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 import { runDoctorNativeCapabilityRepair } from '../core/doctor/doctor-native-capability-repair.js';
 import { runDoctorCommandAliasCleanup } from '../core/doctor/command-alias-cleanup.js';
+import { repairCodexStartupConfig } from '../core/doctor/codex-startup-config-repair.js';
+import { repairContext7Mcp } from '../core/doctor/context7-mcp-repair.js';
+import { repairSupabaseMcp } from '../core/doctor/supabase-mcp-repair.js';
+import { writeDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
+import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 
 export async function run(_command: any, args: any = []) {
@@ -242,6 +247,120 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     warnings: [],
     report_path: `${root}/.sneakoscope/reports/doctor-context7-repair.json`
   }));
+  const startupConfigRepair = doctorFix
+    ? await repairCodexStartupConfig({ root, apply: true }).catch((err: any) => ({
+        schema: 'sks.codex-startup-config-repair.v1',
+        ok: false,
+        apply: true,
+        blockers: [err?.message || String(err)]
+      }))
+    : null;
+  const context7McpRepair = doctorFix
+    ? await repairContext7Mcp({ root, apply: true }).catch((err: any) => ({
+        schema: 'sks.doctor-context7-mcp-repair.v1',
+        ok: false,
+        apply: true,
+        repaired: false,
+        manual_required: false,
+        blockers: [err?.message || String(err)],
+        warnings: []
+      }))
+    : null;
+  const supabaseMcpRepair = doctorFix
+    ? await repairSupabaseMcp({ root, apply: true }).catch((err: any) => ({
+        schema: 'sks.doctor-supabase-mcp-repair.v1',
+        ok: false,
+        apply: true,
+        configured: false,
+        disabled: false,
+        token_env_present: false,
+        unsafe_write_access: false,
+        manual_required: true,
+        next_action: 'Review Supabase MCP configuration manually.',
+        blockers: [err?.message || String(err)],
+        warnings: [],
+        raw_secret_values_recorded: false
+      }))
+    : null;
+  const doctorFixTransaction = doctorFix
+    ? await writeDoctorFixTransaction({
+        root,
+        phases: [
+          {
+            id: 'setup',
+            ok: setupRepair !== null,
+            repaired: setupRepair !== null,
+            blockers: setupRepair === null ? ['setup_repair_not_recorded'] : []
+          },
+          {
+            id: 'codex_startup_repair',
+            ok: (codexStartupRepair as any)?.ok !== false,
+            repaired: doctorFix,
+            blockers: (codexStartupRepair as any)?.blockers || [],
+            warnings: (codexStartupRepair as any)?.warnings || []
+          },
+          {
+            id: 'startup_config_repair',
+            ok: (startupConfigRepair as any)?.ok === true,
+            repaired: (startupConfigRepair as any)?.apply === true,
+            blockers: (startupConfigRepair as any)?.blockers || []
+          },
+          {
+            id: 'context7_repair',
+            ok: (context7Repair as any)?.ok !== false,
+            repaired: doctorFix,
+            blockers: (context7Repair as any)?.blockers || [],
+            warnings: (context7Repair as any)?.warnings || []
+          },
+          {
+            id: 'context7_mcp_repair',
+            ok: (context7McpRepair as any)?.ok === true,
+            repaired: (context7McpRepair as any)?.repaired === true,
+            manual_required: (context7McpRepair as any)?.manual_required === true,
+            blockers: (context7McpRepair as any)?.blockers || [],
+            warnings: (context7McpRepair as any)?.warnings || []
+          },
+          {
+            id: 'supabase_mcp_repair',
+            ok: (supabaseMcpRepair as any)?.ok === true,
+            repaired: false,
+            manual_required: (supabaseMcpRepair as any)?.manual_required === true,
+            blockers: (supabaseMcpRepair as any)?.blockers || [],
+            warnings: (supabaseMcpRepair as any)?.warnings || []
+          },
+          {
+            id: 'command_alias_cleanup',
+            ok: (commandAliasCleanup as any)?.ok !== false,
+            repaired: Array.isArray((commandAliasCleanup as any)?.actions) && (commandAliasCleanup as any).actions.length > 0,
+            blockers: (commandAliasCleanup as any)?.blockers || []
+          },
+          {
+            id: 'native_capability_repair',
+            ok: (doctorNativeCapabilityRepair as any)?.ok !== false,
+            repaired: doctorFix,
+            blockers: (doctorNativeCapabilityRepair as any)?.blockers || []
+          }
+        ]
+      }).catch((err: any) => ({
+        schema: 'sks.doctor-fix-transaction.v1',
+        ok: false,
+        postcheck_ok: false,
+        phases: [
+          {
+            id: 'doctor_fix_transaction',
+            ok: false,
+            repaired: false,
+            manual_required: false,
+            blockers: [err?.message || String(err)],
+            warnings: [],
+            artifact_path: null
+          }
+        ],
+        rollback_performed: false,
+        raw_secret_values_recorded: false
+      } as any))
+    : null;
+  const doctorFixPostcheck = doctorFix ? doctorRepairPostcheck(doctorFixTransaction as any) : null;
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const localModel = await readLocalModelConfig().catch(() => null);
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
@@ -323,6 +442,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     zellij,
     context7_repair: context7Repair,
     codex_startup_repair: codexStartupRepair,
+    startup_config_repair: startupConfigRepair,
+    context7_mcp_repair: context7McpRepair,
+    supabase_mcp_repair: supabaseMcpRepair,
+    doctor_fix_transaction: doctorFixTransaction,
+    doctor_fix_postcheck: doctorFixPostcheck,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
@@ -344,7 +468,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
   const result = {
     schema: 'sks.doctor-status.v1',
-    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false,
+    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false && (!doctorFixPostcheck || (doctorFixPostcheck as any).ok !== false),
     root,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
     codex,
@@ -360,6 +484,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     zellij_repair: zellijRepair,
     context7_repair: context7Repair,
     codex_startup_repair: codexStartupRepair,
+    startup_config_repair: startupConfigRepair,
+    context7_mcp_repair: context7McpRepair,
+    supabase_mcp_repair: supabaseMcpRepair,
+    doctor_fix_transaction: doctorFixTransaction,
+    doctor_fix_postcheck: doctorFixPostcheck,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     zellij_readiness: zellijReadiness,
@@ -383,7 +512,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, doctor_transaction: doctorFixTransaction, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
   };
   if (flag(args, '--json')) {
     printJson(result);

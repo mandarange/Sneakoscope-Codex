@@ -123,7 +123,7 @@ export async function withSecretPreservationGuard<T>(
     }
     await writeJsonAtomic(guardPath, report).catch(() => undefined);
     if (operationError) throw operationError;
-    if (operationName === 'doctor-fix' && rollbackAttempted) {
+    if (rollbackAttempted) {
       throw new Error(`secret_preservation_restored:${changedOrMissing.map((item) => `${safeSourceForError(resolvedRoot, item.source)}:${item.key}:${item.reason}`).join(',')}`);
     }
     return result!;

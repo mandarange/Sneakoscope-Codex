@@ -1,6 +1,6 @@
 # Release Proof Truth
 
-SKS 3.1.12 keeps release proof truth aligned with the MAD right-column `stack-panes` reconciliation evidence and the `doctor --fix` `node_repl` parent/child MCP repair evidence.
+SKS 3.1.12 keeps release proof truth aligned with the MAD right-column `stack-panes` reconciliation evidence, the `doctor --fix` `node_repl` parent/child MCP repair evidence, Codex 0.140 capability and integration gates, doctor production transaction/postcheck reports, Context7/Supabase MCP repair reports, and protected secret rollback evidence.
 
 SKS 3.1.11 keeps release proof truth aligned with the MAD repair evidence for Zellij stacked-pane minimum enforcement, Context7 remote MCP migration, and Codex startup config repair reports.
 
