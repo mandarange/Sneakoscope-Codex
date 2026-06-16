@@ -16,6 +16,8 @@ export async function writeSecretMigrationJournal(root: string, operationName: s
     operation: operationName,
     files_touched: filesTouched,
     protected_keys_present: snapshot.fingerprints.filter((fp) => fp.present).map((fp) => ({ key: fp.key, source: fp.source })),
+    secret_preservation_guard_report: '.sneakoscope/reports/secret-preservation-guard.json',
+    rollback_status_source: 'secret-preservation-guard.changed_or_missing + rollback_attempted + rollback_ok',
     raw_values_recorded: false
   };
   const journal = {

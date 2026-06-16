@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+import { assertGate, emitGate } from './sks-1-18-gate-lib.js';
+import { detectCodex0140Capability } from '../core/codex-control/codex-0140-capability.js';
+
+process.env.SKS_CODEX_0140_FAKE = '1';
+process.env.SKS_CODEX_VERSION_FAKE = 'codex-cli 0.140.0';
+delete process.env.SKS_CODEX_0140_PROBE;
+const cap = await detectCodex0140Capability({ codexBin: 'codex' });
+assertGate(cap.ok === true && cap.supports_0140 === true, 'Codex 0.140 capability fixture must pass', cap);
+process.env.SKS_CODEX_VERSION_FAKE = 'codex-cli 0.139.0';
+const old = await detectCodex0140Capability({ codexBin: 'codex' });
+assertGate(old.ok === false && old.blockers.includes('codex_0_140_required_for_0140_features'), 'Codex 0.139 must not satisfy 0.140 capability', old);
+emitGate('codex:0140-capability', { features: Object.keys(cap.features).length });

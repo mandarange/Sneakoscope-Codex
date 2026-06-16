@@ -35,14 +35,17 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.12** is a release-ready repair pass for `sks doctor --fix` Codex startup recovery and MAD Zellij right-column stack reliability.
+SKS **3.1.12** is a release-ready repair pass for `sks doctor --fix` production recovery, Codex 0.140 capability coverage, and MAD Zellij right-column stack reliability.
 
 What changed in 3.1.12:
 
 - **MAD Zellij panes are stack-reconciled.** Second and later visible workers still launch with native `new-pane --stacked`, then SKS calls Zellij `stack-panes` with the observed worker pane ids so the right column stays one stack instead of drifting into automatic split geometry.
+- **Codex 0.140 readiness is gated.** The release records hermetic coverage for usage metadata, goal attachment preservation, session delete/import, unified mentions, Bedrock managed auth, MCP reliability, SQLite recovery, non-TTY interrupt behavior, large-repo performance, and optional real-probe enforcement.
+- **Doctor production repair is transactional.** `sks doctor --fix` now writes a doctor fix transaction and postcheck report so startup config, Context7 MCP, Supabase MCP, command alias, and native capability repair results are visible in JSON output instead of disappearing into console-only repair steps.
 - **Context7 stdio lockups are doctor-repairable.** `sks doctor --fix` detects local `@upstash/context7-mcp` stdio config and migrates it to the remote Context7 MCP endpoint so Codex launches do not stall at the stdio server banner.
 - **Codex startup warnings are repaired more completely.** `sks doctor --fix` rewrites stale SKS agent `config_file` paths, removes unsupported managed `message_role_prefix` role fields, preserves optional `supabase_sauron`, and now repairs `node_repl` to a valid Codex App command when available or removes both the stale parent table and child env table when it is not.
-- **Doctor JSON exposes the Context7 and startup repair reports.** `context7_repair`, `codex_startup_repair`, and their `repair.*` entries carry migration status, backups, actions, warnings, and any manual auth actions.
+- **Doctor JSON exposes the Context7, startup, Supabase, and production postcheck reports.** `context7_repair`, `codex_startup_repair`, `startup_config_repair`, `context7_mcp_repair`, `supabase_mcp_repair`, `doctor_fix_transaction`, `doctor_fix_postcheck`, and their `repair.*` entries carry migration status, backups, actions, warnings, and any manual auth actions.
+- **Secret rollback is stricter.** The secret-preservation guard treats protected-value changes the same way as missing values, rolls back affected files from redacted backups, and records rollback status without writing raw secret values.
 - **Release metadata is aligned for 3.1.12.** Package, lockfile, CLI version constants, Rust helper metadata, README, and changelog all point at the same release.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.

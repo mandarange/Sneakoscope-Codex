@@ -1,6 +1,6 @@
 # Secret Preservation
 
-SKS 3.1.10 protects Supabase and secret-like config values across setup, update, and doctor repair paths.
+SKS 3.1.12 protects Supabase and secret-like config values across setup, update, and doctor repair paths. The guard rolls back both missing protected values and changed protected-value hashes, including nested `doctor --fix` repair flows that touch startup, MCP, app UI, Zellij, and native capability config.
 
 Protected surfaces include common Supabase environment keys, Supabase JSON config paths, and Supabase MCP config keys. Secret snapshots record:
 

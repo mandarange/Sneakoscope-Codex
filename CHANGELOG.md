@@ -5,8 +5,17 @@
 
 ## [3.1.12] - 2026-06-16
 
+### Added
+
+- Codex 0.140 capability and integration gates for usage metadata, goal attachment preservation, session delete/import, unified mentions, Bedrock managed auth, MCP reliability, SQLite recovery, non-TTY interrupt behavior, large-repo performance, hermetic feature probes, and optional real-probe enforcement.
+- Production `sks doctor --fix` transaction and postcheck reports covering setup, Codex startup repair, startup config repair, Context7 repair, Context7 MCP repair, Supabase MCP safety, command alias cleanup, and native capability repair.
+- Context7 MCP and Supabase MCP doctor repair reports are exposed in doctor JSON and release wiring so manual auth/read-only actions are visible and auditable.
+
 ### Fixed
 
+- `sks doctor --fix` production repair is now release-gated by 3.1.12 wiring, doctor production blackbox, startup config repair blackboxes, Context7/Supabase MCP blackboxes, and the all-feature regression blackbox.
+- Secret preservation rollback now protects changed protected values as well as missing protected values across setup/update/doctor paths without writing raw secret values to reports.
+- Release gate parity now requires every `release` preset gate to have a package script, while still checking the required 3.1.12 gates and the real-check preset.
 - `sks doctor --fix` now repairs stale `node_repl` MCP config without leaving an orphan `[mcp_servers.node_repl.env]` child table. When the current Codex App `cua_node/bin/node_repl` command exists, doctor rewrites to that path and preserves env; otherwise it removes the whole stale parent/child block.
 - MAD Zellij visible worker panes now reconcile native stacked placement with `zellij action stack-panes` after pane ids are observed, keeping second and later workers in one right-column stack instead of relying only on focus-sensitive `new-pane --stacked`.
 - Release metadata is aligned for 3.1.12 across package, lockfile, CLI constants, Rust helper metadata, README, and changelog.

@@ -4,15 +4,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertGate, emitGate, readJson, root } from './sks-1-18-gate-lib.js';
 import { writeJsonAtomic } from '../core/fsx.js';
+import { REQUIRED_3112_REAL_CHECK_IDS, REQUIRED_3112_RELEASE_IDS } from './release-3112-required-gates.js';
 
 interface ReleaseGateScriptParityReport {
   schema: 'sks.release-gate-script-parity.v1';
   ok: boolean;
   release_gate_count: number;
   package_script_count: number;
+  checked_required_ids: number;
   missing_scripts: string[];
   missing_gates: string[];
   missing_release_preset: string[];
+  missing_real_check_preset: string[];
   wrong_commands: Array<{ id: string; expected: string; actual: string }>;
   missing_source_targets: string[];
   missing_dist_targets: string[];
@@ -80,7 +83,7 @@ export async function main(): Promise<void> {
   assertGate(report.ok, 'release gate script parity failed', report);
   emitGate('release:gate-script-parity', {
     release_gate_count: report.release_gate_count,
-    checked_3110_ids: REQUIRED_3110_RELEASE_IDS.length
+    checked_required_ids: report.checked_required_ids
   });
 }
 
@@ -91,33 +94,38 @@ export function buildReleaseGateScriptParityReport(): ReleaseGateScriptParityRep
   const gates = Array.isArray(manifest.gates) ? manifest.gates : [];
   const gateById = new Map(gates.map((gate) => [gate.id, gate]));
   const releaseGateIds = gates.filter((gate) => gate.preset?.includes('release')).map((gate) => gate.id);
+  const requiredReleaseIds = [...new Set([...REQUIRED_3110_RELEASE_IDS, ...REQUIRED_3112_RELEASE_IDS, 'codex:0140-real-probes'])];
+  const requiredAllIds = [...new Set([...requiredReleaseIds, ...REQUIRED_3112_REAL_CHECK_IDS])];
   const missingScripts = [...new Set([
     ...releaseGateIds.filter((id) => !scripts[id]),
-    ...REQUIRED_3110_RELEASE_IDS.filter((id) => !scripts[id])
+    ...requiredAllIds.filter((id) => !scripts[id])
   ])].sort();
-  const missingGates = REQUIRED_3110_RELEASE_IDS.filter((id) => !gateById.has(id)).sort();
-  const missingReleasePreset = REQUIRED_3110_RELEASE_IDS.filter((id) => !gateById.get(id)?.preset?.includes('release')).sort();
-  const wrongCommands = REQUIRED_3110_RELEASE_IDS
+  const missingGates = requiredAllIds.filter((id) => !gateById.has(id)).sort();
+  const missingReleasePreset = requiredReleaseIds.filter((id) => !gateById.get(id)?.preset?.includes('release')).sort();
+  const missingRealCheckPreset = REQUIRED_3112_REAL_CHECK_IDS.filter((id) => !gateById.get(id)?.preset?.includes('real-check')).sort();
+  const wrongCommands = requiredAllIds
     .map((id) => ({ id, expected: `npm run ${id} --silent`, actual: gateById.get(id)?.command || '' }))
     .filter((row) => row.actual !== row.expected);
-  const missingSourceTargets = REQUIRED_3110_RELEASE_IDS
+  const missingSourceTargets = requiredAllIds
     .map((id) => ({ id, source: sourceTargetForScript(scripts[id]) }))
     .filter((row) => row.source && !fs.existsSync(path.join(root, row.source)))
     .map((row) => row.source as string)
     .sort();
-  const missingDistTargets = REQUIRED_3110_RELEASE_IDS
+  const missingDistTargets = requiredAllIds
     .map((id) => ({ id, dist: distTargetForScript(scripts[id]) }))
-    .filter((row) => row.dist && !fs.existsSync(path.join(root, row.dist)))
+    .filter((row) => row.dist && fs.existsSync(path.join(root, 'dist')) && !fs.existsSync(path.join(root, row.dist)))
     .map((row) => row.dist as string)
     .sort();
   return {
     schema: 'sks.release-gate-script-parity.v1',
-    ok: missingScripts.length === 0 && missingGates.length === 0 && missingReleasePreset.length === 0 && wrongCommands.length === 0 && missingSourceTargets.length === 0 && missingDistTargets.length === 0,
+    ok: missingScripts.length === 0 && missingGates.length === 0 && missingReleasePreset.length === 0 && missingRealCheckPreset.length === 0 && wrongCommands.length === 0 && missingSourceTargets.length === 0 && missingDistTargets.length === 0,
     release_gate_count: releaseGateIds.length,
     package_script_count: Object.keys(scripts).length,
+    checked_required_ids: requiredAllIds.length,
     missing_scripts: missingScripts,
     missing_gates: missingGates,
     missing_release_preset: missingReleasePreset,
+    missing_real_check_preset: missingRealCheckPreset,
     wrong_commands: wrongCommands,
     missing_source_targets: missingSourceTargets,
     missing_dist_targets: missingDistTargets
