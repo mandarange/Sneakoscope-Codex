@@ -101,6 +101,12 @@ const ALLOWLIST: AllowEntry[] = [
     expires: '3.2.0'
   },
   {
+    file: 'src/core/codex/agent-config-file-repair.ts',
+    pattern: /writeTextAtomic|configPath|missingAgentConfigFiles/,
+    reason: 'agent config_file repair rewrites only the project .codex/config.toml agent config_file paths and is covered by doctor/setup secret preservation fixtures',
+    expires: '3.2.0'
+  },
+  {
     file: 'src/core/codex/codex-project-config-policy.ts',
     pattern: /writeTextAtomic|configPath/,
     reason: 'project config policy splitter preserves existing protected config content',

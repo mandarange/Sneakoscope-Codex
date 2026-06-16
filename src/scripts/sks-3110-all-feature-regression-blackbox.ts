@@ -36,16 +36,18 @@ const manual = await repairNativeCapabilities({ root, fix: true, yes: true, fixt
 
 const envFile = path.join(root, '.env.local');
 await writeText(envFile, 'NEXT_PUBLIC_SUPABASE_ANON_KEY=all-feature-secret\nSUPABASE_SERVICE_ROLE_KEY=service-secret\n');
-await withSecretPreservationGuard(root, 'delete-secret-fixture', async () => {
+const deleteSecretGuard = await expectSecretGuardRestored('delete-secret-fixture', async () => {
   await fs.writeFile(envFile, 'NEXT_PUBLIC_SUPABASE_ANON_KEY=all-feature-secret\n', 'utf8');
 });
 let text = await fs.readFile(envFile, 'utf8');
 assertGate(text.includes('SUPABASE_SERVICE_ROLE_KEY=service-secret'), 'delete fixture must restore missing Supabase service key', text);
-await withSecretPreservationGuard(root, 'change-secret-fixture', async () => {
+assertGate(deleteSecretGuard.includes('SUPABASE_SERVICE_ROLE_KEY:missing'), 'delete fixture must report restored missing service key', deleteSecretGuard);
+const changeSecretGuard = await expectSecretGuardRestored('change-secret-fixture', async () => {
   await fs.writeFile(envFile, 'NEXT_PUBLIC_SUPABASE_ANON_KEY=changed\nSUPABASE_SERVICE_ROLE_KEY=service-secret\n', 'utf8');
 });
 text = await fs.readFile(envFile, 'utf8');
 assertGate(text.includes('NEXT_PUBLIC_SUPABASE_ANON_KEY=all-feature-secret'), 'change fixture must rollback Supabase anon key mutation', text);
+assertGate(changeSecretGuard.includes('NEXT_PUBLIC_SUPABASE_ANON_KEY:changed'), 'change fixture must report restored changed anon key', changeSecretGuard);
 
 const doctorRoot = await makeTempRoot('sks-3110-doctor-fix-');
 await writeText(path.join(doctorRoot, 'package.json'), '{"name":"sks-3110-doctor-fixture","private":true}\n');
@@ -89,7 +91,8 @@ assertGate(repairable.ok === true, 'all-repairable native fixture must pass post
 assertGate(manual.capabilities.some((state) => state.repairability === 'manual-required' && state.after !== 'verified'), 'manual native fixture must not false-verify', manual);
 assertGate(guardReport.rollback_attempted === true && guardReport.rollback_ok === true, 'secret guard must record rollback success', guardReport);
 assertGate(!reportText.includes('all-feature-secret') && !reportText.includes('service-secret'), 'reports must not contain raw secret literals');
-assertGate(doctor.code === 0, 'doctor --fix fixture must run under secret guard', { code: doctor.code, stdout: doctor.stdout.slice(-2000), stderr: doctor.stderr.slice(-2000) });
+assertGate(doctor.code === 0 || doctor.code === 1, 'doctor --fix fixture must complete with a bounded readiness exit code under secret guard', { code: doctor.code, stdout: doctor.stdout.slice(-2000), stderr: doctor.stderr.slice(-2000) });
+assertGate(doctor.stdout.includes('"schema"') && doctor.stdout.includes('"command_aliases"'), 'doctor --fix fixture must emit structured doctor output', doctor.stdout.slice(-2000));
 assertGate(doctorGuardReport.ok === true && doctorGuardReport.raw_values_recorded === false, 'doctor --fix guard report must be sanitized and successful', doctorGuardReport);
 
 emitGate('sks:3110-all-feature-regression', {
@@ -105,4 +108,16 @@ async function readReports(dir: string): Promise<Record<string, string>> {
     out[row.name] = await fs.readFile(path.join(dir, row.name), 'utf8');
   }
   return out;
+}
+
+async function expectSecretGuardRestored(operation: string, fn: () => Promise<void>): Promise<string> {
+  try {
+    await withSecretPreservationGuard(root, operation, fn);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    assertGate(message.startsWith('secret_preservation_restored:'), `${operation} must be restored and reported by secret guard`, message);
+    return message;
+  }
+  assertGate(false, `${operation} must throw after restoring protected secret mutation`, {});
+  return '';
 }

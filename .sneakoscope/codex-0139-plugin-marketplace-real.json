@@ -1,7 +1,7 @@
 {
   "schema": "sks.codex-0139-plugin-marketplace-real.v1",
   "ok": true,
-  "generated_at": "2026-06-16T03:05:32.487Z",
+  "generated_at": "2026-06-16T07:24:28.103Z",
   "command_line": [
     "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
     "plugin",
