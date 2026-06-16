@@ -33,6 +33,7 @@ const calls = await readJsonl(path.join(tmp, '.sneakoscope', 'fake-zellij-calls.
 const metrics = await readJsonl(path.join(tmp, '.sneakoscope', 'missions', missionId, 'zellij', 'pane-creation-lock-events.jsonl'))
 const anchorCalls = calls.filter((row) => row.args.includes('--name') && row.args.includes('SLOTS'))
 const stackedCalls = calls.filter((row) => row.args.includes('--stacked'))
+const stackPaneCalls = calls.filter((row) => row.args.includes('stack-panes'))
 const workerArtifacts = await Promise.all(visibleRecords.map((record) => readJson(path.join(tmp, record.worker_artifact_dir, 'zellij-worker-pane.json'))))
 const stackedWorkerArtifacts = workerArtifacts.filter((row) => row.worker_stacked_requested === true)
 const lastPaneCreated = Math.max(...events.filter((event) => event.type === 'zellij_pane_created').map((event) => event.at))
@@ -48,6 +49,7 @@ assertGate(maxActive >= workers, 'worker process execution must not be serialize
 assertGate(pids.size >= workers, 'unique worker process PIDs must reach requested worker count', { pids: pids.size })
 assertGate(wall < 9000, 'openWorkerPane integration wall time must stay below 9s', { wall })
 assertGate(stackedCalls.length >= visible - 1, 'second+ visible workers must request native stacked panes on fake zellij >=0.43', { stackedCalls: stackedCalls.length })
+assertGate(stackPaneCalls.length >= visible - 1, 'second+ visible workers must reconcile native stacked panes with stack-panes', { stackPaneCalls: stackPaneCalls.length })
 assertGate(stackedWorkerArtifacts.length >= visible - 1, 'second+ visible worker artifacts must record stacked requested', workerArtifacts)
 assertGate(stackedWorkerArtifacts.every((row) => row.worker_stacked_applied === true), 'second+ visible worker artifacts must record stacked applied', workerArtifacts)
 
@@ -57,6 +59,7 @@ emitGate('zellij:pane-lock-open-worker-integration', {
   unique_pids: pids.size,
   visible_panes: visibleRecords.length,
   stacked_calls: stackedCalls.length,
+  stack_panes_calls: stackPaneCalls.length,
   pane_lock_metrics: metrics.length
 })
 

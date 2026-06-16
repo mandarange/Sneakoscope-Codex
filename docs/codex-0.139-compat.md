@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 3.1.12 keeps the Codex 0.139 compatibility baseline while closing the MAD Zellij stack reconciliation gate and the `doctor --fix` `node_repl` parent/child MCP repair gap.
+
 SKS 3.1.11 keeps the Codex 0.139 compatibility baseline while closing the MAD Zellij stacked-pane minimum, Context7 MCP remote repair, and stale Codex startup config repair gates.
 
 SKS 3.1.10 keeps the Codex 0.139 compatibility baseline while closing the release-ready hardening gates for wiring parity, native capability postchecks, duplicate skill proof, and secret rollback.

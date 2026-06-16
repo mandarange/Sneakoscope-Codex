@@ -24,11 +24,11 @@ const localBlock = [
   'command = "npx"',
   'args = ["-y", "@upstash/context7-mcp@latest"]',
   '',
-  '[mcp_servers.context7.env]',
-  'CONTEXT7_API_KEY = "fixture"',
-  '',
   '[features]',
   'hooks = true',
+  '',
+  '[mcp_servers.context7.env]',
+  'CONTEXT7_API_KEY = "fixture"',
   ''
 ].join('\n')
 await writeTextAtomic(path.join(tmp, '.codex', 'config.toml'), localBlock)

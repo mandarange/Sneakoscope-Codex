@@ -460,6 +460,20 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   const stdoutPaneId = launch?.ok ? extractZellijPaneIdFromOutput(launch.stdout_tail) : null
   const reconciledPane = stdoutPaneId ? null : launch?.ok ? await reconcileZellijWorkerPaneId(input.sessionName, paneName, path.join(root, input.resultPath), cwd) : null
   const paneId = stdoutPaneId || reconciledPane?.pane_id || null
+  const stackPaneIds = [...new Set([
+    ...(freshState?.visible_worker_panes || [])
+      .filter((pane) => pane.pane_id && (pane.status === 'launching' || pane.status === 'running'))
+      .sort((a, b) => Number(a.y_order || 0) - Number(b.y_order || 0))
+      .map((pane) => String(pane.pane_id)),
+    paneId || ''
+  ].filter(Boolean))]
+  const stackPanes = stackRequested && paneId && stackPaneIds.length >= 2
+    ? await runZellij(['--session', input.sessionName, 'action', 'stack-panes', '--', ...stackPaneIds], {
+        cwd,
+        timeoutMs: 5000,
+        optional: true
+      })
+    : null
   const renamePane = paneId ? await renameZellijPaneById(input.sessionName, paneId, paneName, cwd) : null
   const paneIdSource: ZellijWorkerPaneIdSource = stdoutPaneId
     ? 'zellij_worker_new_pane_stdout'
@@ -478,7 +492,8 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   ]
   const warnings = [
     ...(stackIntent && stackedCapability && !stackedCapability.supports_stacked_panes ? [`zellij_stacked_pane_fallback:${stackedCapability.fallback_mode}`] : []),
-    ...(stackedRejectedFallback ? ['zellij_stacked_pane_rejected_fallback_down'] : [])
+    ...(stackedRejectedFallback ? ['zellij_stacked_pane_rejected_fallback_down'] : []),
+    ...(stackPanes && !stackPanes.ok ? stackPanes.blockers.map((blocker) => `zellij_stack_panes_reconcile_${blocker}`) : [])
   ]
   const record = buildWorkerPaneArtifact({
     ...input,
@@ -492,7 +507,9 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
       focus_degraded: focus ? focus.ok !== true : false,
       slot_column_anchor_pane_id: slotColumnAnchorPaneId,
       slot_column_anchor_launch: anchorLaunch,
-      rename_pane: renamePane
+      rename_pane: renamePane,
+      stack_panes: stackPanes,
+      stack_pane_ids: stackPaneIds
     },
     directionRequested,
     directionApplied,

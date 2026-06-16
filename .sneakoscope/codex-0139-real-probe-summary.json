@@ -3,7 +3,7 @@
   "ok": false,
   "require_real": false,
   "codex_bin": "/Users/weklem/.nvm/versions/node/v24.0.2/bin/codex",
-  "parsed_version": "0.139.0",
+  "parsed_version": "0.140.0",
   "actual_cli_probe_count": 7,
   "actual_sdk_probe_count": 0,
   "actual_app_server_probe_count": 0,

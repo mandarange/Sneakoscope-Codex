@@ -15,7 +15,7 @@ export interface DoctorContext7RepairResult {
     scope: 'project' | 'global'
     path: string
     present: boolean
-    status: 'missing' | 'already_remote' | 'local_stdio_detected' | 'repaired_to_remote' | 'blocked'
+    status: 'missing' | 'already_remote' | 'remote_child_env_detected' | 'local_stdio_detected' | 'repaired_to_remote' | 'blocked'
     changed: boolean
     backup_path: string | null
     warnings: string[]
@@ -76,6 +76,26 @@ async function inspectOrRepairContext7Config(candidate: { scope: 'project' | 'gl
   const block = context7Block(text)
   if (!block) return baseConfig(candidate, { present: true, status: 'missing' })
   if (/\burl\s*=\s*["']https:\/\/mcp\.context7\.com\/mcp["']/.test(block.text)) {
+    const childBlocks = context7ChildBlocks(text)
+    if (childBlocks.length) {
+      if (!fix) {
+        return baseConfig(candidate, {
+          present: true,
+          status: 'remote_child_env_detected',
+          warnings: ['remote_context7_child_env_unsupported_by_streamable_http']
+        })
+      }
+      const next = removeBlocks(text, childBlocks).replace(/\s*$/, '\n')
+      const backupPath = await backupConfig(candidate.path, text)
+      await writeTextAtomic(candidate.path, next)
+      return baseConfig(candidate, {
+        present: true,
+        status: 'repaired_to_remote',
+        changed: true,
+        backup_path: backupPath,
+        warnings: ['remote_context7_child_env_removed']
+      })
+    }
     return baseConfig(candidate, { present: true, status: 'already_remote' })
   }
   const localStdio = /@upstash\/context7-mcp|context7-mcp|command\s*=\s*["']npx(?:\s|["'])/i.test(block.text)
@@ -95,7 +115,8 @@ async function inspectOrRepairContext7Config(candidate: { scope: 'project' | 'gl
     })
   }
   const remoteBlock = `[mcp_servers.context7]\nurl = "${CONTEXT7_REMOTE_URL}"\n`
-  const next = `${text.slice(0, block.start).trimEnd()}${block.start > 0 ? '\n\n' : ''}${remoteBlock}${text.slice(block.end).replace(/^\n+/, '\n')}`.replace(/\s*$/, '\n')
+  const withRemote = `${text.slice(0, block.start).trimEnd()}${block.start > 0 ? '\n\n' : ''}${remoteBlock}${text.slice(block.end).replace(/^\n+/, '\n')}`.replace(/\s*$/, '\n')
+  const next = removeBlocks(withRemote, context7ChildBlocks(withRemote)).replace(/\s*$/, '\n')
   const backupPath = await backupConfig(candidate.path, text)
   await writeTextAtomic(candidate.path, next)
   return baseConfig(candidate, {
@@ -105,6 +126,26 @@ async function inspectOrRepairContext7Config(candidate: { scope: 'project' | 'gl
     backup_path: backupPath,
     warnings: ['local_stdio_context7_replaced_with_remote_mcp']
   })
+}
+
+function context7ChildBlocks(text: string): Array<{ start: number; end: number; text: string }> {
+  const blocks: Array<{ start: number; end: number; text: string }> = []
+  const header = /(^|\n)\s*\[mcp_servers\.context7\.[^\]]+\]\s*(?:#.*)?(?:\n|$)/g
+  let match: RegExpExecArray | null
+  while ((match = header.exec(text))) {
+    const start = match.index + (match[1] ? 1 : 0)
+    const rest = text.slice(header.lastIndex)
+    const nextHeader = rest.search(/\n\s*\[[^\]]+\]\s*(?:#.*)?(?:\n|$)/)
+    const end = nextHeader >= 0 ? header.lastIndex + nextHeader : text.length
+    blocks.push({ start, end, text: text.slice(start, end) })
+  }
+  return blocks
+}
+
+function removeBlocks(text: string, blocks: Array<{ start: number; end: number }>): string {
+  return [...blocks]
+    .sort((a, b) => b.start - a.start)
+    .reduce((current, block) => `${current.slice(0, block.start).trimEnd()}${block.start > 0 ? '\n\n' : ''}${current.slice(block.end).replace(/^\n+/, '')}`, text)
 }
 
 function context7Block(text: string): { start: number; end: number; text: string } | null {
