@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 3.1.14 keeps the Codex 0.139 compatibility baseline while aligning the post-3.1.13 release metadata, built output, and npm unpublished-version gate for the next patch publication.
+
 SKS 3.1.13 keeps the Codex 0.139 compatibility baseline while hardening Codex 0.140 feature-state certainty, real usage parsing, goal attachment roundtrip proof, doctor transaction evidence, MCP repair reports, native capability proof, and secret line rollback. See [Codex 0.140 Integration](codex-0140-integration.md) for the 0.140 probe and release wiring surface.
 
 SKS 3.1.12 keeps the Codex 0.139 compatibility baseline while adding Codex 0.140 capability/integration detection gates, closing the MAD Zellij stack reconciliation gate, and closing the `doctor --fix` `node_repl` parent/child MCP repair gap.

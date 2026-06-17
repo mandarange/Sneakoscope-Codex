@@ -615,7 +615,7 @@
     },
     {
       "file": "src/core/agents/agent-cleanup-executor.ts",
-      "symbol": "runAgentCleanupExecutor",
+      "symbol": "headlessActive",
       "token": "fsp.rm",
       "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
     },

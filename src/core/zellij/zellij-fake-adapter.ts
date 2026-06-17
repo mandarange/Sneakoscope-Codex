@@ -33,8 +33,13 @@ export async function runFakeZellij(args: readonly string[] = [], opts: {
   if (args.length === 1 && args[0] === '--version') {
     result = ok(`zellij ${version}\n`)
   } else if (args[0] === 'attach' && args[1] === '--create-background') {
-    getSession(String(args[2] || 'default'))
-    result = ok('')
+    const name = String(args[2] || 'default')
+    if (env.SKS_ZELLIJ_FAKE_CREATE_BACKGROUND_EXISTS === '1' && sessions.has(name)) {
+      result = fail(`Session already exists: ${name}`)
+    } else {
+      getSession(name)
+      result = ok('')
+    }
   } else if (args.includes('new-pane')) {
     if (args.includes('--stacked') && !supportsStacked(version)) {
       result = fail('unknown option --stacked')
