@@ -13,8 +13,12 @@ test('publish lifecycle requires the full release stamp for publish readiness', 
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
   assert.equal(scripts.prepack, 'npm run build');
+  assert.equal(scripts.check, 'npm run release:check:confidence');
+  assert.match(scripts['build:incremental'], /tsc -p tsconfig\.json/);
   assert.equal(scripts['release:check'], 'npm run release:check:affected');
   assert.match(scripts['release:check:affected'], /--preset affected/);
+  assert.match(scripts['release:check:affected'], /build:incremental/);
+  assert.match(scripts['release:check:confidence'], /--sla 5m/);
   assert.match(scripts['release:check:full'], /--preset release --full/);
   assert.match(scripts['release:check:full'], /release-check-stamp\.js write/);
   assert.match(scripts.prepublishOnly, /prepublish-release-check-or-fast\.js/);

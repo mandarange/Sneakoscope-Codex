@@ -10,6 +10,9 @@ const runs = fs.existsSync(reports)
   : []
 const latest = runs.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0]
 const summary = latest ? JSON.parse(fs.readFileSync(latest, 'utf8')) : null
+const certificatePath = latest ? path.join(path.dirname(latest), 'completion-certificate.json') : null
+const certificate = certificatePath && fs.existsSync(certificatePath) ? JSON.parse(fs.readFileSync(certificatePath, 'utf8')) : summary?.completion_certificate || null
+const affectedGraphPath = latest ? path.join(path.dirname(latest), 'affected-gate-graph.json') : null
 const mode = summary?.affected_selection?.mode || summary?.selected_preset || (summary?.full === true ? 'full' : 'unknown')
 const affectedMode = mode === 'affected'
 const latestRuntimeProof = latestRuntimeProofSummaryPath()
@@ -26,6 +29,12 @@ console.log(JSON.stringify({
   skipped_gate_ids: summary?.skipped_by_affected || [],
   cached: summary?.cached || 0,
   cached_gates: summary?.cached_gates || [],
+  proof_bank_file: certificate?.proof_bank_file || path.join(root, '.sneakoscope', 'proof-bank', 'gates', 'cache-v2.json'),
+  completion_certificate: certificate,
+  affected_graph_file: affectedGraphPath && fs.existsSync(affectedGraphPath) ? affectedGraphPath : null,
+  reused_proofs: certificate?.reused_proofs || summary?.cached || 0,
+  newly_executed_gates: certificate?.newly_executed_gates || summary?.executed_gates?.length || 0,
+  five_minute_sla_met: certificate?.sla_met ?? null,
   version_neutralized_inputs: [
     'package.json:version',
     'package-lock.json:root.version',

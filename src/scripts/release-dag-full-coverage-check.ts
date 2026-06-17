@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 import { REQUIRED_3113_REAL_CHECK_IDS, REQUIRED_3113_RELEASE_IDS } from './release-3113-required-gates.js'
+import { REQUIRED_4000_REAL_CHECK_IDS, REQUIRED_4000_RELEASE_IDS } from './release-4000-required-gates.js'
 
 interface PackageJsonShape {
   scripts?: Record<string, string>
@@ -354,7 +355,8 @@ const requiredReleasePresetIds = [
   'doctor:supabase-mcp-repair',
   'doctor:supabase-mcp-repair-blackbox',
   'sks:3112-all-feature-regression',
-  ...REQUIRED_3113_RELEASE_IDS
+  ...REQUIRED_3113_RELEASE_IDS,
+  ...REQUIRED_4000_RELEASE_IDS
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',
@@ -368,7 +370,8 @@ const requiredRealCheckPresetIds = [
   'codex:0139-image-path-real',
   'codex:0139-sandbox-proxy-real',
   'codex:0140-real-probes:require-real',
-  ...REQUIRED_3113_REAL_CHECK_IDS
+  ...REQUIRED_3113_REAL_CHECK_IDS,
+  ...REQUIRED_4000_REAL_CHECK_IDS
 ]
 const missing = legacyIds.filter((id: string) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id: string) => !gateIds.has(id) || !releasePresetIds.has(id))

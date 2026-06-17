@@ -9,11 +9,14 @@ const presetIndex = args.indexOf('--preset')
 const preset = presetIndex >= 0 ? args[presetIndex + 1] : 'release'
 const changedSinceIndex = args.indexOf('--changed-since')
 const changedSince = changedSinceIndex >= 0 ? (args[changedSinceIndex + 1] || null) : null
+const slaIndex = args.indexOf('--sla')
+const slaMs = slaIndex >= 0 ? parseDurationMs(args[slaIndex + 1] || '') : null
 
 const result = await runReleaseGateDag({
   root,
   ...(preset === undefined ? {} : { preset }),
   changedSince,
+  slaMs,
   full: args.includes('--full'),
   explain: args.includes('--explain'),
   noCache: args.includes('--no-cache'),
@@ -30,6 +33,7 @@ console.log(`SKS Release DAG
   parallelism_gain: ${result.parallelism_gain}
   cpu_time_saved: ${(result.cpu_time_saved_ms / 1000).toFixed(1)}s
   critical_path: ${(result.critical_path_ms / 1000).toFixed(1)}s
+  certificate: ${result.completion_certificate.confidence} sla=${(result.completion_certificate.sla_ms / 1000).toFixed(0)}s met=${result.completion_certificate.sla_met}
   report: ${result.report_dir}`)
 
 if (!result.ok) {
@@ -37,4 +41,15 @@ if (!result.ok) {
     console.error(`[fail] ${failure.id} exit=${failure.exit_code}\n${failure.stderr_tail}`)
   }
   process.exit(1)
+}
+
+function parseDurationMs(value: string): number | null {
+  const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)(ms|s|m)?$/i)
+  if (!match) return null
+  const amount = Number(match[1])
+  const unit = (match[2] || 'ms').toLowerCase()
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  if (unit === 'm') return Math.floor(amount * 60_000)
+  if (unit === 's') return Math.floor(amount * 1000)
+  return Math.floor(amount)
 }

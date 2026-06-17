@@ -16,6 +16,8 @@
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": "src",
+    "incremental": true,
+    "tsBuildInfoFile": ".sneakoscope/cache/tsbuildinfo/tsconfig.tsbuildinfo",
     "skipLibCheck": false
   },
   "include": ["src/**/*.ts"],

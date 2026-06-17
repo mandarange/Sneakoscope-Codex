@@ -3,6 +3,9 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import type { ReleaseGateNode } from './release-gate-node.js'
 import { normalizeReleaseCacheInputForBehavior } from './release-cache-key.js'
+import { computeTriWikiCacheKey } from '../triwiki/triwiki-cache-key.js'
+import { createTriWikiProofCard } from '../triwiki/triwiki-proof-card.js'
+import { readReusableTriWikiProofCard, writeTriWikiProofCard } from '../triwiki/triwiki-proof-bank.js'
 
 export const RELEASE_GATE_CACHE_V2_SCHEMA = 'sks.release-gate-cache.v2'
 
@@ -18,6 +21,10 @@ export interface ReleaseGateCacheV2Record {
 
 export function releaseGateCacheFile(root: string): string {
   return path.join(root, '.sneakoscope', 'reports', 'release-gates', 'cache-v2.json')
+}
+
+export function releaseGateProofBankFile(root: string): string {
+  return path.join(root, '.sneakoscope', 'proof-bank', 'gates', 'cache-v2.json')
 }
 
 // Files whose only release-to-release difference is the version literal.
@@ -127,10 +134,22 @@ export function readReleaseGateCacheHit(root: string, gate: ReleaseGateNode): bo
 }
 
 export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode): ReleaseGateCacheV2Record | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(releaseGateCacheFile(root), 'utf8'))
-    const record = parsed.schema === RELEASE_GATE_CACHE_V2_SCHEMA ? parsed.records?.[releaseGateCacheKey(root, gate)] : null
-    if (record?.ok !== true) return null
+  const key = releaseGateCacheKey(root, gate)
+  const proof = readReusableTriWikiProofCard({ root, subjectId: gate.id, cacheKey: key })
+  if (proof.hit && proof.card) {
+    return {
+      ok: true,
+      gate_id: gate.id,
+      command: gate.command,
+      resource: gate.resource,
+      preset: gate.preset,
+      duration_ms: Math.max(0, Math.floor(Number(proof.card.duration_ms) || 0)),
+      recorded_at: proof.card.created_at
+    }
+  }
+  for (const file of [releaseGateProofBankFile(root), releaseGateCacheFile(root)]) {
+    const record = readCacheRecord(file, key)
+    if (!record || record.ok !== true) continue
     return {
       ok: true,
       gate_id: String(record.gate_id || gate.id),
@@ -140,20 +159,13 @@ export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode):
       duration_ms: Math.max(0, Math.floor(Number(record.duration_ms) || 0)),
       recorded_at: String(record.recorded_at || '')
     }
-  } catch {
-    return null
   }
+  return null
 }
 
 export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, durationMs = 0): void {
-  const file = releaseGateCacheFile(root)
-  let parsed: any = { schema: RELEASE_GATE_CACHE_V2_SCHEMA, records: {} }
-  try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
-  } catch {}
-  parsed.schema = RELEASE_GATE_CACHE_V2_SCHEMA
-  parsed.records ||= {}
-  parsed.records[releaseGateCacheKey(root, gate)] = {
+  const key = releaseGateCacheKey(root, gate)
+  const record = {
     ok: true,
     gate_id: gate.id,
     command: gate.command,
@@ -162,6 +174,54 @@ export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, du
     duration_ms: Math.max(0, Math.floor(Number(durationMs) || 0)),
     recorded_at: new Date().toISOString()
   }
+  writeCacheRecord(releaseGateCacheFile(root), key, record)
+  writeCacheRecord(releaseGateProofBankFile(root), key, record)
+  const triKey = computeTriWikiCacheKey({
+    root,
+    id: gate.id,
+    inputs: gate.cache.inputs,
+    implementationFiles: ['release-gates.v2.json', `src/scripts/${gate.id.replace(/[:]/g, '-')}-check.ts`],
+    envAllowlist: ['CI', 'SKS_FAST_MODE', 'SKS_RELEASE_PRESET'],
+    fixtureVersion: 'sks-4.0.0',
+    salt: key
+  })
+  writeTriWikiProofCard(root, createTriWikiProofCard({
+    subject_type: 'gate',
+    subject_id: gate.id,
+    cache_key: key,
+    input_hash: triKey.input_hash,
+    implementation_hash: triKey.implementation_hash,
+    tool_version: triKey.tool_version,
+    fixture_version: triKey.fixture_version,
+    result: 'passed',
+    reusable: true,
+    duration_ms: Math.max(0, Math.floor(Number(durationMs) || 0)),
+    evidence: {
+      command: gate.command,
+      cache_key_schema: 'release-cache-v2-compatible',
+      triwiki_key: triKey.key
+    },
+    invalidation_reasons: []
+  }))
+}
+
+function readCacheRecord(file: string, key: string): any | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    return parsed.schema === RELEASE_GATE_CACHE_V2_SCHEMA ? parsed.records?.[key] || null : null
+  } catch {
+    return null
+  }
+}
+
+function writeCacheRecord(file: string, key: string, record: ReleaseGateCacheV2Record): void {
+  let parsed: any = { schema: RELEASE_GATE_CACHE_V2_SCHEMA, records: {} }
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {}
+  parsed.schema = RELEASE_GATE_CACHE_V2_SCHEMA
+  parsed.records ||= {}
+  parsed.records[key] = record
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
 }

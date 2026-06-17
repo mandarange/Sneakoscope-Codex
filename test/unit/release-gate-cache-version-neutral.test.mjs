@@ -3,7 +3,13 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { releaseGateCacheKey } from '../../dist/core/release/release-gate-cache-v2.js'
+import {
+  readReleaseGateCacheRecord,
+  releaseGateCacheFile,
+  releaseGateCacheKey,
+  releaseGateProofBankFile,
+  writeReleaseGateCacheHit
+} from '../../dist/core/release/release-gate-cache-v2.js'
 
 function fixtureRoot(version) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-cache-vn-'))
@@ -82,4 +88,17 @@ test('gates without declared inputs stay conservatively version-sensitive', () =
   bump(root, '1.0.0', '1.0.1')
   const after = releaseGateCacheKey(root, inputless)
   assert.notEqual(before, after, 'input-less gates must fall back to global digests')
+})
+
+test('successful gate proof is mirrored into the proof bank cache', () => {
+  const root = fixtureRoot('1.0.0')
+  writeReleaseGateCacheHit(root, gate, 4321)
+  assert.equal(fs.existsSync(releaseGateCacheFile(root)), true)
+  assert.equal(fs.existsSync(releaseGateProofBankFile(root)), true)
+
+  fs.rmSync(releaseGateCacheFile(root), { force: true })
+  const hit = readReleaseGateCacheRecord(root, gate)
+  assert.equal(hit?.ok, true)
+  assert.equal(hit?.gate_id, gate.id)
+  assert.equal(hit?.duration_ms, 4321)
 })

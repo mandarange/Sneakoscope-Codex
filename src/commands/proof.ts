@@ -9,11 +9,18 @@ import { finalizeRouteWithProof } from '../core/proof/route-finalizer.js';
 import { renderProofMarkdown, writeCompletionProof } from '../core/proof/proof-writer.js';
 import { validateCompletionProof } from '../core/proof/validation.js';
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../core/agents/runtime-proof-summary.js';
+import { summarizeTriWikiProofBank } from '../core/triwiki/triwiki-proof-bank.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'show';
   const rest = args.slice(1);
+  if (action === 'bank' && rest[0] === 'status') {
+    const status = summarizeTriWikiProofBank(root);
+    if (flag(args, '--json')) return printJson(status);
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
   if (action === 'latest' && !flag(args, '--completion')) {
     const runtime = await tryRuntimeProofSummary(root);
     if (runtime) {

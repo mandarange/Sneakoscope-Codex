@@ -35,6 +35,7 @@ import { repairCodexStartupConfig } from '../core/doctor/codex-startup-config-re
 import { repairContext7Mcp } from '../core/doctor/context7-mcp-repair.js';
 import { repairSupabaseMcp } from '../core/doctor/supabase-mcp-repair.js';
 import { runDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
+import { planDoctorDirtyRepair } from '../core/doctor/doctor-dirty-planner.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 
@@ -286,9 +287,22 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         raw_secret_values_recorded: false
       }))
     : null;
+  const doctorDirtyPlan = doctorFix
+    ? planDoctorDirtyRepair(root, [
+        'setup',
+        'codex_startup_repair',
+        'startup_config_repair',
+        'context7_repair',
+        'context7_mcp_repair',
+        'supabase_mcp_repair',
+        'command_alias_cleanup',
+        'native_capability_repair'
+      ])
+    : null;
   const doctorFixTransaction = doctorFix
     ? await runDoctorFixTransaction({
         root,
+        dirtyPlan: doctorDirtyPlan,
         phases: [
           {
             id: 'setup',
@@ -487,6 +501,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     context7_mcp_repair: context7McpRepair,
     supabase_mcp_repair: supabaseMcpRepair,
     doctor_fix_transaction: doctorFixTransaction,
+    doctor_dirty_plan: doctorDirtyPlan,
     doctor_fix_postcheck: doctorFixPostcheck,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
@@ -553,7 +568,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, doctor_transaction: doctorFixTransaction, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
   };
   if (flag(args, '--json')) {
     printJson(result);
