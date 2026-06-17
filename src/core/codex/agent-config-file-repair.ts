@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { managedAgentRoleConfigForFile, managedAgentRoleConfigForRole } from '../agents/agent-role-config.js';
 
 export interface AgentConfigFileRepairReport {
   schema: 'sks.agent-config-file-repair.v1';
@@ -11,6 +12,8 @@ export interface AgentConfigFileRepairReport {
   repaired_paths: string[];
   created_files: string[];
   removed_unsupported_fields: string[];
+  skipped_unmanaged_paths: string[];
+  manual_required: boolean;
   blockers: string[];
 }
 
@@ -21,27 +24,40 @@ export async function repairAgentConfigFileReferences(input: { root: string; app
   const createdFiles: string[] = [];
   const repairedPaths: string[] = [];
   const removedUnsupportedFields: string[] = [];
-  let text = original.replace(/^\s*message_role_prefix\s*=.*$/gm, (line) => {
-    removedUnsupportedFields.push(line.trim());
-    return '';
-  });
-  text = text.replace(/config_file\s*=\s*"([^"]+)"/g, (_match, value: string) => {
-    const absolute = path.isAbsolute(value) ? value : path.join(root, value);
-    repairedPaths.push(absolute);
-    return `config_file = "${absolute}"`;
-  });
-  if (input.apply && text !== original) {
-    for (const file of repairedPaths) {
-      const exists = await fs.stat(file).then((stat) => stat.isFile()).catch(() => false);
+  const skippedUnmanagedPaths: string[] = [];
+  const edits: Array<{ start: number; end: number; replacement: string }> = [];
+  let text = original;
+  for (const block of tomlBlocks(original)) {
+    const managed = managedBlockTarget(root, block);
+    const currentConfigFile = stringValue(block.text, 'config_file');
+    if (!managed) {
+      if (currentConfigFile && !path.isAbsolute(currentConfigFile)) skippedUnmanagedPaths.push(currentConfigFile);
+      continue;
+    }
+    const target = path.join(root, '.codex', 'agents', managed.file);
+    let replacement = removeKey(block.text, 'message_role_prefix', removedUnsupportedFields);
+    replacement = replaceOrInsertKey(replacement, 'config_file', `"${escapeToml(target)}"`);
+    if (replacement !== block.text) {
+      edits.push({ start: block.start, end: block.end, replacement });
+      repairedPaths.push(target);
+    }
+    if (input.apply) {
+      const exists = await fs.stat(target).then((stat) => stat.isFile()).catch(() => false);
       if (!exists) {
-        await ensureDir(path.dirname(file));
-        await writeTextAtomic(file, '# SKS managed agent config placeholder\n');
-        createdFiles.push(file);
+        await ensureDir(path.dirname(target));
+        await writeTextAtomic(target, managed.content);
+        createdFiles.push(target);
       }
     }
-    await writeTextAtomic(configPath, text);
   }
-  const missing = await missingAgentConfigFiles(text);
+  if (edits.length) text = applyEdits(original, edits);
+  if (input.apply && text !== original) {
+    await writeTextAtomic(configPath, text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n'));
+  }
+  const effectiveText = input.apply ? await fs.readFile(configPath, 'utf8').catch(() => text) : text;
+  const missing = await missingAgentConfigFiles(effectiveText);
+  const unsupportedManagedFields = managedAgentBlocks(effectiveText)
+    .flatMap((block) => block.text.split(/\r?\n/).filter((line) => /^\s*message_role_prefix\s*=/.test(line)));
   const report: AgentConfigFileRepairReport = {
     schema: 'sks.agent-config-file-repair.v1',
     generated_at: nowIso(),
@@ -51,14 +67,22 @@ export async function repairAgentConfigFileReferences(input: { root: string; app
     repaired_paths: repairedPaths,
     created_files: createdFiles,
     removed_unsupported_fields: removedUnsupportedFields,
-    blockers: missing.map((file) => `missing_agent_config_file:${file}`)
+    skipped_unmanaged_paths: skippedUnmanagedPaths,
+    manual_required: skippedUnmanagedPaths.length > 0,
+    blockers: [
+      ...missing.map((file) => `missing_agent_config_file:${file}`),
+      ...unsupportedManagedFields.map(() => 'unsupported_message_role_prefix_field')
+    ]
   };
+  report.ok = report.blockers.length === 0;
   if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json'), report).catch(() => undefined);
   return report;
 }
 
 export async function missingAgentConfigFiles(text: string): Promise<string[]> {
-  const rows = [...String(text || '').matchAll(/config_file\s*=\s*"([^"]+)"/g)].map((match) => match[1]).filter((file): file is string => Boolean(file));
+  const rows = managedAgentBlocks(text)
+    .map((block) => stringValue(block.text, 'config_file'))
+    .filter((file): file is string => Boolean(file));
   const missing: string[] = [];
   for (const file of rows) {
     if (!path.isAbsolute(file)) {
@@ -69,4 +93,85 @@ export async function missingAgentConfigFiles(text: string): Promise<string[]> {
     if (!ok) missing.push(file);
   }
   return missing;
+}
+
+interface TomlBlock {
+  header: string;
+  start: number;
+  end: number;
+  text: string;
+}
+
+function tomlBlocks(text: string): TomlBlock[] {
+  const source = String(text || '');
+  const matches = [...source.matchAll(/(^|\n)\s*\[([^\]]+)\]\s*(?:#.*)?(?:\n|$)/g)];
+  return matches.map((match, index) => {
+    const start = Number(match.index || 0) + (match[1] ? 1 : 0);
+    const next = matches[index + 1];
+    const end = next ? Number(next.index || 0) + (next[1] ? 1 : 0) : source.length;
+    return {
+      header: String(match[2] || '').trim(),
+      start,
+      end,
+      text: source.slice(start, end)
+    };
+  });
+}
+
+function managedAgentBlocks(text: string): TomlBlock[] {
+  return tomlBlocks(text).filter((block) => Boolean(managedBlockTarget(process.cwd(), block)));
+}
+
+function managedBlockTarget(root: string, block: TomlBlock): { file: string; content: string } | null {
+  if (!block.header.startsWith('agents.')) return null;
+  const role = block.header.slice('agents.'.length);
+  const byRole = managedAgentRoleConfigForRole(role);
+  if (byRole) return byRole;
+  const configFile = stringValue(block.text, 'config_file');
+  if (configFile) {
+    const content = managedAgentRoleConfigForFile(configFile);
+    if (content) return { file: path.basename(configFile), content };
+  }
+  if (/SKS managed|sks_/i.test(block.text)) {
+    const fallback = managedAgentRoleConfigForRole(role);
+    if (fallback) return fallback;
+  }
+  void root;
+  return null;
+}
+
+function stringValue(text: string, key: string): string | null {
+  const match = text.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"`, 'm'));
+  return match && typeof match[1] === 'string' ? match[1] : null;
+}
+
+function removeKey(text: string, key: string, removed: string[]): string {
+  return text.split(/\r?\n/).filter((line) => {
+    const match = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(line);
+    if (match) removed.push(line.trim());
+    return !match;
+  }).join('\n');
+}
+
+function replaceOrInsertKey(text: string, key: string, encodedValue: string): string {
+  const lines = text.replace(/\s*$/, '').split('\n');
+  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  const index = lines.findIndex((line) => re.test(line));
+  if (index >= 0) lines[index] = `${key} = ${encodedValue}`;
+  else lines.push(`${key} = ${encodedValue}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function applyEdits(text: string, edits: Array<{ start: number; end: number; replacement: string }>): string {
+  return [...edits]
+    .sort((a, b) => b.start - a.start)
+    .reduce((current, edit) => `${current.slice(0, edit.start)}${edit.replacement}${current.slice(edit.end)}`, text);
+}
+
+function escapeToml(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

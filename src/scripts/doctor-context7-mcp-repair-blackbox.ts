@@ -12,5 +12,5 @@ const text = await fs.readFile(configPath, 'utf8');
 assertGate(repaired.ok === true && text.includes('https://mcp.context7.com/mcp'), 'Context7 blackbox must write remote URL', { repaired, text });
 await writeText(configPath, '[mcp_servers.context7]\ndisabled = true\ncommand = "npx"\n');
 const disabled = await repairContext7Mcp({ root, apply: true });
-assertGate(disabled.after_transport === 'disabled' && disabled.repaired === false, 'Context7 blackbox must preserve explicitly disabled server', disabled);
+assertGate(disabled.after_transport === 'disabled' && disabled.repaired === false && disabled.disabled_preserved === true, 'Context7 blackbox must preserve explicitly disabled server', disabled);
 emitGate('doctor:context7-mcp-repair-blackbox');

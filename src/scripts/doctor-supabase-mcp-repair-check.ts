@@ -7,5 +7,6 @@ const root = await makeTempRoot('sks-supabase-mcp-');
 delete process.env.SUPABASE_ACCESS_TOKEN;
 await writeText(path.join(root, '.codex', 'config.toml'), '[mcp_servers.supabase]\nurl = "https://supabase.example/mcp"\nread_only = true\n');
 const report = await repairSupabaseMcp({ root, apply: true });
-assertGate(report.ok === true && report.manual_required === true && report.raw_secret_values_recorded === false, 'Supabase MCP repair must mark unset token as manual for write features without blocking read-only readiness', report);
+assertGate(report.ok === true && report.manual_required === true && report.ready_blocking === false && report.raw_secret_values_recorded === false, 'Supabase MCP repair must mark unset token as manual for write features without blocking read-only readiness', report);
+assertGate(report.disabled_preserved === false && report.write_scope_requires_confirmation === false, 'Supabase MCP read-only config must not require write confirmation', report);
 emitGate('doctor:supabase-mcp-repair');

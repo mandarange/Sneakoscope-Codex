@@ -3,6 +3,22 @@
 ## [Unreleased]
 
 
+
+## [3.1.13] - 2026-06-16
+
+### Added
+
+- Codex 0.140 deep probe evidence now records feature states, certainty, real usage parsing, goal attachment roundtrip proof, and usage-budget provenance in Naruto loop artifacts.
+- 3.1.13 release wiring adds dedicated doctor transaction, secret line rollback, Codex 0.140 deep probe, and all-feature regression gates.
+
+### Fixed
+
+- `sks doctor --fix` uses a phase transaction runner with per-phase duration, postcheck, optional-manual readiness handling, and rollback evidence.
+- Startup config repair now mutates only managed `[agents.*]` TOML blocks, recreates real managed role configs instead of placeholders, and postchecks TOML syntax plus orphan MCP child tables.
+- Context7 and Supabase MCP repair reports preserve disabled servers, record remote/read-only readiness fields, and separate write-scope confirmation from read-only readiness.
+- Secret preservation rollback restores changed protected assignment lines when possible, preserves unrelated operator edits, records nested guard operations, and keeps secret backups out of git.
+- Native capability postchecks no longer treat environment variables as real Computer Use or Chrome extension proof outside explicit fixture/test modes.
+
 ## [3.1.12] - 2026-06-16
 
 ### Added

@@ -62,7 +62,7 @@ async function postcheckImageFollowupEdit(root: string, state: NativeCapabilityR
 }
 
 function postcheckComputerUse(state: NativeCapabilityRepairState, _fixture: FixtureMode): NativeCapabilityRepairState {
-  if (process.env.SKS_COMPUTER_USE_CAPABILITY === 'verified') return verified(state);
+  if (syntheticNativeVerificationAllowed(_fixture) && process.env.SKS_COMPUTER_USE_CAPABILITY === 'verified') return verified(state);
   return {
     ...state,
     after: 'unknown',
@@ -72,13 +72,17 @@ function postcheckComputerUse(state: NativeCapabilityRepairState, _fixture: Fixt
 }
 
 function postcheckChromeWebReview(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
-  if (fixture === 'all-repairable' || process.env.SKS_CHROME_EXTENSION_READY === '1') return verified(state);
+  if (fixture === 'all-repairable' || (syntheticNativeVerificationAllowed(fixture) && process.env.SKS_CHROME_EXTENSION_READY === '1')) return verified(state);
   return {
     ...state,
     after: 'unknown',
     blockers: ['codex_chrome_extension_readiness_not_verified'],
     warnings: [...new Set([...state.warnings, 'manual_chrome_extension_setup_required'])]
   };
+}
+
+function syntheticNativeVerificationAllowed(fixture: FixtureMode): boolean {
+  return fixture === 'all-repairable' || process.env.SKS_NATIVE_CAPABILITY_FIXTURE === '1' || process.env.NODE_ENV === 'test';
 }
 
 async function postcheckAppScreenshot(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {

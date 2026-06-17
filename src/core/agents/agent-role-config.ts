@@ -5,7 +5,7 @@ import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export const AGENT_ROLE_CONFIG_REPAIR_SCHEMA = 'sks.agent-role-config-repair.v1'
 
-const SKS_OWNED_AGENT_CONFIGS = new Map<string, { name: string; sandbox: 'read-only' | 'workspace-write'; content: string }>([
+export const SKS_OWNED_AGENT_CONFIGS = new Map<string, { name: string; sandbox: 'read-only' | 'workspace-write'; content: string }>([
   ['analysis-scout.toml', roleConfig('analysis_scout', 'Read-only SKS analysis scout retained for stale Codex agent-role config repair.', 'read-only')],
   ['native-agent-intake.toml', roleConfig('native_agent', 'Read-only Team native agent for repository/docs/tests/API/risk slices.', 'read-only')],
   ['team-consensus.toml', roleConfig('team_consensus', 'Planning and debate specialist for SKS Team mode.', 'read-only')],
@@ -13,6 +13,18 @@ const SKS_OWNED_AGENT_CONFIGS = new Map<string, { name: string; sandbox: 'read-o
   ['db-safety-reviewer.toml', roleConfig('db_safety_reviewer', 'Read-only database safety reviewer for SQL, migrations, Supabase, and rollback safety.', 'read-only')],
   ['qa-reviewer.toml', roleConfig('qa_reviewer', 'Strict read-only verification reviewer for correctness, regressions, and final evidence.', 'read-only')]
 ])
+
+export function managedAgentRoleConfigForFile(file: string): string | null {
+  return SKS_OWNED_AGENT_CONFIGS.get(path.basename(file))?.content || null
+}
+
+export function managedAgentRoleConfigForRole(role: string): { file: string; content: string } | null {
+  const normalized = String(role || '').trim().replace(/-/g, '_')
+  for (const [file, config] of SKS_OWNED_AGENT_CONFIGS) {
+    if (config.name === normalized || path.basename(file, '.toml').replace(/-/g, '_') === normalized) return { file, content: config.content }
+  }
+  return null
+}
 
 export async function repairAgentRoleConfigs(input: {
   root: string

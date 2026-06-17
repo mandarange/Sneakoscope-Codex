@@ -146,6 +146,36 @@
       "reason": "Native capability postcheck writes a fixed sample only inside the selected artifact directory to prove write/read capability."
     },
     {
+      "file": "src/core/codex-control/codex-0140-feature-probes.ts",
+      "symbol": "probeSqliteRecovery",
+      "token": "fs.writeFile",
+      "reason": "Codex 0.140 SQLite recovery probe writes a deliberately corrupt database fixture only inside its mkdtemp-created isolated temp directory."
+    },
+    {
+      "file": "src/core/codex-control/codex-0140-feature-probes.ts",
+      "symbol": "probeSqliteRecovery",
+      "token": "fs.rm",
+      "reason": "Codex 0.140 SQLite probe removes only its mkdtemp-created isolated temp fixture directory after the probe completes."
+    },
+    {
+      "file": "src/core/codex-control/codex-0140-feature-probes.ts",
+      "symbol": "probeLargeRepoResponsiveness",
+      "token": "fs.writeFile",
+      "reason": "Codex 0.140 large-repo probe writes small fixture files only inside its mkdtemp-created isolated temp directory."
+    },
+    {
+      "file": "src/core/codex-control/codex-0140-feature-probes.ts",
+      "symbol": "second",
+      "token": "fs.rm",
+      "reason": "Codex 0.140 large-repo probe removes only its mkdtemp-created isolated temp fixture directory after scan timing."
+    },
+    {
+      "file": "src/core/config/secret-preservation.ts",
+      "symbol": "restoreSecretLines",
+      "token": "fs.writeFile",
+      "reason": "Secret preservation rollback writes only the original protected assignment lines back to the already detected secret source."
+    },
+    {
       "file": "src/core/codex-native/project-skill-dedupe.ts",
       "symbol": "quarantineSkill",
       "token": "fs.rm",
