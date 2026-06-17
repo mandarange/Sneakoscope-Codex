@@ -133,7 +133,23 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
   const allowMadRepair = rawArgs.includes('--repair-config') || rawArgs.includes('--fix') || rawArgs.includes('--yes-repair');
-  const launchPreflight = await runCodexLaunchPreflight(launchRoot, { fix: allowMadRepair, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' });
+  const launchPreflightOpts = { fix: allowMadRepair, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' };
+  let launchPreflight = await runCodexLaunchPreflight(launchRoot, launchPreflightOpts);
+  // Fresh-project bootstrap: when the ONLY blocker is that the managed Codex config does
+  // not exist yet (`.codex/config.toml` absent), regenerate it — exactly what the blocker
+  // action tells the user to run via `sks doctor --fix` — and re-run the preflight once,
+  // instead of blocking the launch on a trivially-fixable missing config. An EXISTING but
+  // unreadable/broken config is NOT auto-fixed here: it still blocks and routes the user
+  // to `sks doctor --fix`, so genuine permission/EPERM/parse problems are never masked.
+  if (!launchPreflight.ok && !fs.existsSync(path.join(launchRoot, '.codex', 'config.toml'))) {
+    try {
+      await initProject(launchRoot, { installScope: rawArgs.includes('--local-only') ? 'project' : 'global', localOnly: rawArgs.includes('--local-only'), globalCommand: 'sks' });
+      console.error('SKS MAD bootstrapped the missing managed Codex config (`sks doctor --fix` equivalent) and re-ran preflight.');
+      launchPreflight = await runCodexLaunchPreflight(launchRoot, launchPreflightOpts);
+    } catch (bootstrapErr: any) {
+      console.error(`SKS MAD could not bootstrap the managed Codex config: ${bootstrapErr?.message || bootstrapErr}. Run \`sks doctor --fix\`.`);
+    }
+  }
   const afterPreflightUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-preflight-${uiSnapshotId}`).catch(() => null) : null;
   const preflightUiDiff = beforeUi && afterPreflightUi ? diffCodexAppUiSnapshots(beforeUi, afterPreflightUi) : null;
   if (preflightUiDiff && !preflightUiDiff.ok) {

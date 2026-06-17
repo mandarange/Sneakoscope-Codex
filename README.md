@@ -35,7 +35,14 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.15** is a doctor-reliability patch on the 3.1.14 production-hardening release. It ends the endless `sks doctor --fix` loop that kept reporting `codex_cli_config_toml_parse_error` / `cli_ready: no` on the very run that already repaired the config.
+SKS **3.1.16** is a launch-reliability patch on the 3.1.15 doctor-reliability release. It makes `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
+
+What changed in 3.1.16:
+
+- **`sks --mad` bootstraps a fresh project.** When the only preflight blocker is a missing managed Codex config (`.codex/config.toml` absent), `sks --mad` now regenerates it — the `sks doctor --fix` equivalent — and re-runs the preflight, instead of blocking and making you run a separate command. An existing but unreadable/EPERM/parse-broken config still blocks and routes you to `sks doctor --fix`.
+- **Missing-config diagnostics are honest.** A missing config no longer cascades into misleading `macos_acl_ls_le_failed` / `macos_flags_ls_lO_failed` / `spawned_child_read_failed` blockers from running file checks on a nonexistent path; the preflight reports only `missing_config` / `missing_codex_dir`.
+
+SKS **3.1.15** was a doctor-reliability patch on the 3.1.14 production-hardening release. It ended the endless `sks doctor --fix` loop that kept reporting `codex_cli_config_toml_parse_error` / `cli_ready: no` on the very run that already repaired the config.
 
 What changed in 3.1.15:
 

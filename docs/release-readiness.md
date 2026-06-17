@@ -1,6 +1,6 @@
 # Release Readiness
 
-SKS 3.1.15 is the doctor-reliability patch after 3.1.14. It keeps the Codex 0.140 production-hardening surface intact while requiring package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 3.1.15 before publication.
+SKS 3.1.16 is the doctor-reliability patch after 3.1.15. It keeps the Codex 0.140 production-hardening surface intact while requiring package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 3.1.16 before publication.
 
 SKS 3.1.13 is the production-hardening release for Codex 0.140 evidence, transactional doctor repair, MCP readiness, native capability proof, and protected-secret rollback. It requires release wiring for Codex 0.140 deep probes, real usage parsing, goal attachment roundtrip evidence, doctor transaction/postcheck evidence, managed startup TOML repair, Context7/Supabase MCP repair blackboxes, native capability postcheck proof, secret line rollback, and the 3.1.13 all-feature regression gate.
 
