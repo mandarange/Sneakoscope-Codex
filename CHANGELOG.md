@@ -5,6 +5,14 @@
 
 
 
+## [3.1.15] - 2026-06-17
+
+### Fixed
+
+- `sks doctor --fix` no longer reports `codex_cli_config_toml_parse_error` / `cli_ready: no` on the run that repairs the config. The Codex config-load probe is re-run after the Context7/Supabase/startup MCP repairs land, so the readiness verdict reflects the repaired config instead of the stale pre-repair snapshot that trapped users in an endless rerun loop.
+- Managed setup seeds `[mcp_servers.context7]` on the remote streamable-HTTP `url` transport instead of a local stdio `command`, so the project config never merges with a remote `url` in the global Codex config into the `url is not supported for stdio` error that Codex 0.140 rejects.
+- The `codex_cli_config_toml_parse_error` operator action now names both misplaced machine-local keys and the Context7/MCP stdio-vs-`url` transport conflict, instead of only suggesting a key hoist that cannot fix a transport conflict.
+
 ## [3.1.14] - 2026-06-17
 
 ### Fixed
