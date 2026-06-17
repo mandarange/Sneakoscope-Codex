@@ -41,50 +41,64 @@ export async function inspectCodexConfigReadability(rootInput: string = process.
   }
 
   add(await accessCheck('codex_dir_exists', configDir, fs.constants.R_OK | fs.constants.X_OK))
-  add(await accessCheck('project_config_exists', configPath, fs.constants.R_OK))
+  const projectConfigExists = await accessCheck('project_config_exists', configPath, fs.constants.R_OK)
+  add(projectConfigExists)
 
   for (const dir of parentDirsFor(root, configPath)) {
     add(await accessCheck('parent_traverse', dir, fs.constants.X_OK))
   }
 
-  const lstatCheck = await statCheck('config_lstat', configPath, 'lstat')
-  add(lstatCheck)
-  const stat = await statCheck('config_stat', configPath, 'stat')
-  add(stat)
-  if (stat.ok) {
-    add({ name: 'config_owner', ok: true, detail: { uid: stat.detail.uid, gid: stat.detail.gid } })
-    add({ name: 'config_mode', ok: true, detail: { mode: stat.detail.mode_octal } })
-  }
+  // Fresh project: the managed config simply does not exist yet. Every downstream check
+  // (stat, symlink, macOS ACL/flags/xattr, node/child read, codex config load) would
+  // operate on a nonexistent path and fail with ENOENT, turning the single real cause —
+  // a missing config — into a misleading cascade (`macos_acl_ls_le_failed`,
+  // `macos_flags_ls_lO_failed`, `spawned_child_read_failed`, ...). Skip them and report
+  // only the honest `missing_config` / `missing_codex_dir` blocker so the caller can
+  // regenerate the managed config instead of chasing phantom ACL/permission problems.
+  const configMissing = projectConfigExists.error?.code === 'ENOENT'
 
-  if (lstatCheck.ok) {
-    const isSymlink = Boolean(lstatCheck.detail.is_symbolic_link)
-    const symlinkDetail: any = { is_symlink: isSymlink }
-    if (isSymlink) {
-      symlinkDetail.realpath = await fsp.realpath(configPath).catch((err) => ({ error: errorDetail(err) }))
-      symlinkDetail.allowed = typeof symlinkDetail.realpath === 'string' && symlinkTargetAllowed(symlinkDetail.realpath, root, opts)
-      if (!symlinkDetail.allowed) blockers.add('symlink_escape')
+  if (!configMissing) {
+    const lstatCheck = await statCheck('config_lstat', configPath, 'lstat')
+    add(lstatCheck)
+    const stat = await statCheck('config_stat', configPath, 'stat')
+    add(stat)
+    if (stat.ok) {
+      add({ name: 'config_owner', ok: true, detail: { uid: stat.detail.uid, gid: stat.detail.gid } })
+      add({ name: 'config_mode', ok: true, detail: { mode: stat.detail.mode_octal } })
     }
-    add({ name: 'config_symlink', ok: !isSymlink || symlinkDetail.allowed === true, detail: symlinkDetail })
-  }
 
-  if (process.platform === 'darwin') {
-    add(await commandCheck('macos_acl_ls_le', 'ls', ['-le', configPath], root))
-    const acl = checks.find((check) => check.name === 'macos_acl_ls_le')
-    if (/\bdeny\b.*\b(read|readattr|readextattr|readsecurity|search)\b/i.test(String(acl?.detail?.stdout || ''))) blockers.add('acl_denied')
-    const flags = await commandCheck('macos_flags_ls_lO', 'ls', ['-lO', configPath], root)
-    add(flags)
-    if (/\b(uchg|schg|restricted)\b/.test(String(flags.detail?.stdout || ''))) blockers.add('flags_locked')
-    const xattrs = await commandCheck('macos_xattr', 'xattr', ['-l', configPath], root, { allowExitCodes: [0, 1] })
-    add(xattrs)
-    add({ name: 'macos_quarantine_xattr', ok: !/com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || '')), detail: { present: /com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || '')) } })
-    if (/com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || ''))) blockers.add('quarantine')
+    if (lstatCheck.ok) {
+      const isSymlink = Boolean(lstatCheck.detail.is_symbolic_link)
+      const symlinkDetail: any = { is_symlink: isSymlink }
+      if (isSymlink) {
+        symlinkDetail.realpath = await fsp.realpath(configPath).catch((err) => ({ error: errorDetail(err) }))
+        symlinkDetail.allowed = typeof symlinkDetail.realpath === 'string' && symlinkTargetAllowed(symlinkDetail.realpath, root, opts)
+        if (!symlinkDetail.allowed) blockers.add('symlink_escape')
+      }
+      add({ name: 'config_symlink', ok: !isSymlink || symlinkDetail.allowed === true, detail: symlinkDetail })
+    }
+
+    if (process.platform === 'darwin') {
+      add(await commandCheck('macos_acl_ls_le', 'ls', ['-le', configPath], root))
+      const acl = checks.find((check) => check.name === 'macos_acl_ls_le')
+      if (/\bdeny\b.*\b(read|readattr|readextattr|readsecurity|search)\b/i.test(String(acl?.detail?.stdout || ''))) blockers.add('acl_denied')
+      const flags = await commandCheck('macos_flags_ls_lO', 'ls', ['-lO', configPath], root)
+      add(flags)
+      if (/\b(uchg|schg|restricted)\b/.test(String(flags.detail?.stdout || ''))) blockers.add('flags_locked')
+      const xattrs = await commandCheck('macos_xattr', 'xattr', ['-l', configPath], root, { allowExitCodes: [0, 1] })
+      add(xattrs)
+      add({ name: 'macos_quarantine_xattr', ok: !/com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || '')), detail: { present: /com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || '')) } })
+      if (/com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || ''))) blockers.add('quarantine')
+    } else {
+      add({ name: 'macos_metadata', ok: true, status: 'skipped_non_macos' })
+    }
+
+    add(await nodeReadCheck(configPath))
+    add(await childReadCheck(configPath, root))
+    add(await codexCliConfigLoadCheck(root, configPath, opts))
   } else {
-    add({ name: 'macos_metadata', ok: true, status: 'skipped_non_macos' })
+    add({ name: 'config_file_checks', ok: true, status: 'skipped_config_missing', detail: { config_path: configPath } })
   }
-
-  add(await nodeReadCheck(configPath))
-  add(await childReadCheck(configPath, root))
-  add(await codexCliConfigLoadCheck(root, configPath, opts))
 
   const report: CodexConfigReadabilityReport = {
     schema: CODEX_CONFIG_READABILITY_SCHEMA,

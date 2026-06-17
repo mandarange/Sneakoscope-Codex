@@ -5,6 +5,13 @@
 
 
 
+## [3.1.16] - 2026-06-17
+
+### Fixed
+
+- `sks --mad` now self-bootstraps a fresh project: when the only preflight blocker is a missing managed Codex config (`.codex/config.toml` absent), it regenerates the config (the `sks doctor --fix` equivalent) and re-runs the preflight instead of blocking the launch and printing "Run `sks doctor --fix`". An existing but unreadable/EPERM/parse-broken config still blocks and routes to `sks doctor --fix`, so genuine permission problems are never masked.
+- A missing Codex config no longer cascades into misleading `macos_acl_ls_le_failed` / `macos_flags_ls_lO_failed` / `spawned_child_read_failed` blockers. The readability inspector skips the macOS ACL/flags/stat/symlink and node/child/codex-load checks when the config file does not exist, reporting only the honest `missing_config` / `missing_codex_dir` blocker.
+
 ## [3.1.15] - 2026-06-17
 
 ### Fixed
