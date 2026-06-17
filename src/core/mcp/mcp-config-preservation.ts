@@ -10,9 +10,13 @@ export async function readProjectCodexConfig(root: string): Promise<{ path: stri
 }
 
 export function mcpServerBlock(text: string, serverName: string): string | null {
-  const escaped = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(^\\[mcp_servers\\.${escaped}\\]\\n[\\s\\S]*?)(?=^\\[|(?![\\s\\S]))`, 'm');
-  return String(text || '').match(re)?.[1] || null;
+  const range = tomlTableRange(text, `mcp_servers.${serverName}`, false);
+  return range ? String(text || '').slice(range.start, range.end) : null;
+}
+
+export function mcpServerBlockWithChildren(text: string, serverName: string): string | null {
+  const range = tomlTableRange(text, `mcp_servers.${serverName}`, true);
+  return range ? String(text || '').slice(range.start, range.end) : null;
 }
 
 export function mcpServerExplicitlyDisabled(text: string, serverName: string): boolean {
@@ -21,14 +25,34 @@ export function mcpServerExplicitlyDisabled(text: string, serverName: string): b
 }
 
 export function replaceOrAppendMcpServerBlock(text: string, serverName: string, block: string): string {
-  const escaped = serverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const normalizedBlock = block.endsWith('\n') ? block : `${block}\n`;
-  const re = new RegExp(`(^\\[mcp_servers\\.${escaped}\\]\\n[\\s\\S]*?)(?=^\\[|(?![\\s\\S]))`, 'm');
-  if (re.test(text)) return text.replace(re, normalizedBlock);
+  const range = tomlTableRange(text, `mcp_servers.${serverName}`, true);
+  if (range) return `${text.slice(0, range.start)}${normalizedBlock}${text.slice(range.end).replace(/^\n+/, '')}`;
   const prefix = text.trim() ? `${text.replace(/\s*$/, '\n\n')}` : '';
   return `${prefix}${normalizedBlock}`;
 }
 
+export function removeMcpServerBlock(text: string, serverName: string): string {
+  const range = tomlTableRange(text, `mcp_servers.${serverName}`, true);
+  if (!range) return text;
+  return `${text.slice(0, range.start).trimEnd()}${range.start > 0 ? '\n\n' : ''}${text.slice(range.end).replace(/^\n+/, '')}`;
+}
+
 export function redactedMcpText(text: string): string {
   return String(text || '').replace(/(token|access_token|api_key|secret)\s*=\s*"[^"]*"/gi, '$1 = "<redacted>"');
+}
+
+export function tomlTableRange(text: string, table: string, includeChildren: boolean): { start: number; end: number } | null {
+  const source = String(text || '');
+  const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const header = new RegExp(`(^|\\n)\\s*\\[${escaped}\\]\\s*(?:#.*)?(?:\\n|$)`, 'g');
+  const match = header.exec(source);
+  if (!match) return null;
+  const start = Number(match.index || 0) + (match[1] ? 1 : 0);
+  const rest = source.slice(header.lastIndex);
+  const nextHeader = includeChildren
+    ? rest.search(new RegExp(`\\n\\s*\\[(?!${escaped}(?:\\.|\\]))[^\\]]+\\]\\s*(?:#.*)?(?:\\n|$)`))
+    : rest.search(/\n\s*\[[^\]]+\]\s*(?:#.*)?(?:\n|$)/);
+  const end = nextHeader >= 0 ? header.lastIndex + nextHeader : source.length;
+  return { start, end };
 }

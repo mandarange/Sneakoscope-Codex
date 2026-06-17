@@ -98,6 +98,7 @@ id_ed25519
 .sneakoscope/processes/
 .sneakoscope/bench/
 .sneakoscope/blackbox/
+.sneakoscope/backups/
 .sneakoscope/logs/
 .sneakoscope/naruto/
 .sneakoscope/state/

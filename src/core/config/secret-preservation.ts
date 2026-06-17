@@ -31,6 +31,9 @@ export interface SecretPreservationGuardReport {
   missing_after: Array<{ key: string; source: string }>;
   rollback_attempted: boolean;
   rollback_ok: boolean;
+  restore_mode: 'none' | 'line-level' | 'whole-file' | 'failed';
+  unrelated_changes_preserved: boolean;
+  nested_operations: string[];
   backup_paths: string[];
   raw_values_recorded: false;
 }
@@ -43,7 +46,7 @@ export interface ChangedOrMissingSecret {
   reason: 'missing' | 'changed';
 }
 
-const activeGuardRoots = new Set<string>();
+const activeGuardRoots = new Map<string, { nestedOperations: string[] }>();
 
 export async function captureSecretPreservationSnapshot(input: {
   root: string;
@@ -78,8 +81,13 @@ export async function withSecretPreservationGuard<T>(
   fn: () => Promise<T>
 ): Promise<T> {
   const resolvedRoot = path.resolve(root);
-  if (activeGuardRoots.has(resolvedRoot)) return fn();
-  activeGuardRoots.add(resolvedRoot);
+  const active = activeGuardRoots.get(resolvedRoot);
+  if (active) {
+    active.nestedOperations.push(operationName);
+    return fn();
+  }
+  const guardContext = { nestedOperations: [] as string[] };
+  activeGuardRoots.set(resolvedRoot, guardContext);
   const reportDir = path.join(resolvedRoot, '.sneakoscope', 'reports');
   await ensureDir(reportDir);
   const beforePath = path.join(reportDir, 'secret-preservation-before.json');
@@ -100,9 +108,13 @@ export async function withSecretPreservationGuard<T>(
     let rollbackAttempted = false;
     let rollbackOk = false;
     let restoredKeysCount = 0;
+    let restoreMode: SecretPreservationGuardReport['restore_mode'] = 'none';
+    let unrelatedChangesPreserved = true;
     if (changedOrMissing.length) {
       rollbackAttempted = true;
-      await restoreChangedSecretSources(changedOrMissing, backup.bySource);
+      const restore = await restoreChangedSecretSources(changedOrMissing, backup.bySource);
+      restoreMode = restore.mode;
+      unrelatedChangesPreserved = restore.unrelated_changes_preserved;
       const restored = await captureSecretPreservationSnapshot({
         root: resolvedRoot,
         artifactPath: path.join(reportDir, 'secret-preservation-after-restore.json')
@@ -111,12 +123,12 @@ export async function withSecretPreservationGuard<T>(
       rollbackOk = remaining.length === 0;
       restoredKeysCount = rollbackOk ? changedOrMissing.length : 0;
       if (!rollbackOk) {
-        const failedReport = guardReport(operationName, beforePath, afterPath, changedOrMissing, restoredKeysCount, rollbackAttempted, false, backup.paths);
+        const failedReport = guardReport(operationName, beforePath, afterPath, changedOrMissing, restoredKeysCount, rollbackAttempted, false, backup.paths, 'failed', false, guardContext.nestedOperations);
         await writeJsonAtomic(guardPath, operationError ? { ...failedReport, ok: false, operation_error: sanitizeErrorMessage(operationError) } : failedReport).catch(() => undefined);
         throw new Error(`secret_preservation_rollback_failed:${changedOrMissing.map((item) => `${safeSourceForError(resolvedRoot, item.source)}:${item.key}:${item.reason}`).join(',')}`);
       }
     }
-    const report: SecretPreservationGuardReport & { operation_error?: string } = guardReport(operationName, beforePath, afterPath, changedOrMissing, restoredKeysCount, rollbackAttempted, rollbackAttempted ? rollbackOk : true, backup.paths);
+    const report: SecretPreservationGuardReport & { operation_error?: string } = guardReport(operationName, beforePath, afterPath, changedOrMissing, restoredKeysCount, rollbackAttempted, rollbackAttempted ? rollbackOk : true, backup.paths, restoreMode, unrelatedChangesPreserved, guardContext.nestedOperations);
     if (operationError) {
       report.ok = false;
       report.operation_error = sanitizeErrorMessage(operationError);
@@ -269,7 +281,10 @@ function guardReport(
   restoredKeysCount: number,
   rollbackAttempted: boolean,
   rollbackOk: boolean,
-  backupPaths: string[]
+  backupPaths: string[],
+  restoreMode: SecretPreservationGuardReport['restore_mode'],
+  unrelatedChangesPreserved: boolean,
+  nestedOperations: string[]
 ): SecretPreservationGuardReport {
   return {
     schema: 'sks.secret-preservation-guard.v1',
@@ -283,6 +298,9 @@ function guardReport(
     missing_after: changedOrMissing.filter((item) => item.reason === 'missing').map((item) => ({ key: item.key, source: item.source })),
     rollback_attempted: rollbackAttempted,
     rollback_ok: rollbackOk,
+    restore_mode: restoreMode,
+    unrelated_changes_preserved: unrelatedChangesPreserved,
+    nested_operations: nestedOperations,
     backup_paths: backupPaths,
     raw_values_recorded: false
   };
@@ -302,13 +320,92 @@ async function backupSecretBearingSources(root: string, operationName: string, s
   return { bySource, paths: [...bySource.values()] };
 }
 
-async function restoreChangedSecretSources(changedOrMissing: ChangedOrMissingSecret[], backups: Map<string, string>): Promise<void> {
+async function restoreChangedSecretSources(changedOrMissing: ChangedOrMissingSecret[], backups: Map<string, string>): Promise<{ mode: SecretPreservationGuardReport['restore_mode']; unrelated_changes_preserved: boolean }> {
+  let wholeFileFallback = false;
   for (const source of [...new Set(changedOrMissing.map((item) => item.source))]) {
     const backup = backups.get(source);
-    if (!backup) continue;
-    await ensureDir(path.dirname(source));
-    await fs.copyFile(backup, source);
+    if (!backup) {
+      wholeFileFallback = true;
+      continue;
+    }
+    const sourceChanges = changedOrMissing.filter((item) => item.source === source);
+    const restoredLineLevel = await restoreSecretLines(source, backup, sourceChanges);
+    if (!restoredLineLevel) {
+      wholeFileFallback = true;
+      await ensureDir(path.dirname(source));
+      await fs.copyFile(backup, source);
+    }
   }
+  return { mode: wholeFileFallback ? 'whole-file' : 'line-level', unrelated_changes_preserved: !wholeFileFallback };
+}
+
+async function restoreSecretLines(source: string, backup: string, changes: ChangedOrMissingSecret[]): Promise<boolean> {
+  if (source.endsWith('.json')) return false;
+  const current = await fs.readFile(source, 'utf8').catch(() => null);
+  const before = await fs.readFile(backup, 'utf8').catch(() => null);
+  if (current == null || before == null) return false;
+  let lines = current.split(/\r?\n/);
+  const beforeLines = before.split(/\r?\n/);
+  let changed = false;
+  for (const item of changes) {
+    const beforeLine = findAssignmentLine(beforeLines, item.key);
+    if (!beforeLine) return false;
+    const currentLine = findAssignmentLine(lines, item.key);
+    if (currentLine) {
+      lines[currentLine.index] = beforeLine.line;
+    } else {
+      const insertAt = insertionIndexForKey(lines, item.key);
+      lines.splice(insertAt, 0, beforeLine.line);
+    }
+    changed = true;
+  }
+  if (changed) await fs.writeFile(source, lines.join('\n'), 'utf8');
+  return true;
+}
+
+function findAssignmentLine(lines: string[], key: string): { index: number; line: string } | null {
+  const sectionKey = sectionKeyFor(key);
+  if (sectionKey) {
+    const range = sectionRange(lines, sectionKey.section);
+    if (!range) return null;
+    const re = new RegExp(`^\\s*${escapeRegExp(sectionKey.key)}\\s*=`);
+    for (let index = range.start + 1; index < range.end; index += 1) {
+      if (re.test(lines[index] || '')) return { index, line: lines[index] || '' };
+    }
+    return null;
+  }
+  const re = new RegExp(`^\\s*(?:export\\s+)?${escapeRegExp(key)}\\s*=`);
+  const index = lines.findIndex((line) => re.test(line));
+  return index >= 0 ? { index, line: lines[index] || '' } : null;
+}
+
+function insertionIndexForKey(lines: string[], key: string): number {
+  const sectionKey = sectionKeyFor(key);
+  if (!sectionKey) return Math.max(0, lines.length - (lines[lines.length - 1] === '' ? 1 : 0));
+  const range = sectionRange(lines, sectionKey.section);
+  return range ? range.end : Math.max(0, lines.length - (lines[lines.length - 1] === '' ? 1 : 0));
+}
+
+function sectionKeyFor(key: string): { section: string; key: string } | null {
+  if (!key.includes('.')) return null;
+  const parts = key.split('.');
+  const leaf = parts.pop();
+  const section = parts.join('.');
+  return leaf && section ? { section, key: leaf } : null;
+}
+
+function sectionRange(lines: string[], section: string): { start: number; end: number } | null {
+  const header = new RegExp(`^\\s*\\[${escapeRegExp(section)}\\]\\s*(?:#.*)?$`);
+  const start = lines.findIndex((line) => header.test(line));
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[[^\]]+\]\s*(?:#.*)?$/.test(lines[index] || '')) {
+      end = index;
+      break;
+    }
+  }
+  return { start, end };
 }
 
 function sanitizeSegment(value: string): string {
@@ -331,4 +428,8 @@ function safeSourceForError(root: string, source: string): string {
 function sanitizeErrorMessage(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   return message.replace(/([A-Za-z0-9_]*(?:SECRET|TOKEN|KEY|PASSWORD)[A-Za-z0-9_]*=)[^\s,;]+/gi, '$1<redacted>');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

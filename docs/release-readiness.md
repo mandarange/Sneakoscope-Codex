@@ -1,5 +1,7 @@
 # Release Readiness
 
+SKS 3.1.13 is the production-hardening release for Codex 0.140 evidence, transactional doctor repair, MCP readiness, native capability proof, and protected-secret rollback. It requires release wiring for Codex 0.140 deep probes, real usage parsing, goal attachment roundtrip evidence, doctor transaction/postcheck evidence, managed startup TOML repair, Context7/Supabase MCP repair blackboxes, native capability postcheck proof, secret line rollback, and the 3.1.13 all-feature regression gate.
+
 SKS 3.1.12 is the doctor production, Codex 0.140 coverage, and MAD launch repair release. It keeps the Zellij stacked-pane minimum at 0.43.0, reconciles visible MAD worker panes with Zellij `stack-panes`, keeps `doctor --fix` recovery for local stdio Context7 MCP stalls, and repairs stale Codex startup config by fixing SKS agent role paths, removing unsupported managed role fields, preserving optional `supabase_sauron`, and either restoring `node_repl` to a valid Codex App command or removing the whole stale parent/child MCP block. It also requires release wiring for Codex 0.140 hermetic probes, optional strict real probes, doctor production transaction/postcheck evidence, Context7/Supabase MCP repair blackboxes, and protected secret rollback checks.
 
 SKS 3.1.10 is the release-ready hardening follow-up. It closes release wiring parity, core skill immutability, duplicate skill active-name proof, capability-specific native postchecks, protected secret rollback, and the all-feature regression blackbox.

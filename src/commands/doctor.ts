@@ -34,7 +34,7 @@ import { runDoctorCommandAliasCleanup } from '../core/doctor/command-alias-clean
 import { repairCodexStartupConfig } from '../core/doctor/codex-startup-config-repair.js';
 import { repairContext7Mcp } from '../core/doctor/context7-mcp-repair.js';
 import { repairSupabaseMcp } from '../core/doctor/supabase-mcp-repair.js';
-import { writeDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
+import { runDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 
@@ -273,8 +273,12 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         apply: true,
         configured: false,
         disabled: false,
+        disabled_preserved: false,
         token_env_present: false,
         unsafe_write_access: false,
+        read_only_migrated: false,
+        write_scope_requires_confirmation: false,
+        ready_blocking: true,
         manual_required: true,
         next_action: 'Review Supabase MCP configuration manually.',
         blockers: [err?.message || String(err)],
@@ -283,62 +287,88 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       }))
     : null;
   const doctorFixTransaction = doctorFix
-    ? await writeDoctorFixTransaction({
+    ? await runDoctorFixTransaction({
         root,
         phases: [
           {
             id: 'setup',
-            ok: setupRepair !== null,
-            repaired: setupRepair !== null,
-            blockers: setupRepair === null ? ['setup_repair_not_recorded'] : []
+            run: async () => ({
+              id: 'setup',
+              ok: setupRepair !== null,
+              repaired: setupRepair !== null,
+              blockers: setupRepair === null ? ['setup_repair_not_recorded'] : []
+            })
           },
           {
             id: 'codex_startup_repair',
-            ok: (codexStartupRepair as any)?.ok !== false,
-            repaired: doctorFix,
-            blockers: (codexStartupRepair as any)?.blockers || [],
-            warnings: (codexStartupRepair as any)?.warnings || []
+            run: async () => ({
+              id: 'codex_startup_repair',
+              ok: (codexStartupRepair as any)?.ok !== false,
+              repaired: doctorFix,
+              blockers: (codexStartupRepair as any)?.blockers || [],
+              warnings: (codexStartupRepair as any)?.warnings || []
+            })
           },
           {
             id: 'startup_config_repair',
-            ok: (startupConfigRepair as any)?.ok === true,
-            repaired: (startupConfigRepair as any)?.apply === true,
-            blockers: (startupConfigRepair as any)?.blockers || []
+            run: async () => ({
+              id: 'startup_config_repair',
+              ok: (startupConfigRepair as any)?.ok === true,
+              repaired: (startupConfigRepair as any)?.apply === true,
+              blockers: (startupConfigRepair as any)?.blockers || []
+            })
           },
           {
             id: 'context7_repair',
-            ok: (context7Repair as any)?.ok !== false,
-            repaired: doctorFix,
-            blockers: (context7Repair as any)?.blockers || [],
-            warnings: (context7Repair as any)?.warnings || []
+            run: async () => ({
+              id: 'context7_repair',
+              ok: (context7Repair as any)?.ok !== false,
+              repaired: doctorFix,
+              blockers: (context7Repair as any)?.blockers || [],
+              warnings: (context7Repair as any)?.warnings || []
+            })
           },
           {
             id: 'context7_mcp_repair',
-            ok: (context7McpRepair as any)?.ok === true,
-            repaired: (context7McpRepair as any)?.repaired === true,
-            manual_required: (context7McpRepair as any)?.manual_required === true,
-            blockers: (context7McpRepair as any)?.blockers || [],
-            warnings: (context7McpRepair as any)?.warnings || []
+            run: async () => ({
+              id: 'context7_mcp_repair',
+              ok: (context7McpRepair as any)?.ok === true,
+              repaired: (context7McpRepair as any)?.repaired === true,
+              manual_required: (context7McpRepair as any)?.manual_required === true,
+              blockers: (context7McpRepair as any)?.blockers || [],
+              warnings: (context7McpRepair as any)?.warnings || []
+            })
           },
           {
             id: 'supabase_mcp_repair',
-            ok: (supabaseMcpRepair as any)?.ok === true,
-            repaired: false,
-            manual_required: (supabaseMcpRepair as any)?.manual_required === true,
-            blockers: (supabaseMcpRepair as any)?.blockers || [],
-            warnings: (supabaseMcpRepair as any)?.warnings || []
+            required_for_ready: false,
+            run: async () => ({
+              id: 'supabase_mcp_repair',
+              ok: (supabaseMcpRepair as any)?.ok === true,
+              repaired: false,
+              manual_required: (supabaseMcpRepair as any)?.manual_required === true,
+              required_for_ready: false,
+              blockers: (supabaseMcpRepair as any)?.blockers || [],
+              warnings: (supabaseMcpRepair as any)?.warnings || []
+            })
           },
           {
             id: 'command_alias_cleanup',
-            ok: (commandAliasCleanup as any)?.ok !== false,
-            repaired: Array.isArray((commandAliasCleanup as any)?.actions) && (commandAliasCleanup as any).actions.length > 0,
-            blockers: (commandAliasCleanup as any)?.blockers || []
+            run: async () => ({
+              id: 'command_alias_cleanup',
+              ok: (commandAliasCleanup as any)?.ok !== false,
+              repaired: Array.isArray((commandAliasCleanup as any)?.actions) && (commandAliasCleanup as any).actions.length > 0,
+              blockers: (commandAliasCleanup as any)?.blockers || []
+            })
           },
           {
             id: 'native_capability_repair',
-            ok: (doctorNativeCapabilityRepair as any)?.ok !== false,
-            repaired: doctorFix,
-            blockers: (doctorNativeCapabilityRepair as any)?.blockers || []
+            run: async () => ({
+              id: 'native_capability_repair',
+              ok: (doctorNativeCapabilityRepair as any)?.ok !== false,
+              repaired: doctorFix,
+              blockers: (doctorNativeCapabilityRepair as any)?.blockers || []
+            })
           }
         ]
       }).catch((err: any) => ({

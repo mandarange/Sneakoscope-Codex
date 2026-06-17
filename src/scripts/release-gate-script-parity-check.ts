@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { assertGate, emitGate, readJson, root } from './sks-1-18-gate-lib.js';
 import { writeJsonAtomic } from '../core/fsx.js';
 import { REQUIRED_3112_REAL_CHECK_IDS, REQUIRED_3112_RELEASE_IDS } from './release-3112-required-gates.js';
+import { REQUIRED_3113_REAL_CHECK_IDS, REQUIRED_3113_RELEASE_IDS } from './release-3113-required-gates.js';
 
 interface ReleaseGateScriptParityReport {
   schema: 'sks.release-gate-script-parity.v1';
@@ -94,15 +95,16 @@ export function buildReleaseGateScriptParityReport(): ReleaseGateScriptParityRep
   const gates = Array.isArray(manifest.gates) ? manifest.gates : [];
   const gateById = new Map(gates.map((gate) => [gate.id, gate]));
   const releaseGateIds = gates.filter((gate) => gate.preset?.includes('release')).map((gate) => gate.id);
-  const requiredReleaseIds = [...new Set([...REQUIRED_3110_RELEASE_IDS, ...REQUIRED_3112_RELEASE_IDS, 'codex:0140-real-probes'])];
-  const requiredAllIds = [...new Set([...requiredReleaseIds, ...REQUIRED_3112_REAL_CHECK_IDS])];
+  const requiredReleaseIds = [...new Set([...REQUIRED_3110_RELEASE_IDS, ...REQUIRED_3112_RELEASE_IDS, ...REQUIRED_3113_RELEASE_IDS, 'codex:0140-real-probes'])];
+  const requiredRealCheckIds = [...new Set([...REQUIRED_3112_REAL_CHECK_IDS, ...REQUIRED_3113_REAL_CHECK_IDS])];
+  const requiredAllIds = [...new Set([...requiredReleaseIds, ...requiredRealCheckIds])];
   const missingScripts = [...new Set([
     ...releaseGateIds.filter((id) => !scripts[id]),
     ...requiredAllIds.filter((id) => !scripts[id])
   ])].sort();
   const missingGates = requiredAllIds.filter((id) => !gateById.has(id)).sort();
   const missingReleasePreset = requiredReleaseIds.filter((id) => !gateById.get(id)?.preset?.includes('release')).sort();
-  const missingRealCheckPreset = REQUIRED_3112_REAL_CHECK_IDS.filter((id) => !gateById.get(id)?.preset?.includes('real-check')).sort();
+  const missingRealCheckPreset = requiredRealCheckIds.filter((id) => !gateById.get(id)?.preset?.includes('real-check')).sort();
   const wrongCommands = requiredAllIds
     .map((id) => ({ id, expected: `npm run ${id} --silent`, actual: gateById.get(id)?.command || '' }))
     .filter((row) => row.actual !== row.expected);

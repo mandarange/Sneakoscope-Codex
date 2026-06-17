@@ -5,7 +5,7 @@ import { assertGate, emitGate, makeTempRoot, writeText } from './sks-3-1-8-check
 import { repairCodexStartupConfig } from '../core/doctor/codex-startup-config-repair.js';
 
 const root = await makeTempRoot('sks-startup-config-blackbox-');
-await writeText(path.join(root, '.codex', 'config.toml'), 'config_file = ".codex/agents/stale.toml"\nmessage_role_prefix = "legacy"\n');
+await writeText(path.join(root, '.codex', 'config.toml'), '[agents.analysis_scout]\nconfig_file = ".codex/agents/stale.toml"\nmessage_role_prefix = "legacy"\n');
 const report = await repairCodexStartupConfig({ root, apply: true });
 const text = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
 assertGate(report.ok === true, 'startup config blackbox must pass postcheck', report);

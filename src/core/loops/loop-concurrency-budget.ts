@@ -3,9 +3,19 @@ import { writeJsonAtomic } from '../fsx.js';
 import { loopConcurrencyBudgetPath } from './loop-artifacts.js';
 import type { SksLoopPlan } from './loop-schema.js';
 
+export interface LoopCodexUsageSignal {
+  available: boolean;
+  certainty: 'actual' | 'discovered' | 'fixture' | 'assumed_by_version' | 'unverified';
+  source: 'codex-0140-usage' | 'env' | 'fixture' | 'none';
+  evidence: string[];
+  warnings: string[];
+}
+
 export interface LoopConcurrencyBudget {
   schema: 'sks.loop-concurrency-budget.v1';
   mission_id: string;
+  usage_budget_source: 'codex-0140-usage' | 'sks-local-estimate';
+  codex_usage_signal: LoopCodexUsageSignal;
   max_active_loops: number;
   max_active_workers: number;
   max_model_calls: number;
@@ -23,8 +33,13 @@ export function computeLoopConcurrencyBudget(input: {
   plan: SksLoopPlan;
   parallelism?: 'safe' | 'balanced' | 'extreme';
   env?: NodeJS.ProcessEnv;
+  codexUsageSignal?: LoopCodexUsageSignal;
 }): LoopConcurrencyBudget {
   const env = input.env || process.env;
+  const codexUsageSignal = input.codexUsageSignal || codexUsageSignalFromEnv(env);
+  const usageBudgetSource = codexUsageSignal.available && (codexUsageSignal.certainty === 'actual' || codexUsageSignal.certainty === 'discovered')
+    ? 'codex-0140-usage'
+    : 'sks-local-estimate';
   const cores = Math.max(1, os.cpus().length || 1);
   const requestedLoops = input.parallelism === 'safe' ? 2 : input.parallelism === 'extreme' ? Math.min(16, cores) : Math.min(8, cores);
   const envLoops = positiveInt(env.SKS_LOOP_MAX_ACTIVE_LOOPS);
@@ -54,6 +69,8 @@ export function computeLoopConcurrencyBudget(input: {
   return {
     schema: 'sks.loop-concurrency-budget.v1',
     mission_id: input.plan.mission_id,
+    usage_budget_source: usageBudgetSource,
+    codex_usage_signal: codexUsageSignal,
     max_active_loops: maxActiveLoops,
     max_active_workers: maxActiveWorkers,
     max_model_calls: maxModelCalls,
@@ -76,4 +93,21 @@ export function loopWorkerBudgetFor(budget: LoopConcurrencyBudget, loopId: strin
 function positiveInt(value: unknown): number | null {
   const number = Number(value);
   return Number.isFinite(number) && number >= 1 ? Math.floor(number) : null;
+}
+
+function codexUsageSignalFromEnv(env: NodeJS.ProcessEnv): LoopCodexUsageSignal {
+  const certainty = normalizeUsageCertainty(env.SKS_CODEX_0140_USAGE_CERTAINTY);
+  const available = env.SKS_CODEX_0140_USAGE_AVAILABLE === '1' || certainty === 'actual' || certainty === 'discovered';
+  return {
+    available,
+    certainty,
+    source: available ? 'env' : 'none',
+    evidence: env.SKS_CODEX_0140_USAGE_EVIDENCE ? [env.SKS_CODEX_0140_USAGE_EVIDENCE] : [],
+    warnings: available ? [] : ['codex_0140_usage_signal_unavailable_using_local_estimate']
+  };
+}
+
+function normalizeUsageCertainty(value: unknown): LoopCodexUsageSignal['certainty'] {
+  if (value === 'actual' || value === 'discovered' || value === 'fixture' || value === 'assumed_by_version') return value;
+  return 'unverified';
 }
