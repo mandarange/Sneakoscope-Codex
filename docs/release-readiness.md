@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.0 is the destructive TriWiki Parallel Turbo release after 3.1.16. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 4.0.0 before publication.
+
+4.0.0 release readiness adds reusable TriWiki proof cards, affected-scope release-equivalent graphs, gate packs, resource budgets, five-minute SLA certificates, build-once proof, probe memoization, doctor dirty repair planning, orphan gate detection, legacy alias purge checks, and the 4.0.0 all-feature regression blackbox.
+
 SKS 3.1.16 is the doctor-reliability patch after 3.1.15. It keeps the Codex 0.140 production-hardening surface intact while requiring package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 3.1.16 before publication.
 
 SKS 3.1.13 is the production-hardening release for Codex 0.140 evidence, transactional doctor repair, MCP readiness, native capability proof, and protected-secret rollback. It requires release wiring for Codex 0.140 deep probes, real usage parsing, goal attachment roundtrip evidence, doctor transaction/postcheck evidence, managed startup TOML repair, Context7/Supabase MCP repair blackboxes, native capability postcheck proof, secret line rollback, and the 3.1.13 all-feature regression gate.

@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.0 keeps release proof truth aligned with the 4.0.0 package metadata, built output, release stamp, provenance, and npm unpublished-version evidence required for the next publication after 3.1.16.
+
+SKS 4.0.0 release proof truth also requires TriWiki proof bank evidence, affected graph evidence, gate-pack runner evidence, five-minute SLA certificate evidence, doctor dirty repair evidence, orphan gate detection, and legacy alias purge evidence to be present in the release graph before publication.
+
 SKS 3.1.16 keeps release proof truth aligned with the 3.1.16 package metadata, built output, release stamp, provenance, and npm unpublished-version evidence required for the next publication after 3.1.15.
 
 SKS 3.1.13 keeps release proof truth aligned with Codex 0.140 feature-state certainty, real usage parsing, goal attachment roundtrip proof, Naruto usage-budget provenance, doctor transaction phase/postcheck reports, managed TOML startup repair, Context7/Supabase MCP readiness reports, native capability proof, and secret line rollback evidence.

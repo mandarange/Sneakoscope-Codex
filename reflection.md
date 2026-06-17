@@ -1,5 +1,27 @@
 # Post Route Reflection
 
+## 2026-06-18 SKS Five-Minute Confidence Path Reflection
+
+- Mission: M-20260618-004108-a2a1
+- Route: Naruto-requested goal with parent-owned implementation and verification
+- Outcome: Implemented the attached speed directive by turning repeated cold proofs into an incremental build, proof-bank-backed affected gate path, and `sks check` confidence command.
+
+### Summary
+
+The directive identified the 30-minute to 2-hour latency source as repeated full-pipeline proof from cold state. The implementation added a warm proof-bank mirror, affected-gate graph artifacts, five-minute completion certificates, SLA-aware DAG execution, `sks check --tier instant|affected|confidence|release|real-check`, and incremental TypeScript builds while preserving clean full release proof for publish readiness.
+
+### Evidence
+
+- `node ./dist/bin/sks.js check --tier confidence --sla 5m --json` passed in 77.18s real time with 90 affected gates executed, 480 skipped as unaffected, `confidence: release-equivalent-for-affected-scope`, and `sla_met: true`.
+- `node ./dist/bin/sks.js check --tier instant --json` passed with no build step and read the generated completion certificate.
+- `npm run build:incremental --silent`, focused unit tests, `npm run release:dynamic-presets --silent`, `npm run release:dag-runner --silent`, `npm run release:speed-summary --silent`, `npm run packcheck --silent`, `npm run selftest -- --mock`, and `sks wiki validate .sneakoscope/wiki/context-pack.json` passed.
+
+### Lessons
+
+1. Confidence completion should be "release-equivalent for the affected scope" rather than advertised as a full release proof.
+2. Instant checks need to read existing proof/certificate state without compiling, otherwise they collapse back into the cold-start path.
+3. Dirty local runtime artifacts can widen affected selection; the certificate should expose changed files, executed gates, skipped gates, and SLA status so that speed claims remain auditable.
+
 ## 2026-06-12 SKS 3.1.0 Naruto Loop Mesh Reflection
 
 - Mission: M-20260612-165947-17a6

@@ -1,5 +1,7 @@
 import path from 'node:path';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
+import type { DoctorDirtyPlan } from './doctor-dirty-planner.js';
+import { isDoctorPhaseClean, markDoctorPhaseClean } from './doctor-dirty-planner.js';
 
 export interface DoctorFixTransactionPhase {
   id: string;
@@ -53,6 +55,7 @@ export async function runDoctorFixTransaction(input: {
   root: string;
   phases: DoctorFixPhaseDefinition[];
   reportPath?: string | null;
+  dirtyPlan?: DoctorDirtyPlan | null;
 }): Promise<DoctorFixTransaction> {
   const startedAt = nowIso();
   const phases: DoctorFixTransactionPhase[] = [];
@@ -71,6 +74,16 @@ export async function runDoctorFixTransaction(input: {
       artifact_path: null,
       started_at: phaseStarted
     };
+    if (isDoctorPhaseClean(input.dirtyPlan, definition.id)) {
+      phases.push({
+        ...phase,
+        ok: true,
+        warnings: ['dirty_plan_skipped_clean_phase'],
+        completed_at: nowIso(),
+        duration_ms: Math.max(0, Date.now() - startedMs)
+      });
+      continue;
+    }
     try {
       const result = await definition.run();
       phase = normalizePhase(definition, result, phase, startedMs);
@@ -98,6 +111,7 @@ export async function runDoctorFixTransaction(input: {
     }
     phase.completed_at = phase.completed_at || nowIso();
     phase.duration_ms = phase.duration_ms ?? Math.max(0, Date.now() - startedMs);
+    if (phase.ok) markDoctorPhaseClean(input.root, definition.id);
     phases.push(phase);
   }
   const writeInput: {

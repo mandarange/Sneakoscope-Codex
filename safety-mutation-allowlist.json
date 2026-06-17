@@ -902,16 +902,76 @@
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
     },
     {
-      "file": "src/core/release/release-gate-cache-v2.ts",
-      "symbol": "writeReleaseGateCacheHit",
+      "file": "src/core/build/build-once-runner.ts",
+      "symbol": "writeBuildOnceProof",
       "token": "writeFileSync",
-      "reason": "Release gate cache writer persists scoped cache-hit metadata under the per-gate report directory."
+      "reason": "Build-once proof writer persists scoped build proof JSON under the configured build proof directory."
+    },
+    {
+      "file": "src/core/daemon/sksd.ts",
+      "symbol": "writeState",
+      "token": "writeFileSync",
+      "reason": "SKSD state writer persists daemon-owned warm-cache state JSON under the configured daemon state directory."
+    },
+    {
+      "file": "src/core/doctor/doctor-dirty-planner.ts",
+      "symbol": "markDoctorPhaseClean",
+      "token": "writeFileSync",
+      "reason": "Doctor dirty-plan writer persists scoped phase-clean stamps used to skip already-clean doctor phases."
+    },
+    {
+      "file": "src/core/probes/probe-memoization.ts",
+      "symbol": "memoizeProbe",
+      "token": "writeFileSync",
+      "reason": "Probe memoization writer persists scoped probe-result cache JSON under the configured probe cache directory."
+    },
+    {
+      "file": "src/core/release/gate-pack-runner.ts",
+      "symbol": "writeGatePackReport",
+      "token": "writeFileSync",
+      "reason": "Gate-pack report writer persists scoped pack execution reports under the configured release report directory."
+    },
+    {
+      "file": "src/core/release/release-gate-cache-v2.ts",
+      "symbol": "writeCacheRecord",
+      "token": "writeFileSync",
+      "reason": "Release gate cache writer persists scoped cache-hit and reusable proof metadata under the release gate cache directory."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-proof-bank.ts",
+      "symbol": "writeTriWikiProofCard",
+      "token": "writeFileSync",
+      "reason": "TriWiki proof bank writer persists scoped reusable proof-card JSON under the configured proof bank directory."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-proof-bank.ts",
+      "symbol": "markTriWikiProofInvalidated",
+      "token": "writeFileSync",
+      "reason": "TriWiki proof invalidation writer persists scoped invalidation tombstones under the configured proof bank directory."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-proof-bank.ts",
+      "symbol": "backupCorruptProof",
+      "token": "renameSync",
+      "reason": "TriWiki corrupt-proof backup only renames unreadable scoped proof-card files inside the configured proof bank directory."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-sla-certificate.ts",
+      "symbol": "writeTriWikiSlaCertificate",
+      "token": "writeFileSync",
+      "reason": "TriWiki SLA certificate writer persists scoped release-equivalence certificate JSON under the configured certificate path."
     },
     {
       "file": "src/core/release/release-gate-report.ts",
       "symbol": "writeReleaseGateJson",
       "token": "writeFileSync",
       "reason": "Release gate report helper writes scoped JSON artifacts for the active release-gate run."
+    },
+    {
+      "file": "src/scripts/doctor-fix-proves-codex-read-check.ts",
+      "symbol": "runDoctorFix",
+      "token": "fs.writeFile",
+      "reason": "Doctor fix proof script writes only scoped temporary fixture files under mkdtemp before read-back verification."
     },
     {
       "file": "src/scripts/release-cache-glob-hashing-check.ts",

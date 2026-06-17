@@ -1,15 +1,15 @@
 {
   "schema": "sks.release-proof-truth.v1",
-  "generated_at": "2026-06-16T07:41:56.354Z",
-  "package_version": "3.1.12",
-  "git_commit_sha": "61e76de8c95fae5fee957754a4c0512df2fc2b92",
+  "generated_at": "2026-06-17T19:43:34.329Z",
+  "package_version": "4.0.0",
+  "git_commit_sha": "5df8d469299c7ffbb248bb2acb64356da519379a",
   "git_branch": "main",
   "git_status_clean": false,
-  "package_json_sha256": "cd35ab4700202f0cde23dbe87ebe3f637503d6b0801ed398d72a2f4c732e1a51",
-  "package_lock_sha256": "fe144fa542065e009820c1a20cf319c9a67eb728dca4d774e05b1bbf4b7aa2ae",
-  "version_ts_sha256": "51ec8bc5f85425b423bf174680274cefa3448588cc431cba2241814d826dad05",
-  "changelog_sha256": "6297373598aba304405d2b116afc9c3ea16f4c7047cf6115908396224deb48ca",
-  "release_gates_sha256": "c9ffc1c6e53d6a3b89c4c8292754b77cf8cb2a81d4290735368d203e098eac56",
-  "npm_packlist_count": 957,
-  "npm_packlist_bytes": 6262071
+  "package_json_sha256": "c04c23a349756a9b3307133fb86ed6078e47b126e84dcd480fcf351dc0fe78d0",
+  "package_lock_sha256": "df9acb95c3fa8757f884deec9ea37b9762383bc87d5caa8be2d8d642c8cb8b60",
+  "version_ts_sha256": "4e01bd83fb577a5c858c3f5b4d69d53005c83d2986fe4de7bd09e1596e10a26c",
+  "changelog_sha256": "aaf08bb9987b09cd14ad43c1891688b9edb3c34d3f7aa2e6c542b743d279a285",
+  "release_gates_sha256": "3b7c854cbb7a35a785e2dbc82284ac40f697716804cc568d0bcc91b1fe9bbb96",
+  "npm_packlist_count": 974,
+  "npm_packlist_bytes": 6280176
 }

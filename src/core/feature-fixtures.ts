@@ -23,6 +23,7 @@ const FIXTURES = Object.freeze({
   'cli-hooks': fixture('mock', 'sks hooks trust-report --json', [], 'pass'),
   'cli-features': fixture('execute', 'sks features check --json', [], 'pass'),
   'cli-commands': fixture('execute', 'sks commands --json', [], 'pass'),
+  'cli-check': fixture('execute', 'sks check --tier confidence --sla 5m --plan --json', [], 'pass'),
   'cli-run': fixture('execute_and_validate_artifacts', 'sks run "fixture" --mock --json', ['run-classification.json', 'completion-proof.json', 'evidence-index.json', 'route-completion-contract.json', 'trust-report.json'], 'pass'),
   'cli-status': fixture('execute', 'sks status --json', [], 'pass'),
   'cli-usage': fixture('execute', 'sks usage overview', [], 'pass'),

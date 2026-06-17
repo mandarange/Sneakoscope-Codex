@@ -21,7 +21,7 @@ assertGate(
   { release_check: releaseCheck, delegated_release_check: delegatedReleaseCheck || null, effective_release_check: effectiveReleaseCheck }
 )
 assertGate(!/&&\s*npm run\s+\w/.test(releaseCheck.replace('npm run build --silent &&', '')), 'release:check must not be a giant npm-run chain', releaseCheck)
-assertGate(!/&&\s*npm run\s+\w/.test(effectiveReleaseCheck.replace('npm run build --silent &&', '')), 'effective release:check must not be a giant npm-run chain', effectiveReleaseCheck)
+assertGate(!/&&\s*npm run\s+\w/.test(effectiveReleaseCheck.replace('npm run build:incremental --silent &&', '').replace('npm run build --silent &&', '')), 'effective release:check must not be a giant npm-run chain', effectiveReleaseCheck)
 assertGate(pkg.scripts['release:check:legacy'], 'release:check:legacy must exist for explicit debugging')
 assertGate(manifest.schema === 'sks.release-gates.v2' && manifest.gates.length >= 10, 'release-gates.v2 manifest must exist with nodes', manifest)
 for (const gateId of ['scheduler:utilization-integral', 'parallel:runtime-real-blackbox', 'agent:native-cli-session-swarm-20', 'doctor:fix-proves-codex-read', 'codex:0139-real-probes', 'zellij:slot-telemetry-performance', 'naruto:real-parallelism-blackbox']) {
@@ -31,6 +31,7 @@ for (const gateId of ['scheduler:utilization-integral', 'parallel:runtime-real-b
 assertGate(runner.includes('Promise.race') && scheduler.includes('pickLaunchableReleaseGates'), 'DAG runner must schedule independent gates concurrently')
 assertGate(runner.includes('readReleaseGateCacheRecord') && cache.includes('duration_ms') && cache.includes('RELEASE_GATE_CACHE_V2_SCHEMA'), 'DAG runner must use release gate cache v2 module with cached duration evidence')
 assertGate(runner.includes('cpu_time_saved_ms') && runner.includes('peak_running') && runner.includes('budget_snapshot'), 'DAG summary must include CPU time saved, peak running gates, and resource budget proof')
+assertGate(runner.includes('sks.five-minute-completion-certificate.v1') && runner.includes('sks.affected-gate-graph.v1') && cache.includes('releaseGateProofBankFile'), 'DAG runner must emit completion certificates, affected graph, and proof-bank cache path')
 assertGate(runner.includes('detached: process.platform') && runner.includes('killGateProcessTree') && runner.includes('timed_out'), 'DAG runner must kill timed-out gate process trees and record timeout evidence')
 assertGate(runner.includes('pruneOldReleaseGateRunDirs') && runner.includes('SKS_RELEASE_GATE_RUN_RETENTION'), 'DAG runner must prune stale release-gate run reports before they exhaust local disk')
 
@@ -82,6 +83,10 @@ assertGate(firstCacheRun.ok === true && firstCacheRun.cached === 0, 'DAG cache f
 assertGate(secondCacheRun.ok === true && secondCacheRun.cached === 1, 'DAG cache fixture second run must hit cache', secondCacheRun)
 assertGate(cachedDuration > 0, 'DAG cache fixture must retain nonzero cached duration evidence', secondCacheRun)
 assertGate(secondCacheRun.sum_gate_ms >= cachedDuration, 'DAG cache fixture must include cached duration in sum_gate_ms evidence', secondCacheRun)
+assertGate(secondCacheRun.completion_certificate?.schema === 'sks.five-minute-completion-certificate.v1', 'DAG cache fixture must include completion certificate', secondCacheRun)
+assertGate(secondCacheRun.affected_graph?.proof_bank_file?.includes('.sneakoscope/proof-bank/gates/cache-v2.json'), 'DAG cache fixture must expose proof bank path', secondCacheRun)
+assertGate(await exists(path.join(cacheRoot, '.sneakoscope', 'reports', 'release-gates', secondCacheRun.run_id, 'completion-certificate.json')), 'DAG cache fixture must write completion-certificate artifact')
+assertGate(await exists(path.join(cacheRoot, '.sneakoscope', 'proof-bank', 'gates', 'cache-v2.json')), 'DAG cache fixture must mirror successful proof into proof bank')
 
 const retentionRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-dag-retention-'))
 const retentionBase = path.join(retentionRoot, '.sneakoscope', 'reports', 'release-gates')

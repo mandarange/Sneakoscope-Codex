@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
 import { appendReleaseGateJsonl, writeReleaseGateJson } from './release-gate-report.js'
 import { findReadyReleaseGateNodes, findReleaseGatesBlockedByFailedDeps, pickReadyLaunchableReleaseGates } from './release-gate-scheduler.js'
-import { readReleaseGateCacheRecord, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
+import { readReleaseGateCacheRecord, releaseGateProofBankFile, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
 import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGateManifestV2, type ReleaseGateNode } from './release-gate-node.js'
 import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
 import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
@@ -39,7 +39,40 @@ export interface ReleaseGateDagRunResult {
   budget_summary: string
   report_dir: string
   failures: Array<{ id: string; exit_code: number | null; stderr_tail: string; timed_out: boolean; signal: NodeJS.Signals | null }>
+  affected_graph: ReleaseGateAffectedGraph
+  completion_certificate: ReleaseGateCompletionCertificate
   retention?: ReleaseGateRunRetention
+}
+
+export interface ReleaseGateAffectedGraph {
+  schema: 'sks.affected-gate-graph.v1'
+  changed_files: string[]
+  affected_modules: string[]
+  affected_gates: string[]
+  reused_proofs: string[]
+  invalidated_proofs: string[]
+  skipped_gate_ids: string[]
+  proof_bank_file: string
+}
+
+export interface ReleaseGateCompletionCertificate {
+  schema: 'sks.five-minute-completion-certificate.v1'
+  ok: boolean
+  tier: string
+  confidence: 'release-equivalent-for-affected-scope' | 'full-release-proof'
+  sla_ms: number
+  sla_met: boolean
+  changed_files: string[]
+  affected_gates: number
+  reused_proofs: number
+  newly_executed_gates: number
+  skipped_as_valid_cache: number
+  skipped_as_unaffected: number
+  critical_path_ms: number
+  wall_ms: number
+  full_release_proof: 'current_run' | 'background_or_release_before_publish_required'
+  proof_bank_file: string
+  affected_graph_file: string
 }
 
 export interface ReleaseGateRunRetention {
@@ -70,6 +103,7 @@ export async function runReleaseGateDag(input: {
   explain?: boolean
   changedSince?: string | null
   full?: boolean
+  slaMs?: number | null
 }): Promise<ReleaseGateDagRunResult> {
   const root = path.resolve(input.root)
   const preset = input.preset || 'release'
@@ -88,8 +122,11 @@ export async function runReleaseGateDag(input: {
   const reportDir = path.join(root, '.sneakoscope', 'reports', 'release-gates', runId)
   fs.mkdirSync(reportDir, { recursive: true })
   const timeline = path.join(reportDir, 'timeline.jsonl')
+  const affectedGraphFile = path.join(reportDir, 'affected-gate-graph.json')
+  const completionCertificateFile = path.join(reportDir, 'completion-certificate.json')
   appendReleaseGateJsonl(timeline, { event: 'retention', phase: 'before_run', ...retentionBefore, at: new Date().toISOString() })
   const started = Date.now()
+  const slaMs = Math.max(1, Math.floor(Number(input.slaMs || 300000)))
   const pending = new Map(selected.map((gate) => [gate.id, gate]))
   const running = new Map<string, { gate: ReleaseGateNode; promise: Promise<GateRunResult> }>()
   const completed = new Map<string, GateRunResult>()
@@ -105,6 +142,23 @@ export async function runReleaseGateDag(input: {
   const writeSummarySnapshot = (finished = false): ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } => {
     const wallMs = Date.now() - started
     const failures = [...failed.values()].map((row) => ({ id: row.id, exit_code: row.exit_code, stderr_tail: row.stderr_tail, timed_out: row.timed_out, signal: row.signal }))
+    const affectedGraph = buildAffectedGraph({
+      selection: affected.selection,
+      selected,
+      cachedGates,
+      executedGates,
+      proofBankFile: releaseGateProofBankFile(root)
+    })
+    const completionCertificate = buildCompletionCertificate({
+      ok: failures.length === 0,
+      preset,
+      slaMs,
+      wallMs,
+      criticalPathMs: estimateCriticalPath(selected, completed),
+      affectedGraph,
+      affectedGraphFile,
+      skippedByAffected: affected.selection.mode === 'affected' ? affected.selection.skipped_gate_ids : []
+    })
     const snapshot: ReleaseGateDagRunResult & { in_progress?: boolean; pending?: number; running?: number } = {
       schema: 'sks.release-gate-dag-run.v1',
       ok: failures.length === 0,
@@ -134,7 +188,9 @@ export async function runReleaseGateDag(input: {
 	      budget_snapshot: budget,
       budget_summary: summarizeReleaseGateBudget(budget),
       report_dir: reportDir,
-      failures
+      failures,
+      affected_graph: affectedGraph,
+      completion_certificate: completionCertificate
     }
     if (!finished) {
       snapshot.in_progress = true
@@ -142,6 +198,12 @@ export async function runReleaseGateDag(input: {
       snapshot.running = running.size
     }
     writeReleaseGateJson(path.join(reportDir, 'summary.json'), snapshot)
+    writeReleaseGateJson(affectedGraphFile, affectedGraph)
+    writeReleaseGateJson(completionCertificateFile, completionCertificate)
+    if (finished) {
+      writeReleaseGateJson(path.join(root, '.sneakoscope', 'reports', 'affected-gate-graph.json'), affectedGraph)
+      writeReleaseGateJson(path.join(root, '.sneakoscope', 'reports', 'completion-certificate.json'), completionCertificate)
+    }
     return snapshot
   }
 
@@ -240,6 +302,71 @@ interface GateRunResult {
   duration_ms: number
   cached: boolean
   stderr_tail: string
+}
+
+function buildAffectedGraph(input: {
+  selection: ReleaseGateAffectedSelection
+  selected: ReleaseGateNode[]
+  cachedGates: string[]
+  executedGates: string[]
+  proofBankFile: string
+}): ReleaseGateAffectedGraph {
+  return {
+    schema: 'sks.affected-gate-graph.v1',
+    changed_files: input.selection.changed_files,
+    affected_modules: inferAffectedModules(input.selection.changed_files),
+    affected_gates: input.selected.map((gate) => gate.id),
+    reused_proofs: [...input.cachedGates],
+    invalidated_proofs: [...input.executedGates],
+    skipped_gate_ids: input.selection.skipped_gate_ids,
+    proof_bank_file: input.proofBankFile
+  }
+}
+
+function buildCompletionCertificate(input: {
+  ok: boolean
+  preset: string
+  slaMs: number
+  wallMs: number
+  criticalPathMs: number
+  affectedGraph: ReleaseGateAffectedGraph
+  affectedGraphFile: string
+  skippedByAffected: string[]
+}): ReleaseGateCompletionCertificate {
+  const affectedScope = input.preset === 'affected' || input.preset === 'fast'
+  return {
+    schema: 'sks.five-minute-completion-certificate.v1',
+    ok: input.ok,
+    tier: input.preset === 'affected' ? 'confidence' : input.preset,
+    confidence: affectedScope ? 'release-equivalent-for-affected-scope' : 'full-release-proof',
+    sla_ms: input.slaMs,
+    sla_met: input.wallMs <= input.slaMs,
+    changed_files: input.affectedGraph.changed_files,
+    affected_gates: input.affectedGraph.affected_gates.length,
+    reused_proofs: input.affectedGraph.reused_proofs.length,
+    newly_executed_gates: input.affectedGraph.invalidated_proofs.length,
+    skipped_as_valid_cache: input.affectedGraph.reused_proofs.length,
+    skipped_as_unaffected: input.skippedByAffected.length,
+    critical_path_ms: input.criticalPathMs,
+    wall_ms: input.wallMs,
+    full_release_proof: affectedScope ? 'background_or_release_before_publish_required' : 'current_run',
+    proof_bank_file: input.affectedGraph.proof_bank_file,
+    affected_graph_file: input.affectedGraphFile
+  }
+}
+
+function inferAffectedModules(files: string[]): string[] {
+  const modules = new Set<string>()
+  for (const file of files) {
+    const normalized = file.replace(/\\/g, '/')
+    const parts = normalized.split('/').filter(Boolean)
+    if (!parts.length) continue
+    const top = parts[0]!
+    if (parts[0] === 'src' && parts.length >= 3) modules.add(parts.slice(0, 3).join('/'))
+    else if (parts[0] === 'test' && parts.length >= 2) modules.add(parts.slice(0, 2).join('/'))
+    else modules.add(top)
+  }
+  return [...modules].sort()
 }
 
 function runGate(root: string, runId: string, reportRoot: string, gate: ReleaseGateNode): Promise<GateRunResult> {

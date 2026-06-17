@@ -134,6 +134,11 @@ export const COMMANDS = {
   help: entry('stable', 'Show SKS help', 'dist/commands/help.js', directCommand(() => import('../commands/help.js'), 'dist/commands/help.js')),
   version: entry('stable', 'Show SKS version', 'dist/commands/version.js', directCommand(() => import('../commands/version.js'), 'dist/commands/version.js')),
   commands: entry('stable', 'List SKS commands', 'dist/core/commands/basic-cli.js', basicArgs('commandsCommand')),
+  check: entry('stable', 'Run five-minute proof-bank affected checks', 'dist/core/commands/check-command.js', argsCommand(() => import('../core/commands/check-command.js'), 'checkCommand', 'dist/core/commands/check-command.js')),
+  task: entry('stable', 'Run an SLA-bounded SKS task check', 'dist/core/commands/task-command.js', argsCommand(() => import('../core/commands/task-command.js'), 'taskCommand', 'dist/core/commands/task-command.js')),
+  release: entry('stable', 'Run affected/full/background release gates', 'dist/core/commands/release-command.js', argsCommand(() => import('../core/commands/release-command.js'), 'releaseCommand', 'dist/core/commands/release-command.js')),
+  triwiki: entry('stable', 'Inspect TriWiki index, affected graph, and proof bank', 'dist/core/commands/triwiki-command.js', argsCommand(() => import('../core/commands/triwiki-command.js'), 'triwikiCommand', 'dist/core/commands/triwiki-command.js')),
+  daemon: entry('stable', 'Inspect or warm the local SKS daemon cache', 'dist/core/commands/daemon-command.js', argsCommand(() => import('../core/commands/daemon-command.js'), 'daemonCommand', 'dist/core/commands/daemon-command.js')),
   run: entry('beta', 'Classify and execute a task through the SKS trust kernel', 'dist/core/commands/run-command.js', argsCommand(() => import('../core/commands/run-command.js'), 'runCommand', 'dist/core/commands/run-command.js')),
   status: entry('stable', 'Show concise active mission and trust status', 'dist/core/commands/status-command.js', argsCommand(() => import('../core/commands/status-command.js'), 'statusCommand', 'dist/core/commands/status-command.js')),
   root: entry('stable', 'Show active SKS root', 'dist/commands/root.js', directCommand(() => import('../commands/root.js'), 'dist/commands/root.js')),
@@ -221,17 +226,6 @@ export const TYPED_COMMANDS = COMMANDS;
 export type CommandName = Extract<keyof typeof COMMANDS, string>;
 
 export const LEGACY_COMMAND_ALIASES = {
-  auth: 'codex-lb',
-  mad: 'mad-sks',
-  autoreview: 'auto-review',
-  dollars: 'dollar-commands',
-  '$': 'dollar-commands',
-  'ux-review': 'image-ux-review',
-  'visual-review': 'image-ux-review',
-  'ui-ux-review': 'image-ux-review',
-  cu: 'computer-use',
-  grok: 'xai',
-  memory: 'gc'
 } as const satisfies Record<string, CommandName>;
 
 export const COMMAND_ALIASES = {

@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-06-18
 
+- Add the TriWiki proof bank, proof cards, cache keys, module cards, gate impact maps, affected graphs, and SLA certificates for reusable affected-scope release proof.
+- Add gate-pack manifest/runner, resource-class budgets, extreme parallel scheduler, five-minute SLA planning, build-once proof, `sksd` cache warming, and probe memoization.
+- Add first-class `sks task`, `sks release`, `sks triwiki`, `sks daemon`, and `sks proof bank status` surfaces.
+- Add doctor dirty repair planning so already-clean repair phases can be skipped with explicit transaction evidence.
+- Add legacy/orphan gate inventory, destructive legacy alias purge checks, 4.0.0 required-gate coverage, and all-feature regression wiring.
+- Bump package, lockfile, TypeScript constants, Rust helper metadata, README, changelog, and release docs to 4.0.0.
 
 
 ## [3.1.16] - 2026-06-17

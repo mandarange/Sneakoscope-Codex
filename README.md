@@ -35,7 +35,17 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.16** is a launch-reliability patch on the 3.1.15 doctor-reliability release. It makes `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
+SKS **4.0.0** is the destructive TriWiki Parallel Turbo release. It moves default completion toward affected-scope, release-equivalent proof with reusable TriWiki proof cards, gate packs, SLA scheduling, build-once proof, probe memoization, and explicit legacy-runtime migration instead of silent fallback aliases.
+
+What changed in 4.0.0:
+
+- **TriWiki proof bank.** Proof cards now bind reusable gate proof to input hash, implementation hash, package lock hash, environment allowlist, fixture version, and tool version.
+- **Affected release-equivalent verification.** Changed files map to module cards, gate impact maps, and gate packs so small tasks can run fast without giving up scoped release confidence.
+- **Parallel SLA planning.** Release gate packs, resource budgets, and SLA certificates expose the planned critical path for five-minute foreground verification.
+- **New control surface.** `sks check`, `sks task`, `sks release`, `sks triwiki`, `sks proof bank status`, and `sks daemon` expose the fast proof pipeline.
+- **No silent legacy fallback.** Compatibility aliases are removed; removed runtimes now use explicit migration notices.
+
+SKS **3.1.16** was a launch-reliability patch on the 3.1.15 doctor-reliability release. It made `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
 
 What changed in 3.1.16:
 
