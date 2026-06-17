@@ -65,7 +65,7 @@ async function enable(args: string[]) {
     : await runLocalLlmGenerationSmoke(config, {
         prompt: 'Return strict JSON: {"status":"ok","summary":"local smoke passed"}',
         schema: localLlmSmokeSchema,
-        timeoutMs: 20_000
+        timeoutMs: Math.max(60_000, Number(config.timeout_ms || 0) || 0)
       })
   const next = await writeLocalModelConfig(applyLocalLlmSmokeResult(config, smoke))
   if (!skipSmoke && smoke.ok !== true) process.exitCode = 1

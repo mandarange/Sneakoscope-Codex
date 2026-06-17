@@ -1,8 +1,9 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { appendJsonl, exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, exists, nowIso, packageRoot, readJson, writeJsonAtomic } from '../fsx.js'
 import { drainZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { normalizeAgentSessionRows } from './agent-session-rows.js'
+import { closeZellijPaneById } from '../zellij/zellij-worker-pane-manager.js'
 
 export const AGENT_CLEANUP_PROOF_SCHEMA = 'sks.agent-cleanup-proof.v2'
 export const AGENT_CLEANUP_ACTION_LEDGER_SCHEMA = 'sks.agent-cleanup-action-ledger.v1'
@@ -88,12 +89,14 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       killEscalation
     }))
   }
+  const seenZellijPaneIds = new Set<string>()
   const zellijReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-zellij-report.json')
   for (const file of zellijReports) {
     const report = await readJson<any>(file, null)
     const paneId = String(report?.pane_id || '')
     const sessionId = String(report?.session_id || '')
     if (!paneId) continue
+    seenZellijPaneIds.add(paneId)
     if (!processReportInNamespace(report, projectHash)) {
       actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'zellij_pane_outside_project_namespace' })
       continue
@@ -113,6 +116,72 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
         await drainZellijLaneSupervisor(agentRoot).catch(() => null)
       }
     }))
+  }
+  const workerPaneReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'zellij-worker-pane.json')
+  for (const file of workerPaneReports) {
+    const report = await readJson<any>(file, null)
+    const paneId = String(report?.pane_id || '')
+    const sessionName = String(report?.session_name || '')
+    const sessionId = String(report?.session_id || '')
+    const status = String(report?.status || '')
+    if (!paneId || !sessionName || seenZellijPaneIds.has(paneId)) continue
+    seenZellijPaneIds.add(paneId)
+    if (opts.missionId && report?.mission_id && String(report.mission_id) !== String(opts.missionId)) {
+      actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'zellij_pane_wrong_mission' })
+      continue
+    }
+    const terminal = TERMINAL_STATUSES.has(status) || Boolean(report?.closed_at)
+    if (activeSessionIds.has(sessionId) && !terminal && opts.drain !== true) {
+      actions.push({ kind: 'skip_active_session', target: sessionId || paneId, status: 'skipped', reason: 'managed_zellij_worker_active' })
+      continue
+    }
+    actions.push(await applyAction({
+      kind: 'close_zellij_pane',
+      target: paneId,
+      reason: terminal ? 'managed_worker_zellij_pane_terminal' : 'managed_worker_zellij_pane_stale',
+      apply,
+      before: async () => ({ listed: true, pane_id: paneId, session_name: sessionName, source: path.relative(agentRoot, file), status }),
+      after: async () => ({ listed: false, pane_id: paneId, session_name: sessionName }),
+      run: async () => {
+        const close = await closeZellijPaneById(sessionName, paneId, packageRoot())
+        if (close && close.ok !== true) throw new Error(close.blockers.join(',') || close.stderr_tail || 'zellij_pane_close_failed')
+      }
+    }))
+  }
+  const rightColumnReports = await listNamedFiles(opts.missionDir, 'zellij-right-column-state.json')
+  for (const file of rightColumnReports) {
+    const report = await readJson<any>(file, null)
+    const sessionName = String(report?.session_name || '')
+    if (!sessionName) continue
+    const visibleActive = (Array.isArray(report?.visible_worker_panes) ? report.visible_worker_panes : [])
+      .some((pane: any) => pane?.status === 'launching' || pane?.status === 'running')
+    const headlessActive = (Array.isArray(report?.headless_workers) ? report.headless_workers : [])
+      .some((row: any) => !row?.status || row.status === 'running')
+    const anchorPaneIds = [...new Set([
+      report?.slot_column_anchor_pane_id,
+      report?.right_anchor_pane_id,
+      report?.dashboard_pane_id
+    ].map(String).filter((paneId) => paneId && paneId !== 'null' && paneId !== 'undefined'))]
+    for (const paneId of anchorPaneIds) {
+      if (seenZellijPaneIds.has(paneId)) continue
+      seenZellijPaneIds.add(paneId)
+      if ((visibleActive || headlessActive) && opts.drain !== true) {
+        actions.push({ kind: 'skip_active_session', target: paneId, status: 'skipped', reason: 'zellij_right_column_anchor_active' })
+        continue
+      }
+      actions.push(await applyAction({
+        kind: 'close_zellij_pane',
+        target: paneId,
+        reason: 'zellij_right_column_anchor_terminal',
+        apply,
+        before: async () => ({ listed: true, pane_id: paneId, session_name: sessionName, source: path.relative(opts.missionDir, file), visible_active: visibleActive, headless_active: headlessActive }),
+        after: async () => ({ listed: false, pane_id: paneId, session_name: sessionName }),
+        run: async () => {
+          const close = await closeZellijPaneById(sessionName, paneId, packageRoot())
+          if (close && close.ok !== true) throw new Error(close.blockers.join(',') || close.stderr_tail || 'zellij_anchor_close_failed')
+        }
+      }))
+    }
   }
   for (const dir of Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs.map(String) : []) {
     if (!namespaceOwnsPath(dir, projectHash)) {

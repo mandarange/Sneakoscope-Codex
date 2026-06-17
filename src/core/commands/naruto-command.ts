@@ -105,7 +105,7 @@ async function narutoRun(parsed: NarutoArgs) {
   // system-safe number so naruto never spawns the whole count at once unless an
   // explicit operator override asks for a higher target.
   const localWorker = await resolveNarutoLocalWorkerMode(parsed)
-  const schedulerBackend = localWorker.auto_select_eligible ? 'ollama' : parsed.backend
+  const schedulerBackend = localWorker.auto_select_eligible ? 'local-llm' : parsed.backend
   const safe = systemSafeNarutoConcurrency({ backend: schedulerBackend })
   const baseWorkGraph = buildNarutoWorkGraph({
     prompt: parsed.prompt,
@@ -664,7 +664,7 @@ function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {
   }
   return {
     ...localWorker,
-    selected_worker_count: backendCounts.ollama || 0,
+    selected_worker_count: (backendCounts['local-llm'] || 0) + (backendCounts.ollama || 0),
     backend_counts: backendCounts
   }
 }
@@ -774,7 +774,7 @@ async function narutoHelp(parsed: NarutoArgs) {
     mode: 'NARUTO',
     description: 'Shadow Clone Swarm: fan out up to ' + MAX_NARUTO_AGENT_COUNT + ' parallel clone sessions.',
     usage: [
-      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama] [--local-model|--no-ollama] [--work-items N] [--write-mode parallel|serial|off] [--apply-patches] [--dry-run-patches] [--real] [--readonly] [--json]',
+      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama|local-llm] [--local-model|--ollama|--no-ollama] [--work-items N] [--write-mode parallel|serial|off] [--apply-patches] [--dry-run-patches] [--real] [--readonly] [--json]',
       'sks naruto status [--mission <id>] [--json]',
       'sks naruto proof latest [--messages 20] [--json]'
     ],
@@ -831,10 +831,19 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const workItemsExplicit = hasOption(args, '--work-items')
   const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones * 2)), clones)
   const concurrency = normalizeConcurrency(readOption(args, '--concurrency', readOption(args, '--target-active-slots', null)), clones)
-  const useOllama = hasFlag(args, '--ollama') || hasFlag(args, '--local-model')
+  const useOllamaProtocol = hasFlag(args, '--ollama')
+  const useLocalModel = hasFlag(args, '--local-model')
+  const useOllama = useOllamaProtocol || useLocalModel
   const noOllama = hasFlag(args, '--no-ollama') || hasFlag(args, '--no-local-model')
   const backendExplicit = hasOption(args, '--backend') || useOllama || noOllama
-  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : useOllama && !noOllama ? 'ollama' : 'codex-sdk'))
+  const defaultBackend = hasFlag(args, '--mock')
+    ? 'fake'
+    : useLocalModel && !noOllama
+      ? 'local-llm'
+      : useOllamaProtocol && !noOllama
+        ? 'ollama'
+        : 'codex-sdk'
+  const backend = String(readOption(args, '--backend', defaultBackend))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
   const readonly = hasFlag(args, '--readonly') || hasFlag(args, '--read-only')

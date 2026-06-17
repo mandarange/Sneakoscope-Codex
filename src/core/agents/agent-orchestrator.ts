@@ -1679,7 +1679,8 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
   backend = await maybeSelectOllamaBackend(backend, agent, slice, opts)
   if (backend === 'process') return runProcessAgent(agent, slice, opts)
   if (backend === 'ollama') return runOllamaAgent(agent, slice, opts)
-  if (backend === 'codex-sdk' || backend === 'zellij') {
+  if (backend === 'codex-sdk' || backend === 'zellij' || backend === 'local-llm') {
+    const localPreferred = backend === 'local-llm'
     const ledgerRoot = path.resolve(opts.agentRoot || opts.cwd || process.cwd())
     const workerDir = path.join(ledgerRoot, 'codex-sdk-workers', String(agent.session_id || agent.id || 'agent'), String(slice?.id || 'slice'))
     const writePaths = sdkWritePaths(slice, opts)
@@ -1706,6 +1707,9 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
         user_confirmed_full_access: false,
         mad_sks_authorized: opts.madSksAuthorized === true || process.env.SKS_MAD_SKS_ACTIVE === '1'
       },
+      backendPreference: localPreferred ? ['local-llm', 'codex-sdk'] : ['codex-sdk'],
+      allowLocalLlm: localPreferred,
+      ...(localPreferred ? { localLlmPolicy: { mode: 'local_preferred', requiresGptFinal: true } } : {}),
       mutationLedgerRoot: workerDir,
       zellijPaneId: null
     })
@@ -1713,9 +1717,11 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
     const patchEnvelopes = normalizeDirectSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], agent, opts, sdkTask.sdkThreadId)
     const sdkReport = {
       schema: 'sks.codex-sdk-worker-adapter.v1',
-      backend: 'codex-sdk',
+      backend: sdkTask.backend === 'local-llm' ? 'local-llm' : 'codex-sdk',
+      backend_family: sdkTask.backend_family,
       sdk_thread_id: sdkTask.sdkThreadId,
       sdk_run_id: sdkTask.sdkRunId,
+      local_llm_proof_path: sdkTask.localLlmProofPath || null,
       stream_event_count: sdkTask.streamEventCount,
       structured_output_valid: sdkTask.structuredOutputValid,
       worker_result_path: path.relative(ledgerRoot, sdkTask.workerResultPath),
@@ -1726,18 +1732,31 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
     }
     return validateAgentWorkerResult({
       ...sdkWorkerResult,
-      backend: 'codex-sdk',
+      backend: sdkTask.backend === 'local-llm' ? 'local-llm' : 'codex-sdk',
       patch_envelopes: patchEnvelopes,
       ...(patchEnvelopes.length ? {} : { no_patch_reason: buildDirectNoPatchReason(slice, opts) }),
       codex_child_report: sdkReport,
       codex_sdk_thread: sdkReport,
       model_authored_patch_envelopes: patchEnvelopes.length > 0,
       fixture_patch_envelopes: false,
-      artifacts: [...new Set([...(sdkWorkerResult?.artifacts || []), path.relative(ledgerRoot, sdkTask.workerResultPath), path.join(path.relative(ledgerRoot, workerDir), 'codex-control-proof.json'), path.join(path.relative(ledgerRoot, workerDir), 'codex-thread-registry.json'), path.join(path.relative(ledgerRoot, workerDir), 'codex-sdk-events.jsonl')])],
+      artifacts: [...new Set([
+        ...(sdkWorkerResult?.artifacts || []),
+        path.relative(ledgerRoot, sdkTask.workerResultPath),
+        path.join(path.relative(ledgerRoot, workerDir), 'codex-control-proof.json'),
+        path.join(path.relative(ledgerRoot, workerDir), 'codex-thread-registry.json'),
+        path.join(path.relative(ledgerRoot, workerDir), sdkTask.backend === 'local-llm' ? 'local-llm-events.jsonl' : 'codex-sdk-events.jsonl'),
+        ...(sdkTask.localLlmProofPath ? [path.relative(ledgerRoot, sdkTask.localLlmProofPath)] : [])
+      ])],
       blockers: [...(sdkWorkerResult?.blockers || []), ...sdkTask.blockers],
       verification: {
         status: sdkTask.ok ? 'passed' : 'failed',
-        checks: [...(sdkWorkerResult?.verification?.checks || []), 'codex-sdk-control-plane', 'codex-sdk-event-stream', 'codex-sdk-structured-output']
+        checks: [
+          ...(sdkWorkerResult?.verification?.checks || []),
+          sdkTask.backend === 'local-llm' ? 'local-llm-control-plane' : 'codex-sdk-control-plane',
+          sdkTask.backend === 'local-llm' ? 'local-llm-event-stream' : 'codex-sdk-event-stream',
+          sdkTask.backend === 'local-llm' ? 'local-llm-structured-output' : 'codex-sdk-structured-output',
+          ...(sdkTask.backend === 'local-llm' ? ['gpt-final-required-before-acceptance'] : [])
+        ]
       }
     })
   }
@@ -1754,7 +1773,7 @@ async function maybeSelectOllamaBackend(backend: string, agent: any, slice: any,
   }).catch(() => null)
   if (!config?.ok || config.enabled !== true) return backend
   const policy = classifyOllamaWorkerSlice(slice, { route: opts.route, agent })
-  return policy.ok ? 'ollama' : backend
+  return policy.ok ? 'local-llm' : backend
 }
 
 function buildDirectSdkWorkerPrompt(slice: any) {

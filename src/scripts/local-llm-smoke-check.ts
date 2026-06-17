@@ -5,6 +5,7 @@ import { assertGate, emitGate, importDist, root } from './lib/codex-sdk-gate-lib
 const cfg = await importDist('core/agents/ollama-worker-config.js');
 const smokeMod = await importDist('core/local-llm/local-llm-smoke.js');
 const config = cfg.normalizeLocalModelConfig({ enabled: true, status: 'enabled_unverified' });
+const updateConfig = process.argv.includes('--update-config') || process.argv.includes('--write-config');
 
 if (process.env.SKS_REQUIRE_LOCAL_LLM !== '1' && !process.argv.includes('--require-real')) {
   const skipped = cfg.applyLocalLlmSmokeResult(config, { ok: false, skipped: true, status: 'enabled_unverified', reason: 'release_check_no_real_smoke', schema_valid: false });
@@ -19,5 +20,13 @@ if (process.env.SKS_REQUIRE_LOCAL_LLM !== '1' && !process.argv.includes('--requi
     ? await smokeMod.runLocalLlmGenerationSmoke(realConfig, { reportPath, timeoutMs: 90_000 })
     : first;
   assertGate(smoke.ok === true && smoke.schema_valid === true, 'real local LLM smoke failed', { smoke, retry_count: shouldRetry ? 1 : 0, first_failure_blockers: first.blockers || [] });
-  emitGate('local-llm:smoke', { status: 'real_verified', latency_ms: smoke.latency_ms, tokens_per_second: smoke.tokens_per_second, retry_count: shouldRetry ? 1 : 0 });
+  const updatedConfig = updateConfig ? await cfg.writeLocalModelConfig(cfg.applyLocalLlmSmokeResult(realConfig, smoke)) : null;
+  emitGate('local-llm:smoke', {
+    status: 'real_verified',
+    latency_ms: smoke.latency_ms,
+    tokens_per_second: smoke.tokens_per_second,
+    retry_count: shouldRetry ? 1 : 0,
+    config_updated: updateConfig,
+    config_status: updatedConfig?.status || realConfig.status
+  });
 }

@@ -79,7 +79,7 @@ class NativeCliSessionSwarmRecorder {
       patch_envelope_path: patchRel,
       service_tier: this.input.fastModePolicy.service_tier,
       fast_mode: this.input.fastModePolicy.fast_mode,
-      ollama_enabled: ctx.opts.ollamaEnabled === true || this.input.backend === 'ollama',
+      ollama_enabled: ctx.opts.ollamaEnabled === true || this.input.backend === 'ollama' || this.input.backend === 'local-llm',
       ollama_model: ctx.opts.ollamaModel || null,
       ollama_base_url: ctx.opts.ollamaBaseUrl || null,
       source_intelligence_refs: ctx.agent.source_intelligence_refs || null,

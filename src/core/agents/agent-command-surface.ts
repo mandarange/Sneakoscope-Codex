@@ -13,10 +13,19 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const minimumWorkItems = Number(readOption(args, '--minimum-work-items', targetActiveSlots))
   const maxQueueExpansion = Number(readOption(args, '--max-queue-expansion', 10))
   const concurrency = Number(readOption(args, '--concurrency', Math.min(agents, 5)))
-  const useOllama = hasFlag(args, '--ollama') || hasFlag(args, '--local-model')
+  const useOllamaProtocol = hasFlag(args, '--ollama')
+  const useLocalModel = hasFlag(args, '--local-model')
+  const useOllama = useOllamaProtocol || useLocalModel
   const noOllama = hasFlag(args, '--no-ollama') || hasFlag(args, '--no-local-model')
-  const backendExplicit = hasOption(args, '--backend')
-  const backend = String(readOption(args, '--backend', hasFlag(args, '--mock') ? 'fake' : useOllama && !noOllama ? 'ollama' : 'codex-sdk'))
+  const backendExplicit = hasOption(args, '--backend') || useOllamaProtocol || useLocalModel || noOllama
+  const defaultBackend = hasFlag(args, '--mock')
+    ? 'fake'
+    : useLocalModel && !noOllama
+      ? 'local-llm'
+      : useOllamaProtocol && !noOllama
+        ? 'ollama'
+        : 'codex-sdk'
+  const backend = String(readOption(args, '--backend', defaultBackend))
   const route = String(readOption(args, '--route', '$Agent'))
   const mock = hasFlag(args, '--mock') || backend === 'fake'
   const real = hasFlag(args, '--real')
@@ -35,7 +44,10 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const zellijSessionName = String(readOption(args, '--zellij-session-name', '') || '') || null
   const zellijPaneWorker = hasFlag(args, '--no-zellij-pane-worker') ? false : hasFlag(args, '--zellij-pane-worker') ? true : undefined
   const workerPlacement = String(readOption(args, '--worker-placement', zellijPaneWorker === true ? 'zellij-pane' : '') || '') || undefined
-  const zellijVisiblePaneCap = Number(readOption(args, '--zellij-visible-pane-cap', process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || 12))
+  const zellijVisiblePaneCap = resolveZellijVisiblePaneCap(
+    readOption(args, '--zellij-visible-pane-cap', process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || ''),
+    hasOption(args, '--zellij-visible-pane-cap') || Boolean(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP)
+  )
   const apply = hasFlag(args, '--apply')
   const dryRun = hasFlag(args, '--dry-run') || hasFlag(args, '--dryrun')
   const drain = hasFlag(args, '--drain')
@@ -52,6 +64,22 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
   return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, backendExplicit, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, zellijSessionName, zellijPaneWorker, workerPlacement, zellijVisiblePaneCap, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
+}
+
+export function resolveZellijVisiblePaneCap(value: unknown = '', explicit = false) {
+  const requested = Number(value)
+  if (explicit && Number.isFinite(requested) && requested >= 1) return Math.max(1, Math.floor(requested))
+  const columns = Number(process.env.SKS_ZELLIJ_TERMINAL_COLUMNS || process.env.COLUMNS || process.stdout?.columns || 0)
+  const unknownFallback = Number(process.env.SKS_ZELLIJ_UNKNOWN_VISIBLE_PANE_CAP || 3)
+  if (!Number.isFinite(columns) || columns < 120) {
+    return Math.max(1, Math.floor(Number.isFinite(unknownFallback) ? unknownFallback : 3))
+  }
+  const reservedColumns = Number(process.env.SKS_ZELLIJ_RESERVED_COLUMNS || 108)
+  const minWorkerColumns = Number(process.env.SKS_ZELLIJ_MIN_WORKER_PANE_COLUMNS || 72)
+  const maxAutoVisible = Number(process.env.SKS_ZELLIJ_MAX_AUTO_VISIBLE_PANES || 8)
+  const available = Math.max(0, columns - Math.max(80, reservedColumns))
+  const computed = Math.floor(available / Math.max(40, minWorkerColumns))
+  return Math.max(1, Math.min(Math.max(1, Math.floor(maxAutoVisible || 8)), computed || Math.floor(unknownFallback) || 3))
 }
 
 function hasFlag(args: string[], flag: string) {
