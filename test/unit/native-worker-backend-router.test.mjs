@@ -199,7 +199,7 @@ test('ollama worker normalizes flat path content envelopes', async () => {
   }
 });
 
-test('enabled local model auto-selects ollama for simple codex-sdk worker slice', async () => {
+test('enabled local model auto-selects local-llm for simple codex-sdk worker slice', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-router-ollama-auto-test-'));
   const old = snapshotEnv();
   const oldFetch = globalThis.fetch;
@@ -268,6 +268,80 @@ test('enabled local model auto-selects ollama for simple codex-sdk worker slice'
   }
 });
 
+test('explicit local-llm backend uses OpenAI-compatible chat completions path', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-router-local-llm-openai-test-'));
+  const old = snapshotEnv();
+  const oldFetch = globalThis.fetch;
+  process.env.SKS_DISABLE_ROUTE_RECURSION = '1';
+  process.env.SKS_AGENT_WORKER = '1';
+  process.env.SKS_LOCAL_MODEL_CONFIG = path.join(root, 'local-model.json');
+  await writeVerifiedOpenAiCompatibleLocalModelConfig(root);
+  let calledUrl = '';
+  globalThis.fetch = async (url, init) => {
+    calledUrl = String(url);
+    const body = JSON.parse(String(init?.body || '{}'));
+    assert.equal(body.model, 'local/openai-compatible');
+    assert.ok(Array.isArray(body.messages));
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              status: 'done',
+              summary: 'openai compatible local worker ready',
+              findings: ['chat completions endpoint used'],
+              changed_files: ['owned.ts'],
+              patch_envelopes: [{
+                schema: 'sks.agent-patch-envelope.v1',
+                source: 'model_authored',
+                agent_id: 'agent-local',
+                session_id: 'session-local',
+                slot_id: 'slot-001',
+                generation_index: 1,
+                task_slice_id: 'task-local',
+                lease_id: 'task-local',
+                allowed_paths: ['owned.ts'],
+                operations: [{ op: 'write', path: 'owned.ts', search: '', replace: '', content: 'export const OPENAI_COMPAT_LOCAL = true;\n', diff: '' }],
+                rationale: 'simple local worker patch'
+              }],
+              verification: { status: 'passed', checks: ['local-worker-self-check'] },
+              rollback_notes: [],
+              blockers: []
+            })
+          }
+        }]
+      })
+    };
+  };
+  try {
+    const result = await runNativeCliWorker({
+      intakeJson: {
+        mission_id: 'M-router-local-llm-openai-test',
+        backend: 'local-llm',
+        agent_root: root,
+        agent: { id: 'agent-local', session_id: 'session-local', slot_id: 'slot-001', generation_index: 1, persona_id: 'implementer' },
+        slice: { id: 'task-local', role: 'implementer', write_paths: ['owned.ts'], description: 'simple code write only' },
+        worker_artifact_dir: 'sessions/slot-001/gen-1/worker',
+        result_path: 'sessions/slot-001/gen-1/worker/worker-result.json',
+        heartbeat_path: 'sessions/slot-001/gen-1/worker/worker-heartbeat.jsonl',
+        patch_envelope_path: 'sessions/slot-001/gen-1/worker/worker-patch-envelope.json',
+        fast_mode: true,
+        service_tier: 'fast',
+        backend_explicit: true
+      }
+    });
+    assert.equal(calledUrl, 'http://127.0.0.1:8080/v1/chat/completions');
+    assert.equal(result.status, 'done');
+    assert.equal(result.backend_router_report.selected_backend, 'local-llm');
+    assert.equal(result.patch_envelopes[0].operations[0].path, 'owned.ts');
+  } finally {
+    globalThis.fetch = oldFetch;
+    restoreEnv(old);
+  }
+});
+
 test('ollama worker policy blocks strategy and design work', () => {
   const policy = classifyOllamaWorkerSlice({
     id: 'strategy-task',
@@ -291,6 +365,20 @@ async function writeVerifiedLocalModelConfig(root) {
     provider: 'ollama',
     model: 'rafw007/qwen36-a3b-claude-coder:q4_K_M',
     base_url: 'http://127.0.0.1:11434',
+    think: false,
+    capability: { api_reachable: true, model_installed: true },
+    last_smoke: { ok: true, schema_valid: true, ran_at: new Date().toISOString(), status: 'verified' }
+  }));
+}
+
+async function writeVerifiedOpenAiCompatibleLocalModelConfig(root) {
+  await fs.writeFile(path.join(root, 'local-model.json'), JSON.stringify({
+    schema: 'sks.local-model-config.v2',
+    enabled: true,
+    status: 'verified',
+    provider: 'openai-compatible',
+    model: 'local/openai-compatible',
+    base_url: 'http://127.0.0.1:8080',
     think: false,
     capability: { api_reachable: true, model_installed: true },
     last_smoke: { ok: true, schema_valid: true, ran_at: new Date().toISOString(), status: 'verified' }

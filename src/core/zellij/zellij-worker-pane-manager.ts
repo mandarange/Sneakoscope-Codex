@@ -621,7 +621,8 @@ export async function closeWorkerPane(input: {
   const root = path.resolve(input.root)
   const success = (input.status || 'closed') === 'closed' && !(input.blockers || []).length
   const closeSuccess = process.env.SKS_ZELLIJ_CLOSE_WORKER_PANE !== '0'
-  const closeFailed = process.env.SKS_ZELLIJ_CLOSE_FAILED_PANE === '1' || process.env.SKS_ZELLIJ_KEEP_FAILED_PANE === '0'
+  const keepFailed = process.env.SKS_ZELLIJ_KEEP_FAILED_PANE === '1'
+  const closeFailed = !keepFailed && process.env.SKS_ZELLIJ_CLOSE_FAILED_PANE !== '0'
   const paneId = input.paneRecord.pane_id
   const shouldClose = Boolean(paneId) && (success ? closeSuccess : closeFailed)
   const close = shouldClose
@@ -867,7 +868,7 @@ async function focusZellijPaneById(sessionName: string, paneId: string, cwd: str
   return last
 }
 
-async function closeZellijPaneById(sessionName: string, paneId: string, cwd: string): Promise<ZellijCommandResult | null> {
+export async function closeZellijPaneById(sessionName: string, paneId: string, cwd: string): Promise<ZellijCommandResult | null> {
   const candidates = zellijPaneIdCandidates(paneId)
   let last: ZellijCommandResult | null = null
   for (const candidate of candidates) {

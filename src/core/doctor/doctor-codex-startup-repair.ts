@@ -146,8 +146,10 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
     const targetExists = await exists(target)
     const currentValid = Boolean(current && path.isAbsolute(current) && await exists(current))
     if (currentValid && current === target) continue
-    warnings.push(`agent_config_file_stale:${tableName}`)
-    if (!fix) continue
+    if (!fix) {
+      warnings.push(`agent_config_file_stale:${tableName}`)
+      continue
+    }
     if (!targetExists) {
       await ensureDir(path.dirname(target))
       await writeTextAtomic(target, roleConfigToml(tableName, role.description, role.sandbox))

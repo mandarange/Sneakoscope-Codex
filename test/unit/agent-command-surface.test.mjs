@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAgentCommandArgs } from '../../dist/core/agents/agent-command-surface.js';
+import { parseAgentCommandArgs, resolveZellijVisiblePaneCap } from '../../dist/core/agents/agent-command-surface.js';
 
 test('agent command parser forwards real backend flags without leaking option values into prompt', () => {
   const parsed = parseAgentCommandArgs('agent', [
@@ -38,6 +38,46 @@ test('agent command parser marks default backend as implicit', () => {
 
   assert.equal(parsed.backend, 'codex-sdk');
   assert.equal(parsed.backendExplicit, false);
+});
+
+test('agent command parser separates local model from Ollama protocol backend', () => {
+  const local = parseAgentCommandArgs('agent', [
+    'run',
+    'simple local task',
+    '--local-model',
+    '--json'
+  ]);
+  assert.equal(local.backend, 'local-llm');
+  assert.equal(local.backendExplicit, true);
+  assert.equal(local.ollamaEnabled, true);
+
+  const ollama = parseAgentCommandArgs('agent', [
+    'run',
+    'simple ollama task',
+    '--ollama',
+    '--json'
+  ]);
+  assert.equal(ollama.backend, 'ollama');
+  assert.equal(ollama.backendExplicit, true);
+  assert.equal(ollama.ollamaEnabled, true);
+});
+
+test('agent command parser defaults zellij worker panes to a readable adaptive cap', () => {
+  const oldColumns = process.env.SKS_ZELLIJ_TERMINAL_COLUMNS;
+  const oldFallback = process.env.SKS_ZELLIJ_UNKNOWN_VISIBLE_PANE_CAP;
+  try {
+    process.env.SKS_ZELLIJ_TERMINAL_COLUMNS = '360';
+    assert.equal(resolveZellijVisiblePaneCap('', false), 3);
+    assert.equal(resolveZellijVisiblePaneCap('7', true), 7);
+    process.env.SKS_ZELLIJ_TERMINAL_COLUMNS = '';
+    process.env.SKS_ZELLIJ_UNKNOWN_VISIBLE_PANE_CAP = '2';
+    assert.equal(resolveZellijVisiblePaneCap('', false), 2);
+  } finally {
+    if (oldColumns === undefined) delete process.env.SKS_ZELLIJ_TERMINAL_COLUMNS;
+    else process.env.SKS_ZELLIJ_TERMINAL_COLUMNS = oldColumns;
+    if (oldFallback === undefined) delete process.env.SKS_ZELLIJ_UNKNOWN_VISIBLE_PANE_CAP;
+    else process.env.SKS_ZELLIJ_UNKNOWN_VISIBLE_PANE_CAP = oldFallback;
+  }
 });
 
 test('agent command parser keeps patch entry id out of rollback prompt positionals', () => {

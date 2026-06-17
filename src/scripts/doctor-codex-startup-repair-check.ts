@@ -76,6 +76,7 @@ assertGate(!checkerText.includes('message_role_prefix'), 'managed directive agen
 assertGate(repaired.ok === true, 'startup repair must pass when only optional sauron remains', repaired)
 assertGate(repaired.configs.every((entry) => entry.changed === true && entry.backup_path), 'startup repair must back up changed configs', repaired)
 assertGate(repaired.agent_role_files.created.length >= 10, 'startup repair must create missing project/global role configs', repaired)
+assertGate(repaired.configs.every((entry) => !entry.warnings.some((warning) => warning.includes('agent_config_file_stale'))), 'startup repair must not keep stale agent config warnings after repair', repaired)
 
 const tmpCandidate = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-startup-node-repl-'))
 const codexHomeCandidate = path.join(tmpCandidate, 'codex-home')
