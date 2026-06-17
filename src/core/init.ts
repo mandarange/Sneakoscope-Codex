@@ -814,7 +814,13 @@ function managedCodexConfigBlocks() {
     // Context7 credentials may live directly in this table as args/env/headers/url
     // depending on the user's MCP client setup. Seed the default only when absent;
     // never replace an existing Context7 block during setup/update.
-    { table: 'mcp_servers.context7', text: context7ConfigToml().trim(), preserveExisting: true },
+    // Seed the REMOTE (streamable HTTP `url`) transport, not local stdio: Codex
+    // merges the global ~/.codex/config.toml and the project config per-key, so a
+    // local-stdio `command` here merging with a remote `url` in the global config
+    // yields a stdio server that also carries a `url` — which Codex 0.140 rejects
+    // with `url is not supported for stdio`. Remote is also the transport the doctor
+    // migrates everyone to (local stdio can block interactive Codex launch).
+    { table: 'mcp_servers.context7', text: context7ConfigToml('remote').trim(), preserveExisting: true },
     { table: 'agents.native_agent', text: agentConfigBlock('native_agent', 'Read-only SKS analysis agent.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']) },
     { table: 'agents.team_consensus', text: agentConfigBlock('team_consensus', 'SKS planning/debate agent.', './agents/team-consensus.toml', ['Consensus', 'Atlas']) },
     { table: 'agents.implementation_worker', text: agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']) },

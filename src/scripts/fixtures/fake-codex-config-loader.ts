@@ -7,14 +7,26 @@ const args = process.argv.slice(2);
 const configPath = path.join(process.cwd(), '.codex', 'config.toml');
 const outputLastMessage = readOption('--output-last-message', '');
 
+let configText = '';
 try {
-  fs.readFileSync(configPath, 'utf8');
+  configText = fs.readFileSync(configPath, 'utf8');
 } catch (err) {
   emitConfigError(`Failed to read project config file ${configPath}: ${err.message}`);
 }
 
 if (process.env.SKS_FAKE_CODEX_CONFIG_EPERM === '1') {
   emitConfigError(`Failed to read project config file ${configPath}: Operation not permitted (os error 1)`);
+}
+
+// Simulate the Codex 0.140 stdio/url merge conflict: when the project config still
+// defines Context7 as a local stdio server (a `command`), Codex merges it with the
+// remote `url` in the global config and rejects the result. Once the doctor migrates
+// Context7 to the remote `url` transport (no `command`), the load succeeds.
+if (process.env.SKS_FAKE_CODEX_CONFIG_CONTEXT7_STDIO_CONFLICT === '1') {
+  const context7 = configText.match(/\[mcp_servers\.context7\][^[]*/)?.[0] || '';
+  if (/^\s*command\s*=/m.test(context7) || /@upstash\/context7-mcp/.test(context7)) {
+    emitConfigError('url is not supported for stdio\nin `mcp_servers.context7`');
+  }
 }
 
 if (process.env.SKS_FAKE_CODEX_CONFIG_TOML_ERROR === '1') {

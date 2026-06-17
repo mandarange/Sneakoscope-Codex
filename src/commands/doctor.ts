@@ -143,7 +143,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const migrationJournal = flag(args, '--fix')
     ? await writeFixMigrationJournal(root, migrationPreFix, configRepair, setupRepair).catch(() => null)
     : null;
-  const codexConfig = configRepair?.after || await inspectCodexConfigReadability(root, configProbeOpts);
+  let codexConfig = configRepair?.after || await inspectCodexConfigReadability(root, configProbeOpts);
   const codexDoctor = await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') });
   const codexDoctorDiff = compareCodexDoctorBridge(codexDoctorBefore, codexDoctor);
   codexStartupRepair = mergeObservedCodexStartupWarnings(codexStartupRepair, codexDoctor);
@@ -461,6 +461,17 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     blockers: [err?.message || String(err)],
     warnings: []
   }));
+  // Re-probe the Codex config AFTER the MCP transport repairs (Context7 remote
+  // migration, Supabase read-only, startup config) have landed. `repairCodexConfigEperm`
+  // ran its config-load probe ~before~ those repairs, so a config that those repairs
+  // fix in THIS run would otherwise keep `codexConfig.ok === false`, making the doctor
+  // report `cli_ready: no` / `codex_cli_config_toml_parse_error` on the very run that
+  // fixed it — the endless "rerun sks doctor --fix" loop. Only re-probe when the initial
+  // probe failed and we are in --fix mode, so healthy configs pay no extra probe cost.
+  if (doctorFix && codexConfig?.ok === false) {
+    const reinspected = await inspectCodexConfigReadability(root, configProbeOpts).catch(() => null);
+    if (reinspected) codexConfig = reinspected;
+  }
   const pkgBytes = await dirSize(root).catch(() => 0);
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,

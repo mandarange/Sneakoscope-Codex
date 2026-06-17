@@ -35,7 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.14** is a production-hardening release for Codex 0.140 evidence, transactional `sks doctor --fix` repair, MCP readiness, native capability proof, and protected-secret rollback.
+SKS **3.1.15** is a doctor-reliability patch on the 3.1.14 production-hardening release. It ends the endless `sks doctor --fix` loop that kept reporting `codex_cli_config_toml_parse_error` / `cli_ready: no` on the very run that already repaired the config.
+
+What changed in 3.1.15:
+
+- **`sks doctor --fix` no longer loops on a config it already fixed.** The Codex config-load probe is re-run *after* the Context7/Supabase/startup MCP repairs land, so the readiness verdict reflects the repaired config instead of the stale pre-repair snapshot.
+- **Context7 is seeded on the remote transport.** Managed setup writes `[mcp_servers.context7]` with the streamable-HTTP `url` instead of a local stdio `command`, so the project config never merges with a remote `url` in the global Codex config into the `url is not supported for stdio` error Codex 0.140 rejects.
+- **The config-load operator action is accurate.** A `codex_cli_config_toml_parse_error` now points at both misplaced machine-local keys *and* the Context7/MCP stdio-vs-`url` transport conflict, instead of only suggesting a key hoist that does nothing for a transport conflict.
+
+The 3.1.14 production-hardening surface for Codex 0.140 evidence, transactional `sks doctor --fix` repair, MCP readiness, native capability proof, and protected-secret rollback remains intact.
 
 What changed in 3.1.14:
 
