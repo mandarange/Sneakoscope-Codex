@@ -2,7 +2,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { appendJsonl, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
 import { checkZellijCapability } from './zellij-capability.js'
-import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij } from './zellij-command.js'
+import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { writeZellijLayout, type ZellijLayoutInput } from './zellij-layout-builder.js'
 import { writeZellijClipboardConfig } from './zellij-clipboard-config.js'
 import { writeZellijPaneProof, type ZellijPaneProofOptions } from './zellij-pane-proof.js'
@@ -73,6 +73,9 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     ok: false,
     blockers: [`zellij_pane_proof_exception:${err?.message || String(err)}`]
   }))
+  if (launch?.create_background) {
+    launch.create_background = normalizeExistingZellijSession(sessionName, launch.create_background)
+  }
   const launchOk = launch?.create_background?.ok === true
   const ok = capability.ok && (opts.dryRun === true || capability.status !== 'ok' || launchOk) && (opts.requireZellij === true ? paneProof.ok === true : true)
   const blockers = [
@@ -214,4 +217,17 @@ function readOption(args: readonly unknown[], name: string, fallback: string | n
   const list = args.map((arg) => String(arg))
   const index = list.indexOf(name)
   return index >= 0 && list[index + 1] ? String(list[index + 1]) : fallback
+}
+
+function normalizeExistingZellijSession(sessionName: string, result: ZellijCommandResult): ZellijCommandResult {
+  if (result.ok) return result
+  if (/Session already exists/i.test(result.stderr_tail || '')) {
+    return {
+      ...result,
+      ok: true,
+      blockers: [],
+      warnings: [...result.warnings, `zellij_session_already_exists:${sessionName}`]
+    }
+  }
+  return result
 }

@@ -35,16 +35,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **3.1.13** is a production-hardening release for Codex 0.140 evidence, transactional `sks doctor --fix` repair, MCP readiness, native capability proof, and protected-secret rollback.
+SKS **3.1.14** is a production-hardening release for Codex 0.140 evidence, transactional `sks doctor --fix` repair, MCP readiness, native capability proof, and protected-secret rollback.
 
-What changed in 3.1.13:
+What changed in 3.1.14:
 
 - **Codex 0.140 readiness carries evidence.** Capability reports now expose per-feature state and certainty, real usage parsing, goal attachment roundtrip proof, and usage-budget provenance for loop/Naruto runtime decisions.
 - **Doctor repair is phase-based.** `sks doctor --fix` records phase durations, postchecks, optional manual readiness, and rollback evidence instead of collapsing repair work into a summary writer.
 - **Startup and MCP repair are safer.** Managed agent TOML blocks are repaired without touching unrelated config, missing role files are regenerated from real managed templates, Context7 disabled servers stay disabled, and Supabase write scope is separated from read-only readiness.
 - **Secret rollback is line-level when possible.** Protected key changes are restored without discarding unrelated operator edits, nested guard operations are recorded, and backup artifacts remain ignored.
 - **Native capability proof is stricter.** Computer Use and Chrome/web review no longer become verified from environment variables outside explicit fixture/test modes.
-- **Release metadata is aligned for 3.1.13.** Package, lockfile, CLI version constants, Rust helper metadata, README, and changelog all point at the same release.
+- **Release metadata is aligned for 3.1.14.** Package, lockfile, CLI version constants, Rust helper metadata, README, changelog, docs, built output, and release stamp all point at the same release.
 
 SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
 
