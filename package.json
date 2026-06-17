@@ -33,6 +33,7 @@
     "!dist/vendor/openai-codex/rust-v0.131.0",
     "!dist/scripts/*-blackbox.js",
     "!dist/scripts/*-check.js",
+    "!dist/scripts/*-check-lib.js",
     "!dist/scripts/*-report.js",
     "!dist/scripts/release-readiness-report.js",
     "schemas",
