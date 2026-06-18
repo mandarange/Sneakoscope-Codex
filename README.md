@@ -35,7 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.8** makes the GLM 5.2 MAD path bounded by default: `sks --mad --glm` now returns readiness/status and exits when no task is supplied, while task forms use a direct GLM-only speed path with loop guards, request timeouts, and deterministic patch gates. Ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
+SKS **4.0.11** makes GLM Naruto operationally measurable: `--worktree` is honest, live bench records real worker/verifier/cache metrics, candidates are scored before merge planning, final apply writes rollback-aware transaction evidence, and early terminal paths write canonical stop-gates. Ordinary direct GLM remains available for single-path edits, while GLM Naruto is the measured parallel runtime.
+
+What changed in 4.0.11:
+
+- **Honest worktree isolation.** `sks --mad --glm --naruto --worktree "<task>"` uses per-worker git worktrees when available or blocks unless `--allow-patch-envelope-fallback` is explicit.
+- **Measured live bench.** `--bench --live --no-apply` still runs verifier/scoring and reports TTFT, total latency, verifier pass rate, cache tokens, reasoning tokens, and worker completion/failure counts.
+- **Scoreboard-driven merge planning.** `candidate-scoreboard.json` captures gate, verifier, risk, confidence, path, conflict, latency, cache, diversity, and secret-safety components.
+- **Rollback-aware apply.** Final mutation is single-threaded and records `apply-transaction.json`, selected combined patch, diff hashes, and rollback evidence.
+- **Terminal evidence and artifact safety.** Missing-key, invalid-graph, budget, and no-candidate terminal paths write canonical stop-gates, and GLM Naruto artifacts use key-aware secret audit/redaction.
 
 What changed in 4.0.8:
 

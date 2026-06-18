@@ -6,7 +6,7 @@ import {
   type OpenRouterIssue
 } from './openrouter-types.js';
 import { normalizeOpenRouterError } from './openrouter-error.js';
-import { encodeGlmRequestWithCache } from '../glm/glm-request-cache.js';
+import { encodeGlmRequestWithCache, type GlmRequestCacheKeyParts } from '../glm/glm-request-cache.js';
 
 export interface OpenRouterStreamEvent {
   readonly type: 'chunk' | 'done' | 'error';
@@ -26,6 +26,8 @@ export interface OpenRouterStreamResult {
   readonly chunk_count: number;
   readonly events: readonly OpenRouterStreamEvent[];
   readonly real_stream: boolean;
+  readonly request_cache_hit?: boolean;
+  readonly request_body_sha256?: string;
 }
 
 export class GlmStreamIdleTimeout extends Error {
@@ -46,13 +48,14 @@ export async function sendOpenRouterChatCompletionStream(input: {
   readonly timeoutMs?: number;
   readonly idleTimeoutMs?: number;
   readonly fetchImpl?: typeof fetch;
+  readonly cacheKeyParts?: GlmRequestCacheKeyParts;
 }): Promise<SksResult<OpenRouterStreamResult, OpenRouterIssue>> {
   const started = Date.now();
   const controller = input.timeoutMs ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), Math.max(1, input.timeoutMs || 0)) : null;
   try {
     const request = { ...input.request, stream: true };
-    const encoded = encodeGlmRequestWithCache(request);
+    const encoded = encodeGlmRequestWithCache(input.cacheKeyParts ? { request, cacheKeyParts: input.cacheKeyParts } : request);
     const signal = input.signal || controller?.signal;
     const response = await (input.fetchImpl || fetch)(OPENROUTER_CHAT_COMPLETIONS_URL, {
       method: 'POST',
@@ -71,11 +74,13 @@ export async function sendOpenRouterChatCompletionStream(input: {
     }
     // Real streaming via ReadableStream reader
     if (response.body && typeof response.body.getReader === 'function') {
-      return { ok: true, value: await readRealStream(response.body, started, input.idleTimeoutMs) };
+      const value = await readRealStream(response.body, started, input.idleTimeoutMs);
+      return { ok: true, value: { ...value, request_cache_hit: encoded.cacheHit, request_body_sha256: encoded.entry.bodySha256 } };
     }
     // Fallback: non-streaming response
     const text = await response.text();
-    return { ok: true, value: parseOpenRouterStreamText(text, started, false) };
+    const value = parseOpenRouterStreamText(text, started, false);
+    return { ok: true, value: { ...value, request_cache_hit: encoded.cacheHit, request_body_sha256: encoded.entry.bodySha256 } };
   } catch (err: unknown) {
     if (timeout) clearTimeout(timeout);
     if (err instanceof Error && (err.name === 'AbortError' || err instanceof GlmStreamIdleTimeout || err.message === 'glm_stream_idle_timeout' || err.message === 'glm_stream_idle_timeout_after_ttft')) {

@@ -1,4 +1,4 @@
-import type { GlmNarutoMergePlan, GlmNarutoJudgeResult, GlmNarutoPatchEnvelope } from './glm-naruto-types.js';
+import type { GlmNarutoCandidateScoreboard, GlmNarutoMergePlan, GlmNarutoJudgeResult, GlmNarutoPatchEnvelope } from './glm-naruto-types.js';
 import { planMerge } from './glm-naruto-merge-planner.js';
 import { buildConflictGraph } from './glm-naruto-conflict-graph.js';
 import type { PatchCandidateNode } from './glm-naruto-types.js';
@@ -7,6 +7,7 @@ export function finalizeMergePlan(input: {
   readonly missionId: string;
   readonly envelopes: readonly GlmNarutoPatchEnvelope[];
   readonly judgeResult?: GlmNarutoJudgeResult;
+  readonly scoreboard?: GlmNarutoCandidateScoreboard;
   readonly useJudge: boolean;
   readonly xhighFinalizer: boolean;
 }): GlmNarutoMergePlan {
@@ -27,6 +28,7 @@ export function finalizeMergePlan(input: {
   return planMerge({
     missionId: input.missionId,
     graph: conflictGraph,
+    ...(input.scoreboard ? { scoreboard: input.scoreboard } : {}),
     strategy,
     ...(input.judgeResult ? { judgeRanking: input.judgeResult.ranked_patch_ids } : {})
   });

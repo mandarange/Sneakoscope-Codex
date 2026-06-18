@@ -10,6 +10,8 @@ import type { GlmNarutoShard, GlmNarutoPatchEnvelope, GlmNarutoWorkerTrace, GlmN
 import type { OpenRouterChatMessage } from '../../openrouter/openrouter-types.js';
 import { parseGlmNarutoVerifierOutput } from './glm-naruto-verifier-output.js';
 import { writeGlmNarutoWorkerArtifacts } from './glm-naruto-worker-artifacts.js';
+import { extractGlmNarutoUsageMetrics } from './glm-naruto-usage-extractor.js';
+import { normalizeGlmNarutoSessionId } from './glm-naruto-session-id.js';
 
 export interface WorkerRunInput {
   readonly apiKey: string;
@@ -34,7 +36,7 @@ const STABLE_SYSTEM_PREFIX = `You are a SKS GLM Naruto patch worker. Model lock:
 export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunResult> {
   const started = Date.now();
   const artifactRoot = input.root ?? process.cwd();
-  const sessionId = `sks-glm-naruto-${input.missionId}-${input.workerId}`;
+  const sessionId = normalizeGlmNarutoSessionId(`sks-glm-naruto-${input.missionId}-${input.workerId}`);
   const reasoningEffort: GlmNarutoReasoningEffort = input.shard.reasoning;
 
   const shardSuffix = JSON.stringify({
@@ -65,19 +67,17 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
   const requestWithSession = { ...request, session_id: sessionId };
   const stablePrefixDigest = crypto.createHash('sha256').update(STABLE_SYSTEM_PREFIX).digest('hex');
   const shardSuffixDigest = crypto.createHash('sha256').update(shardSuffix).digest('hex');
-  const encoded = encodeGlmRequestWithCache({
-    request: requestWithSession,
-    cacheKeyParts: {
-      model: requestWithSession.model,
-      profile: 'glm-naruto-worker-speed',
-      stable_prefix_digest: stablePrefixDigest,
-      shard_suffix_digest: shardSuffixDigest,
-      tools_digest: requestWithSession.tools ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.tools)).digest('hex') : null,
-      response_format_digest: requestWithSession.response_format ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.response_format)).digest('hex') : null,
-      provider_digest: crypto.createHash('sha256').update(JSON.stringify(requestWithSession.provider ?? null)).digest('hex'),
-      session_id: sessionId
-    }
-  });
+  const cacheKeyParts = {
+    model: requestWithSession.model,
+    profile: 'glm-naruto-worker-speed',
+    stable_prefix_digest: stablePrefixDigest,
+    shard_suffix_digest: shardSuffixDigest,
+    tools_digest: requestWithSession.tools ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.tools)).digest('hex') : null,
+    response_format_digest: requestWithSession.response_format ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.response_format)).digest('hex') : null,
+    provider_digest: crypto.createHash('sha256').update(JSON.stringify(requestWithSession.provider ?? null)).digest('hex'),
+    session_id: sessionId
+  };
+  const encoded = encodeGlmRequestWithCache({ request: requestWithSession, cacheKeyParts });
   await writeGlmNarutoWorkerArtifacts({
     root: artifactRoot,
     missionId: input.missionId,
@@ -102,6 +102,7 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
     strategy: input.shard.strategy,
     model: GLM_52_OPENROUTER_MODEL,
     provider: 'openrouter',
+    provider_slug: 'openrouter',
     session_id: sessionId,
     ttft_ms: null,
     total_ms: 0,
@@ -117,11 +118,12 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
       request: requestWithSession,
       timeoutMs: input.timeoutMs,
       idleTimeoutMs: 60_000,
+      cacheKeyParts,
       ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {})
     });
 
     if (!response.ok) {
-      const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed' };
+      const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed', chunk_count: 0, real_stream: false };
       await writeGlmNarutoWorkerArtifacts({
         root: artifactRoot,
         missionId: input.missionId,
@@ -140,7 +142,8 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
 
     const modelGuard = assertGlm52ActualModel(response.value.model);
     if (!modelGuard.ok) {
-      const trace = { ...traceBase, total_ms: Date.now() - started, status: 'blocked' };
+      const usage = extractGlmNarutoUsageMetrics(response.value.usage);
+      const trace = { ...traceBase, ...usage, ttft_ms: response.value.ttft_ms, total_ms: Date.now() - started, status: 'blocked', chunk_count: response.value.chunk_count, real_stream: response.value.real_stream, request_cache_hit: response.value.request_cache_hit ?? traceBase.request_cache_hit };
       await writeGlmNarutoWorkerArtifacts({
         root: artifactRoot,
         missionId: input.missionId,
@@ -162,8 +165,12 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
     if (parsed.kind !== 'patch') {
       const trace = {
         ...traceBase,
+        ...extractGlmNarutoUsageMetrics(response.value.usage),
         ttft_ms: response.value.ttft_ms,
         total_ms: Date.now() - started,
+        chunk_count: response.value.chunk_count,
+        real_stream: response.value.real_stream,
+        request_cache_hit: response.value.request_cache_hit ?? traceBase.request_cache_hit,
         status: parsed.kind === 'blocked' ? 'blocked' : 'no_patch'
       };
       await writeGlmNarutoWorkerArtifacts({
@@ -194,8 +201,12 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
 
     const trace: GlmNarutoWorkerTrace = {
       ...traceBase,
+      ...extractGlmNarutoUsageMetrics(response.value.usage),
       ttft_ms: response.value.ttft_ms,
       total_ms: Date.now() - started,
+      chunk_count: response.value.chunk_count,
+      real_stream: response.value.real_stream,
+      request_cache_hit: response.value.request_cache_hit ?? traceBase.request_cache_hit,
       patch_digest: digestPatch(envelope.patch),
       status: 'completed'
     };
@@ -220,7 +231,7 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
 
     return { envelope, trace, ok: true };
   } catch (err) {
-    const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed' };
+    const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed', chunk_count: 0, real_stream: false };
     await writeGlmNarutoWorkerArtifacts({
       root: artifactRoot,
       missionId: input.missionId,
@@ -247,7 +258,7 @@ export async function runVerifierWorker(input: {
   readonly fetchImpl?: typeof fetch;
 }): Promise<{ ok: boolean; trace: GlmNarutoWorkerTrace; issues: readonly string[] }> {
   const started = Date.now();
-  const sessionId = `sks-glm-naruto-verify-${input.missionId}-${input.workerId}`;
+  const sessionId = normalizeGlmNarutoSessionId(`sks-glm-naruto-verify-${input.missionId}-${input.workerId}`);
   const messages: OpenRouterChatMessage[] = [
     { role: 'system', content: `You are a SKS GLM Naruto verifier. Model: ${GLM_52_OPENROUTER_MODEL}. No GPT fallback. Return only JSON with schema "sks.glm-naruto-verifier-output.v1", ok boolean, issues string array, risk_score number 0..1, confidence number 0..1. Do not include markdown.` },
     { role: 'user', content: JSON.stringify({ patch_sha256: input.envelope.patch_sha256, target_paths: input.envelope.target_paths, patch: input.envelope.patch.slice(0, 4000) }) }
@@ -261,13 +272,25 @@ export async function runVerifierWorker(input: {
     parallelToolCalls: false,
     providerSort: 'throughput'
   });
+  const requestWithSession = { ...request, session_id: sessionId };
+  const cacheKeyParts = {
+    model: requestWithSession.model,
+    profile: 'glm-naruto-verifier-speed',
+    stable_prefix_digest: crypto.createHash('sha256').update(messages[0]!.content).digest('hex'),
+    shard_suffix_digest: crypto.createHash('sha256').update(messages[1]!.content).digest('hex'),
+    tools_digest: null,
+    response_format_digest: requestWithSession.response_format ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.response_format)).digest('hex') : null,
+    provider_digest: crypto.createHash('sha256').update(JSON.stringify(requestWithSession.provider ?? null)).digest('hex'),
+    session_id: sessionId
+  };
 
   try {
     const response = await sendOpenRouterChatCompletionStream({
       apiKey: input.apiKey,
-      request: { ...request, session_id: sessionId },
+      request: requestWithSession,
       timeoutMs: input.timeoutMs,
       idleTimeoutMs: 60_000,
+      cacheKeyParts,
       ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {})
     });
 
@@ -280,6 +303,7 @@ export async function runVerifierWorker(input: {
           strategy: 'minimal_patch',
           model: GLM_52_OPENROUTER_MODEL,
           provider: 'openrouter',
+          provider_slug: 'openrouter',
           session_id: sessionId,
           ttft_ms: null,
           total_ms: Date.now() - started,
@@ -293,6 +317,7 @@ export async function runVerifierWorker(input: {
     }
 
     const modelGuard = assertGlm52ActualModel(response.value.model);
+    const usageMetrics = extractGlmNarutoUsageMetrics(response.value.usage);
     if (!modelGuard.ok) {
       return {
         ok: false,
@@ -302,10 +327,14 @@ export async function runVerifierWorker(input: {
           strategy: 'minimal_patch',
           model: GLM_52_OPENROUTER_MODEL,
           provider: 'openrouter',
+          provider_slug: 'openrouter',
           session_id: sessionId,
+          ...usageMetrics,
           ttft_ms: response.value.ttft_ms,
           total_ms: Date.now() - started,
-          request_cache_hit: false,
+          chunk_count: response.value.chunk_count,
+          real_stream: response.value.real_stream,
+          request_cache_hit: response.value.request_cache_hit ?? false,
           output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
           patch_digest: input.envelope.patch_sha256,
           status: 'verification_failed'
@@ -324,10 +353,14 @@ export async function runVerifierWorker(input: {
           strategy: 'minimal_patch',
           model: GLM_52_OPENROUTER_MODEL,
           provider: 'openrouter',
+          provider_slug: 'openrouter',
           session_id: sessionId,
+          ...usageMetrics,
           ttft_ms: response.value.ttft_ms,
           total_ms: Date.now() - started,
-          request_cache_hit: false,
+          chunk_count: response.value.chunk_count,
+          real_stream: response.value.real_stream,
+          request_cache_hit: response.value.request_cache_hit ?? false,
           output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
           patch_digest: input.envelope.patch_sha256,
           status: 'verification_failed'
@@ -345,13 +378,19 @@ export async function runVerifierWorker(input: {
           strategy: 'minimal_patch',
           model: GLM_52_OPENROUTER_MODEL,
           provider: 'openrouter',
+          provider_slug: 'openrouter',
           session_id: sessionId,
+          ...usageMetrics,
           ttft_ms: response.value.ttft_ms,
           total_ms: Date.now() - started,
-          request_cache_hit: false,
+          chunk_count: response.value.chunk_count,
+          real_stream: response.value.real_stream,
+          request_cache_hit: response.value.request_cache_hit ?? false,
           output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
           patch_digest: input.envelope.patch_sha256,
-          status: 'verification_failed'
+          status: 'verification_failed',
+          verifier_risk_score: parsed.output.risk_score,
+          verifier_confidence: parsed.output.confidence
         },
         issues: parsed.output.issues
       };
@@ -365,13 +404,19 @@ export async function runVerifierWorker(input: {
         strategy: 'minimal_patch',
         model: GLM_52_OPENROUTER_MODEL,
         provider: 'openrouter',
+        provider_slug: 'openrouter',
         session_id: sessionId,
+        ...usageMetrics,
         ttft_ms: response.value.ttft_ms,
         total_ms: Date.now() - started,
-        request_cache_hit: false,
+        chunk_count: response.value.chunk_count,
+        real_stream: response.value.real_stream,
+        request_cache_hit: response.value.request_cache_hit ?? false,
         output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
         patch_digest: input.envelope.patch_sha256,
-        status: 'verification_passed'
+        status: 'verification_passed',
+        verifier_risk_score: parsed.output.risk_score,
+        verifier_confidence: parsed.output.confidence
       },
       issues: []
     };
@@ -384,6 +429,7 @@ export async function runVerifierWorker(input: {
         strategy: 'minimal_patch',
         model: GLM_52_OPENROUTER_MODEL,
         provider: 'openrouter',
+        provider_slug: 'openrouter',
         session_id: sessionId,
         ttft_ms: null,
         total_ms: Date.now() - started,

@@ -14,7 +14,7 @@ export async function sendOpenRouterChatCompletion(
 ): Promise<SksResult<OpenRouterChatCompletionResponse, OpenRouterIssue>> {
   try {
     const doFetch = input.fetchImpl || fetch;
-    const encoded = encodeGlmRequestWithCache(input.request);
+    const encoded = encodeGlmRequestWithCache(input.cacheKeyParts ? { request: input.request, cacheKeyParts: input.cacheKeyParts } : input.request);
     const controller = input.timeoutMs ? new AbortController() : null;
     const timeout = controller
       ? setTimeout(() => controller.abort(), Math.max(1, input.timeoutMs || 0))

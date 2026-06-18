@@ -1,20 +1,26 @@
-import type { GlmNarutoConflictGraph, GlmNarutoMergePlan, GlmNarutoMergeCandidate, GlmNarutoMergeStrategy, PatchCandidateNode } from './glm-naruto-types.js';
+import type { GlmNarutoCandidateScoreboard, GlmNarutoConflictGraph, GlmNarutoMergePlan, GlmNarutoMergeCandidate, GlmNarutoMergeStrategy, PatchCandidateNode } from './glm-naruto-types.js';
 import { getNonConflictingSets } from './glm-naruto-conflict-graph.js';
 
 export function planMerge(input: {
   readonly missionId: string;
   readonly graph: GlmNarutoConflictGraph;
+  readonly scoreboard?: GlmNarutoCandidateScoreboard;
   readonly strategy: GlmNarutoMergeStrategy;
   readonly judgeRanking?: readonly string[];
 }): GlmNarutoMergePlan {
-  const passedNodes = input.graph.nodes.filter((n) => n.gate_passed);
-  const nonConflictingSets = getNonConflictingSets(input.graph);
+  const scoreByPatch = new Map((input.scoreboard?.scores ?? []).map((score) => [score.patch_id, score]));
+  const passedNodes = input.graph.nodes.filter((n) => n.gate_passed && !scoreByPatch.get(n.patch_id)?.disqualified);
+  const filteredGraph: GlmNarutoConflictGraph = {
+    ...input.graph,
+    nodes: passedNodes
+  };
+  const nonConflictingSets = getNonConflictingSets(filteredGraph);
 
   const candidates: GlmNarutoMergeCandidate[] = nonConflictingSets.map((patchIds) => {
     const nodes = passedNodes.filter((n) => patchIds.includes(n.patch_id));
-    const totalScore = nodes.reduce((sum, n) => sum + n.score, 0);
+    const totalScore = nodes.reduce((sum, n) => sum + (scoreByPatch.get(n.patch_id)?.total_score ?? n.score), 0);
     return { patch_ids: patchIds, total_score: totalScore, conflict_free: true };
-  });
+  }).filter((candidate) => candidate.patch_ids.every((id) => passedNodes.some((node) => node.patch_id === id)));
 
   candidates.sort((a, b) => b.total_score - a.total_score);
 

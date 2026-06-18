@@ -5,10 +5,12 @@ import os from 'node:os';
 import { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
 import { resolveOpenRouterApiKey } from '../../openrouter/openrouter-secret-store.js';
 import { runGlmNarutoMission } from './glm-naruto-orchestrator.js';
+import { summarizeGlmNarutoWorkerMetrics } from './glm-naruto-metrics.js';
+import type { GlmNarutoWorkerTrace } from './glm-naruto-types.js';
 
 export interface GlmNarutoBenchResult {
   readonly schema: 'sks.glm-naruto-bench.v1';
-  readonly version: '4.0.10';
+  readonly version: '4.0.11';
   readonly generated_at: string;
   readonly status: 'dry_run' | 'live' | 'blocked';
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
@@ -19,12 +21,17 @@ export interface GlmNarutoBenchResult {
     readonly wall_clock_ms: number;
     readonly p50_ttft_ms: number | null;
     readonly p90_ttft_ms: number | null;
+    readonly p50_total_ms: number | null;
+    readonly p90_total_ms: number | null;
     readonly candidate_count: number;
     readonly gate_pass_rate: number;
     readonly verifier_pass_rate: number;
     readonly merge_success: boolean;
-    readonly cached_tokens: number;
-    readonly cache_write_tokens: number;
+    readonly cached_tokens_sum: number | null;
+    readonly cache_write_tokens_sum: number | null;
+    readonly reasoning_tokens_sum: number | null;
+    readonly workers_completed: number;
+    readonly workers_failed: number;
   }[];
   readonly summary: {
     readonly simulated_workers: number;
@@ -49,7 +56,7 @@ export async function runGlmNarutoBench(root: string, args: readonly string[] = 
   if (!live) {
     return {
       schema: 'sks.glm-naruto-bench.v1',
-      version: '4.0.10',
+      version: '4.0.11',
       generated_at: nowIso(),
       status: 'dry_run',
       model: GLM_52_OPENROUTER_MODEL,
@@ -83,24 +90,31 @@ export async function runGlmNarutoBench(root: string, args: readonly string[] = 
       maxWorkers: workers,
       noApply: true
     });
+    const traces = await readWorkerTraces(result.artifact_dir);
+    const metrics = summarizeGlmNarutoWorkerMetrics(traces);
     cases.push({
       name: workers === 1 ? 'direct single GLM' : `GLM Naruto ${workers} workers`,
       workers,
       wall_clock_ms: Date.now() - caseStarted,
-      p50_ttft_ms: null,
-      p90_ttft_ms: null,
+      p50_ttft_ms: metrics.p50_ttft_ms,
+      p90_ttft_ms: metrics.p90_ttft_ms,
+      p50_total_ms: metrics.p50_total_ms,
+      p90_total_ms: metrics.p90_total_ms,
       candidate_count: result.patch_candidates,
       gate_pass_rate: result.patch_candidates ? result.gate_passed_candidates / result.patch_candidates : 0,
-      verifier_pass_rate: 0,
+      verifier_pass_rate: metrics.verifier_pass_rate,
       merge_success: result.mergeable_candidates > 0,
-      cached_tokens: 0,
-      cache_write_tokens: 0
+      cached_tokens_sum: metrics.cached_tokens_sum,
+      cache_write_tokens_sum: metrics.cache_write_tokens_sum,
+      reasoning_tokens_sum: metrics.reasoning_tokens_sum,
+      workers_completed: metrics.workers_completed,
+      workers_failed: metrics.workers_failed
     });
   }
 
   return {
     schema: 'sks.glm-naruto-bench.v1',
-    version: '4.0.10',
+    version: '4.0.11',
     generated_at: nowIso(),
     status: 'live',
     model: GLM_52_OPENROUTER_MODEL,
@@ -121,7 +135,7 @@ export async function runGlmNarutoBench(root: string, args: readonly string[] = 
 function blocked(root: string, warnings: string[]): GlmNarutoBenchResult {
   return {
     schema: 'sks.glm-naruto-bench.v1',
-    version: '4.0.10',
+    version: '4.0.11',
     generated_at: nowIso(),
     status: 'blocked',
     model: GLM_52_OPENROUTER_MODEL,
@@ -136,4 +150,13 @@ function blocked(root: string, warnings: string[]): GlmNarutoBenchResult {
     },
     warnings
   };
+}
+
+async function readWorkerTraces(artifactDir: string | undefined): Promise<GlmNarutoWorkerTrace[]> {
+  if (!artifactDir) return [];
+  try {
+    return JSON.parse(await fsp.readFile(path.join(artifactDir, 'worker-traces.json'), 'utf8')) as GlmNarutoWorkerTrace[];
+  } catch {
+    return [];
+  }
 }

@@ -2,7 +2,6 @@ import { flag, readOption, positionalArgs } from '../../../../cli/args.js';
 import { printJson } from '../../../../cli/output.js';
 import { runGlmNarutoMission } from './glm-naruto-orchestrator.js';
 import { runGlmNarutoBench } from './glm-naruto-bench.js';
-import { resolveOpenRouterApiKey } from '../../openrouter/openrouter-secret-store.js';
 import type { GlmNarutoMissionResult } from './glm-naruto-types.js';
 
 export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMissionResult | unknown> {
@@ -36,33 +35,17 @@ export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMi
     return result;
   }
 
-  const key = await resolveOpenRouterApiKey({ env: process.env });
-  if (!key.key) {
-    const result = {
-      schema: 'sks.glm-naruto-result.v1',
-      ok: false,
-      status: 'blocked' as const,
-      mission_id: 'none',
-      task,
-      model: 'z-ai/glm-5.2',
-      gpt_fallback_allowed: false as const,
-      termination_reason: 'glm_missing_openrouter_key',
-      blockers: ['glm_missing_openrouter_key'],
-      warnings: ['set_OPENROUTER_API_KEY_or_run_sks_--mad_--glm_--repair']
-    };
-    if (flag(args, '--json')) printJson(result);
-    else console.error('GLM Naruto blocked: missing OpenRouter API key. Run: sks --mad --glm --repair');
-    process.exitCode = 1;
-    return result;
-  }
-
   const maxWorkers = parseInt(readOption(args, '--clones', readOption(args, '--workers', '12')), 10) || 12;
   const deep = flag(args, '--deep');
   const useJudge = flag(args, '--judge');
   const xhighFinalizer = flag(args, '--xhigh-finalizer');
   const useWorktree = flag(args, '--worktree');
   const patchEnvelopeOnly = flag(args, '--patch-envelope-only');
+  const keepWorktrees = flag(args, '--keep-worktrees');
+  const cleanupWorktrees = flag(args, '--cleanup-worktrees') || !keepWorktrees;
+  const allowPatchEnvelopeFallback = flag(args, '--allow-patch-envelope-fallback');
   const noApply = flag(args, '--no-apply');
+  const skipVerifier = flag(args, '--skip-verifier');
   const mergeStrategy = readOption(args, '--merge-strategy', 'deterministic') as 'deterministic' | 'quorum' | 'judge';
 
   const result = await runGlmNarutoMission({
@@ -74,7 +57,12 @@ export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMi
     useJudge,
     xhighFinalizer,
     useWorktree: useWorktree && !patchEnvelopeOnly,
+    patchEnvelopeOnly,
+    allowPatchEnvelopeFallback,
+    keepWorktrees,
+    cleanupWorktrees,
     noApply: noApply || flag(args, '--dry-run'),
+    skipVerifier,
     mergeStrategy
   });
 
