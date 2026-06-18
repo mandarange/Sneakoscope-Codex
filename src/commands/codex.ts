@@ -3,6 +3,7 @@ import { printJson } from '../cli/output.js';
 import { codexCompatibilityReport, codexDoctorReport } from '../core/codex-compat/codex-compat-report.js';
 import { codexVersionReport } from '../core/codex-compat/codex-version.js';
 import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-snapshot.js';
+import { detectCodex0141Capability } from '../core/codex-control/codex-0141-capability.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'compatibility';
@@ -21,6 +22,15 @@ export async function run(_command: any, args: any = []) {
     console.log(`Codex detected: ${result.detected.version || 'not installed'} (${result.policy.status})`);
     return;
   }
+  if (action === '0.141' || action === '0141' || action === 'rust-v0.141.0') {
+    const result = await detectCodex0141Capability();
+    if (flag(args, '--json')) return printJson(result);
+    console.log(`Codex 0.141 compatibility: ${result.ok ? 'ok' : 'blocked'}`);
+    for (const blocker of result.blockers || []) console.log(`- blocker: ${blocker}`);
+    for (const warning of result.warnings || []) console.log(`- warning: ${warning}`);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
   if (action === 'doctor') {
     const result = await codexDoctorReport();
     if (flag(args, '--json')) return printJson(result);
@@ -35,6 +45,6 @@ export async function run(_command: any, args: any = []) {
     if (!result.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex compatibility|version|doctor|schema [--json]');
+  console.error('Usage: sks codex compatibility|version|doctor|schema|0.141 [--json]');
   process.exitCode = 1;
 }

@@ -3,6 +3,7 @@ import {
   COMMANDS,
   type CommandName,
 } from './command-registry.js';
+import { detectGlobalMode, glmWithoutMadResult } from './global-mode-router.js';
 
 export interface NormalizedCommand {
   command: CommandName | null;
@@ -39,6 +40,17 @@ export function normalizeCommand(args: readonly string[] = []): NormalizedComman
 
 export async function dispatch(args?: readonly string[]): Promise<unknown> {
   const argv = args ?? process.argv.slice(2);
+  const globalMode = detectGlobalMode(argv);
+  if (globalMode?.kind === 'mad-glm') {
+    const mod = await import('../core/commands/glm-command.js');
+    return mod.glmCommand(globalMode.args);
+  }
+  if (globalMode?.kind === 'glm-without-mad') {
+    const result = glmWithoutMadResult();
+    console.error(`GLM mode requires MAD: ${result.hint}`);
+    process.exitCode = 1;
+    return result;
+  }
   const { command, rawCommand, args: rest } = normalizeCommand(argv);
   if (!command) {
     if (!argv.length) {
