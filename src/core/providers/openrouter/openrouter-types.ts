@@ -32,6 +32,7 @@ export interface OpenRouterProviderPreferences {
 export interface OpenRouterChatCompletionRequest {
   readonly model: string;
   readonly messages: readonly OpenRouterChatMessage[];
+  readonly session_id?: string;
   readonly stream?: boolean;
   readonly temperature?: number;
   readonly top_p?: number;
@@ -61,6 +62,8 @@ export interface OpenRouterSendInput {
   readonly apiKey: string;
   readonly request: OpenRouterChatCompletionRequest;
   readonly endpoint?: typeof OPENROUTER_CHAT_COMPLETIONS_URL;
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
   readonly fetchImpl?: typeof fetch;
 }
 

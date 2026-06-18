@@ -1,33 +1,17 @@
 # GLM Speed Mode
 
-GLM speed mode is a `sks --mad --glm` profile only. It does not change ordinary `sks --mad`, Naruto/Team, OpenAI, Codex default model, or non-GLM provider behavior.
+Sneakoscope-Codex 4.0.6 makes `sks --mad --glm` a bounded GLM-only speed surface.
 
-## Default Profile
+## CLI behavior
 
-The default GLM profile keeps reasoning at xhigh and recovers speed by reducing surrounding overhead:
+- `sks --mad --glm` prints readiness/status and exits.
+- `sks --mad --glm run "task"` or `sks --mad --glm "task"` enters the direct speed path.
+- `sks --mad --glm --interactive`, `sks --mad --glm --zellij`, and `sks --mad --glm session` are the only GLM routes that may launch the long-lived MAD/Zellij path.
 
-- `model: z-ai/glm-5.2`
-- `reasoning.effort: xhigh`
-- `max_tokens: 4096`
-- `temperature: 0.2`
-- `top_p: 0.85`
-- `stream: true`
-- `tool_choice: none`
-- `parallel_tool_calls: false`
-- `provider.allow_fallbacks: false`
-- `provider.require_parameters: true`
-- `provider.sort: throughput`
+## Speed request policy
 
-## Optimization Surface
-
-Speed work is GLM-local:
-
-- compact context building with generated-artifact exclusions;
-- encoded request and tool schema caches;
-- model metadata cache for reasoning support;
-- deterministic output envelope parser and patch gate;
-- latency traces and synthetic bench artifacts under `.sneakoscope/glm/`.
-
-## Opt-In Depth
-
-Use `--deep`, `--xhigh`, or `--strict` when the GLM task needs broader context, automatic tools, or JSON schema proof output. These flags only affect the GLM route where they are passed.
+- Model is locked to `z-ai/glm-5.2`.
+- Provider fallback and GPT fallback remain disabled.
+- Speed mode uses `provider.sort: "throughput"` and `provider.require_parameters: false`.
+- Speed mode does not send `reasoning.effort: "high"` or `reasoning.effort: "xhigh"`.
+- GLM receives no write tools; it returns patch envelopes that SKS gates and applies.

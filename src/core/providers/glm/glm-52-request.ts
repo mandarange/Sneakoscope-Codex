@@ -9,7 +9,11 @@ import {
   type Glm52ReasoningEffort,
   type GlmProfileName
 } from './glm-52-settings.js';
-import { buildDeepReasoningConfig, type OpenRouterModelReasoningMeta } from './glm-reasoning-policy.js';
+import {
+  buildDeepReasoningConfig,
+  buildFastReasoningConfig,
+  type OpenRouterModelReasoningMeta
+} from './glm-reasoning-policy.js';
 import { profileFromConst, resolveGlmProfileFromArgs, type GlmResolvedProfile } from './glm-profile-resolver.js';
 
 export interface Glm52RequestInput {
@@ -36,8 +40,11 @@ export function buildGlm52Request(input: Glm52RequestInput): OpenRouterChatCompl
     input.reasoningEffort === 'high' || input.reasoningEffort === 'xhigh' ? input.reasoningEffort : undefined
   );
   const reasoning = profile.name === 'speed'
-    ? buildDeepReasoningConfig('xhigh')
+    ? buildFastReasoningConfig(input.reasoningMeta)
     : buildDeepReasoningConfig(strictOrDeepEffort || 'high');
+  if (profile.name === 'speed' && (reasoning.effort === 'high' || reasoning.effort === 'xhigh')) {
+    throw new Error(`GLM speed profile invariant violated: forbidden reasoning effort ${reasoning.effort}`);
+  }
   const request: OpenRouterChatCompletionRequest = {
     model: GLM_52_OPENROUTER_MODEL,
     messages: input.messages,

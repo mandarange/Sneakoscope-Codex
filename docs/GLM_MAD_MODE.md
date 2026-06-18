@@ -1,10 +1,11 @@
 # GLM 5.2 MAD Mode
 
-SKS 4.0.5 keeps GLM optimization scoped to `sks --mad --glm`. The GLM path defaults to an xhigh reasoning speed profile, but ordinary `sks --mad`, Naruto/Team, and non-GLM Codex routes keep their existing defaults.
+SKS 4.0.6 keeps GLM optimization scoped to `sks --mad --glm`. The default GLM path is a bounded speed profile with no high/xhigh reasoning effort, while ordinary `sks --mad`, Naruto/Team, and non-GLM Codex routes keep their existing defaults.
 
 ```bash
 sks --mad --glm
 sks --mad --glm --repair
+sks --mad --glm run "fix a small issue"
 sks --mad --glm --deep
 sks --mad --glm --xhigh
 sks --mad --glm --strict
@@ -12,14 +13,14 @@ sks --mad --glm --bench
 sks --mad --glm --trace
 ```
 
-`sks --mad --glm` resolves the GLM/OpenRouter provider profile and keeps the existing SKS proof/task pipeline active. MAD widens the permission profile only through SKS gates; it does not bypass patch proof, response model guard, mutation ledgers, or Honest Mode.
+`sks --mad --glm` resolves the GLM/OpenRouter provider profile, prints readiness/status, and exits when no task is supplied. Task forms use the bounded direct speed path. MAD widens the permission profile only through SKS gates; it does not bypass patch proof, response model guard, mutation ledgers, or Honest Mode.
 
 ## Scope
 
-The 4.0.5 xhigh speed defaults apply only when GLM mode is selected:
+The 4.0.6 speed defaults apply only when GLM mode is selected:
 
 - `sks --mad --glm` uses the GLM speed profile.
-- Non-GLM `sks --mad` does not inherit GLM xhigh reasoning.
+- Non-GLM `sks --mad` does not inherit GLM routing or reasoning defaults.
 - Naruto/Team and Codex default model routing are unchanged outside the GLM path.
 - GLM bench and trace artifacts live under `.sneakoscope/glm/`.
 
@@ -30,7 +31,7 @@ The 4.0.5 xhigh speed defaults apply only when GLM mode is selected:
 - Codex App profile id: `sks/glm-5.2-mad`
 - Request fallback array: not used
 - `provider.allow_fallbacks`: `false`
-- GLM speed `provider.require_parameters`: `true`
+- GLM speed `provider.require_parameters`: `false`
 - GLM deep/strict `provider.require_parameters`: `true`
 - GPT/OpenAI fallback: blocked
 
@@ -42,14 +43,14 @@ Default GLM mode is `speed`:
 
 ```text
 mode: mad-glm-speed
-reasoning.effort: xhigh
+reasoning.effort: none/minimal/low or omitted
 max_tokens: 4096
 temperature: 0.2
 top_p: 0.85
 stream: true
 tool_choice: none
 provider.sort: throughput
-provider.require_parameters: true
+provider.require_parameters: false
 ```
 
 Opt-in profiles:
@@ -102,7 +103,7 @@ The profile metadata is:
 
 ```text
 id: sks/glm-5.2-mad
-label: GLM 5.2 (MAD XHigh Speed / OpenRouter)
+label: GLM 5.2 (MAD Speed / OpenRouter)
 provider: openrouter
 model: z-ai/glm-5.2
 strictModelLock: true

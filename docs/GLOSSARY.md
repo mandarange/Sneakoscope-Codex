@@ -2,7 +2,7 @@
 
 ## GLM MAD Mode
 
-`mad-glm-speed` is the SKS 4.0.5 mode entered by `sks --mad --glm`. It combines the existing MAD permission profile with the OpenRouter GLM 5.2 provider profile while keeping SKS proof and mutation gates active. Its xhigh speed defaults are GLM-only and do not change ordinary `sks --mad`.
+`mad-glm-speed` is the SKS 4.0.6 mode entered by `sks --mad --glm`. It combines the existing MAD permission profile with the OpenRouter GLM 5.2 provider profile while keeping SKS proof and mutation gates active. Its bounded speed defaults are GLM-only, avoid high/xhigh reasoning by default, and do not change ordinary `sks --mad`.
 
 ## GLM 5.2 Model Lock
 
