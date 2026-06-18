@@ -2,8 +2,24 @@
 
 ## [Unreleased]
 
+## [4.0.6] - 2026-06-19
 
+### Fixed
 
+- Changed `sks --mad --glm` so bare/no-task invocation returns GLM readiness/status instead of falling through to a long-lived MAD/Zellij launch.
+- Changed the GLM speed profile to avoid `high`/`xhigh` reasoning by default and to use `provider.require_parameters: false` with throughput-first routing.
+- Added bounded GLM direct-run state, loop guard, request timeout, repeated-output/no-progress termination, and terminal run artifacts.
+- Added real encoded OpenRouter request body reuse, AbortSignal/timeout support, and streaming TTFT/usage collection scaffolding.
+- Added deterministic GLM patch parsing and `git apply --check`/protected-path gating before applying GLM patches.
+
+### Security
+
+- GLM direct runs continue to lock the model to `z-ai/glm-5.2`, disallow GPT/model fallback arrays, and block mutation on model mismatch.
+- Encoded request caching skips secret-like prompt bodies and never stores Authorization headers.
+
+### Compatibility
+
+- CI/CD, GitHub Actions, publish workflow, and release automation files are unchanged.
 
 ## [4.0.5] - 2026-06-18
 

@@ -264,7 +264,7 @@ async function writeGlmModeArtifacts(
     profile: selectedProfile.name,
     temperature: selectedProfile.temperature,
     top_p: selectedProfile.top_p,
-    reasoning_effort: selectedProfile.reasoning_effort || 'xhigh',
+    reasoning_effort: selectedProfile.reasoning_effort || null,
     max_tokens: selectedProfile.max_tokens,
     tool_choice: selectedProfile.tool_choice,
     parallel_tool_calls: selectedProfile.parallel_tool_calls,

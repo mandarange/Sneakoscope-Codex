@@ -5,7 +5,7 @@ import {
 import { profileFromConst } from './glm-profile-resolver.js';
 
 export const GLM_CODEX_APP_PROFILE_ID = 'sks/glm-5.2-mad' as const;
-export const GLM_CODEX_APP_PROFILE_LABEL = 'GLM 5.2 (MAD XHigh Speed / OpenRouter)' as const;
+export const GLM_CODEX_APP_PROFILE_LABEL = 'GLM 5.2 (MAD Speed / OpenRouter)' as const;
 
 export interface SksCodexAppModelProfile {
   readonly schema: 'sks.codex-app-model-profile.v1';
@@ -21,7 +21,7 @@ export interface SksCodexAppModelProfile {
   readonly defaultSettings: {
     readonly temperature: number;
     readonly top_p: number;
-    readonly reasoning_effort: 'xhigh';
+    readonly reasoning_effort: 'high' | 'xhigh' | null;
     readonly tool_choice: 'none' | 'auto';
     readonly parallel_tool_calls: false;
     readonly max_tokens: number;
@@ -53,7 +53,7 @@ export function buildGlmCodexAppModelProfile(): SksCodexAppModelProfile {
     defaultSettings: {
       temperature: speed.temperature,
       top_p: speed.top_p,
-      reasoning_effort: 'xhigh',
+      reasoning_effort: speed.reasoning_effort || null,
       tool_choice: speed.tool_choice,
       parallel_tool_calls: speed.parallel_tool_calls,
       max_tokens: speed.max_tokens,

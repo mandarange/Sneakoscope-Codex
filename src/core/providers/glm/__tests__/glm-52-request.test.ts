@@ -11,11 +11,12 @@ test('buildGlm52Request locks GLM 5.2 and disables fallback', () => {
   assert.equal(request.model, GLM_52_OPENROUTER_MODEL);
   assert.equal('models' in request, false);
   assert.equal(request.provider?.allow_fallbacks, false);
-  assert.equal(request.provider?.require_parameters, true);
+  assert.equal(request.provider?.require_parameters, false);
   assert.equal(request.provider?.sort, 'throughput');
   assert.equal(request.temperature, 0.2);
   assert.equal(request.top_p, 0.85);
-  assert.deepEqual(request.reasoning, { effort: 'xhigh', exclude: true });
+  assert.notEqual(request.reasoning?.effort, 'high');
+  assert.notEqual(request.reasoning?.effort, 'xhigh');
   assert.equal(request.parallel_tool_calls, false);
   assert.equal(request.tool_choice, 'none');
   assert.equal(request.max_tokens, 4096);

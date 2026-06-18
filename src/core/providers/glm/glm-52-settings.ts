@@ -24,7 +24,7 @@ export const GLM_SPEED_PROFILE = {
   stream: true,
   provider: {
     allow_fallbacks: false,
-    require_parameters: true,
+    require_parameters: false,
     sort: 'throughput',
     preferred_min_throughput: { p50: 80, p90: 40 },
     preferred_max_latency: { p50: 2, p90: 5 }
@@ -32,8 +32,8 @@ export const GLM_SPEED_PROFILE = {
   tool_choice: 'none',
   parallel_tool_calls: false,
   max_tokens: GLM_52_MAX_TOKENS_SPEED,
-  reasoning_effort: 'xhigh',
-  reasoning_default: 'xhigh-speed-optimized'
+  reasoning_effort: null,
+  reasoning_default: 'off-or-minimal-speed'
 } as const;
 
 export const GLM_DEEP_PROFILE = {

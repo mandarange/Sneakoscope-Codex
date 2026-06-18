@@ -3,7 +3,7 @@ import { nowIso, writeJsonAtomic } from '../../fsx.js';
 
 export interface GlmLatencyTrace {
   readonly schema: 'sks.glm-latency-trace.v1';
-  readonly version: '4.0.5';
+  readonly version: '4.0.6';
   readonly mode: 'speed' | 'deep' | 'xhigh' | 'strict';
   readonly total_ms: number;
   readonly preflight_ms: number;
@@ -36,7 +36,7 @@ export interface GlmLatencyTrace {
 export function createEmptyGlmLatencyTrace(mode: GlmLatencyTrace['mode']): GlmLatencyTrace {
   return {
     schema: 'sks.glm-latency-trace.v1',
-    version: '4.0.5',
+    version: '4.0.6',
     mode,
     total_ms: 0,
     preflight_ms: 0,

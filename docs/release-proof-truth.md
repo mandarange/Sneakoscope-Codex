@@ -1,8 +1,8 @@
 # Release Proof Truth
 
-SKS 4.0.5 keeps release proof truth aligned with the 4.0.5 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM-only xhigh speed-profile tests, GLM bench/trace artifacts, OpenRouter fallback blocking, disabled GPT fallback swarm proof, and Codex compatibility evidence before publication.
+SKS 4.0.6 keeps release proof truth aligned with the 4.0.6 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM speed-profile tests, GLM loop-guard artifacts, GLM bench/trace artifacts, OpenRouter fallback blocking, disabled GPT fallback swarm proof, and Codex compatibility evidence before publication.
 
-SKS 4.0.5 release proof truth also requires proof that `sks --mad --glm` is the only route receiving the GLM xhigh speed defaults, that non-GLM MAD/Codex paths keep their previous defaults, and that GLM request artifacts use compact context, bounded completion tokens, disabled default tools, and redacted diagnostics.
+SKS 4.0.6 release proof truth also requires proof that `sks --mad --glm` no longer launches long-lived sessions by default, that non-GLM MAD/Codex paths keep their previous defaults, and that GLM request artifacts use compact context, bounded completion tokens, disabled default tools, terminal loop guards, and redacted diagnostics.
 
 SKS 4.0.4 keeps release proof truth aligned with the 4.0.4 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM 5.2 MAD launch checks, OpenRouter key wrapper evidence, disabled GPT fallback swarm proof, and Codex `rust-v0.141.0` compatibility evidence before publication.
 

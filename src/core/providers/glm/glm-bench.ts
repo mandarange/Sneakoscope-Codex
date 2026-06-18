@@ -5,9 +5,9 @@ import { createEmptyGlmLatencyTrace, writeGlmLatencyTrace } from './glm-latency-
 
 export interface GlmBenchResult {
   readonly schema: 'sks.glm-bench-result.v1';
-  readonly version: '4.0.5';
+  readonly version: '4.0.6';
   readonly generated_at: string;
-  readonly status: 'dry_run' | 'blocked';
+  readonly status: 'dry_run' | 'live' | 'blocked';
   readonly dry_run: boolean;
   readonly cases: readonly GlmBenchCaseResult[];
   readonly summary: {
@@ -47,11 +47,12 @@ const SYNTHETIC_CASES: readonly GlmBenchCaseResult[] = Object.freeze([
 ]);
 
 export async function runGlmBench(root: string, args: readonly string[] = []): Promise<GlmBenchResult> {
+  const live = args.includes('--live');
   const execute = args.includes('--execute');
-  if (execute) {
+  if (execute && !live) {
     const blocked: GlmBenchResult = {
       schema: 'sks.glm-bench-result.v1',
-      version: '4.0.5',
+      version: '4.0.6',
       generated_at: nowIso(),
       status: 'blocked',
       dry_run: true,
@@ -66,11 +67,47 @@ export async function runGlmBench(root: string, args: readonly string[] = []): P
     await writeJsonAtomic(path.join(root, '.sneakoscope', 'glm', 'bench-blocked.json'), blocked);
     return blocked;
   }
+  if (live) {
+    const blocked: GlmBenchResult = {
+      schema: 'sks.glm-bench-result.v1',
+      version: '4.0.6',
+      generated_at: nowIso(),
+      status: 'blocked',
+      dry_run: false,
+      cases: [],
+      summary: {
+        speed_p50_total_ms: 0,
+        speed_p90_total_ms: 0,
+        speed_p50_ttft_ms: null
+      },
+      warnings: ['live_openrouter_bench_requires_explicit_network_runner_not_enabled_in_this_build']
+    };
+    await writeJsonAtomic(path.join(root, '.sneakoscope', 'glm', 'bench-live-blocked.json'), blocked);
+    return blocked;
+  }
+  if (execute) {
+    const blocked: GlmBenchResult = {
+      schema: 'sks.glm-bench-result.v1',
+      version: '4.0.6',
+      generated_at: nowIso(),
+      status: 'blocked',
+      dry_run: true,
+      cases: [],
+      summary: {
+        speed_p50_total_ms: 0,
+        speed_p90_total_ms: 0,
+        speed_p50_ttft_ms: null
+      },
+      warnings: ['execute_requested_without_live_flag_uses_no_network_dry_run_policy']
+    };
+    await writeJsonAtomic(path.join(root, '.sneakoscope', 'glm', 'bench-blocked.json'), blocked);
+    return blocked;
+  }
   const speedTotals = SYNTHETIC_CASES.map((row) => row.speed.total_ms);
   const deepTotals = SYNTHETIC_CASES.map((row) => row.deep.total_ms);
   const result: GlmBenchResult = {
     schema: 'sks.glm-bench-result.v1',
-    version: '4.0.5',
+    version: '4.0.6',
     generated_at: nowIso(),
     status: 'dry_run',
     dry_run: true,

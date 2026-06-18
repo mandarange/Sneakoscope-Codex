@@ -168,5 +168,5 @@ function shellQuote(value: string): string {
 function codexReasoningEffortForProfile(profile: GlmResolvedProfile): 'low' | 'high' | 'xhigh' {
   if (profile.name === 'xhigh') return 'xhigh';
   if (profile.name === 'deep' || profile.name === 'strict') return 'high';
-  return 'xhigh';
+  return 'low';
 }

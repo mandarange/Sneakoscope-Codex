@@ -23,7 +23,7 @@ export interface GlmResolvedProfile {
   readonly tool_choice: 'none' | 'auto';
   readonly parallel_tool_calls: false;
   readonly provider: OpenRouterProviderPreferences;
-  readonly reasoning_effort?: 'high' | 'xhigh';
+  readonly reasoning_effort?: 'high' | 'xhigh' | null;
   readonly response_format?: unknown;
   readonly stop?: readonly string[];
   readonly blockers: readonly string[];

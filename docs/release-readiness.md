@@ -1,8 +1,8 @@
 # Release Readiness
 
-SKS 4.0.5 is the GLM-only xhigh speed-mode patch after 4.0.4. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and GLM speed-profile metadata to agree on 4.0.5 before publication.
+SKS 4.0.6 is the GLM speed/stability/loop-fix patch after 4.0.5. It requires package, lockfile, CLI constants, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and GLM speed-profile metadata to agree on 4.0.6 before publication.
 
-4.0.5 release readiness adds proof that the xhigh speed defaults are scoped to `sks --mad --glm`, that ordinary `sks --mad` and non-GLM routes do not inherit GLM reasoning defaults, and that GLM request/profile/launch artifacts record compact context, disabled default tools, no GPT fallback, OpenRouter fallback blocking, redacted traces, and bench diagnostics.
+4.0.6 release readiness adds proof that bare `sks --mad --glm` exits with readiness/status, speed mode does not use high/xhigh reasoning or `require_parameters: true`, explicit interactive/Zellij launch remains opt-in, and GLM request/profile/launch artifacts record compact context, disabled default tools, no GPT fallback, OpenRouter fallback blocking, redacted traces, terminal run artifacts, and bench diagnostics.
 
 SKS 4.0.4 is the GLM 5.2 MAD launch-fix patch after 4.0.3. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and OpenRouter GLM launch metadata to agree on 4.0.4 before publication.
 
