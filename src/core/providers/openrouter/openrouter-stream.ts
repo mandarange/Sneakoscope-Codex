@@ -24,6 +24,7 @@ export interface OpenRouterStreamResult {
   readonly total_ms: number;
   readonly chunk_count: number;
   readonly events: readonly OpenRouterStreamEvent[];
+  readonly real_stream: boolean;
 }
 
 export async function sendOpenRouterChatCompletionStream(input: {
@@ -51,9 +52,17 @@ export async function sendOpenRouterChatCompletionStream(input: {
       body: encoded.body
     });
     if (timeout) clearTimeout(timeout);
+    if (!response.ok) {
+      const text = await response.text();
+      return { ok: false, error: normalizeOpenRouterError(response.status, text) };
+    }
+    // Real streaming via ReadableStream reader
+    if (response.body && typeof response.body.getReader === 'function') {
+      return { ok: true, value: await readRealStream(response.body, started) };
+    }
+    // Fallback: non-streaming response
     const text = await response.text();
-    if (!response.ok) return { ok: false, error: normalizeOpenRouterError(response.status, text) };
-    return { ok: true, value: parseOpenRouterStreamText(text, started) };
+    return { ok: true, value: parseOpenRouterStreamText(text, started, false) };
   } catch (err: unknown) {
     if (timeout) clearTimeout(timeout);
     if (err instanceof Error && err.name === 'AbortError') {
@@ -77,7 +86,62 @@ export async function sendOpenRouterChatCompletionStream(input: {
   }
 }
 
-export function parseOpenRouterStreamText(text: string, startedAtMs = Date.now()): OpenRouterStreamResult {
+async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: number): Promise<OpenRouterStreamResult> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  const events: OpenRouterStreamEvent[] = [];
+  let content = '';
+  let model: string | undefined;
+  let usage: unknown;
+  let ttft: number | null = null;
+  let buffer = '';
+  let chunkCount = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const data = line.slice('data:'.length).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const raw = JSON.parse(data) as any;
+          const delta = raw?.choices?.[0]?.delta?.content;
+          if (typeof raw?.model === 'string') model = raw.model;
+          if (raw?.usage) usage = raw.usage;
+          if (typeof delta === 'string' && delta) {
+            if (ttft === null) ttft = Math.max(0, Date.now() - startedAtMs);
+            content += delta;
+            chunkCount++;
+            events.push({ type: 'chunk', content_delta: delta, ...(model ? { model } : {}), raw });
+          }
+        } catch {
+          events.push({ type: 'error', raw: data });
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  events.push({ type: 'done', ...(model ? { model } : {}), ...(usage ? { usage } : {}) });
+  return {
+    content,
+    ...(model ? { model } : {}),
+    ...(usage ? { usage } : {}),
+    ttft_ms: ttft,
+    total_ms: Math.max(0, Date.now() - startedAtMs),
+    chunk_count: chunkCount,
+    events,
+    real_stream: true
+  };
+}
+
+export function parseOpenRouterStreamText(text: string, startedAtMs = Date.now(), realStream = false): OpenRouterStreamResult {
   const events: OpenRouterStreamEvent[] = [];
   let content = '';
   let model: string | undefined;
@@ -109,6 +173,7 @@ export function parseOpenRouterStreamText(text: string, startedAtMs = Date.now()
     ttft_ms: ttft,
     total_ms: Math.max(0, Date.now() - startedAtMs),
     chunk_count: events.filter((event) => event.type === 'chunk').length,
-    events
+    events,
+    real_stream: realStream
   };
 }

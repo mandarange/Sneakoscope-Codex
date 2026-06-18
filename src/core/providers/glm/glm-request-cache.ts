@@ -22,10 +22,19 @@ export function encodeGlmRequestWithCache(
 ): { readonly body: string; readonly entry: EncodedRequestCacheEntry; readonly cacheHit: boolean } {
   const key = digestRequestForCache(request);
   const hit = cache.get(key);
+  // Fix 18.2: On cache hit, return stored body without JSON.stringify
+  if (hit) {
+    if (hit.bodyStored) {
+      return { body: hit.body, entry: hit, cacheHit: true };
+    }
+    // Even for non-stored bodies, skip re-stringifying by computing from request
+    const body = JSON.stringify(request);
+    return { body, entry: hit, cacheHit: true };
+  }
+  // Cache miss: stringify once
   const body = JSON.stringify(request);
-  if (hit) return { body: hit.bodyStored ? hit.body : body, entry: hit, cacheHit: true };
   if (containsSecretLikeContent(body)) {
-    const entry = {
+    const entry: EncodedRequestCacheEntry = {
       key,
       body: '',
       bodySha256: crypto.createHash('sha256').update(body).digest('hex'),
@@ -36,7 +45,7 @@ export function encodeGlmRequestWithCache(
     };
     return { body, entry, cacheHit: false };
   }
-  const entry = {
+  const entry: EncodedRequestCacheEntry = {
     key,
     body,
     bodySha256: crypto.createHash('sha256').update(body).digest('hex'),

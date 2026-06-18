@@ -35,11 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.6** makes the GLM 5.2 MAD path bounded by default: `sks --mad --glm` now returns readiness/status and exits when no task is supplied, while task forms use a direct GLM-only speed path with loop guards, request timeouts, and deterministic patch gates. Ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
+SKS **4.0.8** makes the GLM 5.2 MAD path bounded by default: `sks --mad --glm` now returns readiness/status and exits when no task is supplied, while task forms use a direct GLM-only speed path with loop guards, request timeouts, and deterministic patch gates. Ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
+
+What changed in 4.0.8:
+
+- **`--open` alias for interactive GLM launch.** `sks --mad --glm --open` now opens the GLM interactive Zellij runtime, equivalent to `sks --mad --glm --interactive`.
 
 What changed in 4.0.6:
 
-- **No default long-lived GLM launch.** Bare `sks --mad --glm` no longer falls through to MAD/Zellij; `--interactive`, `--zellij`, or `session` is required for that path.
+- **No default long-lived GLM launch.** Bare `sks --mad --glm` no longer falls through to MAD/Zellij; `--interactive`, `--open`, `--zellij`, or `session` is required for that path.
 - **Fast GLM speed profile.** Speed mode keeps OpenRouter locked to `z-ai/glm-5.2`, disables GPT/model fallback, avoids high/xhigh reasoning by default, and uses `provider.require_parameters: false` with throughput-first routing.
 - **Bounded direct task runs.** `sks --mad --glm run "task"` and `sks --mad --glm "task"` use a one-shot GLM speed run with max-turn, wall-clock, request-timeout, no-progress, repeated-output, and terminal-state guards.
 - **Deterministic mutation gate.** GLM still returns patch envelopes; SKS parses the unified diff, blocks protected paths, runs `git apply --check`, and applies only after the gate passes.

@@ -129,3 +129,34 @@ async function ensureSecretDir(secretDir: string): Promise<void> {
   await fs.mkdir(secretDir, { recursive: true, mode: 0o700 });
   await fs.chmod(secretDir, 0o700).catch(() => undefined);
 }
+
+export async function promptForOpenRouterKeyHidden(): Promise<string | null> {
+  const readline = await import('node:readline/promises');
+  const { stdin, stdout } = await import('node:process');
+  const rl = readline.createInterface({ input: stdin, output: stdout, terminal: true });
+  try {
+    // Use muted input for hidden key entry
+    let key = '';
+    const escaped = stdout.isTTY
+      ? await new Promise<string>((resolve) => {
+          const onData = (char: Buffer) => {
+            const c = char.toString();
+            if (c === '\r' || c === '\n' || c === '\u0004') {
+              stdin.removeListener('data', onData);
+              resolve(key);
+            } else if (c === '\u0003') {
+              stdin.removeListener('data', onData);
+              resolve('');
+            } else {
+              key += c;
+            }
+          };
+          stdin.on('data', onData);
+          stdout.write('Enter OpenRouter API key (input hidden): ');
+        })
+      : await rl.question('Enter OpenRouter API key: ');
+    return escaped.trim() || null;
+  } finally {
+    rl.close();
+  }
+}
