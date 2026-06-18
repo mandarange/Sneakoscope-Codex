@@ -1,5 +1,5 @@
 import { flag, positionalArgs } from '../../cli/args.js';
-import { runGlmBench } from '../providers/glm/glm-bench.js';
+import { runGlmBenchmark } from '../providers/glm/bench/glm-benchmark-runner.js';
 import { printJson } from '../../cli/output.js';
 import { runGlmDirectSpeedRun } from '../providers/glm/glm-direct-run.js';
 import { runGlmReadinessAndExit } from '../providers/glm/glm-readiness.js';
@@ -12,11 +12,16 @@ export async function glmCommand(args: string[] = []) {
     return glmNarutoCommand(narutoArgs);
   }
   if (flag(args, '--bench') && !flag(args, '--naruto')) {
-    const result = await runGlmBench(process.cwd(), args);
+    const result = await runGlmBenchmark(process.cwd(), args);
     if (result.status === 'blocked') process.exitCode = 1;
     if (flag(args, '--json')) printJson(result);
-    else if (result.status === 'blocked') console.error(`GLM bench blocked: ${result.warnings.join(', ')}`);
-    else console.log(`GLM bench: dry-run p50=${result.summary.speed_p50_total_ms}ms ratio=${result.summary.speed_vs_deep_ratio}`);
+    else if (result.status === 'blocked') console.error(`GLM benchmark blocked: ${result.warnings.join(', ')}`);
+    else if (result.status === 'dry_run') console.log(`GLM benchmark: dry-run (use --live for real measurement)`);
+    else {
+      const direct = result.cases.find((c) => c.implementation_path === 'direct-glm');
+      if (direct) console.log(`  Direct GLM: ${direct.wall_clock_ms}ms`);
+      console.log(`  Recommendation: ${result.comparison.recommendation}`);
+    }
     return result;
   }
   const task = extractGlmTask(args);
