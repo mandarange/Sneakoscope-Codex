@@ -4,6 +4,16 @@
 
 
 
+## [4.0.4] - 2026-06-18
+
+### Fixed
+
+- Fixed `sks --mad --glm` stopping after the GLM readiness banner instead of entering the MAD launch path.
+- Wired GLM MAD launches to Codex with OpenRouter `z-ai/glm-5.2`, `model_provider="openrouter"`, and no codex-lb/OpenAI fallback.
+- Added a mission-local GLM Codex wrapper so OpenRouter keys are read at runtime without writing raw secrets into Zellij layout artifacts.
+- Disabled the existing GPT/codex-sdk native swarm by default for GLM MAD launches to keep the no-GPT-fallback contract honest until a GLM worker backend exists.
+- Added launch proof in `mad-glm-launch.json` and regression tests for GLM launch args, secret handling, and swarm fallback blocking.
+
 ## [4.0.3] - 2026-06-18
 
 ### Added

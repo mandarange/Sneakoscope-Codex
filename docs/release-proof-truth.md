@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.4 keeps release proof truth aligned with the 4.0.4 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM 5.2 MAD launch checks, OpenRouter key wrapper evidence, disabled GPT fallback swarm proof, and Codex `rust-v0.141.0` compatibility evidence before publication.
+
+SKS 4.0.4 release proof truth also requires proof that GLM MAD launches inject Codex OpenRouter `z-ai/glm-5.2` args, do not write raw OpenRouter keys into Zellij layout or wrapper artifacts, continue into MAD after readiness, and record `mad-glm-launch.json` for each launch.
+
 SKS 4.0.3 keeps release proof truth aligned with the 4.0.3 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM 5.2 MAD route checks, OpenRouter key handling evidence, Codex App GLM profile proof, and Codex `rust-v0.141.0` compatibility evidence before publication.
 
 SKS 4.0.3 release proof truth also requires proof that GLM requests use `z-ai/glm-5.2`, do not include GPT/OpenAI fallback model arrays, disable OpenRouter provider fallbacks, reject non-GLM returned models, and leave CI/CD publishing infrastructure unchanged.
