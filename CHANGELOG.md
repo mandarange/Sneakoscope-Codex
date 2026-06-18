@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+
+
+
+## [4.0.8] - 2026-06-19
+
+### Added
+
+- GLM Naruto extreme parallel modification loop: `sks --mad --glm --naruto "<task>"` launches parallel GLM-only patch workers, isolated worktree/patch-envelope candidates, deterministic gates, conflict graph, merge planner, judge/finalizer, repair waves, and real streaming TTFT.
+- `--open` alias for the GLM interactive launch path (from 4.0.7).
+
+## [4.0.7] - 2026-06-18
+
+### Added
+
+- `--open` alias for the GLM interactive launch path. `sks --mad --glm --open` is now equivalent to `sks --mad --glm --interactive`.
+
 ## [4.0.6] - 2026-06-19
 
 ### Fixed

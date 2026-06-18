@@ -4,9 +4,14 @@ import { printJson } from '../../cli/output.js';
 import { runGlmDirectSpeedRun } from '../providers/glm/glm-direct-run.js';
 import { runGlmReadinessAndExit } from '../providers/glm/glm-readiness.js';
 import { runGlmInteractiveLaunch } from '../providers/glm/glm-interactive-launch.js';
+import { glmNarutoCommand } from '../providers/glm/naruto/glm-naruto-command.js';
 
 export async function glmCommand(args: string[] = []) {
-  if (flag(args, '--bench')) {
+  if (flag(args, '--naruto') || positionalArgs(args)[0] === 'naruto') {
+    const narutoArgs = args.filter((a) => a !== '--naruto' && a !== 'naruto');
+    return glmNarutoCommand(narutoArgs);
+  }
+  if (flag(args, '--bench') && !flag(args, '--naruto')) {
     const result = await runGlmBench(process.cwd(), args);
     if (result.status === 'blocked') process.exitCode = 1;
     if (flag(args, '--json')) printJson(result);
@@ -15,7 +20,7 @@ export async function glmCommand(args: string[] = []) {
     return result;
   }
   const task = extractGlmTask(args);
-  const interactive = flag(args, '--interactive') || flag(args, '--zellij') || positionalArgs(args)[0] === 'session';
+  const interactive = flag(args, '--interactive') || flag(args, '--open') || flag(args, '--zellij') || positionalArgs(args)[0] === 'session';
   if (interactive) {
     const readiness = await runGlmReadinessAndExit(args);
     if (!readiness.ok) return readiness;
@@ -41,5 +46,6 @@ function extractGlmTask(args: readonly string[]): string | null {
   const positional = positionalArgs(args).map(String);
   if (positional[0] === 'run') return positional.slice(1).join(' ').trim() || null;
   if (positional[0] === 'session') return null;
+  if (positional[0] === 'naruto') return null;
   return positional.join(' ').trim() || null;
 }
