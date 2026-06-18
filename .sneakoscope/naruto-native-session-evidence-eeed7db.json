@@ -1,0 +1,96 @@
+{
+  "schema": "sks.naruto-native-session-completion-evidence.v1",
+  "generated_at": "2026-06-18T22:25:02Z",
+  "ok": true,
+  "hook_requirement": "SKS $Naruto requires native multi-session evidence before completion. Run worker/reviewer native sessions for disjoint code-changing work, or record explicit evidence that native sessions were unavailable or unsafe to split.",
+  "route": "$Naruto",
+  "task_commit": "eeed7dbaf41530d978fde3752f0ceef136de91b9",
+  "branch": "main",
+  "evidence_kind": "native_multi_session_reviewer_scouts",
+  "native_multi_session_evidence": {
+    "ran_native_sessions": true,
+    "session_count": 5,
+    "mode": "reviewer_scout_lanes_with_parent_owned_integration",
+    "why_parent_owned_integration": [
+      "The task was a fast release-prep request with tightly coupled version, package, GLM Naruto, bench, targeted-check, stop-gate, and publish-readiness surfaces.",
+      "The native lanes were split as disjoint reviewer/scout scopes before integration; parent integration avoided conflicting edits across shared GLM Naruto orchestration and release metadata surfaces.",
+      "After the implementation commit was pushed, launching new mutating workers would risk churn on an already verified release-prep commit, so this artifact binds the completed native reviewer sessions to the completion evidence."
+    ],
+    "sessions": [
+      {
+        "agent_id": "019edcc1-654b-7e80-bd12-3f82ecf3c5f7",
+        "nickname": "Mapper",
+        "scope": "P0-A worktree candidate extraction and isolation",
+        "status": "completed",
+        "mutation_mode": "read_only_reviewer",
+        "result_summary": "Confirmed the missing extracted-diff-only worktree path, parser wiring gap, missing worktree proof fields, and missing candidate extraction test before parent integration."
+      },
+      {
+        "agent_id": "019edcc1-7bbc-7082-99e8-39ea5b29baf2",
+        "nickname": "Analysis",
+        "scope": "P0-B/P0-F adaptive scheduler, provider backoff, and retry policy",
+        "status": "completed",
+        "mutation_mode": "read_only_reviewer",
+        "result_summary": "Confirmed full worker Promise.all fanout, retrospective-only provider health, missing structured retry issue surface, and missing retry/backpressure artifacts before parent integration."
+      },
+      {
+        "agent_id": "019edcc1-8f4e-7892-a597-40c495be8b03",
+        "nickname": "Analysis the 2nd",
+        "scope": "P0-C live bench direct GLM vs Naruto cases",
+        "status": "completed",
+        "mutation_mode": "read_only_reviewer",
+        "result_summary": "Confirmed the bench mislabeled Naruto workers=1 as direct GLM and lacked direct-baseline orchestration tests before parent integration."
+      },
+      {
+        "agent_id": "019edcc1-a1b4-7080-abbf-a60e24665e42",
+        "nickname": "Mapper the 2nd",
+        "scope": "P0-D/P0-E/P0-G targeted checks, dirty tree policy, rollback, final seal, and merge rationale",
+        "status": "completed",
+        "mutation_mode": "read_only_reviewer",
+        "result_summary": "Confirmed missing targeted checks, dirty touched-path policy, rollback-on-check-failure, final seal, stop-gate final-seal evidence, and merge rationale artifact before parent integration."
+      },
+      {
+        "agent_id": "019edcc1-b45c-75c2-89c3-c967c102b425",
+        "nickname": "Mapper the 3rd",
+        "scope": "version, stale dist, npm publish readiness, and CI/CD no-change guard",
+        "status": "completed",
+        "mutation_mode": "read_only_reviewer",
+        "result_summary": "Confirmed stale 4.0.11 package/version/dist surfaces, npm publish --ignore-scripts risk, dirty artifact hygiene risk, and CI/CD untouched status before parent integration."
+      }
+    ],
+    "native_session_status_check": {
+      "tool": "multi_agent_v1.wait_agent",
+      "checked_at": "2026-06-18T22:24:00Z",
+      "all_completed": true,
+      "timed_out": false,
+      "codex_thread_reader_note": "codex_app.read_thread could not resolve these IDs because they are native agent IDs rather than ordinary Codex thread IDs; multi_agent_v1.wait_agent returned completed status for all five."
+    }
+  },
+  "completion_claim": {
+    "release_prep_commit_pushed": true,
+    "pushed_commit": "eeed7dbaf41530d978fde3752f0ceef136de91b9",
+    "push_target": "origin/main",
+    "publish_state": {
+      "npm_latest_before_publish": "4.0.11",
+      "npm_4_0_12_unpublished": true,
+      "publish_command_ready": "npm publish --ignore-scripts",
+      "dry_run_publish_passed": true
+    },
+    "verification_summary": [
+      "npm run typecheck",
+      "npm run build:incremental",
+      "focused GLM Naruto node tests: 21/21 pass",
+      "npm run packcheck",
+      "npm pack --dry-run --ignore-scripts --json",
+      "npm publish --dry-run --ignore-scripts",
+      "release version truth, provenance, metadata, proof-truth, selftest mock, and wiki validation"
+    ],
+    "ci_cd_changed": false
+  },
+  "blockers": [],
+  "honest_mode": {
+    "claim": "Native multi-session evidence existed before completion through five completed native reviewer/scout lanes covering disjoint code-changing scopes, with parent-owned integration and verification.",
+    "support": "multi_agent_v1.wait_agent returned completed status for all five agent IDs and their final summaries are bound above. The release-prep commit eeed7db was pushed to origin/main after targeted verification and dry-run publish.",
+    "remaining_gap": "The native sessions were reviewer/scout lanes, not separate mutating worker branches. This was chosen to avoid conflicts on tightly coupled release and GLM Naruto orchestration surfaces during fast publish preparation."
+  }
+}
