@@ -37,7 +37,7 @@ const checks = {
   ppt_full_e2e_blackbox: scriptContains('release:check', 'ppt:full-e2e-blackbox'),
   ppt_full_e2e_artifact_graph: scriptContains('release:check', 'ppt:full-e2e-artifact-graph'),
   codex_0133_official_compat: scriptContains('release:check', 'codex:0.133-official-compat'),
-  codex_0136_compat: scriptContains('release:check', 'codex:0.136-compat'),
+  codex_0136_compat: scriptContains('release:check', 'codex:0.137-compat'),
   codex_0134_compat: scriptContains('release:check', 'codex:0.134-compat'),
   codex_0134_official_compat: scriptContains('release:check', 'codex:0.134-official-compat'),
   codex_profile_primary: scriptContains('release:check', 'codex:profile-primary'),

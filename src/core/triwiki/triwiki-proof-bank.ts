@@ -175,8 +175,8 @@ function isLockStale(file: string, staleAfterMs: number): boolean {
   try {
     const stat = fs.statSync(file);
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { pid?: number };
-    const pidAlive = typeof raw.pid === 'number' && process.kill(raw.pid, 0) !== undefined;
-    return !pidAlive || Date.now() - stat.mtimeMs > staleAfterMs;
+    const alive = typeof raw.pid === 'number' && pidAlive(raw.pid);
+    return !alive || Date.now() - stat.mtimeMs > staleAfterMs;
   } catch {
     try {
       const stat = fs.statSync(file);
@@ -184,6 +184,16 @@ function isLockStale(file: string, staleAfterMs: number): boolean {
     } catch {
       return true;
     }
+  }
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: unknown) {
+    const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code || '') : '';
+    return code === 'EPERM';
   }
 }
 

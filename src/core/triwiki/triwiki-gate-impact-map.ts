@@ -95,6 +95,7 @@ export function gatePackForGate(gate: ReleaseGateNode, modules: string[], cards:
   if (gate.id.startsWith('gate-pack:') || gate.id.startsWith('release:')) return 'release-parity';
   if (gate.id.startsWith('doctor:')) return 'doctor-production';
   if (gate.id.startsWith('sksd:') || gate.id.startsWith('probes:')) return 'startup-mcp';
+  if (gate.id.startsWith('secret:') || gate.id.includes('secret')) return 'secret';
   if (gate.id.startsWith('legacy:') || gate.id.startsWith('orphan:') || gate.id.includes('zellij')) return 'zellij';
   const card = cards.find((candidate) => modules.includes(candidate.module_id) && candidate.gate_packs.length);
   return card?.gate_packs[0] || 'release-parity';

@@ -20,7 +20,8 @@ const result = await runReleaseGateDag({
   full: args.includes('--full'),
   explain: args.includes('--explain'),
   noCache: args.includes('--no-cache'),
-  failFast: args.includes('--fail-fast')
+  failFast: args.includes('--fail-fast'),
+  useGatePacks: args.includes('--use-gate-packs')
 })
 
 console.log(`SKS Release DAG

@@ -16,6 +16,8 @@ export function defaultReleaseGateBudget(): ReleaseGateBudget {
     python: Math.min(12, Math.max(1, cores)),
     network: 12,
     'zellij-real': 1,
+    'browser-real': 1,
+    'secret-sensitive': 1,
     'local-llm-real': Math.max(1, Number(process.env.SKS_LOCAL_LLM_MAX_PARALLEL || 1)),
     'remote-model-real': 6,
     'global-config': 1,

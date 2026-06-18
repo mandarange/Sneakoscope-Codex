@@ -49,6 +49,11 @@ export interface DoctorFixTransaction {
   postcheck_ok: boolean;
   rollback_performed: boolean;
   raw_secret_values_recorded: false;
+  skipped_clean_phases: string[];
+  dirty_phases: string[];
+  proof_ids_used: string[];
+  saved_ms_estimate: number;
+  semantic_dirty_plan_path: string | null;
 }
 
 export async function runDoctorFixTransaction(input: {
@@ -59,6 +64,7 @@ export async function runDoctorFixTransaction(input: {
 }): Promise<DoctorFixTransaction> {
   const startedAt = nowIso();
   const phases: DoctorFixTransactionPhase[] = [];
+  const proofIdsUsed: string[] = [];
   let rollbackPerformed = false;
   for (const definition of input.phases) {
     const phaseStarted = nowIso();
@@ -75,10 +81,12 @@ export async function runDoctorFixTransaction(input: {
       started_at: phaseStarted
     };
     if (isDoctorPhaseClean(input.dirtyPlan, definition.id)) {
+      const proofId = input.dirtyPlan?.phases.find((row) => row.id === definition.id)?.last_clean_proof_id;
+      if (proofId) proofIdsUsed.push(proofId);
       phases.push({
         ...phase,
         ok: true,
-        warnings: ['dirty_plan_skipped_clean_phase'],
+        warnings: [`dirty_plan_skipped_clean_phase${proofId ? `:${proofId}` : ''}`],
         completed_at: nowIso(),
         duration_ms: Math.max(0, Date.now() - startedMs)
       });
@@ -111,7 +119,11 @@ export async function runDoctorFixTransaction(input: {
     }
     phase.completed_at = phase.completed_at || nowIso();
     phase.duration_ms = phase.duration_ms ?? Math.max(0, Date.now() - startedMs);
-    if (phase.ok) markDoctorPhaseClean(input.root, definition.id);
+    if (phase.ok) {
+      const proofId = `doctor-${definition.id}-${Date.now()}`;
+      markDoctorPhaseClean(input.root, definition.id, proofId, true);
+      proofIdsUsed.push(proofId);
+    }
     phases.push(phase);
   }
   const writeInput: {
@@ -127,7 +139,11 @@ export async function runDoctorFixTransaction(input: {
     rollbackPerformed
   };
   if (input.reportPath !== undefined) writeInput.reportPath = input.reportPath;
-  return writeDoctorFixTransaction(writeInput);
+  return writeDoctorFixTransaction({
+    ...writeInput,
+    dirtyPlan: input.dirtyPlan || null,
+    proofIdsUsed
+  });
 }
 
 export async function writeDoctorFixTransaction(input: {
@@ -136,6 +152,8 @@ export async function writeDoctorFixTransaction(input: {
   phases: DoctorFixTransactionPhase[];
   rollbackPerformed?: boolean;
   reportPath?: string | null;
+  dirtyPlan?: DoctorDirtyPlan | null;
+  proofIdsUsed?: string[];
 }): Promise<DoctorFixTransaction> {
   const root = path.resolve(input.root);
   const phases = input.phases.map((phase) => ({
@@ -162,7 +180,12 @@ export async function writeDoctorFixTransaction(input: {
     phases,
     postcheck_ok: postcheckOk,
     rollback_performed: input.rollbackPerformed === true,
-    raw_secret_values_recorded: false
+    raw_secret_values_recorded: false,
+    skipped_clean_phases: phases.filter((phase) => phase.warnings.some((warning) => warning.startsWith('dirty_plan_skipped_clean_phase'))).map((phase) => phase.id),
+    dirty_phases: input.dirtyPlan?.phases.filter((phase) => phase.status === 'dirty').map((phase) => phase.id) || phases.filter((phase) => !phase.warnings.some((warning) => warning.startsWith('dirty_plan_skipped_clean_phase'))).map((phase) => phase.id),
+    proof_ids_used: [...new Set(input.proofIdsUsed || [])].sort(),
+    saved_ms_estimate: phases.filter((phase) => phase.warnings.some((warning) => warning.startsWith('dirty_plan_skipped_clean_phase'))).length * 1000,
+    semantic_dirty_plan_path: input.dirtyPlan?.semantic_dirty_plan_path || null
   };
   if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-fix-transaction.json'), report).catch(() => undefined);
   return report;

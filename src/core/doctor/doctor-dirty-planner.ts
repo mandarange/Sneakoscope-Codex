@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { hashJson } from '../triwiki/triwiki-cache-key.js';
+import { triWikiProofBankDir } from '../triwiki/triwiki-proof-bank.js';
 
 export const DOCTOR_DIRTY_PLAN_SCHEMA = 'sks.doctor-dirty-plan.v1';
 
@@ -10,6 +11,7 @@ export interface DoctorDirtyPlan {
   phases: DoctorDirtyPhase[];
   dirty_count: number;
   clean_count: number;
+  semantic_dirty_plan_path: string;
 }
 
 export interface DoctorDirtyPhase {
@@ -31,6 +33,9 @@ export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorD
     if (markerState.input_hash !== inputHash) {
       return { id, status: 'dirty' as const, reason: 'input_hash_changed', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired };
     }
+    if (markerState.proof_id && !proofExists(root, markerState.proof_id)) {
+      return { id, status: 'dirty' as const, reason: 'clean_proof_missing', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired };
+    }
     if (postcheckRequired && !markerState.postcheck_passed) {
       return { id, status: 'dirty' as const, reason: 'postcheck_required', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: true };
     }
@@ -41,16 +46,18 @@ export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorD
     root,
     phases,
     dirty_count: phases.filter((phase) => phase.status === 'dirty').length,
-    clean_count: phases.filter((phase) => phase.status === 'clean').length
+    clean_count: phases.filter((phase) => phase.status === 'clean').length,
+    semantic_dirty_plan_path: dirtyPlanPath(root)
   };
   writeDirtyPlan(root, plan);
   return plan;
 }
 
-export function markDoctorPhaseClean(root: string, id: string): void {
+export function markDoctorPhaseClean(root: string, id: string, proofId = `doctor-${id}-${Date.now()}`, postcheckPassed = true): string {
   const file = markerPath(root, id);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ schema: 'sks.doctor-dirty-clean-proof.v1', proof_id: `doctor-${id}-${Date.now()}`, cleaned_at: new Date().toISOString(), input_hash: phaseInputHash(root, id), postcheck_passed: true }, null, 2)}\n`);
+  fs.writeFileSync(file, `${JSON.stringify({ schema: 'sks.doctor-dirty-clean-proof.v1', proof_id: proofId, cleaned_at: new Date().toISOString(), input_hash: phaseInputHash(root, id), postcheck_passed: postcheckPassed }, null, 2)}\n`);
+  return proofId;
 }
 
 export function isDoctorPhaseClean(plan: DoctorDirtyPlan | null | undefined, id: string): boolean {
@@ -77,10 +84,9 @@ function phaseInputHash(root: string, id: string): string {
   const files = phaseInputFiles(id).map((rel) => {
     const file = path.join(root, rel);
     if (!fs.existsSync(file)) return { rel, hash: 'missing' };
-    const stat = fs.statSync(file);
-    return { rel, hash: stat.isDirectory() ? `dir:${stat.mtimeMs}` : hashJson({ size: stat.size, mtimeMs: stat.mtimeMs, text: stat.size < 512_000 ? fs.readFileSync(file, 'utf8') : '' }) };
+    return hashSemanticPath(root, rel);
   });
-  return hashJson({ id, files, env: phaseEnvPresence(id) });
+  return hashJson({ id, files, env: phaseEnvPresence(id), semantic_state: phaseSemanticState(root, id) });
 }
 
 function phaseInputFiles(id: string): string[] {
@@ -99,12 +105,96 @@ function phaseEnvPresence(id: string): Record<string, boolean> {
   return Object.fromEntries(keys.map((key) => [key, process.env[key] !== undefined]));
 }
 
+function phaseSemanticState(root: string, id: string): Record<string, unknown> {
+  const config = readTextIfSmall(path.join(root, '.codex', 'config.toml'));
+  return {
+    zellij_capability_present: id.includes('zellij') ? fs.existsSync(path.join(root, 'src', 'core', 'zellij')) : undefined,
+    context7_transport: id.includes('context7') ? parseMcpTransport(config, 'context7') : undefined,
+    startup_config_targets: id.includes('startup') ? parseConfigTargets(config) : undefined,
+    supabase_env_present: id.includes('supabase') ? process.env.SUPABASE_ACCESS_TOKEN !== undefined : undefined,
+    skill_registry_hash: id.includes('skill') ? hashSemanticPath(root, '.agents/skills').hash : undefined,
+    native_capability_hash: id.includes('native') ? hashSemanticPath(root, 'src/core/codex-native').hash : undefined,
+    secret_fingerprint_hash: id.includes('secret') ? hashJson({ has_allowlist: fs.existsSync(path.join(root, 'safety-mutation-allowlist.json')) }) : undefined
+  };
+}
+
+function hashSemanticPath(root: string, rel: string): { rel: string; hash: string } {
+  const absolute = path.join(root, rel);
+  if (!fs.existsSync(absolute)) return { rel, hash: 'missing' };
+  const stat = fs.lstatSync(absolute);
+  if (stat.isDirectory()) {
+    const records = walkFiles(absolute).map((file) => {
+      const fileStat = fs.lstatSync(file);
+      const relative = path.relative(root, file).replace(/\\/g, '/');
+      return fileStat.isSymbolicLink()
+        ? { path: relative, mode: 'symlink', target: fs.readlinkSync(file) }
+        : { path: relative, mode: 'file', hash: hashFile(file), size: fileStat.size };
+    });
+    return { rel, hash: hashJson(records) };
+  }
+  if (stat.isSymbolicLink()) return { rel, hash: hashJson({ mode: 'symlink', target: fs.readlinkSync(absolute) }) };
+  return { rel, hash: hashFile(absolute) };
+}
+
+function walkFiles(dir: string): string[] {
+  const out: string[] = [];
+  const stack = [dir];
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current) continue;
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) stack.push(absolute);
+      else if (entry.isFile() || entry.isSymbolicLink()) out.push(absolute);
+    }
+  }
+  return out.sort();
+}
+
+function hashFile(file: string): string {
+  return hashJson({ text: fs.readFileSync(file, 'utf8') });
+}
+
+function readTextIfSmall(file: string): string {
+  try {
+    const stat = fs.statSync(file);
+    if (stat.size > 512_000) return '';
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+function parseMcpTransport(text: string, name: string): string | null {
+  const block = text.match(new RegExp(`\\[mcp_servers\\.${name}\\]([\\s\\S]*?)(?:\\n\\[|$)`));
+  if (!block?.[1]) return null;
+  const transport = block[1].match(/transport\s*=\s*["']?([^"'\n]+)["']?/);
+  const command = block[1].match(/command\s*=\s*["']?([^"'\n]+)["']?/);
+  return transport?.[1]?.trim() || (command ? 'stdio' : 'unknown');
+}
+
+function parseConfigTargets(text: string): string[] {
+  return [...text.matchAll(/config_file\s*=\s*["']([^"']+)["']/g)].map((match) => match[1] || '').filter(Boolean).sort();
+}
+
+function proofExists(root: string, proofId: string): boolean {
+  const transaction = path.join(root, '.sneakoscope', 'reports', 'doctor-fix-transaction.json');
+  if (fs.existsSync(transaction) && fs.readFileSync(transaction, 'utf8').includes(proofId)) return true;
+  const bank = triWikiProofBankDir(root);
+  if (!fs.existsSync(bank)) return false;
+  return walkFiles(bank).some((file) => path.basename(file) === `${proofId}.json` || fs.readFileSync(file, 'utf8').includes(proofId));
+}
+
 function phaseRequiresPostcheck(id: string): boolean {
   return /zellij|context7|startup|supabase|native|secret/i.test(id);
 }
 
 function writeDirtyPlan(root: string, plan: DoctorDirtyPlan): void {
-  const file = path.join(root, '.sneakoscope', 'reports', 'doctor-dirty-plan.json');
+  const file = dirtyPlanPath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(plan, null, 2)}\n`);
+}
+
+function dirtyPlanPath(root: string): string {
+  return path.join(root, '.sneakoscope', 'reports', 'doctor-dirty-plan.json');
 }

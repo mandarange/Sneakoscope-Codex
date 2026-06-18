@@ -1088,6 +1088,54 @@
       "reason": "Gate-pack fixture cache writes only scoped fixture metadata inside the project fixture-cache directory."
     },
     {
+      "file": "src/core/build/build-once-runner.ts",
+      "symbol": "runBuildOnce",
+      "token": "rmSync",
+      "reason": "Build-once clean mode removes only scoped build artifacts and TypeScript cache directories before rebuilding."
+    },
+    {
+      "file": "src/core/daemon/sksd-ipc.ts",
+      "symbol": "writeSksdIpcResponse",
+      "token": "writeFileSync",
+      "reason": "SKSD IPC response writer persists only scoped daemon protocol response JSON under the project IPC path."
+    },
+    {
+      "file": "src/core/daemon/sksd.ts",
+      "symbol": "writeProbeResponse",
+      "token": "writeFileSync",
+      "reason": "SKSD probe response writer persists only scoped daemon readiness probe JSON under the daemon response path."
+    },
+    {
+      "file": "src/core/release/extreme-parallel-scheduler.ts",
+      "symbol": "writeResourceClaimTimeline",
+      "token": "writeFileSync",
+      "reason": "Resource scheduler writes only scoped resource claim timeline evidence under the release reports directory."
+    },
+    {
+      "file": "src/core/release/gate-pack-assertion.ts",
+      "symbol": "writeGatePackSharedArtifact",
+      "token": "writeFileSync",
+      "reason": "Gate-pack shared artifact writer persists only scoped pack evidence JSON under the configured artifact path."
+    },
+    {
+      "file": "src/core/release/gate-pack-fixture-cache.ts",
+      "symbol": "prepareGatePackFixture",
+      "token": "rmSync",
+      "reason": "Gate-pack fixture cache removes only its scoped base fixture directory before recreating deterministic fixtures."
+    },
+    {
+      "file": "src/core/release/gate-pack-fixture-cache.ts",
+      "symbol": "cleanupOldRuns",
+      "token": "rmSync",
+      "reason": "Gate-pack fixture cleanup removes only scoped old run directories after retention sorting."
+    },
+    {
+      "file": "src/core/release/release-gate-cache-v2.ts",
+      "symbol": "writeReleaseCacheBridgeReport",
+      "token": "writeFileSync",
+      "reason": "Release cache bridge writer persists only scoped cache bridge evidence under .sneakoscope/reports."
+    },
+    {
       "file": "src/core/triwiki/triwiki-gate-impact-map.ts",
       "symbol": "writeImpactMap",
       "token": "writeFileSync",

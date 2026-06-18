@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_TRIWIKI_MODULE_CARDS, moduleIdsForPath, type TriWikiModuleCard } from './triwiki-module-card.js';
 import { buildTriWikiGateImpactMap } from './triwiki-gate-impact-map.js';
+import { computeTriWikiCacheKey } from './triwiki-cache-key.js';
+import { readReusableTriWikiProofCard } from './triwiki-proof-bank.js';
 
 export const TRIWIKI_AFFECTED_GRAPH_SCHEMA = 'sks.triwiki-affected-graph.v1';
 
@@ -28,8 +30,8 @@ export interface TriWikiAffectedGraph {
   release_equivalent_within_scope: boolean;
   confidence: 'instant' | 'affected-release-equivalent' | 'full-release';
   conservative_reason: string | null;
-  reused_proofs: string[];
-  invalidated_proofs: string[];
+  reused_proofs: Array<{ gate_id: string; proof_id: string; path: string }>;
+  invalidated_proofs: Array<{ gate_id: string; reason: string }>;
   required_new_proofs: string[];
 }
 
@@ -56,6 +58,30 @@ export function computeTriWikiAffectedGraph(input: TriWikiAffectedGraphInput): T
   const selected = impactMap.impacts.filter((impact) => input.full || impact.modules.some((moduleId) => affectedModules.has(moduleId)) || conservativeReason === 'root_release_surface_changed');
   const gatePacks = new Set<string>();
   for (const impact of selected) gatePacks.add(impact.gate_pack);
+  const proofLookup = selected.map((impact) => {
+    const cacheKey = computeTriWikiCacheKey({
+      root: input.root,
+      id: impact.gate_id,
+      inputs: impact.cache_inputs,
+      implementationFiles: [`src/scripts/${scriptFileForCommand(impact.command) || ''}`].filter(Boolean),
+      envAllowlist: ['CI', 'SKS_FAST_MODE', 'SKS_RELEASE_PRESET'],
+      fixtureVersion: 'sks-4.0.2'
+    });
+    const hit = readReusableTriWikiProofCard({ root: input.root, subjectId: impact.gate_id, cacheKey: cacheKey.key });
+    return { impact, hit };
+  });
+  const reusedProofs = proofLookup
+    .filter((row) => row.hit.hit && row.hit.card && row.hit.path)
+    .map((row) => ({ gate_id: row.impact.gate_id, proof_id: row.hit.card!.proof_id, path: row.hit.path! }))
+    .sort((a, b) => a.gate_id.localeCompare(b.gate_id));
+  const invalidatedProofs = proofLookup
+    .filter((row) => !row.hit.hit && row.hit.invalidation_reasons.some((reason) => !['proof_dir_missing', 'proof_not_found'].includes(reason)))
+    .map((row) => ({ gate_id: row.impact.gate_id, reason: row.hit.invalidation_reasons.join('|') || 'proof_not_reusable' }))
+    .sort((a, b) => a.gate_id.localeCompare(b.gate_id));
+  const requiredNewProofs = proofLookup
+    .filter((row) => !row.hit.hit)
+    .map((row) => row.impact.gate_id)
+    .sort();
   const tier = input.tier || 'affected';
   return {
     schema: TRIWIKI_AFFECTED_GRAPH_SCHEMA,
@@ -68,9 +94,9 @@ export function computeTriWikiAffectedGraph(input: TriWikiAffectedGraphInput): T
     release_equivalent_within_scope: tier !== 'instant',
     confidence: tier === 'release' ? 'full-release' : tier === 'instant' ? 'instant' : 'affected-release-equivalent',
     conservative_reason: conservativeReason,
-    reused_proofs: [],
-    invalidated_proofs: selected.map((impact) => impact.gate_id).sort(),
-    required_new_proofs: selected.map((impact) => impact.gate_id).sort()
+    reused_proofs: reusedProofs,
+    invalidated_proofs: invalidatedProofs,
+    required_new_proofs: requiredNewProofs
   };
 }
 
@@ -127,4 +153,10 @@ function parseGitStatusPathLine(line: string): string[] {
 
 function previousPathOrConservative(root: string, file: string): string {
   return fs.existsSync(path.join(root, file)) ? file : file;
+}
+
+function scriptFileForCommand(command: string): string | null {
+  const script = command.match(/^npm run ([^ ]+)/)?.[1];
+  if (!script) return null;
+  return `${script.replace(/[:]/g, '-')}${script.includes('blackbox') ? '' : '-check'}.ts`;
 }

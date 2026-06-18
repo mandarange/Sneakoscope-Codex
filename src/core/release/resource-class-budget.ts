@@ -12,6 +12,7 @@ export interface ResourceClassBudget {
   network: number;
   remote_model_real: number;
   zellij_real: number;
+  browser_real: number;
   secret_sensitive: number;
 }
 
@@ -27,6 +28,7 @@ export function computeResourceClassBudget(env: NodeJS.ProcessEnv = process.env)
     network: readEnvInt(env, 'SKS_RESOURCE_NETWORK', 2),
     remote_model_real: readEnvInt(env, 'SKS_RESOURCE_REMOTE_MODEL_REAL', 1),
     zellij_real: readEnvInt(env, 'SKS_RESOURCE_ZELLIJ_REAL', 1),
+    browser_real: readEnvInt(env, 'SKS_RESOURCE_BROWSER_REAL', 1),
     secret_sensitive: readEnvInt(env, 'SKS_RESOURCE_SECRET', 1)
   };
 }

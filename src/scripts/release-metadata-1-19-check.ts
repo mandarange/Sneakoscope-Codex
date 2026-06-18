@@ -143,8 +143,7 @@ const requiredScripts = [
   'proof:fake-real-policy-v2',
   'release:runtime-truth-matrix',
   'release:gate-existence-audit',
-  'codex:0.136-compat',
-  'codex:0.135-compat',
+  'codex:0.137-compat',
   'doctor:codex-doctor-parity',
   'codex:permission-profiles',
   'codex:legacy-profile-consumers-removed',
@@ -288,8 +287,6 @@ const requiredScripts = [
   'release:check:parallel'
 ];
 const requiredRealScripts = [
-  'codex:0.136-compat:require-real',
-  'codex:0.135-compat:require-real',
   'doctor:codex-doctor-parity:actual',
   'publish:dry-run-performance',
   'zellij:capability',
