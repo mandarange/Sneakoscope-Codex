@@ -32,13 +32,18 @@ test('worktree policy blocks unavailable git worktree unless fallback is explici
 
 test('worktree materialization applies patch outside main workspace and exports diff', async () => {
   const cwd = await tempRepo();
-  const patch = `diff --git a/src/a.ts b/src/a.ts
+  const patch = `<sks_patch_candidate>
+summary: update a
+target_paths:
+- src/a.ts
+patch:
+diff --git a/src/a.ts b/src/a.ts
 --- a/src/a.ts
 +++ b/src/a.ts
 @@ -1 +1 @@
 -export const a = 1;
 +export const a = 2;
-`;
+</sks_patch_candidate>`;
   const envelope = createPatchEnvelope({ missionId: 'M-test', workerId: 'worker-1', shardId: 's1', baseDigest: 'base', patch, strategy: 'minimal_patch', reasoningEffort: 'low', status: 'gate_passed' });
   const result = await materializePatchViaWorktree({ repoRoot: cwd, missionId: 'M-test', envelope, cleanup: false });
   assert.equal(result.ok, true);

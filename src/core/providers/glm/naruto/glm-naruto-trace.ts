@@ -58,6 +58,14 @@ export async function writeMissionArtifacts(input: {
   if (input.termination) await writeJsonAtomic(path.join(dir, 'termination.json'), sanitizeArtifact(input.termination));
   if (input.applyResult) await writeJsonAtomic(path.join(dir, 'apply-result.json'), sanitizeArtifact(input.applyResult));
   if (input.applyTransaction) await writeJsonAtomic(path.join(dir, 'apply-transaction.json'), sanitizeArtifact(input.applyTransaction));
+  if (input.mergePlan) {
+    await writeTextAtomic(path.join(dir, 'merge-rationale.md'), renderMergeRationale({
+      mergePlan: input.mergePlan,
+      conflictGraph: input.conflictGraph,
+      candidateScoreboard: input.candidateScoreboard,
+      applyTransaction: input.applyTransaction
+    }));
+  }
   if (input.verificationSummary) await writeJsonAtomic(path.join(dir, 'verification-summary.json'), sanitizeArtifact(input.verificationSummary));
   if (input.missionResult) await writeJsonAtomic(path.join(dir, 'mission-result.json'), sanitizeArtifact(input.missionResult));
   // 4.0.9: Write per-worker patch envelope / request-summary / stream-trace / gate-result artifacts.
@@ -100,6 +108,54 @@ export async function writeMissionArtifacts(input: {
     }
   }
   return dir;
+}
+
+function renderMergeRationale(input: {
+  readonly mergePlan: unknown;
+  readonly conflictGraph?: unknown;
+  readonly candidateScoreboard?: unknown;
+  readonly applyTransaction?: unknown;
+}): string {
+  const plan = input.mergePlan as any;
+  const graph = input.conflictGraph as any;
+  const scoreboard = input.candidateScoreboard as any;
+  const tx = input.applyTransaction as any;
+  const selected = Array.isArray(plan?.selected_patches) ? plan.selected_patches : [];
+  const scores = Array.isArray(scoreboard?.scores) ? scoreboard.scores : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  const rejected = scores
+    .filter((score: any) => !selected.includes(score.patch_id))
+    .map((score: any) => `- ${score.patch_id}: score=${score.total_score}; disqualified=${Boolean(score.disqualified)}; reasons=${(score.disqualification_reasons || []).join(', ') || 'none'}`);
+  const selectedRows = selected.map((patchId: string) => {
+    const score = scores.find((row: any) => row.patch_id === patchId);
+    return `- ${patchId}: score=${score?.total_score ?? 'n/a'}; components=${JSON.stringify(score?.components ?? {})}`;
+  });
+  const conflictRows = edges.map((edge: any) => `- ${edge.left_patch_id} vs ${edge.right_patch_id}: ${edge.reason}`);
+  return [
+    '# GLM Naruto Merge Rationale',
+    '',
+    `Mission: ${plan?.mission_id ?? 'unknown'}`,
+    `Strategy: ${plan?.strategy ?? 'unknown'}`,
+    `Rationale: ${plan?.rationale ?? 'not_recorded'}`,
+    '',
+    '## Selected Patch IDs',
+    selectedRows.length ? selectedRows.join('\n') : '- none',
+    '',
+    '## Rejected Patch IDs',
+    rejected.length ? rejected.join('\n') : '- none',
+    '',
+    '## Conflicts',
+    conflictRows.length ? conflictRows.join('\n') : '- none',
+    '',
+    '## Apply Transaction',
+    `- final_status: ${tx?.final_status ?? 'not_attempted'}`,
+    `- apply_passed: ${tx?.apply_passed ?? false}`,
+    `- targeted_checks_passed: ${tx?.targeted_checks_passed ?? null}`,
+    `- rollback_attempted: ${tx?.rollback_attempted ?? false}`,
+    `- rollback_passed: ${tx?.rollback_passed ?? null}`,
+    `- blockers: ${(tx?.blockers || []).join(', ') || 'none'}`,
+    ''
+  ].join('\n');
 }
 
 function sanitizeArtifact<T>(value: T): T {

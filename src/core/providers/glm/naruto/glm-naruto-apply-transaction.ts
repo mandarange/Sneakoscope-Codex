@@ -4,6 +4,7 @@ import { sha256, writeJsonAtomic, writeTextAtomic } from '../../../fsx.js';
 import { parseUnifiedDiffPatch } from '../glm-patch-parser.js';
 import { combineGlmNarutoPatches } from './glm-naruto-combined-patch.js';
 import type { GlmNarutoApplyTransaction, GlmNarutoPatchEnvelope } from './glm-naruto-types.js';
+import { runGlmNarutoTargetedChecks } from './glm-naruto-targeted-checks.js';
 
 export async function runGlmNarutoApplyTransaction(input: {
   readonly cwd: string;
@@ -11,23 +12,30 @@ export async function runGlmNarutoApplyTransaction(input: {
   readonly envelopes: readonly GlmNarutoPatchEnvelope[];
   readonly selectedPatchIds: readonly string[];
   readonly artifactDir: string;
+  readonly allowDirtyApply?: boolean;
+  readonly noRollback?: boolean;
+  readonly strictChecks?: boolean;
 }): Promise<{ readonly ok: boolean; readonly applied: readonly string[]; readonly patch: string; readonly transaction: GlmNarutoApplyTransaction }> {
   const preStatus = await gitText(input.cwd, ['status', '--short']);
   const preDiff = await gitText(input.cwd, ['diff', '--binary']);
   const patch = combineGlmNarutoPatches(input.envelopes, input.selectedPatchIds);
   const parsed = parseUnifiedDiffPatch(patch);
+  const dirtyTouchedPaths = await dirtyPaths(input.cwd, parsed.touchedPaths);
   const patchPath = path.join(input.artifactDir, 'selected-combined.patch');
   await writeTextAtomic(patchPath, patch);
 
   const blockers: string[] = [];
   let applyCheckPassed = false;
   let applyPassed = false;
+  let targetedChecksPassed: boolean | null = null;
   let rollbackAttempted = false;
   let rollbackPassed: boolean | null = null;
   let finalStatus: GlmNarutoApplyTransaction['final_status'] = 'blocked';
 
   if (!patch.trim()) {
     blockers.push('combined_patch_empty');
+  } else if (dirtyTouchedPaths.length > 0 && !input.allowDirtyApply) {
+    blockers.push(`dirty_touched_paths_before_apply:${dirtyTouchedPaths.join(',')}`);
   } else {
     const checked = await gitApply(input.cwd, patch, ['apply', '--check', '--whitespace=nowarn', '-']);
     applyCheckPassed = checked.code === 0;
@@ -36,14 +44,36 @@ export async function runGlmNarutoApplyTransaction(input: {
       const applied = await gitApply(input.cwd, patch, ['apply', '--whitespace=nowarn', '-']);
       applyPassed = applied.code === 0;
       if (applyPassed) {
-        finalStatus = 'applied';
+        const targeted = await runGlmNarutoTargetedChecks({
+          cwd: input.cwd,
+          touchedPaths: parsed.touchedPaths,
+          artifactDir: input.artifactDir,
+          ...(input.strictChecks !== undefined ? { strictChecks: input.strictChecks } : {})
+        });
+        targetedChecksPassed = targeted.ok;
+        if (targeted.ok) {
+          finalStatus = 'applied';
+        } else {
+          blockers.push(...targeted.blockers);
+          if (!input.noRollback) {
+            rollbackAttempted = true;
+            const rollback = await gitApply(input.cwd, patch, ['apply', '-R', '--whitespace=nowarn', '-']);
+            rollbackPassed = rollback.code === 0;
+            finalStatus = rollbackPassed ? 'rolled_back' : 'blocked';
+            if (!rollbackPassed) blockers.push(rollback.stderr || rollback.stdout || 'rollback_reverse_patch_failed');
+          } else {
+            finalStatus = 'blocked';
+          }
+        }
       } else {
         blockers.push(applied.stderr || applied.stdout || 'git_apply_failed');
-        rollbackAttempted = true;
-        const rollback = await gitApply(input.cwd, patch, ['apply', '-R', '--whitespace=nowarn', '-']);
-        rollbackPassed = rollback.code === 0;
-        finalStatus = rollbackPassed ? 'rolled_back' : 'blocked';
-        if (!rollbackPassed) blockers.push(rollback.stderr || rollback.stdout || 'rollback_reverse_patch_failed');
+        if (!input.noRollback) {
+          rollbackAttempted = true;
+          const rollback = await gitApply(input.cwd, patch, ['apply', '-R', '--whitespace=nowarn', '-']);
+          rollbackPassed = rollback.code === 0;
+          finalStatus = rollbackPassed ? 'rolled_back' : 'blocked';
+          if (!rollbackPassed) blockers.push(rollback.stderr || rollback.stdout || 'rollback_reverse_patch_failed');
+        }
       }
     }
   }
@@ -54,12 +84,15 @@ export async function runGlmNarutoApplyTransaction(input: {
     mission_id: input.missionId,
     selected_patch_ids: input.selectedPatchIds,
     touched_paths: parsed.touchedPaths,
+    dirty_touched_paths_before_apply: dirtyTouchedPaths,
+    dirty_policy: input.allowDirtyApply ? 'allow' : 'block',
     pre_status: preStatus,
     pre_diff_sha256: sha256(preDiff),
+    post_diff_sha256: sha256(postDiff),
     combined_patch_sha256: sha256(patch),
     apply_check_passed: applyCheckPassed,
     apply_passed: applyPassed,
-    targeted_checks_passed: null,
+    targeted_checks_passed: targetedChecksPassed,
     rollback_attempted: rollbackAttempted,
     rollback_passed: rollbackPassed,
     final_status: finalStatus,
@@ -83,6 +116,18 @@ function gitText(cwd: string, args: readonly string[]): Promise<string> {
     child.stdout.on('data', (chunk) => { stdout += String(chunk); });
     child.on('close', () => resolve(stdout));
   });
+}
+
+async function dirtyPaths(cwd: string, paths: readonly string[]): Promise<readonly string[]> {
+  if (paths.length === 0) return [];
+  const status = await gitText(cwd, ['status', '--short', '--', ...paths]);
+  return status.split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => {
+      const raw = line.slice(3).trim();
+      return raw.includes(' -> ') ? raw.split(' -> ').pop()!.trim() : raw;
+    });
 }
 
 function gitApply(cwd: string, patch: string, args: readonly string[]): Promise<{

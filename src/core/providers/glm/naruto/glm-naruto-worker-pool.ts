@@ -1,13 +1,16 @@
+import path from 'node:path';
+import { writeJsonAtomic, writeTextAtomic } from '../../../fsx.js';
 import type { GlmNarutoShard, GlmNarutoPatchEnvelope, GlmNarutoWorkerTrace, GlmNarutoPatchStrategy } from './glm-naruto-types.js';
 import { runPatchWorker, type WorkerRunResult } from './glm-naruto-worker-runtime.js';
 import { decideConcurrency } from './glm-naruto-concurrency-governor.js';
-import { planFileLeases } from './glm-naruto-file-lease.js';
 import type { GlmNarutoConcurrencyDecision } from './glm-naruto-types.js';
 import { evaluateGlmNarutoPatchCandidateGate } from './glm-naruto-patch-candidate-gate.js';
 import { createPatchEnvelope } from './glm-naruto-patch-envelope.js';
 import { writeGlmNarutoWorkerArtifacts } from './glm-naruto-worker-artifacts.js';
 import { materializePatchViaWorktree } from './glm-naruto-worktree-worker.js';
 import type { GlmNarutoIsolationMode } from './glm-naruto-isolation-policy.js';
+import { createProviderHealthTracker, type ProviderHealthTracker } from '../../openrouter/openrouter-provider-health.js';
+import { runGlmNarutoWorkerScheduler, type GlmNarutoWorkerJob } from './glm-naruto-worker-scheduler.js';
 
 export interface WorkerPoolInput {
   readonly apiKey: string;
@@ -21,6 +24,7 @@ export interface WorkerPoolInput {
   readonly isolationMode?: GlmNarutoIsolationMode;
   readonly cleanupWorktrees?: boolean;
   readonly baseCommit?: string | null;
+  readonly health?: ProviderHealthTracker;
 }
 
 export interface WorkerPoolResult {
@@ -28,6 +32,11 @@ export interface WorkerPoolResult {
   readonly traces: readonly GlmNarutoWorkerTrace[];
   readonly failedShardIds: readonly string[];
   readonly concurrencyDecisions: readonly GlmNarutoConcurrencyDecision[];
+  readonly schedulerSummary: {
+    readonly max_observed_active_workers: number;
+    readonly backpressure_events: number;
+    readonly queue_drained: boolean;
+  };
 }
 
 export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<WorkerPoolResult> {
@@ -35,12 +44,6 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
   const traces: GlmNarutoWorkerTrace[] = [];
   const failedShardIds: string[] = [];
   const concurrencyDecisions: GlmNarutoConcurrencyDecision[] = [];
-
-  const shardPathMap = new Map<string, readonly string[]>();
-  for (const shard of input.shards) {
-    shardPathMap.set(shard.id, shard.target_paths);
-  }
-  const leases = planFileLeases(shardPathMap);
 
   const mutableShards = input.shards.filter((s) => s.mutable);
   const decision = decideConcurrency({
@@ -51,9 +54,8 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
     failureRate: 0,
     operatorMax: input.maxWorkers
   });
-  concurrencyDecisions.push(decision);
 
-  const workerTasks: Promise<WorkerRunResult>[] = [];
+  const jobs: GlmNarutoWorkerJob[] = [];
   let workerIdx = 0;
 
   for (const shard of mutableShards) {
@@ -61,19 +63,32 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
     for (const strategy of strategies) {
       const workerId = `worker-${shard.id}-${strategy}-${workerIdx++}`;
       const shardWithStrategy: GlmNarutoShard = { ...shard, strategy };
-      workerTasks.push(runPatchWorker({
-        apiKey: input.apiKey,
-        missionId: input.missionId,
-        workerId,
-        root: input.cwd,
-        shard: shardWithStrategy,
-        contextSummary: input.contextSummary,
-        timeoutMs: input.workerTimeoutMs
-      }));
+      jobs.push({ worker_id: workerId, shard: shardWithStrategy, strategy });
     }
   }
 
-  const results = await Promise.allSettled(workerTasks);
+  const health = input.health ?? createProviderHealthTracker();
+  const schedulerResult = await runGlmNarutoWorkerScheduler({
+    jobs,
+    initial_active_workers: decision.target_active_workers,
+    max_active_workers: input.maxWorkers,
+    worker_timeout_ms: input.workerTimeoutMs,
+    health,
+    onDecision: (nextDecision) => {
+      concurrencyDecisions.push(nextDecision);
+    },
+    runJob: (job) => runPatchWorker({
+      apiKey: input.apiKey,
+      missionId: input.missionId,
+      workerId: job.worker_id,
+      root: input.cwd,
+      shard: job.shard,
+      contextSummary: input.contextSummary,
+      timeoutMs: input.workerTimeoutMs
+    })
+  });
+  await writeSchedulerArtifacts(input.cwd, input.missionId, schedulerResult).catch(() => undefined);
+  const results = schedulerResult.results;
 
   for (const result of results) {
     if (result.status === 'fulfilled' && result.value.ok && result.value.envelope) {
@@ -96,6 +111,9 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
           worktree_path: worktree.lease?.path ?? null,
           branch: worktree.lease?.branch ?? null,
           base_commit: worktree.lease?.base_commit ?? input.baseCommit ?? null,
+          candidate_body_sha256: worktree.worktree?.candidate_body_sha256 ?? null,
+          extracted_patch_sha256: worktree.worktree?.extracted_patch_sha256 ?? null,
+          applied_patch_was_extracted: worktree.worktree?.applied_patch_was_extracted ?? false,
           blockers: worktree.blockers
         };
         if (!worktree.ok) {
@@ -172,5 +190,44 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
     }
   }
 
-  return { envelopes, traces, failedShardIds, concurrencyDecisions };
+  return {
+    envelopes,
+    traces,
+    failedShardIds,
+    concurrencyDecisions,
+    schedulerSummary: {
+      max_observed_active_workers: schedulerResult.max_observed_active_workers,
+      backpressure_events: schedulerResult.backpressure_events,
+      queue_drained: true
+    }
+  };
+}
+
+async function writeSchedulerArtifacts(root: string, missionId: string, schedulerResult: Awaited<ReturnType<typeof runGlmNarutoWorkerScheduler>>): Promise<void> {
+  const dir = path.join(root, '.sneakoscope', 'glm-naruto', missionId);
+  await writeTextAtomic(
+    path.join(dir, 'scheduler-decisions.jsonl'),
+    schedulerResult.decisions.map((decision) => JSON.stringify(decision)).join('\n') + (schedulerResult.decisions.length ? '\n' : '')
+  );
+  await writeJsonAtomic(path.join(dir, 'scheduler-summary.json'), {
+    schema: 'sks.glm-naruto-scheduler-summary.v1',
+    max_observed_active_workers: schedulerResult.max_observed_active_workers,
+    backpressure_events: schedulerResult.backpressure_events,
+    queue_drained: true,
+    result_count: schedulerResult.results.length,
+    decision_count: schedulerResult.decisions.length,
+    retry_count: schedulerResult.retry_events.length
+  });
+  if (schedulerResult.backpressure_records.length > 0) {
+    await writeTextAtomic(
+      path.join(dir, 'provider-backpressure.jsonl'),
+      schedulerResult.backpressure_records.map((row) => JSON.stringify(row)).join('\n') + '\n'
+    );
+  }
+  if (schedulerResult.retry_events.length > 0) {
+    await writeTextAtomic(
+      path.join(dir, 'worker-retries.jsonl'),
+      schedulerResult.retry_events.map((row) => JSON.stringify(row)).join('\n') + '\n'
+    );
+  }
 }

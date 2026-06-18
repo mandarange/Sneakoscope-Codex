@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.12 is the GLM Naruto final-seal patch after 4.0.11. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, provenance, npm registry unpublished-version checks, and GLM Naruto final-seal metadata to agree on 4.0.12 before publication.
+
+4.0.12 release readiness adds proof that worktree workers apply only extracted unified diffs, patch workers launch through a bounded adaptive scheduler with provider backpressure, live bench separates true direct GLM from Naruto 1/4/8/12 worker cases, final apply blocks dirty touched paths and runs targeted checks, and stop-gates reference `final-seal.json`.
+
 SKS 4.0.8 is the GLM speed/stability/loop-fix patch after 4.0.5. It requires package, lockfile, CLI constants, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and GLM speed-profile metadata to agree on 4.0.8 before publication.
 
 4.0.8 release readiness adds proof that bare `sks --mad --glm` exits with readiness/status, speed mode does not use high/xhigh reasoning or `require_parameters: true`, explicit interactive/Zellij launch remains opt-in, and GLM request/profile/launch artifacts record compact context, disabled default tools, no GPT fallback, OpenRouter fallback blocking, redacted traces, terminal run artifacts, and bench diagnostics.
