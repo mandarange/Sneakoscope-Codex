@@ -35,15 +35,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.3** adds a GLM 5.2-only MAD mode through OpenRouter while preserving the proof-first SKS pipeline. `sks --mad --glm` resolves the GLM profile, keeps GPT/OpenAI fallback disabled, and records model-lock proof; `sks --mad --glm --repair` rotates the OpenRouter API key outside project files.
+SKS **4.0.4** makes the GLM 5.2 MAD launch path real: `sks --mad --glm` now resolves the OpenRouter key, opens the MAD Zellij launch flow with Codex configured for `z-ai/glm-5.2`, blocks GPT fallback panes, and records launch proof; `sks --mad --glm --repair` still rotates the OpenRouter API key outside project files.
 
-What changed in 4.0.3:
+What changed in 4.0.4:
 
-- **GLM 5.2 MAD mode.** `sks --mad --glm` enters a `mad-glm` profile using OpenRouter model `z-ai/glm-5.2`.
-- **No GPT fallback.** GLM requests use `provider.allow_fallbacks: false`, omit fallback `models`, and reject non-GLM response model ids before mutation.
+- **GLM MAD actually launches.** `sks --mad --glm` no longer stops after the readiness banner; it continues into the MAD launcher with a GLM/OpenRouter Codex profile.
+- **No leaked OpenRouter key.** The Zellij pane uses a mission-local `sks-glm-codex-wrapper.sh` that reads the key at runtime, so layout artifacts do not contain the raw secret.
+- **No GPT fallback panes.** GLM MAD disables the existing GPT/codex-sdk native swarm by default until a GLM worker backend exists, preserving the no-fallback guarantee.
+- **Launch proof.** Each GLM MAD launch writes `mad-glm-launch.json` with provider/model/profile/wrapper evidence and records disabled fallback status.
 - **OpenRouter key lifecycle.** Keys resolve from `OPENROUTER_API_KEY`, `SKS_OPENROUTER_API_KEY`, or the user SKS secret store; stored keys use private permissions and redacted metadata.
-- **Codex App profile.** `sks codex-app glm-profile install` writes the `sks/glm-5.2-mad` profile metadata for Codex App selection.
-- **Codex 0.141 alignment.** SKS delegates remote relay, cwd/shell/path preservation, selected plugin MCP activation, App/MCP dedupe, bounded prompt-image cache, bounded feedback upload, and terminal resize behavior to Codex-native semantics where available.
+- **4.0.3 GLM request safeguards remain.** GLM requests still use `provider.allow_fallbacks: false`, omit fallback `models`, and reject non-GLM response model ids before mutation.
 
 SKS **3.1.16** was a launch-reliability patch on the 3.1.15 doctor-reliability release. It made `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
 

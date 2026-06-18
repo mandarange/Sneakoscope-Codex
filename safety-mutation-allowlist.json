@@ -1200,6 +1200,12 @@
       "symbol": "ensureSecretDir",
       "token": "chmod",
       "reason": "OpenRouter key storage enforces 0700 permissions only on the scoped SKS secret directory before writing key material."
+    },
+    {
+      "file": "src/core/providers/glm/glm-mad-launch.ts",
+      "symbol": "writeMadGlmCodexWrapper",
+      "token": "chmod",
+      "reason": "GLM MAD launch marks only the mission-local Codex wrapper executable after writing it under the scoped mission artifact directory."
     }
   ]
 }

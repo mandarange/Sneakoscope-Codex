@@ -1,6 +1,6 @@
 # Codex 0.141 Compatibility
 
-SKS 4.0.3 aligns its Codex integration boundary with OpenAI Codex `rust-v0.141.0`.
+SKS 4.0.4 aligns its Codex integration boundary with OpenAI Codex `rust-v0.141.0` while fixing the GLM MAD launch bridge.
 
 Primary source:
 
@@ -12,7 +12,7 @@ https://github.com/openai/codex/releases/tag/rust-v0.141.0
 
 SKS delegates or narrows duplicate functionality when Codex 0.141 provides the native behavior:
 
-| Codex 0.141 surface | SKS 4.0.3 policy |
+| Codex 0.141 surface | SKS 4.0.4 policy |
 | --- | --- |
 | Remote executor Noise relay | Delegate to Codex remote executor relay |
 | Native cwd/shell/path preservation | Preserve Codex-native PathUri/native path semantics |
