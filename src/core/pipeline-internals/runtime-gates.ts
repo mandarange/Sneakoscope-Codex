@@ -17,6 +17,7 @@ import { readAgentGateStatus } from '../agents/agent-gate.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
 import { SSOT_GUARD_ARTIFACT, validateSsotGuardArtifact } from '../safety/ssot-guard.js';
 import { validateTeamRuntimeArtifacts } from '../team-dag.js';
+import { checkStopGate } from '../stop-gate/stop-gate-check.js';
 import {
   clarificationStopReason,
   context7Evidence,
@@ -221,10 +222,30 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
     return complianceBlock(root, state, `SKS no-question run is not done. Continue autonomously, fix failing checks, update ${gate.file || 'the active gate file'}, and do not ask the user.${missing}`, { gate: gate.file || 'active-gate', missing: gate.missing });
   }
   if (state?.mission_id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
-    const gate: any = await passedActiveGate(root, state);
-    if (!gate.ok) {
-      const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
-      return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}`, { gate: gate.file || state.stop_gate, missing: gate.missing });
+    // 4.0.9: Use canonical stop-gate resolver first for NARUTO/GLM_NARUTO routes.
+    const modeUpper = String(state?.mode || '').toUpperCase();
+    if (modeUpper === 'NARUTO' || state.stop_gate === 'stop-gate.json' || state.stop_gate === 'naruto-gate.json') {
+      const stopCheck = await checkStopGate({
+        root,
+        route: state.route || state.mode,
+        missionId: state.mission_id,
+        explicitGatePath: typeof state.stop_gate_abs_path === 'string' && state.stop_gate_abs_path ? state.stop_gate_abs_path : undefined,
+      });
+      if (stopCheck.action === 'allow_stop') {
+        // Gate passed via canonical resolver; fall through to remaining checks.
+      } else if (stopCheck.action === 'hard_blocked') {
+        return { continue: true, systemMessage: `SKS: ${stopCheck.feedback}` };
+      } else {
+        const missing = stopCheck.diagnostics.missing_fields?.length ? ` Missing gate fields: ${stopCheck.diagnostics.missing_fields.join(', ')}.` : '';
+        const checkedPaths = stopCheck.diagnostics.checked_paths?.length ? ` Checked: ${stopCheck.diagnostics.checked_paths.join(', ')}.` : '';
+        return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${stopCheck.gate_path || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}${checkedPaths}`, { gate: stopCheck.gate_path || state.stop_gate, missing: stopCheck.diagnostics.missing_fields });
+      }
+    } else {
+      const gate: any = await passedActiveGate(root, state);
+      if (!gate.ok) {
+        const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
+        return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}`, { gate: gate.file || state.stop_gate, missing: gate.missing });
+      }
     }
   }
   const proofGate = await routeProofGateStatus(root, state);

@@ -64,7 +64,7 @@ export async function runGlmJudge(input: {
     return fallbackJudgeResult(validEnvelopes, [`judge_request_failed:${response.error.code}`]);
   }
 
-  const modelGuard = assertGlm52ActualModel(response.value.model || GLM_52_OPENROUTER_MODEL);
+  const modelGuard = assertGlm52ActualModel(response.value.model);
   if (!modelGuard.ok) {
     return fallbackJudgeResult(validEnvelopes, [`judge_model_guard:${modelGuard.code}`]);
   }

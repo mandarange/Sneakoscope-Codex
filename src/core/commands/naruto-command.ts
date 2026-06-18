@@ -25,6 +25,7 @@ import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../agents/runtime-proof-summary.js'
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js'
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js'
+import { writeFinalStopGate } from '../stop-gate/stop-gate-writer.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -36,6 +37,11 @@ const NARUTO_ROUTE = '$Naruto'
 // writes). The standard 20-agent ceiling is lifted only for this route.
 export async function narutoCommand(commandOrArgs: string | string[] = 'naruto', maybeArgs: string[] = []) {
   const args = Array.isArray(commandOrArgs) ? commandOrArgs : maybeArgs
+  // 4.0.9: `sks naruto --glm` delegates to GLM Naruto before legacy Naruto starts.
+  if (args.includes('--glm')) {
+    const { glmNarutoCommand } = await import('../providers/glm/naruto/glm-naruto-command.js')
+    return glmNarutoCommand(args.filter((arg) => arg !== '--glm'))
+  }
   const parsed = parseNarutoArgs(args)
   if (parsed.action === 'help') return narutoHelp(parsed)
   if (parsed.action === 'status') return narutoStatus(parsed)
@@ -443,6 +449,25 @@ async function narutoRun(parsed: NarutoArgs) {
     stop_gate: 'naruto-gate.json',
     prompt: parsed.prompt
   })
+  // 4.0.9: Write canonical stop-gate artifacts for hook resolution.
+  const narutoGatePassed = result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk
+  await writeFinalStopGate({
+    root,
+    missionId: mission.id,
+    route: 'Naruto',
+    routeCommand: '$Naruto',
+    status: summaryOk ? 'passed' : 'blocked',
+    terminal: summaryOk,
+    terminalState: summaryOk ? 'completed' : 'blocked',
+    evidence: {
+      build_passed: summaryOk,
+      tests_passed: summaryOk,
+      route_evidence_passed: nativeProofOk && finalAccepted,
+      native_session_split_evidence: nativeProofOk ? 'native_agent_proof' : null,
+    },
+    blockers: summaryOk ? [] : [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate'])],
+    nativeGateFile: 'naruto-gate.json',
+  }).catch(() => null)
   const summary = {
     schema: NARUTO_RESULT_SCHEMA,
     ok: summaryOk,

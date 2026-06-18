@@ -21,6 +21,7 @@ export interface OpenRouterStreamResult {
   readonly model?: string;
   readonly usage?: unknown;
   readonly ttft_ms: number | null;
+  readonly last_chunk_ms?: number;
   readonly total_ms: number;
   readonly chunk_count: number;
   readonly events: readonly OpenRouterStreamEvent[];
@@ -32,6 +33,7 @@ export async function sendOpenRouterChatCompletionStream(input: {
   readonly request: OpenRouterChatCompletionRequest;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  readonly idleTimeoutMs?: number;
   readonly fetchImpl?: typeof fetch;
 }): Promise<SksResult<OpenRouterStreamResult, OpenRouterIssue>> {
   const started = Date.now();
@@ -58,19 +60,20 @@ export async function sendOpenRouterChatCompletionStream(input: {
     }
     // Real streaming via ReadableStream reader
     if (response.body && typeof response.body.getReader === 'function') {
-      return { ok: true, value: await readRealStream(response.body, started) };
+      return { ok: true, value: await readRealStream(response.body, started, input.idleTimeoutMs) };
     }
     // Fallback: non-streaming response
     const text = await response.text();
     return { ok: true, value: parseOpenRouterStreamText(text, started, false) };
   } catch (err: unknown) {
     if (timeout) clearTimeout(timeout);
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof Error && (err.name === 'AbortError' || err.message === 'glm_stream_idle_timeout' || err.message === 'glm_stream_idle_timeout_after_ttft')) {
+      const isIdle = err.message.startsWith('glm_stream_idle');
       return {
         ok: false,
         error: {
-          code: 'glm_request_timeout',
-          message: `OpenRouter stream aborted after ${input.timeoutMs || 'external'}ms.`,
+          code: isIdle ? (err.message as string) : 'glm_request_timeout',
+          message: isIdle ? `OpenRouter stream idle timeout after ${input.idleTimeoutMs || 0}ms.` : `OpenRouter stream aborted after ${input.timeoutMs || 'external'}ms.`,
           severity: 'failed'
         }
       };
@@ -86,7 +89,7 @@ export async function sendOpenRouterChatCompletionStream(input: {
   }
 }
 
-async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: number): Promise<OpenRouterStreamResult> {
+async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: number, idleTimeoutMs?: number): Promise<OpenRouterStreamResult> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const events: OpenRouterStreamEvent[] = [];
@@ -96,14 +99,31 @@ async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: num
   let ttft: number | null = null;
   let buffer = '';
   let chunkCount = 0;
+  let lastChunkMs = startedAtMs;
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      // 4.0.9: Idle timeout between chunks — abort if stream stalls.
+      const readPromise = reader.read();
+      let idleTimer: ReturnType<typeof setTimeout> | null = null;
+      if (idleTimeoutMs && idleTimeoutMs > 0) {
+        idleTimer = setTimeout(() => {
+          const code = ttft === null ? 'glm_stream_idle_timeout' : 'glm_stream_idle_timeout_after_ttft';
+          reader.cancel(code).catch(() => undefined);
+        }, idleTimeoutMs);
+      }
+      let result;
+      try {
+        result = await readPromise;
+      } finally {
+        if (idleTimer) clearTimeout(idleTimer);
+      }
+      const { done, value } = result;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split(/\r?\n/);
       buffer = lines.pop() || '';
+      let hadChunk = false;
       for (const line of lines) {
         if (!line.startsWith('data:')) continue;
         const data = line.slice('data:'.length).trim();
@@ -117,12 +137,15 @@ async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: num
             if (ttft === null) ttft = Math.max(0, Date.now() - startedAtMs);
             content += delta;
             chunkCount++;
+            lastChunkMs = Date.now();
+            hadChunk = true;
             events.push({ type: 'chunk', content_delta: delta, ...(model ? { model } : {}), raw });
           }
         } catch {
           events.push({ type: 'error', raw: data });
         }
       }
+      if (hadChunk) lastChunkMs = Date.now();
     }
   } finally {
     reader.releaseLock();
@@ -134,6 +157,7 @@ async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: num
     ...(model ? { model } : {}),
     ...(usage ? { usage } : {}),
     ttft_ms: ttft,
+    last_chunk_ms: lastChunkMs,
     total_ms: Math.max(0, Date.now() - startedAtMs),
     chunk_count: chunkCount,
     events,
