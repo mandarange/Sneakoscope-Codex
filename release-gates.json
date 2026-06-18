@@ -1058,34 +1058,6 @@
       "can_run_incremental": true
     },
     {
-      "id": "codex:0.135-compat",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "codex:0.136-compat",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/core/codex/**",
-        "src/core/codex-app.ts",
-        "src/core/codex-lb-circuit.ts",
-        "src/scripts/codex-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
       "id": "codex:exec-syntax-parity",
       "tier": "P1",
       "cost": "hermetic",

@@ -110,9 +110,9 @@ function estimatedMsForPack(id: string): number {
 }
 
 function resourceClassesForPack(id: string): string[] {
-  if (id === 'secret') return ['fs-read'];
+  if (id === 'secret') return ['secret-sensitive', 'fs-read'];
   if (id === 'zellij') return ['zellij-real'];
-  if (id === 'qa-research-image') return ['cpu-heavy', 'io-heavy'];
+  if (id === 'qa-research-image') return ['browser-real', 'cpu-heavy', 'io-heavy'];
   if (id === 'codex-0140') return ['remote-model-real'];
   return ['cpu-light', 'fs-read'];
 }

@@ -8,6 +8,8 @@ export const RELEASE_GATE_RESOURCE_CLASSES = [
   'git',
   'git-worktree',
   'zellij-real',
+  'browser-real',
+  'secret-sensitive',
   'local-llm-real',
   'remote-model-real',
   'python',

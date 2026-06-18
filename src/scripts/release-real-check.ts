@@ -42,8 +42,6 @@ const tasks = [
   task('codex:0139-interrupt-agent-real', 'codex:0139-interrupt-agent-real', { group: 'environment_required', phase: 'parallel_processing', deps: ['codex:0139-real-probes:require-real'] }),
   task('codex:0139-image-path-real', 'codex:0139-image-path-real', { group: 'environment_required', phase: 'parallel_processing', deps: ['codex:0139-real-probes:require-real'] }),
   task('codex:0139-sandbox-proxy-real', 'codex:0139-sandbox-proxy-real', { group: 'environment_required', phase: 'parallel_processing', deps: ['codex:0139-real-probes:require-real'] }),
-  task('codex:0.136-compat:require-real', 'codex:0.136-compat:require-real', { group: 'environment_required', phase: 'parallel_processing' }),
-  task('codex:0.135-compat:require-real', 'codex:0.135-compat:require-real', { group: 'environment_required', phase: 'parallel_processing' }),
   task('doctor:codex-doctor-parity:actual', 'doctor:codex-doctor-parity:actual', { group: 'environment_required', phase: 'parallel_processing' }),
   task('publish:dry-run-performance', 'publish:dry-run-performance', { group: 'environment_required', phase: 'parallel_processing' }),
   task('zellij:capability', 'zellij:capability', { group: 'environment_required', phase: 'parallel_processing', args: ['--require-real'], env: { SKS_REQUIRE_ZELLIJ: '1' } }),

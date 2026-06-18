@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+
+## [4.0.2] - 2026-06-18
+
+### Added
+
+- Build-once runner implementation with reusable proof/report artifacts and blackbox coverage.
+- TriWiki-first release runner source-of-truth mode for affected and confidence release selection.
+- TriWiki proof bank and release-gate-cache-v2 bridge reporting.
+- Resource claim/release scheduler timeline for gate pack execution.
+- Gate pack v2 shared artifact and assertion evidence path.
+- Semantic dirty doctor based on parsed/content state and proof ids.
+- Real sksd IPC request surface with cache warmup evidence.
+- 4.0.2 all-feature real regression and five-minute SLA blackboxes.
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- `build-once:runner` no longer points at a missing or proof-thin source module.
+- Affected/confidence release selection no longer ignores TriWiki gate selection.
+- Legacy/team/tmux/old Codex gates cannot remain silently in the release surface without a non-expired structured allowlist.
+- SLA certificate actual mode is generated from real execution statistics in the 4.0.2 regression surface.
+
 ## [4.0.1] - 2026-06-18
 
 ### Added

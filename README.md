@@ -35,9 +35,9 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.1** is the TriWiki Turbo completion release. It moves default completion toward affected-scope, release-equivalent proof with reusable TriWiki proof cards, real gate pack execution, SLA scheduling, build-once proof, probe memoization, and explicit legacy-runtime migration instead of silent fallback aliases.
+SKS **4.0.2** is the TriWiki Turbo production completion release. It makes affected/confidence release runs TriWiki-first, restores build-once proof, bridges reusable TriWiki proof cards into release cache v2, runs gate packs through a resource-aware scheduler, and tightens semantic dirty doctor, sksd warmup, legacy purge, orphan detection, and actual five-minute SLA regression evidence.
 
-What changed in 4.0.1:
+What changed in 4.0.2:
 
 - **TriWiki proof bank.** Proof cards now bind reusable gate proof to input hash, implementation hash, package lock hash, environment allowlist, fixture version, and tool version.
 - **Affected release-equivalent verification.** Changed files map to module cards, gate impact maps, and gate packs so small tasks can run fast without giving up scoped release confidence.

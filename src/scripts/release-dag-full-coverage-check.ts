@@ -5,6 +5,7 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 import { REQUIRED_3113_REAL_CHECK_IDS, REQUIRED_3113_RELEASE_IDS } from './release-3113-required-gates.js'
 import { REQUIRED_4000_REAL_CHECK_IDS, REQUIRED_4000_RELEASE_IDS } from './release-4000-required-gates.js'
 import { REQUIRED_4001_REAL_CHECK_IDS, REQUIRED_4001_RELEASE_IDS } from './release-4001-required-gates.js'
+import { REQUIRED_4002_REAL_CHECK_IDS, REQUIRED_4002_RELEASE_IDS } from './release-4002-required-gates.js'
 
 interface PackageJsonShape {
   scripts?: Record<string, string>
@@ -105,8 +106,6 @@ const requiredReleasePresetIds = [
   'naruto:ssot-default',
   'naruto:ssot-gate-aliases',
   'naruto:ssot-pipeline-default',
-  'sks:team-alias-to-naruto',
-  'team:alias-to-naruto',
   'update:notice',
   'update:gate-removed',
   'update:mad-zellij-notice',
@@ -358,7 +357,8 @@ const requiredReleasePresetIds = [
   'sks:3112-all-feature-regression',
   ...REQUIRED_3113_RELEASE_IDS,
   ...REQUIRED_4000_RELEASE_IDS,
-  ...REQUIRED_4001_RELEASE_IDS
+  ...REQUIRED_4001_RELEASE_IDS,
+  ...REQUIRED_4002_RELEASE_IDS
 ]
 const requiredRealCheckPresetIds = [
   'codex:0139-real-probes:require-real',
@@ -374,7 +374,8 @@ const requiredRealCheckPresetIds = [
   'codex:0140-real-probes:require-real',
   ...REQUIRED_3113_REAL_CHECK_IDS,
   ...REQUIRED_4000_REAL_CHECK_IDS,
-  ...REQUIRED_4001_REAL_CHECK_IDS
+  ...REQUIRED_4001_REAL_CHECK_IDS,
+  ...REQUIRED_4002_REAL_CHECK_IDS
 ]
 const missing = legacyIds.filter((id: string) => !gateIds.has(id) && !allowlist.has(id))
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id: string) => !gateIds.has(id) || !releasePresetIds.has(id))

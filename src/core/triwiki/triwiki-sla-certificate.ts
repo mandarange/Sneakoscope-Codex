@@ -13,6 +13,7 @@ export interface TriWikiSlaCertificate {
   estimated_critical_path_ms: number;
   estimated_sequential_ms: number;
   reduction_ratio: number;
+  sla_met: boolean;
   release_equivalent_within_scope: boolean;
   gates: number;
   gate_packs: string[];
@@ -50,6 +51,7 @@ export function buildTriWikiSlaCertificate(input: {
   const blockers = input.blockers || [];
   const mode = input.mode || 'plan';
   if (input.estimatedCriticalPathMs > input.slaMs) blockers.push('sla_estimate_exceeds_budget');
+  if (mode === 'actual' && input.actualDurationMs !== undefined && input.actualDurationMs > input.slaMs) blockers.push('actual_duration_exceeds_budget');
   if (mode === 'actual' && input.actualDurationMs === undefined) blockers.push('actual_mode_missing_execution_stats');
   const certificate: TriWikiSlaCertificate = {
     schema: TRIWIKI_SLA_CERTIFICATE_SCHEMA,
@@ -60,6 +62,7 @@ export function buildTriWikiSlaCertificate(input: {
     estimated_critical_path_ms: input.estimatedCriticalPathMs,
     estimated_sequential_ms: input.estimatedSequentialMs,
     reduction_ratio: Number(reductionRatio.toFixed(4)),
+    sla_met: blockers.length === 0,
     release_equivalent_within_scope: input.graph.release_equivalent_within_scope,
     gates: input.graph.gates.length,
     gate_packs: input.graph.gate_packs,

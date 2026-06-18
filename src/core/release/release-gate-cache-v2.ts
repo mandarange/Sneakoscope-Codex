@@ -137,6 +137,14 @@ export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode):
   const key = releaseGateCacheKey(root, gate)
   const proof = readReusableTriWikiProofCard({ root, subjectId: gate.id, cacheKey: key })
   if (proof.hit && proof.card) {
+    writeReleaseCacheBridgeReport(root, {
+      gate_id: gate.id,
+      cache_key: key,
+      bridge: 'triwiki-to-release-v2',
+      source: proof.path || null,
+      duration_ms: Math.max(0, Math.floor(Number(proof.card.duration_ms) || 0)),
+      disagreement: null
+    })
     return {
       ok: true,
       gate_id: gate.id,
@@ -150,6 +158,15 @@ export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode):
   for (const file of [releaseGateProofBankFile(root), releaseGateCacheFile(root)]) {
     const record = readCacheRecord(file, key)
     if (!record || record.ok !== true) continue
+    writeTriWikiProofFromReleaseCacheRecord(root, gate, key, record, file)
+    writeReleaseCacheBridgeReport(root, {
+      gate_id: gate.id,
+      cache_key: key,
+      bridge: 'release-v2-to-triwiki',
+      source: file,
+      duration_ms: Math.max(0, Math.floor(Number(record.duration_ms) || 0)),
+      disagreement: null
+    })
     return {
       ok: true,
       gate_id: String(record.gate_id || gate.id),
@@ -208,6 +225,67 @@ export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, du
     },
     invalidation_reasons: []
   }))
+  writeReleaseCacheBridgeReport(root, {
+    gate_id: gate.id,
+    cache_key: key,
+    bridge: 'release-v2-to-triwiki',
+    source: releaseGateCacheFile(root),
+    duration_ms: record.duration_ms,
+    disagreement: null
+  })
+}
+
+function writeTriWikiProofFromReleaseCacheRecord(root: string, gate: ReleaseGateNode, key: string, record: ReleaseGateCacheV2Record, source: string): void {
+  const triKey = computeTriWikiCacheKey({
+    root,
+    id: gate.id,
+    inputs: gate.cache.inputs,
+    implementationFiles: ['release-gates.v2.json', `src/scripts/${gate.id.replace(/[:]/g, '-')}-check.ts`],
+    envAllowlist: ['CI', 'SKS_FAST_MODE', 'SKS_RELEASE_PRESET'],
+    fixtureVersion: 'sks-4.0.2',
+    salt: key
+  })
+  writeTriWikiProofCard(root, createTriWikiProofCard({
+    subject_type: 'gate',
+    subject_id: gate.id,
+    cache_key: key,
+    input_hash: triKey.input_hash,
+    implementation_hash: triKey.implementation_hash,
+    gate_impl_hash: triKey.implementation_hash,
+    package_lock_hash: triKey.package_lock_hash,
+    release_gates_hash: triKey.release_gates_hash,
+    env_allowlist_hash: triKey.env_allowlist_hash,
+    tool_versions: triKey.tool_versions,
+    tool_version: triKey.tool_version,
+    fixture_version: triKey.fixture_version,
+    result: 'passed',
+    reusable: true,
+    duration_ms: Math.max(0, Math.floor(Number(record.duration_ms) || 0)),
+    evidence: { command: gate.command, cache_bridge: 'release-v2-to-triwiki', source },
+    invalidation_reasons: []
+  }))
+}
+
+function writeReleaseCacheBridgeReport(root: string, row: {
+  gate_id: string
+  cache_key: string
+  bridge: 'release-v2-to-triwiki' | 'triwiki-to-release-v2'
+  source: string | null
+  duration_ms: number
+  disagreement: string | null
+}): void {
+  const file = path.join(root, '.sneakoscope', 'reports', 'release-cache-bridge.json')
+  let parsed: { schema: 'sks.release-cache-bridge.v1'; records: Array<typeof row> } = { schema: 'sks.release-cache-bridge.v1', records: [] }
+  try {
+    const existing = JSON.parse(fs.readFileSync(file, 'utf8')) as typeof parsed
+    if (existing.schema === parsed.schema && Array.isArray(existing.records)) parsed = existing
+  } catch {}
+  parsed.records = [
+    ...parsed.records.filter((item) => item.gate_id !== row.gate_id || item.cache_key !== row.cache_key || item.bridge !== row.bridge),
+    row
+  ].sort((a, b) => `${a.gate_id}:${a.bridge}`.localeCompare(`${b.gate_id}:${b.bridge}`))
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
 }
 
 function readCacheRecord(file: string, key: string): any | null {

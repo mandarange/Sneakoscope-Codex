@@ -9,6 +9,8 @@ import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGate
 import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
 import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
 import { computeTriWikiAffectedGraph, type TriWikiAffectedGraph } from '../triwiki/triwiki-affected-graph.js'
+import { executeExtremeSchedule } from './extreme-parallel-scheduler.js'
+import { computeResourceClassBudget } from './resource-class-budget.js'
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { rmrf } from '../fsx.js'
@@ -44,6 +46,14 @@ export interface ReleaseGateDagRunResult {
   completion_certificate: ReleaseGateCompletionCertificate
   retention?: ReleaseGateRunRetention
   triwiki_affected_graph?: TriWikiAffectedGraph | null
+  triwiki_selection_used: boolean
+  triwiki_selected_gates: string[]
+  triwiki_skipped_gates: string[]
+  triwiki_conservative_reason: string | null
+  executed_packs?: string[]
+  pack_parallelism_gain?: number
+  triwiki_proof_bank_hits?: number
+  pack_proof_paths?: string[]
 }
 
 export interface ReleaseGateAffectedGraph {
@@ -104,6 +114,7 @@ export async function runReleaseGateDag(input: {
   failFast?: boolean
   explain?: boolean
   changedSince?: string | null
+  changedFiles?: string[]
   full?: boolean
   slaMs?: number | null
   triwiki?: boolean
@@ -115,12 +126,24 @@ export async function runReleaseGateDag(input: {
   const manifest = loadReleaseGateManifest(root)
   const presetGates = selectReleaseGatePreset(manifest, preset)
   const triwikiGraph = input.triwiki !== false && (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
-    ? computeTriWikiAffectedGraph({ root, tier: preset === 'fast' ? 'affected' : 'confidence', changedSince: input.changedSince || 'auto' })
+    ? computeTriWikiAffectedGraph({ root, tier: preset === 'fast' ? 'affected' : 'confidence', changedSince: input.changedSince || 'auto', ...(input.changedFiles ? { changedFiles: input.changedFiles } : {}) })
     : null
   const affected = (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
-    ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', preset })
+    ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', ...(input.changedFiles ? { changedFiles: input.changedFiles } : {}), preset })
     : selectAffectedReleaseGates(root, manifest, presetGates, { full: true, preset })
-  const selected = affected.gates
+  const triwikiSelectionUsed = Boolean(triwikiGraph)
+  const triwikiConservative = Boolean(triwikiGraph?.conservative_reason)
+  const triwikiSelectedIds = new Set(triwikiGraph && !triwikiConservative ? triwikiGraph.gates : presetGates.map((gate) => gate.id))
+  const selected = triwikiGraph
+    ? presetGates.filter((gate) => triwikiSelectedIds.has(gate.id))
+    : affected.gates
+  const triwikiSkippedGates = triwikiGraph ? presetGates.filter((gate) => !selected.some((row) => row.id === gate.id)).map((gate) => gate.id) : []
+  if (triwikiGraph) {
+    affected.selection.mode = 'affected'
+    affected.selection.selected_gate_ids = selected.map((gate) => gate.id)
+    affected.selection.skipped_gate_ids = triwikiSkippedGates
+    affected.selection.reasons = Object.fromEntries(selected.map((gate) => [gate.id, triwikiConservative ? `triwiki_conservative:${triwikiGraph.conservative_reason}` : 'triwiki-affected']))
+  }
   const selectedIds = new Set(selected.map((gate) => gate.id))
   const affectedExternalSatisfiedDeps = affected.selection.mode === 'affected'
     ? new Set(selected.flatMap((gate) => gate.deps || []).filter((dep) => !selectedIds.has(dep)))
@@ -199,7 +222,11 @@ export async function runReleaseGateDag(input: {
       failures,
       affected_graph: affectedGraph,
       completion_certificate: completionCertificate,
-      triwiki_affected_graph: triwikiGraph
+      triwiki_affected_graph: triwikiGraph,
+      triwiki_selection_used: triwikiSelectionUsed,
+      triwiki_selected_gates: triwikiGraph ? selected.map((gate) => gate.id) : [],
+      triwiki_skipped_gates: triwikiSkippedGates,
+      triwiki_conservative_reason: triwikiGraph?.conservative_reason || null
     }
     if (!finished) {
       snapshot.in_progress = true
@@ -215,6 +242,32 @@ export async function runReleaseGateDag(input: {
       writeReleaseGateJson(path.join(root, '.sneakoscope', 'reports', 'completion-certificate.json'), completionCertificate)
     }
     return snapshot
+  }
+
+  if (input.useGatePacks === true && triwikiGraph && (preset === 'affected' || preset === 'fast' || preset === 'confidence') && selected.length > 0) {
+    const packRun = await executeExtremeSchedule({
+      root,
+      graph: triwikiGraph,
+      slaMs,
+      budget: computeResourceClassBudget(),
+      useProofBank: input.useTriWikiProofBank !== false
+    })
+    for (const report of packRun.pack_reports) {
+      if (report.ok) completed.set(report.pack_id, { id: report.pack_id, ok: true, exit_code: 0, signal: null, timed_out: false, duration_ms: report.critical_path_ms || 0, cached: false, stderr_tail: '' })
+      else failed.set(report.pack_id, { id: report.pack_id, ok: false, exit_code: 1, signal: null, timed_out: false, duration_ms: report.critical_path_ms || 0, cached: false, stderr_tail: report.blockers.join('\n') })
+      sumGateMs += report.critical_path_ms || 0
+    }
+    const packed = writeSummarySnapshot(true)
+    return {
+      ...packed,
+      ok: packed.ok && packRun.ok,
+      completed: packRun.pack_reports.filter((report) => report.ok).length,
+      failed: packRun.failed_pack_count,
+      executed_packs: packRun.executed_packs,
+      pack_parallelism_gain: packRun.wall_ms > 0 ? Number((packRun.sequential_ms / packRun.wall_ms).toFixed(2)) : 1,
+      triwiki_proof_bank_hits: packRun.reused_proof_count,
+      pack_proof_paths: packRun.pack_reports.flatMap((report) => report.proof_paths)
+    }
   }
 
   if (input.explain) {
@@ -299,7 +352,7 @@ export async function runReleaseGateDag(input: {
 }
 
 export function selectReleaseGatePreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
-  const effectivePreset = preset === 'affected' || preset === 'fast' ? 'release' : preset
+  const effectivePreset = preset === 'affected' || preset === 'fast' || preset === 'confidence' ? 'release' : preset
   return manifest.gates.filter((gate) => gate.preset.includes(effectivePreset))
 }
 

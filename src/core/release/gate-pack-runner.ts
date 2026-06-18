@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { computeTriWikiCacheKey } from '../triwiki/triwiki-cache-key.js';
@@ -6,6 +6,7 @@ import { createTriWikiProofCard } from '../triwiki/triwiki-proof-card.js';
 import { readReusableTriWikiProofCard, writeTriWikiProofCard } from '../triwiki/triwiki-proof-bank.js';
 import { buildGatePackManifest } from './gate-pack-manifest.js';
 import { prepareGatePackFixture } from './gate-pack-fixture-cache.js';
+import { writeGatePackSharedArtifact } from './gate-pack-assertion.js';
 import { loadPackageScripts, loadReleaseGateManifest } from '../triwiki/triwiki-gate-impact-map.js';
 
 export const GATE_PACK_RUNNER_SCHEMA = 'sks.gate-pack-runner.v1';
@@ -37,92 +38,8 @@ export interface GatePackExecuteInput {
 }
 
 export function runGatePack(input: { root: string; packId: string; execute?: boolean; env?: NodeJS.ProcessEnv }): GatePackRunnerResult {
-  const manifest = buildGatePackManifest(input.root);
-  const pack = manifest.packs.find((candidate) => candidate.id === input.packId);
-  if (!pack) {
-    return { schema: GATE_PACK_RUNNER_SCHEMA, ok: false, root: input.root, pack_id: input.packId, mode: input.execute ? 'execute' : 'plan', reused: 0, executed: 0, failed: 0, proof_paths: [], blockers: ['pack_missing'] };
-  }
-  const gates = loadReleaseGateManifest(input.root).gates.filter((gate) => pack.gate_ids.includes(gate.id));
-  const scripts = loadPackageScripts(input.root);
-  const blockers: string[] = [];
-  const proofPaths: string[] = [];
-  let reused = 0;
-  let executed = 0;
-  let failed = 0;
-  for (const gate of gates) {
-    if (!input.execute) continue;
-    const cacheKey = computeTriWikiCacheKey({
-      root: input.root,
-      id: gate.id,
-      inputs: gate.cache.inputs,
-      implementationFiles: [`src/scripts/${scriptFileForCommand(gate.command) || ''}`].filter(Boolean),
-      envAllowlist: ['CI', 'SKS_FAST_MODE', 'SKS_RELEASE_PRESET'],
-      fixtureVersion: 'sks-4.0.0'
-    });
-    const hit = readReusableTriWikiProofCard({ root: input.root, subjectId: gate.id, cacheKey: cacheKey.key });
-    if (hit.hit) {
-      reused += 1;
-      if (hit.path) proofPaths.push(hit.path);
-      continue;
-    }
-    const scriptName = scriptNameForCommand(gate.command);
-    if (!scriptName || !scripts[scriptName]) {
-      failed += 1;
-      blockers.push(`script_missing:${gate.id}`);
-      continue;
-    }
-    const started = Date.now();
-    const run = spawnSync('npm', ['run', scriptName, '--silent'], {
-      cwd: input.root,
-      encoding: 'utf8',
-      maxBuffer: 1024 * 1024 * 10,
-      env: { ...process.env, ...(input.env || {}), CI: process.env.CI || 'true' }
-    });
-    executed += 1;
-    const passed = run.status === 0;
-    if (!passed) {
-      failed += 1;
-      blockers.push(`gate_failed:${gate.id}`);
-    }
-    const card = createTriWikiProofCard({
-      subject_type: 'gate',
-      subject_id: gate.id,
-      cache_key: cacheKey.key,
-      input_hash: cacheKey.input_hash,
-      implementation_hash: cacheKey.implementation_hash,
-      gate_impl_hash: cacheKey.implementation_hash,
-      package_lock_hash: cacheKey.package_lock_hash,
-      release_gates_hash: cacheKey.release_gates_hash,
-      env_allowlist_hash: cacheKey.env_allowlist_hash,
-      tool_versions: cacheKey.tool_versions,
-      tool_version: cacheKey.tool_version,
-      fixture_version: cacheKey.fixture_version,
-      result: passed ? 'passed' : 'failed',
-      reusable: passed,
-      duration_ms: Math.max(0, Date.now() - started),
-      evidence: {
-        status: run.status,
-        stdout_tail: tail(String(run.stdout || '')),
-        stderr_tail: tail(String(run.stderr || ''))
-      },
-      invalidation_reasons: passed ? [] : ['gate_failed']
-    });
-    proofPaths.push(writeTriWikiProofCard(input.root, card));
-  }
-  const report: GatePackRunnerResult = {
-    schema: GATE_PACK_RUNNER_SCHEMA,
-    ok: blockers.length === 0,
-    root: input.root,
-    pack_id: input.packId,
-    mode: input.execute ? 'execute' : 'plan',
-    reused,
-    executed,
-    failed,
-    proof_paths: proofPaths,
-    blockers
-  };
-  writeGatePackReport(input.root, report);
-  return report;
+  void input;
+  throw new Error('gate_pack_legacy_sync_runner_removed');
 }
 
 export async function executeGatePack(input: GatePackExecuteInput): Promise<GatePackRunnerResult> {
@@ -136,7 +53,8 @@ export async function executeGatePack(input: GatePackExecuteInput): Promise<Gate
   if (mode === 'plan') {
     return { schema: GATE_PACK_RUNNER_SCHEMA, ok: true, root: input.root, pack_id: input.packId, mode: 'plan', reused: 0, executed: 0, failed: 0, proof_paths: [], blockers: [], shared_setup_count: 0, parallelism_gain: 1, critical_path_ms: pack.estimated_ms, reused_proof_count: 0, executed_gate_count: 0 };
   }
-  const fixture = await prepareGatePackFixture({ root: input.root, packId: input.packId, fixtureVersion: 'sks-4.0.1' });
+  const fixture = await prepareGatePackFixture({ root: input.root, packId: input.packId, fixtureVersion: 'sks-4.0.2' });
+  const artifactPath = writeGatePackSharedArtifact({ root: input.root, pack, fixturePath: fixture.run_path });
   const scripts = loadPackageScripts(input.root);
   const blockers: string[] = [];
   const proofPaths: string[] = [];
@@ -177,7 +95,7 @@ export async function executeGatePack(input: GatePackExecuteInput): Promise<Gate
         continue;
       }
       const started = Date.now();
-      const run = await spawnNpmScript(input.root, scriptName, input.env);
+      const run = await spawnNpmScript(input.root, scriptName, { ...(input.env || {}), SKS_GATE_PACK_ARTIFACT: artifactPath });
       const duration = Math.max(0, Date.now() - started);
       sumMs += duration;
       criticalPathMs = Math.max(criticalPathMs, duration);
@@ -203,7 +121,7 @@ export async function executeGatePack(input: GatePackExecuteInput): Promise<Gate
         result: passed ? 'passed' : 'failed',
         reusable: passed,
         duration_ms: duration,
-        evidence: { status: run.status, stdout_tail: tail(run.stdout), stderr_tail: tail(run.stderr), fixture_path: fixture.run_path },
+        evidence: { status: run.status, stdout_tail: tail(run.stdout), stderr_tail: tail(run.stderr), fixture_path: fixture.run_path, shared_artifact_path: artifactPath },
         invalidation_reasons: passed ? [] : ['gate_failed']
       });
       proofPaths.push(writeTriWikiProofCard(input.root, card));
@@ -223,7 +141,7 @@ export async function executeGatePack(input: GatePackExecuteInput): Promise<Gate
     fixture_version: fixture.fixture_version,
     result: failed === 0 ? 'passed' : 'failed',
     reusable: failed === 0,
-    evidence: { gate_count: gates.length, reused, executed, failed },
+    evidence: { gate_count: gates.length, reused, executed, failed, shared_artifact_path: artifactPath },
     invalidation_reasons: failed === 0 ? [] : ['pack_gate_failed']
   });
   proofPaths.push(writeTriWikiProofCard(input.root, packCard));

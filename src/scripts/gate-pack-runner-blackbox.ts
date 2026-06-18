@@ -22,6 +22,6 @@ await fs.writeFile(path.join(tmp, 'release-gates.v2.json'), JSON.stringify({
   }]
 }, null, 2));
 const runner = await importDist('core/release/gate-pack-runner.js');
-const report = runner.runGatePack({ root: tmp, packId: 'triwiki', execute: true });
-assertGate(report.ok === true && report.executed === 1 && report.proof_paths.length === 1, 'gate pack blackbox must execute and write proof', report);
+const report = await runner.executeGatePack({ root: tmp, packId: 'triwiki', mode: 'execute' });
+assertGate(report.ok === true && report.executed === 1 && report.proof_paths.length >= 2, 'gate pack blackbox must execute and write gate plus pack proof', report);
 emitGate('gate-pack:runner-blackbox', { executed: report.executed, proofs: report.proof_paths.length });

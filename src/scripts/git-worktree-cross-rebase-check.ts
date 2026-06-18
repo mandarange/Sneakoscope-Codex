@@ -6,16 +6,18 @@ import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
 import { crossRebaseIdleWorktrees } from '../core/git/git-worktree-cross-rebase.js'
 import { runGitCommand, gitOutputLine } from '../core/git/git-worktree-runner.js'
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-worktree-cross-rebase-'))
+const suiteRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-worktree-cross-rebase-'))
+const root = path.join(suiteRoot, 'repo')
+fs.mkdirSync(root, { recursive: true })
 await runGitCommand(root, ['init'])
 await runGitCommand(root, ['config', 'user.email', 'sks@example.test'])
 await runGitCommand(root, ['config', 'user.name', 'SKS Test'])
 fs.writeFileSync(path.join(root, 'base.txt'), 'base\n')
 await runGitCommand(root, ['add', 'base.txt'])
 await runGitCommand(root, ['commit', '-m', 'base'])
-const workerPath = path.join(root, '..', `worker-${process.pid}`)
-const dirtyWorkerPath = path.join(root, '..', `worker-dirty-${process.pid}`)
-const runningWorkerPath = path.join(root, '..', `worker-running-${process.pid}`)
+const workerPath = path.join(suiteRoot, 'worker')
+const dirtyWorkerPath = path.join(suiteRoot, 'worker-dirty')
+const runningWorkerPath = path.join(suiteRoot, 'worker-running')
 await runGitCommand(root, ['worktree', 'add', workerPath, 'HEAD'])
 await runGitCommand(root, ['worktree', 'add', dirtyWorkerPath, 'HEAD'])
 await runGitCommand(root, ['worktree', 'add', runningWorkerPath, 'HEAD'])

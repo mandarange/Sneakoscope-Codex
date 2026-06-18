@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.2 completes the TriWiki Turbo production path after 4.0.1. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 4.0.2 before publication.
+
+4.0.2 release readiness adds build-once proof reuse, TriWiki-first affected/confidence release selection, proof-bank to release-cache-v2 bridging, resource-aware gate pack execution, semantic dirty-doctor proofs, sksd protocol/warm cache checks, final legacy/orphan purge gates, and the 4.0.2 five-minute all-feature regression blackboxes.
+
 SKS 4.0.1 completes the TriWiki Turbo architecture after 4.0.0. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 4.0.1 before publication.
 
 4.0.1 release readiness adds TriWiki-first release runner wiring, full proof-card invalidation material, shared-fixture parallel gate packs, executable scheduler metrics, semantic doctor dirty repair, optional sksd cache warming, actual SLA certificate metrics, and the 4.0.1 all-feature regression blackbox.
