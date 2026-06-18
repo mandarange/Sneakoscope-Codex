@@ -35,16 +35,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.5** tunes only the GLM 5.2 MAD path: `sks --mad --glm` now defaults to an xhigh reasoning profile while recovering speed through compact GLM context, disabled default tools, streaming, request/schema caches, and redacted bench/trace artifacts. Ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
+SKS **4.0.6** makes the GLM 5.2 MAD path bounded by default: `sks --mad --glm` now returns readiness/status and exits when no task is supplied, while task forms use a direct GLM-only speed path with loop guards, request timeouts, and deterministic patch gates. Ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
 
-What changed in 4.0.5:
+What changed in 4.0.6:
 
-- **GLM-only xhigh speed profile.** `sks --mad --glm` keeps OpenRouter locked to `z-ai/glm-5.2`, uses `reasoning.effort: xhigh`, and bounds the default completion budget to the speed profile instead of changing global SKS reasoning defaults.
-- **Compact GLM request shape.** The GLM speed profile uses streaming, `tool_choice: none`, no fallback `models`, `provider.allow_fallbacks: false`, `provider.require_parameters: true`, and throughput/latency provider preferences.
-- **Opt-in GLM depth controls.** `--deep`, `--xhigh`, `--strict`, `--ttft`, and `--exact-provider` select explicit GLM profiles without affecting non-GLM routes.
-- **GLM speed infrastructure.** GLM-only context budgeting, encoded request cache, tool schema cache, model metadata cache, output envelope parsing, deterministic patch gating, latency traces, and `--bench` dry-run diagnostics are covered by tests.
-- **No GPT fallback panes.** GLM MAD keeps the existing GPT/codex-sdk native swarm disabled by default until a GLM worker backend exists, preserving the no-fallback guarantee.
-- **4.0.4 GLM launch proof remains.** Each GLM MAD launch still writes `mad-glm-launch.json` with provider/model/profile/wrapper evidence and keeps OpenRouter keys out of layout artifacts.
+- **No default long-lived GLM launch.** Bare `sks --mad --glm` no longer falls through to MAD/Zellij; `--interactive`, `--zellij`, or `session` is required for that path.
+- **Fast GLM speed profile.** Speed mode keeps OpenRouter locked to `z-ai/glm-5.2`, disables GPT/model fallback, avoids high/xhigh reasoning by default, and uses `provider.require_parameters: false` with throughput-first routing.
+- **Bounded direct task runs.** `sks --mad --glm run "task"` and `sks --mad --glm "task"` use a one-shot GLM speed run with max-turn, wall-clock, request-timeout, no-progress, repeated-output, and terminal-state guards.
+- **Deterministic mutation gate.** GLM still returns patch envelopes; SKS parses the unified diff, blocks protected paths, runs `git apply --check`, and applies only after the gate passes.
+- **OpenRouter speed plumbing.** Encoded request bodies are cached without Authorization headers, request timeout/abort is wired, streaming TTFT/usage capture is scaffolded, and synthetic `--bench` remains network-free by default.
+- **Loop regression tests.** Routing, speed-profile, cache, loop-guard, patch-gate, and OpenRouter key handling are covered by targeted tests.
 
 SKS **3.1.16** was a launch-reliability patch on the 3.1.15 doctor-reliability release. It made `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
 
