@@ -9,7 +9,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'release-gates.v2.js
 const ids = new Set(manifest.gates.map((gate) => gate.id));
 const required = [...REQUIRED_4001_RELEASE_IDS, ...REQUIRED_4002_RELEASE_IDS];
 const missing = required.filter((id) => !pkg.scripts?.[id] || !ids.has(id));
-assertGate(pkg.version === '4.0.2', 'package version must be 4.0.2 after production completion bump', pkg.version);
+assertGate(compareSemver(pkg.version || '0.0.0', '4.0.2') >= 0, 'package version must be at least 4.0.2 after production completion bump', pkg.version);
 assertGate(missing.length === 0, '4.0.1/4.0.2 required scripts/gates missing', missing);
 
 const graphMod = await importDist('core/triwiki/triwiki-affected-graph.js');
@@ -35,3 +35,13 @@ assertGate(plan.schema === 'sks.extreme-parallel-scheduler.v1', 'regression must
 assertGate(dirty.schema === 'sks.doctor-dirty-plan.v1', 'regression must exercise semantic dirty doctor', dirty);
 assertGate(certificate.mode === 'actual' && certificate.sla_met === true, 'regression must create actual SLA certificate', certificate);
 emitGate('sks:401-all-feature-regression', { required: required.length, packs: graph.gate_packs.length });
+
+function compareSemver(left: string, right: string): number {
+  const a = left.split('.').map((part) => Number.parseInt(part, 10) || 0);
+  const b = right.split('.').map((part) => Number.parseInt(part, 10) || 0);
+  for (let i = 0; i < 3; i += 1) {
+    const diff = (a[i] || 0) - (b[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}

@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.3 is the GLM 5.2 MAD publication patch after 4.0.2. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and OpenRouter GLM metadata to agree on 4.0.3 before publication.
+
+4.0.3 release readiness adds strict `sks --mad --glm` routing, OpenRouter `z-ai/glm-5.2` request locking, disabled GPT/OpenAI fallback, response model guarding, OpenRouter key repair guidance, Codex App profile metadata, and Codex `rust-v0.141.0` compatibility evidence.
+
 SKS 4.0.2 completes the TriWiki Turbo production path after 4.0.1. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, and npm registry unpublished-version checks to agree on 4.0.2 before publication.
 
 4.0.2 release readiness adds build-once proof reuse, TriWiki-first affected/confidence release selection, proof-bank to release-cache-v2 bridging, resource-aware gate pack execution, semantic dirty-doctor proofs, sksd protocol/warm cache checks, final legacy/orphan purge gates, and the 4.0.2 five-minute all-feature regression blackboxes.

@@ -4,7 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 
-const latest = latestDagSummary()
+const currentRunDir = process.env.SKS_REPORT_DIR ? path.dirname(process.env.SKS_REPORT_DIR) : null
+const latest = currentRunDir ? currentDagSummary(currentRunDir) : latestDagSummary()
 assertGate(Boolean(latest), 'release speed budget requires an actual DAG summary', {
   expected: '.sneakoscope/reports/release-gates/<latest>/summary.json',
   hint: 'run npm run release:check:dag first'
@@ -67,6 +68,12 @@ function latestDagSummary() {
     .map((candidate) => ({ dir: candidate, summaryPath: path.join(candidate, 'summary.json'), mtime: fs.statSync(path.join(candidate, 'summary.json')).mtimeMs }))
     .sort((a, b) => b.mtime - a.mtime)
   return rows[0] || null
+}
+
+function currentDagSummary(dir: string) {
+  const summaryPath = path.join(dir, 'summary.json')
+  if (!fs.existsSync(summaryPath)) return null
+  return { dir, summaryPath, mtime: fs.statSync(summaryPath).mtimeMs }
 }
 
 function slowestGateResults(reportDir: string) {

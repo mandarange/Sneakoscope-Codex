@@ -1170,6 +1170,36 @@
       "symbol": "allocateWorkerWorktree",
       "token": "fsp.rm",
       "reason": "Retry cleanup removes only the scoped partial worker worktree path before recreating it."
+    },
+    {
+      "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
+      "symbol": "writeStoredOpenRouterKey",
+      "token": "chmod",
+      "reason": "OpenRouter key storage enforces 0600 permissions only on generated key and metadata files inside the scoped SKS secret directory."
+    },
+    {
+      "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
+      "symbol": "writeStoredOpenRouterKey",
+      "token": "rename",
+      "reason": "OpenRouter key storage atomically renames only a same-directory temp key file into the scoped SKS secret path."
+    },
+    {
+      "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
+      "symbol": "writeStoredOpenRouterKey",
+      "token": "fs.rm",
+      "reason": "OpenRouter key storage removes only the generated same-directory temp key file after a failed atomic write."
+    },
+    {
+      "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
+      "symbol": "writeStoredOpenRouterKey",
+      "token": "fs.writeFile",
+      "reason": "OpenRouter key storage writes only redacted key metadata JSON inside the scoped SKS secret directory."
+    },
+    {
+      "file": "src/core/providers/openrouter/openrouter-secret-store.ts",
+      "symbol": "ensureSecretDir",
+      "token": "chmod",
+      "reason": "OpenRouter key storage enforces 0700 permissions only on the scoped SKS secret directory before writing key material."
     }
   ]
 }
