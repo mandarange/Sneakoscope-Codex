@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.3 keeps release proof truth aligned with the 4.0.3 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM 5.2 MAD route checks, OpenRouter key handling evidence, Codex App GLM profile proof, and Codex `rust-v0.141.0` compatibility evidence before publication.
+
+SKS 4.0.3 release proof truth also requires proof that GLM requests use `z-ai/glm-5.2`, do not include GPT/OpenAI fallback model arrays, disable OpenRouter provider fallbacks, reject non-GLM returned models, and leave CI/CD publishing infrastructure unchanged.
+
 SKS 4.0.2 keeps release proof truth aligned with the 4.0.2 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, build-once proof reuse, TriWiki-first DAG selection, proof-bank/cache bridge evidence, resource-aware gate-pack timelines, semantic dirty-doctor proof ids, sksd protocol evidence, and 4.0.2 regression certificates.
 
 SKS 4.0.2 release proof truth also requires final legacy/orphan purge evidence, mutation-callsite coverage for new build/cache/report writers, and five-minute affected-scope release-equivalent blackboxes to be present in the release graph before publication.

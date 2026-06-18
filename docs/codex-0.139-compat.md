@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.0.3 keeps the Codex 0.139 compatibility baseline while adding the GLM 5.2 MAD publish surface: OpenRouter-only `z-ai/glm-5.2` routing, no GPT/OpenAI fallback, Codex App GLM profile metadata, Codex `rust-v0.141.0` compatibility evidence, and release metadata alignment for publication.
+
 SKS 4.0.2 keeps the Codex 0.139 compatibility baseline while completing the TriWiki Turbo production path: build-once proof reuse, TriWiki-first release DAG selection, proof-bank/cache-v2 bridging, resource-aware gate packs, semantic doctor dirty repair, sksd warming, legacy purge gates, and 4.0.2 all-feature regression coverage.
 
 SKS 4.0.1 keeps the Codex 0.139 compatibility baseline while completing TriWiki Turbo runtime wiring: TriWiki-first release selection, proof-bank invalidation material, real gate pack shared fixtures, executable scheduler metrics, semantic doctor dirty repair, optional sksd cache warming, and actual SLA certificates.

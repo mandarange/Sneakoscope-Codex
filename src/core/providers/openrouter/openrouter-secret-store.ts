@@ -83,7 +83,8 @@ export async function writeStoredOpenRouterKey(
   const key = value.trim();
   if (!key) throw new Error('OpenRouter key is empty.');
   const paths = input.paths || openRouterSecretPaths();
-  const now = (input.nowIso || (() => new Date().toISOString()))();
+  const nowIso = input.nowIso || (() => new Date().toISOString());
+  const timestamp = nowIso();
   const previous = input.previousRecord ?? await readOpenRouterKeyRecord(paths);
   await ensureSecretDir(paths.secretDir);
   const tmp = `${paths.keyPath}.${process.pid}.${crypto.randomBytes(3).toString('hex')}.tmp`;
@@ -104,8 +105,8 @@ export async function writeStoredOpenRouterKey(
   }
   const record: OpenRouterKeyRecord = {
     schema: 'sks.openrouter-key.v1',
-    created_at: previous?.created_at || now,
-    updated_at: now,
+    created_at: previous?.created_at || timestamp,
+    updated_at: timestamp,
     key_hash: crypto.createHash('sha256').update(key).digest('hex'),
     key_preview: redactOpenRouterKey(key)
   };
