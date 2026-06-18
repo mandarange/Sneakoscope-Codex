@@ -36,13 +36,29 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
 
-  const cleanArgs = stripMadLaunchOnlyArgs(args);
   const rawArgs = (args || []).map((arg: any) => String(arg));
   const glmMadLaunch = isMadGlmLaunch(rawArgs, deps);
+  const glmOnlyFlagBlockers = findGlmOnlyMadFlagBlockers(rawArgs, glmMadLaunch);
+  if (glmOnlyFlagBlockers.length) {
+    const result = {
+      ok: false,
+      status: 'blocked',
+      blockers: glmOnlyFlagBlockers,
+      hint: 'GLM profile and diagnostics flags require sks --mad --glm.'
+    };
+    if (rawArgs.includes('--json')) console.log(JSON.stringify(result, null, 2));
+    else {
+      console.error('SKS MAD launch blocked: GLM-only flags require --glm.');
+      for (const blocker of glmOnlyFlagBlockers) console.error(`- ${blocker}`);
+    }
+    process.exitCode = 1;
+    return result;
+  }
+  const cleanArgs = stripMadLaunchOnlyArgs(args, { includeGlmFlags: glmMadLaunch });
   const madDbGrant = resolveMadLaunchMadDbGrant(rawArgs);
   const dryRun = rawArgs.includes('--dry-run');
   if (rawArgs.includes('--json') && !dryRun) {
-    const profile = glmMadLaunch ? buildMadGlmLaunchProfileNoWrite() : buildMadHighLaunchProfileNoWrite();
+    const profile = glmMadLaunch ? buildMadGlmLaunchProfileNoWrite(rawArgs) : buildMadHighLaunchProfileNoWrite();
     return console.log(JSON.stringify(profile, null, 2));
   }
   const update = { status: 'notice_only', non_blocking: true };
@@ -176,7 +192,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return launchPreflight;
   }
   const madLaunch = await activateMadZellijPermissionState(process.cwd(), args);
-  const glmRuntime: any = glmMadLaunch ? await prepareMadGlmLaunchRuntime(madLaunch, deps) : null;
+  const glmRuntime: any = glmMadLaunch ? await prepareMadGlmLaunchRuntime(madLaunch, { ...deps, glmArgs: deps?.glmArgs || rawArgs }) : null;
   if (glmMadLaunch && !glmRuntime?.ok) {
     process.exitCode = 1;
     return glmRuntime;
@@ -321,7 +337,7 @@ function isMadGlmLaunch(args: any[] = [], deps: any = {}) {
 
 async function prepareMadGlmLaunchRuntime(madLaunch: any, deps: any = {}): Promise<any> {
   const keyResolution = await resolveMadGlmLaunchKey(process.env);
-  const profile = buildMadGlmLaunchProfileNoWrite();
+  const profile = buildMadGlmLaunchProfileNoWrite(deps?.glmArgs || []);
   if (!keyResolution.key) {
     const blocked = {
       schema: 'sks.glm-mad-launch.v1',
@@ -330,6 +346,9 @@ async function prepareMadGlmLaunchRuntime(madLaunch: any, deps: any = {}): Promi
       mission_id: madLaunch.mission_id,
       provider: profile.provider,
       model: profile.model,
+      glm_profile: profile.glm_profile,
+      glm_mode: profile.glm_mode,
+      model_reasoning_effort: profile.model_reasoning_effort,
       gpt_fallback_allowed: false,
       blockers: keyResolution.blockers,
       warnings: keyResolution.warnings
@@ -364,6 +383,9 @@ async function prepareMadGlmLaunchRuntime(madLaunch: any, deps: any = {}): Promi
     type: 'mad_sks.glm_launch_profile_ready',
     provider: profile.provider,
     model: profile.model,
+    glm_profile: profile.glm_profile,
+    glm_mode: profile.glm_mode,
+    model_reasoning_effort: profile.model_reasoning_effort,
     key_source: keyResolution.source || null,
     gpt_fallback_allowed: false
   });
@@ -711,7 +733,7 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   return { mission_id: id, dir, gate, root };
 }
 
-function madLaunchOnlyFlags() {
+function baseMadLaunchOnlyFlags() {
   return new Set([
     '--mad',
     '--MAD',
@@ -759,8 +781,27 @@ function madLaunchOnlyFlags() {
   ]);
 }
 
-function madLaunchValueFlags() {
+function glmMadLaunchOnlyFlags() {
   return new Set([
+    '--deep',
+    '--xhigh',
+    '--strict',
+    '--trace',
+    '--ttft',
+    '--exact-provider'
+  ]);
+}
+
+function madLaunchOnlyFlags(includeGlmFlags = false) {
+  const flags = baseMadLaunchOnlyFlags();
+  if (includeGlmFlags) {
+    for (const flag of glmMadLaunchOnlyFlags()) flags.add(flag);
+  }
+  return flags;
+}
+
+function madLaunchValueFlags(includeGlmFlags = false) {
+  const flags = new Set([
     '--mad-agents',
     '--mad-swarm-agents',
     '--mad-swarm-work-items',
@@ -768,6 +809,18 @@ function madLaunchValueFlags() {
 	    '--mad-swarm-prompt',
 	    '--ack'
   ]);
+  if (includeGlmFlags) flags.add('--exact-provider');
+  return flags;
+}
+
+export function findGlmOnlyMadFlagBlockers(args: readonly string[] = [], glmMadLaunch = false): readonly string[] {
+  if (glmMadLaunch) return [];
+  const blockers: string[] = [];
+  const glmOnly = new Set([...glmMadLaunchOnlyFlags(), '--bench']);
+  for (const arg of args) {
+    if (glmOnly.has(String(arg))) blockers.push(`glm_flag_requires_--glm:${arg}`);
+  }
+  return blockers;
 }
 
 export function defaultMadSwarmBackend(args: any[] = [], opts: any = {}) {
@@ -781,9 +834,9 @@ export function defaultMadSwarmBackend(args: any[] = [], opts: any = {}) {
   return 'zellij';
 }
 
-function stripMadLaunchOnlyArgs(args: any[] = []) {
-  const flags = madLaunchOnlyFlags();
-  const valueFlags = madLaunchValueFlags();
+export function stripMadLaunchOnlyArgs(args: any[] = [], opts: { readonly includeGlmFlags?: boolean } = {}) {
+  const flags = madLaunchOnlyFlags(Boolean(opts.includeGlmFlags));
+  const valueFlags = madLaunchValueFlags(Boolean(opts.includeGlmFlags));
   const out: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = String(args[i]);

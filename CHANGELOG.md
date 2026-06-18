@@ -4,6 +4,30 @@
 
 
 
+
+## [4.0.5] - 2026-06-18
+
+### Added
+
+- Added a GLM-only xhigh speed profile for `sks --mad --glm`; ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
+- Added GLM profile resolution for `--deep`, `--xhigh`, `--strict`, `--ttft`, and `--exact-provider`.
+- Added GLM-only context budgeting, context cache, encoded request cache, tool schema cache, model metadata cache, output envelope parser, deterministic speed gate, latency traces, and synthetic `--bench` diagnostics.
+
+### Changed
+
+- GLM speed requests now keep `reasoning.effort: xhigh` while reducing latency pressure through compact context, `tool_choice: none`, bounded default `max_tokens`, streaming, and OpenRouter throughput/latency provider preferences.
+- GLM Codex App and MAD launch profile metadata now report the xhigh speed profile and carry the selected GLM mode into launch proof.
+
+### Security
+
+- GLM mode continues to lock requests to `z-ai/glm-5.2`, disables provider fallback, omits fallback model arrays, and rejects non-GLM response model ids before mutation.
+- `--exact-provider` validates provider slugs before they can be used in OpenRouter provider ordering.
+
+### Compatibility
+
+- CI/CD and publish workflow files are unchanged.
+- Public non-GLM command behavior is preserved.
+
 ## [4.0.4] - 2026-06-18
 
 ### Fixed

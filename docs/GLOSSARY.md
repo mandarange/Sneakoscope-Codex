@@ -2,7 +2,7 @@
 
 ## GLM MAD Mode
 
-`mad-glm` is the SKS 4.0.3 mode entered by `sks --mad --glm`. It combines the existing MAD permission profile with the OpenRouter GLM 5.2 provider profile while keeping SKS proof and mutation gates active.
+`mad-glm-speed` is the SKS 4.0.5 mode entered by `sks --mad --glm`. It combines the existing MAD permission profile with the OpenRouter GLM 5.2 provider profile while keeping SKS proof and mutation gates active. Its xhigh speed defaults are GLM-only and do not change ordinary `sks --mad`.
 
 ## GLM 5.2 Model Lock
 
@@ -14,8 +14,8 @@ The user-scoped secret location at `${SKS_HOME:-~/.sneakoscope}/secrets/openrout
 
 ## Codex App GLM Profile
 
-The SKS model profile metadata with id `sks/glm-5.2-mad` and label `GLM 5.2 (MAD / OpenRouter)`. It records provider/model policy without monkey-patching Codex App UI.
+The SKS model profile metadata with id `sks/glm-5.2-mad` and label `GLM 5.2 (MAD XHigh Speed / OpenRouter)`. It records provider/model policy without monkey-patching Codex App UI.
 
 ## Codex 0.141 Delegation
 
-The 4.0.3 compatibility policy that delegates remote relay, cwd/shell/path preservation, selected executor plugin MCP activation, App/MCP dedupe, prompt-image cache bounds, feedback upload bounds, and terminal resize behavior to Codex-native semantics when Codex `rust-v0.141.0` is available.
+The 4.0.5 compatibility policy that delegates remote relay, cwd/shell/path preservation, selected executor plugin MCP activation, App/MCP dedupe, prompt-image cache bounds, feedback upload bounds, and terminal resize behavior to Codex-native semantics when Codex `rust-v0.141.0` is available.

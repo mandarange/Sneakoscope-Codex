@@ -6,9 +6,13 @@ import { validateGlmCodexAppModelProfile } from '../glm-profile-schema.js';
 test('Codex App GLM profile locks OpenRouter GLM 5.2 with no GPT fallback', () => {
   const profile = buildGlmCodexAppModelProfile();
   assert.equal(profile.id, 'sks/glm-5.2-mad');
-  assert.equal(profile.label, 'GLM 5.2 (MAD / OpenRouter)');
+  assert.equal(profile.label, 'GLM 5.2 (MAD XHigh Speed / OpenRouter)');
   assert.equal(profile.provider, 'openrouter');
   assert.equal(profile.model, 'z-ai/glm-5.2');
+  assert.equal(profile.defaultProfile, 'speed');
+  assert.equal(profile.defaultSettings.reasoning_effort, 'xhigh');
+  assert.equal(profile.defaultSettings.tool_choice, 'none');
+  assert.equal(profile.defaultSettings.provider_require_parameters, true);
   assert.equal(profile.strictModelLock, true);
   assert.equal(profile.gptFallbackAllowed, false);
   assert.equal(validateGlmCodexAppModelProfile(profile).ok, true);

@@ -8,6 +8,8 @@ test('detectGlobalMode routes top-level --mad --glm before command dispatch', ()
     args: ['--json']
   });
   assert.deepEqual(stripGlobalModeFlags(['--mad', '--glm', '--repair']), ['--repair']);
+  assert.deepEqual(stripGlobalModeFlags(['--mad', '--glm', '--deep', '--trace']), ['--deep', '--trace']);
+  assert.deepEqual(stripGlobalModeFlags(['--mad', '--glm', '--bench', '--json']), ['--bench', '--json']);
 });
 
 test('detectGlobalMode blocks bare --glm and leaves help/version alone', () => {

@@ -4,7 +4,7 @@ export const OPENROUTER_CHAT_COMPLETIONS_URL =
   'https://openrouter.ai/api/v1/chat/completions' as const;
 
 export type OpenRouterRole = 'system' | 'user' | 'assistant' | 'tool';
-export type OpenRouterReasoningEffort = 'high' | 'xhigh';
+export type OpenRouterReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type OpenRouterKeySource = 'env' | 'user-secret-store' | 'prompt';
 
 export interface OpenRouterChatMessage {
@@ -16,8 +16,17 @@ export interface OpenRouterChatMessage {
 
 export interface OpenRouterProviderPreferences {
   readonly allow_fallbacks: false;
-  readonly require_parameters: true;
+  readonly require_parameters: boolean;
   readonly sort?: 'price' | 'throughput' | 'latency';
+  readonly preferred_min_throughput?: number | {
+    readonly p50?: number;
+    readonly p90?: number;
+  };
+  readonly preferred_max_latency?: number | {
+    readonly p50?: number;
+    readonly p90?: number;
+  };
+  readonly order?: readonly string[];
 }
 
 export interface OpenRouterChatCompletionRequest {
@@ -27,6 +36,7 @@ export interface OpenRouterChatCompletionRequest {
   readonly temperature?: number;
   readonly top_p?: number;
   readonly max_tokens?: number;
+  readonly stop?: string | readonly string[];
   readonly reasoning?: {
     readonly effort?: OpenRouterReasoningEffort;
     readonly enabled?: boolean;

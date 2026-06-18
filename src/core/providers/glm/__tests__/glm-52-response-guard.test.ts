@@ -9,6 +9,7 @@ test('GLM response guard accepts canonical and dated variants', () => {
 
 test('GLM response guard rejects GPT, empty, and unknown models', () => {
   assert.equal(assertGlm52ActualModel('openai/gpt-5.2').code, 'glm_model_mismatch');
+  assert.equal(assertGlm52ActualModel('other/glm-5.2-proxy').code, 'glm_model_mismatch');
   assert.equal(assertGlm52ActualModel(undefined).code, 'glm_model_missing');
   assert.equal(assertGlm52ActualModel('anthropic/claude-fable-5').code, 'glm_model_mismatch');
 });

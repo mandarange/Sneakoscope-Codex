@@ -1,6 +1,6 @@
 # Codex 0.141 Compatibility
 
-SKS 4.0.4 aligns its Codex integration boundary with OpenAI Codex `rust-v0.141.0` while fixing the GLM MAD launch bridge.
+SKS 4.0.5 aligns its Codex integration boundary with OpenAI Codex `rust-v0.141.0` while keeping the GLM xhigh speed profile scoped to the GLM MAD launch bridge.
 
 Primary source:
 
@@ -12,7 +12,7 @@ https://github.com/openai/codex/releases/tag/rust-v0.141.0
 
 SKS delegates or narrows duplicate functionality when Codex 0.141 provides the native behavior:
 
-| Codex 0.141 surface | SKS 4.0.4 policy |
+| Codex 0.141 surface | SKS 4.0.5 policy |
 | --- | --- |
 | Remote executor Noise relay | Delegate to Codex remote executor relay |
 | Native cwd/shell/path preservation | Preserve Codex-native PathUri/native path semantics |
@@ -53,3 +53,4 @@ The GLM Codex App profile follows the same boundary:
 - It keeps selected executor plugin MCP behavior delegated to Codex-native routing.
 - It preserves native cwd/shell/path semantics.
 - It marks GPT fallback disabled in both metadata and runtime result.
+- Its xhigh speed defaults apply only to `sks --mad --glm`.

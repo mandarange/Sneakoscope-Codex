@@ -28,8 +28,7 @@ export function assertGlm52ActualModel(responseModel: string | undefined): GlmMo
   const normalized = responseModel.toLowerCase();
   if (
     normalized === GLM_52_OPENROUTER_MODEL ||
-    normalized.startsWith(`${GLM_52_OPENROUTER_MODEL}-`) ||
-    normalized.includes('glm-5.2')
+    normalized.startsWith(`${GLM_52_OPENROUTER_MODEL}-`)
   ) {
     return {
       ok: true,
