@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.5 is the GLM-only xhigh speed-mode patch after 4.0.4. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and GLM speed-profile metadata to agree on 4.0.5 before publication.
+
+4.0.5 release readiness adds proof that the xhigh speed defaults are scoped to `sks --mad --glm`, that ordinary `sks --mad` and non-GLM routes do not inherit GLM reasoning defaults, and that GLM request/profile/launch artifacts record compact context, disabled default tools, no GPT fallback, OpenRouter fallback blocking, redacted traces, and bench diagnostics.
+
 SKS 4.0.4 is the GLM 5.2 MAD launch-fix patch after 4.0.3. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, and OpenRouter GLM launch metadata to agree on 4.0.4 before publication.
 
 4.0.4 release readiness adds proof that `sks --mad --glm` continues past readiness into the MAD launcher, injects Codex OpenRouter `z-ai/glm-5.2` launch args, uses a secret-safe wrapper for stored OpenRouter keys, writes `mad-glm-launch.json`, and blocks GPT fallback native swarm panes by default.

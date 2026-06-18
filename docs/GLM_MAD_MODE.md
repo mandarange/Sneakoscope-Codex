@@ -1,13 +1,27 @@
 # GLM 5.2 MAD Mode
 
-SKS 4.0.3 adds a GLM-only MAD profile for OpenRouter.
+SKS 4.0.5 keeps GLM optimization scoped to `sks --mad --glm`. The GLM path defaults to an xhigh reasoning speed profile, but ordinary `sks --mad`, Naruto/Team, and non-GLM Codex routes keep their existing defaults.
 
 ```bash
 sks --mad --glm
 sks --mad --glm --repair
+sks --mad --glm --deep
+sks --mad --glm --xhigh
+sks --mad --glm --strict
+sks --mad --glm --bench
+sks --mad --glm --trace
 ```
 
-`sks --mad --glm` resolves the `mad-glm` provider profile and keeps the existing SKS proof/task pipeline active. MAD widens the permission profile only through SKS gates; it does not bypass patch proof, response model guard, mutation ledgers, or Honest Mode.
+`sks --mad --glm` resolves the GLM/OpenRouter provider profile and keeps the existing SKS proof/task pipeline active. MAD widens the permission profile only through SKS gates; it does not bypass patch proof, response model guard, mutation ledgers, or Honest Mode.
+
+## Scope
+
+The 4.0.5 xhigh speed defaults apply only when GLM mode is selected:
+
+- `sks --mad --glm` uses the GLM speed profile.
+- Non-GLM `sks --mad` does not inherit GLM xhigh reasoning.
+- Naruto/Team and Codex default model routing are unchanged outside the GLM path.
+- GLM bench and trace artifacts live under `.sneakoscope/glm/`.
 
 ## Model Lock
 
@@ -16,10 +30,35 @@ sks --mad --glm --repair
 - Codex App profile id: `sks/glm-5.2-mad`
 - Request fallback array: not used
 - `provider.allow_fallbacks`: `false`
-- `provider.require_parameters`: `true`
+- GLM speed `provider.require_parameters`: `true`
+- GLM deep/strict `provider.require_parameters`: `true`
 - GPT/OpenAI fallback: blocked
 
 OpenRouter responses must report a GLM 5.2 model id. If the actual response model is missing, GPT/OpenAI, or unknown, SKS discards the result before mutation and records `glm_model_missing` or `glm_model_mismatch`.
+
+## Profiles
+
+Default GLM mode is `speed`:
+
+```text
+mode: mad-glm-speed
+reasoning.effort: xhigh
+max_tokens: 4096
+temperature: 0.2
+top_p: 0.85
+stream: true
+tool_choice: none
+provider.sort: throughput
+provider.require_parameters: true
+```
+
+Opt-in profiles:
+
+- `--deep`: larger GLM context/completion budget with high reasoning and automatic tools.
+- `--xhigh`: larger GLM context/completion budget with xhigh reasoning.
+- `--strict`: deep GLM profile plus JSON schema response format.
+- `--ttft`: GLM provider preference shifts toward lower latency.
+- `--exact-provider <slug>`: GLM provider order is pinned after slug validation.
 
 ## OpenRouter Key Resolution
 
@@ -63,11 +102,12 @@ The profile metadata is:
 
 ```text
 id: sks/glm-5.2-mad
-label: GLM 5.2 (MAD / OpenRouter)
+label: GLM 5.2 (MAD XHigh Speed / OpenRouter)
 provider: openrouter
 model: z-ai/glm-5.2
 strictModelLock: true
 gptFallbackAllowed: false
+defaultProfile: speed
 ```
 
 SKS does not monkey patch Codex App UI. The profile is represented as SKS metadata and follows Codex-native App/MCP dedupe and selected executor plugin boundaries.
@@ -80,6 +120,9 @@ GLM mode writes redacted, bounded proof summaries:
 .sneakoscope/glm/mad-glm-session.json
 .sneakoscope/glm/openrouter-request-summary.json
 .sneakoscope/glm/model-guard.json
+.sneakoscope/glm/bench-result.json
+.sneakoscope/glm/bench-blocked.json
+.sneakoscope/glm/traces/*-glm-*-trace.json
 ```
 
 Raw OpenRouter keys, Authorization headers, and raw key-bearing stack traces must not appear in these files.

@@ -22,15 +22,18 @@ import { buildGlm52KeyValidationRequest, buildGlm52Request } from './glm-52-requ
 import { assertGlm52ActualModel } from './glm-52-response-guard.js';
 import {
   GLM_52_OPENROUTER_MODEL,
-  GLM_MAD_MODE,
+  type GlmModeId,
   OPENROUTER_CHAT_COMPLETIONS_URL
 } from './glm-52-settings.js';
+import { resolveGlmProfileFromArgs, type GlmResolvedProfile } from './glm-profile-resolver.js';
+import { createEmptyGlmLatencyTrace, writeGlmLatencyTrace } from './glm-latency-trace.js';
 
 export interface GlmModeResult {
   readonly schema: 'sks.glm-mode-result.v1';
   readonly ok: boolean;
   readonly status: 'ready' | 'running' | 'blocked' | 'failed' | 'completed';
-  readonly mode: typeof GLM_MAD_MODE;
+  readonly mode: GlmModeId;
+  readonly profile: GlmResolvedProfile['name'];
   readonly provider: 'openrouter';
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
   readonly requested_model: typeof GLM_52_OPENROUTER_MODEL;
@@ -68,17 +71,24 @@ export async function runMadGlmMode(
   const noSaveKey = flag(args, '--no-save-key');
   const skipValidation = flag(args, '--skip-validation');
   const json = flag(args, '--json');
+  const selectedProfile = resolveGlmProfileFromArgs(args);
   const profile = buildGlmCodexAppModelProfile();
 
   let result: GlmModeResult;
-  if (repair) {
+  if (selectedProfile.blockers.length) {
+    result = baseResult({
+      status: 'blocked',
+      blockers: selectedProfile.blockers,
+      warnings: []
+    }, selectedProfile);
+  } else if (repair) {
     const key = await runtime.promptSecret('OpenRouter API key is required for GLM 5.2 mode.\nEnter OpenRouter API key: ');
     if (!key) {
       result = baseResult({
         status: 'blocked',
         blockers: ['glm_key_prompt_cancelled'],
         warnings: []
-      });
+      }, selectedProfile);
     } else {
       if (!noSaveKey) await runtime.writeSecret(key);
       const validation = skipValidation
@@ -92,21 +102,21 @@ export async function runMadGlmMode(
           key_preview: redactOpenRouterKey(key),
           blockers: [],
           warnings: noSaveKey ? ['openrouter_key_not_saved'] : []
-        })
+        }, selectedProfile)
         : baseResult({
           status: 'blocked',
           openrouter_key_source: noSaveKey ? 'prompt' : 'user-secret-store',
           key_preview: redactOpenRouterKey(key),
           blockers: [validation.error.code],
           warnings: []
-        });
+        }, selectedProfile);
     }
   } else {
     const resolved = await resolveOpenRouterApiKey({ env: runtime.env });
     if (!resolved.key && process.stdin.isTTY) {
       const key = await runtime.promptSecret('OpenRouter API key is required for GLM 5.2 mode.\nEnter OpenRouter API key: ');
       if (!key) {
-        result = baseResult({ status: 'blocked', blockers: ['glm_key_prompt_cancelled'], warnings: [] });
+        result = baseResult({ status: 'blocked', blockers: ['glm_key_prompt_cancelled'], warnings: [] }, selectedProfile);
       } else {
         const save = noSaveKey ? false : await runtime.promptConfirm('Save this key for future SKS GLM runs? [Y/n] ', true);
         if (save) await runtime.writeSecret(key);
@@ -116,14 +126,14 @@ export async function runMadGlmMode(
           key_preview: redactOpenRouterKey(key),
           blockers: [],
           warnings: save ? [] : ['openrouter_key_not_saved']
-        });
+        }, selectedProfile);
       }
     } else if (!resolved.key) {
       result = baseResult({
         status: 'blocked',
         blockers: resolved.blockers,
         warnings: ['set_OPENROUTER_API_KEY_or_run_sks_--mad_--glm_--repair']
-      });
+      }, selectedProfile);
     } else {
       result = baseResult({
         status: 'ready',
@@ -131,11 +141,20 @@ export async function runMadGlmMode(
         key_preview: resolved.key_preview,
         blockers: [],
         warnings: resolved.warnings
-      });
+      }, selectedProfile);
     }
   }
 
-  await writeGlmModeArtifacts(runtime.cwd, result, profile, runtime.nowIso()).catch(() => undefined);
+  await writeGlmModeArtifacts(runtime.cwd, result, profile, selectedProfile, runtime.nowIso()).catch(() => undefined);
+  if (flag(args, '--trace')) {
+    await writeGlmLatencyTrace(runtime.cwd, {
+      ...createEmptyGlmLatencyTrace(selectedProfile.name),
+      context_estimated_tokens: selectedProfile.name === 'speed' ? 16_000 : 64_000,
+      request_encode_ms: 1,
+      encoded_request_cache_hit: false,
+      provider: 'openrouter'
+    }).catch(() => undefined);
+  }
   if (json) printJson(result);
   else printHumanGlmResult(result, runtime.log);
   if (!result.ok) process.exitCode = 1;
@@ -149,12 +168,13 @@ function baseResult(input: {
   readonly key_preview?: string | null;
   readonly blockers: readonly string[];
   readonly warnings: readonly string[];
-}): GlmModeResult {
+}, profile: GlmResolvedProfile): GlmModeResult {
   const result: GlmModeResult = {
     schema: 'sks.glm-mode-result.v1',
     ok: input.blockers.length === 0 && input.status !== 'failed',
     status: input.status,
-    mode: GLM_MAD_MODE,
+    mode: profile.mode,
+    profile: profile.name,
     provider: 'openrouter',
     model: GLM_52_OPENROUTER_MODEL,
     requested_model: GLM_52_OPENROUTER_MODEL,
@@ -224,6 +244,7 @@ async function writeGlmModeArtifacts(
   cwd: string,
   result: GlmModeResult,
   profile: ReturnType<typeof buildGlmCodexAppModelProfile>,
+  selectedProfile: GlmResolvedProfile,
   generatedAt: string
 ): Promise<void> {
   const dir = path.join(cwd, '.sneakoscope', 'glm');
@@ -231,19 +252,26 @@ async function writeGlmModeArtifacts(
     schema: 'sks.glm-mad-session.v1',
     generated_at: generatedAt,
     result,
-    profile_id: profile.id
+    profile_id: profile.id,
+    selected_profile: selectedProfile.name
   });
   await writeJsonAtomic(path.join(dir, 'openrouter-request-summary.json'), {
     schema: 'sks.openrouter-request-summary.v1',
     generated_at: generatedAt,
     endpoint: OPENROUTER_CHAT_COMPLETIONS_URL,
     model: GLM_52_OPENROUTER_MODEL,
-    temperature: 1,
-    top_p: 0.95,
-    reasoning_effort: 'high',
-    stream: true,
+    mode: selectedProfile.mode,
+    profile: selectedProfile.name,
+    temperature: selectedProfile.temperature,
+    top_p: selectedProfile.top_p,
+    reasoning_effort: selectedProfile.reasoning_effort || 'xhigh',
+    max_tokens: selectedProfile.max_tokens,
+    tool_choice: selectedProfile.tool_choice,
+    parallel_tool_calls: selectedProfile.parallel_tool_calls,
+    stream: selectedProfile.stream,
     provider_allow_fallbacks: false,
-    require_parameters: true,
+    provider_sort: selectedProfile.provider.sort || null,
+    require_parameters: selectedProfile.provider.require_parameters,
     key_source: result.openrouter_key_source || null,
     key_preview: result.key_preview || null
   });
@@ -260,7 +288,7 @@ async function writeGlmModeArtifacts(
 }
 
 function printHumanGlmResult(result: GlmModeResult, log: (message: string) => void): void {
-  log(`GLM 5.2 MAD mode: ${result.ok ? result.status : 'blocked'}`);
+  log(`GLM 5.2 MAD mode: ${result.ok ? result.status : 'blocked'} (${result.profile})`);
   log(`Model: ${result.model}`);
   log(`GPT fallback: ${result.gpt_fallback_allowed ? 'allowed' : 'blocked'}`);
   if (result.openrouter_key_source) log(`OpenRouter key: ${result.openrouter_key_source} ${result.key_preview || ''}`.trim());
@@ -289,6 +317,7 @@ async function promptConfirmLine(prompt: string, defaultYes: boolean): Promise<b
 export function buildGlmModeDryRunRequest(): OpenRouterChatCompletionRequest {
   return buildGlm52Request({
     messages: [{ role: 'user', content: 'SKS GLM dry run.' }],
+    profile: 'speed',
     stream: false,
     maxTokens: 1,
     toolChoice: 'none',

@@ -1,11 +1,11 @@
 import {
-  GLM_52_DEFAULT_REQUEST_SETTINGS,
   GLM_52_OPENROUTER_MODEL,
   GLM_MAD_MODE
 } from './glm-52-settings.js';
+import { profileFromConst } from './glm-profile-resolver.js';
 
 export const GLM_CODEX_APP_PROFILE_ID = 'sks/glm-5.2-mad' as const;
-export const GLM_CODEX_APP_PROFILE_LABEL = 'GLM 5.2 (MAD / OpenRouter)' as const;
+export const GLM_CODEX_APP_PROFILE_LABEL = 'GLM 5.2 (MAD XHigh Speed / OpenRouter)' as const;
 
 export interface SksCodexAppModelProfile {
   readonly schema: 'sks.codex-app-model-profile.v1';
@@ -17,12 +17,17 @@ export interface SksCodexAppModelProfile {
   readonly strictModelLock: true;
   readonly gptFallbackAllowed: false;
   readonly requiresSecret: 'openrouter-api-key';
+  readonly defaultProfile: 'speed';
   readonly defaultSettings: {
-    readonly temperature: 1;
-    readonly top_p: 0.95;
-    readonly reasoning_effort: 'high';
-    readonly tool_choice: 'auto';
+    readonly temperature: number;
+    readonly top_p: number;
+    readonly reasoning_effort: 'xhigh';
+    readonly tool_choice: 'none' | 'auto';
     readonly parallel_tool_calls: false;
+    readonly max_tokens: number;
+    readonly provider_sort: 'throughput' | 'latency' | 'price';
+    readonly provider_allow_fallbacks: false;
+    readonly provider_require_parameters: boolean;
   };
   readonly codexCompatibility: {
     readonly target: 'rust-v0.141.0';
@@ -33,6 +38,7 @@ export interface SksCodexAppModelProfile {
 }
 
 export function buildGlmCodexAppModelProfile(): SksCodexAppModelProfile {
+  const speed = profileFromConst('speed');
   return {
     schema: 'sks.codex-app-model-profile.v1',
     id: GLM_CODEX_APP_PROFILE_ID,
@@ -43,12 +49,17 @@ export function buildGlmCodexAppModelProfile(): SksCodexAppModelProfile {
     strictModelLock: true,
     gptFallbackAllowed: false,
     requiresSecret: 'openrouter-api-key',
+    defaultProfile: 'speed',
     defaultSettings: {
-      temperature: GLM_52_DEFAULT_REQUEST_SETTINGS.temperature,
-      top_p: GLM_52_DEFAULT_REQUEST_SETTINGS.top_p,
-      reasoning_effort: 'high',
-      tool_choice: 'auto',
-      parallel_tool_calls: false
+      temperature: speed.temperature,
+      top_p: speed.top_p,
+      reasoning_effort: 'xhigh',
+      tool_choice: speed.tool_choice,
+      parallel_tool_calls: speed.parallel_tool_calls,
+      max_tokens: speed.max_tokens,
+      provider_sort: speed.provider.sort || 'throughput',
+      provider_allow_fallbacks: false,
+      provider_require_parameters: speed.provider.require_parameters
     },
     codexCompatibility: {
       target: 'rust-v0.141.0',

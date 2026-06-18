@@ -35,16 +35,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.4** makes the GLM 5.2 MAD launch path real: `sks --mad --glm` now resolves the OpenRouter key, opens the MAD Zellij launch flow with Codex configured for `z-ai/glm-5.2`, blocks GPT fallback panes, and records launch proof; `sks --mad --glm --repair` still rotates the OpenRouter API key outside project files.
+SKS **4.0.5** tunes only the GLM 5.2 MAD path: `sks --mad --glm` now defaults to an xhigh reasoning profile while recovering speed through compact GLM context, disabled default tools, streaming, request/schema caches, and redacted bench/trace artifacts. Ordinary `sks --mad`, Naruto/Team, and non-GLM Codex paths keep their existing defaults.
 
-What changed in 4.0.4:
+What changed in 4.0.5:
 
-- **GLM MAD actually launches.** `sks --mad --glm` no longer stops after the readiness banner; it continues into the MAD launcher with a GLM/OpenRouter Codex profile.
-- **No leaked OpenRouter key.** The Zellij pane uses a mission-local `sks-glm-codex-wrapper.sh` that reads the key at runtime, so layout artifacts do not contain the raw secret.
-- **No GPT fallback panes.** GLM MAD disables the existing GPT/codex-sdk native swarm by default until a GLM worker backend exists, preserving the no-fallback guarantee.
-- **Launch proof.** Each GLM MAD launch writes `mad-glm-launch.json` with provider/model/profile/wrapper evidence and records disabled fallback status.
-- **OpenRouter key lifecycle.** Keys resolve from `OPENROUTER_API_KEY`, `SKS_OPENROUTER_API_KEY`, or the user SKS secret store; stored keys use private permissions and redacted metadata.
-- **4.0.3 GLM request safeguards remain.** GLM requests still use `provider.allow_fallbacks: false`, omit fallback `models`, and reject non-GLM response model ids before mutation.
+- **GLM-only xhigh speed profile.** `sks --mad --glm` keeps OpenRouter locked to `z-ai/glm-5.2`, uses `reasoning.effort: xhigh`, and bounds the default completion budget to the speed profile instead of changing global SKS reasoning defaults.
+- **Compact GLM request shape.** The GLM speed profile uses streaming, `tool_choice: none`, no fallback `models`, `provider.allow_fallbacks: false`, `provider.require_parameters: true`, and throughput/latency provider preferences.
+- **Opt-in GLM depth controls.** `--deep`, `--xhigh`, `--strict`, `--ttft`, and `--exact-provider` select explicit GLM profiles without affecting non-GLM routes.
+- **GLM speed infrastructure.** GLM-only context budgeting, encoded request cache, tool schema cache, model metadata cache, output envelope parsing, deterministic patch gating, latency traces, and `--bench` dry-run diagnostics are covered by tests.
+- **No GPT fallback panes.** GLM MAD keeps the existing GPT/codex-sdk native swarm disabled by default until a GLM worker backend exists, preserving the no-fallback guarantee.
+- **4.0.4 GLM launch proof remains.** Each GLM MAD launch still writes `mad-glm-launch.json` with provider/model/profile/wrapper evidence and keeps OpenRouter keys out of layout artifacts.
 
 SKS **3.1.16** was a launch-reliability patch on the 3.1.15 doctor-reliability release. It made `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
 
@@ -396,7 +396,7 @@ sks team open-zellij latest
 sks team attach-zellij latest
 ```
 
-Interactive SKS sessions use Zellij layouts. By default SKS launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, the selected `model_reasoning_effort`, and `--no-alt-screen` for Zellij-backed interactive panes so terminal scrollback captures the conversation transcript. SKS always forces the model to `gpt-5.5`; `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove that model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort, and `SKS_ZELLIJ_CODEX_ALT_SCREEN=1` restores Codex's alternate-screen UI for the next launch. Use `sks --mad --workspace <name>` for an explicit MAD session and `sks help` for CLI help.
+Interactive SKS sessions use Zellij layouts. By default SKS launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, the selected `model_reasoning_effort`, and `--no-alt-screen` for Zellij-backed interactive panes so terminal scrollback captures the conversation transcript. Non-GLM SKS sessions force the model to `gpt-5.5`; `sks --mad --glm` is the OpenRouter GLM 5.2 exception. `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove the non-GLM model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort, and `SKS_ZELLIJ_CODEX_ALT_SCREEN=1` restores Codex's alternate-screen UI for the next launch. Use `sks --mad --workspace <name>` for an explicit MAD session and `sks help` for CLI help.
 
 Before opening the interactive runtime, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens the runtime with the updated Codex CLI.
 

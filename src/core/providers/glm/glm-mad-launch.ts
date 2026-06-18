@@ -3,7 +3,8 @@ import path from 'node:path';
 import { nowIso, writeTextAtomic } from '../../fsx.js';
 import { resolveOpenRouterApiKey, openRouterSecretPaths } from '../openrouter/openrouter-secret-store.js';
 import type { OpenRouterKeyResolution } from '../openrouter/openrouter-types.js';
-import { GLM_52_OPENROUTER_MODEL } from './glm-52-settings.js';
+import { GLM_52_OPENROUTER_MODEL, type GlmProfileName } from './glm-52-settings.js';
+import { resolveGlmProfileFromArgs, type GlmResolvedProfile } from './glm-profile-resolver.js';
 
 export const GLM_MAD_PROFILE_ID = 'sks/glm-5.2-mad' as const;
 export const OPENROUTER_CODEX_PROVIDER = 'openrouter' as const;
@@ -13,10 +14,12 @@ export interface MadGlmLaunchProfile {
   readonly profile_name: typeof GLM_MAD_PROFILE_ID;
   readonly provider: typeof OPENROUTER_CODEX_PROVIDER;
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
+  readonly glm_profile: GlmProfileName;
+  readonly glm_mode: GlmResolvedProfile['mode'];
   readonly launch_args: readonly string[];
   readonly sandbox_mode: 'danger-full-access';
   readonly approval_policy: 'never';
-  readonly model_reasoning_effort: 'high';
+  readonly model_reasoning_effort: 'low' | 'high' | 'xhigh';
   readonly service_tier: 'fast';
   readonly gpt_fallback_allowed: false;
   readonly writes_user_codex_config: false;
@@ -29,12 +32,16 @@ export interface MadGlmCodexWrapper {
   readonly raw_key_written_to_wrapper: false;
 }
 
-export function buildMadGlmLaunchProfileNoWrite(): MadGlmLaunchProfile {
+export function buildMadGlmLaunchProfileNoWrite(args: readonly string[] = []): MadGlmLaunchProfile {
+  const profile = resolveGlmProfileFromArgs(args);
+  const effort = codexReasoningEffortForProfile(profile);
   return {
     schema: 'sks.glm-mad-launch-profile.v1',
     profile_name: GLM_MAD_PROFILE_ID,
     provider: OPENROUTER_CODEX_PROVIDER,
     model: GLM_52_OPENROUTER_MODEL,
+    glm_profile: profile.name,
+    glm_mode: profile.mode,
     launch_args: [
       '--sandbox',
       'danger-full-access',
@@ -43,7 +50,7 @@ export function buildMadGlmLaunchProfileNoWrite(): MadGlmLaunchProfile {
       '-c',
       'service_tier=fast',
       '-c',
-      'model_reasoning_effort=high',
+      `model_reasoning_effort=${effort}`,
       '-c',
       'model_provider="openrouter"',
       '-c',
@@ -61,7 +68,7 @@ export function buildMadGlmLaunchProfileNoWrite(): MadGlmLaunchProfile {
     ],
     sandbox_mode: 'danger-full-access',
     approval_policy: 'never',
-    model_reasoning_effort: 'high',
+    model_reasoning_effort: effort,
     service_tier: 'fast',
     gpt_fallback_allowed: false,
     writes_user_codex_config: false
@@ -137,6 +144,9 @@ export function buildMadGlmLaunchArtifact(input: {
     mission_id: input.missionId,
     provider: profile.provider,
     model: profile.model,
+    glm_profile: profile.glm_profile,
+    glm_mode: profile.glm_mode,
+    model_reasoning_effort: profile.model_reasoning_effort,
     profile_name: profile.profile_name,
     strict_model_lock: true,
     gpt_fallback_allowed: false,
@@ -153,4 +163,10 @@ export function buildMadGlmLaunchArtifact(input: {
 
 function shellQuote(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function codexReasoningEffortForProfile(profile: GlmResolvedProfile): 'low' | 'high' | 'xhigh' {
+  if (profile.name === 'xhigh') return 'xhigh';
+  if (profile.name === 'deep' || profile.name === 'strict') return 'high';
+  return 'xhigh';
 }
