@@ -376,24 +376,19 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
   let columnCreationDirectionRequested: 'right' | null = null
   let columnCreationDirectionApplied: 'right' | 'unknown' | 'not_applied' | null = null
   if (rightColumn && !freshFocusCandidate) {
-    columnCreationDirectionRequested = 'right'
-    const anchorCommand = buildZellijSlotColumnAnchorCommand({
-      cliPath: path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
-      missionId: input.missionId,
-      mode: input.uiMode || 'compact-slots',
-      artifactRoot: root,
-      watch: true
-    })
-    anchorLaunch = createSession.ok
-      ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', 'SLOTS', '--', 'sh', '-lc', anchorCommand], {
-          cwd,
-          timeoutMs: 5000,
-          optional: false
-        })
+    // Single right-column invariant: if this zellij session was reused (stable
+    // per-cwd name) and already carries a SLOTS anchor from a prior mission, adopt
+    // it and stack workers underneath instead of splitting ANOTHER `--direction
+    // right` column — repeated right-splits are exactly what fragments the screen
+    // into side-by-side columns. A fresh column is only split when none exists yet.
+    const adoptedAnchorPaneId = createSession.ok
+      ? await findExistingSlotsAnchorPaneId(input.sessionName, cwd).catch(() => null)
       : null
-    slotColumnAnchorPaneId = anchorLaunch?.ok ? extractZellijPaneIdFromOutput(anchorLaunch.stdout_tail) : null
-    columnCreationDirectionApplied = anchorLaunch?.ok ? (slotColumnAnchorPaneId ? 'right' : 'unknown') : 'not_applied'
-    if (slotColumnAnchorPaneId) {
+    if (adoptedAnchorPaneId) {
+      // Adopted an existing column: no creation was requested, so leave the
+      // column-creation direction fields null (avoids a false
+      // `zellij_worker_slot_column_anchor_not_created` blocker).
+      slotColumnAnchorPaneId = adoptedAnchorPaneId
       await recordSlotColumnAnchorInRightColumn({
         root,
         ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
@@ -401,6 +396,33 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         sessionName: input.sessionName,
         paneId: slotColumnAnchorPaneId
       })
+    } else {
+      columnCreationDirectionRequested = 'right'
+      const anchorCommand = buildZellijSlotColumnAnchorCommand({
+        cliPath: path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
+        missionId: input.missionId,
+        mode: input.uiMode || 'compact-slots',
+        artifactRoot: root,
+        watch: true
+      })
+      anchorLaunch = createSession.ok
+        ? await runZellij(['--session', input.sessionName, 'action', 'new-pane', '--direction', 'right', '--name', 'SLOTS', '--', 'sh', '-lc', anchorCommand], {
+            cwd,
+            timeoutMs: 5000,
+            optional: false
+          })
+        : null
+      slotColumnAnchorPaneId = anchorLaunch?.ok ? extractZellijPaneIdFromOutput(anchorLaunch.stdout_tail) : null
+      columnCreationDirectionApplied = anchorLaunch?.ok ? (slotColumnAnchorPaneId ? 'right' : 'unknown') : 'not_applied'
+      if (slotColumnAnchorPaneId) {
+        await recordSlotColumnAnchorInRightColumn({
+          root,
+          ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
+          missionId: input.missionId,
+          sessionName: input.sessionName,
+          paneId: slotColumnAnchorPaneId
+        })
+      }
     }
   }
   const focusPaneId = lastVisibleWorkerPaneId || slotColumnAnchorPaneId || freshFocusCandidate || null
@@ -765,6 +787,30 @@ async function reconcileZellijWorkerPaneId(sessionName: string, paneName: string
     dump_screen: screen,
     blockers: paneId == null ? ['zellij_worker_pane_id_not_reconciled'] : []
   }
+}
+
+// Look up an already-open SLOTS anchor pane in a (possibly reused) session so a
+// new mission can stack its workers under the existing right column instead of
+// splitting another one. Returns the live pane id (terminal_<n>) or null.
+async function findExistingSlotsAnchorPaneId(sessionName: string, cwd: string): Promise<string | null> {
+  const listed = await runZellij(['--session', sessionName, 'action', 'list-panes', '--json', '--all'], {
+    cwd,
+    timeoutMs: 5000,
+    optional: true
+  })
+  if (!listed.ok) return null
+  const rows = parsePaneRows(listed.stdout_tail)
+  const pane = rows.find((row: any) => {
+    if (row?.is_plugin === true) return false
+    const exited = row?.exited === true || row?.is_exited === true || row?.exit_status != null
+    if (exited) return false
+    const title = String(row?.title || row?.name || row?.pane_name || '')
+    return title === 'SLOTS'
+  })
+  if (!pane) return null
+  const rawPaneId = pane.pane_id ?? pane.paneId
+  if (rawPaneId != null && String(rawPaneId).trim()) return String(rawPaneId).trim()
+  return pane.id == null ? null : `terminal_${pane.id}`
 }
 
 function normalizePaneProviderContext(context?: ProviderContext | null, serviceTier?: string | null): ProviderContext {

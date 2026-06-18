@@ -14,8 +14,9 @@ export async function checkCommand(args: string[] = []): Promise<unknown> {
   const changedSince = readArg(args, '--changed-since', 'auto')
   const json = flag(args, '--json')
   const planOnly = flag(args, '--plan')
+  const triwiki = !flag(args, '--no-triwiki')
 
-  const plan = buildCheckPlan({ tier, sla, changedSince })
+  const plan = buildCheckPlan({ tier, sla, changedSince, triwiki })
   if (planOnly) {
     const result = { schema: CHECK_SCHEMA, ok: true, mode: 'plan', ...plan }
     if (json) return printJson(result)
@@ -56,7 +57,7 @@ export async function checkCommand(args: string[] = []): Promise<unknown> {
   return result
 }
 
-function buildCheckPlan(input: { tier: string; sla: string; changedSince: string }) {
+function buildCheckPlan(input: { tier: string; sla: string; changedSince: string; triwiki: boolean }) {
   const tier = normalizeTier(input.tier)
   const buildScript = tier === 'release' ? 'build:clean' : 'build:incremental'
   const steps: Array<{ name: string; command: string; args: string[] }> = []
@@ -71,6 +72,7 @@ function buildCheckPlan(input: { tier: string; sla: string; changedSince: string
   return {
     tier,
     sla: input.sla,
+    triwiki: input.triwiki,
     changed_since: input.changedSince,
     build_once: tier === 'release' ? 'clean' : tier === 'real-check' || tier === 'instant' ? 'not_applicable' : 'incremental',
     steps

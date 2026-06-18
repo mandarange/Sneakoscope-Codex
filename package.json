@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -994,7 +994,16 @@
     "cli:check-tiers": "node ./dist/scripts/cli-check-tiers-check.js",
     "cli:five-minute-task": "node ./dist/scripts/cli-five-minute-task-check.js",
     "certificate:sla": "node ./dist/scripts/certificate-sla-check.js",
-    "sks:400-all-feature-regression": "node ./dist/scripts/sks-400-all-feature-regression-blackbox.js"
+    "sks:400-all-feature-regression": "node ./dist/scripts/sks-400-all-feature-regression-blackbox.js",
+    "triwiki:stale-proof-rejection": "node ./dist/scripts/triwiki-stale-proof-rejection-check.js",
+    "gate-pack:fixture-cache": "node ./dist/scripts/gate-pack-fixture-cache-check.js",
+    "release:triwiki-first-runner": "node ./dist/scripts/release-triwiki-first-runner-check.js",
+    "release:cache-bridge": "node ./dist/scripts/release-cache-bridge-check.js",
+    "doctor:dirty-semantic": "node ./dist/scripts/doctor-dirty-semantic-check.js",
+    "legacy:strong-inventory": "node ./dist/scripts/legacy-strong-inventory-check.js",
+    "orphan:strong-detection": "node ./dist/scripts/orphan-strong-detection-check.js",
+    "sks:401-five-minute-actual-blackbox": "node ./dist/scripts/sks-401-five-minute-actual-blackbox.js",
+    "sks:401-all-feature-regression": "node ./dist/scripts/sks-401-all-feature-regression-blackbox.js"
   },
   "keywords": [
     "sneakoscope",

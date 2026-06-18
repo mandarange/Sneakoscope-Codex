@@ -227,10 +227,15 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest
   };
   const launchOpts = codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: profile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
-  const workspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`));
+  const explicitWorkspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', null));
+  // Only the auto-derived stable `sks-mad-<cwd>` name accumulates panes across
+  // runs; when the user names a session explicitly (or codex-lb already minted a
+  // fresh unique session) respect it and skip the reset.
+  const autoDerivedMadSession = !explicitWorkspace && !launchOpts.session;
+  const workspace = explicitWorkspace || launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`;
   const launch: any = headlessZellij
     ? await writeMadHeadlessZellijFallback(madLaunch, workspace)
-    : await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+    : await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, freshSession: autoDerivedMadSession, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const afterLaunchUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-launch-${uiSnapshotId}`).catch(() => null) : null;
   const launchUiDiff = beforeUi && afterLaunchUi ? diffCodexAppUiSnapshots(beforeUi, afterLaunchUi) : null;
   if (launchUiDiff) {

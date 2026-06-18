@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { TriWikiProofCard } from './triwiki-proof-card.js';
-import { TRIWIKI_PROOF_CARD_SCHEMA, isReusableTriWikiProofCard } from './triwiki-proof-card.js';
+import { TRIWIKI_PROOF_CARD_SCHEMA, classifyTriWikiProofCardSchema, isReusableTriWikiProofCard } from './triwiki-proof-card.js';
 
 export const TRIWIKI_PROOF_BANK_SCHEMA = 'sks.triwiki-proof-bank.v1';
 
@@ -30,8 +30,10 @@ export function writeTriWikiProofCard(root: string, card: TriWikiProofCard, subj
   const dir = path.join(triWikiProofBankDir(root), subjectType, safeId(card.subject_id));
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${safeId(card.proof_id)}.json`);
-  fs.writeFileSync(file, `${JSON.stringify(card, null, 2)}\n`);
-  return file;
+  return withSubjectLock(root, subjectType, card.subject_id, () => {
+    atomicWriteJson(file, card);
+    return file;
+  });
 }
 
 export function readReusableTriWikiProofCard(input: TriWikiProofBankLookup): { hit: boolean; card: TriWikiProofCard | null; path: string | null; invalidation_reasons: string[] } {
@@ -44,6 +46,11 @@ export function readReusableTriWikiProofCard(input: TriWikiProofBankLookup): { h
     if (!card) {
       backupCorruptProof(absolute);
       reasons.push(`corrupt:${file}`);
+      continue;
+    }
+    const schemaClass = classifyTriWikiProofCardSchema(card);
+    if (schemaClass === 'legacy_proof_card_schema') {
+      reasons.push(`legacy_proof_card_schema:${file}`);
       continue;
     }
     if (card.cache_key !== input.cacheKey) {
@@ -65,7 +72,7 @@ export function markTriWikiProofInvalidated(root: string, subjectId: string, pro
     reusable: false,
     invalidation_reasons: [...new Set([...(card.invalidation_reasons || []), reason])]
   };
-  fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
+  atomicWriteJson(file, next);
   return true;
 }
 
@@ -117,6 +124,67 @@ function backupCorruptProof(file: string): void {
   if (!fs.existsSync(file)) return;
   const backup = `${file}.corrupt-${Date.now()}.bak`;
   fs.renameSync(file, backup);
+}
+
+function atomicWriteJson(file: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  const fd = fs.openSync(temp, 'w');
+  try {
+    fs.writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`);
+    try {
+      fs.fsyncSync(fd);
+    } catch {
+      // fsync can be unavailable on some virtual filesystems; rename remains atomic.
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(temp, file);
+}
+
+function withSubjectLock<T>(root: string, subjectType: string, subjectId: string, fn: () => T): T {
+  const lockDir = path.join(triWikiProofBankDir(root), '.locks', subjectType);
+  fs.mkdirSync(lockDir, { recursive: true });
+  const lockFile = path.join(lockDir, `${safeId(subjectId)}.lock`);
+  const staleAfterMs = 30_000;
+  const started = Date.now();
+  while (true) {
+    try {
+      const fd = fs.openSync(lockFile, 'wx');
+      fs.writeFileSync(fd, `${JSON.stringify({ schema: 'sks.triwiki-proof-bank-lock.v1', pid: process.pid, acquired_at: new Date().toISOString(), stale_after_ms: staleAfterMs }, null, 2)}\n`);
+      fs.closeSync(fd);
+      break;
+    } catch (err) {
+      if (isLockStale(lockFile, staleAfterMs)) {
+        try { fs.rmSync(lockFile, { force: true }); } catch {}
+        continue;
+      }
+      if (Date.now() - started > staleAfterMs * 2) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    try { fs.rmSync(lockFile, { force: true }); } catch {}
+  }
+}
+
+function isLockStale(file: string, staleAfterMs: number): boolean {
+  try {
+    const stat = fs.statSync(file);
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as { pid?: number };
+    const pidAlive = typeof raw.pid === 'number' && process.kill(raw.pid, 0) !== undefined;
+    return !pidAlive || Date.now() - stat.mtimeMs > staleAfterMs;
+  } catch {
+    try {
+      const stat = fs.statSync(file);
+      return Date.now() - stat.mtimeMs > staleAfterMs;
+    } catch {
+      return true;
+    }
+  }
 }
 
 function walkJson(dir: string): string[] {

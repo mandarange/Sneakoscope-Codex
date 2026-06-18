@@ -8,6 +8,7 @@ import { readReleaseGateCacheRecord, releaseGateProofBankFile, writeReleaseGateC
 import { RELEASE_GATE_NODE_SCHEMA, validateReleaseGateManifest, type ReleaseGateManifestV2, type ReleaseGateNode } from './release-gate-node.js'
 import { countReleaseGateResources, defaultReleaseGateBudget, summarizeReleaseGateBudget, type ReleaseGateBudget } from './release-gate-resource-governor.js'
 import { selectAffectedReleaseGates, type ReleaseGateAffectedSelection } from './release-gate-affected-selector.js'
+import { computeTriWikiAffectedGraph, type TriWikiAffectedGraph } from '../triwiki/triwiki-affected-graph.js'
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { rmrf } from '../fsx.js'
@@ -42,6 +43,7 @@ export interface ReleaseGateDagRunResult {
   affected_graph: ReleaseGateAffectedGraph
   completion_certificate: ReleaseGateCompletionCertificate
   retention?: ReleaseGateRunRetention
+  triwiki_affected_graph?: TriWikiAffectedGraph | null
 }
 
 export interface ReleaseGateAffectedGraph {
@@ -104,12 +106,18 @@ export async function runReleaseGateDag(input: {
   changedSince?: string | null
   full?: boolean
   slaMs?: number | null
+  triwiki?: boolean
+  useTriWikiProofBank?: boolean
+  useGatePacks?: boolean
 }): Promise<ReleaseGateDagRunResult> {
   const root = path.resolve(input.root)
   const preset = input.preset || 'release'
   const manifest = loadReleaseGateManifest(root)
   const presetGates = selectReleaseGatePreset(manifest, preset)
-  const affected = (preset === 'affected' || preset === 'fast') && input.full !== true
+  const triwikiGraph = input.triwiki !== false && (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
+    ? computeTriWikiAffectedGraph({ root, tier: preset === 'fast' ? 'affected' : 'confidence', changedSince: input.changedSince || 'auto' })
+    : null
+  const affected = (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
     ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', preset })
     : selectAffectedReleaseGates(root, manifest, presetGates, { full: true, preset })
   const selected = affected.gates
@@ -190,7 +198,8 @@ export async function runReleaseGateDag(input: {
       report_dir: reportDir,
       failures,
       affected_graph: affectedGraph,
-      completion_certificate: completionCertificate
+      completion_certificate: completionCertificate,
+      triwiki_affected_graph: triwikiGraph
     }
     if (!finished) {
       snapshot.in_progress = true
@@ -199,6 +208,7 @@ export async function runReleaseGateDag(input: {
     }
     writeReleaseGateJson(path.join(reportDir, 'summary.json'), snapshot)
     writeReleaseGateJson(affectedGraphFile, affectedGraph)
+    if (triwikiGraph) writeReleaseGateJson(path.join(reportDir, 'triwiki-affected-graph.json'), triwikiGraph)
     writeReleaseGateJson(completionCertificateFile, completionCertificate)
     if (finished) {
       writeReleaseGateJson(path.join(root, '.sneakoscope', 'reports', 'affected-gate-graph.json'), affectedGraph)

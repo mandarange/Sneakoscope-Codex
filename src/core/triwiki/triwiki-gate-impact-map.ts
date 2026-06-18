@@ -12,6 +12,11 @@ export interface TriWikiGateImpact {
   gate_pack: string;
   cache_inputs: string[];
   resources: string[];
+  semantic_dependencies: string[];
+  fixture_dependencies: string[];
+  resource_class: string[];
+  expected_duration_ms_p50: number;
+  expected_duration_ms_p95: number;
   orphan: boolean;
   command: string;
 }
@@ -21,7 +26,9 @@ export interface TriWikiGateImpactMap {
   root: string;
   gate_count: number;
   orphan_count: number;
+  package_script_orphan_count: number;
   impacts: TriWikiGateImpact[];
+  package_script_orphans: string[];
 }
 
 export function buildTriWikiGateImpactMap(root: string, cards: TriWikiModuleCard[] = DEFAULT_TRIWIKI_MODULE_CARDS): TriWikiGateImpactMap {
@@ -35,17 +42,27 @@ export function buildTriWikiGateImpactMap(root: string, cards: TriWikiModuleCard
       gate_pack: gatePackForGate(gate, modules, cards),
       cache_inputs: gate.cache.inputs,
       resources: gate.resource,
+      semantic_dependencies: semanticDependenciesForGate(gate),
+      fixture_dependencies: fixtureDependenciesForGate(gate),
+      resource_class: gate.resource,
+      expected_duration_ms_p50: expectedDurationForGate(gate, 0.5),
+      expected_duration_ms_p95: expectedDurationForGate(gate, 0.95),
       orphan: !scriptExistsForGateCommand(gate.command, scripts),
       command: gate.command
     };
   });
-  return {
+  const packageScriptOrphans = findPackageScriptOrphans(manifest, scripts);
+  const map: TriWikiGateImpactMap = {
     schema: TRIWIKI_GATE_IMPACT_MAP_SCHEMA,
     root,
     gate_count: impacts.length,
     orphan_count: impacts.filter((impact) => impact.orphan).length,
-    impacts
+    package_script_orphan_count: packageScriptOrphans.length,
+    impacts,
+    package_script_orphans: packageScriptOrphans
   };
+  writeImpactMap(root, map);
+  return map;
 }
 
 export function loadReleaseGateManifest(root: string): ReleaseGateManifestV2 {
@@ -72,6 +89,8 @@ export function modulesForGate(gate: ReleaseGateNode, cards: TriWikiModuleCard[]
 }
 
 export function gatePackForGate(gate: ReleaseGateNode, modules: string[], cards: TriWikiModuleCard[] = DEFAULT_TRIWIKI_MODULE_CARDS): string {
+  const explicitPack = (gate as ReleaseGateNode & { x_sks_pack?: string }).x_sks_pack;
+  if (explicitPack) return explicitPack;
   if (gate.id.startsWith('triwiki:')) return 'triwiki';
   if (gate.id.startsWith('gate-pack:') || gate.id.startsWith('release:')) return 'release-parity';
   if (gate.id.startsWith('doctor:')) return 'doctor-production';
@@ -92,4 +111,38 @@ function inputMatches(pattern: string, input: string): boolean {
   const cleanPattern = pattern.replace(/\/\*\*$/, '');
   const cleanInput = input.replace(/\/\*\*.*$/, '');
   return cleanInput === cleanPattern || cleanInput.startsWith(`${cleanPattern}/`);
+}
+
+function semanticDependenciesForGate(gate: ReleaseGateNode): string[] {
+  const deps = new Set<string>(gate.deps || []);
+  for (const input of gate.cache.inputs || []) {
+    if (input.includes('package')) deps.add('package-metadata');
+    if (input.includes('release-gates')) deps.add('release-gate-manifest');
+    if (input.includes('src/core/triwiki')) deps.add('triwiki-runtime');
+  }
+  return [...deps].sort();
+}
+
+function fixtureDependenciesForGate(gate: ReleaseGateNode): string[] {
+  return (gate.cache.inputs || []).filter((input) => input.includes('fixture') || input.includes('test/')).sort();
+}
+
+function expectedDurationForGate(gate: ReleaseGateNode, quantile: 0.5 | 0.95): number {
+  const resources = new Set(gate.resource || []);
+  const base = resources.has('cpu-heavy') ? 45_000 : resources.has('remote-model-real') ? 90_000 : 12_000;
+  return quantile === 0.95 ? Math.round(base * 2.5) : base;
+}
+
+function findPackageScriptOrphans(manifest: ReleaseGateManifestV2, scripts: Record<string, string>): string[] {
+  const releaseScripts = new Set(manifest.gates.map((gate) => gate.command.match(/^npm run ([^ ]+)/)?.[1]).filter((value): value is string => Boolean(value)));
+  return Object.keys(scripts)
+    .filter((name) => /^(triwiki|gate-pack|scheduler|release|doctor|legacy|orphan|sks:401|certificate|build-once|sksd|probes):/.test(name))
+    .filter((name) => !releaseScripts.has(name))
+    .sort();
+}
+
+function writeImpactMap(root: string, map: TriWikiGateImpactMap): void {
+  const file = path.join(root, '.sneakoscope', 'reports', 'triwiki-gate-impact-map.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(map, null, 2)}\n`);
 }
