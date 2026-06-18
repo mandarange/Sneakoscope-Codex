@@ -3,6 +3,21 @@
 ## [Unreleased]
 
 
+## [4.0.10] - 2026-06-19
+
+### Fixed
+
+- Added a GLM Naruto patch-candidate gate for `<sks_patch_candidate>` envelopes, including diff extraction, protected-path checks, secret checks, and `git apply --check`.
+- Made canonical Naruto stop-gate allow decisions final for Naruto-family routes so hidden proof/reflection gates cannot block after `allow_stop`.
+- Preserved route-native `naruto-gate.json`/termination details while writing canonical `stop-gate.json` separately.
+- Hardened GLM Naruto verifier workers with model guard and schema-validated JSON output.
+- Added worker-local request, stream, patch, gate, and termination artifacts before aggregate mission artifact writes.
+- Added typed OpenRouter stream idle timeouts, structural GLM request cache keys, hunk-level conflict detection, combined patch apply-check, and GLM Naruto artifact secret audit.
+
+### Compatibility
+
+- CI/CD, GitHub Actions, publish workflow, and release automation files are unchanged.
+
 
 
 ## [4.0.8] - 2026-06-19

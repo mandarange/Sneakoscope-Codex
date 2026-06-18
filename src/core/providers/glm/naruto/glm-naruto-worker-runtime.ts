@@ -8,14 +8,18 @@ import { encodeGlmRequestWithCache } from '../glm-request-cache.js';
 import { parsePatchCandidateOutput, createPatchEnvelope, digestPatch } from './glm-naruto-patch-envelope.js';
 import type { GlmNarutoShard, GlmNarutoPatchEnvelope, GlmNarutoWorkerTrace, GlmNarutoReasoningEffort } from './glm-naruto-types.js';
 import type { OpenRouterChatMessage } from '../../openrouter/openrouter-types.js';
+import { parseGlmNarutoVerifierOutput } from './glm-naruto-verifier-output.js';
+import { writeGlmNarutoWorkerArtifacts } from './glm-naruto-worker-artifacts.js';
 
 export interface WorkerRunInput {
   readonly apiKey: string;
   readonly missionId: string;
   readonly workerId: string;
+  readonly root?: string;
   readonly shard: GlmNarutoShard;
   readonly contextSummary: string;
   readonly timeoutMs: number;
+  readonly fetchImpl?: typeof fetch;
 }
 
 export interface WorkerRunResult {
@@ -29,6 +33,7 @@ const STABLE_SYSTEM_PREFIX = `You are a SKS GLM Naruto patch worker. Model lock:
 
 export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunResult> {
   const started = Date.now();
+  const artifactRoot = input.root ?? process.cwd();
   const sessionId = `sks-glm-naruto-${input.missionId}-${input.workerId}`;
   const reasoningEffort: GlmNarutoReasoningEffort = input.shard.reasoning;
 
@@ -58,7 +63,38 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
   });
 
   const requestWithSession = { ...request, session_id: sessionId };
-  const encoded = encodeGlmRequestWithCache(requestWithSession);
+  const stablePrefixDigest = crypto.createHash('sha256').update(STABLE_SYSTEM_PREFIX).digest('hex');
+  const shardSuffixDigest = crypto.createHash('sha256').update(shardSuffix).digest('hex');
+  const encoded = encodeGlmRequestWithCache({
+    request: requestWithSession,
+    cacheKeyParts: {
+      model: requestWithSession.model,
+      profile: 'glm-naruto-worker-speed',
+      stable_prefix_digest: stablePrefixDigest,
+      shard_suffix_digest: shardSuffixDigest,
+      tools_digest: requestWithSession.tools ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.tools)).digest('hex') : null,
+      response_format_digest: requestWithSession.response_format ? crypto.createHash('sha256').update(JSON.stringify(requestWithSession.response_format)).digest('hex') : null,
+      provider_digest: crypto.createHash('sha256').update(JSON.stringify(requestWithSession.provider ?? null)).digest('hex'),
+      session_id: sessionId
+    }
+  });
+  await writeGlmNarutoWorkerArtifacts({
+    root: artifactRoot,
+    missionId: input.missionId,
+    workerId: input.workerId,
+    shardId: input.shard.id,
+    requestSummary: {
+      model: requestWithSession.model,
+      provider: 'openrouter',
+      session_id: sessionId,
+      request_body_sha256: encoded.entry.bodySha256,
+      request_body_size: encoded.entry.byteLength,
+      request_body_stored: encoded.entry.bodyStored,
+      cache_hit: encoded.cacheHit,
+      stable_prefix_digest: stablePrefixDigest,
+      shard_suffix_digest: shardSuffixDigest
+    }
+  }).catch(() => undefined);
 
   const traceBase: GlmNarutoWorkerTrace = {
     worker_id: input.workerId,
@@ -80,13 +116,23 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
       apiKey: input.apiKey,
       request: requestWithSession,
       timeoutMs: input.timeoutMs,
-      idleTimeoutMs: 60_000
+      idleTimeoutMs: 60_000,
+      ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {})
     });
 
     if (!response.ok) {
+      const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed' };
+      await writeGlmNarutoWorkerArtifacts({
+        root: artifactRoot,
+        missionId: input.missionId,
+        workerId: input.workerId,
+        shardId: input.shard.id,
+        streamTrace: trace,
+        termination: { status: 'failed', ok: false, error: response.error.code }
+      }).catch(() => undefined);
       return {
         envelope: null,
-        trace: { ...traceBase, total_ms: Date.now() - started, status: 'failed' },
+        trace,
         ok: false,
         error: response.error.code
       };
@@ -94,9 +140,18 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
 
     const modelGuard = assertGlm52ActualModel(response.value.model);
     if (!modelGuard.ok) {
+      const trace = { ...traceBase, total_ms: Date.now() - started, status: 'blocked' };
+      await writeGlmNarutoWorkerArtifacts({
+        root: artifactRoot,
+        missionId: input.missionId,
+        workerId: input.workerId,
+        shardId: input.shard.id,
+        streamTrace: trace,
+        termination: { status: 'blocked', ok: false, error: `model_guard:${modelGuard.code}` }
+      }).catch(() => undefined);
       return {
         envelope: null,
-        trace: { ...traceBase, total_ms: Date.now() - started, status: 'blocked' },
+        trace,
         ok: false,
         error: `model_guard:${modelGuard.code}`
       };
@@ -105,14 +160,23 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
     const parsed = parsePatchCandidateOutput(response.value.content);
 
     if (parsed.kind !== 'patch') {
+      const trace = {
+        ...traceBase,
+        ttft_ms: response.value.ttft_ms,
+        total_ms: Date.now() - started,
+        status: parsed.kind === 'blocked' ? 'blocked' : 'no_patch'
+      };
+      await writeGlmNarutoWorkerArtifacts({
+        root: artifactRoot,
+        missionId: input.missionId,
+        workerId: input.workerId,
+        shardId: input.shard.id,
+        streamTrace: trace,
+        termination: { status: trace.status, ok: false, error: parsed.kind }
+      }).catch(() => undefined);
       return {
         envelope: null,
-        trace: {
-          ...traceBase,
-          ttft_ms: response.value.ttft_ms,
-          total_ms: Date.now() - started,
-          status: parsed.kind === 'blocked' ? 'blocked' : 'no_patch'
-        },
+        trace,
         ok: false,
         error: parsed.kind
       };
@@ -136,11 +200,38 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
       status: 'completed'
     };
 
+    await writeGlmNarutoWorkerArtifacts({
+      root: artifactRoot,
+      missionId: input.missionId,
+      workerId: input.workerId,
+      shardId: input.shard.id,
+      streamTrace: trace,
+      patchEnvelope: envelope,
+      gateResult: {
+        schema: 'sks.glm-naruto-worker-gate-result.v1',
+        worker_id: input.workerId,
+        shard_id: input.shard.id,
+        status: 'pending_orchestrator_gate',
+        ok: false,
+        reason: 'deterministic_gate_runs_in_orchestrator_with_repo_cwd'
+      },
+      termination: { status: 'completed', ok: true }
+    }).catch(() => undefined);
+
     return { envelope, trace, ok: true };
   } catch (err) {
+    const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed' };
+    await writeGlmNarutoWorkerArtifacts({
+      root: artifactRoot,
+      missionId: input.missionId,
+      workerId: input.workerId,
+      shardId: input.shard.id,
+      streamTrace: trace,
+      termination: { status: 'failed', ok: false, error: err instanceof Error ? err.message : String(err) }
+    }).catch(() => undefined);
     return {
       envelope: null,
-      trace: { ...traceBase, total_ms: Date.now() - started, status: 'failed' },
+      trace,
       ok: false,
       error: err instanceof Error ? err.message : String(err)
     };
@@ -153,11 +244,12 @@ export async function runVerifierWorker(input: {
   readonly workerId: string;
   readonly envelope: GlmNarutoPatchEnvelope;
   readonly timeoutMs: number;
+  readonly fetchImpl?: typeof fetch;
 }): Promise<{ ok: boolean; trace: GlmNarutoWorkerTrace; issues: readonly string[] }> {
   const started = Date.now();
   const sessionId = `sks-glm-naruto-verify-${input.missionId}-${input.workerId}`;
   const messages: OpenRouterChatMessage[] = [
-    { role: 'system', content: `You are a SKS GLM Naruto verifier. Model: ${GLM_52_OPENROUTER_MODEL}. No GPT fallback. Check if the patch is correct and safe. Output JSON: {"ok":true/false,"issues":["..."]}` },
+    { role: 'system', content: `You are a SKS GLM Naruto verifier. Model: ${GLM_52_OPENROUTER_MODEL}. No GPT fallback. Return only JSON with schema "sks.glm-naruto-verifier-output.v1", ok boolean, issues string array, risk_score number 0..1, confidence number 0..1. Do not include markdown.` },
     { role: 'user', content: JSON.stringify({ patch_sha256: input.envelope.patch_sha256, target_paths: input.envelope.target_paths, patch: input.envelope.patch.slice(0, 4000) }) }
   ];
 
@@ -166,7 +258,8 @@ export async function runVerifierWorker(input: {
     messages,
     maxTokens: 2048,
     toolChoice: 'none',
-    parallelToolCalls: false
+    parallelToolCalls: false,
+    providerSort: 'throughput'
   });
 
   try {
@@ -174,7 +267,8 @@ export async function runVerifierWorker(input: {
       apiKey: input.apiKey,
       request: { ...request, session_id: sessionId },
       timeoutMs: input.timeoutMs,
-      idleTimeoutMs: 60_000
+      idleTimeoutMs: 60_000,
+      ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {})
     });
 
     if (!response.ok) {
@@ -198,6 +292,71 @@ export async function runVerifierWorker(input: {
       };
     }
 
+    const modelGuard = assertGlm52ActualModel(response.value.model);
+    if (!modelGuard.ok) {
+      return {
+        ok: false,
+        trace: {
+          worker_id: input.workerId,
+          shard_id: input.envelope.shard_id,
+          strategy: 'minimal_patch',
+          model: GLM_52_OPENROUTER_MODEL,
+          provider: 'openrouter',
+          session_id: sessionId,
+          ttft_ms: response.value.ttft_ms,
+          total_ms: Date.now() - started,
+          request_cache_hit: false,
+          output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
+          patch_digest: input.envelope.patch_sha256,
+          status: 'verification_failed'
+        },
+        issues: [`model_guard:${modelGuard.code}`]
+      };
+    }
+
+    const parsed = parseGlmNarutoVerifierOutput(response.value.content);
+    if (!parsed.ok || !parsed.output) {
+      return {
+        ok: false,
+        trace: {
+          worker_id: input.workerId,
+          shard_id: input.envelope.shard_id,
+          strategy: 'minimal_patch',
+          model: GLM_52_OPENROUTER_MODEL,
+          provider: 'openrouter',
+          session_id: sessionId,
+          ttft_ms: response.value.ttft_ms,
+          total_ms: Date.now() - started,
+          request_cache_hit: false,
+          output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
+          patch_digest: input.envelope.patch_sha256,
+          status: 'verification_failed'
+        },
+        issues: parsed.issues
+      };
+    }
+
+    if (!parsed.output.ok) {
+      return {
+        ok: false,
+        trace: {
+          worker_id: input.workerId,
+          shard_id: input.envelope.shard_id,
+          strategy: 'minimal_patch',
+          model: GLM_52_OPENROUTER_MODEL,
+          provider: 'openrouter',
+          session_id: sessionId,
+          ttft_ms: response.value.ttft_ms,
+          total_ms: Date.now() - started,
+          request_cache_hit: false,
+          output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
+          patch_digest: input.envelope.patch_sha256,
+          status: 'verification_failed'
+        },
+        issues: parsed.output.issues
+      };
+    }
+
     return {
       ok: true,
       trace: {
@@ -212,7 +371,7 @@ export async function runVerifierWorker(input: {
         request_cache_hit: false,
         output_digest: crypto.createHash('sha256').update(response.value.content).digest('hex'),
         patch_digest: input.envelope.patch_sha256,
-        status: 'completed'
+        status: 'verification_passed'
       },
       issues: []
     };

@@ -28,6 +28,17 @@ export interface OpenRouterStreamResult {
   readonly real_stream: boolean;
 }
 
+export class GlmStreamIdleTimeout extends Error {
+  readonly code: 'glm_stream_idle_timeout' | 'glm_stream_idle_timeout_after_ttft';
+
+  constructor(afterTtft: boolean) {
+    const code = afterTtft ? 'glm_stream_idle_timeout_after_ttft' : 'glm_stream_idle_timeout';
+    super(code);
+    this.name = 'GlmStreamIdleTimeout';
+    this.code = code;
+  }
+}
+
 export async function sendOpenRouterChatCompletionStream(input: {
   readonly apiKey: string;
   readonly request: OpenRouterChatCompletionRequest;
@@ -67,12 +78,13 @@ export async function sendOpenRouterChatCompletionStream(input: {
     return { ok: true, value: parseOpenRouterStreamText(text, started, false) };
   } catch (err: unknown) {
     if (timeout) clearTimeout(timeout);
-    if (err instanceof Error && (err.name === 'AbortError' || err.message === 'glm_stream_idle_timeout' || err.message === 'glm_stream_idle_timeout_after_ttft')) {
-      const isIdle = err.message.startsWith('glm_stream_idle');
+    if (err instanceof Error && (err.name === 'AbortError' || err instanceof GlmStreamIdleTimeout || err.message === 'glm_stream_idle_timeout' || err.message === 'glm_stream_idle_timeout_after_ttft')) {
+      const code = err instanceof GlmStreamIdleTimeout ? err.code : err.message;
+      const isIdle = code.startsWith('glm_stream_idle');
       return {
         ok: false,
         error: {
-          code: isIdle ? (err.message as string) : 'glm_request_timeout',
+          code: isIdle ? code : 'glm_request_timeout',
           message: isIdle ? `OpenRouter stream idle timeout after ${input.idleTimeoutMs || 0}ms.` : `OpenRouter stream aborted after ${input.timeoutMs || 'external'}ms.`,
           severity: 'failed'
         }
@@ -103,18 +115,21 @@ async function readRealStream(body: ReadableStream<Uint8Array>, startedAtMs: num
 
   try {
     while (true) {
-      // 4.0.9: Idle timeout between chunks — abort if stream stalls.
       const readPromise = reader.read();
       let idleTimer: ReturnType<typeof setTimeout> | null = null;
-      if (idleTimeoutMs && idleTimeoutMs > 0) {
-        idleTimer = setTimeout(() => {
-          const code = ttft === null ? 'glm_stream_idle_timeout' : 'glm_stream_idle_timeout_after_ttft';
-          reader.cancel(code).catch(() => undefined);
-        }, idleTimeoutMs);
-      }
       let result;
       try {
-        result = await readPromise;
+        result = idleTimeoutMs && idleTimeoutMs > 0
+          ? await Promise.race([
+              readPromise,
+              new Promise<never>((_, reject) => {
+                idleTimer = setTimeout(() => reject(new GlmStreamIdleTimeout(ttft !== null)), idleTimeoutMs);
+              })
+            ])
+          : await readPromise;
+      } catch (err) {
+        if (err instanceof GlmStreamIdleTimeout) await reader.cancel(err.code).catch(() => undefined);
+        throw err;
       } finally {
         if (idleTimer) clearTimeout(idleTimer);
       }
