@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.1 keeps release proof truth aligned with the 4.0.1 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, TriWiki proof-bank invalidation material, and actual SLA execution metrics required for the next publication after 4.0.0.
+
+SKS 4.0.1 release proof truth also requires TriWiki-first affected graph evidence, gate-pack shared fixture evidence, executable scheduler evidence, semantic doctor dirty repair evidence, optional sksd warming evidence, orphan gate detection, and legacy alias purge evidence to be present in the release graph before publication.
+
 SKS 4.0.0 keeps release proof truth aligned with the 4.0.0 package metadata, built output, release stamp, provenance, and npm unpublished-version evidence required for the next publication after 3.1.16.
 
 SKS 4.0.0 release proof truth also requires TriWiki proof bank evidence, affected graph evidence, gate-pack runner evidence, five-minute SLA certificate evidence, doctor dirty repair evidence, orphan gate detection, and legacy alias purge evidence to be present in the release graph before publication.

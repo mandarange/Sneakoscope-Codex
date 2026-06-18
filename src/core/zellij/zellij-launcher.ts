@@ -24,6 +24,13 @@ export interface ZellijLaunchOptions {
   codexBin?: string
   codexArgs?: readonly unknown[]
   launchEnv?: Record<string, unknown>
+  // When true, kill any pre-existing session with this name before (re)creating
+  // it so the launch starts from a clean main-only layout. Without this, a stable
+  // per-cwd session name (e.g. `sks-mad-<cwd>`) is reused across runs and each new
+  // mission splits ANOTHER `--direction right` SLOTS column onto the already
+  // populated session, fragmenting the screen into side-by-side columns. Opt out
+  // at runtime with SKS_ZELLIJ_KEEP_SESSION=1.
+  freshSession?: boolean
 }
 
 export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
@@ -54,6 +61,18 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path, ...clipboard.optionFlags]
   const attachCommand = ['attach', sessionName]
   const zellijEnv = resolveZellijProcessEnvMeta()
+  // Reset a stale same-named session before recreating it so the launch starts
+  // main-only. `attach --create-background` is idempotent and otherwise reuses an
+  // existing session, causing each run to pile another right-split SLOTS column
+  // onto leftover panes from prior missions. Skipped on dry-run, when zellij is
+  // unavailable, or when the user opts out with SKS_ZELLIJ_KEEP_SESSION=1.
+  const resetSession = opts.freshSession === true
+    && opts.dryRun !== true
+    && capability.status === 'ok'
+    && process.env.SKS_ZELLIJ_KEEP_SESSION !== '1'
+  const sessionReset = resetSession
+    ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, timeoutMs: 5000, optional: true })
+    : null
   const launch: any = opts.dryRun === true || capability.status !== 'ok'
     ? null
     : {
@@ -120,6 +139,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     dry_run: opts.dryRun === true,
     capability,
     launch,
+    session_reset: sessionReset,
     blockers,
     warnings: [
       ...capability.warnings,

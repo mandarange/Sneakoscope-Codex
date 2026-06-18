@@ -38,6 +38,9 @@ const report = {
     mission_id: defaultRun.mission_id,
     fast_mode: defaultRun.fast_mode_policy?.fast_mode,
     service_tier: defaultRun.fast_mode_policy?.service_tier,
+    preference_mode: defaultRun.fast_mode_policy?.preference_mode,
+    explicit_fast: defaultRun.fast_mode_policy?.explicit_fast,
+    explicit_service_tier: defaultRun.fast_mode_policy?.explicit_service_tier,
     worker_report_count: defaultRun.fast_mode_propagation?.worker_process_report_count
   },
   no_fast: {
@@ -64,8 +67,12 @@ fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 
 assertGate(defaultRun.ok === true, 'default agent run must pass', report);
-assertGate(defaultRun.fast_mode_policy?.fast_mode === false, 'default run must not force fast_mode true', report);
-assertGate(defaultRun.fast_mode_policy?.service_tier === 'standard', 'default run must record service_tier standard', report);
+assertGate(defaultRun.fast_mode_policy?.explicit_fast === false && defaultRun.fast_mode_policy?.explicit_service_tier === null, 'default run must not use explicit fast/service-tier flags', report);
+if (defaultRun.fast_mode_policy?.preference_mode === 'fast') {
+  assertGate(defaultRun.fast_mode_policy?.fast_mode === true && defaultRun.fast_mode_policy?.service_tier === 'fast', 'default run must honor saved fast preference', report);
+} else {
+  assertGate(defaultRun.fast_mode_policy?.fast_mode === false && defaultRun.fast_mode_policy?.service_tier === 'standard', 'default run without saved fast preference must record service_tier standard', report);
+}
 assertGate(fastRun.fast_mode_policy?.fast_mode === true, '--fast must enable fast mode', report);
 assertGate(fastRun.fast_mode_policy?.service_tier === 'fast', '--fast must record service_tier fast', report);
 assertGate(fastRun.fast_mode_propagation?.worker_process_report_count >= 2, 'worker process reports must record explicit fast mode', report);

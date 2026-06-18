@@ -182,7 +182,7 @@ export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, du
     inputs: gate.cache.inputs,
     implementationFiles: ['release-gates.v2.json', `src/scripts/${gate.id.replace(/[:]/g, '-')}-check.ts`],
     envAllowlist: ['CI', 'SKS_FAST_MODE', 'SKS_RELEASE_PRESET'],
-    fixtureVersion: 'sks-4.0.0',
+    fixtureVersion: 'sks-4.0.1',
     salt: key
   })
   writeTriWikiProofCard(root, createTriWikiProofCard({
@@ -191,6 +191,11 @@ export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, du
     cache_key: key,
     input_hash: triKey.input_hash,
     implementation_hash: triKey.implementation_hash,
+    gate_impl_hash: triKey.implementation_hash,
+    package_lock_hash: triKey.package_lock_hash,
+    release_gates_hash: triKey.release_gates_hash,
+    env_allowlist_hash: triKey.env_allowlist_hash,
+    tool_versions: triKey.tool_versions,
     tool_version: triKey.tool_version,
     fixture_version: triKey.fixture_version,
     result: 'passed',

@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-06-18
+
+### Added
+
+- TriWiki-first release runner integration.
+- Real gate pack shared-fixture parallel runner.
+- Executable extreme scheduler.
+- Semantic doctor dirty repair.
+- Real sksd daemon/IPC cache warmer.
+- Actual SLA certificate.
+
+### Fixed
+
+- Proof bank cards now include full invalidation material.
+- Gate packs no longer execute all gates sequentially with repeated setup.
+- Doctor dirty repair no longer trusts stale marker files.
+- Legacy/orphan gates fail release unless purged or explicitly documented.
+- 5-minute confidence tier uses actual executed/reused proof metrics.
+
 ## [4.0.0] - 2026-06-18
 
 - Add the TriWiki proof bank, proof cards, cache keys, module cards, gate impact maps, affected graphs, and SLA certificates for reusable affected-scope release proof.

@@ -10,6 +10,7 @@ export interface TriWikiCacheKeyInput {
   inputs: string[];
   implementationFiles?: string[];
   toolVersion?: string;
+  toolVersions?: Record<string, string>;
   envAllowlist?: string[];
   fixtureVersion?: string;
   salt?: string;
@@ -22,11 +23,15 @@ export interface TriWikiCacheKey {
   input_hash: string;
   implementation_hash: string;
   package_lock_hash: string;
+  release_gates_hash: string;
   env_allowlist_hash: string;
   fixture_version: string;
   tool_version: string;
+  tool_versions: Record<string, string>;
   file_count: number;
   missing_inputs: string[];
+  redacted_env_keys: string[];
+  unsupported_globs: string[];
 }
 
 const DEFAULT_EXCLUDED_DIRS = new Set([
@@ -44,9 +49,12 @@ export function computeTriWikiCacheKey(input: TriWikiCacheKeyInput): TriWikiCach
   const sourceFiles = collectInputFiles(root, input.inputs);
   const implementationFiles = collectInputFiles(root, input.implementationFiles || []);
   const packageLock = hashPathIfPresent(root, 'package-lock.json');
-  const envHash = hashJson(envFingerprint(input.envAllowlist || []));
+  const releaseGates = hashPathIfPresent(root, 'release-gates.v2.json');
+  const env = envFingerprint(input.envAllowlist || []);
+  const envHash = hashJson(env.records);
   const fixtureVersion = input.fixtureVersion || 'fixture-v1';
   const toolVersion = input.toolVersion || readPackageVersion(root);
+  const toolVersions = { sks: toolVersion, ...(input.toolVersions || {}) };
   const inputHash = hashJson(sourceFiles.records);
   const implementationHash = hashJson(implementationFiles.records);
   const key = hashJson({
@@ -55,9 +63,10 @@ export function computeTriWikiCacheKey(input: TriWikiCacheKeyInput): TriWikiCach
     input_hash: inputHash,
     implementation_hash: implementationHash,
     package_lock_hash: packageLock.hash,
+    release_gates_hash: releaseGates.hash,
     env_allowlist_hash: envHash,
     fixture_version: fixtureVersion,
-    tool_version: toolVersion,
+    tool_versions: toolVersions,
     salt: input.salt || ''
   });
   return {
@@ -67,11 +76,15 @@ export function computeTriWikiCacheKey(input: TriWikiCacheKeyInput): TriWikiCach
     input_hash: inputHash,
     implementation_hash: implementationHash,
     package_lock_hash: packageLock.hash,
+    release_gates_hash: releaseGates.hash,
     env_allowlist_hash: envHash,
     fixture_version: fixtureVersion,
     tool_version: toolVersion,
+    tool_versions: toolVersions,
     file_count: sourceFiles.records.length,
-    missing_inputs: [...sourceFiles.missing, ...packageLock.missing]
+    missing_inputs: [...sourceFiles.missing, ...packageLock.missing, ...releaseGates.missing],
+    redacted_env_keys: env.redacted_keys,
+    unsupported_globs: [...sourceFiles.unsupported, ...implementationFiles.unsupported]
   };
 }
 
@@ -83,10 +96,15 @@ export function hashJson(value: unknown): string {
   return hashText(JSON.stringify(value, stableJsonReplacer));
 }
 
-export function collectInputFiles(root: string, patterns: string[]): { records: Array<{ path: string; hash: string; size: number; mode: string }>; missing: string[] } {
+export function collectInputFiles(root: string, patterns: string[]): { records: Array<{ path: string; hash: string; size: number; mode: string }>; missing: string[]; unsupported: string[] } {
   const files = new Set<string>();
   const missing: string[] = [];
+  const unsupported: string[] = [];
   for (const pattern of patterns) {
+    if (/[{}]/.test(pattern)) {
+      unsupported.push(`unsupported_brace_glob:${pattern}`);
+      continue;
+    }
     const matches = expandInputPattern(root, pattern);
     if (!matches.length) {
       const literal = path.resolve(root, pattern);
@@ -102,7 +120,7 @@ export function collectInputFiles(root: string, patterns: string[]): { records: 
     if (hashed.missing.length) missing.push(rel);
     else if (hashed.record) records.push(hashed.record);
   }
-  return { records, missing: [...new Set(missing)].sort() };
+  return { records, missing: [...new Set(missing)].sort(), unsupported: [...new Set(unsupported)].sort() };
 }
 
 function expandInputPattern(root: string, pattern: string): string[] {
@@ -177,7 +195,9 @@ function hashPathIfPresent(root: string, rel: string): { hash: string; missing: 
   }
   if (stat.isSymbolicLink()) {
     const target = fs.readlinkSync(absolute);
-    const hash = hashJson({ rel, target, mode });
+    const resolved = path.resolve(path.dirname(absolute), target);
+    const outsideRoot = !resolved.startsWith(path.resolve(root) + path.sep);
+    const hash = hashJson({ rel, target, mode, outside_root: outsideRoot });
     return { hash, missing: [], record: { path: normalizePattern(rel), hash, size: target.length, mode } };
   }
   const hash = hashFileChunked(absolute, stat.size);
@@ -206,15 +226,19 @@ function hashFileChunked(file: string, size: number): string {
   return h.digest('hex');
 }
 
-function envFingerprint(keys: string[]): Array<{ key: string; present: boolean; fingerprint: string }> {
-  return [...new Set(keys)].sort().map((key) => {
+function envFingerprint(keys: string[]): { records: Array<{ key: string; present: boolean; fingerprint: string }>; redacted_keys: string[] } {
+  const redacted: string[] = [];
+  const records = [...new Set(keys)].sort().map((key) => {
     const value = process.env[key];
+    const secret = /SECRET|TOKEN|PASSWORD|KEY|CREDENTIAL/i.test(key);
+    if (secret) redacted.push(key);
     return {
       key,
       present: value !== undefined,
-      fingerprint: value === undefined ? 'missing' : hashText(`${key}:${value}`)
+      fingerprint: value === undefined ? 'missing' : secret ? 'redacted-secret' : hashText(`${key}:${hashText(value)}`)
     };
   });
+  return { records, redacted_keys: redacted };
 }
 
 function readPackageVersion(root: string): string {

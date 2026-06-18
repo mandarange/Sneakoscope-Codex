@@ -939,15 +939,15 @@
     },
     {
       "file": "src/core/triwiki/triwiki-proof-bank.ts",
-      "symbol": "writeTriWikiProofCard",
+      "symbol": "atomicWriteJson",
       "token": "writeFileSync",
-      "reason": "TriWiki proof bank writer persists scoped reusable proof-card JSON under the configured proof bank directory."
+      "reason": "TriWiki proof bank atomic JSON writer persists scoped proof-card, invalidation, and status files under the configured proof bank directory."
     },
     {
       "file": "src/core/triwiki/triwiki-proof-bank.ts",
-      "symbol": "markTriWikiProofInvalidated",
-      "token": "writeFileSync",
-      "reason": "TriWiki proof invalidation writer persists scoped invalidation tombstones under the configured proof bank directory."
+      "symbol": "withSubjectLock",
+      "token": "rmSync",
+      "reason": "TriWiki proof bank lock cleanup removes only stale or released scoped lock files under the proof-bank lock directory."
     },
     {
       "file": "src/core/triwiki/triwiki-proof-bank.ts",
@@ -1038,6 +1038,78 @@
       "symbol": "markPendingHookResolved",
       "token": "fs.rm",
       "reason": "MAD-DB result lifecycle removes only the scoped latest pending-hook pointer after terminal result ledger resolution."
+    },
+    {
+      "file": "src/core/daemon/sksd-ipc.ts",
+      "symbol": "writeSksdIpcMessage",
+      "token": "writeFileSync",
+      "reason": "SKSD IPC writer persists only a scoped single-action JSON message file under the daemon IPC path."
+    },
+    {
+      "file": "src/core/daemon/sksd.ts",
+      "symbol": "sksdWarm",
+      "token": "writeFileSync",
+      "reason": "SKSD warm command writes only the scoped daemon IPC warm request JSON for local service coordination."
+    },
+    {
+      "file": "src/core/daemon/sksd.ts",
+      "symbol": "sksdStop",
+      "token": "rmSync",
+      "reason": "SKSD stop removes only the scoped daemon IPC request file after local service stop coordination."
+    },
+    {
+      "file": "src/core/doctor/doctor-dirty-planner.ts",
+      "symbol": "writeDirtyPlan",
+      "token": "writeFileSync",
+      "reason": "Doctor dirty planner writes only the scoped dirty-plan JSON report under the project evidence directory."
+    },
+    {
+      "file": "src/core/probes/probe-memoization.ts",
+      "symbol": "memoizeProbeAsync",
+      "token": "writeFileSync",
+      "reason": "Probe memoization writes only scoped probe cache JSON records under the configured SKS cache path."
+    },
+    {
+      "file": "src/core/probes/probe-memoization.ts",
+      "symbol": "writeProbeReport",
+      "token": "writeFileSync",
+      "reason": "Probe memoization report writer persists only scoped probe summary reports under .sneakoscope/reports."
+    },
+    {
+      "file": "src/core/release/critical-path-ledger.ts",
+      "symbol": "writeCriticalPathLedger",
+      "token": "writeFileSync",
+      "reason": "Release critical-path ledger writes only scoped release timing evidence under the release report directory."
+    },
+    {
+      "file": "src/core/release/gate-pack-fixture-cache.ts",
+      "symbol": "prepareGatePackFixture",
+      "token": "writeFileSync",
+      "reason": "Gate-pack fixture cache writes only scoped fixture metadata inside the project fixture-cache directory."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-gate-impact-map.ts",
+      "symbol": "writeImpactMap",
+      "token": "writeFileSync",
+      "reason": "TriWiki gate impact map writer persists only scoped gate impact metadata under the TriWiki evidence path."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-invalidation.ts",
+      "symbol": "invalidateTriWikiProofsForChange",
+      "token": "writeFileSync",
+      "reason": "TriWiki invalidation writes only scoped invalidation report JSON under the TriWiki report directory."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-proof-bank.ts",
+      "symbol": "atomicWriteJson",
+      "token": "renameSync",
+      "reason": "TriWiki proof bank atomic writer renames only same-directory temp files into scoped proof-bank JSON targets."
+    },
+    {
+      "file": "src/core/triwiki/triwiki-proof-bank.ts",
+      "symbol": "withSubjectLock",
+      "token": "writeFileSync",
+      "reason": "TriWiki proof bank lock writer creates only scoped lock metadata files under the proof-bank lock directory."
     },
     {
       "file": "src/core/zellij/zellij-command.ts",

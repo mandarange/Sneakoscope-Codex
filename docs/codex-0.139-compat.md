@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.0.1 keeps the Codex 0.139 compatibility baseline while completing TriWiki Turbo runtime wiring: TriWiki-first release selection, proof-bank invalidation material, real gate pack shared fixtures, executable scheduler metrics, semantic doctor dirty repair, optional sksd cache warming, and actual SLA certificates.
+
 SKS 4.0.0 keeps the Codex 0.139 compatibility baseline while moving release verification to TriWiki proof bank reuse, affected-scope release-equivalent graphs, gate packs, five-minute SLA certificates, doctor dirty repair planning, and explicit legacy fallback removal.
 
 SKS 3.1.16 keeps the Codex 0.139 compatibility baseline while aligning the post-3.1.15 release metadata, built output, and npm unpublished-version gate for the next patch publication.
