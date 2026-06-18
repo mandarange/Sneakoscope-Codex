@@ -15,7 +15,7 @@ export type GlmNarutoWorkKind =
 
 export type GlmNarutoRole = 'patch_worker' | 'scout' | 'verifier' | 'repair' | 'judge' | 'finalizer';
 
-export type GlmNarutoIsolation = 'git-worktree' | 'patch-envelope';
+export type GlmNarutoIsolation = 'git-worktree' | 'patch-envelope' | 'patch-envelope-only' | 'blocked';
 
 export type GlmNarutoPatchStrategy =
   | 'minimal_patch'
@@ -122,6 +122,35 @@ export interface GlmNarutoConflictGraph {
   readonly edges: readonly GlmNarutoConflictEdge[];
 }
 
+export interface GlmNarutoCandidateScore {
+  readonly schema: 'sks.glm-naruto-candidate-score.v1';
+  readonly patch_id: string;
+  readonly shard_id: string;
+  readonly total_score: number;
+  readonly components: {
+    readonly deterministic_gate: number;
+    readonly verifier: number;
+    readonly verifier_confidence: number;
+    readonly verifier_risk_penalty: number;
+    readonly patch_size_penalty: number;
+    readonly touched_path_penalty: number;
+    readonly target_alignment: number;
+    readonly hunk_conflict_penalty: number;
+    readonly latency_penalty: number;
+    readonly cache_bonus: number;
+    readonly strategy_diversity_bonus: number;
+    readonly secret_safety: number;
+  };
+  readonly disqualified: boolean;
+  readonly disqualification_reasons: readonly string[];
+}
+
+export interface GlmNarutoCandidateScoreboard {
+  readonly schema: 'sks.glm-naruto-candidate-scoreboard.v1';
+  readonly mission_id: string;
+  readonly scores: readonly GlmNarutoCandidateScore[];
+}
+
 export type GlmNarutoMergeStrategy = 'deterministic' | 'quorum' | 'judge';
 
 export interface GlmNarutoMergeCandidate {
@@ -154,18 +183,23 @@ export interface GlmNarutoWorkerTrace {
   readonly strategy: GlmNarutoPatchStrategy;
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
   readonly provider: 'openrouter';
+  readonly provider_slug?: string | null;
   readonly session_id: string;
   readonly ttft_ms: number | null;
   readonly total_ms: number;
-  readonly prompt_tokens?: number;
-  readonly completion_tokens?: number;
-  readonly reasoning_tokens?: number;
-  readonly cached_tokens?: number;
-  readonly cache_write_tokens?: number;
+  readonly prompt_tokens?: number | null;
+  readonly completion_tokens?: number | null;
+  readonly reasoning_tokens?: number | null;
+  readonly cached_tokens?: number | null;
+  readonly cache_write_tokens?: number | null;
+  readonly real_stream?: boolean;
+  readonly chunk_count?: number;
   readonly request_cache_hit: boolean;
   readonly output_digest: string;
   readonly patch_digest: string | null;
   readonly status: string;
+  readonly verifier_risk_score?: number | null;
+  readonly verifier_confidence?: number | null;
 }
 
 export interface GlmNarutoConcurrencyDecision {
@@ -196,6 +230,23 @@ export interface GlmNarutoMissionResult {
   readonly budget_used_ms: number;
   readonly blockers: readonly string[];
   readonly warnings: readonly string[];
+}
+
+export interface GlmNarutoApplyTransaction {
+  readonly schema: 'sks.glm-naruto-apply-transaction.v1';
+  readonly mission_id: string;
+  readonly selected_patch_ids: readonly string[];
+  readonly touched_paths: readonly string[];
+  readonly pre_status: string;
+  readonly pre_diff_sha256: string;
+  readonly combined_patch_sha256: string;
+  readonly apply_check_passed: boolean;
+  readonly apply_passed: boolean;
+  readonly targeted_checks_passed: boolean | null;
+  readonly rollback_attempted: boolean;
+  readonly rollback_passed: boolean | null;
+  readonly final_status: 'applied' | 'rolled_back' | 'blocked';
+  readonly blockers: readonly string[];
 }
 
 export const GLM_NARUTO_LIMITS = {

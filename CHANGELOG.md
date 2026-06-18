@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+## [4.0.11] - 2026-06-19
+
+### Added
+
+- Connected GLM Naruto worktree isolation policy so `--worktree` uses per-worker git worktrees when available or blocks honestly unless `--allow-patch-envelope-fallback` is set.
+- Added live bench worker metrics for TTFT, total latency, verifier pass rate, token usage, cache counters, and worker completion/failure counts.
+- Added candidate scoreboard artifacts and fed scoreboard scores into merge planning.
+- Added rollback-aware final apply transaction artifacts with selected patch, pre/post diff hashes, and reverse-patch rollback evidence.
+
+### Fixed
+
+- `--no-apply` no longer skips the verifier wave; `--skip-verifier` is now the explicit opt-out.
+- GLM Naruto early terminal paths now write canonical stop-gate evidence.
+- Artifact secret audit now detects JSON key-level secrets and mission aggregate artifacts are sanitized before write.
+- OpenRouter stream/client request encoding now accepts structural cache key parts.
+
+### Compatibility
+
+- CI/CD, GitHub Actions, publish workflow, and release automation files are unchanged.
+
+
 ## [4.0.10] - 2026-06-19
 
 ### Fixed

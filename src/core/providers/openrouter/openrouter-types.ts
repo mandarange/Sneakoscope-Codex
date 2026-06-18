@@ -1,4 +1,5 @@
 import type { SksIssue } from '../../results.js';
+import type { GlmRequestCacheKeyParts } from '../glm/glm-request-cache.js';
 
 export const OPENROUTER_CHAT_COMPLETIONS_URL =
   'https://openrouter.ai/api/v1/chat/completions' as const;
@@ -65,6 +66,7 @@ export interface OpenRouterSendInput {
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
   readonly fetchImpl?: typeof fetch;
+  readonly cacheKeyParts?: GlmRequestCacheKeyParts;
 }
 
 export interface OpenRouterKeyResolution {

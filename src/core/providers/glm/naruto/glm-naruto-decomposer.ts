@@ -16,9 +16,32 @@ export function decomposeTask(input: DecomposerInput): GlmNarutoWorkGraph {
   const mutableShardIds: string[] = [];
   const verificationShardIds: string[] = [];
 
-  const paths = input.mentionedPaths.length > 0
-    ? input.mentionedPaths
-    : ['src/'];
+  const paths = discoverTargetPaths(input);
+  if (paths.length === 0) {
+    const scoutShard: GlmNarutoShard = {
+      id: 'shard-scout-paths',
+      kind: 'verification',
+      task: `Discover target paths before mutation for: ${input.task}`,
+      target_paths: [],
+      forbidden_paths: ['.github/', 'dist/', 'node_modules/'],
+      base_digest: digestBase(input),
+      strategy: 'minimal_patch',
+      patches_per_shard: 0,
+      max_tokens: 2048,
+      reasoning: 'low',
+      mutable: false
+    };
+    return {
+      schema: 'sks.glm-naruto-work-graph.v1',
+      mission_id: input.missionId,
+      task: input.task,
+      shards: [scoutShard],
+      dependencies,
+      parallel_groups: [],
+      mutable_shards: [],
+      verification_shards: [scoutShard.id]
+    };
+  }
 
   let shardIndex = 0;
   for (const targetPath of paths) {
@@ -81,6 +104,31 @@ export function decomposeTask(input: DecomposerInput): GlmNarutoWorkGraph {
   };
 }
 
+function discoverTargetPaths(input: DecomposerInput): readonly string[] {
+  const candidates = new Set<string>();
+  for (const mentioned of input.mentionedPaths) candidates.add(mentioned);
+  for (const line of (input.gitStatus || '').split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:[AMDRCU?!]{1,2})\s+(.+)$/);
+    if (!match) continue;
+    const file = match[1]!.split(/\s+->\s+/).pop()!.trim();
+    if (isMutableCandidate(file)) candidates.add(file);
+  }
+  for (const source of [input.task, input.lastError || '']) {
+    for (const match of source.matchAll(/\b([A-Za-z0-9_.-]+\/[A-Za-z0-9_./-]+\.(?:ts|tsx|js|mjs|cjs|json|md|yml|yaml|toml))\b/g)) {
+      if (isMutableCandidate(match[1]!)) candidates.add(match[1]!);
+    }
+  }
+  return [...candidates];
+}
+
+function isMutableCandidate(file: string): boolean {
+  return Boolean(file)
+    && !file.startsWith('.github/')
+    && !file.startsWith('dist/')
+    && !file.startsWith('node_modules/')
+    && !file.endsWith('/');
+}
+
 function classifyShardKind(path: string): GlmNarutoShard['kind'] {
   if (path.includes('test') || path.includes('__tests__') || path.includes('.test.')) return 'test_fix';
   if (path.endsWith('.md') || path.endsWith('.txt')) return 'doc_patch';
@@ -100,7 +148,7 @@ function digestBase(input: DecomposerInput): string {
 export function validateWorkGraph(graph: GlmNarutoWorkGraph, isVerifyOnly: boolean): { ok: boolean; reason?: string } {
   if (isVerifyOnly) return { ok: true };
   const mutableCount = graph.mutable_shards.length;
-  if (mutableCount === 0) return { ok: false, reason: 'glm_naruto_invalid_verify_only_plan' };
+  if (mutableCount === 0) return { ok: false, reason: 'glm_naruto_needs_target_path_context' };
   // Check ratio of mutable shards to total shards (excluding verification shards from the denominator)
   const totalWorkShards = graph.shards.filter(s => s.mutable || s.kind !== 'verification').length;
   const ratio = totalWorkShards > 0 ? mutableCount / totalWorkShards : 0;

@@ -28,7 +28,7 @@ test('validateWorkGraph rejects verify-only plan for modification task', () => {
   };
   const result = validateWorkGraph(graph, false);
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'glm_naruto_invalid_verify_only_plan');
+  assert.equal(result.reason, 'glm_naruto_needs_target_path_context');
 });
 
 test('decomposeTask assigns diverse strategies across shards', () => {

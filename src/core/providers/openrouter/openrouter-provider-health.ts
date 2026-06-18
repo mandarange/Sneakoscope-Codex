@@ -43,8 +43,9 @@ export function createProviderHealthTracker(providerSlug = 'openrouter', model =
   return {
     record: (entry) => {
       if (typeof entry.p50_ttft_ms === 'number') ttftSamples.push(entry.p50_ttft_ms);
-      const p50 = ttftSamples.length > 0 ? (ttftSamples[Math.floor(ttftSamples.length * 0.5)] ?? 0) : 0;
-      const p90 = ttftSamples.length > 0 ? (ttftSamples[Math.floor(ttftSamples.length * 0.9)] ?? 0) : 0;
+      const sorted = [...ttftSamples].sort((a, b) => a - b);
+      const p50 = sorted.length > 0 ? (sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.5))] ?? 0) : 0;
+      const p90 = sorted.length > 0 ? (sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))] ?? 0) : 0;
       health = {
         ...health,
         ...entry,
