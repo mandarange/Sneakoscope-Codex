@@ -224,7 +224,9 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (state?.mission_id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
     // 4.0.9: Use canonical stop-gate resolver first for NARUTO/GLM_NARUTO routes.
     const modeUpper = String(state?.mode || '').toUpperCase();
-    if (modeUpper === 'NARUTO' || state.stop_gate === 'stop-gate.json' || state.stop_gate === 'naruto-gate.json') {
+    const routeUpper = String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase();
+    const narutoFamily = modeUpper === 'NARUTO' || routeUpper === 'NARUTO' || routeUpper === 'GLM_NARUTO';
+    if (narutoFamily || state.stop_gate === 'stop-gate.json' || state.stop_gate === 'naruto-gate.json') {
       const stopCheck = await checkStopGate({
         root,
         route: state.route || state.mode,
@@ -232,7 +234,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
         explicitGatePath: typeof state.stop_gate_abs_path === 'string' && state.stop_gate_abs_path ? state.stop_gate_abs_path : undefined,
       });
       if (stopCheck.action === 'allow_stop') {
-        // Gate passed via canonical resolver; fall through to remaining checks.
+        if (narutoFamily) return { continue: true, systemMessage: `SKS: canonical stop-gate passed at ${stopCheck.gate_path}` };
       } else if (stopCheck.action === 'hard_blocked') {
         return { continue: true, systemMessage: `SKS: ${stopCheck.feedback}` };
       } else {

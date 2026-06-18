@@ -20,6 +20,10 @@ export interface SksStopGateEvidence {
   readonly main_push_commit?: string | null;
   readonly native_session_split_evidence?: string | null;
   readonly route_evidence_passed?: boolean;
+  readonly proof_required?: boolean;
+  readonly proof_passed?: boolean;
+  readonly reflection_required?: boolean;
+  readonly reflection_passed?: boolean | 'not_required';
   readonly per_worker_artifacts?: boolean;
   readonly verifier_wave_run?: boolean;
   readonly model_guard_enforced?: boolean;

@@ -1,4 +1,5 @@
 import type { GlmNarutoConflictGraph, GlmNarutoConflictEdge, PatchCandidateNode, GlmNarutoPatchEnvelope } from './glm-naruto-types.js';
+import { envelopesHaveHunkConflict } from './glm-naruto-hunk-conflict.js';
 
 export function buildConflictGraph(envelopes: readonly GlmNarutoPatchEnvelope[], nodes: readonly PatchCandidateNode[]): GlmNarutoConflictGraph {
   const edges: GlmNarutoConflictEdge[] = [];
@@ -27,11 +28,16 @@ function detectConflict(left: PatchCandidateNode, right: PatchCandidateNode, env
     return { left_patch_id: left.patch_id, right_patch_id: right.patch_id, reason: 'base_digest_mismatch' };
   }
 
+  if (left.shard_id === right.shard_id) {
+    return { left_patch_id: left.patch_id, right_patch_id: right.patch_id, reason: 'same_hunk' };
+  }
+
   const leftPaths = new Set(left.target_paths);
   const rightPaths = new Set(right.target_paths);
   const sharedFiles = [...leftPaths].filter((p) => rightPaths.has(p));
   if (sharedFiles.length > 0) {
-    if (left.shard_id === right.shard_id) {
+    if (leftEnv && rightEnv) {
+      if (!envelopesHaveHunkConflict(leftEnv, rightEnv)) return null;
       return { left_patch_id: left.patch_id, right_patch_id: right.patch_id, reason: 'same_hunk' };
     }
     return { left_patch_id: left.patch_id, right_patch_id: right.patch_id, reason: 'same_file' };

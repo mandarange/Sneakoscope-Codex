@@ -6,6 +6,7 @@ import fsp from 'node:fs/promises';
 import { checkStopGate } from '../stop-gate-check.js';
 import { resolveStopGate } from '../stop-gate-resolver.js';
 import { writeFinalStopGate } from '../stop-gate-writer.js';
+import { evaluateStop } from '../../pipeline-internals/runtime-gates.js';
 
 async function makeTempRoot(): Promise<string> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-sg-root-'));
@@ -134,4 +135,90 @@ test('regression: naruto-gate passed but hook blocked — resolver finds mission
   const result = await checkStopGate({ root, route: 'Naruto' });
   assert.equal(result.action, 'allow_stop', 'should allow stop because mission dir gate is passed');
   assert.ok(result.gate_path!.includes(missionId), 'should select mission dir gate, not root gate');
+});
+
+test('stop hook does not hidden-block after canonical Naruto allow_stop', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-007';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'stop-gate.json'), JSON.stringify({
+    schema: 'sks.stop-gate.v1',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mission_id: missionId,
+    gate_file: 'naruto-gate.json',
+    gate_abs_path: path.join(dir, 'stop-gate.json'),
+    status: 'passed',
+    passed: true,
+    terminal: true,
+    terminal_state: 'completed',
+    evidence: { route_evidence_passed: true, proof_required: false, proof_passed: true, reflection_required: true, reflection_passed: true },
+    blockers: [],
+    missing_fields: [],
+    created_at: new Date().toISOString()
+  }));
+  await writeCurrent(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: true });
+
+  const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: true }, { message: 'done' });
+  assert.equal(decision?.continue, true);
+  assert.match(decision?.systemMessage, /canonical stop-gate passed/);
+});
+
+test('strict pass rule rejects status blocked or blockers', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-008';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'stop-gate.json'), JSON.stringify({
+    schema: 'sks.stop-gate.v1',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mission_id: missionId,
+    gate_file: 'naruto-gate.json',
+    gate_abs_path: path.join(dir, 'stop-gate.json'),
+    status: 'blocked',
+    passed: true,
+    terminal: true,
+    terminal_state: 'completed',
+    evidence: {},
+    blockers: ['x'],
+    missing_fields: [],
+    created_at: new Date().toISOString()
+  }));
+  await writeCurrent(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto' });
+  const result = await checkStopGate({ root, route: 'Naruto' });
+  assert.equal(result.action, 'continue');
+  assert.ok(result.diagnostics.missing_fields.includes('status'));
+  assert.ok(result.diagnostics.missing_fields.includes('blockers'));
+});
+
+test('writeFinalStopGate preserves existing native gate fields', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-009';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ schema: 'sks.naruto-gate.v1', clone_roster_built: true, custom_detail: 'keep-me', passed: false }));
+  await writeFinalStopGate({
+    root,
+    missionId,
+    route: 'Naruto',
+    routeCommand: '$Naruto',
+    status: 'passed',
+    terminal: true,
+    terminalState: 'completed',
+    evidence: { route_evidence_passed: true, proof_required: false, proof_passed: true, reflection_required: false, reflection_passed: 'not_required' },
+    nativeGateFile: 'naruto-gate.json'
+  });
+  const native = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
+  assert.equal(native.clone_roster_built, true);
+  assert.equal(native.custom_detail, 'keep-me');
+  assert.equal(native.passed, true);
+  const canonical = JSON.parse(await fsp.readFile(path.join(dir, 'stop-gate.json'), 'utf8'));
+  assert.equal(canonical.schema, 'sks.stop-gate.v1');
+});
+
+test('diagnostics are written when no stop gate exists', async () => {
+  const root = await makeTempRoot();
+  const result = await checkStopGate({ root, route: 'Naruto', missionId: 'M-test-010' });
+  assert.equal(result.action, 'continue');
+  const diagnostics = JSON.parse(await fsp.readFile(path.join(root, '.sneakoscope', 'reports', 'stop-gate-last-check.json'), 'utf8'));
+  assert.equal(diagnostics.reason, 'no_gate_file_found');
 });

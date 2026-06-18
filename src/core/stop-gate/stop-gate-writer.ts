@@ -16,13 +16,19 @@ export interface FinalStopGateInput {
   readonly blockers?: readonly string[];
   readonly missingFields?: readonly string[];
   readonly nativeGateFile?: string;
+  readonly preserveNativeGate?: boolean;
+  readonly nativeGatePatch?: Record<string, unknown>;
 }
 
 export async function writeFinalStopGate(input: FinalStopGateInput): Promise<SksStopGateV1> {
   const dir = missionDir(input.root, input.missionId);
   await ensureDir(dir);
 
-  const passed = input.status === 'passed';
+  const evidenceBlockers = input.status === 'passed' ? evidenceMissingBlockers(input.evidence) : [];
+  const status = evidenceBlockers.length ? 'blocked' : input.status;
+  const blockers = [...(input.blockers ?? []), ...evidenceBlockers];
+  const missingFields = [...(input.missingFields ?? []), ...evidenceBlockers.map((blocker) => `evidence:${blocker}`)];
+  const passed = status === 'passed';
   const nativeGateFile = input.nativeGateFile ?? 'naruto-gate.json';
   const nativeGatePath = path.join(dir, nativeGateFile);
   const canonicalGatePath = path.join(dir, 'stop-gate.json');
@@ -36,18 +42,55 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
     mission_id: input.missionId,
     gate_file: nativeGateFile,
     gate_abs_path: canonicalGatePath,
-    status: input.status,
+    status,
     passed,
-    terminal: input.terminal,
-    terminal_state: input.terminalState,
+    terminal: evidenceBlockers.length ? false : input.terminal,
+    terminal_state: evidenceBlockers.length ? 'blocked' : input.terminalState,
     evidence: input.evidence,
-    blockers: input.blockers ?? [],
-    missing_fields: input.missingFields ?? [],
+    blockers,
+    missing_fields: missingFields,
     created_at: nowIso(),
   };
 
-  // 1. Write route-native gate file (backwards compat)
-  await writeJsonAtomic(nativeGatePath, { ...gate, schema: 'sks.naruto-gate' });
+  // 1. Write route-native gate file (backwards compat), preserving detailed native fields by default.
+  const preserveNativeGate = input.preserveNativeGate !== false;
+  if (preserveNativeGate && await exists(nativeGatePath)) {
+    const existing = await readJson(nativeGatePath, {}) as Record<string, unknown>;
+    await writeJsonAtomic(nativeGatePath, {
+      ...existing,
+      ...(input.nativeGatePatch ?? {}),
+      route: input.route,
+      route_command: input.routeCommand,
+      mission_id: input.missionId,
+      status,
+      passed,
+      terminal: gate.terminal,
+      terminal_state: gate.terminal_state,
+      evidence: {
+        ...((existing.evidence as Record<string, unknown>) || {}),
+        ...input.evidence
+      },
+      blockers,
+      missing_fields: missingFields,
+      updated_at: nowIso()
+    });
+  } else {
+    await writeJsonAtomic(nativeGatePath, {
+      schema: nativeGateFile === 'termination.json' ? 'sks.glm-naruto-termination.v1' : 'sks.naruto-gate.v1',
+      route: input.route,
+      route_command: input.routeCommand,
+      mission_id: input.missionId,
+      status,
+      passed,
+      terminal: gate.terminal,
+      terminal_state: gate.terminal_state,
+      evidence: input.evidence,
+      blockers,
+      missing_fields: missingFields,
+      updated_at: nowIso(),
+      ...(input.nativeGatePatch ?? {})
+    });
+  }
   // 2. Write canonical stop-gate.json
   await writeJsonAtomic(canonicalGatePath, gate);
   // 3. Write stop-gate.latest.json
@@ -61,11 +104,11 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
     mode: input.route === 'GLM_NARUTO' ? 'NARUTO' : (input.route === 'Naruto' ? 'NARUTO' : input.route),
     stop_gate: 'stop-gate.json',
     stop_gate_abs_path: canonicalGatePath,
-    stop_gate_status: input.status,
+    stop_gate_status: status,
     stop_gate_passed: passed,
     route_evidence_passed: input.evidence.route_evidence_passed ?? passed,
-    terminal: input.terminal,
-    terminal_state: input.terminalState,
+    terminal: gate.terminal,
+    terminal_state: gate.terminal_state,
   });
 
   // 5. Re-read and verify
@@ -93,4 +136,11 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
   await writeJsonAtomic(verifyPath, verifyResult);
 
   return gate;
+}
+
+function evidenceMissingBlockers(evidence: SksStopGateEvidence): string[] {
+  const blockers: string[] = [];
+  if (evidence.proof_required === true && evidence.proof_passed !== true) blockers.push('proof_not_passed');
+  if (evidence.reflection_required === true && evidence.reflection_passed !== true && evidence.reflection_passed !== 'not_required') blockers.push('reflection_not_passed');
+  return blockers;
 }

@@ -2,7 +2,6 @@ import path from 'node:path';
 import { nowIso, writeJsonAtomic } from '../../../fsx.js';
 import { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
 import { resolveOpenRouterApiKey } from '../../openrouter/openrouter-secret-store.js';
-import { checkAndApplyGlmPatch } from '../glm-patch-apply.js';
 import { decomposeTask, validateWorkGraph } from './glm-naruto-decomposer.js';
 import { planShardCandidates, computeInitialLaneMix } from './glm-naruto-shard-planner.js';
 import { runPatchWorkerPool } from './glm-naruto-worker-pool.js';
@@ -16,6 +15,8 @@ import { createProviderHealthTracker } from '../../openrouter/openrouter-provide
 import { createMissionTrace, recordWorkerTrace, writeMissionArtifacts, buildMissionSummary } from './glm-naruto-trace.js';
 import { runGlmJudge } from './glm-naruto-judge.js';
 import { writeFinalStopGate } from '../../../stop-gate/stop-gate-writer.js';
+import { checkAndApplyCombinedGlmNarutoPatch } from './glm-naruto-combined-patch.js';
+import { auditGlmNarutoArtifactsForSecrets } from './glm-naruto-secret-audit.js';
 import type {
   GlmNarutoMissionResult,
   GlmNarutoWorkGraph,
@@ -196,18 +197,17 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
 
   // Apply winning merge plan
   let appliedPatches = 0;
-  let applyResult: { ok: boolean; applied: readonly string[] } | null = null;
+  let applyResult: { ok: boolean; applied: readonly string[]; blocker?: string } | null = null;
 
   if (!input.noApply && mergePlan.selected_patches.length > 0) {
-    for (const patchId of mergePlan.selected_patches) {
-      const envelope = envelopes.find((e) => e.worker_id === patchId);
-      if (!envelope) continue;
-      const applied = await checkAndApplyGlmPatch({ cwd, patch: envelope.patch, apply: true });
-      if (applied.ok) {
-        appliedPatches++;
-      }
-    }
-    applyResult = { ok: appliedPatches > 0, applied: mergePlan.selected_patches };
+    const combinedApply = await checkAndApplyCombinedGlmNarutoPatch({
+      cwd,
+      envelopes,
+      selectedPatchIds: mergePlan.selected_patches,
+      apply: true
+    });
+    appliedPatches = combinedApply.ok ? combinedApply.applied.length : 0;
+    applyResult = { ok: combinedApply.ok, applied: combinedApply.applied, ...(combinedApply.blocker ? { blocker: combinedApply.blocker } : {}) };
   }
 
   const terminalState: GlmNarutoTerminalState = appliedPatches > 0 ? 'completed' : passedEnvelopes.length > 0 ? 'partial_candidates' : 'blocked';
@@ -262,13 +262,21 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     missionResult: result,
     envelopes
   });
+  const secretAudit = await auditGlmNarutoArtifactsForSecrets(path.join(cwd, '.sneakoscope', 'glm-naruto', missionId)).catch((err) => ({
+    schema: 'sks.glm-naruto-secret-audit.v1' as const,
+    ok: false,
+    root: path.join(cwd, '.sneakoscope', 'glm-naruto', missionId),
+    scanned_files: 0,
+    findings: [`audit_failed:${err instanceof Error ? err.message : String(err)}`]
+  }));
+  await writeJsonAtomic(path.join(artifactDir, 'secret-audit.json'), secretAudit).catch(() => undefined);
   // 4.0.9: Write canonical stop-gate artifacts for hook resolution.
   await writeFinalStopGate({
     root: cwd,
     missionId,
     route: 'GLM_NARUTO',
     routeCommand: '$Naruto',
-    status: result.ok ? 'passed' : (terminalState === 'blocked' ? 'blocked' : 'failed'),
+    status: result.ok && secretAudit.ok ? 'passed' : (terminalState === 'blocked' || !secretAudit.ok ? 'blocked' : 'failed'),
     terminal: terminalState === 'completed' || terminalState === 'blocked',
     terminalState,
     evidence: {
@@ -278,8 +286,12 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
       per_worker_artifacts: true,
       verifier_wave_run: true,
       model_guard_enforced: true,
+      proof_required: false,
+      proof_passed: true,
+      reflection_required: false,
+      reflection_passed: 'not_required',
     },
-    blockers: result.blockers || [],
+    blockers: secretAudit.ok ? (result.blockers || []) : ['glm_naruto_secret_leak_detected'],
     nativeGateFile: 'termination.json',
   }).catch(() => null);
 

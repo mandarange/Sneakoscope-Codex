@@ -1,10 +1,11 @@
 import type { GlmNarutoShard, GlmNarutoPatchEnvelope, GlmNarutoWorkerTrace, GlmNarutoPatchStrategy } from './glm-naruto-types.js';
 import { runPatchWorker, type WorkerRunResult } from './glm-naruto-worker-runtime.js';
-import { checkAndApplyGlmPatch } from '../glm-patch-apply.js';
-import { evaluateGlmSpeedGate } from '../glm-speed-gate.js';
 import { decideConcurrency } from './glm-naruto-concurrency-governor.js';
 import { planFileLeases } from './glm-naruto-file-lease.js';
 import type { GlmNarutoConcurrencyDecision } from './glm-naruto-types.js';
+import { evaluateGlmNarutoPatchCandidateGate } from './glm-naruto-patch-candidate-gate.js';
+import { createPatchEnvelope } from './glm-naruto-patch-envelope.js';
+import { writeGlmNarutoWorkerArtifacts } from './glm-naruto-worker-artifacts.js';
 
 export interface WorkerPoolInput {
   readonly apiKey: string;
@@ -59,6 +60,7 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
         apiKey: input.apiKey,
         missionId: input.missionId,
         workerId,
+        root: input.cwd,
         shard: shardWithStrategy,
         contextSummary: input.contextSummary,
         timeoutMs: input.workerTimeoutMs
@@ -70,24 +72,41 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
 
   for (const result of results) {
     if (result.status === 'fulfilled' && result.value.ok && result.value.envelope) {
-      const gate = evaluateGlmSpeedGate(result.value.envelope.patch);
+      const gate = await evaluateGlmNarutoPatchCandidateGate({
+        cwd: input.cwd,
+        envelope: result.value.envelope,
+        apply: false
+      });
       let envelope = result.value.envelope;
       if (gate.ok) {
-        const applyCheck = await checkAndApplyGlmPatch({
-          cwd: input.cwd,
-          patch: envelope.patch,
-          apply: false
+        envelope = createPatchEnvelope({
+          missionId: envelope.mission_id,
+          workerId: envelope.worker_id,
+          shardId: envelope.shard_id,
+          baseDigest: envelope.base_digest,
+          patch: gate.extracted_patch,
+          strategy: envelope.strategy,
+          reasoningEffort: envelope.reasoning_effort,
+          status: 'gate_passed',
+          warnings: envelope.warnings
         });
-        envelope = applyCheck.ok
-          ? { ...envelope, status: 'gate_passed' }
-          : { ...envelope, status: 'gate_failed', blockers: [applyCheck.error.code] };
       } else {
         envelope = {
           ...envelope,
           status: 'gate_failed',
-          blockers: gate.checks.filter((c) => !c.ok).map((c) => c.reason || c.id)
+          blockers: gate.blockers
         };
       }
+      await writeGlmNarutoWorkerArtifacts({
+        root: input.cwd,
+        missionId: input.missionId,
+        workerId: envelope.worker_id,
+        shardId: envelope.shard_id,
+        patchEnvelope: envelope,
+        gateResult: gate,
+        streamTrace: result.value.trace,
+        termination: { status: envelope.status, ok: gate.ok, blockers: envelope.blockers }
+      }).catch(() => undefined);
       envelopes.push(envelope);
       traces.push(result.value.trace);
     } else if (result.status === 'fulfilled') {

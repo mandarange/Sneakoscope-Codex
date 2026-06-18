@@ -94,6 +94,7 @@ export async function checkStopGate(input: {
       missing_fields: [],
       blockers: [],
     };
+    await writeDiagnostics(root, missionId, diagnostics);
     return {
       schema: 'sks.stop-gate-check.v1',
       ok: true,
@@ -125,6 +126,7 @@ export async function checkStopGate(input: {
       missing_fields: [],
       blockers: [],
     };
+    await writeDiagnostics(root, missionId, diagnostics);
     return {
       schema: 'sks.stop-gate-check.v1',
       ok: false,
@@ -139,9 +141,18 @@ export async function checkStopGate(input: {
 
   const missingFields: string[] = [];
   if (normalizedGate.passed !== true) missingFields.push('passed');
-  if (!normalizedGate.terminal) missingFields.push('terminal');
+  if (normalizedGate.terminal !== true) missingFields.push('terminal');
+  if (normalizedGate.status !== 'passed') missingFields.push('status');
+  if (normalizedGate.blockers.length > 0) missingFields.push('blockers');
+  if (normalizedGate.missing_fields.length > 0) missingFields.push(...normalizedGate.missing_fields.map((field) => `missing_fields:${field}`));
 
-  if (normalizedGate.passed === true && missingFields.length === 0) {
+  if (
+    normalizedGate.passed === true
+    && normalizedGate.terminal === true
+    && normalizedGate.status === 'passed'
+    && normalizedGate.blockers.length === 0
+    && normalizedGate.missing_fields.length === 0
+  ) {
     const action: StopGateAction = 'allow_stop';
     const diagnostics: StopGateDiagnostics = {
       schema: 'sks.stop-gate-diagnostics.v1',
