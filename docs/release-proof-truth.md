@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.12 keeps release proof truth aligned with the 4.0.12 package metadata, built output, provenance, npm unpublished-version evidence, GLM Naruto extracted-diff worktree evidence, adaptive scheduler artifacts, targeted apply checks, dirty-tree policy, and final seal stop-gate evidence before publication.
+
+SKS 4.0.12 release proof truth also requires proof that GLM requests stay locked to `z-ai/glm-5.2`, provider/model fallbacks remain disabled, live bench distinguishes true direct GLM from Naruto worker cases, and `final-seal.json` records model, isolation, scheduler, candidate, apply, secret-audit, and stop-gate invariants.
+
 SKS 4.0.8 keeps release proof truth aligned with the 4.0.8 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, GLM speed-profile tests, GLM loop-guard artifacts, GLM bench/trace artifacts, OpenRouter fallback blocking, disabled GPT fallback swarm proof, and Codex compatibility evidence before publication.
 
 SKS 4.0.8 release proof truth also requires proof that `sks --mad --glm` no longer launches long-lived sessions by default, that non-GLM MAD/Codex paths keep their previous defaults, and that GLM request artifacts use compact context, bounded completion tokens, disabled default tools, terminal loop guards, and redacted diagnostics.

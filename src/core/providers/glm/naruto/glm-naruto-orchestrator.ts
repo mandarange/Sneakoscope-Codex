@@ -20,6 +20,7 @@ import { getGitHead, getGitRoot } from './glm-naruto-worktree-manager.js';
 import { buildGlmNarutoCandidateScoreboard } from './glm-naruto-scoreboard.js';
 import { runGlmNarutoApplyTransaction } from './glm-naruto-apply-transaction.js';
 import { finalizeGlmNarutoTerminal } from './glm-naruto-terminal.js';
+import { writeGlmNarutoFinalSeal } from './glm-naruto-final-seal.js';
 import type {
   GlmNarutoMissionResult,
   GlmNarutoPatchEnvelope,
@@ -45,6 +46,9 @@ export interface OrchestratorInput {
   readonly cleanupWorktrees?: boolean;
   readonly noApply?: boolean;
   readonly skipVerifier?: boolean;
+  readonly allowDirtyApply?: boolean;
+  readonly noRollback?: boolean;
+  readonly strictChecks?: boolean;
   readonly mergeStrategy?: GlmNarutoMergeStrategy;
 }
 
@@ -129,7 +133,8 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     strategies: strategyMap,
     isolationMode: isolationPolicy.selected,
     cleanupWorktrees: input.cleanupWorktrees ?? !input.keepWorktrees,
-    baseCommit
+    baseCommit,
+    health: healthTracker
   });
 
   for (const trace of poolResult.traces) {
@@ -149,6 +154,7 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
   let envelopes = poolResult.envelopes;
   let failedShardIds = poolResult.failedShardIds;
   let repairWaves = 0;
+  let schedulerSummary = poolResult.schedulerSummary;
 
   // Repair wave if needed
   if (failedShardIds.length > 0 && repairWaves < GLM_NARUTO_LIMITS.max_repair_waves) {
@@ -170,9 +176,15 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
         strategies: new Map(repairPlan.shardsToRepair.map((s) => [s.id, [s.strategy]])),
         isolationMode: isolationPolicy.selected,
         cleanupWorktrees: input.cleanupWorktrees ?? !input.keepWorktrees,
-        baseCommit
+        baseCommit,
+        health: healthTracker
       });
       envelopes = [...envelopes, ...repairPool.envelopes];
+      schedulerSummary = {
+        max_observed_active_workers: Math.max(schedulerSummary.max_observed_active_workers, repairPool.schedulerSummary.max_observed_active_workers),
+        backpressure_events: schedulerSummary.backpressure_events + repairPool.schedulerSummary.backpressure_events,
+        queue_drained: schedulerSummary.queue_drained && repairPool.schedulerSummary.queue_drained
+      };
       for (const trace of repairPool.traces) {
         traceState = recordWorkerTrace(traceState, trace);
       }
@@ -276,7 +288,10 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
       missionId,
       envelopes,
       selectedPatchIds: mergePlan.selected_patches,
-      artifactDir
+      artifactDir,
+      ...(input.allowDirtyApply !== undefined ? { allowDirtyApply: input.allowDirtyApply } : {}),
+      ...(input.noRollback !== undefined ? { noRollback: input.noRollback } : {}),
+      ...(input.strictChecks !== undefined ? { strictChecks: input.strictChecks } : {})
     });
     applyTransaction = transactionResult.transaction;
     appliedPatches = transactionResult.ok ? transactionResult.applied.length : 0;
@@ -351,13 +366,33 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     findings: [`audit_failed:${err instanceof Error ? err.message : String(err)}`]
   }));
   await writeJsonAtomic(path.join(writtenArtifactDir, 'secret-audit.json'), secretAudit).catch(() => undefined);
+  const predictedStopGatePath = path.join(cwd, '.sneakoscope', 'missions', missionId, 'stop-gate.json');
+  const finalSeal = await writeGlmNarutoFinalSeal({
+    artifactDir: writtenArtifactDir,
+    missionId,
+    result,
+    envelopes,
+    traces: traceState.workerTraces,
+    isolationPolicy,
+    scheduler: schedulerSummary,
+    selectedPatchIds: mergePlan.selected_patches,
+    applyTransaction,
+    secretAudit,
+    stopGatePath: predictedStopGatePath,
+    stopGatePassed: result.ok && secretAudit.ok
+  }).catch((err) => ({
+    seal: null,
+    path: path.join(writtenArtifactDir, 'final-seal.json'),
+    passed: false,
+    error: err instanceof Error ? err.message : String(err)
+  }));
   // 4.0.9: Write canonical stop-gate artifacts for hook resolution.
   await writeFinalStopGate({
     root: cwd,
     missionId,
     route: 'GLM_NARUTO',
     routeCommand: '$Naruto',
-    status: result.ok && secretAudit.ok ? 'passed' : (terminalState === 'blocked' || !secretAudit.ok ? 'blocked' : 'failed'),
+    status: result.ok && secretAudit.ok && finalSeal.passed ? 'passed' : (terminalState === 'blocked' || !secretAudit.ok || !finalSeal.passed ? 'blocked' : 'failed'),
     terminal: terminalState === 'completed' || terminalState === 'blocked',
     terminalState,
     evidence: {
@@ -367,12 +402,16 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
       per_worker_artifacts: true,
       verifier_wave_run: verifierWaveRun,
       model_guard_enforced: true,
+      final_seal_passed: finalSeal.passed,
+      final_seal_path: finalSeal.path,
       proof_required: false,
       proof_passed: true,
       reflection_required: false,
       reflection_passed: 'not_required',
     },
-    blockers: secretAudit.ok ? (result.blockers || []) : ['glm_naruto_secret_leak_detected'],
+    blockers: secretAudit.ok
+      ? (finalSeal.passed ? (result.blockers || []) : [...(result.blockers || []), 'glm_naruto_final_seal_not_passed'])
+      : ['glm_naruto_secret_leak_detected'],
     nativeGateFile: 'termination.json',
   }).catch(() => null);
 

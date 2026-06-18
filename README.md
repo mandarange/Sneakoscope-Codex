@@ -35,15 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.11** makes GLM Naruto operationally measurable: `--worktree` is honest, live bench records real worker/verifier/cache metrics, candidates are scored before merge planning, final apply writes rollback-aware transaction evidence, and early terminal paths write canonical stop-gates. Ordinary direct GLM remains available for single-path edits, while GLM Naruto is the measured parallel runtime.
+SKS **4.0.12** seals GLM Naruto's production runtime path: worktree workers apply extracted unified diffs only, patch workers launch through a bounded adaptive scheduler, live bench compares true direct GLM against Naruto worker counts, final apply runs dirty-tree and targeted-check guards, and stop-gates reference a final seal artifact.
 
-What changed in 4.0.11:
+What changed in 4.0.12:
 
-- **Honest worktree isolation.** `sks --mad --glm --naruto --worktree "<task>"` uses per-worker git worktrees when available or blocks unless `--allow-patch-envelope-fallback` is explicit.
-- **Measured live bench.** `--bench --live --no-apply` still runs verifier/scoring and reports TTFT, total latency, verifier pass rate, cache tokens, reasoning tokens, and worker completion/failure counts.
-- **Scoreboard-driven merge planning.** `candidate-scoreboard.json` captures gate, verifier, risk, confidence, path, conflict, latency, cache, diversity, and secret-safety components.
-- **Rollback-aware apply.** Final mutation is single-threaded and records `apply-transaction.json`, selected combined patch, diff hashes, and rollback evidence.
-- **Terminal evidence and artifact safety.** Missing-key, invalid-graph, budget, and no-candidate terminal paths write canonical stop-gates, and GLM Naruto artifacts use key-aware secret audit/redaction.
+- **Extracted worktree patches.** `--worktree` parses `<sks_patch_candidate>` and records candidate/extracted patch hashes before any worker worktree apply.
+- **Adaptive scheduler.** Patch workers use a finite launch queue with provider-health backpressure and retry-once handling for retryable 429/5xx/idle-timeout failures.
+- **True direct-vs-Naruto bench.** `--bench --live --no-apply` compares direct GLM, Naruto 1, 4, 8, and 12 worker cases without fake zero metrics.
+- **Transaction guards.** Final apply blocks dirty touched paths unless `--allow-dirty-apply` is explicit, runs targeted checks, and rolls back on validation failure by default.
+- **Seal artifacts.** GLM Naruto writes `final-seal.json`, stop-gate final-seal evidence, `merge-rationale.md`, and `bench-report.md` for auditability.
 
 What changed in 4.0.8:
 

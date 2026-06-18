@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 
+
+## [4.0.12] - 2026-06-19
+
+### Fixed
+
+- GLM Naruto worktree workers now parse `<sks_patch_candidate>` bodies and apply only the extracted unified diff, with candidate/extracted hash evidence.
+- Replaced patch-worker full fanout with a bounded adaptive scheduler, provider backpressure records, and retry-once policy for retryable provider failures.
+- Live bench now separates the true direct GLM speed path from GLM Naruto 1/4/8/12 worker cases and marks unavailable metrics as null plus `metric_status`.
+- Final apply now blocks dirty touched paths by default, runs targeted checks after apply, and rolls back when those checks fail.
+- Added `final-seal.json`, stop-gate final-seal evidence, `merge-rationale.md`, and live bench markdown report artifacts for GLM Naruto audits.
+
 ## [4.0.11] - 2026-06-19
 
 ### Added

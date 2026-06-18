@@ -202,6 +202,13 @@ export interface GlmNarutoWorkerTrace {
   readonly verifier_confidence?: number | null;
 }
 
+export interface GlmNarutoWorkerIssue {
+  readonly code: string;
+  readonly retryable: boolean;
+  readonly provider_status?: number;
+  readonly retry_after_ms?: number | null;
+}
+
 export interface GlmNarutoConcurrencyDecision {
   readonly target_active_workers: number;
   readonly burst_workers: number;
@@ -237,8 +244,11 @@ export interface GlmNarutoApplyTransaction {
   readonly mission_id: string;
   readonly selected_patch_ids: readonly string[];
   readonly touched_paths: readonly string[];
+  readonly dirty_touched_paths_before_apply: readonly string[];
+  readonly dirty_policy: 'block' | 'allow';
   readonly pre_status: string;
   readonly pre_diff_sha256: string;
+  readonly post_diff_sha256: string;
   readonly combined_patch_sha256: string;
   readonly apply_check_passed: boolean;
   readonly apply_passed: boolean;

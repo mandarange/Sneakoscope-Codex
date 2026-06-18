@@ -27,6 +27,8 @@ export interface SksStopGateEvidence {
   readonly per_worker_artifacts?: boolean;
   readonly verifier_wave_run?: boolean;
   readonly model_guard_enforced?: boolean;
+  readonly final_seal_passed?: boolean;
+  readonly final_seal_path?: string | null;
   readonly stream_idle_timeout_ms?: number | null;
 }
 

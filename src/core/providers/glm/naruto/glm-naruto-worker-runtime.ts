@@ -6,7 +6,8 @@ import { sendOpenRouterChatCompletionStream } from '../../openrouter/openrouter-
 import { assertGlm52ActualModel } from '../glm-52-response-guard.js';
 import { encodeGlmRequestWithCache } from '../glm-request-cache.js';
 import { parsePatchCandidateOutput, createPatchEnvelope, digestPatch } from './glm-naruto-patch-envelope.js';
-import type { GlmNarutoShard, GlmNarutoPatchEnvelope, GlmNarutoWorkerTrace, GlmNarutoReasoningEffort } from './glm-naruto-types.js';
+import type { GlmNarutoShard, GlmNarutoPatchEnvelope, GlmNarutoWorkerTrace, GlmNarutoReasoningEffort, GlmNarutoWorkerIssue } from './glm-naruto-types.js';
+import type { OpenRouterIssue } from '../../openrouter/openrouter-types.js';
 import type { OpenRouterChatMessage } from '../../openrouter/openrouter-types.js';
 import { parseGlmNarutoVerifierOutput } from './glm-naruto-verifier-output.js';
 import { writeGlmNarutoWorkerArtifacts } from './glm-naruto-worker-artifacts.js';
@@ -29,6 +30,7 @@ export interface WorkerRunResult {
   readonly trace: GlmNarutoWorkerTrace;
   readonly ok: boolean;
   readonly error?: string;
+  readonly issue?: GlmNarutoWorkerIssue;
 }
 
 const STABLE_SYSTEM_PREFIX = `You are a SKS GLM Naruto patch worker. Model lock: ${GLM_52_OPENROUTER_MODEL}. No GPT/OpenAI fallback allowed. Output only <sks_patch_candidate>, <sks_need_context>, or <sks_blocked> envelopes. Use unified diff format for patches. Never write to main workspace directly. Follow proof-first mutation rules.`;
@@ -123,6 +125,7 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
     });
 
     if (!response.ok) {
+      const issue = classifyWorkerIssue(response.error);
       const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed', chunk_count: 0, real_stream: false };
       await writeGlmNarutoWorkerArtifacts({
         root: artifactRoot,
@@ -136,7 +139,8 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
         envelope: null,
         trace,
         ok: false,
-        error: response.error.code
+        error: response.error.code,
+        issue
       };
     }
 
@@ -156,7 +160,8 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
         envelope: null,
         trace,
         ok: false,
-        error: `model_guard:${modelGuard.code}`
+        error: `model_guard:${modelGuard.code}`,
+        issue: { code: `model_guard:${modelGuard.code}`, retryable: false }
       };
     }
 
@@ -185,7 +190,8 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
         envelope: null,
         trace,
         ok: false,
-        error: parsed.kind
+        error: parsed.kind,
+        issue: { code: parsed.kind, retryable: false }
       };
     }
 
@@ -231,6 +237,7 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
 
     return { envelope, trace, ok: true };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     const trace = { ...traceBase, total_ms: Date.now() - started, status: 'failed', chunk_count: 0, real_stream: false };
     await writeGlmNarutoWorkerArtifacts({
       root: artifactRoot,
@@ -244,9 +251,27 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
       envelope: null,
       trace,
       ok: false,
-      error: err instanceof Error ? err.message : String(err)
+      error: message,
+      issue: classifyWorkerIssue({ code: message, message, severity: 'failed' })
     };
   }
+}
+
+function classifyWorkerIssue(issue: OpenRouterIssue | { code: string; message: string; severity: string }): GlmNarutoWorkerIssue {
+  const code = String(issue.code || 'glm_worker_failed');
+  const status = typeof (issue as OpenRouterIssue).status === 'number' ? (issue as OpenRouterIssue).status : undefined;
+  const retryable = code === 'glm_openrouter_rate_limited'
+    || status === 429
+    || (typeof status === 'number' && status >= 500)
+    || code === 'glm_openrouter_provider_unavailable'
+    || code === 'glm_stream_idle_timeout'
+    || code === 'glm_request_timeout';
+  return {
+    code,
+    retryable,
+    ...(status !== undefined ? { provider_status: status } : {}),
+    retry_after_ms: null
+  };
 }
 
 export async function runVerifierWorker(input: {

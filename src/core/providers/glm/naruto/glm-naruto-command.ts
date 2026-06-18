@@ -46,6 +46,9 @@ export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMi
   const allowPatchEnvelopeFallback = flag(args, '--allow-patch-envelope-fallback');
   const noApply = flag(args, '--no-apply');
   const skipVerifier = flag(args, '--skip-verifier');
+  const allowDirtyApply = flag(args, '--allow-dirty-apply');
+  const noRollback = flag(args, '--no-rollback');
+  const strictChecks = flag(args, '--strict-checks');
   const mergeStrategy = readOption(args, '--merge-strategy', 'deterministic') as 'deterministic' | 'quorum' | 'judge';
 
   const result = await runGlmNarutoMission({
@@ -63,6 +66,9 @@ export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMi
     cleanupWorktrees,
     noApply: noApply || flag(args, '--dry-run'),
     skipVerifier,
+    allowDirtyApply,
+    noRollback,
+    strictChecks,
     mergeStrategy
   });
 
