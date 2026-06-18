@@ -5,7 +5,7 @@ import { createEmptyGlmLatencyTrace, writeGlmLatencyTrace } from './glm-latency-
 
 export interface GlmBenchResult {
   readonly schema: 'sks.glm-bench-result.v1';
-  readonly version: '4.0.8';
+  readonly version: '4.0.9';
   readonly generated_at: string;
   readonly status: 'dry_run' | 'live' | 'blocked';
   readonly dry_run: boolean;
@@ -52,7 +52,7 @@ export async function runGlmBench(root: string, args: readonly string[] = []): P
   if (execute && !live) {
     const blocked: GlmBenchResult = {
       schema: 'sks.glm-bench-result.v1',
-      version: '4.0.8',
+      version: '4.0.9',
       generated_at: nowIso(),
       status: 'blocked',
       dry_run: true,
@@ -70,7 +70,7 @@ export async function runGlmBench(root: string, args: readonly string[] = []): P
   if (live) {
     const blocked: GlmBenchResult = {
       schema: 'sks.glm-bench-result.v1',
-      version: '4.0.8',
+      version: '4.0.9',
       generated_at: nowIso(),
       status: 'blocked',
       dry_run: false,
@@ -88,7 +88,7 @@ export async function runGlmBench(root: string, args: readonly string[] = []): P
   if (execute) {
     const blocked: GlmBenchResult = {
       schema: 'sks.glm-bench-result.v1',
-      version: '4.0.8',
+      version: '4.0.9',
       generated_at: nowIso(),
       status: 'blocked',
       dry_run: true,
@@ -107,7 +107,7 @@ export async function runGlmBench(root: string, args: readonly string[] = []): P
   const deepTotals = SYNTHETIC_CASES.map((row) => row.deep.total_ms);
   const result: GlmBenchResult = {
     schema: 'sks.glm-bench-result.v1',
-    version: '4.0.8',
+    version: '4.0.9',
     generated_at: nowIso(),
     status: 'dry_run',
     dry_run: true,

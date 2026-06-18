@@ -24,7 +24,7 @@ export type GlmNarutoPatchStrategy =
   | 'refactor_local'
   | 'defensive_fix';
 
-export type GlmNarutoEnvelopeStatus = 'candidate' | 'gate_passed' | 'gate_failed' | 'superseded' | 'selected';
+export type GlmNarutoEnvelopeStatus = 'candidate' | 'gate_passed' | 'gate_failed' | 'verification_passed' | 'verification_failed' | 'superseded' | 'selected';
 
 export type GlmNarutoTerminalState =
   | 'completed'
@@ -92,6 +92,13 @@ export interface GlmNarutoPatchEnvelope {
   readonly blockers: readonly string[];
   readonly warnings: readonly string[];
   readonly strategy: GlmNarutoPatchStrategy;
+  readonly verification_passed?: boolean;
+  readonly request_body_size?: number | null;
+  readonly cached?: boolean;
+  readonly ttft_ms?: number | null;
+  readonly chunk_count?: number | null;
+  readonly real_stream?: boolean;
+  readonly idle_timeout_ms?: number | null;
 }
 
 export interface PatchCandidateNode {

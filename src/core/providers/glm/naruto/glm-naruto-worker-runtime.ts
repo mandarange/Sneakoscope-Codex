@@ -79,7 +79,8 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
     const response = await sendOpenRouterChatCompletionStream({
       apiKey: input.apiKey,
       request: requestWithSession,
-      timeoutMs: input.timeoutMs
+      timeoutMs: input.timeoutMs,
+      idleTimeoutMs: 60_000
     });
 
     if (!response.ok) {
@@ -91,7 +92,7 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
       };
     }
 
-    const modelGuard = assertGlm52ActualModel(response.value.model || GLM_52_OPENROUTER_MODEL);
+    const modelGuard = assertGlm52ActualModel(response.value.model);
     if (!modelGuard.ok) {
       return {
         envelope: null,
@@ -172,7 +173,8 @@ export async function runVerifierWorker(input: {
     const response = await sendOpenRouterChatCompletionStream({
       apiKey: input.apiKey,
       request: { ...request, session_id: sessionId },
-      timeoutMs: input.timeoutMs
+      timeoutMs: input.timeoutMs,
+      idleTimeoutMs: 60_000
     });
 
     if (!response.ok) {

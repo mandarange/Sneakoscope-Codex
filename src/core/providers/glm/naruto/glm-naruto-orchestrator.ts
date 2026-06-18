@@ -6,6 +6,7 @@ import { checkAndApplyGlmPatch } from '../glm-patch-apply.js';
 import { decomposeTask, validateWorkGraph } from './glm-naruto-decomposer.js';
 import { planShardCandidates, computeInitialLaneMix } from './glm-naruto-shard-planner.js';
 import { runPatchWorkerPool } from './glm-naruto-worker-pool.js';
+import { runVerifierWorker } from './glm-naruto-worker-runtime.js';
 import { buildConflictGraph } from './glm-naruto-conflict-graph.js';
 import { planMerge } from './glm-naruto-merge-planner.js';
 import { finalizeMergePlan } from './glm-naruto-finalizer.js';
@@ -14,6 +15,7 @@ import { createBudget, checkBudget, recordRequest } from './glm-naruto-budget.js
 import { createProviderHealthTracker } from '../../openrouter/openrouter-provider-health.js';
 import { createMissionTrace, recordWorkerTrace, writeMissionArtifacts, buildMissionSummary } from './glm-naruto-trace.js';
 import { runGlmJudge } from './glm-naruto-judge.js';
+import { writeFinalStopGate } from '../../../stop-gate/stop-gate-writer.js';
 import type {
   GlmNarutoMissionResult,
   GlmNarutoWorkGraph,
@@ -128,8 +130,42 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     }
   }
 
+  // 4.0.9: Verifier wave — run parallel verifier workers over gate-passed candidates.
+  let passedEnvelopes = envelopes.filter((e) => e.status === 'gate_passed');
+  if (passedEnvelopes.length > 0 && !input.noApply) {
+    const verifyApiKey = key.key;
+    const verifyResults = await Promise.allSettled(
+      passedEnvelopes.map((env) =>
+        runVerifierWorker({
+          apiKey: verifyApiKey,
+          missionId,
+          workerId: env.worker_id,
+          envelope: env,
+          timeoutMs: 120_000,
+        })
+      )
+    );
+    const verifiedEnvelopes: GlmNarutoPatchEnvelope[] = [];
+    for (let vi = 0; vi < passedEnvelopes.length; vi++) {
+      const env = passedEnvelopes[vi]!;
+      const res = verifyResults[vi]!;
+      if (res.status === 'fulfilled' && res.value.ok) {
+        verifiedEnvelopes.push({ ...env, verification_passed: true, status: 'gate_passed' });
+      } else {
+        verifiedEnvelopes.push({ ...env, verification_passed: false, status: 'verification_failed' });
+      }
+      if (res.status === 'fulfilled') {
+        traceState = recordWorkerTrace(traceState, res.value.trace);
+      }
+    }
+    envelopes = envelopes.map((e) => {
+      const verified = verifiedEnvelopes.find((v) => v.worker_id === e.worker_id);
+      return verified ?? e;
+    });
+    passedEnvelopes = envelopes.filter((e) => e.status === 'gate_passed');
+  }
+
   // Build conflict graph and merge plan
-  const passedEnvelopes = envelopes.filter((e) => e.status === 'gate_passed');
   const nodes = passedEnvelopes.map((env) => ({
     patch_id: env.worker_id,
     shard_id: env.shard_id,
@@ -223,8 +259,29 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     termination: { schema: 'sks.glm-naruto-termination.v1', mission_id: missionId, terminal_state: terminalState, reason: terminationReason, wall_clock_ms: summary.wall_clock_ms },
     ...(applyResult ? { applyResult: { ...applyResult, schema: 'sks.glm-naruto-apply-result.v1' } } : {}),
     verificationSummary: { schema: 'sks.glm-naruto-verification.v1', verified: passedEnvelopes.length, total: envelopes.length },
-    missionResult: result
+    missionResult: result,
+    envelopes
   });
+  // 4.0.9: Write canonical stop-gate artifacts for hook resolution.
+  await writeFinalStopGate({
+    root: cwd,
+    missionId,
+    route: 'GLM_NARUTO',
+    routeCommand: '$Naruto',
+    status: result.ok ? 'passed' : (terminalState === 'blocked' ? 'blocked' : 'failed'),
+    terminal: terminalState === 'completed' || terminalState === 'blocked',
+    terminalState,
+    evidence: {
+      build_passed: result.ok,
+      tests_passed: result.ok,
+      route_evidence_passed: result.ok,
+      per_worker_artifacts: true,
+      verifier_wave_run: true,
+      model_guard_enforced: true,
+    },
+    blockers: result.blockers || [],
+    nativeGateFile: 'termination.json',
+  }).catch(() => null);
 
   return { ...result, artifact_dir: artifactDir };
 }

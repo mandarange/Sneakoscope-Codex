@@ -82,7 +82,7 @@ export async function runGlmDirectSpeedRun(input: {
     return result(reason === 'glm_request_timeout' ? 'timeout' : 'failed', controller.state().run_id, input.task, termination.reason, artifactDir, [], [response.error.code], []);
   }
   controller.transition('model_guard');
-  const modelGuard = assertGlm52ActualModel(response.value.model || GLM_52_OPENROUTER_MODEL);
+  const modelGuard = assertGlm52ActualModel(response.value.model);
   if (!modelGuard.ok) {
     const termination = controller.terminate('blocked', 'glm_model_mismatch', [modelGuard.code]);
     const artifactDir = await writeGlmRunArtifacts({ cwd: input.cwd, state: controller.state(), termination, contextOmissions: context.omitted });

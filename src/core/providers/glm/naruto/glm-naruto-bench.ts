@@ -4,7 +4,7 @@ import { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
 
 export interface GlmNarutoBenchResult {
   readonly schema: 'sks.glm-naruto-bench.v1';
-  readonly version: '4.0.8';
+  readonly version: '4.0.9';
   readonly generated_at: string;
   readonly status: 'dry_run' | 'live' | 'blocked';
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
@@ -32,7 +32,7 @@ export async function runGlmNarutoBench(root: string, args: readonly string[] = 
   if (!live) {
     return {
       schema: 'sks.glm-naruto-bench.v1',
-      version: '4.0.8',
+      version: '4.0.9',
       generated_at: nowIso(),
       status: 'dry_run',
       model: GLM_52_OPENROUTER_MODEL,
@@ -52,7 +52,7 @@ export async function runGlmNarutoBench(root: string, args: readonly string[] = 
   // Live bench would require OpenRouter key and real API calls
   return {
     schema: 'sks.glm-naruto-bench.v1',
-    version: '4.0.8',
+    version: '4.0.9',
     generated_at: nowIso(),
     status: 'blocked',
     model: GLM_52_OPENROUTER_MODEL,
@@ -72,7 +72,7 @@ export async function runGlmNarutoBench(root: string, args: readonly string[] = 
 function blocked(root: string, warnings: string[]): GlmNarutoBenchResult {
   return {
     schema: 'sks.glm-naruto-bench.v1',
-    version: '4.0.8',
+    version: '4.0.9',
     generated_at: nowIso(),
     status: 'blocked',
     model: GLM_52_OPENROUTER_MODEL,
