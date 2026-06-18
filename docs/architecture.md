@@ -32,3 +32,16 @@ Hard thresholds:
 - files that directly import five or more unrelated route domains fail unless they are explicit route-domain aggregators.
 
 The pipeline runtime compatibility surface stays split: `src/core/pipeline-internals/runtime-core.ts` remains under the 1200-line pipeline gate, while stop/gate evaluation lives in `src/core/pipeline-internals/runtime-gates.ts`.
+
+## 4.0.3 GLM Provider Split
+
+GLM MAD mode is intentionally split by side-effect boundary:
+
+- `src/cli/global-mode-router.ts` detects top-level `--mad --glm` before normal command dispatch.
+- `src/core/providers/glm/glm-52-request.ts` builds pure OpenRouter request payloads.
+- `src/core/providers/glm/glm-52-response-guard.ts` rejects missing, GPT/OpenAI, or unknown actual model ids before mutation.
+- `src/core/providers/openrouter/openrouter-secret-store.ts` owns the user-scoped OpenRouter key lifecycle outside project files.
+- `src/core/providers/openrouter/openrouter-client.ts` is the only OpenRouter network adapter.
+- `src/core/codex-app/glm-profile-installer.ts` writes only GLM model profile metadata and avoids duplicate Codex App/MCP declarations.
+
+This keeps provider policy testable without routing around the existing SKS proof-first pipeline.

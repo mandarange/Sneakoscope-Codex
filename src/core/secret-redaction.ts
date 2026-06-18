@@ -1,6 +1,8 @@
 const SECRET_ENV_NAMES = [
   'CODEX_ACCESS_TOKEN',
   'OPENAI_API_KEY',
+  'OPENROUTER_API_KEY',
+  'SKS_OPENROUTER_API_KEY',
   'CODEX_LB_API_KEY',
   'ANTHROPIC_API_KEY',
   'GITHUB_TOKEN',
@@ -9,6 +11,8 @@ const SECRET_ENV_NAMES = [
 
 const SECRET_PATTERNS = [
   /\bsk-proj-[A-Za-z0-9_-]{12,}\b/g,
+  /\bsk-or-v1-[A-Za-z0-9_-]{12,}\b/g,
+  /\bsk-or-[A-Za-z0-9_-]{12,}\b/g,
   /\bsk-[A-Za-z0-9_-]{20,}\b/g,
   /\bsk-clb-[A-Za-z0-9_-]{8,}\b/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,

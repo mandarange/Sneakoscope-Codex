@@ -35,15 +35,15 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.2** is the TriWiki Turbo production completion release. It makes affected/confidence release runs TriWiki-first, restores build-once proof, bridges reusable TriWiki proof cards into release cache v2, runs gate packs through a resource-aware scheduler, and tightens semantic dirty doctor, sksd warmup, legacy purge, orphan detection, and actual five-minute SLA regression evidence.
+SKS **4.0.3** adds a GLM 5.2-only MAD mode through OpenRouter while preserving the proof-first SKS pipeline. `sks --mad --glm` resolves the GLM profile, keeps GPT/OpenAI fallback disabled, and records model-lock proof; `sks --mad --glm --repair` rotates the OpenRouter API key outside project files.
 
-What changed in 4.0.2:
+What changed in 4.0.3:
 
-- **TriWiki proof bank.** Proof cards now bind reusable gate proof to input hash, implementation hash, package lock hash, environment allowlist, fixture version, and tool version.
-- **Affected release-equivalent verification.** Changed files map to module cards, gate impact maps, and gate packs so small tasks can run fast without giving up scoped release confidence.
-- **Parallel SLA planning.** Release gate packs, resource budgets, and SLA certificates expose the planned critical path for five-minute foreground verification.
-- **New control surface.** `sks check`, `sks task`, `sks release`, `sks triwiki`, `sks proof bank status`, and `sks daemon` expose the fast proof pipeline.
-- **No silent legacy fallback.** Compatibility aliases are removed; removed runtimes now use explicit migration notices.
+- **GLM 5.2 MAD mode.** `sks --mad --glm` enters a `mad-glm` profile using OpenRouter model `z-ai/glm-5.2`.
+- **No GPT fallback.** GLM requests use `provider.allow_fallbacks: false`, omit fallback `models`, and reject non-GLM response model ids before mutation.
+- **OpenRouter key lifecycle.** Keys resolve from `OPENROUTER_API_KEY`, `SKS_OPENROUTER_API_KEY`, or the user SKS secret store; stored keys use private permissions and redacted metadata.
+- **Codex App profile.** `sks codex-app glm-profile install` writes the `sks/glm-5.2-mad` profile metadata for Codex App selection.
+- **Codex 0.141 alignment.** SKS delegates remote relay, cwd/shell/path preservation, selected plugin MCP activation, App/MCP dedupe, bounded prompt-image cache, bounded feedback upload, and terminal resize behavior to Codex-native semantics where available.
 
 SKS **3.1.16** was a launch-reliability patch on the 3.1.15 doctor-reliability release. It made `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
 

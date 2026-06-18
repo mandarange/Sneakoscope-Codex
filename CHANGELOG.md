@@ -3,6 +3,35 @@
 ## [Unreleased]
 
 
+
+## [4.0.3] - 2026-06-18
+
+### Added
+
+- Added GLM 5.2 MAD mode through OpenRouter with `sks --mad --glm`.
+- Added `sks --mad --glm --repair` for OpenRouter API key repair and rotation.
+- Added GLM 5.2 request builder, response model guard, OpenRouter client/key store, and Codex App model profile metadata.
+- Added Codex `rust-v0.141.0` compatibility evidence and a `codex:0.141-compat` gate.
+
+### Changed
+
+- Split GLM provider routing into pure profile, request, response guard, OpenRouter client, key lifecycle, and CLI mode modules.
+- Aligned Codex integration policy with `rust-v0.141.0` by delegating native relay/cwd/path/plugin MCP behavior, deduping App/MCP declarations, bounding prompt-image and feedback surfaces, and treating terminal resize reflow as Codex-native.
+
+### Security
+
+- OpenRouter API keys are stored outside project files with private permissions and redacted in logs/artifacts.
+- GLM mode locks requests to `z-ai/glm-5.2`, disables provider fallback, and rejects non-GLM response model ids before mutation.
+
+### Compatibility
+
+- Public CLI commands and aliases are preserved.
+- CI/CD and publish automation files are unchanged.
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [4.0.2] - 2026-06-18
 
 ### Added

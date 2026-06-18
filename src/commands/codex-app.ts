@@ -10,6 +10,7 @@ import { runCodexInitDeep } from '../core/codex-app/codex-init-deep.js';
 import { buildCodexHookLifecycle } from '../core/codex-app/codex-hook-lifecycle.js';
 import { resolveCodexAppExecutionProfile } from '../core/codex-app/codex-app-execution-profile.js';
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
+import { doctorCodexAppGlmProfile, installCodexAppGlmProfile } from '../core/codex-app/glm-profile-installer.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
@@ -23,6 +24,14 @@ export async function run(_command: any, args: any = []) {
   if (action === 'init-deep') return printCodexAppResult(args, await runCodexInitDeep({ root: await sksRoot(), apply: !flag(args, '--check-only') && !flag(args, '--dry-run') }));
   if (action === 'hook-lifecycle') return printCodexAppResult(args, await buildCodexHookLifecycle({ root: await sksRoot(), apply: flag(args, '--apply') || flag(args, '--fix') }));
   if (action === 'execution-profile') return printCodexAppResult(args, await resolveCodexAppExecutionProfile({ root: await sksRoot() }));
+  if (action === 'glm-profile') {
+    const subcommand = args[1] || 'doctor';
+    const root = await sksRoot();
+    const result = subcommand === 'install' || subcommand === 'repair'
+      ? await installCodexAppGlmProfile({ root, apply: true })
+      : await doctorCodexAppGlmProfile({ root });
+    return printCodexAppResult(args, result);
+  }
   if (action === 'product-design' || action === 'design-product' || action === 'ensure-product-design') {
     const checkOnly = flag(args, '--check-only') || flag(args, '--no-install');
     const status = await codexProductDesignPluginStatus({
@@ -76,7 +85,7 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|glm-profile [install|doctor]|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
   process.exitCode = 1;
 }
 
