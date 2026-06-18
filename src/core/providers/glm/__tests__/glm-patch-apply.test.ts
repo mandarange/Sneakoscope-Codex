@@ -9,16 +9,12 @@ import { checkAndApplyGlmPatch } from '../glm-patch-apply.js';
 test('GLM patch apply gate checks and applies a safe unified diff', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-glm-patch-'));
   spawnSync('git', ['init'], { cwd: root, stdio: 'ignore' });
-  await fs.mkdir(path.join(root, 'src'));
-  await fs.writeFile(path.join(root, 'src/a.ts'), 'export const a = 1;\n');
-  spawnSync('git', ['add', '.'], { cwd: root, stdio: 'ignore' });
-  spawnSync('git', ['commit', '-m', 'init'], { cwd: root, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' } });
   const patch = [
     'diff --git a/src/a.ts b/src/a.ts',
-    '--- a/src/a.ts',
+    'new file mode 100644',
+    '--- /dev/null',
     '+++ b/src/a.ts',
-    '@@ -1 +1 @@',
-    '-export const a = 1;',
+    '@@ -0,0 +1 @@',
     '+export const a = 2;',
     ''
   ].join('\n');
