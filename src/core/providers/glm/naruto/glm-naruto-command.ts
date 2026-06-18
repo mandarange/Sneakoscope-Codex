@@ -6,10 +6,19 @@ import type { GlmNarutoMissionResult } from './glm-naruto-types.js';
 
 export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMissionResult | unknown> {
   if (flag(args, '--bench')) {
+    // --compare is an alias; the benchmark always compares direct vs Naruto.
     const result = await runGlmNarutoBench(process.cwd(), args);
     if (flag(args, '--json')) printJson(result);
-    else if (result.status === 'blocked') console.error(`GLM Naruto bench blocked: ${result.warnings.join(', ')}`);
-    else console.log(`GLM Naruto bench: ${result.status} workers=${result.summary.simulated_workers} candidates=${result.summary.simulated_patch_candidates}`);
+    else if (result.status === 'blocked') console.error(`GLM benchmark blocked: ${result.warnings.join(', ')}`);
+    else if (result.status === 'dry_run') console.log(`GLM benchmark: dry-run (use --live for real measurement)`);
+    else {
+      const direct = result.cases.find((c) => c.implementation_path === 'direct-glm');
+      const best = result.comparison.best_naruto_runner_id;
+      console.log(`GLM benchmark: ${result.status} (${result.cases.length} cases)`);
+      if (direct) console.log(`  Direct GLM: ${direct.wall_clock_ms}ms`);
+      if (result.comparison.best_naruto_wall_clock_ms !== null) console.log(`  Best Naruto: ${best} at ${result.comparison.best_naruto_wall_clock_ms}ms`);
+      console.log(`  Recommendation: ${result.comparison.recommendation}`);
+    }
     return result;
   }
 

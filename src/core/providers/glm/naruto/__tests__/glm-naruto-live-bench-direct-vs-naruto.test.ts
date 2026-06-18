@@ -55,8 +55,11 @@ test('live bench separates true direct GLM from Naruto worker cases', async () =
     });
     assert.equal(directCalls, 1);
     assert.deepEqual(narutoWorkers, [1, 4, 8, 12]);
-    assert.equal(result.cases?.[0]?.kind, 'direct-glm');
-    assert.equal(result.cases?.[1]?.name, 'GLM Naruto 1 worker');
+    assert.equal(result.cases[0]?.kind, 'direct-glm');
+    assert.equal(result.cases[0]?.implementation_path, 'direct-glm');
+    assert.equal(result.cases[0]?.runner_id, 'direct-glm-speed');
+    assert.equal(result.cases[1]?.runner_id, 'glm-naruto-1');
+    assert.equal(result.cases[1]?.implementation_path, 'glm-naruto');
   } finally {
     if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = previous;
