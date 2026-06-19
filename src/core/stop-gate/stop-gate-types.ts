@@ -29,6 +29,11 @@ export interface SksStopGateEvidence {
   readonly model_guard_enforced?: boolean;
   readonly final_seal_passed?: boolean;
   readonly final_seal_path?: string | null;
+  readonly required_coverage_passed?: boolean;
+  readonly uncovered_required_count?: number;
+  readonly coverage_ledger_path?: string | null;
+  readonly parallelism_summary_path?: string | null;
+  readonly critical_path_path?: string | null;
   readonly stream_idle_timeout_ms?: number | null;
 }
 

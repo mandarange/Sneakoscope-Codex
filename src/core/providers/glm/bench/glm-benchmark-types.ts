@@ -1,6 +1,6 @@
 import type { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
 
-export const GLM_BENCHMARK_VERSION = '4.0.13' as const;
+export const GLM_BENCHMARK_VERSION = '4.0.14' as const;
 
 export type GlmBenchmarkRunnerId =
   | 'direct-glm-speed'
@@ -78,7 +78,7 @@ export interface GlmBenchmarkComparison {
 
 export interface GlmBenchmarkResult {
   readonly schema: 'sks.glm-benchmark-result.v1';
-  readonly version: '4.0.13';
+  readonly version: '4.0.14';
   readonly generated_at: string;
   readonly status: 'dry_run' | 'live' | 'blocked';
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
@@ -96,15 +96,22 @@ export interface GlmBenchModelLockProof {
   readonly checked_cases: readonly string[];
   readonly model: typeof GLM_52_OPENROUTER_MODEL;
   readonly gpt_fallback_allowed: false;
-  readonly fallback_arrays_found: 0;
-  readonly openai_key_used: false;
+  readonly request_summary_status: 'checked' | 'unavailable';
+  readonly request_summaries_checked: number;
+  readonly request_summaries_unavailable: number;
+  readonly naruto_request_summaries_checked: number;
+  readonly direct_trace_checked: boolean;
+  readonly fallback_arrays_found: number;
+  readonly openai_key_used: boolean;
+  readonly fallback_array_scan: 'checked' | 'unavailable';
+  readonly openai_key_usage_scan: 'checked' | 'unavailable';
   readonly mismatches: readonly string[];
   readonly passed: boolean;
 }
 
 export interface GlmBenchNoMutationProof {
   readonly schema: 'sks.glm-bench-no-mutation-proof.v1';
-  readonly user_cwd_unchanged: true;
+  readonly user_cwd_unchanged: boolean;
   readonly fixture_mutated_only_under_apply_temp: boolean;
   readonly cases_report_no_mutation: true;
   readonly passed: boolean;

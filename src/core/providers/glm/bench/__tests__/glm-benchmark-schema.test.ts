@@ -26,11 +26,11 @@ function mockNaruto(task: string, workers: number): GlmNarutoMissionResult {
   };
 }
 
-test('benchmark result schema is v1 with version 4.0.13', async () => {
+test('benchmark result schema is v1 with version 4.0.14', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-schema-'));
   const result = await runGlmBenchmark(root, []);
   assert.equal(result.schema, 'sks.glm-benchmark-result.v1');
-  assert.equal(result.version, '4.0.13');
+  assert.equal(result.version, '4.0.14');
   assert.equal(result.model, 'z-ai/glm-5.2');
   assert.equal(result.gpt_fallback_allowed, false);
 });

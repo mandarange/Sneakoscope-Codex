@@ -9,7 +9,9 @@ export function detectGlobalMode(args: readonly string[] = []): GlobalMode | nul
   const hasMad = args.includes('--mad');
   const hasGlm = args.includes('--glm');
   if (hasMad && hasGlm) return { kind: 'mad-glm', args: stripGlobalModeFlags(args) };
-  if (hasGlm && !hasMad) return { kind: 'glm-without-mad', args: stripGlobalModeFlags(args) };
+  if (hasGlm && !hasMad && String(args[0]).startsWith('-')) {
+    return { kind: 'glm-without-mad', args: stripGlobalModeFlags(args) };
+  }
   return null;
 }
 

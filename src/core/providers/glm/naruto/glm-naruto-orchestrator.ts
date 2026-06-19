@@ -21,6 +21,22 @@ import { buildGlmNarutoCandidateScoreboard } from './glm-naruto-scoreboard.js';
 import { runGlmNarutoApplyTransaction } from './glm-naruto-apply-transaction.js';
 import { finalizeGlmNarutoTerminal } from './glm-naruto-terminal.js';
 import { writeGlmNarutoFinalSeal } from './glm-naruto-final-seal.js';
+import { runGlmNarutoStageScheduler } from './glm-naruto-stage-scheduler.js';
+import {
+  buildGlmNarutoParallelismSummary,
+  metricFromStageResult,
+  writeGlmNarutoParallelismArtifacts
+} from './glm-naruto-parallelism-summary.js';
+import {
+  buildGlmNarutoRequirementCoverageSummary,
+  enrichGlmNarutoCandidateRequirementCoverage,
+  inferCandidateRequirementCoverage
+} from './glm-naruto-requirement-coverage.js';
+import { buildGlmNarutoRequirementLedger } from './glm-naruto-requirement-ledger.js';
+import {
+  buildGlmNarutoCriticalPathMetrics,
+  writeGlmNarutoCriticalPathArtifacts
+} from './glm-naruto-critical-path.js';
 import type {
   GlmNarutoMissionResult,
   GlmNarutoPatchEnvelope,
@@ -66,8 +82,15 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     });
   }
 
+  const decompositionStartedMs = Date.now();
   const mentionedPaths = extractMentionedPaths(input.task);
   const gitStatus = await readGitStatus(cwd);
+  const requirementLedger = buildGlmNarutoRequirementLedger({
+    missionId,
+    task: input.task,
+    mentionedPaths,
+    ...(gitStatus !== undefined ? { gitStatus } : {})
+  });
   const gitRoot = await getGitRoot(cwd);
   const baseCommit = gitRoot ? await getGitHead(cwd) : null;
   const isolationPolicy = resolveGlmNarutoIsolationPolicy({
@@ -112,6 +135,7 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
   }
 
   const laneMix = computeInitialLaneMix(graph);
+  const decompositionMs = Date.now() - decompositionStartedMs;
   const strategies = planShardCandidates(graph);
   const strategyMap = new Map<string, readonly GlmNarutoPatchStrategy[]>();
   for (const entry of strategies) {
@@ -155,6 +179,8 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
   let failedShardIds = poolResult.failedShardIds;
   let repairWaves = 0;
   let schedulerSummary = poolResult.schedulerSummary;
+  const stageMetrics = [...poolResult.stageMetrics];
+  const stageEvents = [...poolResult.stageEvents];
 
   // Repair wave if needed
   if (failedShardIds.length > 0 && repairWaves < GLM_NARUTO_LIMITS.max_repair_waves) {
@@ -177,9 +203,12 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
         isolationMode: isolationPolicy.selected,
         cleanupWorktrees: input.cleanupWorktrees ?? !input.keepWorktrees,
         baseCommit,
-        health: healthTracker
+        health: healthTracker,
+        stageName: 'repair_generation'
       });
       envelopes = [...envelopes, ...repairPool.envelopes];
+      stageMetrics.push(...repairPool.stageMetrics);
+      stageEvents.push(...repairPool.stageEvents);
       schedulerSummary = {
         max_observed_active_workers: Math.max(schedulerSummary.max_observed_active_workers, repairPool.schedulerSummary.max_observed_active_workers),
         backpressure_events: schedulerSummary.backpressure_events + repairPool.schedulerSummary.backpressure_events,
@@ -198,17 +227,23 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
   if (passedEnvelopes.length > 0 && !input.skipVerifier) {
     verifierWaveRun = true;
     const verifyApiKey = key.key;
-    const verifyResults = await Promise.allSettled(
-      passedEnvelopes.map((env) =>
+    const verifierStage = await runGlmNarutoStageScheduler({
+      stage: 'verifier',
+      jobs: passedEnvelopes.map((env) => ({ id: env.worker_id, stage: 'verifier' as const, input: env })),
+      max_active: Math.min(8, passedEnvelopes.length),
+      timeout_ms: 120_000,
+      runJob: (job) =>
         runVerifierWorker({
           apiKey: verifyApiKey,
           missionId,
-          workerId: env.worker_id,
-          envelope: env,
+          workerId: job.input.worker_id,
+          envelope: job.input,
           timeoutMs: 120_000,
         })
-      )
-    );
+    });
+    stageMetrics.push(metricFromStageResult(verifierStage));
+    stageEvents.push(...verifierStage.events);
+    const verifyResults = verifierStage.results;
     const verifiedEnvelopes: GlmNarutoPatchEnvelope[] = [];
     for (let vi = 0; vi < passedEnvelopes.length; vi++) {
       const env = passedEnvelopes[vi]!;
@@ -237,9 +272,12 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     });
     passedEnvelopes = envelopes.filter((e) => e.status === 'gate_passed');
   }
-  const warnings = input.skipVerifier && passedEnvelopes.length > 0 ? ['verifier_skipped_by_flag'] : [];
+  envelopes = envelopes.map((env) => enrichGlmNarutoCandidateRequirementCoverage({ envelope: env, ledger: requirementLedger }));
+  passedEnvelopes = envelopes.filter((e) => e.status === 'gate_passed');
+  const verifierWarnings = input.skipVerifier && passedEnvelopes.length > 0 ? ['verifier_skipped_by_flag'] : [];
 
   // Build conflict graph and merge plan
+  const conflictMergeStartedMs = Date.now();
   const nodes = passedEnvelopes.map((env) => ({
     patch_id: env.worker_id,
     shard_id: env.shard_id,
@@ -275,35 +313,64 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     useJudge: input.useJudge || false,
     xhighFinalizer: input.xhighFinalizer || false
   });
+  const conflictMergeMs = Date.now() - conflictMergeStartedMs;
+
+  const candidateRequirementCoverage = envelopes.map((env) => inferCandidateRequirementCoverage({ envelope: env, ledger: requirementLedger }));
+  const preliminarySelectedPatchIds = mergePlan.selected_patches;
+  const requirementCoverageSummary = buildGlmNarutoRequirementCoverageSummary({
+    missionId,
+    ledger: requirementLedger,
+    envelopes,
+    selectedPatchIds: preliminarySelectedPatchIds
+  });
+  const selectedPatchIds = requirementCoverageSummary.passed ? preliminarySelectedPatchIds : [];
 
   // Apply winning merge plan
   let appliedPatches = 0;
   let applyResult: { ok: boolean; applied: readonly string[]; blocker?: string } | null = null;
   let applyTransaction = null as Awaited<ReturnType<typeof runGlmNarutoApplyTransaction>>['transaction'] | null;
   const artifactDir = path.join(cwd, '.sneakoscope', 'glm-naruto', missionId);
+  let finalApplyMs: number | null = null;
 
-  if (!input.noApply && mergePlan.selected_patches.length > 0) {
+  if (!input.noApply && selectedPatchIds.length > 0) {
+    const finalApplyStartedMs = Date.now();
     const transactionResult = await runGlmNarutoApplyTransaction({
       cwd,
       missionId,
       envelopes,
-      selectedPatchIds: mergePlan.selected_patches,
+      selectedPatchIds,
       artifactDir,
       ...(input.allowDirtyApply !== undefined ? { allowDirtyApply: input.allowDirtyApply } : {}),
       ...(input.noRollback !== undefined ? { noRollback: input.noRollback } : {}),
       ...(input.strictChecks !== undefined ? { strictChecks: input.strictChecks } : {})
     });
+    finalApplyMs = Date.now() - finalApplyStartedMs;
     applyTransaction = transactionResult.transaction;
     appliedPatches = transactionResult.ok ? transactionResult.applied.length : 0;
     applyResult = { ok: transactionResult.ok, applied: transactionResult.applied, ...(transactionResult.transaction.blockers[0] ? { blocker: transactionResult.transaction.blockers[0] } : {}) };
   }
 
-  const terminalState: GlmNarutoTerminalState = appliedPatches > 0 ? 'completed' : passedEnvelopes.length > 0 ? 'partial_candidates' : 'blocked';
+  const coverageBlocked = !requirementCoverageSummary.passed;
+  const terminalState: GlmNarutoTerminalState = appliedPatches > 0
+    ? 'completed'
+    : passedEnvelopes.length > 0 ? 'partial_candidates' : 'blocked';
   const terminationReason = appliedPatches > 0
     ? 'completed_merge_applied'
     : applyResult && !applyResult.ok
       ? 'apply_transaction_failed'
-      : passedEnvelopes.length > 0 ? 'partial_no_apply' : 'no_gate_passed_candidates';
+      : coverageBlocked
+        ? 'required_requirement_coverage_missing'
+        : passedEnvelopes.length > 0 ? 'partial_no_apply' : 'no_gate_passed_candidates';
+
+  const parallelismSummary = buildGlmNarutoParallelismSummary({
+    metrics: stageMetrics,
+    totalWallClockMs: Date.now() - startedMs
+  });
+  const warnings = [
+    ...verifierWarnings,
+    ...parallelismSummary.blockers,
+    ...(coverageBlocked ? ['required_requirement_coverage_missing'] : [])
+  ];
 
   const summary = buildMissionSummary({
     missionId,
@@ -335,7 +402,9 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     failed_shards: summary.failed_shards,
     repair_waves: summary.repair_waves,
     budget_used_ms: summary.budget_used_ms,
-    blockers: terminalState === 'blocked' ? ['no_gate_passed_candidates'] : (applyResult && !applyResult.ok ? [applyResult.blocker || 'apply_transaction_failed'] : []),
+    blockers: coverageBlocked
+      ? requirementCoverageSummary.uncovered_required_requirements.map((id) => `required_requirement_uncovered:${id}`)
+      : terminalState === 'blocked' ? ['no_gate_passed_candidates'] : (applyResult && !applyResult.ok ? [applyResult.blocker || 'apply_transaction_failed'] : []),
     warnings
   };
 
@@ -358,6 +427,15 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     missionResult: result,
     envelopes
   });
+  await writeJsonAtomic(path.join(writtenArtifactDir, 'requirement-ledger.json'), requirementLedger).catch(() => undefined);
+  await writeJsonAtomic(path.join(writtenArtifactDir, 'candidate-requirement-coverage.json'), candidateRequirementCoverage).catch(() => undefined);
+  await writeJsonAtomic(path.join(writtenArtifactDir, 'requirement-coverage-summary.json'), requirementCoverageSummary).catch(() => undefined);
+  await writeGlmNarutoParallelismArtifacts({
+    root: cwd,
+    missionId,
+    summary: parallelismSummary,
+    events: stageEvents
+  }).catch(() => undefined);
   const secretAudit = await auditGlmNarutoArtifactsForSecrets(path.join(cwd, '.sneakoscope', 'glm-naruto', missionId)).catch((err) => ({
     schema: 'sks.glm-naruto-secret-audit.v1' as const,
     ok: false,
@@ -367,6 +445,7 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
   }));
   await writeJsonAtomic(path.join(writtenArtifactDir, 'secret-audit.json'), secretAudit).catch(() => undefined);
   const predictedStopGatePath = path.join(cwd, '.sneakoscope', 'missions', missionId, 'stop-gate.json');
+  const finalSealStartedMs = Date.now();
   const finalSeal = await writeGlmNarutoFinalSeal({
     artifactDir: writtenArtifactDir,
     missionId,
@@ -375,7 +454,8 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     traces: traceState.workerTraces,
     isolationPolicy,
     scheduler: schedulerSummary,
-    selectedPatchIds: mergePlan.selected_patches,
+    selectedPatchIds,
+    requirementCoverage: requirementCoverageSummary,
     applyTransaction,
     secretAudit,
     stopGatePath: predictedStopGatePath,
@@ -386,6 +466,17 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
     passed: false,
     error: err instanceof Error ? err.message : String(err)
   }));
+  const finalSealMs = Date.now() - finalSealStartedMs;
+  const criticalPath = buildGlmNarutoCriticalPathMetrics({
+    totalWallClockMs: Date.now() - startedMs,
+    stages: parallelismSummary.stages,
+    decompositionMs,
+    conflictMergeMs,
+    finalApplyMs,
+    finalSealMs,
+    parallelismWarnings: parallelismSummary.blockers
+  });
+  await writeGlmNarutoCriticalPathArtifacts({ root: cwd, missionId, metrics: criticalPath }).catch(() => undefined);
   // 4.0.9: Write canonical stop-gate artifacts for hook resolution.
   await writeFinalStopGate({
     root: cwd,
@@ -404,6 +495,11 @@ export async function runGlmNarutoMission(input: OrchestratorInput): Promise<Glm
       model_guard_enforced: true,
       final_seal_passed: finalSeal.passed,
       final_seal_path: finalSeal.path,
+      required_coverage_passed: requirementCoverageSummary.passed,
+      uncovered_required_count: requirementCoverageSummary.uncovered_required_requirements.length,
+      coverage_ledger_path: path.join(writtenArtifactDir, 'requirement-coverage-summary.json'),
+      parallelism_summary_path: path.join(writtenArtifactDir, 'parallelism-summary.json'),
+      critical_path_path: path.join(writtenArtifactDir, 'critical-path.json'),
       proof_required: false,
       proof_passed: true,
       reflection_required: false,
