@@ -4,7 +4,18 @@
 
 
 
-## [4.0.12] - 2026-06-19
+
+## [4.0.14] - 2026-06-19
+
+### Fixed
+
+- Added real parallel-stage execution metrics for GLM Naruto.
+- Added bounded parallel queues for candidate gate, worktree, and verifier phases.
+- Added requirement coverage tracking to prevent parallel workers from missing task details.
+- Preserved `sks --mad` GPT/Codex/MAD route isolation from GLM/OpenRouter mode.
+- Fixed benchmark/proof metadata regressions from 4.0.13.
+
+## [4.0.13] - 2026-06-19
 
 ### Fixed
 
@@ -13,6 +24,12 @@
 - Live bench now separates the true direct GLM speed path from GLM Naruto 1/4/8/12 worker cases and marks unavailable metrics as null plus `metric_status`.
 - Final apply now blocks dirty touched paths by default, runs targeted checks after apply, and rolls back when those checks fail.
 - Added `final-seal.json`, stop-gate final-seal evidence, `merge-rationale.md`, and live bench markdown report artifacts for GLM Naruto audits.
+
+## [4.0.12] - 2026-06-19
+
+### Fixed
+
+- Kept release metadata aligned after the explicit 4.0.12 package version bump.
 
 ## [4.0.11] - 2026-06-19
 

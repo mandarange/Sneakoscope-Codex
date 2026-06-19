@@ -93,6 +93,10 @@ export async function runPatchWorker(input: WorkerRunInput): Promise<WorkerRunRe
       request_body_size: encoded.entry.byteLength,
       request_body_stored: encoded.entry.bodyStored,
       cache_hit: encoded.cacheHit,
+      gpt_fallback_allowed: false,
+      fallback_models_count: Array.isArray((requestWithSession as { models?: unknown }).models) ? (requestWithSession as { models?: unknown[] }).models?.length ?? 0 : 0,
+      openai_key_used: false,
+      authorization_source: 'openrouter',
       stable_prefix_digest: stablePrefixDigest,
       shard_suffix_digest: shardSuffixDigest
     }
@@ -285,8 +289,8 @@ export async function runVerifierWorker(input: {
   const started = Date.now();
   const sessionId = normalizeGlmNarutoSessionId(`sks-glm-naruto-verify-${input.missionId}-${input.workerId}`);
   const messages: OpenRouterChatMessage[] = [
-    { role: 'system', content: `You are a SKS GLM Naruto verifier. Model: ${GLM_52_OPENROUTER_MODEL}. No GPT fallback. Return only JSON with schema "sks.glm-naruto-verifier-output.v1", ok boolean, issues string array, risk_score number 0..1, confidence number 0..1. Do not include markdown.` },
-    { role: 'user', content: JSON.stringify({ patch_sha256: input.envelope.patch_sha256, target_paths: input.envelope.target_paths, patch: input.envelope.patch.slice(0, 4000) }) }
+    { role: 'system', content: `You are a SKS GLM Naruto verifier. Model: ${GLM_52_OPENROUTER_MODEL}. No GPT fallback. Return only JSON with schema "sks.glm-naruto-verifier-output.v1", ok boolean, issues string array, risk_score number 0..1, confidence number 0..1, requirements_satisfied string array, requirements_missing string array, and detail_loss_risks string array. Do not include markdown.` },
+    { role: 'user', content: JSON.stringify({ patch_sha256: input.envelope.patch_sha256, target_paths: input.envelope.target_paths, requirements_satisfied: input.envelope.requirements_satisfied ?? [], requirements_risk: input.envelope.requirements_risk ?? [], patch: input.envelope.patch.slice(0, 4000) }) }
   ];
 
   const request = buildGlm52Request({

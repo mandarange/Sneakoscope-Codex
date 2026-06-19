@@ -31,6 +31,7 @@ import {
   writeMadGlmCodexWrapper
 } from '../providers/glm/glm-mad-launch.js';
 import { GLM_MAD_MODE } from '../providers/glm/glm-52-settings.js';
+import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -38,6 +39,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
 
   const rawArgs = (args || []).map((arg: any) => String(arg));
   const glmMadLaunch = isMadGlmLaunch(rawArgs, deps);
+  if (!glmMadLaunch) assertNonGlmMadRoute(rawArgs.includes('--mad') ? rawArgs : ['--mad', ...rawArgs]);
   const glmOnlyFlagBlockers = findGlmOnlyMadFlagBlockers(rawArgs, glmMadLaunch);
   if (glmOnlyFlagBlockers.length) {
     const result = {

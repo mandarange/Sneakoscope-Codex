@@ -7,6 +7,11 @@ test('detectGlobalMode routes top-level --mad --glm before command dispatch', ()
     kind: 'mad-glm',
     args: ['--json']
   });
+  assert.equal(detectGlobalMode(['--mad', '--json']), null);
+  assert.deepEqual(detectGlobalMode(['--mad', '--glm', '--naruto', '--json']), {
+    kind: 'mad-glm',
+    args: ['--naruto', '--json']
+  });
   assert.deepEqual(stripGlobalModeFlags(['--mad', '--glm', '--repair']), ['--repair']);
   assert.deepEqual(stripGlobalModeFlags(['--mad', '--glm', '--deep', '--trace']), ['--deep', '--trace']);
   assert.deepEqual(stripGlobalModeFlags(['--mad', '--glm', '--bench', '--json']), ['--bench', '--json']);
@@ -14,6 +19,7 @@ test('detectGlobalMode routes top-level --mad --glm before command dispatch', ()
 
 test('detectGlobalMode blocks bare --glm and leaves help/version alone', () => {
   assert.deepEqual(detectGlobalMode(['--glm']), { kind: 'glm-without-mad', args: [] });
+  assert.equal(detectGlobalMode(['naruto', '--glm', '--json']), null);
   assert.equal(detectGlobalMode(['help']), null);
   assert.equal(detectGlobalMode(['version']), null);
   assert.equal(glmWithoutMadResult().hint, 'use sks --mad --glm');

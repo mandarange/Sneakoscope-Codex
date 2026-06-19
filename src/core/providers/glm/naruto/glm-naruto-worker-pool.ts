@@ -11,6 +11,16 @@ import { materializePatchViaWorktree } from './glm-naruto-worktree-worker.js';
 import type { GlmNarutoIsolationMode } from './glm-naruto-isolation-policy.js';
 import { createProviderHealthTracker, type ProviderHealthTracker } from '../../openrouter/openrouter-provider-health.js';
 import { runGlmNarutoWorkerScheduler, type GlmNarutoWorkerJob } from './glm-naruto-worker-scheduler.js';
+import {
+  runGlmNarutoStageScheduler,
+  type GlmNarutoStageEvent,
+  type GlmNarutoStageName
+} from './glm-naruto-stage-scheduler.js';
+import {
+  createStageParallelismMetric,
+  metricFromStageResult,
+  type GlmNarutoStageParallelismMetric
+} from './glm-naruto-parallelism-summary.js';
 
 export interface WorkerPoolInput {
   readonly apiKey: string;
@@ -25,6 +35,7 @@ export interface WorkerPoolInput {
   readonly cleanupWorktrees?: boolean;
   readonly baseCommit?: string | null;
   readonly health?: ProviderHealthTracker;
+  readonly stageName?: GlmNarutoStageName;
 }
 
 export interface WorkerPoolResult {
@@ -37,6 +48,20 @@ export interface WorkerPoolResult {
     readonly backpressure_events: number;
     readonly queue_drained: boolean;
   };
+  readonly stageMetrics: readonly GlmNarutoStageParallelismMetric[];
+  readonly stageEvents: readonly GlmNarutoStageEvent[];
+}
+
+interface SuccessfulCandidate {
+  readonly envelope: GlmNarutoPatchEnvelope;
+  readonly trace: GlmNarutoWorkerTrace;
+}
+
+interface MaterializedCandidate {
+  readonly envelope: GlmNarutoPatchEnvelope;
+  readonly trace: GlmNarutoWorkerTrace;
+  readonly gateEligible: boolean;
+  readonly worktreeRecord?: Record<string, unknown>;
 }
 
 export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<WorkerPoolResult> {
@@ -44,6 +69,8 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
   const traces: GlmNarutoWorkerTrace[] = [];
   const failedShardIds: string[] = [];
   const concurrencyDecisions: GlmNarutoConcurrencyDecision[] = [];
+  const stageMetrics: GlmNarutoStageParallelismMetric[] = [];
+  const stageEvents: GlmNarutoStageEvent[] = [];
 
   const mutableShards = input.shards.filter((s) => s.mutable);
   const decision = decideConcurrency({
@@ -68,6 +95,7 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
   }
 
   const health = input.health ?? createProviderHealthTracker();
+  const patchGenerationStarted = Date.now();
   const schedulerResult = await runGlmNarutoWorkerScheduler({
     jobs,
     initial_active_workers: decision.target_active_workers,
@@ -87,24 +115,59 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
       timeoutMs: input.workerTimeoutMs
     })
   });
+  const patchGenerationWallClockMs = Date.now() - patchGenerationStarted;
   await writeSchedulerArtifacts(input.cwd, input.missionId, schedulerResult).catch(() => undefined);
   const results = schedulerResult.results;
+  stageMetrics.push(createStageParallelismMetric({
+    stage: input.stageName ?? 'patch_generation',
+    job_count: jobs.length,
+    max_observed_active: schedulerResult.max_observed_active_workers,
+    wall_clock_ms: patchGenerationWallClockMs,
+    sum_job_duration_ms: schedulerResult.results.reduce((sum, result) => (
+      result.status === 'fulfilled' ? sum + Math.max(0, result.value.trace.total_ms) : sum + input.workerTimeoutMs
+    ), 0),
+    overlap_ratio: 1
+  }));
 
+  const successfulCandidates: SuccessfulCandidate[] = [];
   for (const result of results) {
     if (result.status === 'fulfilled' && result.value.ok && result.value.envelope) {
-      const isolationMode = input.isolationMode ?? 'patch-envelope-only';
-      let candidateEnvelope = result.value.envelope;
-      let worktreeRecord: Record<string, unknown> | undefined;
-      if (isolationMode === 'git-worktree') {
+      successfulCandidates.push({ envelope: result.value.envelope, trace: result.value.trace });
+    } else if (result.status === 'fulfilled') {
+      traces.push(result.value.trace);
+      failedShardIds.push(result.value.trace.shard_id);
+    } else {
+      // rejected promise
+      failedShardIds.push('unknown');
+    }
+  }
+
+  const isolationMode = input.isolationMode ?? 'patch-envelope-only';
+  let materializedCandidates: MaterializedCandidate[] = successfulCandidates.map((candidate) => ({
+    envelope: candidate.envelope,
+    trace: candidate.trace,
+    gateEligible: true
+  }));
+
+  if (isolationMode === 'git-worktree' && materializedCandidates.length > 0) {
+    const worktreeStage = await runGlmNarutoStageScheduler({
+      stage: 'worktree_materialization',
+      jobs: materializedCandidates.map((candidate) => ({
+        id: candidate.envelope.worker_id,
+        stage: 'worktree_materialization' as const,
+        input: candidate
+      })),
+      max_active: Math.min(4, materializedCandidates.length),
+      timeout_ms: input.workerTimeoutMs,
+      runJob: async (job) => {
         const worktree = await materializePatchViaWorktree({
           repoRoot: input.cwd,
           missionId: input.missionId,
-          envelope: candidateEnvelope,
+          envelope: job.input.envelope,
           ...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
           cleanup: input.cleanupWorktrees !== false
         });
-        candidateEnvelope = worktree.envelope;
-        worktreeRecord = {
+        const worktreeRecord = {
           schema: 'sks.glm-naruto-worker-worktree.v1',
           selected: 'git-worktree',
           ok: worktree.ok,
@@ -116,34 +179,91 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
           applied_patch_was_extracted: worktree.worktree?.applied_patch_was_extracted ?? false,
           blockers: worktree.blockers
         };
-        if (!worktree.ok) {
-          await writeGlmNarutoWorkerArtifacts({
-            root: input.cwd,
-            missionId: input.missionId,
-            workerId: candidateEnvelope.worker_id,
-            shardId: candidateEnvelope.shard_id,
-            patchEnvelope: candidateEnvelope,
-            streamTrace: result.value.trace,
-            isolation: {
-              schema: 'sks.glm-naruto-worker-isolation.v1',
-              selected: isolationMode,
-              workers_write_main_workspace: false
-            },
-            worktree: worktreeRecord,
-            termination: { status: candidateEnvelope.status, ok: false, blockers: candidateEnvelope.blockers }
-          }).catch(() => undefined);
-          envelopes.push(candidateEnvelope);
-          traces.push(result.value.trace);
-          failedShardIds.push(candidateEnvelope.shard_id);
-          continue;
-        }
+        return {
+          envelope: worktree.ok ? worktree.envelope : { ...worktree.envelope, status: 'gate_failed' as const, blockers: worktree.blockers },
+          worktreeRecord,
+          ok: worktree.ok
+        };
       }
-      const gate = await evaluateGlmNarutoPatchCandidateGate({
+    });
+    stageMetrics.push(metricFromStageResult(worktreeStage));
+    stageEvents.push(...worktreeStage.events);
+    materializedCandidates = materializedCandidates.map((candidate, index) => {
+      const result = worktreeStage.results[index];
+      if (result?.status === 'fulfilled') {
+        return {
+          envelope: result.value.envelope,
+          trace: candidate.trace,
+          gateEligible: result.value.ok,
+          worktreeRecord: result.value.worktreeRecord
+        };
+      }
+      return {
+        envelope: { ...candidate.envelope, status: 'gate_failed' as const, blockers: ['worktree_materialization_failed'] },
+        trace: candidate.trace,
+        gateEligible: false
+      };
+    });
+  }
+
+  for (const candidate of materializedCandidates.filter((item) => !item.gateEligible)) {
+    await writeGlmNarutoWorkerArtifacts({
+      root: input.cwd,
+      missionId: input.missionId,
+      workerId: candidate.envelope.worker_id,
+      shardId: candidate.envelope.shard_id,
+      patchEnvelope: candidate.envelope,
+      streamTrace: candidate.trace,
+      isolation: {
+        schema: 'sks.glm-naruto-worker-isolation.v1',
+        selected: isolationMode,
+        workers_write_main_workspace: false
+      },
+      ...(candidate.worktreeRecord ? { worktree: candidate.worktreeRecord } : {}),
+      termination: { status: candidate.envelope.status, ok: false, blockers: candidate.envelope.blockers }
+    }).catch(() => undefined);
+    envelopes.push(candidate.envelope);
+    traces.push(candidate.trace);
+    failedShardIds.push(candidate.envelope.shard_id);
+  }
+
+  const gateCandidates = materializedCandidates.filter((item) => item.gateEligible);
+  if (gateCandidates.length > 0) {
+    const gateStage = await runGlmNarutoStageScheduler({
+      stage: 'candidate_gate',
+      jobs: gateCandidates.map((candidate) => ({
+        id: candidate.envelope.worker_id,
+        stage: 'candidate_gate' as const,
+        input: candidate
+      })),
+      max_active: Math.min(8, gateCandidates.length),
+      timeout_ms: Math.min(60_000, input.workerTimeoutMs),
+      runJob: (job) => evaluateGlmNarutoPatchCandidateGate({
         cwd: input.cwd,
-        envelope: candidateEnvelope,
+        envelope: job.input.envelope,
         apply: false
-      });
-      let envelope = candidateEnvelope;
+      })
+    });
+    stageMetrics.push(metricFromStageResult(gateStage));
+    stageEvents.push(...gateStage.events);
+
+    for (let index = 0; index < gateCandidates.length; index += 1) {
+      const candidate = gateCandidates[index]!;
+      const result = gateStage.results[index];
+      const gate = result?.status === 'fulfilled'
+        ? result.value
+        : {
+            schema: 'sks.glm-naruto-patch-candidate-gate.v1' as const,
+            ok: false,
+            worker_id: candidate.envelope.worker_id,
+            shard_id: candidate.envelope.shard_id,
+            patch_id: candidate.envelope.patch_sha256,
+            extracted_patch: '',
+            touched_paths: [],
+            checks: [],
+            blockers: ['candidate_gate_failed']
+          };
+      let envelope = candidate.envelope;
       if (gate.ok) {
         envelope = createPatchEnvelope({
           missionId: envelope.mission_id,
@@ -170,23 +290,17 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
         shardId: envelope.shard_id,
         patchEnvelope: envelope,
         gateResult: gate,
-        streamTrace: result.value.trace,
+        streamTrace: candidate.trace,
         isolation: {
           schema: 'sks.glm-naruto-worker-isolation.v1',
           selected: isolationMode,
           workers_write_main_workspace: false
         },
-        ...(worktreeRecord ? { worktree: worktreeRecord } : {}),
+        ...(candidate.worktreeRecord ? { worktree: candidate.worktreeRecord } : {}),
         termination: { status: envelope.status, ok: gate.ok, blockers: envelope.blockers }
       }).catch(() => undefined);
       envelopes.push(envelope);
-      traces.push(result.value.trace);
-    } else if (result.status === 'fulfilled') {
-      traces.push(result.value.trace);
-      failedShardIds.push(result.value.trace.shard_id);
-    } else {
-      // rejected promise
-      failedShardIds.push('unknown');
+      traces.push(candidate.trace);
     }
   }
 
@@ -199,7 +313,9 @@ export async function runPatchWorkerPool(input: WorkerPoolInput): Promise<Worker
       max_observed_active_workers: schedulerResult.max_observed_active_workers,
       backpressure_events: schedulerResult.backpressure_events,
       queue_drained: true
-    }
+    },
+    stageMetrics,
+    stageEvents
   };
 }
 

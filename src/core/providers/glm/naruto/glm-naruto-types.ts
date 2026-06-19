@@ -99,6 +99,36 @@ export interface GlmNarutoPatchEnvelope {
   readonly chunk_count?: number | null;
   readonly real_stream?: boolean;
   readonly idle_timeout_ms?: number | null;
+  readonly requirements_satisfied?: readonly string[];
+  readonly requirements_risk?: readonly string[];
+  readonly assumptions?: readonly string[];
+}
+
+export interface GlmNarutoRequirementLedger {
+  readonly schema: 'sks.glm-naruto-requirement-ledger.v1';
+  readonly mission_id: string;
+  readonly requirements: readonly {
+    readonly id: string;
+    readonly text: string;
+    readonly source: 'user_task' | 'git_status' | 'test_error' | 'inferred';
+    readonly required: boolean;
+  }[];
+}
+
+export interface GlmNarutoRequirementCoverageSummary {
+  readonly schema: 'sks.glm-naruto-requirement-coverage-summary.v1';
+  readonly mission_id: string;
+  readonly required_total: number;
+  readonly required_covered: number;
+  readonly uncovered_required_requirements: readonly string[];
+  readonly passed: boolean;
+  readonly requirements: readonly {
+    readonly requirement_id: string;
+    readonly required: boolean;
+    readonly covered: boolean;
+    readonly satisfied_by: readonly string[];
+    readonly risk_by: readonly string[];
+  }[];
 }
 
 export interface PatchCandidateNode {

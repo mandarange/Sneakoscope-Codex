@@ -70,3 +70,33 @@ test('final seal blocks on model mismatch evidence', async () => {
   assert.equal(result.seal.status, 'blocked');
   assert.deepEqual(result.seal.model_lock.mismatches, ['envelope:w1']);
 });
+
+test('final seal blocks when required requirement coverage is missing', async () => {
+  const artifactDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-final-seal-'));
+  const result = await writeGlmNarutoFinalSeal({
+    artifactDir,
+    missionId: 'M-test',
+    result: missionResult(true),
+    envelopes: [],
+    traces: [],
+    isolationPolicy: { schema: 'sks.glm-naruto-isolation-policy.v1', requested: 'patch-envelope-only', selected: 'patch-envelope-only', honest: true, reason: 'test', blockers: [], fallback_allowed: false, workers_write_main_workspace: false },
+    scheduler: { max_observed_active_workers: 1, queue_drained: true, backpressure_events: 0 },
+    selectedPatchIds: ['w1'],
+    requirementCoverage: {
+      schema: 'sks.glm-naruto-requirement-coverage-summary.v1',
+      mission_id: 'M-test',
+      required_total: 2,
+      required_covered: 1,
+      uncovered_required_requirements: ['REQ-002'],
+      passed: false,
+      requirements: []
+    },
+    applyTransaction: null,
+    secretAudit: { ok: true, findings: [] },
+    stopGatePath: path.join(artifactDir, 'stop-gate.json'),
+    stopGatePassed: false
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.seal.status, 'blocked');
+  assert.deepEqual(result.seal.requirement_coverage.uncovered_required_requirements, ['REQ-002']);
+});

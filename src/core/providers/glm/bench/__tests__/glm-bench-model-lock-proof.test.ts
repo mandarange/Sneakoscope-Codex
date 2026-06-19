@@ -35,6 +35,7 @@ test('model-lock-proof.json is written for live benchmark', async () => {
     assert.equal(result.model_lock_proof.gpt_fallback_allowed, false);
     assert.equal(result.model_lock_proof.fallback_arrays_found, 0);
     assert.equal(result.model_lock_proof.openai_key_used, false);
+    assert.equal(result.model_lock_proof.request_summary_status, 'unavailable');
     assert.equal(result.model_lock_proof.mismatches.length, 0);
     assert.equal(result.model_lock_proof.passed, true);
     assert.equal(result.model_lock_proof.checked_cases.length, 5);
@@ -64,4 +65,29 @@ test('buildGlmBenchModelLockProof detects model mismatch', () => {
   const proof = buildGlmBenchModelLockProof(cases);
   assert.equal(proof.passed, false);
   assert.ok(proof.mismatches.length >= 1);
+});
+
+test('buildGlmBenchModelLockProof marks request summaries checked when provided', () => {
+  const cases: GlmBenchmarkCaseResult[] = [
+    {
+      schema: 'sks.glm-benchmark-case.v1',
+      name: 'good', kind: 'glm-naruto', runner_id: 'glm-naruto-1',
+      implementation_path: 'glm-naruto', workers: 1,
+      model: 'z-ai/glm-5.2', gpt_fallback_allowed: false,
+      no_apply: true, mutation_performed: false, wall_clock_ms: 100,
+      p50_ttft_ms: null, p90_ttft_ms: null, p50_total_ms: null, p90_total_ms: null,
+      candidate_count: null, gate_pass_rate: null, verifier_pass_rate: null,
+      merge_success: null, patch_generated: null, patch_gate_passed: null,
+      cached_tokens_sum: null, cache_write_tokens_sum: null, reasoning_tokens_sum: null,
+      metric_status: { latency: 'unavailable', usage: 'unavailable', candidate: 'measured', verifier: 'measured', merge: 'measured' },
+      artifacts: { case_dir: '/tmp', trace_path: null, mission_artifact_dir: null },
+      blockers: [], warnings: []
+    }
+  ];
+  const proof = buildGlmBenchModelLockProof(cases, {
+    requestSummaries: [{ worker_id: 'worker-1', model: 'z-ai/glm-5.2', gpt_fallback_allowed: false, fallback_models_count: 0, openai_key_used: false }]
+  });
+  assert.equal(proof.request_summary_status, 'checked');
+  assert.equal(proof.request_summaries_checked, 1);
+  assert.equal(proof.passed, true);
 });

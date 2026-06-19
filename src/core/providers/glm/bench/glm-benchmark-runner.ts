@@ -157,13 +157,16 @@ export async function runGlmBenchmark(
   await cleanupFixture(sharedFixture);
 
   const comparison = computeGlmBenchmarkComparison(cases);
-  const modelLockProof = buildGlmBenchModelLockProof(cases);
+  const modelLockProof = buildGlmBenchModelLockProof(cases, {
+    requestSummaries: await collectRequestSummaries(cases),
+    directTraceChecked: cases.some((c) => c.runner_id === 'direct-glm-speed' && c.artifacts.trace_path !== null)
+  });
 
   const userCwdAfter = await captureGitStatus(userCwd);
   const userCwdUnchanged = userCwdBefore === userCwdAfter;
   const noMutationProof: GlmBenchNoMutationProof = {
     schema: 'sks.glm-bench-no-mutation-proof.v1',
-    user_cwd_unchanged: userCwdUnchanged ? true : true,
+    user_cwd_unchanged: userCwdUnchanged,
     fixture_mutated_only_under_apply_temp: !applyTemp,
     cases_report_no_mutation: true,
     passed: userCwdUnchanged && cases.every((c) => c.mutation_performed === false)
@@ -171,7 +174,7 @@ export async function runGlmBenchmark(
 
   const result: GlmBenchmarkResult = {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.0.13',
+    version: '4.0.14',
     generated_at: nowIso(),
     status: 'live',
     model: GLM_52_OPENROUTER_MODEL,
@@ -201,7 +204,7 @@ export async function runGlmBenchmark(
 function dryRunResult(root: string, startedMs: number): GlmBenchmarkResult {
   return {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.0.13',
+    version: '4.0.14',
     generated_at: nowIso(),
     status: 'dry_run',
     model: GLM_52_OPENROUTER_MODEL,
@@ -225,7 +228,7 @@ function dryRunResult(root: string, startedMs: number): GlmBenchmarkResult {
 function blockedResult(root: string, warnings: string[]): GlmBenchmarkResult {
   return {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.0.13',
+    version: '4.0.14',
     generated_at: nowIso(),
     status: 'blocked',
     model: GLM_52_OPENROUTER_MODEL,
@@ -253,6 +256,25 @@ async function readWorkerTraces(artifactDir: string | undefined): Promise<GlmNar
   } catch {
     return [];
   }
+}
+
+async function collectRequestSummaries(cases: readonly GlmBenchmarkCaseResult[]): Promise<readonly Record<string, unknown>[]> {
+  const summaries: Record<string, unknown>[] = [];
+  for (const caseResult of cases) {
+    const dir = caseResult.artifacts.mission_artifact_dir;
+    if (!dir) continue;
+    try {
+      const workerRoot = path.join(dir, 'workers');
+      const workerIds = await fsp.readdir(workerRoot);
+      for (const workerId of workerIds) {
+        try {
+          const summary = JSON.parse(await fsp.readFile(path.join(workerRoot, workerId, 'request-summary.json'), 'utf8')) as Record<string, unknown>;
+          summaries.push(summary);
+        } catch {}
+      }
+    } catch {}
+  }
+  return summaries;
 }
 
 async function captureGitStatus(cwd: string): Promise<string> {

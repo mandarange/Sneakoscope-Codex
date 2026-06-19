@@ -35,9 +35,17 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.12** seals GLM Naruto's production runtime path: worktree workers apply extracted unified diffs only, patch workers launch through a bounded adaptive scheduler, live bench compares true direct GLM against Naruto worker counts, final apply runs dirty-tree and targeted-check guards, and stop-gates reference a final seal artifact.
+SKS **4.0.14** seals GLM Naruto real parallelism while preserving the existing GPT/Codex/MAD `sks --mad` route. GLM mode stays locked to OpenRouter `z-ai/glm-5.2`; non-GLM MAD does not require OpenRouter, does not select GLM, and does not enter the GLM Naruto scheduler.
 
-What changed in 4.0.12:
+What changed in 4.0.14:
+
+- **Real stage parallelism evidence.** GLM Naruto records bounded parallel stage timelines, overlap ratios, parallelism summaries, critical-path metrics, and speed diagnosis artifacts.
+- **Parallel gate/verifier/worktree stages.** Candidate gate, worktree materialization, and verifier checks no longer have to run candidate-by-candidate when multiple candidates are available.
+- **Requirement coverage seal.** GLM Naruto writes a requirement ledger and candidate coverage artifacts, and the final seal blocks when required requirements remain uncovered.
+- **MAD route isolation.** `sks --mad` without `--glm` remains the GPT/Codex/MAD route and does not resolve OpenRouter or run GLM-specific benchmark/Naruto code.
+- **Benchmark proof honesty.** GLM benchmark proof now reports request-summary availability separately from case-level model lock checks and fixes the no-mutation proof boolean.
+
+What changed in 4.0.13:
 
 - **Extracted worktree patches.** `--worktree` parses `<sks_patch_candidate>` and records candidate/extracted patch hashes before any worker worktree apply.
 - **Adaptive scheduler.** Patch workers use a finite launch queue with provider-health backpressure and retry-once handling for retryable 429/5xx/idle-timeout failures.
