@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:execution-profile-routing",
+  "cache_key": "b7aa17cc8d8af2aeda789b1c61ff9d43ee4d0fa20a5b1c71f917320b6af2a6a7",
+  "input_hash": "8c88f61ae652186a7da16c1df087088174f9fb2b0d6918aa09d799c807ca7c6c",
+  "implementation_hash": "f69a246c8e479e5023ff70123c7524f742180be8f9c07267a737db1d6186b341",
+  "gate_impl_hash": "f69a246c8e479e5023ff70123c7524f742180be8f9c07267a737db1d6186b341",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:execution-profile-routing --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d2e493820646f9038ce317002f8239395e80a40a5ad0888b3d3ce66469bfce88"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 25808,
+  "proof_id": "proof-3123dde06ad819d2c70915dd",
+  "created_at": "2026-06-18T17:40:23.016Z"
+}

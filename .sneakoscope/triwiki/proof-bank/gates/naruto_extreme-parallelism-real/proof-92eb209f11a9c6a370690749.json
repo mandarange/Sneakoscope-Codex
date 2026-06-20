@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:extreme-parallelism-real",
+  "cache_key": "94a171b7eca82a4f1a6058caeca8f4d6580ef07ac211e3c0e347a81862d8d3bd",
+  "input_hash": "d85756afa3b3b7e275dc3ae8f8f30e83259b00a3dc82e3926a2fc60d570148fe",
+  "implementation_hash": "e0c922dd25a55bca82b52a3cffc449567bf89c95455b3f1d8c761f14d4866755",
+  "gate_impl_hash": "e0c922dd25a55bca82b52a3cffc449567bf89c95455b3f1d8c761f14d4866755",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:extreme-parallelism-real --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 61265,
+  "proof_id": "proof-92eb209f11a9c6a370690749",
+  "created_at": "2026-06-18T13:50:27.443Z"
+}

@@ -1,0 +1,9 @@
+{
+  "schema": "sks.skill-quarantine-record.v1",
+  "generated_at": "2026-06-15T16:12:34.085Z",
+  "source_path": "/Users/weklem/.codex/skills/naruto",
+  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/naruto/1781539954082-3316/naruto",
+  "canonical_name": "naruto",
+  "reason": "duplicate SKS-managed skill",
+  "content_sha256": "b196beb5a9bc9fd46ff33cc2c0d3919e4e19ce643e40648733e4cc375e2d4315"
+}

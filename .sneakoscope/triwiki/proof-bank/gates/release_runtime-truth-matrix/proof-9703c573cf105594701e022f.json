@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:runtime-truth-matrix",
+  "cache_key": "1f35d715b64e358bf789148b7583604fa2e1d6c36402c5831e5f71c35ce2b30b",
+  "input_hash": "df127ffc2b9e047d5a27f338f5466bcec54b195e5bd7c35f22c836d378af29a1",
+  "implementation_hash": "b45a28fa9a74040f8e8e490f5c091d3fa6018316cfc46a161662615c38d58703",
+  "gate_impl_hash": "b45a28fa9a74040f8e8e490f5c091d3fa6018316cfc46a161662615c38d58703",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:runtime-truth-matrix --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "e38dd2c002e82365a12d19dae0f30acd7d0c7e470f373ffce70eb7124133fbc1"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 16032,
+  "proof_id": "proof-9703c573cf105594701e022f",
+  "created_at": "2026-06-18T17:39:20.925Z"
+}

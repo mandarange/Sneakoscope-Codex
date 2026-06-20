@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:dirty-semantic",
+  "cache_key": "086b98a736342731a8c329372665d8101deb25da832381e52539cf2e66fbf206",
+  "input_hash": "d756d745680051609f3d844da5a51c1161057d9fd4a82d559a316dd562d1a7fa",
+  "implementation_hash": "ce3d1334acafdcb61168b317bc3bdab7bd4e74c0a62d051e7033acdae7eac01c",
+  "gate_impl_hash": "ce3d1334acafdcb61168b317bc3bdab7bd4e74c0a62d051e7033acdae7eac01c",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:dirty-semantic --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "eb6b71c2fb278bfc617f27e74a8e8c0c8a1afd06fd45cdb28ee950e61a1004c6"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 12681,
+  "proof_id": "proof-9f11fe1de91592d1c41d04dc",
+  "created_at": "2026-06-18T07:40:49.288Z"
+}

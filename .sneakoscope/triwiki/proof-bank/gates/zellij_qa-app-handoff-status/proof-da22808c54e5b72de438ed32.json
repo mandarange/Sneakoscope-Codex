@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:qa-app-handoff-status",
+  "cache_key": "5c32e53d0281589ccf77bd5265e3bbe3b68193b80f7451a900e57ddfa7ef46f6",
+  "input_hash": "946a1b3d49d6aba9d89a94d79923a02c570f6575edea1eddd5b48c492aeb6282",
+  "implementation_hash": "db77791d3073d0464e8b50a725694057d9fd09af67d80447085dc6e081a58a03",
+  "gate_impl_hash": "db77791d3073d0464e8b50a725694057d9fd09af67d80447085dc6e081a58a03",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:qa-app-handoff-status --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "e59d8583e29460510a50bbddc00070554065765149c6940767098c9a9bef8fab"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5879,
+  "proof_id": "proof-da22808c54e5b72de438ed32",
+  "created_at": "2026-06-18T14:32:49.229Z"
+}

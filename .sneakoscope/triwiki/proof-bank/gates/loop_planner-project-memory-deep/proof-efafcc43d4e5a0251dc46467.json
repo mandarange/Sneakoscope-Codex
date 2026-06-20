@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:planner-project-memory-deep",
+  "cache_key": "479d3bc37d34eef46bf78c78cd7496512be1c36d06920028e16f14d5431df06e",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "86fb6f323c26af7b668916e8e1c0ec79d34c22235ac0dfa58bdb80ce6c168ad8",
+  "gate_impl_hash": "86fb6f323c26af7b668916e8e1c0ec79d34c22235ac0dfa58bdb80ce6c168ad8",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:planner-project-memory-deep --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ecfba9268564ddf6ed404588d4f60ff88d01346dc2a157e5aa3e82cca9c8a620"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3369,
+  "proof_id": "proof-efafcc43d4e5a0251dc46467",
+  "created_at": "2026-06-18T02:15:11.733Z"
+}

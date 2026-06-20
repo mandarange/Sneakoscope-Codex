@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:self-heal-status-contract",
+  "cache_key": "417ffa5b008db5805cd43d0de2fdfa373742d106ed5449f662962d2a96b05bd7",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "1a44c8000b16b33cda50656f8d313cd2f71e0f0fd8d9d8e21f7a68aea7d16f4e",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:self-heal-status-contract --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "343713f8d26d8e189b3f818ad00c3689491e89a61526d2c2b468d25b7f61245a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3651,
+  "proof_id": "proof-2465030c694272ea380ace2e",
+  "created_at": "2026-06-17T19:34:12.025Z"
+}

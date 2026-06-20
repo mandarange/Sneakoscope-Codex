@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:self-heal",
+  "cache_key": "e0512d350c101fa3e68e8937167c9a04640f3627f2beaca798563a8ff11680e7",
+  "input_hash": "59651bb47ae900ba4393891d303ca8a74c0ab3176ecc8afc1d1f149de75d570d",
+  "implementation_hash": "801f60050fb30d181c044cf29710e9d80b2c60794c96924294f4e72caf4caa18",
+  "gate_impl_hash": "801f60050fb30d181c044cf29710e9d80b2c60794c96924294f4e72caf4caa18",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:self-heal --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "74a210b9bd90e19c61c2c2c3015be26e314be8de339cbb8bcac207d7c7709aea"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7191,
+  "proof_id": "proof-45f1b5bf5da1eb92578f13fa",
+  "created_at": "2026-06-18T00:09:27.294Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "terminal:keyboard-enhancement-safety",
+  "cache_key": "a609df983b4dbb62e5f41db0decc2fc09f9fd7d5e843bd243a0cb3e322a41afe",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "49aed82616c4fcd7903533d43615cc500e05f3bffc2c241586f3739e86fd33ae",
+  "gate_impl_hash": "49aed82616c4fcd7903533d43615cc500e05f3bffc2c241586f3739e86fd33ae",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run terminal:keyboard-enhancement-safety --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4283,
+  "proof_id": "proof-6c5edf9dde825a628276a85d",
+  "created_at": "2026-06-18T16:43:30.511Z"
+}

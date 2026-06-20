@@ -1,0 +1,9 @@
+{
+  "schema": "sks.skill-quarantine-record.v1",
+  "generated_at": "2026-06-17T09:22:25.926Z",
+  "source_path": "/Users/weklem/.codex/skills/qa-loop",
+  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/qa-loop/1781688145924-93906/qa-loop",
+  "canonical_name": "qa-loop",
+  "reason": "duplicate SKS-managed skill",
+  "content_sha256": "832232982aeee8d92fb6dab90de9122396447844a8769abb47a7bb48509a251f"
+}

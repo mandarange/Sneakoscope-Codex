@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:config-eperm-fixture",
+  "cache_key": "8913a2ca8b3f347b05d1e0863bacf273cb90ae3344db42b4607695d2df98d49b",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:config-eperm-fixture --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "65e0279b8dd54d6ef71c1f2c06299ca96fdada5ac56d72b6f4ac8bf9a4b5733e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9827,
+  "proof_id": "proof-313de490fe779b674fef7b56",
+  "created_at": "2026-06-17T19:30:49.019Z"
+}

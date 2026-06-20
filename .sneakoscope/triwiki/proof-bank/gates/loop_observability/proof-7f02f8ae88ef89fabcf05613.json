@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:observability",
+  "cache_key": "807445714931c176db4d766c230918b7f9ad09c26d6dc542a92a81a0e976f2d6",
+  "input_hash": "1699392cd079da818281d8e9589864dc1c6f6951a53ade478794add3c47f5e86",
+  "implementation_hash": "fb978d16eaf4a9ef76305951cd9611097ea603a8b5fea794f02d55497a862a14",
+  "gate_impl_hash": "fb978d16eaf4a9ef76305951cd9611097ea603a8b5fea794f02d55497a862a14",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:observability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f6a1966796e5571dee517f38ac6cd7bd878d13f822ddb64b23e8e0e6fcf33a11"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 111057,
+  "proof_id": "proof-7f02f8ae88ef89fabcf05613",
+  "created_at": "2026-06-18T16:32:08.067Z"
+}

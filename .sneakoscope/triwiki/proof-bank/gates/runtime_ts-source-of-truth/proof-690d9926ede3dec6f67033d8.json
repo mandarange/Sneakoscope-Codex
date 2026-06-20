@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:ts-source-of-truth",
+  "cache_key": "1da61374e681e1270df975346d448f11a76d8736bf630df0f128c955345e1163",
+  "input_hash": "cf417576f421756e129660d4fb6364099cf97d7b0c8ffbf2461ee77d5b56731b",
+  "implementation_hash": "f4987f2470ea183f1c92f82ce86f059f46bcff21197c7424309754049eeb7fb2",
+  "gate_impl_hash": "f4987f2470ea183f1c92f82ce86f059f46bcff21197c7424309754049eeb7fb2",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:ts-source-of-truth --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7abf1f857c8f154bff430001dcc7204efd310700f45a01210b6ec6146765774a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6983,
+  "proof_id": "proof-690d9926ede3dec6f67033d8",
+  "created_at": "2026-06-18T00:09:17.268Z"
+}

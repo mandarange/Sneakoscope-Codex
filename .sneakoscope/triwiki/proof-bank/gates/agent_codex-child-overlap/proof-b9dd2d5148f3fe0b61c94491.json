@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:codex-child-overlap",
+  "cache_key": "6d93a3869c0008c9b5771dfde8b4c0e8fb4e761b28f0d8a188b8cb3ba6f9b2df",
+  "input_hash": "080352704b499db3fcdcde8a307b1c16e9f6d5209aff823a14763ceeaedab948",
+  "implementation_hash": "33900e2ea72463679545602dc1216bdaeb3a8efb3de2a8c2fc90f66118befe48",
+  "gate_impl_hash": "33900e2ea72463679545602dc1216bdaeb3a8efb3de2a8c2fc90f66118befe48",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:codex-child-overlap --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7c3eb91a3fe571204f1c9485ac26ce5edfb1e8a6508190b6d1eb4a4cadfb0c23"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 383,
+  "proof_id": "proof-b9dd2d5148f3fe0b61c94491",
+  "created_at": "2026-06-18T08:06:56.831Z"
+}

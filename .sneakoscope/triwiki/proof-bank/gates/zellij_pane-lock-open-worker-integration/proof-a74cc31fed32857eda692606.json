@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:pane-lock-open-worker-integration",
+  "cache_key": "dade820a6de45071e7537b8e345254c4b4e88da72b47e5ea189206d7629441b7",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "gate_impl_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:pane-lock-open-worker-integration --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b3d4db00488ab504bb620c25b3cbeb5754e7001125e3bd902a037c6242a656be"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5310,
+  "proof_id": "proof-a74cc31fed32857eda692606",
+  "created_at": "2026-06-18T00:09:57.294Z"
+}

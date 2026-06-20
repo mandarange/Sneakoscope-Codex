@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:budget-policy",
+  "cache_key": "b2da76b6230975131a43fa30da9c80db95c7d298b2283bcfb392449fc0017d1a",
+  "input_hash": "8c58f44a3ae7b8f068a6a0f8549a60b10ddfb7308b52b87d231d66791292d712",
+  "implementation_hash": "cf6673723ec284f60514f142c78187e73fad34b6cf8121a0be97ed8ec7a24615",
+  "gate_impl_hash": "cf6673723ec284f60514f142c78187e73fad34b6cf8121a0be97ed8ec7a24615",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:budget-policy --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3f314f1912fc5cad84d06cf801d2ca583d5dfd3c74b99031c7d4a2c33e7cdddf"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3574,
+  "proof_id": "proof-93564c7016be887732829c3e",
+  "created_at": "2026-06-18T07:55:59.778Z"
+}

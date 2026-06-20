@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "local-collab:policy",
+  "cache_key": "d2aa86eef5fb6fcd4fcc843734f98c22d67ac5e1ed3066f0542ce7fd71b5829f",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "b8f542ad29cf6a659f73fed9eaef1f92b3ee3423179124561fcf9d5cc32caf80",
+  "gate_impl_hash": "b8f542ad29cf6a659f73fed9eaef1f92b3ee3423179124561fcf9d5cc32caf80",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run local-collab:policy --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "da9f8bfbb61af7892eede0ff93873f1cd68c61b8d8cc663f8831a490ed01ecc2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 79322,
+  "proof_id": "proof-b84b1a49b59989dae1ed1b2e",
+  "created_at": "2026-06-20T03:07:04.321Z"
+}

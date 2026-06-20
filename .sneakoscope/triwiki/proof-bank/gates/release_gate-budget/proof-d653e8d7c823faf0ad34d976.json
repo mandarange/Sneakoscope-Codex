@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:gate-budget",
+  "cache_key": "d745f1015685be19d86a8df7d188873a5701d11a0feeafad3ac04573297ba546",
+  "input_hash": "1c07077e1f02b1d0dc6d450c8a6f2c9dd60445b04b4a851e698c1363c78b85df",
+  "implementation_hash": "0b74af90d2deba6be4557edb79a8cee263d6a14a831636207257cb0f992568c1",
+  "gate_impl_hash": "0b74af90d2deba6be4557edb79a8cee263d6a14a831636207257cb0f992568c1",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:gate-budget --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "e3658fa0417e2db848cb1c757d0d1d1602ae226ad2219e96232d1d4f687138cf"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3116,
+  "proof_id": "proof-d653e8d7c823faf0ad34d976",
+  "created_at": "2026-06-18T07:38:22.291Z"
+}

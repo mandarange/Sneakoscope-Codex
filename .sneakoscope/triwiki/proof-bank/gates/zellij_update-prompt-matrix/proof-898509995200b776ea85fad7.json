@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:update-prompt-matrix",
+  "cache_key": "c2754bed366bdd34792a7b726248e2206211f18ed4618cebc69eea041414f8e2",
+  "input_hash": "8c58f44a3ae7b8f068a6a0f8549a60b10ddfb7308b52b87d231d66791292d712",
+  "implementation_hash": "8b8de8b32bc2a187191cc3a8f87fc75633a7e72a9bded55fd7f5929ca6ed5b26",
+  "gate_impl_hash": "8b8de8b32bc2a187191cc3a8f87fc75633a7e72a9bded55fd7f5929ca6ed5b26",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:update-prompt-matrix --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a05f484339b98cc025d59ec98714a5e84054ab08782dc8b6656bb6ede578b982"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3035,
+  "proof_id": "proof-898509995200b776ea85fad7",
+  "created_at": "2026-06-18T07:39:22.316Z"
+}

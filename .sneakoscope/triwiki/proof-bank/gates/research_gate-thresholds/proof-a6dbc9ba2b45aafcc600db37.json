@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:gate-thresholds",
+  "cache_key": "8dac32f9835a3ae1affb6f82480a87e8bed07ffb1ad249aa96fbc607fc76006c",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:gate-thresholds --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d6130a97e90cf038e96ce800a80237add79ecc91fe38b1da9d4a51967ed5a43c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4295,
+  "proof_id": "proof-a6dbc9ba2b45aafcc600db37",
+  "created_at": "2026-06-17T19:34:27.656Z"
+}

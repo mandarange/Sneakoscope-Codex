@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:zellij-dynamic-backfill-panes",
+  "cache_key": "2e9d7d30a8e4d0cad72d7847f8525b7ed1ca799affbcf17e669fb3579f3d43a9",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "14667f5d251532ab6df44c367a2042dc481e2060681226d4260aed98b7f9d003",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:zellij-dynamic-backfill-panes --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d01b796048c59b66dca82b752271b6d82f4fc54d55a6d77ab6e682c30eaf5219"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9979,
+  "proof_id": "proof-2709f6ea531a11ae432fb71c",
+  "created_at": "2026-06-17T19:30:13.982Z"
+}

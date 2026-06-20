@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:dag-runner",
+  "cache_key": "7c4954801b7df70300c2f4be6ecb2bc80e7101e8ff18507b0e2befa8d9660e5e",
+  "input_hash": "afc0817fdcc5737ca973c8c0b8fcdcc92f8ccaefd6ceab8c69006fbf72d42223",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:dag-runner --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5130c3eb65cb07fb44550b770482f314fbede7183992f0565b8b9a9684f00cb0"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9007,
+  "proof_id": "proof-cad6952e83daa5cabfc6d27c",
+  "created_at": "2026-06-17T19:24:11.172Z"
+}

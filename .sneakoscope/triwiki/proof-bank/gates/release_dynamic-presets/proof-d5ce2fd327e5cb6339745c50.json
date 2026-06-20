@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:dynamic-presets",
+  "cache_key": "4d203f091589d8738e89d564b8de32ae9731c5c011e2b8302c1ffc644183d9e5",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "b5b39dbb105a9df800b551c7649dca15af86db88845367c63f919bc7b5806f3f",
+  "gate_impl_hash": "b5b39dbb105a9df800b551c7649dca15af86db88845367c63f919bc7b5806f3f",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:dynamic-presets --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ef92a1b3be01dcf77fbbcc67972b3a422b4b3358d66a912db709fe7c510e91d6"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8218,
+  "proof_id": "proof-d5ce2fd327e5cb6339745c50",
+  "created_at": "2026-06-18T02:10:28.636Z"
+}

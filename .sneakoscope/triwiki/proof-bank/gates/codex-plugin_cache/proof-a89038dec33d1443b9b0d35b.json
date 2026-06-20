@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-plugin:cache",
+  "cache_key": "fe6b8238f4078699050b0fa029a320a4514f562826a6c22c339cf6023b94d3b4",
+  "input_hash": "cf717ff23fc15cadf66f28c4301c2903efe06556b37dcd6a2a4406c1caed1fd0",
+  "implementation_hash": "6a85ce423778cb0f4e3a267a1a6fc7e1aa53d757ac12a40a4dae3501cc8da086",
+  "gate_impl_hash": "6a85ce423778cb0f4e3a267a1a6fc7e1aa53d757ac12a40a4dae3501cc8da086",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-plugin:cache --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5657,
+  "proof_id": "proof-a89038dec33d1443b9b0d35b",
+  "created_at": "2026-06-18T16:42:38.826Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:doctor-readiness",
+  "cache_key": "6aa222ffe266eb46795089dd1755965c9f855778f342ca2ae5fbdf40620e53d2",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "ebe56bd616214720de2218fd7b5b3a312a1966d2a4d9a37339e6b4c4c91e50d0",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:doctor-readiness --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7e643110b000c1fd338c7cfae64738876c6d61eaa4f255a827be4dc85fe49f8d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 109673,
+  "proof_id": "proof-8f4d5f9e3cc146d9f7c98614",
+  "created_at": "2026-06-17T19:35:48.841Z"
+}

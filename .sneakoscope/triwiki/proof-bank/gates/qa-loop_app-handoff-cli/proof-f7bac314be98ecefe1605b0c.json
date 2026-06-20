@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:app-handoff-cli",
+  "cache_key": "c6d0f2d8a8c8c655a4627cd77225dc131dddf9b0c82cc8556df08f0e7e6d3572",
+  "input_hash": "8c58f44a3ae7b8f068a6a0f8549a60b10ddfb7308b52b87d231d66791292d712",
+  "implementation_hash": "0d1262ff3bf5cab20f0d4557dc1163e37cd1c32722eb6a07ab1de20e6bda3eb9",
+  "gate_impl_hash": "0d1262ff3bf5cab20f0d4557dc1163e37cd1c32722eb6a07ab1de20e6bda3eb9",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:app-handoff-cli --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "fc250f1eab50ca668ab2cf0569c177f17c5e61b0b2a68626fe47ed15ef505eca"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5320,
+  "proof_id": "proof-f7bac314be98ecefe1605b0c",
+  "created_at": "2026-06-18T07:38:13.889Z"
+}

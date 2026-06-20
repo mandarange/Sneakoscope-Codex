@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "skill:name-canonicalizer",
+  "cache_key": "c5bf9f1aa19a6000f14bddf5bf8550688c3f654b882fb546e4247d91caae4ccb",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "770978f66c54637c20140d3b4dd093f079a8f7f70cb1bf22c7d7055bfb4f00fe",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run skill:name-canonicalizer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2843570ea2cf1b204425f875af7c26067386154f3108720f4225782fe76ac2bd"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8276,
+  "proof_id": "proof-fce120145c56a2b4baa3864b",
+  "created_at": "2026-06-17T19:34:50.622Z"
+}

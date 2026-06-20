@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "config:managed-merge-callsite-coverage",
+  "cache_key": "a002a15b04c8e9c7d2e5500fdc0cdc25a7c184ae5d06deb2b59afe9d6f3cb8d8",
+  "input_hash": "8c88f61ae652186a7da16c1df087088174f9fb2b0d6918aa09d799c807ca7c6c",
+  "implementation_hash": "6a138890eec1dd7cfad4a9da549acc7547a2be7ceb7b73abd7ea4efb242406f3",
+  "gate_impl_hash": "6a138890eec1dd7cfad4a9da549acc7547a2be7ceb7b73abd7ea4efb242406f3",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run config:managed-merge-callsite-coverage --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "898ae47c457ba6aa8430fcbf09f6ca6d06478cdb36b0635a33c8abf69e303be2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 16461,
+  "proof_id": "proof-6bc65df2eb0f0243c967947d",
+  "created_at": "2026-06-18T18:01:21.652Z"
+}

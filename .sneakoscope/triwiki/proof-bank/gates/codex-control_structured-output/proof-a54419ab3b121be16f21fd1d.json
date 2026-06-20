@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-control:structured-output",
+  "cache_key": "d7e050fc64c58e2e5ff516ba668e00493711b37a7d7ec15dbd4d35b46a836b58",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "6417a95573554b0ca33ef47735b280e4fc74ed93948be14bd0cfbfe901258d6b",
+  "gate_impl_hash": "6417a95573554b0ca33ef47735b280e4fc74ed93948be14bd0cfbfe901258d6b",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-control:structured-output --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ddbb3fac840274ff236b90ba0a8760543cee0c83ab5188630b2fd2a1b7f21b27"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 12932,
+  "proof_id": "proof-a54419ab3b121be16f21fd1d",
+  "created_at": "2026-06-18T02:13:00.183Z"
+}

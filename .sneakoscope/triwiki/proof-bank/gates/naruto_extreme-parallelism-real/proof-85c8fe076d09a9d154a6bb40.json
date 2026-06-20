@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:extreme-parallelism-real",
+  "cache_key": "2345fe1a06fc706da28b747974a1655e675927487d6a0b218fcec8cf5b7bb8b2",
+  "input_hash": "359c78981bee5bdf6c1ec96a35845a4812ff3a4457ef83ecc05ed37846694a86",
+  "implementation_hash": "e0c922dd25a55bca82b52a3cffc449567bf89c95455b3f1d8c761f14d4866755",
+  "gate_impl_hash": "e0c922dd25a55bca82b52a3cffc449567bf89c95455b3f1d8c761f14d4866755",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:extreme-parallelism-real --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d1e4f0e39172d9704c1d8706aa7a4f7514dbbb214e43d693ffc2eb233bf9511e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 38506,
+  "proof_id": "proof-85c8fe076d09a9d154a6bb40",
+  "created_at": "2026-06-18T08:10:54.605Z"
+}

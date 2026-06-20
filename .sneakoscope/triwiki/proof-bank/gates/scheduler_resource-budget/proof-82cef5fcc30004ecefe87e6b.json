@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "scheduler:resource-budget",
+  "cache_key": "12f36c396e7bc2782cee5870a47dd3faafd77f10bbae760e8b44539947b9c644",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "6338753135458f7fa53d5a4070ebec29cc2fda2659693ea9c461930af30ba70e",
+  "gate_impl_hash": "6338753135458f7fa53d5a4070ebec29cc2fda2659693ea9c461930af30ba70e",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run scheduler:resource-budget --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "43ad5a207ae42ec869d2c252243612a3a972536a9db8aa7b42f956a2e336d4ba"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14760,
+  "proof_id": "proof-82cef5fcc30004ecefe87e6b",
+  "created_at": "2026-06-18T02:41:42.463Z"
+}

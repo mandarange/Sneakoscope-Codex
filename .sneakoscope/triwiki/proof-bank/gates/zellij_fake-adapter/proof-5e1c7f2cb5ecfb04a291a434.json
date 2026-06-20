@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:fake-adapter",
+  "cache_key": "31eda72aedd3adaebe478bdcbb0546213cd2d8dbf32e7eb6921461d9c052d006",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "e72d1099967cb1e65fd7737c3561200992b136c2aaf708c39ac24082eb0da63f",
+  "gate_impl_hash": "e72d1099967cb1e65fd7737c3561200992b136c2aaf708c39ac24082eb0da63f",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:fake-adapter --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f0c2acd5e51432e3c55610f406b2136c0a4871f59b094c7f6ecbad2e6209e977"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6488,
+  "proof_id": "proof-5e1c7f2cb5ecfb04a291a434",
+  "created_at": "2026-06-18T01:55:28.910Z"
+}

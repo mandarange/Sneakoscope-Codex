@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:app-handoff-capability",
+  "cache_key": "1061d311774f556e2411b2cf3789437ea6a81964124efa1b684e5b36232b6e61",
+  "input_hash": "038cad549c4373f8b367f97b23fc8d2b53eda693fa1bfab424eee6edf6e0f8ea",
+  "implementation_hash": "8349a031128d46f624ef7e57ab9a2965eb8f37243510f4efbc7383e0b45e7454",
+  "gate_impl_hash": "8349a031128d46f624ef7e57ab9a2965eb8f37243510f4efbc7383e0b45e7454",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:app-handoff-capability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "75020f5bdf0acaf7c4b1cb1ca1584de63689e5672abc4e5b06656a386ac69eeb"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7833,
+  "proof_id": "proof-5fc7f9ef130b8c99e2eeb859",
+  "created_at": "2026-06-18T13:29:36.620Z"
+}

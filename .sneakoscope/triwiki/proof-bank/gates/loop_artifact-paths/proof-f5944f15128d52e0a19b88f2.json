@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:artifact-paths",
+  "cache_key": "2bb6c1baec45516eb4642884da21eb996240102bcc614bda1cce5d50a7db923f",
+  "input_hash": "10c40b4348dec2a6f3a0dccd8728836eba9199fda3dfc1060cb17f2035b7818a",
+  "implementation_hash": "b40f26153aa799a104e23864e1daf7196defe5ac445a24f8c4bce391d7738450",
+  "gate_impl_hash": "b40f26153aa799a104e23864e1daf7196defe5ac445a24f8c4bce391d7738450",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:artifact-paths --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "bbbd90b95c0a732816705b4c647c42b7fbdd4ea9868d1debe10b8a42f53beeda"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 109674,
+  "proof_id": "proof-f5944f15128d52e0a19b88f2",
+  "created_at": "2026-06-18T02:39:10.491Z"
+}

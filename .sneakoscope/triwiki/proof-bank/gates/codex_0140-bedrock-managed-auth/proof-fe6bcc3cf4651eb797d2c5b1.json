@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0140-bedrock-managed-auth",
+  "cache_key": "101feee5f3290efa4a580fc1791d5df5d361edc6ea3fba1cd83e3d2c1da6d5a6",
+  "input_hash": "d756d745680051609f3d844da5a51c1161057d9fd4a82d559a316dd562d1a7fa",
+  "implementation_hash": "ce2b716ef356e99a6d084ca9120e5dd693619a44d1a9e0d019e4f86762a2d35e",
+  "gate_impl_hash": "ce2b716ef356e99a6d084ca9120e5dd693619a44d1a9e0d019e4f86762a2d35e",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0140-bedrock-managed-auth --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "74236fae92f907717c64cc94ff5f7d2e80c84b1132515e3c5d435fb20f1b20f6"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10167,
+  "proof_id": "proof-fe6bcc3cf4651eb797d2c5b1",
+  "created_at": "2026-06-18T07:39:58.800Z"
+}

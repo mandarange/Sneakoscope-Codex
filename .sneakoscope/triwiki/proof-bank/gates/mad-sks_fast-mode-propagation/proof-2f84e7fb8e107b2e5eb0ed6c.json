@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad-sks:fast-mode-propagation",
+  "cache_key": "4a1a5065a6ec7cdd42417354f96d3b8fc9ba1adbf552a88fada94244146c0951",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "58f0423140eaf59b488e6cb30b16b425df72c63d5ff216640579d4d707ae0185",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad-sks:fast-mode-propagation --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7f6db0719bea07fe3399301d30c25a84f14b016391e4f3071ee5cdb627601190"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5329,
+  "proof_id": "proof-2f84e7fb8e107b2e5eb0ed6c",
+  "created_at": "2026-06-17T19:33:03.440Z"
+}

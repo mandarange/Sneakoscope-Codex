@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:update-prompt-mode",
+  "cache_key": "aaf5cd08eefd9322e72d45eb089178bb32775eead8659764fae17fb9edf05240",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "1f0b61f50baf3180e209c1d200a2f730237a377ee66a226923ada5c4c0b4bb6f",
+  "gate_impl_hash": "1f0b61f50baf3180e209c1d200a2f730237a377ee66a226923ada5c4c0b4bb6f",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:update-prompt-mode --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "06d3658d5d423f4146f75d1f30aed95228d49811512dea32f47bbc62d9a2d7ca"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11430,
+  "proof_id": "proof-8fa40d00a7bdd921a53b9dbd",
+  "created_at": "2026-06-18T00:09:44.326Z"
+}

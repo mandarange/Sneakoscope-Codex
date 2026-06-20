@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:supabase-mcp-repair",
+  "cache_key": "2f10c17049d77b9fdcee53f78019906fb0e1321165a65d99c724d4b064c62337",
+  "input_hash": "ef8d8202c1defba6d4f4fb99d6acd65e06993adaf7f0a8ec8e8688eff14eac3e",
+  "implementation_hash": "60555e7d16c41f6e6ea6e6de6c13ae8a16fe07f314427a5f1c96b1ff6b7fe139",
+  "gate_impl_hash": "60555e7d16c41f6e6ea6e6de6c13ae8a16fe07f314427a5f1c96b1ff6b7fe139",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:supabase-mcp-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5f23235eef4900a0ae34bfb0e0cf4dfa2028907cfc1be4266f273a6008e7936a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11637,
+  "proof_id": "proof-834bc95b8a946fbcf6dd20c8",
+  "created_at": "2026-06-18T16:18:46.816Z"
+}

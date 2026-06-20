@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-control:stream-idle-watchdog",
+  "cache_key": "a871056792b4ff1bccfa21c9569144931911a6075e80bde32cf97b09c4f5266e",
+  "input_hash": "080352704b499db3fcdcde8a307b1c16e9f6d5209aff823a14763ceeaedab948",
+  "implementation_hash": "99e190f12ddd83c3f94ace4d60199b0bc73341397f74841d9b78c2b4a404bda0",
+  "gate_impl_hash": "99e190f12ddd83c3f94ace4d60199b0bc73341397f74841d9b78c2b4a404bda0",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-control:stream-idle-watchdog --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "aaaf22003224978195dc3bb3b33b9e1720434be9881e68c22fecd0cdf7d6acd8"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13576,
+  "proof_id": "proof-dd80963cd516a914aa1a40e4",
+  "created_at": "2026-06-18T08:07:34.092Z"
+}

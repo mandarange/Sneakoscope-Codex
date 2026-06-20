@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:proof-summary-cli",
+  "cache_key": "1d22c47684458d157297c5e3aa20013e52699ff865ccc1f0d39929f7a6f693f5",
+  "input_hash": "965e1a0df72280fbd68c7585bd84d57fdd65d61cfe4beafd7c63840c55ef2219",
+  "implementation_hash": "618dabc985fa248c0401eb3d4a20f7c80e2a3af26a3174d113f82e1934e2bc46",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:proof-summary-cli --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "783bf1a64a16164b0b37d3bbe2cf067f3c6993237cc0b311755fb1fe54a02731"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 86128,
+  "proof_id": "proof-fcbec5d8c1188dfabbde2a46",
+  "created_at": "2026-06-17T19:33:23.859Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:immutable-sync",
+  "cache_key": "7076711a83db529d6c78f1c5d9b269f73208e2ce68e32d6116d949f5edf339e3",
+  "input_hash": "7fc6faa9adb2be3d2fef87a3e13fdc3ddb749627995af9a606684bf3bcada2d0",
+  "implementation_hash": "2f6e6bd1a7a6b3dd80c22bdb75e0ea7af204edb89b112218f52b3c11c564ca8a",
+  "gate_impl_hash": "2f6e6bd1a7a6b3dd80c22bdb75e0ea7af204edb89b112218f52b3c11c564ca8a",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:immutable-sync --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6628479605f1741095703e6a53ac22ea5338304a47e051d977489659d47bce89"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14504,
+  "proof_id": "proof-36a17b6e6088d95a6368237b",
+  "created_at": "2026-06-18T14:33:39.216Z"
+}

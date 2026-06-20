@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "sks:3112-all-feature-regression",
+  "cache_key": "8c51aeb063c272d9d647d2413ab1089f15064ed70aa474f43a6c6a31565b62e6",
+  "input_hash": "e9ec4aa859bf13d84dd880f56cf7d8b2665f99132b034ab90920c6438ad913d7",
+  "implementation_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "gate_impl_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run sks:3112-all-feature-regression --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2a87163f9fd78389c77ff74a14c2b1ff2bd4348f4fe26aa0c1afff03c6f719e4"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7395,
+  "proof_id": "proof-06a571bdaad21a92553daab0",
+  "created_at": "2026-06-18T07:57:53.647Z"
+}

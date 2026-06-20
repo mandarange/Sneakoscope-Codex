@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "native-capability:postcheck",
+  "cache_key": "542b19893beb97a0212834a05401208d921aed0f3e5a935eb21ac2adc9bae7aa",
+  "input_hash": "7fc6faa9adb2be3d2fef87a3e13fdc3ddb749627995af9a606684bf3bcada2d0",
+  "implementation_hash": "1056a4a063323a010e27e34125f52868c37791d2838b63fc1269eefb2a7b5ef7",
+  "gate_impl_hash": "1056a4a063323a010e27e34125f52868c37791d2838b63fc1269eefb2a7b5ef7",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run native-capability:postcheck --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "80a2ee09de5176888240846281dd41e5b9b479c62eff3a01f1a17a5185bfc342"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 17956,
+  "proof_id": "proof-83ba7a074cb72989d2ddcaa5",
+  "created_at": "2026-06-18T14:33:57.105Z"
+}

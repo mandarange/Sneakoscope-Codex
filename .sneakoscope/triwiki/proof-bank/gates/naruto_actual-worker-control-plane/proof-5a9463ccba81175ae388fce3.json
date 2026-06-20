@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:actual-worker-control-plane",
+  "cache_key": "210bb9cd0e81c5ca7d9d4c0c24d176616c46326e0f76e1ac49035da93adbaf95",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "19744f60d256a55840ee71867ae2a02300702eccc37914a465db49f18939e5ce",
+  "gate_impl_hash": "19744f60d256a55840ee71867ae2a02300702eccc37914a465db49f18939e5ce",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:actual-worker-control-plane --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d3441c92b93812bc54e25891c680ac34d9f18db6f817b9aac14503cb45f5ca2d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 35242,
+  "proof_id": "proof-5a9463ccba81175ae388fce3",
+  "created_at": "2026-06-18T13:50:56.247Z"
+}

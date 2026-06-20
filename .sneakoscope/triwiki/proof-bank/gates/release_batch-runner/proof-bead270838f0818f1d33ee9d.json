@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:batch-runner",
+  "cache_key": "55711528e116375963d0feef572f6923105891ded18721116733f5f80e254626",
+  "input_hash": "1c07077e1f02b1d0dc6d450c8a6f2c9dd60445b04b4a851e698c1363c78b85df",
+  "implementation_hash": "346bb5cfdaa655b5f397760e2094afd8628c4452c2f15b13ad5d54932256769a",
+  "gate_impl_hash": "346bb5cfdaa655b5f397760e2094afd8628c4452c2f15b13ad5d54932256769a",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:batch-runner --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0d7e6046d5b221a9c99efef4e1fe58192cb8e9b612ee263245aed72f56658dd9"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3513,
+  "proof_id": "proof-bead270838f0818f1d33ee9d",
+  "created_at": "2026-06-18T07:56:01.716Z"
+}

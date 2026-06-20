@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "goal:legacy-runtime-escape",
+  "cache_key": "70fd00d482f0886eb98cdf9c9f6349bd3e13d5734b8c55acca1e38651f957d3e",
+  "input_hash": "10c40b4348dec2a6f3a0dccd8728836eba9199fda3dfc1060cb17f2035b7818a",
+  "implementation_hash": "6007e56dcde360b537d4a9aee9489b8979a2b254b40ecf08e805e5f2752a461f",
+  "gate_impl_hash": "6007e56dcde360b537d4a9aee9489b8979a2b254b40ecf08e805e5f2752a461f",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run goal:legacy-runtime-escape --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3b4d6d4b254065e283733c06a9a9c0d0483486d72178bbcca41cc5ac22e03dad"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 152903,
+  "proof_id": "proof-f63905782395ee01852fdd41",
+  "created_at": "2026-06-18T02:16:15.814Z"
+}

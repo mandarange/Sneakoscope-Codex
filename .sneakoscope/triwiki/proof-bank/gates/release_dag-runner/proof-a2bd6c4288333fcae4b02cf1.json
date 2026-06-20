@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:dag-runner",
+  "cache_key": "3999494043b0decdc2cb71f3eb319d67fd939f6150706af90491bbe6308ee641",
+  "input_hash": "c55f38c2b61ca7a0656037d55118e85f2f3b84e48caf4664951c69c61e96d4b2",
+  "implementation_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "gate_impl_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:dag-runner --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b1a0e4eeb5b959b9aadf511fb747521f6c40285ebc752502f3a49e4aa9a96876"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11041,
+  "proof_id": "proof-a2bd6c4288333fcae4b02cf1",
+  "created_at": "2026-06-18T00:09:18.390Z"
+}

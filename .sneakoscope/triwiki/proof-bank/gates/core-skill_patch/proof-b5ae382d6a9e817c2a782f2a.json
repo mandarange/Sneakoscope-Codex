@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:patch",
+  "cache_key": "063d89bb91c2e18d4db84ab2805b8262a4501d8eb6a625ceb0daff23bfb595e2",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "caeb1df8a843313a08afc2a3858bfcaf5451061ae4b5012eefa130b626464210",
+  "gate_impl_hash": "caeb1df8a843313a08afc2a3858bfcaf5451061ae4b5012eefa130b626464210",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:patch --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "458a13ff6f412a6cee333662e59c491ec51b018e9a9bb61c15f0c8bee5b21e83"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9028,
+  "proof_id": "proof-b5ae382d6a9e817c2a782f2a",
+  "created_at": "2026-06-18T16:29:24.921Z"
+}

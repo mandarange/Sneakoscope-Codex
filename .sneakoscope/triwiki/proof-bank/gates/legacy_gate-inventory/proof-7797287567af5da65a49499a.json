@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "legacy:gate-inventory",
+  "cache_key": "38496036f31d0e4052196048b3f9f41393d2b8555ecdc214c44703ec714928e6",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "6f7ecc00e69183a81097fb6752e105e34bc394153fe56ca5a496a5ede9ee416f",
+  "gate_impl_hash": "6f7ecc00e69183a81097fb6752e105e34bc394153fe56ca5a496a5ede9ee416f",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run legacy:gate-inventory --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d8e9580c72a6c2c1f790dd56c920046ec3eae443c77dfd8f1aac5f1a9f7e4d06"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9190,
+  "proof_id": "proof-7797287567af5da65a49499a",
+  "created_at": "2026-06-18T02:25:16.224Z"
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "sks.glm-mad-session.v1",
+  "generated_at": "2026-06-20T02:24:09.606Z",
+  "result": {
+    "schema": "sks.glm-mode-result.v1",
+    "ok": true,
+    "status": "ready",
+    "mode": "mad-glm-speed",
+    "profile": "speed",
+    "provider": "openrouter",
+    "model": "z-ai/glm-5.2",
+    "requested_model": "z-ai/glm-5.2",
+    "strict_model_lock": true,
+    "gpt_fallback_allowed": false,
+    "codex_app_profile_id": "sks/glm-5.2-mad",
+    "blockers": [],
+    "warnings": [],
+    "openrouter_key_source": "user-secret-store",
+    "key_preview": "sk-or-...abe4"
+  },
+  "profile_id": "sks/glm-5.2-mad",
+  "selected_profile": "speed"
+}

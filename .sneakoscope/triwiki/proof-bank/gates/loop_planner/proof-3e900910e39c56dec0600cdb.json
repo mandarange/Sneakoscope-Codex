@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:planner",
+  "cache_key": "f81b8b2eaacd4a56991d3be6c9642b03a432da5a1cf8f75455b04a72a5c80f1a",
+  "input_hash": "591c82dccf61cb0161f6897d72a69e1e1ef677cefb5e61667df5263226bda59e",
+  "implementation_hash": "54b1179d1f801a9595a4bbf7bc0431af7fe87f6e57ccca9d5a09292f2552be09",
+  "gate_impl_hash": "54b1179d1f801a9595a4bbf7bc0431af7fe87f6e57ccca9d5a09292f2552be09",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:planner --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "dad9bcc2273709fa48463756d5fe8da6f9e7055de554a9e40c546a962dce6d2d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 63888,
+  "proof_id": "proof-3e900910e39c56dec0600cdb",
+  "created_at": "2026-06-18T13:29:25.715Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:short-report-rejection",
+  "cache_key": "5682dd6cfce9bd50fd397406181e1722b68a96f36bf84eef9ab6e61ef10d1b00",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "27c332805e9992ee7928ab05ef1c72607aaf199edea9fbda2ad3b1bd26a64af7",
+  "gate_impl_hash": "27c332805e9992ee7928ab05ef1c72607aaf199edea9fbda2ad3b1bd26a64af7",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:short-report-rejection --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "12f4150619d223d834e8d41b49e5071dc49bc955ebf53235b04be6c1e0f75d47"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14404,
+  "proof_id": "proof-48eccc9edd10b96271c55dd6",
+  "created_at": "2026-06-18T02:24:42.025Z"
+}

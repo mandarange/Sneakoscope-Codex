@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:fixture-safety",
+  "cache_key": "893823020f8987f5a3cba8360a27e7bd134e06dd02e4730cf3585d3b340ecaf7",
+  "input_hash": "965e1a0df72280fbd68c7585bd84d57fdd65d61cfe4beafd7c63840c55ef2219",
+  "implementation_hash": "e0c8f7bcc2b9191b340e17ab67b8ff7cbd90fab54c0c2a3c3ab3d68f6d67b2ef",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:fixture-safety --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0e0744af2a4e842c01297fc6a58c4cb7a3d65a3af9f8eafa719a10cb127b5237"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 26926,
+  "proof_id": "proof-0268f97cad5b147ffbf98b11",
+  "created_at": "2026-06-17T19:35:52.238Z"
+}

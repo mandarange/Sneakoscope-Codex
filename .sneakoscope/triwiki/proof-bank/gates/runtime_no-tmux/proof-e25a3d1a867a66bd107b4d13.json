@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:no-tmux",
+  "cache_key": "717a1d39dc225d05a2d64a117be8e19b283b440b2281f6caa78daf659cb3c6d1",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "c99a120f869ddf6b265b422307103a18077ee0010b32714b5a24e57ed99757f5",
+  "gate_impl_hash": "c99a120f869ddf6b265b422307103a18077ee0010b32714b5a24e57ed99757f5",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:no-tmux --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c562b39fc5e324b8e01aed17d3eb9f40ce92c6535a1c574f9f1da4e992754917"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6418,
+  "proof_id": "proof-e25a3d1a867a66bd107b4d13",
+  "created_at": "2026-06-18T02:34:12.422Z"
+}

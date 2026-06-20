@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "local-collab:gpt-final-availability",
+  "cache_key": "4da7180e80a589d1acf1a228cdebfbb3e071b644ed3bbf140111442242ed5662",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "e20a1885d5788e07aa5261c5d031481c895169daa3e44b048180ad695fc38c46",
+  "gate_impl_hash": "e20a1885d5788e07aa5261c5d031481c895169daa3e44b048180ad695fc38c46",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run local-collab:gpt-final-availability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0f888c10693798dbf71d953557c3024a76eed6142e09625ace4a090d1c9f4116"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4314,
+  "proof_id": "proof-24d41bfbf5e6ceda7d08202f",
+  "created_at": "2026-06-18T02:37:22.756Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "sks:3112-all-feature-regression",
+  "cache_key": "2be3ad07806f6d6acc912e09eee45c776740c383e2b9677176af8377aa8de73d",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run sks:3112-all-feature-regression --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "22a7468c76f4ff10df92d13b1c972db88aa525f42e99afb1ddac9020e5f08388"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 1817,
+  "proof_id": "proof-2c263a6efd4dcc62b6c8cd5c",
+  "created_at": "2026-06-17T19:35:03.229Z"
+}

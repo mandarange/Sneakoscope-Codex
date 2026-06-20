@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:aggressive-resource-governor",
+  "cache_key": "ef634d1dd13f3b1e671505050d40d3f52a1aebe14b3049f5f12d3ee0601407f6",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "165215bc70a56ea2f0976edb5898f7ef7f780a9d50bc463a84d607c6a3387cbd",
+  "gate_impl_hash": "165215bc70a56ea2f0976edb5898f7ef7f780a9d50bc463a84d607c6a3387cbd",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:aggressive-resource-governor --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2aee9a198ad298dc18177b090340ae07fe4158cfb3b1b35df2f4eafa82e053fc"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8437,
+  "proof_id": "proof-de10a0c0e7936f8bf380894a",
+  "created_at": "2026-06-18T00:09:15.598Z"
+}

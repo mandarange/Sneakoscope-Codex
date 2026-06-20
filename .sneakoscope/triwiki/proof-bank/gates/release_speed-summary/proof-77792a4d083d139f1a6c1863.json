@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:speed-summary",
+  "cache_key": "490af595a26fb62b4df0a96a7380e312eab974f5c0b32b8534990284383f4ef6",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "6967fc576204083d23ba849158a8a5199b33395563585a2f9f4b120aaa5b8f17",
+  "gate_impl_hash": "6967fc576204083d23ba849158a8a5199b33395563585a2f9f4b120aaa5b8f17",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:speed-summary --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a6cd3acd581b5af5b0526ececa59144da35efc3328fff059bc6a0da24d7bf667"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15444,
+  "proof_id": "proof-77792a4d083d139f1a6c1863",
+  "created_at": "2026-06-18T00:09:23.552Z"
+}

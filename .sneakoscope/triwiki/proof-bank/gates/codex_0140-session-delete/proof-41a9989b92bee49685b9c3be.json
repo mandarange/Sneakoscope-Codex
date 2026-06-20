@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0140-session-delete",
+  "cache_key": "65851c40aa7396ff1ae78512fdf31294c5ef05e9866d10158d85cbbe11285ee7",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "ce6777d1507672b325a7a501162f38a912246cf76969e5cfafddcd36569fe994",
+  "gate_impl_hash": "ce6777d1507672b325a7a501162f38a912246cf76969e5cfafddcd36569fe994",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0140-session-delete --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2f4f711cbc3a374c046a982f37b7fa692bbe1127f11c7e441a3cc48265d4e532"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14232,
+  "proof_id": "proof-41a9989b92bee49685b9c3be",
+  "created_at": "2026-06-18T13:52:54.257Z"
+}

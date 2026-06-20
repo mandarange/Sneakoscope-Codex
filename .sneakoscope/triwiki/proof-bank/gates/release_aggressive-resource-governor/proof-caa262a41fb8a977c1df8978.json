@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:aggressive-resource-governor",
+  "cache_key": "2682c714a37ea7923ea8af095f69a52db0f1bd95883734172a8b34b4b85f3a61",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "503c8f53a84b90ccb90798794644a20509d3ec618b7abb4ddae8cddb824b37d1",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:aggressive-resource-governor --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ef88de7bbb16577f659eb49144335bf4f332c605c7ae05682667899fcd9b9956"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2570,
+  "proof_id": "proof-caa262a41fb8a977c1df8978",
+  "created_at": "2026-06-17T19:27:13.868Z"
+}

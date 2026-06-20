@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:worktree-policy",
+  "cache_key": "52516476e22adba4e0a613110f06777f61aa76f4cb431f78dafec5254a4b4ec0",
+  "input_hash": "10c40b4348dec2a6f3a0dccd8728836eba9199fda3dfc1060cb17f2035b7818a",
+  "implementation_hash": "8b8dff80b88a2ab065fc5f380cc04b57d810616052104915cdecff73220585dd",
+  "gate_impl_hash": "8b8dff80b88a2ab065fc5f380cc04b57d810616052104915cdecff73220585dd",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:worktree-policy --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0b87f696a743ff73e47b253be6628a9db64b32af817afbca353fd95747964285"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 91220,
+  "proof_id": "proof-8b20d52387f500a217bd91f6",
+  "created_at": "2026-06-18T02:40:42.426Z"
+}

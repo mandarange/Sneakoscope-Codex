@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:handoff",
+  "cache_key": "d89265fc8a158da2ae3f726205dc97321fcf2af97e9d2f9e92d9d4cf70a4ff8c",
+  "input_hash": "1116ae22ac91cbe50274346fd8dac9dbc484042d2f1ece90c762f8e91706a74d",
+  "implementation_hash": "10029275c12a634cc897d56536c2da2f1aa634ac0521ea7887f581870ca3510b",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:handoff --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5b3726e68b13296b749122a90c3b6a22b41f80050243686838358324cfccf339"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6314,
+  "proof_id": "proof-3060b8dbf274d7b6b77135e2",
+  "created_at": "2026-06-17T19:30:47.366Z"
+}

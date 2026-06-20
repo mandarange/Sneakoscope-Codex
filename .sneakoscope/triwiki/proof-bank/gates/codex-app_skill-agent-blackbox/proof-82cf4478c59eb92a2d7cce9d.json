@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:skill-agent-blackbox",
+  "cache_key": "34a049c3a54e46f1c9f9b1931b81d18b9fab8d624b1bf9df22eec252bfc6464f",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "gate_impl_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:skill-agent-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3641ee331a7b88f8b6cf50e71548ab1b8af5c59ed9bc09d7db0ded0fb9354e26"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5252,
+  "proof_id": "proof-82cf4478c59eb92a2d7cce9d",
+  "created_at": "2026-06-18T02:36:36.139Z"
+}

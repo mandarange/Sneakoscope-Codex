@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:no-mjs-scripts",
+  "cache_key": "338fad16b5b90e238680d5ecaffb08c218940616496bf26751b9afcfd3ee7ac2",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "41f49391977dbd5dc0614b3adbc805bd238ae363944bb2d45d81d545446b62e1",
+  "gate_impl_hash": "41f49391977dbd5dc0614b3adbc805bd238ae363944bb2d45d81d545446b62e1",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:no-mjs-scripts --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "4522d11c47f27fa5e73e4443ea4aebe28f283dfa2460a86eddc1ac8b98faf21a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9526,
+  "proof_id": "proof-049c6ab3f70d4a98b6c058fa",
+  "created_at": "2026-06-18T00:09:18.018Z"
+}

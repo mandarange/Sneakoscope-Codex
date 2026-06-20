@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-gate-aliases",
+  "cache_key": "8237c505da98b9978ea8f7f5c8884cc787c08cffb1ec12f2531ce60a18569967",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "f549d3c96fbf269051db1c6e8709a1cfea34360ea86d83634b4a8f4ded7c0cd8",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-gate-aliases --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "eaef5d3230566602ac38bba3578d6ea653ab8629268e6d1897a4eb54ae0eeb38"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5817,
+  "proof_id": "proof-cb9ce3f53c623a62eae26d65",
+  "created_at": "2026-06-17T19:33:15.827Z"
+}

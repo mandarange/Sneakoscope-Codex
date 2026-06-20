@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-sdk:research-pipeline",
+  "cache_key": "23fd2cb3d31c3e08c086244cc473de46dac11b800b146062c2aa4bf7dc3d70a2",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "36755a7dadfd321e7a0450f2e89c486225a68cb3bee13ee503200cf5abe2208d",
+  "gate_impl_hash": "36755a7dadfd321e7a0450f2e89c486225a68cb3bee13ee503200cf5abe2208d",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-sdk:research-pipeline --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0356697da1548e1a004ef838c9a6f473ffeaebb8f79a0eb0f754dfca1675574b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 16404,
+  "proof_id": "proof-b6253431d957314e6108d8e0",
+  "created_at": "2026-06-18T02:25:01.378Z"
+}

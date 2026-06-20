@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:ts-source-of-truth",
+  "cache_key": "1cc4e7209986727f63f96da2a68c5f6c4beefe6516c1022b0e9ae63b831fdd65",
+  "input_hash": "cf417576f421756e129660d4fb6364099cf97d7b0c8ffbf2461ee77d5b56731b",
+  "implementation_hash": "f4987f2470ea183f1c92f82ce86f059f46bcff21197c7424309754049eeb7fb2",
+  "gate_impl_hash": "f4987f2470ea183f1c92f82ce86f059f46bcff21197c7424309754049eeb7fb2",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:ts-source-of-truth --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ac401e07f8e85ae68865753771dfd55e153910126ed08fbe975ecbd188b2f237"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10131,
+  "proof_id": "proof-b3b1d29aa3650002c2784888",
+  "created_at": "2026-06-18T02:10:33.083Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:ui-design",
+  "cache_key": "167617e0b774d1dd1dcc5cf289b7ef3d492018ddff8c42eaa0776141b1f37636",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "463c3affbb5418e89e5884dbb423038f0cb55feb9f21840e615c2e4b544f69c6",
+  "gate_impl_hash": "463c3affbb5418e89e5884dbb423038f0cb55feb9f21840e615c2e4b544f69c6",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:ui-design --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1111ab312a4d05ca74af45b103951e5427d667cfbccb53cb4bad274d6d6d66ab"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9724,
+  "proof_id": "proof-5d9de5cfeab6f4e9d4a3d9e5",
+  "created_at": "2026-06-18T00:09:38.186Z"
+}

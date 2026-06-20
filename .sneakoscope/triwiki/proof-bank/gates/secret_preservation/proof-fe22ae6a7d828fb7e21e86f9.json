@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "secret:preservation",
+  "cache_key": "a1e74ded0491c7c896f50930b3531b59f7fd2a16de0478083d3b3ca315923d7a",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "7f7228cde5a89f322bdb2fe5d9651940975e81ceb937cc7f0c8985eade37dfa5",
+  "gate_impl_hash": "7f7228cde5a89f322bdb2fe5d9651940975e81ceb937cc7f0c8985eade37dfa5",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run secret:preservation --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "fbecaed68a1289789db633db51c3c2b0a68f1886e0818760e9a37ff819cf3d52"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5940,
+  "proof_id": "proof-fe22ae6a7d828fb7e21e86f9",
+  "created_at": "2026-06-18T13:52:30.378Z"
+}

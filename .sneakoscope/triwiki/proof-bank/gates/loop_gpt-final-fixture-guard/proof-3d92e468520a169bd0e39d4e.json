@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:gpt-final-fixture-guard",
+  "cache_key": "dcec16befb2026aa215371bc0c7d8266de28da68d7e1bfdd03c6dd29fac74d86",
+  "input_hash": "1699392cd079da818281d8e9589864dc1c6f6951a53ade478794add3c47f5e86",
+  "implementation_hash": "f881870f469650a28e4e8aeb7f126756a4bede372d06d2acf7922350563c4869",
+  "gate_impl_hash": "f881870f469650a28e4e8aeb7f126756a4bede372d06d2acf7922350563c4869",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:gpt-final-fixture-guard --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13780,
+  "proof_id": "proof-3d92e468520a169bd0e39d4e",
+  "created_at": "2026-06-18T16:43:10.384Z"
+}

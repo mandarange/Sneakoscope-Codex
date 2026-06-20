@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:strategy-to-lease-wiring",
+  "cache_key": "e6b129ea306edce986ff695a5a4f872af884706c36fb36322d6ffb73bcf3e297",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "a54aa922470073da9b1ac58a1d6ae7a18b492aead0148f6023669403e7a0671b",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:strategy-to-lease-wiring --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f56afc3477bcf92654b30e9759f69e9b2a3a48b6326209bea8a228ecc93c1534"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10727,
+  "proof_id": "proof-ac79ca3c509466e2fac5109f",
+  "created_at": "2026-06-17T19:30:09.521Z"
+}

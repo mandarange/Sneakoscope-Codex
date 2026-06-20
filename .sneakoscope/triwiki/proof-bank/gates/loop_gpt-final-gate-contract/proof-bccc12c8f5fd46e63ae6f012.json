@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:gpt-final-gate-contract",
+  "cache_key": "d3c6e1ad19c24567a9e419f1a695aab50117f1d985a68d2611e39bf1022c2167",
+  "input_hash": "1b03a58bb0f9befbca1df1cdef1e992e8e0b4001129a21136752bdbafbeece2b",
+  "implementation_hash": "2d9b48766d83af53385309eb2c1cf36b786e63c7682b92b51a0ceef43266ad41",
+  "gate_impl_hash": "2d9b48766d83af53385309eb2c1cf36b786e63c7682b92b51a0ceef43266ad41",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:gpt-final-gate-contract --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ef449b1f578e4a08aa09f56c90ff4c1f5e962f659af49db1697e90c554e488a9"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 19019,
+  "proof_id": "proof-bccc12c8f5fd46e63ae6f012",
+  "created_at": "2026-06-18T14:30:30.261Z"
+}

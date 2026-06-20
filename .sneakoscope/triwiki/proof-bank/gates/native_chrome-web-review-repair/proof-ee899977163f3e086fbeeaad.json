@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "native:chrome-web-review-repair",
+  "cache_key": "ed3df4bb70707ea45c1219f8cf403dd99927c67bfbd2cf0494577ea02d24c9f3",
+  "input_hash": "fd13415fddef19410ccc504777927b325bcdd65c86025f87120dee5982bdf822",
+  "implementation_hash": "f91eb39575c9142fa39d34b871fbef03c379d58c734a201453832e0db28b1226",
+  "gate_impl_hash": "f91eb39575c9142fa39d34b871fbef03c379d58c734a201453832e0db28b1226",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run native:chrome-web-review-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "9b685cff633a53776a405c3db01f2d8adf72e1ac3143361cc1d7c8cc4e1f55d5"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 34123,
+  "proof_id": "proof-ee899977163f3e086fbeeaad",
+  "created_at": "2026-06-20T03:17:27.265Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "git:worktree-cross-rebase",
+  "cache_key": "554b6b8791b6a8675b75b728a9082f840b1ff4e29010f57bcff06d03daf0b7ce",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "900e708dcfe13c277aa5f6a49ea75476b602a14e1c9d99196752244d084ebf3b",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run git:worktree-cross-rebase --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1ac32716278de2369696c22bd9339ad67231fab2eba719b3f4bde27ead46de8c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14866,
+  "proof_id": "proof-589844f6e386a8c65f96ac9f",
+  "created_at": "2026-06-17T19:32:21.016Z"
+}

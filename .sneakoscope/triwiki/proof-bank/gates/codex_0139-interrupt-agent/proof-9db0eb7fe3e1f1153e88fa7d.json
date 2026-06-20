@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0139-interrupt-agent",
+  "cache_key": "d6e6a3f599ae615527cb2f1f0c531891ff596a3c3a94cecae9e0f185f63f9f98",
+  "input_hash": "946a1b3d49d6aba9d89a94d79923a02c570f6575edea1eddd5b48c492aeb6282",
+  "implementation_hash": "8ac3f2f1e754974b53e81d743c3b170006d1a0d4d238d32783d6e72656f76ab3",
+  "gate_impl_hash": "8ac3f2f1e754974b53e81d743c3b170006d1a0d4d238d32783d6e72656f76ab3",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0139-interrupt-agent --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "35e74d624e66a5dbfcc805472eff5d27aada9fa1c5aed1d30e48d4a388f5f529"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 1428,
+  "proof_id": "proof-9db0eb7fe3e1f1153e88fa7d",
+  "created_at": "2026-06-18T14:28:48.139Z"
+}

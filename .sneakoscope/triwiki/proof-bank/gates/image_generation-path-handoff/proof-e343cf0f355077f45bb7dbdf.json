@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "image:generation-path-handoff",
+  "cache_key": "8f63112139f9eced358d5a713f3f99eb7b060265fcc06c8adeb2128217d77013",
+  "input_hash": "df127ffc2b9e047d5a27f338f5466bcec54b195e5bd7c35f22c836d378af29a1",
+  "implementation_hash": "e45bb42cb6cdb96b17ef27dad7581fde9a37a49f04c33465146e44d57a228049",
+  "gate_impl_hash": "e45bb42cb6cdb96b17ef27dad7581fde9a37a49f04c33465146e44d57a228049",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run image:generation-path-handoff --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 31905,
+  "proof_id": "proof-e343cf0f355077f45bb7dbdf",
+  "created_at": "2026-06-18T17:49:18.070Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "native:app-screenshot-repair",
+  "cache_key": "28965e679fb52fdacce1cbc44e597790e931352b713ba2b09f258df3f4d3b912",
+  "input_hash": "fd13415fddef19410ccc504777927b325bcdd65c86025f87120dee5982bdf822",
+  "implementation_hash": "4a576793b3d9cd3e2ab2e93c0d923e7f458f0357c9192f28e9ea7dfce89f8687",
+  "gate_impl_hash": "4a576793b3d9cd3e2ab2e93c0d923e7f458f0357c9192f28e9ea7dfce89f8687",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run native:app-screenshot-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2effc1afcfebf706da403fa4476592e4271e894ae0b3e5bf45517de11decd095"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 32473,
+  "proof_id": "proof-da54bfb84cdeb8c57429aa8a",
+  "created_at": "2026-06-20T03:17:26.338Z"
+}

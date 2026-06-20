@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:loop-mesh-blackbox",
+  "cache_key": "3d69c9c21c495e92a80c2a6805b522ab9b80f51a9e72deaf2478337584421a15",
+  "input_hash": "965e1a0df72280fbd68c7585bd84d57fdd65d61cfe4beafd7c63840c55ef2219",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:loop-mesh-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "bf2e0171ba4489f15f7776a7e25dd845d6fd4435ad1ac220c6884f183bc33b37"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14832,
+  "proof_id": "proof-07e5af3f252d379b5e19c34d",
+  "created_at": "2026-06-17T19:37:28.918Z"
+}

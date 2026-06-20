@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:fast-ui-preservation",
+  "cache_key": "537148c0143dbe68b76a7b7a0275d185b5d056d5c89d728c9903dc62343e8be5",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "ee5ee9821ec9a8347df79b2a58f5abe392e8bdb1865ec69fa0eff47473bf682c",
+  "gate_impl_hash": "ee5ee9821ec9a8347df79b2a58f5abe392e8bdb1865ec69fa0eff47473bf682c",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:fast-ui-preservation --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2319b7587109675c9f83de49e2fe295e906c56b73d030425362297b7a9d1cd8e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9544,
+  "proof_id": "proof-8b1a84c47a01d45932e63b11",
+  "created_at": "2026-06-18T02:12:45.039Z"
+}

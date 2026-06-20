@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:mutation-ledger",
+  "cache_key": "d914e98c6f033eaecb05bfffc34026a96cba59d82ebb7309e0f8b932c45453cf",
+  "input_hash": "fd820d34ef08bc3ed115211d620a6ad997d525a88d9a2c1cc3df16bd2f2d9232",
+  "implementation_hash": "06723a140732ed3ece35663abef16b206182c340ab79ecfac39da1234c258afa",
+  "gate_impl_hash": "06723a140732ed3ece35663abef16b206182c340ab79ecfac39da1234c258afa",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:mutation-ledger --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "aff6e2f601c5bceb9bb3ab5bbc590af57800369a8d042e7c8041aeab652168e4"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 32838,
+  "proof_id": "proof-04087735d1dfb67a267012fc",
+  "created_at": "2026-06-20T03:08:41.381Z"
+}

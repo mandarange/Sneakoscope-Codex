@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:native-cli-session-proof",
+  "cache_key": "a9faee537dfc057da8f1027b2d4c8ae5a8198b9d3b643acb349a4448210c08ac",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "8480711fb9bb187b6b23c24ac33a874fba8e72ea3c7cdc5649de48d2ec2d4864",
+  "gate_impl_hash": "8480711fb9bb187b6b23c24ac33a874fba8e72ea3c7cdc5649de48d2ec2d4864",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:native-cli-session-proof --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2cae3cd9ece5fc174c9a00f62b9b3c8f098a8ef8dcc52903beab21fdcd00c0f2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 44985,
+  "proof_id": "proof-0f8f1163be5039b5a7ea8e25",
+  "created_at": "2026-06-18T02:13:08.986Z"
+}

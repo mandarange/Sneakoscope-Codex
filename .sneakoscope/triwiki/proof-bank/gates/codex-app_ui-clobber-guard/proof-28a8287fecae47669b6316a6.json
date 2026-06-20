@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:ui-clobber-guard",
+  "cache_key": "2b30cbf91b3bd12f1d7e1264896f7828394c7ec181ae2b7579c25e2a49134a79",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "bb9b05a3e3501867ae3e3663cc27c6f51644d65538c21356d680b43826ebc335",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:ui-clobber-guard --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "8c94be0643d736763698f1760977c562a13936276ba3855f07b2b247b6e69c7e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5688,
+  "proof_id": "proof-28a8287fecae47669b6316a6",
+  "created_at": "2026-06-17T19:30:18.398Z"
+}

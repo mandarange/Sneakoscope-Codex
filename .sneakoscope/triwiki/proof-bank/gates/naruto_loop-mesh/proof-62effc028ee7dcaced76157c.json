@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:loop-mesh",
+  "cache_key": "15c7c92f39aab64b1e4e4905fa9eb2dc05d3e314a68aa3f38c2be7c7c3777e16",
+  "input_hash": "1699392cd079da818281d8e9589864dc1c6f6951a53ade478794add3c47f5e86",
+  "implementation_hash": "91a90b62b7f260c35e94731defa5014e3a3d7336b0e8ebfc56b08f6aa61b7905",
+  "gate_impl_hash": "91a90b62b7f260c35e94731defa5014e3a3d7336b0e8ebfc56b08f6aa61b7905",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:loop-mesh --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a9cd175bd37469f0a992fec15ba81863a8415d75fece5c68bcdad2d7eb76ccba"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 102385,
+  "proof_id": "proof-62effc028ee7dcaced76157c",
+  "created_at": "2026-06-18T16:19:21.477Z"
+}

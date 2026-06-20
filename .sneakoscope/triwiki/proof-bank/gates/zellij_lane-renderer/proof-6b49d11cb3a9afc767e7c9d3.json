@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:lane-renderer",
+  "cache_key": "cb1c1dad1b33ce987ced95150f53e0923a00d5c9f08aefb9ac200789acd70a99",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "fcd768f0faf75a068719cc2a2f200e5a5b213d67bdb03d481ae71bdb5a50a397",
+  "gate_impl_hash": "fcd768f0faf75a068719cc2a2f200e5a5b213d67bdb03d481ae71bdb5a50a397",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:lane-renderer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c81f2dfc9e1d4d7cd6231fef65002fa558386758b3e2ab234a72313300e8042f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8431,
+  "proof_id": "proof-6b49d11cb3a9afc767e7c9d3",
+  "created_at": "2026-06-18T00:09:24.459Z"
+}

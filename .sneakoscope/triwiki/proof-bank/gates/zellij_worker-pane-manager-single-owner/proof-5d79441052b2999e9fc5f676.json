@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:worker-pane-manager-single-owner",
+  "cache_key": "deef6e6bd7d611bb923dcff6b8ed39b284b2ec99316c668ef8f75beb7853e5db",
+  "input_hash": "bee7fb7bff3d6dc9f554b0a6474dcceb951773bc5cb5ae149777749b0a871a20",
+  "implementation_hash": "6661a1ff515b897baf000d5f22253c39c0b874d65537f8b2d41a98d01618cb4b",
+  "gate_impl_hash": "6661a1ff515b897baf000d5f22253c39c0b874d65537f8b2d41a98d01618cb4b",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:worker-pane-manager-single-owner --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7398,
+  "proof_id": "proof-5d79441052b2999e9fc5f676",
+  "created_at": "2026-06-18T14:46:36.029Z"
+}

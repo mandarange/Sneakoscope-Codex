@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "native:image-generation-repair",
+  "cache_key": "4a0e9e4227b08e4bf86546137d69f3ed4b93ba374d474e5973240a6ee9b2dfde",
+  "input_hash": "ef8d8202c1defba6d4f4fb99d6acd65e06993adaf7f0a8ec8e8688eff14eac3e",
+  "implementation_hash": "0de829db085875e7a7e24cd4458a8906bf9e3533f60d6557044df40f2c103350",
+  "gate_impl_hash": "0de829db085875e7a7e24cd4458a8906bf9e3533f60d6557044df40f2c103350",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run native:image-generation-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c7d3d3abf5f790fba91be98dd6fea02b26eb4d208c52b3a42742a990e9039d4f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3748,
+  "proof_id": "proof-85c3f9fe876d8d2e80fa80a3",
+  "created_at": "2026-06-18T16:18:20.123Z"
+}

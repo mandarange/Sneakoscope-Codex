@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:promotion-side-effect-ledger",
+  "cache_key": "7a95ad1eb223b1744cbfcc525d415e9b508a76c73c5ab6e1a8faf3a7f2f48d11",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "19e069f1d802f51f96b9196bc40b3854f7c1215b72ca9414e028df4050f81af0",
+  "gate_impl_hash": "19e069f1d802f51f96b9196bc40b3854f7c1215b72ca9414e028df4050f81af0",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:promotion-side-effect-ledger --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8087,
+  "proof_id": "proof-1e70dbc848a7e6beb4601393",
+  "created_at": "2026-06-18T16:42:40.809Z"
+}

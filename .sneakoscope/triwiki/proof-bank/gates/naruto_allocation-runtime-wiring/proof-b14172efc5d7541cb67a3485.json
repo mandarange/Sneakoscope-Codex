@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:allocation-runtime-wiring",
+  "cache_key": "260a1076b00e0f37b2b9ca10d50f1f223f657e7c19e9b3206d986a505e90ce4c",
+  "input_hash": "bfe8b293c4912540c6c3088b078685a2072864d2930957dba524559e229d8f14",
+  "implementation_hash": "c677ccd3ea10861f0303558378c331205688cceba4336923676c856eb95f33a5",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:allocation-runtime-wiring --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "384e0ba3e31afffe79908f92a6ab7526c221f663ec05ee0e6b12a41296648b09"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 22493,
+  "proof_id": "proof-b14172efc5d7541cb67a3485",
+  "created_at": "2026-06-17T19:33:31.985Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:homebrew-policy",
+  "cache_key": "f4f12b0f35aa4ebe1df6fa9dbe6d294dbf277dc40182aabc422aa2a1c6aaf78f",
+  "input_hash": "59651bb47ae900ba4393891d303ca8a74c0ab3176ecc8afc1d1f149de75d570d",
+  "implementation_hash": "6e034c1763cdf3f05895c40712dde28b08d214c0fcdb2155530b5967918c8e36",
+  "gate_impl_hash": "6e034c1763cdf3f05895c40712dde28b08d214c0fcdb2155530b5967918c8e36",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:homebrew-policy --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1090619671a1558125e8a01856fff3e984ddf855f67d45d4094b36a232a2cb4e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6973,
+  "proof_id": "proof-129368853609cdec872b2495",
+  "created_at": "2026-06-18T00:09:22.507Z"
+}

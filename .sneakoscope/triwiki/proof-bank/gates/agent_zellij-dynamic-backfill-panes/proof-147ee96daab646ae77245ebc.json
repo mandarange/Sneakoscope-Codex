@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:zellij-dynamic-backfill-panes",
+  "cache_key": "79da029becc04d1d9d95c9b1edd9f0ae94d55f0add4929ba33ffc3e81bb71418",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "63efe04bbf5bc5ddc45360143f34380f0a2447d89e35ca602fa9303f0334903e",
+  "gate_impl_hash": "63efe04bbf5bc5ddc45360143f34380f0a2447d89e35ca602fa9303f0334903e",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:zellij-dynamic-backfill-panes --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a98cfb5f9e8040d3b60b21415ddc1e7ef9972914cfc6661b4a660055a02f09b7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15300,
+  "proof_id": "proof-147ee96daab646ae77245ebc",
+  "created_at": "2026-06-18T13:26:06.585Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:stacked-fallback-integration",
+  "cache_key": "8cac66e12599669fb18c9ff81108113bea1e74519463a4cc5e0248a9806faad5",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "gate_impl_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:stacked-fallback-integration --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d900e6f03e2c68e514758a5dbe18fc613275968a5706b0ed3e38648ced690232"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 1600,
+  "proof_id": "proof-08abc8f3a6e3b096e68ec5eb",
+  "created_at": "2026-06-18T01:55:44.820Z"
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "sks.openrouter-request-summary.v1",
+  "generated_at": "2026-06-20T02:24:09.606Z",
+  "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+  "model": "z-ai/glm-5.2",
+  "mode": "mad-glm-speed",
+  "profile": "speed",
+  "temperature": 0.2,
+  "top_p": 0.85,
+  "reasoning_effort": null,
+  "max_tokens": 4096,
+  "tool_choice": "none",
+  "parallel_tool_calls": false,
+  "stream": true,
+  "provider_allow_fallbacks": false,
+  "provider_sort": "throughput",
+  "require_parameters": false,
+  "key_source": "user-secret-store",
+  "key_preview": "sk-or-...abe4"
+}

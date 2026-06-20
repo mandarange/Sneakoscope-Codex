@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "scheduler:extreme-parallel",
+  "cache_key": "8f514d21c6484f8e0bce1919af2f3b436402efa14de16af485b637fafc12e1b2",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "eb06ef99dca638b2d336de2d79e517d70143e25ca61df2488341ff46cc1b8985",
+  "gate_impl_hash": "eb06ef99dca638b2d336de2d79e517d70143e25ca61df2488341ff46cc1b8985",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run scheduler:extreme-parallel --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "8c106d7fe8bb3ce49e686a0b6bc3071e0d07a03696f8435f460ce5885cb30ae3"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9763,
+  "proof_id": "proof-36f991f6155391dd7b7fda32",
+  "created_at": "2026-06-18T13:53:35.528Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:no-mjs-scripts",
+  "cache_key": "da18b9b21c5f050a020c8e6850546b109d4295e1c532a15c4c43fc4b0469018b",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "00469d7246d2f2df367cbb53c7a60c6c7477e1e9e6b1b8886176bfdcc68745bd",
+  "gate_impl_hash": "00469d7246d2f2df367cbb53c7a60c6c7477e1e9e6b1b8886176bfdcc68745bd",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:no-mjs-scripts --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1398d5d7be61ebcb9043e0cb3c138651071f377e0d716cb30000d9c78724af94"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 17687,
+  "proof_id": "proof-bb5c72c5427596967daa6e26",
+  "created_at": "2026-06-18T16:16:25.912Z"
+}

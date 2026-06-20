@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "orphan:gate-detection",
+  "cache_key": "0c3490eb9ab4257bd1f3b5bd8b21fa4cc608663b623b9929a01e21d04e177634",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "939340436e19e58a2b3d8745942983ef80ffe8209a8735528c130de045ae2e79",
+  "gate_impl_hash": "939340436e19e58a2b3d8745942983ef80ffe8209a8735528c130de045ae2e79",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run orphan:gate-detection --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a8cdf746165d60268d86bb4d3baa45af2f7d136a7cbe370eefcad50ad5fc8404"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15344,
+  "proof_id": "proof-a66f10864c026694d9d1f3f9",
+  "created_at": "2026-06-18T02:41:52.173Z"
+}

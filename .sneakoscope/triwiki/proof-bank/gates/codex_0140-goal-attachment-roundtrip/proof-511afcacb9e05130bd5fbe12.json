@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0140-goal-attachment-roundtrip",
+  "cache_key": "b9c81c7f1c49a1b1f3518a162ed6a98ba35ad0ed8e8bc5ab2535a59fe129cdf3",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "a8531efc8ac556207cba7fe1d6bb6369574acfcb56165161194283de6e7d6379",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0140-goal-attachment-roundtrip --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c0309dbe48c3581d5f66941aa28efa844eed3cdc99fb1cec084b4419a0169318"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11930,
+  "proof_id": "proof-511afcacb9e05130bd5fbe12",
+  "created_at": "2026-06-17T19:35:15.853Z"
+}

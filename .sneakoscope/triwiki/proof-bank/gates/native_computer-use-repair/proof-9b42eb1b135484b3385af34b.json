@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "native:computer-use-repair",
+  "cache_key": "dc52d4bee22a1313477820f812b8c4d5d384cf699a3c8d5874e067f9f88c79e1",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "018fdbe75b7012fd9dd25e8a433124c5f8bea3402c08c4f6fa3516b4707549b3",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run native:computer-use-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7d3c038f672968f5433f1e03c8ee43b99f3015f35a13f9d91cd820d210c6bd3d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13422,
+  "proof_id": "proof-9b42eb1b135484b3385af34b",
+  "created_at": "2026-06-17T19:35:32.294Z"
+}

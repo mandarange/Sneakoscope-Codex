@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:codex-app-harness",
+  "cache_key": "91ba7b84a65f56fb47f732a0edf223c0e0d009e1ac3907f993e8285f4b1bab84",
+  "input_hash": "159bed17a907fd250458fc3f9dcecdb0edb62c9662b4c68ccf72b276ea8345af",
+  "implementation_hash": "82f25784d0bcd8686bf61e21f9858aee3f0878f19bead0ed7f45652cd628f80a",
+  "gate_impl_hash": "82f25784d0bcd8686bf61e21f9858aee3f0878f19bead0ed7f45652cd628f80a",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:codex-app-harness --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ed9240ebfcc9fc31c38d96473a0251fbc1aa45188eda844217d5dfe274b549d5"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 32205,
+  "proof_id": "proof-dc3954077becc9816514ce8e",
+  "created_at": "2026-06-18T08:08:34.478Z"
+}

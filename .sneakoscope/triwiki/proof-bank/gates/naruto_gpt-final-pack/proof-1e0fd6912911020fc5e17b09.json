@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:gpt-final-pack",
+  "cache_key": "319b3092def53a86e70c72597d1941405fcd99d4af3e252b1c52abdd09d25eba",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "31c6af0c57a9cd97737682bafb3672878b58edb8ccd1a02caa0e4434e3b04c16",
+  "gate_impl_hash": "31c6af0c57a9cd97737682bafb3672878b58edb8ccd1a02caa0e4434e3b04c16",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:gpt-final-pack --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "70cbecaeadbcd55dc4e7fd4585c9b639e14d1e447dc6f4283ea45f5d32ceab32"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10590,
+  "proof_id": "proof-1e0fd6912911020fc5e17b09",
+  "created_at": "2026-06-18T16:32:24.907Z"
+}

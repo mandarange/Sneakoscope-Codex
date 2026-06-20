@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-routing",
+  "cache_key": "a498720f5ac8e905610d509292e2c0718a11c77cb190dccd28c8a10f4332bb5c",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "dcd188a3c59e60f97372c62e2e43dbe1bccf1a3b35994be767c00ba0b2ccc103",
+  "gate_impl_hash": "dcd188a3c59e60f97372c62e2e43dbe1bccf1a3b35994be767c00ba0b2ccc103",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-routing --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c2cc6b2b6865e8c564f509966ee90a870ec599d27a773ac4d3e6d34444919423"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9389,
+  "proof_id": "proof-d06bbc154cfa6aac9f736ffb",
+  "created_at": "2026-06-18T02:16:48.924Z"
+}

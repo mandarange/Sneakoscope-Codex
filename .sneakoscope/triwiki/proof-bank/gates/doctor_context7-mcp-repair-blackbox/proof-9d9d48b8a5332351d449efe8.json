@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:context7-mcp-repair-blackbox",
+  "cache_key": "d24c9995f24411ea31f5852b287a74bfe1cf3d9a6bedbd20090ea3afe0a79c5e",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:context7-mcp-repair-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "be9c6237db6f53dac0bbda54f485d21c7ffedc600b13f7c118b3bf35255d4ad9"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7179,
+  "proof_id": "proof-9d9d48b8a5332351d449efe8",
+  "created_at": "2026-06-17T19:35:05.814Z"
+}

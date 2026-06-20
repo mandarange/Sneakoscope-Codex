@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:rollback-command",
+  "cache_key": "4fe9cbbdc11ad0cb6dd9c05a4ec987856c2fd10b7ccc210ee5039ce29e683fcd",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "6592a1e32ec04c59b312fad49d4007d77a67da7edb87bc8e07ea23be3b05d581",
+  "gate_impl_hash": "6592a1e32ec04c59b312fad49d4007d77a67da7edb87bc8e07ea23be3b05d581",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:rollback-command --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "866ee582ed6d8ba55c5ebb1eaec5c3da32fa81d18f37321e1054947f3ee39e33"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 42104,
+  "proof_id": "proof-4e2c16ac9ed9ff4c72cb17a8",
+  "created_at": "2026-06-20T03:04:18.344Z"
+}

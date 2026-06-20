@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-native:read-repair-split-blackbox",
+  "cache_key": "7fb4dfa27fea3696071d58e261ff0c71db85eeeb3273f1bd7d531090152bd96a",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "af26e6a78cd7987abd7ceec03f4e248895de8b133234c917a321b97c3c6a7155",
+  "gate_impl_hash": "af26e6a78cd7987abd7ceec03f4e248895de8b133234c917a321b97c3c6a7155",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-native:read-repair-split-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "8e9e23acbf821643af446cc69b120e58efbbad47f43e610ae3b665ee37d1ef4d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 49325,
+  "proof_id": "proof-2fa7da9b729a96622655309b",
+  "created_at": "2026-06-18T13:32:06.191Z"
+}

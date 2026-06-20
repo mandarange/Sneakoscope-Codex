@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:decomposer",
+  "cache_key": "f4f616808016f3dca14a7e92c837cdd5634c5dd2fae96b2353870e697992abb9",
+  "input_hash": "1699392cd079da818281d8e9589864dc1c6f6951a53ade478794add3c47f5e86",
+  "implementation_hash": "d567da79da21267ccda0d91b4d56aff4fc5529e2f54cfce3f6625e1ff2356371",
+  "gate_impl_hash": "d567da79da21267ccda0d91b4d56aff4fc5529e2f54cfce3f6625e1ff2356371",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:decomposer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ae225128808600ec40053e492559cef24fad8d6e08b742993e66dae7b93c5c93"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 146630,
+  "proof_id": "proof-5ae7f8b0cf29d7ba82dffa2f",
+  "created_at": "2026-06-18T16:15:00.792Z"
+}

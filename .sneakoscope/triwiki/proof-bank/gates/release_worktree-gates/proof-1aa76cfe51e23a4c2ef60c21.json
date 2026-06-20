@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:worktree-gates",
+  "cache_key": "57d8d062aa7a37eff6965a13bc283ee7660c87b003fd6a700c0fe84108cf34ad",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "af26e6a78cd7987abd7ceec03f4e248895de8b133234c917a321b97c3c6a7155",
+  "gate_impl_hash": "af26e6a78cd7987abd7ceec03f4e248895de8b133234c917a321b97c3c6a7155",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:worktree-gates --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "058b453004619f44b7fc272cee3794721b11b24a5be17db0b45711f0eaaa0bc7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 145617,
+  "proof_id": "proof-1aa76cfe51e23a4c2ef60c21",
+  "created_at": "2026-06-18T16:18:29.012Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:wiring-3112-blackbox",
+  "cache_key": "35c04f196d653f9d8208a91004de3bb639f3eb5b2cc425c5115ccb5fe56f814b",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:wiring-3112-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7ecbeda534d0ba2987e9195f88fd86de693776b1f2a45dbaecb1f5f73d09a2b1"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 1925,
+  "proof_id": "proof-03c19961882fa96f85926c63",
+  "created_at": "2026-06-17T19:26:43.015Z"
+}

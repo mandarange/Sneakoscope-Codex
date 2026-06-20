@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-control:empty-result-retry",
+  "cache_key": "e03572dfed9ed10c0aff0b728b5ac7eda5de328f177821830b43407ec91988f9",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "ff13305e5ebb6e8cd6129610bea4435252259bb4e26ec8ae62216cc87b8a307e",
+  "gate_impl_hash": "ff13305e5ebb6e8cd6129610bea4435252259bb4e26ec8ae62216cc87b8a307e",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-control:empty-result-retry --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "283cad4a89ed9c0dc5462e9ab2bdc655006113c2ee5a2ad48f76d693eaac3bee"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3782,
+  "proof_id": "proof-6d3c2124cc9f98d4858b7c14",
+  "created_at": "2026-06-18T02:36:27.770Z"
+}

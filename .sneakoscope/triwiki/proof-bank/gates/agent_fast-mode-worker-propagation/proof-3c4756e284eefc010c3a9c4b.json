@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:fast-mode-worker-propagation",
+  "cache_key": "26a3881dd929a02e9e28615c38395d62d3381754a982ea31ef7ff78327725d22",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "d0ca798049ecce4c9a8a23164cb204be73bed32a2a7c59908e7115ac696608f7",
+  "gate_impl_hash": "d0ca798049ecce4c9a8a23164cb204be73bed32a2a7c59908e7115ac696608f7",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:fast-mode-worker-propagation --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ec2fc5e2c02e6d88508857e5bc9fa0051a5f232a4416695b534533fdbba711a0"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 45360,
+  "proof_id": "proof-3c4756e284eefc010c3a9c4b",
+  "created_at": "2026-06-18T13:26:26.262Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:update-missing-self-heal",
+  "cache_key": "60aa2511099381e2dcfb1bb4cb969e0f69f9e5e1dfa37e2c4c5d6891e7c3faf7",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "22f963f5c721413061b5fbc459db3234746aa6a3ce955eda475c4db7a075c5cd",
+  "gate_impl_hash": "22f963f5c721413061b5fbc459db3234746aa6a3ce955eda475c4db7a075c5cd",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:update-missing-self-heal --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a8cabb563127ff3f91c30e22c80f0b254c77d613b4144d8463b1c09e8d4c0a3f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11768,
+  "proof_id": "proof-7cf0f367465ef12e9589e81a",
+  "created_at": "2026-06-18T13:52:04.314Z"
+}

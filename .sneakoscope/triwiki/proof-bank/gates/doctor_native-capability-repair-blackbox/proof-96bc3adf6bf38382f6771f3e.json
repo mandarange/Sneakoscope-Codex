@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:native-capability-repair-blackbox",
+  "cache_key": "df23b42e3d86179357b4e09ab3ad88590f1bf3e64f99f8e0b534490fc3b35ee0",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:native-capability-repair-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "90f47ed91eae459042262a1ffcb1007ef08785972baa15d96f79ceda0944a78e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10003,
+  "proof_id": "proof-96bc3adf6bf38382f6771f3e",
+  "created_at": "2026-06-17T19:35:30.956Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:patch-transaction-journal",
+  "cache_key": "b71f91b12ce0282a140c9a03a96445505d69dfbac3bb3174aae0a5f0bc5a4209",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "9b9c896fc0e7a01d2f35969ee3d51444cece80972188b28ab8f742b0ae2350ec",
+  "gate_impl_hash": "9b9c896fc0e7a01d2f35969ee3d51444cece80972188b28ab8f742b0ae2350ec",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:patch-transaction-journal --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2acc704a7ba26164f5c9157313d2ac3fad2d5cee20ee488a8a438fa9bab15de9"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 17242,
+  "proof_id": "proof-a9a2873681ae5707ffe7d15c",
+  "created_at": "2026-06-20T03:03:53.491Z"
+}

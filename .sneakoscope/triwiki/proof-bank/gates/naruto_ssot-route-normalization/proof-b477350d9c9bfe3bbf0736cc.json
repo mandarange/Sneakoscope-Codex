@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-route-normalization",
+  "cache_key": "3b1af35ea6d9425972f072af7b83116f7da24a32614c039db9a3ff5411e39542",
+  "input_hash": "080352704b499db3fcdcde8a307b1c16e9f6d5209aff823a14763ceeaedab948",
+  "implementation_hash": "cb64a46eb5d4ad995fda2b2c58ad08beb06dff7e14d5225c6d9375b631682e11",
+  "gate_impl_hash": "cb64a46eb5d4ad995fda2b2c58ad08beb06dff7e14d5225c6d9375b631682e11",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-route-normalization --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1baece9260ded5895cb7caf74f40bcef9a15a3f6f6a83baf9d76a99c68e9dbfd"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3449,
+  "proof_id": "proof-b477350d9c9bfe3bbf0736cc",
+  "created_at": "2026-06-18T08:10:14.213Z"
+}

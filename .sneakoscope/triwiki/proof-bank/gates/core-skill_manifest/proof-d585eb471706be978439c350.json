@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:manifest",
+  "cache_key": "0c05b6999dfaf1443fbf7ebdb8b03d3cd1338057f1009bd06f2e6e17de8f63ff",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "f907513f001e19af7a03b0f0723770004758ed846152af3b9e0c98f48c591613",
+  "gate_impl_hash": "f907513f001e19af7a03b0f0723770004758ed846152af3b9e0c98f48c591613",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:manifest --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6d398646ccedc17685a048613e2d59bb3ed8493ce5ad306d212cc31b6b65605b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2954,
+  "proof_id": "proof-d585eb471706be978439c350",
+  "created_at": "2026-06-18T02:24:19.490Z"
+}

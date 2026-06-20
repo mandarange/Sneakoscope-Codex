@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:repetition-detector",
+  "cache_key": "b48d2fd6f2d375dc6f58179dc8dcd61201d460fd24ac3e09b91f27b929645da5",
+  "input_hash": "1c07077e1f02b1d0dc6d450c8a6f2c9dd60445b04b4a851e698c1363c78b85df",
+  "implementation_hash": "974368e77677cdc9d888f702ee8470db1d91c9c7fef66134c0f9d23195cbbc17",
+  "gate_impl_hash": "974368e77677cdc9d888f702ee8470db1d91c9c7fef66134c0f9d23195cbbc17",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:repetition-detector --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b3f2fe47165c0d07e9526fcf2ad4f4697500c84d8f0c92745c7f50910ed39f7a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3102,
+  "proof_id": "proof-6b4bd1b9e4673ed9cd251ada",
+  "created_at": "2026-06-18T07:39:34.859Z"
+}

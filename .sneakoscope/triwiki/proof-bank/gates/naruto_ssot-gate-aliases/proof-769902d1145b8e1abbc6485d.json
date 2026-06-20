@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-gate-aliases",
+  "cache_key": "ef4030e9d41fe2e7ae8c1ab254c526e41fef658ed142e2bf4fdacab86a0e4e01",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "1d125758c432ed6f9137bffc04fb463366fdb3b0216eaa0f597941bafd38865a",
+  "gate_impl_hash": "1d125758c432ed6f9137bffc04fb463366fdb3b0216eaa0f597941bafd38865a",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-gate-aliases --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "da1599ea28740cce73abe8180ca1210c5f53c1d18924a6e1c9a346584710ebf5"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4808,
+  "proof_id": "proof-769902d1145b8e1abbc6485d",
+  "created_at": "2026-06-18T02:39:35.152Z"
+}

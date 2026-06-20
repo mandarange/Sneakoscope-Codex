@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "triwiki:gate-impact-map",
+  "cache_key": "e42a5ef870d4345477d315f8232b154d6b5b9d01766d4058be367257f432ade3",
+  "input_hash": "fd13415fddef19410ccc504777927b325bcdd65c86025f87120dee5982bdf822",
+  "implementation_hash": "e21e655100a618577a12c5f8e36d856e2a9eaea9b3e666abbe25d4dd0abd6a32",
+  "gate_impl_hash": "e21e655100a618577a12c5f8e36d856e2a9eaea9b3e666abbe25d4dd0abd6a32",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run triwiki:gate-impact-map --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "4cc8a7e3ac9460513976f0e8a3e9d94a06e16f3090c86fe0471ec99e79a46834"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14279,
+  "proof_id": "proof-ba5f2fca5978b1f5ebac63e0",
+  "created_at": "2026-06-20T03:17:14.593Z"
+}

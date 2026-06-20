@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:role-distribution",
+  "cache_key": "631a60dd1d863d1bf77204965b9b4bc78d12213d118891d7db72a6237ec718c1",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "52d24ce66fae2e6d3ae1f67e4848fbffa1769c5ae739fed832f7d3d9faa16d10",
+  "gate_impl_hash": "52d24ce66fae2e6d3ae1f67e4848fbffa1769c5ae739fed832f7d3d9faa16d10",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:role-distribution --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "22243592b2a69bc55265ea1e34f9127b760f625230e7409922b4f3dc238ed675"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5030,
+  "proof_id": "proof-daa2d13cc99bbf907dcb298e",
+  "created_at": "2026-06-18T02:39:32.726Z"
+}

@@ -1,0 +1,12 @@
+{
+  "run_id": "glm-2026-06-18T17-22-04-111Z-07c2b6",
+  "phase": "blocked",
+  "started_at": "2026-06-18T17:22:04.111Z",
+  "updated_at": "2026-06-18T17:22:04.112Z",
+  "turn_count": 0,
+  "tool_round_count": 0,
+  "no_progress_count": 0,
+  "repeated_output_count": 0,
+  "terminal": true,
+  "terminal_reason": "glm_patch_gate_failed"
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "pipeline:five-minute-sla",
+  "cache_key": "6cd7f378dc2a52efc661ac2e7d216d8a7650ff763661d186f12f3682efec827c",
+  "input_hash": "fd13415fddef19410ccc504777927b325bcdd65c86025f87120dee5982bdf822",
+  "implementation_hash": "24ffbff67e218b6469ff9a7b935de36f536ccebab6d7d5ff584c94807d7776d6",
+  "gate_impl_hash": "24ffbff67e218b6469ff9a7b935de36f536ccebab6d7d5ff584c94807d7776d6",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": true,
+  "evidence": {
+    "command": "npm run pipeline:five-minute-sla --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1e052125baaee2ca6d99e6f36f86e8bdfe04e6fe79b7f7e72fd49bfb464923dc"
+  },
+  "invalidation_reasons": [],
+  "expires_at": null,
+  "duration_ms": 195818,
+  "proof_id": "proof-03e7e60c495029b6bc007007",
+  "created_at": "2026-06-20T03:20:22.599Z"
+}

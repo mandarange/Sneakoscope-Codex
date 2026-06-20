@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:continuation-enforcer",
+  "cache_key": "d5d9464ac24d09bdaa99f5e8870484da0919b85721a173d517698a13d821a86a",
+  "input_hash": "d756d745680051609f3d844da5a51c1161057d9fd4a82d559a316dd562d1a7fa",
+  "implementation_hash": "4dfa3e8f2d882a19f8db47854e0666d69b09fd7f9a95a0dbf40a698d64c96567",
+  "gate_impl_hash": "4dfa3e8f2d882a19f8db47854e0666d69b09fd7f9a95a0dbf40a698d64c96567",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:continuation-enforcer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "36b1c94a37105551dbe4dc988b9223e2aa619337d1b3e33b91602c1dda201a24"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4195,
+  "proof_id": "proof-478d4b89940fb19a0bed44ea",
+  "created_at": "2026-06-18T07:35:53.597Z"
+}

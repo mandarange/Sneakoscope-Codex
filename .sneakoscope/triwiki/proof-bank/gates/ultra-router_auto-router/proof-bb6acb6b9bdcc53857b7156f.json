@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "ultra-router:auto-router",
+  "cache_key": "2b58e0c8975f9caba2dd11d1bf0af65123ea920ef6913c1d43e4ebe0fbd478fa",
+  "input_hash": "6431b292c55615a9b7a58acfe5fd1280b5bb0f81d83bc697859e12aeded7edaa",
+  "implementation_hash": "c8b7b856c41050f58e506a747ab8b91c2c1e2f3d009cea43318e4738ca6aa72c",
+  "gate_impl_hash": "c8b7b856c41050f58e506a747ab8b91c2c1e2f3d009cea43318e4738ca6aa72c",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run ultra-router:auto-router --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "fe9846bf3e5ce05203f7be847440ddd16041f0f19eab9be8f86af40fd00a3320"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7773,
+  "proof_id": "proof-bb6acb6b9bdcc53857b7156f",
+  "created_at": "2026-06-18T17:39:33.338Z"
+}

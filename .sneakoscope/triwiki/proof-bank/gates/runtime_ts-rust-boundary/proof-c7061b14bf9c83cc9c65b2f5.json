@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:ts-rust-boundary",
+  "cache_key": "c75de145ecf72e11c6c591047911c4ef3e0679b56e1b71231086c5705d275751",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "8da9ce6f9098b1c4857f6a1397ba48748b888a761e02d52b03c5e4b208e192a3",
+  "gate_impl_hash": "8da9ce6f9098b1c4857f6a1397ba48748b888a761e02d52b03c5e4b208e192a3",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:ts-rust-boundary --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "55a06776f3f0c0f897154154a11693d42ff407b5a0595d6cc484c601d34021cc"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10640,
+  "proof_id": "proof-c7061b14bf9c83cc9c65b2f5",
+  "created_at": "2026-06-18T00:09:20.337Z"
+}

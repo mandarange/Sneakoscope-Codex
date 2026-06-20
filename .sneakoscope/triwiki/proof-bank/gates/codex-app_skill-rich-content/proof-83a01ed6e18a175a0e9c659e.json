@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:skill-rich-content",
+  "cache_key": "e03e174828984dae9cb1fa0d85fb9f02724fb5f5c81eaa1f69cc63486640242a",
+  "input_hash": "ef8d8202c1defba6d4f4fb99d6acd65e06993adaf7f0a8ec8e8688eff14eac3e",
+  "implementation_hash": "af26e6a78cd7987abd7ceec03f4e248895de8b133234c917a321b97c3c6a7155",
+  "gate_impl_hash": "af26e6a78cd7987abd7ceec03f4e248895de8b133234c917a321b97c3c6a7155",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:skill-rich-content --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "04aaaf9af12ceaa9ae81c423f415723537220223e61ac206f91a7c2c57fdc20e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15579,
+  "proof_id": "proof-83a01ed6e18a175a0e9c659e",
+  "created_at": "2026-06-18T16:28:42.834Z"
+}

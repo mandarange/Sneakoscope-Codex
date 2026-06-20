@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "image:generation-path-handoff",
+  "cache_key": "0010fc8ab26cca546f8f97b8055377771d59ecad9750beb1ed437e9828c858ae",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "d7154c0e070d6cab8be6cac649b71d9cdf741b8e9fca7ea559626d847a5b7f17",
+  "gate_impl_hash": "d7154c0e070d6cab8be6cac649b71d9cdf741b8e9fca7ea559626d847a5b7f17",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run image:generation-path-handoff --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "42a7731deeec771898b884ce3b344c7c6cbe75f2d223358f8ccb9d01d99e3fe1"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4395,
+  "proof_id": "proof-e261be5b3ee9e706dc01c340",
+  "created_at": "2026-06-18T02:15:09.475Z"
+}

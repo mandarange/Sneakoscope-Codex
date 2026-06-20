@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:triwiki-first-runner",
+  "cache_key": "d4d1038ed30fb79ad13cabebc7925a8314082f90a53a8557d3b88e5307be285b",
+  "input_hash": "59651bb47ae900ba4393891d303ca8a74c0ab3176ecc8afc1d1f149de75d570d",
+  "implementation_hash": "bb49a4296c06e3c06a7f7ead23a953f1632ba9e276972c30b9558df0bde74286",
+  "gate_impl_hash": "bb49a4296c06e3c06a7f7ead23a953f1632ba9e276972c30b9558df0bde74286",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:triwiki-first-runner --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6de718d0713402446f74f990641afbfd00f4374b90a4a905081d1bdcbb281163"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4861,
+  "proof_id": "proof-1ab68aac2b0f38cc691ade16",
+  "created_at": "2026-06-18T00:09:41.606Z"
+}

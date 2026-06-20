@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "typecheck",
+  "cache_key": "202779d3cbf06bab02fb40f3d221b03f0fd1f6461da8734679d41a4654e64b26",
+  "input_hash": "cf417576f421756e129660d4fb6364099cf97d7b0c8ffbf2461ee77d5b56731b",
+  "implementation_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "gate_impl_hash": "c4649c1b4d1b0235a50b064b2e03dfad8bb60b265e6b0e00389b4377189d666f",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run typecheck --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "860c359af517d44fa512f67b8ff731c7f73795ef21d3c61f26d2ffe48bdd65b7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9702,
+  "proof_id": "proof-e0d5b4a76cd8a30e20310326",
+  "created_at": "2026-06-18T00:09:18.884Z"
+}

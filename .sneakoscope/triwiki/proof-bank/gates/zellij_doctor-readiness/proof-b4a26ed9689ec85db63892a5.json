@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:doctor-readiness",
+  "cache_key": "55552580d7ac59ce01a069d9e611598495f538e8768abc350cd43e7352554feb",
+  "input_hash": "6431b292c55615a9b7a58acfe5fd1280b5bb0f81d83bc697859e12aeded7edaa",
+  "implementation_hash": "693da3606b5080a7e6f235d66f288750cd66614d88eb400c6a4c9306f9ebe0e7",
+  "gate_impl_hash": "693da3606b5080a7e6f235d66f288750cd66614d88eb400c6a4c9306f9ebe0e7",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:doctor-readiness --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "559b177cd05fc28382f31c05e65877d625a14082ef2aad803b8aa6fbf6a2bdfc"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 156454,
+  "proof_id": "proof-b4a26ed9689ec85db63892a5",
+  "created_at": "2026-06-18T18:01:41.714Z"
+}

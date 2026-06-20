@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:concurrency-governor",
+  "cache_key": "a8f7d8508fb9764b1ab6ff4540db273bc3cdaf3d9e807dca7e449086c8adc20f",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "1e5783a3d28fc1a256f658125a425c410069019466916a4e386f1f0c2e020672",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:concurrency-governor --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3bf1445d5fbada0463f4618728734024bac979c13873aca08e9b1748cb48d0df"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4128,
+  "proof_id": "proof-6743cf538564e38b6d809b3b",
+  "created_at": "2026-06-17T19:33:06.282Z"
+}

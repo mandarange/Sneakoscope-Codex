@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:gpt-final-contract-crossref",
+  "cache_key": "720c4e5de5d1230a6e213935f34f670c00154890ad712285b4382cbcf64f4038",
+  "input_hash": "20188e02a96e20025e08deb0d101ee3e26bd1ff1c995bbfed349233f11424430",
+  "implementation_hash": "c7bf93cb204a9bbf0054e165f6ddc53430562eeff382dbfe34e79821f8f4ff19",
+  "gate_impl_hash": "c7bf93cb204a9bbf0054e165f6ddc53430562eeff382dbfe34e79821f8f4ff19",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:gpt-final-contract-crossref --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7ad6b7ca91cbd2371906db85deb5e209606fc85869e9c7bcdebef01737e829f9"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 17800,
+  "proof_id": "proof-aab76ec6f5a2794d47da18e7",
+  "created_at": "2026-06-18T17:57:54.304Z"
+}

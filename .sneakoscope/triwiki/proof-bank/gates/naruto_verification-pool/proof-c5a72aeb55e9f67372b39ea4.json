@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:verification-pool",
+  "cache_key": "bd7593886d1317afeb5f59ea9345906ccafb37e7b6a3224fdd13b2840b4c5877",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "37ac178ee97a8a83325c85374d60b1595210bfb4cf6ded37437476508bacd66d",
+  "gate_impl_hash": "37ac178ee97a8a83325c85374d60b1595210bfb4cf6ded37437476508bacd66d",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:verification-pool --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "840a3114119fe19b0d011be22667b35a905aa901a9de4383bed28a0d77fb90c7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10964,
+  "proof_id": "proof-c5a72aeb55e9f67372b39ea4",
+  "created_at": "2026-06-18T02:16:51.187Z"
+}

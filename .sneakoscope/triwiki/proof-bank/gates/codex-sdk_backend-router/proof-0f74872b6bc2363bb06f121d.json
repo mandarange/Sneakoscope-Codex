@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-sdk:backend-router",
+  "cache_key": "1ae9c1952903229f941fcee492bf032bd4159b56c8449cb6034d8bb2dd702d7c",
+  "input_hash": "080352704b499db3fcdcde8a307b1c16e9f6d5209aff823a14763ceeaedab948",
+  "implementation_hash": "9731253ddd912644224cca3a04eb6e977b0ae703c13c208d4ff0a1c5e3758364",
+  "gate_impl_hash": "9731253ddd912644224cca3a04eb6e977b0ae703c13c208d4ff0a1c5e3758364",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-sdk:backend-router --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b9e1c457c165e82dbe10f7bb0159a11188670e3af96ed9b8326d0d929e0c2005"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7507,
+  "proof_id": "proof-0f74872b6bc2363bb06f121d",
+  "created_at": "2026-06-18T08:07:39.646Z"
+}

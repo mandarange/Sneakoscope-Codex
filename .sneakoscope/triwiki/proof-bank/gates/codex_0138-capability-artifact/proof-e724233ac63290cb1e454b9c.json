@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0138-capability-artifact",
+  "cache_key": "26b764489b09ab16d5450f3660d23d64c381662ce23a3828131f5e88769aec44",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "123cb2b4e23bb0eff1d9a6bb09baecc5c012834e8bf62a7a746b2a9c93345f50",
+  "gate_impl_hash": "123cb2b4e23bb0eff1d9a6bb09baecc5c012834e8bf62a7a746b2a9c93345f50",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0138-capability-artifact --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b13a60b204d33d61d9b9b06ed165d308bf3407fc847765f9b85c92e3b2979b6b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5689,
+  "proof_id": "proof-e724233ac63290cb1e454b9c",
+  "created_at": "2026-06-18T02:37:02.308Z"
+}

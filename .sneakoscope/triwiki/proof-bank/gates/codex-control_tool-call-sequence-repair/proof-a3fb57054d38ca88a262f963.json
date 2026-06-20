@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-control:tool-call-sequence-repair",
+  "cache_key": "5ac606c4ec821cbe5ba79c7c97ca639c20d2f90dd678c252f2f0fe7596b06df7",
+  "input_hash": "080352704b499db3fcdcde8a307b1c16e9f6d5209aff823a14763ceeaedab948",
+  "implementation_hash": "03d7d504dc56f2861b8a6b6770ec91008f6e729050edd1acf62e4c500ad27a94",
+  "gate_impl_hash": "03d7d504dc56f2861b8a6b6770ec91008f6e729050edd1acf62e4c500ad27a94",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-control:tool-call-sequence-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "bbf5f6d2c6de634588ab5be7eddc290cd58aa5ec0dead00c04fb62ba275ec09f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8598,
+  "proof_id": "proof-a3fb57054d38ca88a262f963",
+  "created_at": "2026-06-18T08:07:30.907Z"
+}

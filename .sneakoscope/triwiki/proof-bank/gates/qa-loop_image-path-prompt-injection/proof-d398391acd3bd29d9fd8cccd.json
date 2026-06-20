@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:image-path-prompt-injection",
+  "cache_key": "302bf7e038c8f7c617cec3e69ff73dfdb190c42b3e769e0d71420b633f1c7124",
+  "input_hash": "60bd91d45040a394bda6d0dc9d166754c24f35fbfb723c1745abd931b8a6b109",
+  "implementation_hash": "22659669cfc9f334885ca3fe1fcb9424549187ede6d944915a670a70460b8215",
+  "gate_impl_hash": "22659669cfc9f334885ca3fe1fcb9424549187ede6d944915a670a70460b8215",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:image-path-prompt-injection --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6682eccc3a6677bc396d5413340a3006e49c294ff57acdd301a61a2d4a29677a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 24787,
+  "proof_id": "proof-d398391acd3bd29d9fd8cccd",
+  "created_at": "2026-06-20T03:11:55.556Z"
+}

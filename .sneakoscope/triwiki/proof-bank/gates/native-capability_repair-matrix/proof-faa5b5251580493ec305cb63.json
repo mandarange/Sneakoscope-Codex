@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "native-capability:repair-matrix",
+  "cache_key": "0600839d23bb13c10a86f97e6c97de759bdacc312eec34ee761f1a8f8298a30d",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "6276a784ad95deef373abea90782121f5c3c97c49e89a1b6029b759501c82b6a",
+  "gate_impl_hash": "6276a784ad95deef373abea90782121f5c3c97c49e89a1b6029b759501c82b6a",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run native-capability:repair-matrix --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "63dc7085ba56e7758e00e97be50ae4d462f42176569feb7a495a91a32d7002dd"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4799,
+  "proof_id": "proof-faa5b5251580493ec305cb63",
+  "created_at": "2026-06-18T02:24:23.906Z"
+}

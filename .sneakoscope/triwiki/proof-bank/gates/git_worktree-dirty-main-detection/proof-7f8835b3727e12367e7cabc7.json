@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "git:worktree-dirty-main-detection",
+  "cache_key": "ab7c60ab43587c88ca5cca152c97803aa801de29a988f2df67bf0fbac9415abe",
+  "input_hash": "b9cdabbe460ba131caf61da59f5e88c2bf8997fc90382b14622270a93a199083",
+  "implementation_hash": "147be75b25fc11d7ee76be51816eab253f58ce3d6149be3da7b894bb38bb38de",
+  "gate_impl_hash": "147be75b25fc11d7ee76be51816eab253f58ce3d6149be3da7b894bb38bb38de",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run git:worktree-dirty-main-detection --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 23248,
+  "proof_id": "proof-7f8835b3727e12367e7cabc7",
+  "created_at": "2026-06-18T07:52:40.359Z"
+}

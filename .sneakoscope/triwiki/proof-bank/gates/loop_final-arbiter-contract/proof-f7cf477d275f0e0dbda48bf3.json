@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:final-arbiter-contract",
+  "cache_key": "06594ece4da2b2e97d655bde0cd811a3ab885b8abd908a97ec470c77e2f0cbf5",
+  "input_hash": "1699392cd079da818281d8e9589864dc1c6f6951a53ade478794add3c47f5e86",
+  "implementation_hash": "3d367ff9d0ff462342c5d20d1b818d12707476c529a6ac82232ce62fcc149344",
+  "gate_impl_hash": "3d367ff9d0ff462342c5d20d1b818d12707476c529a6ac82232ce62fcc149344",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:final-arbiter-contract --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7c56d47090284fef1ad2814ac75c8d2f28278e58bc1d491369c5187595567e9a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 66041,
+  "proof_id": "proof-f7cf477d275f0e0dbda48bf3",
+  "created_at": "2026-06-18T16:30:56.313Z"
+}

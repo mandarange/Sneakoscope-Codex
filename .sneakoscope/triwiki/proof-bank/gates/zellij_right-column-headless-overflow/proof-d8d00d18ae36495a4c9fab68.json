@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:right-column-headless-overflow",
+  "cache_key": "2a1c5ad46fd8f067619bfc4dbaff4e663af65d246d271baa5aa29a499e8bf2a1",
+  "input_hash": "21bd2ce3b825ab6cb1b916befb605c3e95dec0f2751c85a6cfabd9f1de96c679",
+  "implementation_hash": "d99b6bc1b85235ae628dbfbf8864cb49b048314cb6452621004a2c22d7921567",
+  "gate_impl_hash": "d99b6bc1b85235ae628dbfbf8864cb49b048314cb6452621004a2c22d7921567",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:right-column-headless-overflow --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "143361e50841dd59577a22dff9fcef52f90343dbe612668b945bb73b36b947a2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14428,
+  "proof_id": "proof-d8d00d18ae36495a4c9fab68",
+  "created_at": "2026-06-18T00:09:46.130Z"
+}

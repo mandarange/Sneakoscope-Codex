@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad:zellij-self-heal-blackbox",
+  "cache_key": "03f7702e0a129ae526dedfe55d8735717d2e9ec01ba10aad5fea3cf2f4c6ee63",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad:zellij-self-heal-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "902f803a3be5d7f05dc94c56b64c09a9d26721c84f6df2ecf31d6f1bd1779590"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4768,
+  "proof_id": "proof-2bd00ccdef3a5d2911881157",
+  "created_at": "2026-06-17T19:34:18.741Z"
+}

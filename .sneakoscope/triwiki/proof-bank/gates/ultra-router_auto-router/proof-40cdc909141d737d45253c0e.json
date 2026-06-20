@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "ultra-router:auto-router",
+  "cache_key": "fc7db1738ea1caeb44f887657ec507f1eeab45b418d98efb9b258d996fbfee32",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "134790b8a4e4afdbfa7fb88bf628c90b103f1c3b946743dc33059f63c7f719b0",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run ultra-router:auto-router --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "9f148aceccd8f910ac1503863ab758c3d0ead55146094cad331029bfdfbc4e0b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3017,
+  "proof_id": "proof-40cdc909141d737d45253c0e",
+  "created_at": "2026-06-17T19:33:56.578Z"
+}

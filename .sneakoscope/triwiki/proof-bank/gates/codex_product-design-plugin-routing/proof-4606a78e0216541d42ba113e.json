@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:product-design-plugin-routing",
+  "cache_key": "5f935ed5f29ba785e1e9dbc8b8898591290a239f6d19aab28769cd809d4e1808",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:product-design-plugin-routing --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2113926795eb3c5f5c99f148a42fa424680ca8139360bf0d73cb6d20c6f97e3a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5417,
+  "proof_id": "proof-4606a78e0216541d42ba113e",
+  "created_at": "2026-06-17T19:30:54.416Z"
+}

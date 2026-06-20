@@ -1,0 +1,29 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "triwiki:stale-proof-rejection",
+  "cache_key": "0b4f219a338440697d9af4c3bfe3c4663801d19b36fe580a88dac8ad1a745faa",
+  "input_hash": "fd13415fddef19410ccc504777927b325bcdd65c86025f87120dee5982bdf822",
+  "implementation_hash": "1ad8d92980704a414f777878170cc4a1eb05cb36754ce852d5cbff02576581ff",
+  "gate_impl_hash": "1ad8d92980704a414f777878170cc4a1eb05cb36754ce852d5cbff02576581ff",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": true,
+  "evidence": {
+    "command": "npm run triwiki:stale-proof-rejection --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "edb935499a3b4814e220fbeac30d818f65ba16289a5366ef23522e26e69844c2"
+  },
+  "invalidation_reasons": [],
+  "expires_at": null,
+  "duration_ms": 69505,
+  "proof_id": "proof-69aff8cb05683b47536094c3",
+  "created_at": "2026-06-20T03:18:45.393Z"
+}

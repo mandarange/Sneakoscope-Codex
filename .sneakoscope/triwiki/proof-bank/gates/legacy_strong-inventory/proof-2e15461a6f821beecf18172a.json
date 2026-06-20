@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "legacy:strong-inventory",
+  "cache_key": "67f05b8b557d8d53aa8f89edbafa0c1baebf67b752d2e5040623d6ca22da7180",
+  "input_hash": "7fc6faa9adb2be3d2fef87a3e13fdc3ddb749627995af9a606684bf3bcada2d0",
+  "implementation_hash": "eca594a66c4bd27197abc24d42440b74e4c6c4efff17115ba1b96f7a42f24c12",
+  "gate_impl_hash": "eca594a66c4bd27197abc24d42440b74e4c6c4efff17115ba1b96f7a42f24c12",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run legacy:strong-inventory --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "66cd8f4b0c6d5b9a15a66e9f2f409fbc64fb9de9507df2da0d207fc086affb9b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 16494,
+  "proof_id": "proof-2e15461a6f821beecf18172a",
+  "created_at": "2026-06-18T14:35:17.820Z"
+}

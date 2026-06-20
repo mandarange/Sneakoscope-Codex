@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:mesh-production-e2e-blackbox",
+  "cache_key": "74e5083e2aa1222b4067cd741aba10ff65c87517128bd716c5c4af3d3cdeb43c",
+  "input_hash": "9951fbcaa1a24028e2322d6fd2e9a090f4d0e4a0c91c28d7782ed6b38e4c98ea",
+  "implementation_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "gate_impl_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:mesh-production-e2e-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d63f3ddc36f9e951b0cf0dfe3bb66300d3b5f4424da82c673bc007a7a92e6346"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2224,
+  "proof_id": "proof-af7d17bb76d0d9762e5c2d81",
+  "created_at": "2026-06-18T08:01:55.655Z"
+}

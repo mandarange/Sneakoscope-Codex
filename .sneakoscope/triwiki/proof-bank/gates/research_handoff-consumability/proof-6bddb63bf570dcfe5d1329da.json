@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:handoff-consumability",
+  "cache_key": "547757d5122b07eb8a6f9a0819d5db8f5eb55c4ae616e82cc43d1953dc9c9a20",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "6a865b12259304d4d114adec6b71066c5a63945628a28d2927bd785a022491cc",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:handoff-consumability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c4deab4f34eed993b430d079fca75d38b797e7fee7ab6ea7daec1298e3f9263d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8159,
+  "proof_id": "proof-6bddb63bf570dcfe5d1329da",
+  "created_at": "2026-06-17T19:34:46.584Z"
+}

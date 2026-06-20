@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:loop-maker-checker",
+  "cache_key": "52b595f27df122e923ce5761c3704c60a859d139294f5333df7fed242a6215d1",
+  "input_hash": "9951fbcaa1a24028e2322d6fd2e9a090f4d0e4a0c91c28d7782ed6b38e4c98ea",
+  "implementation_hash": "9829fbd6b5553b1320957c9e0848b74232887b7c50fb565cd6b9ddddf929a45a",
+  "gate_impl_hash": "9829fbd6b5553b1320957c9e0848b74232887b7c50fb565cd6b9ddddf929a45a",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:loop-maker-checker --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "90318de7122075ecbe81c331bd0f0dcd377dc9bc47023542aa40919c04240406"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 187226,
+  "proof_id": "proof-b8f5c36a9141999d0403dbad",
+  "created_at": "2026-06-18T07:58:43.442Z"
+}

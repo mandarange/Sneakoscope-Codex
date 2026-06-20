@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0140-large-repo-performance",
+  "cache_key": "343ae5d5a623e505ac581568cc4d425f6959d5c84c3131442201b48c391c0992",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "8a8131d6671cb5e2eeb0b4f5ed686666a6ac1177456a67ab9f98aa5cec5cdd3e",
+  "gate_impl_hash": "8a8131d6671cb5e2eeb0b4f5ed686666a6ac1177456a67ab9f98aa5cec5cdd3e",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0140-large-repo-performance --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "bfaf3ec66af1bbd25c01288ceff7afcf67bc864b7d06a50b9b6f45197e35dca2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15792,
+  "proof_id": "proof-e38a45318d4784def7ee53f6",
+  "created_at": "2026-06-18T13:53:05.331Z"
+}

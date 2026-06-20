@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:zellij-massive-ui",
+  "cache_key": "cd229f050500d0c5529a8a69fd9a096eb60ef4e6b6978d2f9ea195cb2b6c2852",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "c14668374c31fa2b31a891c5746670ddc89d206f363aa9e6d5aa23e9b8c45aa8",
+  "gate_impl_hash": "c14668374c31fa2b31a891c5746670ddc89d206f363aa9e6d5aa23e9b8c45aa8",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:zellij-massive-ui --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "58c8d9df646cb005441c8a08e06f081e80b80b2e2e83e8253f311e6e16b516c8"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2637,
+  "proof_id": "proof-e5985bc4bc4ab60084e5f9a0",
+  "created_at": "2026-06-18T01:55:18.914Z"
+}
