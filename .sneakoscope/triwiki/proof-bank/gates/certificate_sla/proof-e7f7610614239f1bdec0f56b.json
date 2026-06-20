@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "certificate:sla",
+  "cache_key": "d1f9c3de343a4d78a4b18ff231e6ac1a29d9936cacf5b8a6464e22aca4acfab5",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "b9b3ab5d82eef3f77b03254c4beef255a65fa56b6211409a128f19d3866f91f6",
+  "gate_impl_hash": "b9b3ab5d82eef3f77b03254c4beef255a65fa56b6211409a128f19d3866f91f6",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run certificate:sla --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "774eaf457df6419646b819b35f7a70e7907ab58924d49c4aa077782bb15255cf"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 17371,
+  "proof_id": "proof-e7f7610614239f1bdec0f56b",
+  "created_at": "2026-06-18T13:32:52.261Z"
+}

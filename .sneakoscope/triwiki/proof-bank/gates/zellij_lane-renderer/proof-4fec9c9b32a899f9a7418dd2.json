@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:lane-renderer",
+  "cache_key": "480a3ea332f32694325ea2601bbb5322710231ad6870ff3021a9b04ff8529570",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "908dc3980cfa4d704d0de12ea21781ceb8d1e2d61575ec7035976c03f24bf1ae",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:lane-renderer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "39de3ea17186feebf474d3378b02485a5a4dc3c36f0d0122aaf9abd5dfa82512"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5920,
+  "proof_id": "proof-4fec9c9b32a899f9a7418dd2",
+  "created_at": "2026-06-17T19:34:07.913Z"
+}

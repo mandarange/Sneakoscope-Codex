@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:transaction-engine-blackbox",
+  "cache_key": "ff3074caf25c67081307b8620e8384e1e64c6915417bedf9006ff7b11a706b0e",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:transaction-engine-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "83f190ca19a047dccf06e1599ee7262f01006445dc861f64f4c52c5a8c050629"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3535,
+  "proof_id": "proof-83e9c515e522275620e2e4dd",
+  "created_at": "2026-06-17T19:35:11.845Z"
+}

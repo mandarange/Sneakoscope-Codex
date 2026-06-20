@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:cache-input-classifier",
+  "cache_key": "aab916170a0267ef32356801c0d9c83a0f861add770c781c68daecf8cd95d377",
+  "input_hash": "cf717ff23fc15cadf66f28c4301c2903efe06556b37dcd6a2a4406c1caed1fd0",
+  "implementation_hash": "b5523ea3054801a6f74b83e5f44a7c05f77c49e3b55857524b46339704dc9390",
+  "gate_impl_hash": "b5523ea3054801a6f74b83e5f44a7c05f77c49e3b55857524b46339704dc9390",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:cache-input-classifier --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "fec6c4b82009721e987cec0377c9480d38dc9014b177be5bb9fe82e2eaf9ff1e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10246,
+  "proof_id": "proof-aa7ac1cc369affa2e5467900",
+  "created_at": "2026-06-18T16:16:04.922Z"
+}

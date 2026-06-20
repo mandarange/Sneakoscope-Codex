@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:allocation-policy",
+  "cache_key": "896fec29ed189e8f31f027720260bd4eb51b8e3ec71816b8b1ba8dfb261316cb",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "8f8bb4ddbe111c9756580c45cedb1698ffdd4de4470790c826a3edee4678f1c6",
+  "gate_impl_hash": "8f8bb4ddbe111c9756580c45cedb1698ffdd4de4470790c826a3edee4678f1c6",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:allocation-policy --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2fc83e8f714a2b84531070b34f248bbab908274ca94f74b735d2e03b47a4004f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2722,
+  "proof_id": "proof-8cc68fa18702c292696071e5",
+  "created_at": "2026-06-18T16:15:18.295Z"
+}

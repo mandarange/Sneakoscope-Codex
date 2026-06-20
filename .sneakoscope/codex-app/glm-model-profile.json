@@ -1,0 +1,29 @@
+{
+  "schema": "sks.codex-app-model-profile.v1",
+  "id": "sks/glm-5.2-mad",
+  "label": "GLM 5.2 (MAD XHigh Speed / OpenRouter)",
+  "provider": "openrouter",
+  "model": "z-ai/glm-5.2",
+  "mode": "mad-glm-speed",
+  "strictModelLock": true,
+  "gptFallbackAllowed": false,
+  "requiresSecret": "openrouter-api-key",
+  "defaultProfile": "speed",
+  "defaultSettings": {
+    "temperature": 0.2,
+    "top_p": 0.85,
+    "reasoning_effort": "xhigh",
+    "tool_choice": "none",
+    "parallel_tool_calls": false,
+    "max_tokens": 4096,
+    "provider_sort": "throughput",
+    "provider_allow_fallbacks": false,
+    "provider_require_parameters": true
+  },
+  "codexCompatibility": {
+    "target": "rust-v0.141.0",
+    "selectedExecutorPluginMcp": "defer-to-codex-native",
+    "duplicateAppMcpDeclarations": "dedupe-by-codex",
+    "cwdShellPathSemantics": "preserve-codex-native"
+  }
+}

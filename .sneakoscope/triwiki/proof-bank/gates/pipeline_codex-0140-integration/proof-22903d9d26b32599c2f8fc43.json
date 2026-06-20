@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "pipeline:codex-0140-integration",
+  "cache_key": "7492f0adcd1df792cac16ba947ebf35df687ef47e82ce9495f854aae258f13a1",
+  "input_hash": "ef8d8202c1defba6d4f4fb99d6acd65e06993adaf7f0a8ec8e8688eff14eac3e",
+  "implementation_hash": "83b5235b459940dd48d90c67a7716fe44a47ba13a1364bbe4533023d405b61f6",
+  "gate_impl_hash": "83b5235b459940dd48d90c67a7716fe44a47ba13a1364bbe4533023d405b61f6",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run pipeline:codex-0140-integration --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ffd734f712bf1bfdde17fb30e00c34eb95aabe8f2ee9c616bd5c3890840acfec"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7777,
+  "proof_id": "proof-22903d9d26b32599c2f8fc43",
+  "created_at": "2026-06-18T16:18:22.010Z"
+}

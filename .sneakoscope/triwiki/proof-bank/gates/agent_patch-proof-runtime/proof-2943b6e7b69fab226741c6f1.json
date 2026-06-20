@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:patch-proof-runtime",
+  "cache_key": "27d7924f844aa4eecf9b78dacb7192c397624d5e946aa4d13a64f24ccfb6f23c",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "83bca289edd59f88c1d9cfae258b76c8e44f8364287c7b2843d8a24f665e843e",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:patch-proof-runtime --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b2ab64201ecb03daf50b546e9c45d73642b60ec3ed64af6e2ee89843d1452fb0"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7086,
+  "proof_id": "proof-2943b6e7b69fab226741c6f1",
+  "created_at": "2026-06-17T19:30:04.466Z"
+}

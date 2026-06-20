@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:image-path-exposure",
+  "cache_key": "60355f94d5bf63d1a571fc934790a61a3328686971bb8bd952b1318eacee9e22",
+  "input_hash": "1116ae22ac91cbe50274346fd8dac9dbc484042d2f1ece90c762f8e91706a74d",
+  "implementation_hash": "19d3fa1a81cf97370d9b9a110b1e50b364d74a64f3a0a0295161c1c378b73336",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:image-path-exposure --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "605be792f555ac3ced5d0a350ecc73e233b88fb9403a425b40388045c30bb475"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5330,
+  "proof_id": "proof-fd191529f2edaa913fb14d7a",
+  "created_at": "2026-06-17T19:33:37.323Z"
+}

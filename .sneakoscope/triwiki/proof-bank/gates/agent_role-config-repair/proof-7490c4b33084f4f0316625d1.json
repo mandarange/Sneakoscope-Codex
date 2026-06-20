@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:role-config-repair",
+  "cache_key": "f365e337f6309f7ed82be840e191f95772ff7f53b683c77908b0ba546e3eed19",
+  "input_hash": "63cd6394f6606e043bc6daeb3a1dfb8bb2f3586697344532d4a97ac9ca7f5e07",
+  "implementation_hash": "c5a336d424e414a4b488790ce4125a8d5c9f5004ca466ac43a56635cae895837",
+  "gate_impl_hash": "c5a336d424e414a4b488790ce4125a8d5c9f5004ca466ac43a56635cae895837",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:role-config-repair --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11424,
+  "proof_id": "proof-7490c4b33084f4f0316625d1",
+  "created_at": "2026-06-18T17:48:44.751Z"
+}

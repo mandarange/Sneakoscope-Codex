@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:fast-ui-preservation",
+  "cache_key": "fa91cc4265367e0fb16e36bfb397e44f2516f714a49746f744cbfef7f478eb0b",
+  "input_hash": "6431b292c55615a9b7a58acfe5fd1280b5bb0f81d83bc697859e12aeded7edaa",
+  "implementation_hash": "5c3812276481fdd505aef98f154ba3a9c7add53a00ed69798edd1ad8e8677f40",
+  "gate_impl_hash": "5c3812276481fdd505aef98f154ba3a9c7add53a00ed69798edd1ad8e8677f40",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:fast-ui-preservation --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 21009,
+  "proof_id": "proof-e22a11c5cc3a55c75fa686a2",
+  "created_at": "2026-06-18T17:48:50.249Z"
+}

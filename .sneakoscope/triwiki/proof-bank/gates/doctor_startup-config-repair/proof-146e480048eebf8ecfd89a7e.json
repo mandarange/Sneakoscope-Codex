@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:startup-config-repair",
+  "cache_key": "4a69b720d21470df888234b29e16f54bb276a922a9cb037733a6484f1a49cd1d",
+  "input_hash": "e9ec4aa859bf13d84dd880f56cf7d8b2665f99132b034ab90920c6438ad913d7",
+  "implementation_hash": "7f1034806492ed4c7e35fbfc6be918bd240dec2951f73bc8a126fce592c6a364",
+  "gate_impl_hash": "7f1034806492ed4c7e35fbfc6be918bd240dec2951f73bc8a126fce592c6a364",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:startup-config-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5aacf3f93487b8e312d367a2da6e3e5d06fffa3c72e6d911a5fbd975e7b201e7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7073,
+  "proof_id": "proof-146e480048eebf8ecfd89a7e",
+  "created_at": "2026-06-18T07:57:49.811Z"
+}

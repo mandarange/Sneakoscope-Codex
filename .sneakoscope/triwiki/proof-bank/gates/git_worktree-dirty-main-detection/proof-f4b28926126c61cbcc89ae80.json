@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "git:worktree-dirty-main-detection",
+  "cache_key": "14159fd7dae7d9c3b0cb80fe511a4f2c260eec80f216ac76e4854f9222829811",
+  "input_hash": "b9cdabbe460ba131caf61da59f5e88c2bf8997fc90382b14622270a93a199083",
+  "implementation_hash": "209e00f39caa6f2801072a74caa7ab3cbdf8486fa153dae20382cb6f08e4941a",
+  "gate_impl_hash": "209e00f39caa6f2801072a74caa7ab3cbdf8486fa153dae20382cb6f08e4941a",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run git:worktree-dirty-main-detection --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5a98c6cb9f63654105611ebced67d72feab8efc66c8c0138635380ca26d95fa3"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 26859,
+  "proof_id": "proof-f4b28926126c61cbcc89ae80",
+  "created_at": "2026-06-18T08:07:26.705Z"
+}

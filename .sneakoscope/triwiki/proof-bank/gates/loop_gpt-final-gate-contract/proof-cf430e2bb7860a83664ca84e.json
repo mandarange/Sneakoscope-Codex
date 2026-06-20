@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:gpt-final-gate-contract",
+  "cache_key": "bccdf1338eef76885ce75fb6a871b18ab71fe63404fef9f2175024486e4dd3b4",
+  "input_hash": "965e1a0df72280fbd68c7585bd84d57fdd65d61cfe4beafd7c63840c55ef2219",
+  "implementation_hash": "d3a871ef9ceb93bd4fa2fae10e6a372e849060f8cf13299dfc496afc46e84e8c",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:gpt-final-gate-contract --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6799f6d2244d50fe0f4bba70a0cdddd74e7d76280a66665453b88ed2e569cf3c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6240,
+  "proof_id": "proof-cf430e2bb7860a83664ca84e",
+  "created_at": "2026-06-17T19:31:21.560Z"
+}

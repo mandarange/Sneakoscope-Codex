@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:codex-doctor-parity",
+  "cache_key": "1a69f28523204eeef85c2d25009db254dfda79d02f0b431249b537d25afc3a95",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "07d152b1ff5f315d27b9c25fc73cf908d13b2d33b17aa36b5a7cd95a28226f41",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:codex-doctor-parity --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3bb3b868db8e82a7fc9162e032f1acc4ae9cacdaa6fbeee2578a027c451503b4"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15849,
+  "proof_id": "proof-6eed4b9e3e4ceebcca5f578e",
+  "created_at": "2026-06-17T19:31:13.434Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:patch-swarm-runtime",
+  "cache_key": "c97296eca7e8e9bfa41987f8d24b67f696ad6a4612598465782e7f279613d9b2",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "32c966569754fecac4288f08631f73992efb54eca9b271f07c212eb037c550fc",
+  "gate_impl_hash": "32c966569754fecac4288f08631f73992efb54eca9b271f07c212eb037c550fc",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:patch-swarm-runtime --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0c79a3900c3624d55b7ffb8e94fcc347b10f3bdedf1715ce621a8ee56bccdfc0"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 54309,
+  "proof_id": "proof-df353b3eb695c39eb4705f11",
+  "created_at": "2026-06-18T13:47:23.456Z"
+}

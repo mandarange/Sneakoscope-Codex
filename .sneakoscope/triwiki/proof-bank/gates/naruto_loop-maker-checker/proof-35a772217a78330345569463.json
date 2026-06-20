@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:loop-maker-checker",
+  "cache_key": "bc8a5c69a76257762f78963f8a01915dfe3d63346ea8b332e6a4e165a8cc5857",
+  "input_hash": "965e1a0df72280fbd68c7585bd84d57fdd65d61cfe4beafd7c63840c55ef2219",
+  "implementation_hash": "c0e1c2137ae1db8dd89d1e5178de5e508d1385330a4277e577d1d268730f8390",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:loop-maker-checker --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "538bfc98482e9d51e2e26f0e4cba65eb368093eee2579a678542f98d6d2fa697"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 149502,
+  "proof_id": "proof-35a772217a78330345569463",
+  "created_at": "2026-06-17T19:35:32.628Z"
+}

@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.14 is the GLM Naruto parallelism-seal patch after 4.0.13. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, provenance, npm registry unpublished-version checks, and GLM Naruto parallelism-seal metadata to agree on 4.0.14 before publication.
+
+4.0.14 release readiness adds proof that GLM Naruto records real parallel-stage execution metrics, uses bounded parallel queues for candidate gate, worktree, and verifier phases, tracks requirement coverage so parallel workers do not miss task details, preserves `sks --mad` GPT/Codex/MAD route isolation from GLM/OpenRouter mode, and repairs benchmark/proof metadata regressions carried over from 4.0.13.
+
 SKS 4.0.12 is the GLM Naruto final-seal patch after 4.0.11. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, provenance, npm registry unpublished-version checks, and GLM Naruto final-seal metadata to agree on 4.0.12 before publication.
 
 4.0.12 release readiness adds proof that worktree workers apply only extracted unified diffs, patch workers launch through a bounded adaptive scheduler with provider backpressure, live bench separates true direct GLM from Naruto 1/4/8/12 worker cases, final apply blocks dirty touched paths and runs targeted checks, and stop-gates reference `final-seal.json`.

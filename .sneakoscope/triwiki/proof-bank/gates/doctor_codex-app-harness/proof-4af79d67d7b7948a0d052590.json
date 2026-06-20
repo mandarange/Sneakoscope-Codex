@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:codex-app-harness",
+  "cache_key": "d619422fd00a0511e8419d90d7e51c0bdd6cb00ff14aac820da26aab583bb189",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "82523f91bd0212088e6dc5331259164eb4bef2653813142bf7cb4024a15873da",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:codex-app-harness --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "e52c87808b69b590d1316e9b2731fb9a7d19b127fac43d3e5a863a56cd7e96dd"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 39533,
+  "proof_id": "proof-4af79d67d7b7948a0d052590",
+  "created_at": "2026-06-17T19:31:50.484Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:quality-gates",
+  "cache_key": "9fe145be0c6c9313ce2b628577846ca4b77869c3d23be2c704b0fc71dd6fd30b",
+  "input_hash": "1c07077e1f02b1d0dc6d450c8a6f2c9dd60445b04b4a851e698c1363c78b85df",
+  "implementation_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "gate_impl_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:quality-gates --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "e41a32f93207d7378c35b070c6aa95bb74c638f308cd6450d5250bc7e509f88b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3028,
+  "proof_id": "proof-9ec48b85fae29ce6b46f837d",
+  "created_at": "2026-06-18T07:39:26.452Z"
+}

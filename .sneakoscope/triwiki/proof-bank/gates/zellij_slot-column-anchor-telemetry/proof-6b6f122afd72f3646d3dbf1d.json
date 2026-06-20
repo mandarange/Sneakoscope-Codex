@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:slot-column-anchor-telemetry",
+  "cache_key": "8b099b584b144587c6a905b2ef860790574e8f86c30a2a540dff6ebf0a0b423b",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "dd66a4e0932ed8bb92734e158a2c51b68bf56d7243803d4a97eb13c9c0aefd7d",
+  "gate_impl_hash": "dd66a4e0932ed8bb92734e158a2c51b68bf56d7243803d4a97eb13c9c0aefd7d",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:slot-column-anchor-telemetry --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "46af661f4b791643e2a3a8ec001573373c1a884a1797cc016666b698e8cccce4"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11665,
+  "proof_id": "proof-6b6f122afd72f3646d3dbf1d",
+  "created_at": "2026-06-18T00:09:33.799Z"
+}

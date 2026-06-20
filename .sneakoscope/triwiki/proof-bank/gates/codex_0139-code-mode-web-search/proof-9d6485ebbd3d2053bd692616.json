@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0139-code-mode-web-search",
+  "cache_key": "c72970b3ac246a66eae1ba11e8e766bf46657b4b67789de44132eb23c26d5b0a",
+  "input_hash": "cf717ff23fc15cadf66f28c4301c2903efe06556b37dcd6a2a4406c1caed1fd0",
+  "implementation_hash": "f1105ca0fb5db61fc84bfd8a3038b0cc1e1e554b91f72369f23b1845a00f3ef4",
+  "gate_impl_hash": "f1105ca0fb5db61fc84bfd8a3038b0cc1e1e554b91f72369f23b1845a00f3ef4",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0139-code-mode-web-search --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "91f4c645a09e3b3dd58b3487486c37b210f83f2dc6ac0a524c6e6fc29d43d0a6"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9674,
+  "proof_id": "proof-9d6485ebbd3d2053bd692616",
+  "created_at": "2026-06-18T16:29:08.004Z"
+}

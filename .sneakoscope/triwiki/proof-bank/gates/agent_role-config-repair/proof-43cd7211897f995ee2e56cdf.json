@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:role-config-repair",
+  "cache_key": "962fbcb7e568c22fc1ffb673b430f4919b215546766268df358a2b4982821d8f",
+  "input_hash": "9518a579132efeb545db278a0ebb810b3134a847c1b28659c7018673baf89ccc",
+  "implementation_hash": "b9794f49e518ea766f1a6df586164ee2255d4826deb4c778f55e56d5b3f8c614",
+  "gate_impl_hash": "b9794f49e518ea766f1a6df586164ee2255d4826deb4c778f55e56d5b3f8c614",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:role-config-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ccebb2ee5858f525b7a8d1cc1b9a59af765dce4184d32f04abe317cfa7b6bb70"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7639,
+  "proof_id": "proof-43cd7211897f995ee2e56cdf",
+  "created_at": "2026-06-18T02:12:33.103Z"
+}

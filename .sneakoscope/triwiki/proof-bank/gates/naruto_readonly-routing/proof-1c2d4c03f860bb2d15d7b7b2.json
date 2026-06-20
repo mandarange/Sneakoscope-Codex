@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:readonly-routing",
+  "cache_key": "ad40b6f43240d451d9f10f27fa7e49b338ba0f2c159effa3a9dc674a46df197a",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "98994e390cc6b9179bb85619817cb3080e5b35878a1a31fdf3d202b62a6ce004",
+  "gate_impl_hash": "98994e390cc6b9179bb85619817cb3080e5b35878a1a31fdf3d202b62a6ce004",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:readonly-routing --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1278ebf62dbb795d238eb79cd68d262c41d10a3e49a85432f13ad11e879bd176"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 69164,
+  "proof_id": "proof-1c2d4c03f860bb2d15d7b7b2",
+  "created_at": "2026-06-18T02:40:36.169Z"
+}

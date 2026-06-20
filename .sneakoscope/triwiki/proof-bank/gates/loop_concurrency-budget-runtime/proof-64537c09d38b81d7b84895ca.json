@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:concurrency-budget-runtime",
+  "cache_key": "5869d50235f73e9a4391f826a70a9ff06751cdfed3b820e6cf80a71e71d4defb",
+  "input_hash": "20188e02a96e20025e08deb0d101ee3e26bd1ff1c995bbfed349233f11424430",
+  "implementation_hash": "bfeae074bc161f39f7f11f200f21f7e558fdc0bf6ca836e08989e4be5de9be43",
+  "gate_impl_hash": "bfeae074bc161f39f7f11f200f21f7e558fdc0bf6ca836e08989e4be5de9be43",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:concurrency-budget-runtime --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c3a9afaa289e3fcfa89f1af65ad2c7d6b22129a4fb8624089aee6a28f5e76b14"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13390,
+  "proof_id": "proof-64537c09d38b81d7b84895ca",
+  "created_at": "2026-06-18T17:56:57.997Z"
+}

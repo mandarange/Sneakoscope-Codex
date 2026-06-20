@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-default",
+  "cache_key": "e5b42a0bbdb9e06400ff4ffae9263599d50cda4782848b0d9157321692a8cff5",
+  "input_hash": "080352704b499db3fcdcde8a307b1c16e9f6d5209aff823a14763ceeaedab948",
+  "implementation_hash": "a95ba2c75d398eab81b3ab349bf883bbdc7e6e25386352ac8bc028efca27c977",
+  "gate_impl_hash": "a95ba2c75d398eab81b3ab349bf883bbdc7e6e25386352ac8bc028efca27c977",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-default --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d0f06cde1da5904dfc03c56b8d6d96cb7146893f3d3bfa987bcb1ea00b435ecf"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4043,
+  "proof_id": "proof-2fee8aeb67f96fcf434c0872",
+  "created_at": "2026-06-18T08:10:12.850Z"
+}

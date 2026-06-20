@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "context7:evidence-dedupe",
+  "cache_key": "ed26f5ef0e6cbbf74e02c6f50675d518698638b9e3128cf0faec5b8d6f120f01",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "18061322b26dd99e95ad55e9b5636b44eacd3e329cdad597e734ca68d7efa392",
+  "gate_impl_hash": "18061322b26dd99e95ad55e9b5636b44eacd3e329cdad597e734ca68d7efa392",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run context7:evidence-dedupe --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6ddf87d23ceb122a76340d71abc32249072415133cbb60f21fdd8c1d82f2cc39"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 16195,
+  "proof_id": "proof-aea8209e177d281d00fb9301",
+  "created_at": "2026-06-18T16:12:00.723Z"
+}

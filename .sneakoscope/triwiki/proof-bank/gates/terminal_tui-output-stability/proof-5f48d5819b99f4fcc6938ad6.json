@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "terminal:tui-output-stability",
+  "cache_key": "d6e0468dae18a98005f34642b0a9fb33fd359d826594304a5411b4f96c63cab9",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "a0fe4ab463f08cc0f916920f1d43541ddfe55c5742e4d99e95a7ef769223a162",
+  "gate_impl_hash": "a0fe4ab463f08cc0f916920f1d43541ddfe55c5742e4d99e95a7ef769223a162",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run terminal:tui-output-stability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "25655cc6dfaed8c66d833bd9f02368a5773fd0fdcf1e8b5ce4371474fe5550e2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10022,
+  "proof_id": "proof-5f48d5819b99f4fcc6938ad6",
+  "created_at": "2026-06-18T13:51:25.464Z"
+}

@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.0.14 keeps the Codex 0.139 compatibility baseline while sealing GLM Naruto parallelism: real parallel-stage execution metrics, bounded parallel queues for candidate gate, worktree, and verifier phases, requirement coverage tracking to prevent parallel workers from missing task details, preserved `sks --mad` GPT/Codex/MAD route isolation from GLM/OpenRouter mode, and benchmark/proof metadata regression fixes from 4.0.13.
+
 SKS 4.0.12 keeps the Codex 0.139 compatibility baseline while sealing the GLM Naruto runtime: extracted-diff worktrees, bounded adaptive scheduling, true direct-vs-Naruto benchmarking, targeted apply checks, dirty-tree guards, and final seal stop-gate evidence.
 
 SKS 4.0.8 keeps the Codex 0.139 compatibility baseline while making the GLM 5.2 MAD path bounded by default: bare `sks --mad --glm` exits with readiness/status, task forms use the direct GLM-only speed path, high/xhigh reasoning is opt-in, patch mutation stays behind deterministic gates, and loop termination artifacts record timeout/no-progress/repeated-output outcomes.

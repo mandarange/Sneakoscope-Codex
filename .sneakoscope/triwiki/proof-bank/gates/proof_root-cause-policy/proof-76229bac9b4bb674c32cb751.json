@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "proof:root-cause-policy",
+  "cache_key": "8917ba26d6d542d1ff00876aa6d13c12d2182e2aab46f8f5125a61be1f66d623",
+  "input_hash": "e4449dc86e00dab1a020a53948c177bb6bafcb0e321d6f87b86816d55c3e13a6",
+  "implementation_hash": "62216efcb792b8c153ed81d4312acd7ff953c3f8d63e05aba262523419a4a066",
+  "gate_impl_hash": "62216efcb792b8c153ed81d4312acd7ff953c3f8d63e05aba262523419a4a066",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run proof:root-cause-policy --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 49417,
+  "proof_id": "proof-76229bac9b4bb674c32cb751",
+  "created_at": "2026-06-18T14:46:23.381Z"
+}

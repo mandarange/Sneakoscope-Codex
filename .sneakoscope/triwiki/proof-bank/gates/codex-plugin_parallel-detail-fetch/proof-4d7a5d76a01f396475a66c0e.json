@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-plugin:parallel-detail-fetch",
+  "cache_key": "7a44282e730ad6155a07ae3108911662b7b497859c680d76839fa72d7892049e",
+  "input_hash": "df127ffc2b9e047d5a27f338f5466bcec54b195e5bd7c35f22c836d378af29a1",
+  "implementation_hash": "0622f00df6c09fda2889914460f133b04f0cb7faba0b781ecd1b7d85eb3df49d",
+  "gate_impl_hash": "0622f00df6c09fda2889914460f133b04f0cb7faba0b781ecd1b7d85eb3df49d",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-plugin:parallel-detail-fetch --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5c09757c970c68f7891f4bdedb21d851e7841d9f11f91505a014373da425822c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5116,
+  "proof_id": "proof-4d7a5d76a01f396475a66c0e",
+  "created_at": "2026-06-18T17:35:38.385Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:blueprint-densifier",
+  "cache_key": "cd030b1baee39ae07501c4cccce282af2eba887faa97a44675958ea68b2b7c41",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "9fc4531635b92994e84eaa78bf60f84f6e64c00c46b36e66b59a6bc2c18811dc",
+  "gate_impl_hash": "9fc4531635b92994e84eaa78bf60f84f6e64c00c46b36e66b59a6bc2c18811dc",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:blueprint-densifier --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "d6db56feeaccfcda5e7c046514605150de8754618fd67801b711658f84f9b304"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8088,
+  "proof_id": "proof-511b845adc52d6ff2571bdb6",
+  "created_at": "2026-06-18T16:34:19.666Z"
+}

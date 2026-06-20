@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "side-effect:runtime-report",
+  "cache_key": "f9dcc02a966d3c15d4c540ce5334bc0f07f1e7a8e8d1e98565bcd557fe40f0d4",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "5912b0553ca60840b29b2e85dfd321f407dc3a1e7e51e4e4223958f5ac422249",
+  "gate_impl_hash": "5912b0553ca60840b29b2e85dfd321f407dc3a1e7e51e4e4223958f5ac422249",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run side-effect:runtime-report --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "84cbe25c2e4bf064f0529ad2a870ac9f90b53cce586963d236aa34b88cf0ea4f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 76350,
+  "proof_id": "proof-679d818639047dcb60036998",
+  "created_at": "2026-06-18T16:34:27.574Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad:zellij-self-heal",
+  "cache_key": "f2e7456750ae067c891557f6a4a0c629450ee3041b0961fbf9d723cb8c9448fb",
+  "input_hash": "e9ec4aa859bf13d84dd880f56cf7d8b2665f99132b034ab90920c6438ad913d7",
+  "implementation_hash": "ffd26bdfb0698df6478d67b0cee6011c3cb49020f19a07c0f16991a9a7541f65",
+  "gate_impl_hash": "ffd26bdfb0698df6478d67b0cee6011c3cb49020f19a07c0f16991a9a7541f65",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad:zellij-self-heal --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "88dd88e2a3e3c3e421534f0ce80698c16e1a1495d3ffb57b19ce87166a766f71"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5351,
+  "proof_id": "proof-1d0514666ae1cc67bb1f5bb8",
+  "created_at": "2026-06-18T07:56:55.062Z"
+}

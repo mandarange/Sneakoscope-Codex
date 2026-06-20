@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:promotion-side-effect-ledger",
+  "cache_key": "0b9072beffa1d44d124f31ddcf29cd38e7cec83ddd77e466e48d1d852910f3c7",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "36c333c53577ca23819ecba18572da11f84590684d82a25328bb7d8154b4e012",
+  "gate_impl_hash": "36c333c53577ca23819ecba18572da11f84590684d82a25328bb7d8154b4e012",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:promotion-side-effect-ledger --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "22950c3b2a35038ea8c683752281fa1043847272589ec935e11474ae3a0ca3d0"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10312,
+  "proof_id": "proof-6b1aba08d538f75ad79cab7b",
+  "created_at": "2026-06-18T02:13:43.162Z"
+}

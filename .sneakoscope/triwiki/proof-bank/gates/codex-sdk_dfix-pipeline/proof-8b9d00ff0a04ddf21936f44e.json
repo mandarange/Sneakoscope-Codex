@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-sdk:dfix-pipeline",
+  "cache_key": "83033454573c44e0c63802ca5caf2fdad100b53d8cb5e8b867f797d25fea13d0",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "4373f6e826d1bcbe85c0af0ead8467cb93486b31968392795d5041022f32adf7",
+  "gate_impl_hash": "4373f6e826d1bcbe85c0af0ead8467cb93486b31968392795d5041022f32adf7",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-sdk:dfix-pipeline --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6c9af3058b1367837236ffd305668d89f89511237b9bd40a37fee33d6871cf90"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9569,
+  "proof_id": "proof-8b9d00ff0a04ddf21936f44e",
+  "created_at": "2026-06-18T16:28:59.313Z"
+}

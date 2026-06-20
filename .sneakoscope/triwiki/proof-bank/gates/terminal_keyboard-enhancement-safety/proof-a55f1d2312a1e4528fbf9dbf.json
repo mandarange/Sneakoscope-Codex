@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "terminal:keyboard-enhancement-safety",
+  "cache_key": "ffa18dbaf02c92c7ab8dd3a414477ff94dca07c6fc786a0f67b0df70181a43a1",
+  "input_hash": "1c07077e1f02b1d0dc6d450c8a6f2c9dd60445b04b4a851e698c1363c78b85df",
+  "implementation_hash": "2d709f8f6469a77f1a697d55c8eee96e2fd56a39666e53b60972188ea266c8f9",
+  "gate_impl_hash": "2d709f8f6469a77f1a697d55c8eee96e2fd56a39666e53b60972188ea266c8f9",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run terminal:keyboard-enhancement-safety --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f8e34c6747afe2cd6434b647a70adf6541bfcbf4d14aaa271f5e41967a5dbbba"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3772,
+  "proof_id": "proof-a55f1d2312a1e4528fbf9dbf",
+  "created_at": "2026-06-18T07:56:24.419Z"
+}

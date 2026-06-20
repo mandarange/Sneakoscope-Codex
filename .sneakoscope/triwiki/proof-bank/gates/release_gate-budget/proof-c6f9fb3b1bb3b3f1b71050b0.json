@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:gate-budget",
+  "cache_key": "d9f92228fc1310e4eabe042e8779f9cd40f43ea50b0e91179e8abad1cea3de2b",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "d1fb5f0274717eccfac5e822d6156d51ad98a3ad32afacfd755b94f4e2d056cb",
+  "gate_impl_hash": "d1fb5f0274717eccfac5e822d6156d51ad98a3ad32afacfd755b94f4e2d056cb",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:gate-budget --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "38b2b3aa889a372267440816c25e48c2f6c992cba999d66391c96debdb5eebfd"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5206,
+  "proof_id": "proof-c6f9fb3b1bb3b3f1b71050b0",
+  "created_at": "2026-06-18T00:09:12.961Z"
+}

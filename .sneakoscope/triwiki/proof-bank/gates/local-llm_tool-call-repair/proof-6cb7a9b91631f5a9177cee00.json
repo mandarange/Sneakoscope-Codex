@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "local-llm:tool-call-repair",
+  "cache_key": "5f2bfe1b9d678d8d6bb8d4a9431f21caf430f93ffb5a50a84818159864cab8fd",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "7f9073a3aa0a23460374b8c20743214146f1d8250d48959c57cd201b2e5cf874",
+  "gate_impl_hash": "7f9073a3aa0a23460374b8c20743214146f1d8250d48959c57cd201b2e5cf874",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run local-llm:tool-call-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1718181ba0f0b580efdc62753d378048dd48a025c011e0f7e3024e665403a38c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6617,
+  "proof_id": "proof-6cb7a9b91631f5a9177cee00",
+  "created_at": "2026-06-18T13:47:12.788Z"
+}

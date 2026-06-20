@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:active-pool",
+  "cache_key": "2bd646fd0843e22d36c71efacc7d8984537bdafa42cfeb8aea1b2ab5c268bf79",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "9d544af589adbd2418a7a7b294e39849fb3606ea5f6f589f3b6ef28edf11492a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:active-pool --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "89428b324ba6ea4719b9e6cce80401f459ce5b9560f82a4e448243c5603ab464"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4045,
+  "proof_id": "proof-5de0c4b2dc50c124909132bd",
+  "created_at": "2026-06-17T19:33:04.620Z"
+}

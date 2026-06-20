@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:gate-batch-runner",
+  "cache_key": "252dcadc2aa75136b4c13c05d369639dda5f1d8c925ce3c0e7449c71137782a8",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "41c8bbfba73f5b3c8d2309daf295e766cbdb122bf130c54c974b655125067812",
+  "gate_impl_hash": "41c8bbfba73f5b3c8d2309daf295e766cbdb122bf130c54c974b655125067812",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:gate-batch-runner --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "42788e21c22c02e9f3e0aef4ad7a1c8ffca62a22223ea2776748a5c3a34b58cf"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8982,
+  "proof_id": "proof-8d7ef6238ce2a333eb8ae5b6",
+  "created_at": "2026-06-18T01:55:25.921Z"
+}

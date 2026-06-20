@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "git:worktree-integration-primary",
+  "cache_key": "7c5c7498d30445c21f882905211c4a7d2ebe97c791597a883f8df3026aaebfe8",
+  "input_hash": "c6e2cd512f0436c3c8dfc50d8281f43dc387884a5e9f1ed5f9be031902246bab",
+  "implementation_hash": "68d5eb791703c5a6686ff9c37f0d4457e5e062aeab4774dd8ef6d929ce318061",
+  "gate_impl_hash": "68d5eb791703c5a6686ff9c37f0d4457e5e062aeab4774dd8ef6d929ce318061",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run git:worktree-integration-primary --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c0b390d5a54168b02909c09799171c917669d6b6d69edc01fd9accac3082446f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 32782,
+  "proof_id": "proof-66cc65ff8e585b992d63fe84",
+  "created_at": "2026-06-18T02:15:34.523Z"
+}

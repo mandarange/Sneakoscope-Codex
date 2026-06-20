@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:active-pool",
+  "cache_key": "10ae5290c302a91ebfa820eff0d6a1d62b9635307d2c455b2e2c3ee5e3f409ef",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "633ddfd2ebd3de497a363cee29439f9b30da4d63e93f86413b27be71ed0dee7f",
+  "gate_impl_hash": "633ddfd2ebd3de497a363cee29439f9b30da4d63e93f86413b27be71ed0dee7f",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:active-pool --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "60fc50a663c8ea04757b3317ddce8ad25a96e7b5b9ec91fa7eebec0d7f29c509"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6996,
+  "proof_id": "proof-05754480a1dc06e1f78cb63f",
+  "created_at": "2026-06-18T13:50:27.341Z"
+}

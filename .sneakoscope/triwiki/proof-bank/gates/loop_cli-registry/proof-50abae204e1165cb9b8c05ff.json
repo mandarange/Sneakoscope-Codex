@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:cli-registry",
+  "cache_key": "b599930f7a16634a332af7f583e6d6796dae06271636a30c9f72fdd670213059",
+  "input_hash": "cadaf1701ef551d4789a3156d18b135a7262fe6cdd53ff704e05fd06ebe907e4",
+  "implementation_hash": "9fd1838cb5154483db2713489add458fc9544ebf68fb66686acbf37a9db1f5a2",
+  "gate_impl_hash": "9fd1838cb5154483db2713489add458fc9544ebf68fb66686acbf37a9db1f5a2",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:cli-registry --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1bec475cfe95742af6153d0343fe47b88477496788917deeb8039d3bad49fb94"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 106294,
+  "proof_id": "proof-50abae204e1165cb9b8c05ff",
+  "created_at": "2026-06-18T07:37:33.465Z"
+}

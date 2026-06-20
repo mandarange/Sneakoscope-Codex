@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:right-column-headless-overflow",
+  "cache_key": "165960ad9182ff476d481c40057b1efb51d7493b2bce215788158a4e388b4c14",
+  "input_hash": "835711e2abe53cc4cc0c16dc192c160eba095eefd896871ded1e9b86e4705d40",
+  "implementation_hash": "f90046330e340edce4ffd37a9612fe2d02ee330638304dcfc3c4bed50037e9ae",
+  "gate_impl_hash": "f90046330e340edce4ffd37a9612fe2d02ee330638304dcfc3c4bed50037e9ae",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:right-column-headless-overflow --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4529,
+  "proof_id": "proof-f927336d56475f47f2bef12a",
+  "created_at": "2026-06-18T14:46:33.665Z"
+}

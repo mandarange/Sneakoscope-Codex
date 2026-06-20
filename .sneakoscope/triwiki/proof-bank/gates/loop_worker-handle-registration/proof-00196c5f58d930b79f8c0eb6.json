@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:worker-handle-registration",
+  "cache_key": "a7506ee89e8d32b4b91a165398e274f06067b516cd5beb2a0392620162276d50",
+  "input_hash": "591c82dccf61cb0161f6897d72a69e1e1ef677cefb5e61667df5263226bda59e",
+  "implementation_hash": "b6566ece852fa1504e1f193310bc0f9c1782d09f6877ed613dc822aacbcea95a",
+  "gate_impl_hash": "b6566ece852fa1504e1f193310bc0f9c1782d09f6877ed613dc822aacbcea95a",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:worker-handle-registration --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "287351beba817091bd61b0d95cbc53c2eb4df4b0d351a6c313df3bb5716f2005"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 18772,
+  "proof_id": "proof-00196c5f58d930b79f8c0eb6",
+  "created_at": "2026-06-18T13:49:58.850Z"
+}

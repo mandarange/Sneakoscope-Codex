@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mcp:plugin-inventory",
+  "cache_key": "f03a2c12d4112ae7e60db33e91458729970c8f75c8a303318e3ade3e30219b98",
+  "input_hash": "df127ffc2b9e047d5a27f338f5466bcec54b195e5bd7c35f22c836d378af29a1",
+  "implementation_hash": "8edbb430ad5f9c9f7aa9778c760e05b5f75d84618e9ea43c64e3c70804dea8dd",
+  "gate_impl_hash": "8edbb430ad5f9c9f7aa9778c760e05b5f75d84618e9ea43c64e3c70804dea8dd",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mcp:plugin-inventory --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2ab56826b739c423a55f78b76ea995a21a9050568b5a6375a6441c01c961fe4e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 22808,
+  "proof_id": "proof-82785bd102fe62f25187116f",
+  "created_at": "2026-06-18T17:58:13.184Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:slot-pane-telemetry-renderer",
+  "cache_key": "98143f031d68bb8dbbd5af68a173eed2fc45d352fef57c8fef1d54ee58980bf8",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "1e69b89d2d0d98e4ee567a444203958e7a379ffa6c41cc09f44854535f3128cc",
+  "gate_impl_hash": "1e69b89d2d0d98e4ee567a444203958e7a379ffa6c41cc09f44854535f3128cc",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:slot-pane-telemetry-renderer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f8d8aee3b09d696ed1df75b8f8b8028e566315612c85116fa92f51f335a212da"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 14955,
+  "proof_id": "proof-aa40291326182f3c6a905c02",
+  "created_at": "2026-06-20T03:14:51.850Z"
+}

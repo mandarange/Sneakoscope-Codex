@@ -1,0 +1,15 @@
+{
+  "schema": "sks.glm-run-termination.v1",
+  "run_id": "glm-2026-06-18T17-30-11-551Z-24bd32",
+  "terminal": true,
+  "phase": "blocked",
+  "reason": "glm_patch_gate_failed",
+  "turn_count": 0,
+  "wall_clock_ms": 1,
+  "blockers": [
+    "glm_missing_openrouter_key"
+  ],
+  "warnings": [
+    "set_OPENROUTER_API_KEY_or_run_sks_--mad_--glm_--repair"
+  ]
+}

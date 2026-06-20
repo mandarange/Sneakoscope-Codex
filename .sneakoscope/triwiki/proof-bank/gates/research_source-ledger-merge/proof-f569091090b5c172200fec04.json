@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:source-ledger-merge",
+  "cache_key": "e6db11e3a1817d749f740ddb45ed7e297451bfebcd09f0cc2b8dd3b81ca4d8b7",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "da5e8226cf1b5b56b4b82a0a0f754ae51706a7a0052de7331bd0501ae793b921",
+  "gate_impl_hash": "da5e8226cf1b5b56b4b82a0a0f754ae51706a7a0052de7331bd0501ae793b921",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:source-ledger-merge --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "06cd66b8f6a1528d328f002ab35ab9cfe86145779bbe8c0660753fb0daae02ba"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10071,
+  "proof_id": "proof-f569091090b5c172200fec04",
+  "created_at": "2026-06-20T03:15:20.050Z"
+}

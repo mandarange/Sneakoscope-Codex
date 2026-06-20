@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:shadow-clone-swarm",
+  "cache_key": "a047a4ec5667569625f85f4ce5e989ac596ee755c5f484143900890fe19d31af",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "40c06e31e66fb4850d62acf1d04b757d670700b32e1b50f26a52d01b8b7aaa40",
+  "gate_impl_hash": "40c06e31e66fb4850d62acf1d04b757d670700b32e1b50f26a52d01b8b7aaa40",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:shadow-clone-swarm --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3826b13859d165a910abc3e754ab4a30f3b2e20e2e8a031620cd0462621275e3"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 182071,
+  "proof_id": "proof-f23a84a944e80d82252752e1",
+  "created_at": "2026-06-18T16:18:28.468Z"
+}

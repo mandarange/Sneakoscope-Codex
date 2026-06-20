@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "local-collab:worktree-gpt-final-apply-policy",
+  "cache_key": "03388aeb26168468e4a44dfa39854bcd770653f6508b8920debe7d0b060374f9",
+  "input_hash": "461842530d4e29df5378beebef34def51e8cab0b250a07b6c30da6e1289618a5",
+  "implementation_hash": "a734cc703187ff63f5d3dd14ad8f9e2cbcd7fc8a6ade05a37654b931247e916a",
+  "gate_impl_hash": "a734cc703187ff63f5d3dd14ad8f9e2cbcd7fc8a6ade05a37654b931247e916a",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run local-collab:worktree-gpt-final-apply-policy --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5499,
+  "proof_id": "proof-a0c1e1574aedb995befa98f7",
+  "created_at": "2026-06-18T16:42:48.033Z"
+}

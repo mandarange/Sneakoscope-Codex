@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:zellij-massive-ui",
+  "cache_key": "f62515791bfaa4f2788298d8d3ef0452bf3f51a03f72e80fbeaabbc4bc7948c2",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "c14668374c31fa2b31a891c5746670ddc89d206f363aa9e6d5aa23e9b8c45aa8",
+  "gate_impl_hash": "c14668374c31fa2b31a891c5746670ddc89d206f363aa9e6d5aa23e9b8c45aa8",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:zellij-massive-ui --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "0981effbd8bd05a01113a74a9427def22fe93a1397051a37722940b30b892cf4"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2437,
+  "proof_id": "proof-4b85892292f120ae23ad7085",
+  "created_at": "2026-06-18T00:09:09.244Z"
+}

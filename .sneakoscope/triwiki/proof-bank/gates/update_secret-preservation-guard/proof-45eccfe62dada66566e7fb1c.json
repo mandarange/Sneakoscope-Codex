@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "update:secret-preservation-guard",
+  "cache_key": "8ba09e19ecee2e71a84d00ebe14e9fb6e26df71b2a23cf94ea16cd864b4aff93",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "9088663a8cd61e8538837b0c517fc52361e00ecb327261a150c4fa459e85b4b3",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run update:secret-preservation-guard --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3563d001bb05227b5d7344a85fa920ec4df21443529fd6b4f839aa43c2a24c70"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7520,
+  "proof_id": "proof-45eccfe62dada66566e7fb1c",
+  "created_at": "2026-06-17T19:35:13.729Z"
+}

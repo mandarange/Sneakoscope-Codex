@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "docs:codex-0139-wording",
+  "cache_key": "2237ae16e044ddeabe3288aa0c6e020c5288091d1773dc95f09cae9573c9cb8e",
+  "input_hash": "1116ae22ac91cbe50274346fd8dac9dbc484042d2f1ece90c762f8e91706a74d",
+  "implementation_hash": "40b3407b0f5b70f33142d9db169a1a1841d17236bbebc5afb23e393f231416c5",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run docs:codex-0139-wording --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "20e7b490267a92a1795d8e80a73ff798b212984efd6613172bf34db4010c5723"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4250,
+  "proof_id": "proof-9f84f8d3ef247a1549a46553",
+  "created_at": "2026-06-17T19:30:59.869Z"
+}

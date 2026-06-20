@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:native-cli-session-swarm",
+  "cache_key": "86624855d38f81fa0f2712d81efe974febee71cd0be6a9924bfe41105134aefc",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "30f3fb38fdaf00f0e7d4bcc5f53d72944999ad9eddf4e00517c7d868d1a79349",
+  "gate_impl_hash": "30f3fb38fdaf00f0e7d4bcc5f53d72944999ad9eddf4e00517c7d868d1a79349",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:native-cli-session-swarm --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "89c54571c14030fc8cf414d2a08c11f909ac3b5497498357ccf9035b02da2771"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 47461,
+  "proof_id": "proof-9247c7074ae13a3e9f7cfcf9",
+  "created_at": "2026-06-18T16:28:53.844Z"
+}

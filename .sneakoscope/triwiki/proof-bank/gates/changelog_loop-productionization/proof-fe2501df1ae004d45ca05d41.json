@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "changelog:loop-productionization",
+  "cache_key": "9d30d3616569c8588742c8dc3817da1d383e5e33838e5d4a659c01a0f1048e52",
+  "input_hash": "24196fe9b6f9aea7dfaca21c424fae84fd790ce20ec93a269561eff6535880ac",
+  "implementation_hash": "7c7948a144b8e3648b05452fb1bf44e181587a857c66c01f03dc57e59756f5cc",
+  "gate_impl_hash": "7c7948a144b8e3648b05452fb1bf44e181587a857c66c01f03dc57e59756f5cc",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run changelog:loop-productionization --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "41ae768b4a11fac27a80013e01554a535955194e24f35fca8bda0eab48185887"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10818,
+  "proof_id": "proof-fe2501df1ae004d45ca05d41",
+  "created_at": "2026-06-18T07:52:56.707Z"
+}

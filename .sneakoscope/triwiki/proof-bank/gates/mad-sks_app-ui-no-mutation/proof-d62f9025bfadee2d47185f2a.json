@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad-sks:app-ui-no-mutation",
+  "cache_key": "01a84f39d0f1d2bf7e02211383815238e478d1898b94eff0bcbbfd71847b5545",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "5811a702bb04923859bfee55f447fbc75d41ea0fb0b3cb7a6135f9ff09b272d3",
+  "gate_impl_hash": "5811a702bb04923859bfee55f447fbc75d41ea0fb0b3cb7a6135f9ff09b272d3",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad-sks:app-ui-no-mutation --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "35cbbd17e4c552589333060a8abad635f624c4528c385c091c9e428eb14b05dc"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 19181,
+  "proof_id": "proof-d62f9025bfadee2d47185f2a",
+  "created_at": "2026-06-18T16:32:15.377Z"
+}

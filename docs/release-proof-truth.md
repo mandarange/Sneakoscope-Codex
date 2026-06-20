@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.14 keeps release proof truth aligned with the 4.0.14 package metadata, built output, provenance, npm unpublished-version evidence, GLM Naruto parallel-stage execution metrics, bounded parallel queue proof, requirement coverage tracking proof, MAD route isolation proof, and benchmark/proof metadata regression-fix evidence before publication.
+
+SKS 4.0.14 release proof truth also requires proof that GLM requests stay locked to `z-ai/glm-5.2`, provider/model fallbacks remain disabled, parallel candidate/worktree/verifier queues stay bounded, requirement coverage artifacts exist for every parallel worker, and `sks --mad` keeps GPT/Codex/MAD routes isolated from GLM/OpenRouter mode.
+
 SKS 4.0.12 keeps release proof truth aligned with the 4.0.12 package metadata, built output, provenance, npm unpublished-version evidence, GLM Naruto extracted-diff worktree evidence, adaptive scheduler artifacts, targeted apply checks, dirty-tree policy, and final seal stop-gate evidence before publication.
 
 SKS 4.0.12 release proof truth also requires proof that GLM requests stay locked to `z-ai/glm-5.2`, provider/model fallbacks remain disabled, live bench distinguishes true direct GLM from Naruto worker cases, and `final-seal.json` records model, isolation, scheduler, candidate, apply, secret-audit, and stop-gate invariants.

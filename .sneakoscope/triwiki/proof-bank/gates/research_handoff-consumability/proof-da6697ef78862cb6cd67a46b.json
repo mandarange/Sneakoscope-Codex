@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:handoff-consumability",
+  "cache_key": "e95f9d88f6c7d5fff9b3c5c8dce6ded0d695550e9459ea35183e0736d0d49cad",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "369e23a71837ae13d9e271069de4a97f1602e483ac61b7f539804391f0aa2cb7",
+  "gate_impl_hash": "369e23a71837ae13d9e271069de4a97f1602e483ac61b7f539804391f0aa2cb7",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:handoff-consumability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "73cd22d9b827a7c71d34da88539da752e4f10c9e6a6e8390cf63eda270eb5bc7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2937,
+  "proof_id": "proof-da6697ef78862cb6cd67a46b",
+  "created_at": "2026-06-18T13:53:10.515Z"
+}

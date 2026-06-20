@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "docs:loop-runtime",
+  "cache_key": "b3629df8caff23ed48d0ab05dffdfbdfe0c2346ea8bdd35e1c37abe292cfbb75",
+  "input_hash": "fd820d34ef08bc3ed115211d620a6ad997d525a88d9a2c1cc3df16bd2f2d9232",
+  "implementation_hash": "2a35853afa33f6f49b4ec1108581bd3138cfe3b203d0f94d1a33a3399803f040",
+  "gate_impl_hash": "2a35853afa33f6f49b4ec1108581bd3138cfe3b203d0f94d1a33a3399803f040",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run docs:loop-runtime --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "99b5a879403d4c76dd59109be137d4570cd97713fbf67c37031433d87b4e8339"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 201724,
+  "proof_id": "proof-3fabfcbf6d50418acb0e8138",
+  "created_at": "2026-06-20T03:08:40.211Z"
+}

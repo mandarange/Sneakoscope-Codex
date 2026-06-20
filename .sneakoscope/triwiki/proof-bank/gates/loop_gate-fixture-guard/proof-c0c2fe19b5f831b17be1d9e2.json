@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:gate-fixture-guard",
+  "cache_key": "aca02d000990947ebb1dc1160ce0950b9b9e0da5da1fcfd125960443df8ba1ba",
+  "input_hash": "1b03a58bb0f9befbca1df1cdef1e992e8e0b4001129a21136752bdbafbeece2b",
+  "implementation_hash": "9167ffacd5a2f95f3d5e57ef65872c8a9d8f32c99b84ef0d0b9c8a913dae62ec",
+  "gate_impl_hash": "9167ffacd5a2f95f3d5e57ef65872c8a9d8f32c99b84ef0d0b9c8a913dae62ec",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:gate-fixture-guard --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "78793f0c7b351933349bfe7a3ea4be59060c798759c74b2f9ee2cfdaa347a27b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 1786,
+  "proof_id": "proof-c0c2fe19b5f831b17be1d9e2",
+  "created_at": "2026-06-18T14:35:12.325Z"
+}

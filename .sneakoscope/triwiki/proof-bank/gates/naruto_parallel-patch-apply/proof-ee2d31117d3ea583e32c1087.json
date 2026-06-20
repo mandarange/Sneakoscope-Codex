@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:parallel-patch-apply",
+  "cache_key": "acd2b8430c8bccf2d8e12076ae6506443b7c3fbff395e0cd62c5523fb1e79f85",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "dc76c09241412e0b5fbbc3f9a3019e43840a9c2fc32b1f7e5c57b64995bb4633",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:parallel-patch-apply --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "da0e94d9cdc64cf1be6a4e8bf9d0905c837c52068b2c13daf9ee5536e339cf3a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5851,
+  "proof_id": "proof-ee2d31117d3ea583e32c1087",
+  "created_at": "2026-06-17T19:33:09.654Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "local-collab:gpt-final-availability",
+  "cache_key": "b85ddd7db3d94b149f338984f758001af2f910e80b5b10317851dca37cdbbc4c",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "9e405077659ca43661d11d84e756014b1ed981685995821f37d9966cf719194d",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run local-collab:gpt-final-availability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "e7c9ec107bbabe09663782a0947dd3e18674f8dadd4e65804f31e9f7c1a008b0"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5445,
+  "proof_id": "proof-6f5fb385ec0e153959e1a4f5",
+  "created_at": "2026-06-17T19:31:09.448Z"
+}

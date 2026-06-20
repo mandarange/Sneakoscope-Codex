@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0140-mcp-reliability",
+  "cache_key": "d612679bbc7a896cf1d71cc1c957a52cdd029ed4e64592a2e199b4323f2221dd",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "07cf13980095ca77383357b1233b9ce8fd9f96703a1a233403cf275f26318d14",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0140-mcp-reliability --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "06c35556850f2b03d4f09adfc2115ef16b06a773fbac02ba2dfb26ef8aca9bb5"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3421,
+  "proof_id": "proof-669593b0dd5096d77b61bb1d",
+  "created_at": "2026-06-17T19:34:56.735Z"
+}

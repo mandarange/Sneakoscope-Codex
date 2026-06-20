@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-native:broker-read-only",
+  "cache_key": "5f4cd2d48b228577ed0536dfcbea335e9b832e125b7cc997d105f491217cd133",
+  "input_hash": "ef8d8202c1defba6d4f4fb99d6acd65e06993adaf7f0a8ec8e8688eff14eac3e",
+  "implementation_hash": "f9215cc8527005142fda8b8bd2f6be317ba1e894e6734a49b949f7bf38f60ee3",
+  "gate_impl_hash": "f9215cc8527005142fda8b8bd2f6be317ba1e894e6734a49b949f7bf38f60ee3",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-native:broker-read-only --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "836f34b407d495bcbd6bed26ecc4eabceb759a7083ae7fb2ef56cbf1c5624beb"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6889,
+  "proof_id": "proof-edba8514e1281b7f138890aa",
+  "created_at": "2026-06-18T16:34:16.786Z"
+}

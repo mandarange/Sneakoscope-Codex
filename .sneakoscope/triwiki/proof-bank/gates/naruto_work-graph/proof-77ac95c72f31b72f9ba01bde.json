@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:work-graph",
+  "cache_key": "f2494eab7161c7277ce82d0af706cf2e189b8f3acbc36f218704ab10a72acb6a",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "5f4ac0bbb5ec936da8626b79da03599674928d983e54ebc5a97f3632968ad8b0",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:work-graph --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "9beb78ed13138d0954f5aa2d5c463789ac4bb9aafedd6f50a7d28ce2e9c9771a"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2652,
+  "proof_id": "proof-77ac95c72f31b72f9ba01bde",
+  "created_at": "2026-06-17T19:33:17.381Z"
+}

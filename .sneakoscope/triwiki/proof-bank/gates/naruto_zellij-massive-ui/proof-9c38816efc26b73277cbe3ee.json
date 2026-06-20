@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:zellij-massive-ui",
+  "cache_key": "ee1909aabb9b8e96428dcdfc8ffad239de7a84e8c9cafd21bf838a808045bce2",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "f568e7844cf387e5aa967a69f0acb056ce60580672b986c03a426ce1cd0c1127",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:zellij-massive-ui --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c475ee3c1e18ff42402d721775975e14830cfa57b814f866b2f3e17d3fbd4b47"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5044,
+  "proof_id": "proof-9c38816efc26b73277cbe3ee",
+  "created_at": "2026-06-17T19:33:21.012Z"
+}

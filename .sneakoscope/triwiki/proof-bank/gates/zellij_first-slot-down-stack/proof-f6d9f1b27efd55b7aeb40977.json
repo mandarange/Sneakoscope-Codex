@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:first-slot-down-stack",
+  "cache_key": "e5e50be79d7c128bd5622583e64190e7f7f2f267058f9069fde4703435a18521",
+  "input_hash": "0b92acd69c4965524b17f6958fbe17f7c7b16ef132c56afa17b3342409368255",
+  "implementation_hash": "1ab2a31cc04c7ea31e598e66c7c62a6dea2ecd500b1034758eb2bbba5c91c3f1",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:first-slot-down-stack --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "164dd86a21457bcc1371f049b2fef1e4879a4e199a17a1146c983d9031f955f7"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5962,
+  "proof_id": "proof-f6d9f1b27efd55b7aeb40977",
+  "created_at": "2026-06-17T19:34:20.118Z"
+}

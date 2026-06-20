@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:fast-mode-profile-propagation",
+  "cache_key": "119db557c59f754bfe4b07d2bcac26081d46be442b2c510dcc0e3331dc266403",
+  "input_hash": "bf43ef340244a04bc2ff186631ba6e1851cfb095262678afe54736bec127bedb",
+  "implementation_hash": "82d7baf3ca917a3ee82e7f16bff11a8b7029808db9909a5d73b0fe3291a083a3",
+  "gate_impl_hash": "82d7baf3ca917a3ee82e7f16bff11a8b7029808db9909a5d73b0fe3291a083a3",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.2",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:fast-mode-profile-propagation --silent",
+    "cache_bridge": "release-v2-to-triwiki",
+    "source": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/proof-bank/gates/cache-v2.json"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 27707,
+  "proof_id": "proof-0b5dff09be4d5deebf5b4cbf",
+  "created_at": "2026-06-18T16:42:35.434Z"
+}

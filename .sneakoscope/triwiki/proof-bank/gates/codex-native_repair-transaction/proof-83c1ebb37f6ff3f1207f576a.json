@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-native:repair-transaction",
+  "cache_key": "f6879b39fabbf841c811ca0db9b958f2bd2d8f49574fd648b5c80b08c9a36e65",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "a4c5ca91e8a9207d1682bb292523831fe8439a159dd3796b64640bcd9ad041fb",
+  "gate_impl_hash": "a4c5ca91e8a9207d1682bb292523831fe8439a159dd3796b64640bcd9ad041fb",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-native:repair-transaction --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "6eabe94acdf61abb3e052c74b6fe05cd6dcab93198d16dca7f01af3134c28f09"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 19789,
+  "proof_id": "proof-83c1ebb37f6ff3f1207f576a",
+  "created_at": "2026-06-18T02:40:54.030Z"
+}

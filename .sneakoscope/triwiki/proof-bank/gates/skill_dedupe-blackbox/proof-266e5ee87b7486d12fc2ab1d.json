@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "skill:dedupe-blackbox",
+  "cache_key": "4fae4eac58fc63f9f4e8dd66a2ec57cbc0b4f1d0a4908f880f15a6773495e247",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run skill:dedupe-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "62d780990059aa8b51a62d13dbfc90883aa4eab9f66af076f5ff2f6acad1378e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3881,
+  "proof_id": "proof-266e5ee87b7486d12fc2ab1d",
+  "created_at": "2026-06-17T19:35:19.300Z"
+}

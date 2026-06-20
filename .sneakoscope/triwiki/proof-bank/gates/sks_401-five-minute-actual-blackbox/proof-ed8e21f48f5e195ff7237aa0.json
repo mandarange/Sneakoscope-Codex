@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "sks:401-five-minute-actual-blackbox",
+  "cache_key": "af4dbb4265d48b5398f91372636db5092cda50fbfc0bd6f7c6117562a4b8457c",
+  "input_hash": "e9ec4aa859bf13d84dd880f56cf7d8b2665f99132b034ab90920c6438ad913d7",
+  "implementation_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "gate_impl_hash": "ed283d6c2babe81090965aa63bc40dff7f82fbffde8e661b3bbb39a25297e38f",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run sks:401-five-minute-actual-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "628d05a99bbf3cf555d5d8bcaf6525c4868c1b5b17e3d1a657b1d60fbadcf824"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 15973,
+  "proof_id": "proof-ed8e21f48f5e195ff7237aa0",
+  "created_at": "2026-06-18T07:58:38.519Z"
+}

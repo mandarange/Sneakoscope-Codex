@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:route-runtime-integration",
+  "cache_key": "d91a9d3a3f8326cee50fa45adc97dd7b430acae793d6c5cbb330147ed345071c",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "aae940421050eab704769f934ac8af7bfcd177bd14adcfdeccb22f43068ff018",
+  "gate_impl_hash": "aae940421050eab704769f934ac8af7bfcd177bd14adcfdeccb22f43068ff018",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:route-runtime-integration --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "cd7fce7794cc402a842b539b0ea7a0f036766436275f35d5f496bd027f9de813"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13960,
+  "proof_id": "proof-4b110835b870dcbf6ea43ed6",
+  "created_at": "2026-06-18T13:27:07.580Z"
+}

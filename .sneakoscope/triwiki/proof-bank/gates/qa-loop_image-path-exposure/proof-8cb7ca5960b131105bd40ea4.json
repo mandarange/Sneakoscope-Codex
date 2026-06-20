@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "qa-loop:image-path-exposure",
+  "cache_key": "15c666f413258a9b7d4fbe15fa40cd6b03780438833a7135d33d5c91511ebfe9",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "1523cd64b4eb99898a3fb7a26c621a52f4b7e2b22bbae29991692f201b61ad64",
+  "gate_impl_hash": "1523cd64b4eb99898a3fb7a26c621a52f4b7e2b22bbae29991692f201b61ad64",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run qa-loop:image-path-exposure --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "56174125219a10488eb5eadfc4c3241c81b0fb7f6b2f8790823ae83def7f91bb"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5283,
+  "proof_id": "proof-8cb7ca5960b131105bd40ea4",
+  "created_at": "2026-06-18T02:39:52.169Z"
+}

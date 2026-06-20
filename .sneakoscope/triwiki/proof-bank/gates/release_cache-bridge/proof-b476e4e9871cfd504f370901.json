@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:cache-bridge",
+  "cache_key": "9b1decb70de8db7af61001bf4e81b11a61009948987eab579b04bc68ce150637",
+  "input_hash": "6431b292c55615a9b7a58acfe5fd1280b5bb0f81d83bc697859e12aeded7edaa",
+  "implementation_hash": "611f799a3b0b598e5c79d2acf8af670cef4c704d339ae038f3949b706d0fb114",
+  "gate_impl_hash": "611f799a3b0b598e5c79d2acf8af670cef4c704d339ae038f3949b706d0fb114",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:cache-bridge --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "17b38e8532218b698fc4d8fe0ac474bc93fc32132b989dec7473b0af7292993c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7,
+  "proof_id": "proof-b476e4e9871cfd504f370901",
+  "created_at": "2026-06-18T18:01:59.326Z"
+}

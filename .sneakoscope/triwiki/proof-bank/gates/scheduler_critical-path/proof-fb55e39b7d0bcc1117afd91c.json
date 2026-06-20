@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "scheduler:critical-path",
+  "cache_key": "db7a437ac6667d7d41074ab935d3bcaf5abeae4e181755e0ba9020f413ad61d2",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "ac444c192f821d1b4f72bbd9aa37de96435dab331c8416bd11b5b8a06471a438",
+  "gate_impl_hash": "ac444c192f821d1b4f72bbd9aa37de96435dab331c8416bd11b5b8a06471a438",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run scheduler:critical-path --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7a4d0fd321fd5b11338016f2127a030a225d6c9a7c8c5b7995fb7e81c73172c1"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 12179,
+  "proof_id": "proof-fb55e39b7d0bcc1117afd91c",
+  "created_at": "2026-06-18T02:41:41.133Z"
+}

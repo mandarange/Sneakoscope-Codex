@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:gate-script-parity",
+  "cache_key": "dc164cbfb5230d60d52fa14166420b0920d7eb45ca6c5f375b87f2a57812caf1",
+  "input_hash": "2f17e0afa82afe6ee14d70d1ea71f617867b646fca2f7e7ce4e5b4d2989ff161",
+  "implementation_hash": "7678c145a234daad3eb67efaa883199ba7d1c854e81b32c0c3e31cd5a5faff9a",
+  "gate_impl_hash": "7678c145a234daad3eb67efaa883199ba7d1c854e81b32c0c3e31cd5a5faff9a",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:gate-script-parity --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3272c972f181808543d83c79e66789cd115cf3ca04f6706a7e621ea2fdace372"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2441,
+  "proof_id": "proof-41a4ada8cf9b3d8bc2798ca0",
+  "created_at": "2026-06-18T13:52:27.528Z"
+}

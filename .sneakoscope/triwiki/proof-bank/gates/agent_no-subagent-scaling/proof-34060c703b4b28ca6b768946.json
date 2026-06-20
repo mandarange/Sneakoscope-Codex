@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:no-subagent-scaling",
+  "cache_key": "aefb49220a7ec7fa0c76da40ebdfb7af34c946bed8d8418cd5299aee0047edbb",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "be763a5269cf4610679f7fb1e9bcb8733d37d8c07fba2bdfdca866465593fc74",
+  "gate_impl_hash": "be763a5269cf4610679f7fb1e9bcb8733d37d8c07fba2bdfdca866465593fc74",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:no-subagent-scaling --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a6c698a1ee670d1fc08af5b2682eb2c1a8122c316301033049008507145f221e"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 48734,
+  "proof_id": "proof-34060c703b4b28ca6b768946",
+  "created_at": "2026-06-18T02:13:13.148Z"
+}

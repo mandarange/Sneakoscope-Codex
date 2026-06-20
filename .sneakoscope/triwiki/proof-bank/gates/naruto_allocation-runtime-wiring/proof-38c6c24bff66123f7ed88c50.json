@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:allocation-runtime-wiring",
+  "cache_key": "a941fc1b6205b228645b8fd3af298bfaf43dda16f223530749179ce8089d2e7b",
+  "input_hash": "66adf58e7f684f43483a8ecb2298f31195a1d201924f7f6a09544e51d21e6b9c",
+  "implementation_hash": "130f5d61df14317dfaa076d9a2970460e345de5451b301b6b655a1306869e49e",
+  "gate_impl_hash": "130f5d61df14317dfaa076d9a2970460e345de5451b301b6b655a1306869e49e",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:allocation-runtime-wiring --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "8d12b96d9cdead73af5e2df2c247bbc38730bb0809a908ea99d17b80e9bc4bb8"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 20300,
+  "proof_id": "proof-38c6c24bff66123f7ed88c50",
+  "created_at": "2026-06-18T08:10:31.836Z"
+}

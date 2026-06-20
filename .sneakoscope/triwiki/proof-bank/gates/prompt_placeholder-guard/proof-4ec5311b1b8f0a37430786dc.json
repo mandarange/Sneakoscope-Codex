@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "prompt:placeholder-guard",
+  "cache_key": "a55b95ce3712eebe12bfd10b17e1f9fc24f785f5d01255687d292d398add054a",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "0e08a545e82a1a6dd7cec0a9dda599c8b6c173d65093c16e5960235f3ef6536b",
+  "gate_impl_hash": "0e08a545e82a1a6dd7cec0a9dda599c8b6c173d65093c16e5960235f3ef6536b",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run prompt:placeholder-guard --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "8728f25d001a0f86c487621e409c160d1da8f6f7bfa2f52b5add46673390c955"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4769,
+  "proof_id": "proof-4ec5311b1b8f0a37430786dc",
+  "created_at": "2026-06-18T13:29:31.610Z"
+}

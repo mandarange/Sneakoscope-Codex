@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "update:gate-removed",
+  "cache_key": "767c03f046a2b4943ca73672a2e02bd18e82bb21903fc5d9f770306b5ede4e1b",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "fa0affa8229ee2060c3b86ee2e64788a35ba665456522713ff41124b2e6b2952",
+  "gate_impl_hash": "fa0affa8229ee2060c3b86ee2e64788a35ba665456522713ff41124b2e6b2952",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run update:gate-removed --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b564b62fd13d68950c8724a141686163b6ab247fc1cb13a32c9e52d18ace6d40"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5220,
+  "proof_id": "proof-fccbd5cdd63fd2ae5dbf130e",
+  "created_at": "2026-06-18T13:29:58.281Z"
+}

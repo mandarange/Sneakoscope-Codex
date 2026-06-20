@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "release:gate-budget",
+  "cache_key": "5efd54221f065ea7dd0376d3c14816c4d4de4ef9060476a905eb212194468240",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "3ba0b374311007ecb877ae337e8c702ffd7dae2713124d74908ad01b73712858",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run release:gate-budget --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a6951490adebca387f0e59645f73357ee897ad014a51f517d9e8c68f8d52de32"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4576,
+  "proof_id": "proof-541e63ac291bba6acc6a00fb",
+  "created_at": "2026-06-17T19:27:16.224Z"
+}

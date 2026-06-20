@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:slot-telemetry",
+  "cache_key": "a7482a7f43c00c275b26cdbebd0758e47ce14ef699eeb5d8de16ec4cdc9d6681",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "efdad523a6c3fe2e1902d1635582b8755e650573a0bc39b114efab7cfaf23682",
+  "gate_impl_hash": "efdad523a6c3fe2e1902d1635582b8755e650573a0bc39b114efab7cfaf23682",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:slot-telemetry --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c3ace21140d1acbad902601250bf6525b3921ad5e68b60e297b3feaa915ce97f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13055,
+  "proof_id": "proof-52b61d25626b0c0ec920bfee",
+  "created_at": "2026-06-18T00:09:36.193Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:orchestrator-runtime-source",
+  "cache_key": "e0b97cd9e6b07eb01bfffbc62fefe00c00d426409cd4ac0143f3e7ac8aa6a98c",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "f18deac92e4288a297b55b0882e137b9ff79d157214df4ace085c1cbd321343d",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:orchestrator-runtime-source --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c7437037bd35abc856feeb0bbafcaa94b5e1c230be38eb114f9cd6f9c55ba7da"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 36427,
+  "proof_id": "proof-a8360cd90a3fcd09f8767864",
+  "created_at": "2026-06-17T19:34:15.585Z"
+}

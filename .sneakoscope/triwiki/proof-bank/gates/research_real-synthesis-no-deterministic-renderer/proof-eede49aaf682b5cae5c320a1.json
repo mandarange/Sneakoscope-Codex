@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:real-synthesis-no-deterministic-renderer",
+  "cache_key": "8cbc68a3a4752a569fc67bb826077a7532d8606127c36436809d66c531f115ae",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "36f05d368030c94451bf8a21d8f25f7706ca73f9a7bdb7314e34bc8d279ae038",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:real-synthesis-no-deterministic-renderer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "bc651b85cf558b55f321ceed6871806cb3411ba69fc8353b51ffb52808c2c61b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4924,
+  "proof_id": "proof-eede49aaf682b5cae5c320a1",
+  "created_at": "2026-06-17T19:34:52.220Z"
+}

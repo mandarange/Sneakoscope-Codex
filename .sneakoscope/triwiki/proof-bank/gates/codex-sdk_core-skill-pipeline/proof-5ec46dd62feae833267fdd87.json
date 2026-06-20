@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-sdk:core-skill-pipeline",
+  "cache_key": "54e0a53d4882ba355845aff23c06667296e7bac64fc7556d0f6e36b809a2dd9a",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "c7814f6563ce7bd1c8b5c6713abb26b8b4ecef8d41bf1b7daa631d56cb17fd1f",
+  "gate_impl_hash": "c7814f6563ce7bd1c8b5c6713abb26b8b4ecef8d41bf1b7daa631d56cb17fd1f",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-sdk:core-skill-pipeline --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "185386fdc9a4973b2c755b4c1efcb1a83ca2afd17dfbd9df591f109a8ba72407"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11340,
+  "proof_id": "proof-5ec46dd62feae833267fdd87",
+  "created_at": "2026-06-18T13:47:19.608Z"
+}

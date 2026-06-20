@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "git:worktree-dirty-main-detection",
+  "cache_key": "579a2486034356f6475db5d04468a1227397ed832fa4832d0b6a895fdd8715c8",
+  "input_hash": "b9cdabbe460ba131caf61da59f5e88c2bf8997fc90382b14622270a93a199083",
+  "implementation_hash": "eef13c20edf13494c8cec3aeed5800671169037befb70185406167391077492f",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run git:worktree-dirty-main-detection --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "57d64fa4115e23da750f78e3fe4fbfd7669ced54d4d4dfb0cb79cc3ac7610a67"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 25747,
+  "proof_id": "proof-dd03270f18bb78a286b1e5ea",
+  "created_at": "2026-06-17T19:30:24.515Z"
+}

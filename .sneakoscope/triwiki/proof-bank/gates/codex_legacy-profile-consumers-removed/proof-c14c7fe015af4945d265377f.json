@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:legacy-profile-consumers-removed",
+  "cache_key": "2781250b6bbe123450abbb862ff6fa30e085f28a2f8eb48e3054e70bf16b2c7f",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "1ca090e41fa2f5e77b524a7cc427ab71d9420459862da4adefeabb888aa7263c",
+  "gate_impl_hash": "1ca090e41fa2f5e77b524a7cc427ab71d9420459862da4adefeabb888aa7263c",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:legacy-profile-consumers-removed --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "30921e65c4d779f3163b448deac7681634ad18ed7a7a06649ac5336af4ef4074"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6355,
+  "proof_id": "proof-c14c7fe015af4945d265377f",
+  "created_at": "2026-06-20T03:04:57.577Z"
+}

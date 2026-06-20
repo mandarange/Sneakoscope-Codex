@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "docs:codex-0139-wording",
+  "cache_key": "3da6cf704b7ba3c76837fe6e6ee35e330c55acd32b38fe7d7ddc81a15a4842d5",
+  "input_hash": "038cad549c4373f8b367f97b23fc8d2b53eda693fa1bfab424eee6edf6e0f8ea",
+  "implementation_hash": "ce69572c36cfb59c5f4c8590cda7cb80030249cf2d8bc60e6c25cbe297c6c8bc",
+  "gate_impl_hash": "ce69572c36cfb59c5f4c8590cda7cb80030249cf2d8bc60e6c25cbe297c6c8bc",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run docs:codex-0139-wording --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "c92de0037777daa60d05743d36049c1ab9ce7a1812dc156127fba8bca75a9202"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11436,
+  "proof_id": "proof-b58860d8fd4d1d075755558c",
+  "created_at": "2026-06-18T13:47:53.895Z"
+}

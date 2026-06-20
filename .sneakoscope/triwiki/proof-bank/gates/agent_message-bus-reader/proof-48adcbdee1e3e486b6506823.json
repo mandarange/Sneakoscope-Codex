@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "agent:message-bus-reader",
+  "cache_key": "12809a0f62647867c83a2892d4ef9481a6b6151e0229712d8a5b6a98a229daf9",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "d089e9b771f7f8f2d404f6a9fc150faff24aa1906425081814e8f205d8416627",
+  "gate_impl_hash": "d089e9b771f7f8f2d404f6a9fc150faff24aa1906425081814e8f205d8416627",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run agent:message-bus-reader --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f724398fdc0d70661b6aa2116c187ebb2f390e12c4877f6d304246383b60eb3b"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3503,
+  "proof_id": "proof-48adcbdee1e3e486b6506823",
+  "created_at": "2026-06-18T02:12:27.418Z"
+}

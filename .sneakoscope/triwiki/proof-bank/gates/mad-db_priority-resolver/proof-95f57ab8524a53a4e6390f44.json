@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad-db:priority-resolver",
+  "cache_key": "efecc729a34d896c1331e7b4af798faaf0362b6ebaf5d9892b04eb5e71df091b",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "7095f6e0bcfb33d802f6fae26a7c4aa33b8aebe432dad92ab6ac73a0fa761f28",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad-db:priority-resolver --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "7c2c00d0936a84facf680d1d8ddcebf40f8be67ebe2f4a3ce3def6ffbb23cd6f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6921,
+  "proof_id": "proof-95f57ab8524a53a4e6390f44",
+  "created_at": "2026-06-17T19:33:03.877Z"
+}

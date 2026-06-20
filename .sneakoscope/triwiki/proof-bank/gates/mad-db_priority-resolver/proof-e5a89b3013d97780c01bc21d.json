@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad-db:priority-resolver",
+  "cache_key": "341a9ccad5baad34c516f466fac5efb3728400fc8ccfbb89dea548ff719e1dc9",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "81130c1ed5a0de3b9fa81f6474eba81e219c20dbe166dec6cb337b314a5cf844",
+  "gate_impl_hash": "81130c1ed5a0de3b9fa81f6474eba81e219c20dbe166dec6cb337b314a5cf844",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad-db:priority-resolver --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1949db071bbebb93caf6f7d058effbe33f968f555a9bb607f75760f964455d9c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5858,
+  "proof_id": "proof-e5a89b3013d97780c01bc21d",
+  "created_at": "2026-06-18T13:50:18.992Z"
+}

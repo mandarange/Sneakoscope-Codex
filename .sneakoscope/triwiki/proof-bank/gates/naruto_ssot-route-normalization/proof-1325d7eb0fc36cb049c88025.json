@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-route-normalization",
+  "cache_key": "0f6795b709c2af50972abd679882b1ff4cf416bf09bd94e7b408b94e94ec4497",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "04fe4c1310688b10d2790988b532a74d3e6d00d910738c27d8f7b8f46d65305f",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-route-normalization --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "cd31ce31599a5c7d71a2c2db853a7e182ff6ef28f82916b0ec5e4054703f2a1d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3273,
+  "proof_id": "proof-1325d7eb0fc36cb049c88025",
+  "created_at": "2026-06-17T19:33:14.236Z"
+}

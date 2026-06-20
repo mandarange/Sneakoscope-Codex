@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:pane-lock-concurrency-blackbox",
+  "cache_key": "ba3ea011be7b3cde32b913b1f8517fef07fcfa5d7b672fa6457790941c2466ef",
+  "input_hash": "1116ae22ac91cbe50274346fd8dac9dbc484042d2f1ece90c762f8e91706a74d",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:pane-lock-concurrency-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "4c7245501b793fba88655cb822106132c718e32df3e3de7d77424320a5720a64"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3817,
+  "proof_id": "proof-29aa981a781510a232af6959",
+  "created_at": "2026-06-17T19:40:27.584Z"
+}

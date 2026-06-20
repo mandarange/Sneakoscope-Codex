@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0139-marketplace-source",
+  "cache_key": "bc22e67075870d9f1f702d7914a3b35ade2d9882dc6b86ce330ca07ddaa757ef",
+  "input_hash": "ff751791924e75f55e09e5aecf448185d51575ee98006cf98c0e0b18932833c5",
+  "implementation_hash": "633e316276d08fae45c4674980d913d9a7240f48f9b1e9bae95e3ead1f29e516",
+  "gate_impl_hash": "633e316276d08fae45c4674980d913d9a7240f48f9b1e9bae95e3ead1f29e516",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0139-marketplace-source --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "21865bfba646ca3a88ee7f924df81d3204a2b8f90ab343bc9dac5006f2c8ba32"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 8833,
+  "proof_id": "proof-258c2c9f1560cee2ce3c72b7",
+  "created_at": "2026-06-18T08:07:51.709Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:loop-worker-router",
+  "cache_key": "ae3bb51b3c5b0d2a7ca87e80531bd17f403c80149c9dc2f69f6f0bb41e433185",
+  "input_hash": "965e1a0df72280fbd68c7585bd84d57fdd65d61cfe4beafd7c63840c55ef2219",
+  "implementation_hash": "f7544f3d81725a21adfa6eceea8eeeeeb27cf1dd16a87d1f1da0bc429405d0bc",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:loop-worker-router --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "5950274ebf656be26e340d3dea5da5bfe83497ffaf8e93cdbf6e334989d31d50"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 110271,
+  "proof_id": "proof-b95c3c105f61d2f1824bef58",
+  "created_at": "2026-06-17T19:34:53.766Z"
+}

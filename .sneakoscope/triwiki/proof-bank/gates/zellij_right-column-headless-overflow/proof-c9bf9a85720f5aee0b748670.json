@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:right-column-headless-overflow",
+  "cache_key": "e8a83828413f8417542c2054aa35b9767329f2f367eff48642e6af9abd07e85d",
+  "input_hash": "049b923e6fb7aeb0d8f8adea5d7be88937936a0637ce76c3a66633cf21c65e47",
+  "implementation_hash": "97395b0461b5c6bd37db15384f5bb409fd0ae4453b02849fa6d055c7fa930b94",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:right-column-headless-overflow --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "24040773faa434caadb0ecba05ae6dcbed9bf61b899b980f1783237ca0928dff"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4848,
+  "proof_id": "proof-c9bf9a85720f5aee0b748670",
+  "created_at": "2026-06-17T19:34:21.440Z"
+}

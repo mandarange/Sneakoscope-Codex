@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:context7-mcp-repair",
+  "cache_key": "740006dd88838c6c0f4cfd493ee84d984e53bbbcf0eba8fbc15081551b7a627a",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "9aab90fb869a588da9d9dc0592b19aedba9081d1b2d06387a22f9c4d2e8f9596",
+  "gate_impl_hash": "9aab90fb869a588da9d9dc0592b19aedba9081d1b2d06387a22f9c4d2e8f9596",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:context7-mcp-repair --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2a5f6e3b76bc7c281e9e2eb9c9dc53d47a67e7bfc2984284e318f3def5957c2d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11154,
+  "proof_id": "proof-ca4db4b5b8e5c6e3a1d328d7",
+  "created_at": "2026-06-18T02:24:49.448Z"
+}

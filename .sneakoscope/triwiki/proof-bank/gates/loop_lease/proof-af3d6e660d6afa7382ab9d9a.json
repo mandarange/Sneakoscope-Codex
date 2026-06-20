@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:lease",
+  "cache_key": "f867984bce114d1b04b8012cace58da723d0b95e8434b018f2ddacd27207519d",
+  "input_hash": "fd820d34ef08bc3ed115211d620a6ad997d525a88d9a2c1cc3df16bd2f2d9232",
+  "implementation_hash": "cc027f1fa42cd572a170303f3617cd1f2b434f3a318b9f6257884a5c088379a9",
+  "gate_impl_hash": "cc027f1fa42cd572a170303f3617cd1f2b434f3a318b9f6257884a5c088379a9",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:lease --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1983ef163a9cdfd0780d9fa2d44eedb376072339509ded69290f2515d7dc0118"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 126471,
+  "proof_id": "proof-af3d6e660d6afa7382ab9d9a",
+  "created_at": "2026-06-20T03:09:17.591Z"
+}

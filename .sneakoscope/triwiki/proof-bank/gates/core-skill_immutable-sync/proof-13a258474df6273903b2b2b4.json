@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:immutable-sync",
+  "cache_key": "29c3852dc459bf56b92d7596a5fced2030f6ca67970e39b565a20e8291bc9723",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "0ceb35ae77c353e0df3d3b1508c991d041e832f7abed16f1a0084ae0e995cf42",
+  "gate_impl_hash": "0ceb35ae77c353e0df3d3b1508c991d041e832f7abed16f1a0084ae0e995cf42",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:immutable-sync --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "3e139e397e37510599be7974a1f255d8ae1df533e911e9b4dfc72090471ebf9c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3280,
+  "proof_id": "proof-13a258474df6273903b2b2b4",
+  "created_at": "2026-06-18T02:40:43.651Z"
+}

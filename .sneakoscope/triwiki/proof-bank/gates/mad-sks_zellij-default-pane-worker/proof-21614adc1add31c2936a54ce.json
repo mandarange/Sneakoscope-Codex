@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "mad-sks:zellij-default-pane-worker",
+  "cache_key": "5ca17d8b8c42ecd9ad7a01c5d6ee78aa6de899974571f33e7978b1c57c309b69",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "19dfa371751844e9867470e103fb51a2864ae2ce75600725f0e5285e784d5bf0",
+  "gate_impl_hash": "19dfa371751844e9867470e103fb51a2864ae2ce75600725f0e5285e784d5bf0",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run mad-sks:zellij-default-pane-worker --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "b855d0adeb3a2b2d2c2d968da87900f26c41478dea7d5300208996f504aafe53"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 10918,
+  "proof_id": "proof-21614adc1add31c2936a54ce",
+  "created_at": "2026-06-18T13:31:00.760Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "research:synthesis-writer",
+  "cache_key": "d37b451fd4fb3ac7dba623ba10e7bc75a9fd202d50d199b45a5e7b5dcff42632",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "38da1522e01d980d48b13e9e5d9210f3fa051021357fa2b6dd77184a89c9a276",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run research:synthesis-writer --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "92bbc09d32cc106735483268b3e00b4dcb17ef382aa948dd3f85f55537bc671d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6143,
+  "proof_id": "proof-e7604b0cb07a4937baa220ed",
+  "created_at": "2026-06-17T19:34:46.917Z"
+}

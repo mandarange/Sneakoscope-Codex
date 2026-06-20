@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "core-skill:route-runtime-integration",
+  "cache_key": "0b6fb9eec5cdf544005be15acfea5998a236d117b0146b35cfcdbf4eadba52c2",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "44a066380ef844f818f3c7479ae313493769bf35d5557b9d00f8e12111359a4d",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run core-skill:route-runtime-integration --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "adaa8437f705a38557f8297e9d0d527b2d59416d9240758db70e3d6a14df2703"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4692,
+  "proof_id": "proof-7ab659a1d62945eb3519cf6b",
+  "created_at": "2026-06-17T19:30:58.732Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:transaction-engine",
+  "cache_key": "7b51c000bb37f5552f3f7ff91549ff15c50b84ead693da2acd16bf6384f9bf62",
+  "input_hash": "ef8d8202c1defba6d4f4fb99d6acd65e06993adaf7f0a8ec8e8688eff14eac3e",
+  "implementation_hash": "3897a87aaea59abfacbe54ec9ecb7217fa1640e786d5f5983933d4ee53391864",
+  "gate_impl_hash": "3897a87aaea59abfacbe54ec9ecb7217fa1640e786d5f5983933d4ee53391864",
+  "package_lock_hash": "387c7483aad9e2af4cc8046753cb7a95f6ff3ba79ccd58efdfef039346912691",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.5"
+  },
+  "tool_version": "4.0.5",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:transaction-engine --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "1be56ceb49c1c1b291edb81b7fa593e3156db66f4803cd9c651a0687c46798a9"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 2133,
+  "proof_id": "proof-85172ef561eae06c0b36fcc5",
+  "created_at": "2026-06-18T16:18:42.085Z"
+}

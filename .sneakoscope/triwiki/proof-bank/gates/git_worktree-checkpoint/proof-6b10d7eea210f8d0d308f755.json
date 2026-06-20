@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "git:worktree-checkpoint",
+  "cache_key": "a4a33a652a71474c9ee33fcb052f56ecac8f8f4c4f930cfa77f26988bba0974f",
+  "input_hash": "97ed926fd7f9a19bbde6556060f57e2261bcc854c581d5286bb9e70aabac151a",
+  "implementation_hash": "6208b8b1eec5c1300fd17106ad40daf440101fe69f195ee94810f63b369d2a34",
+  "gate_impl_hash": "6208b8b1eec5c1300fd17106ad40daf440101fe69f195ee94810f63b369d2a34",
+  "package_lock_hash": "efc95d4cd660e83bce67c946e0c10ab7dedd95f83e7c7bb1f8f1d98dbf4bed73",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.14"
+  },
+  "tool_version": "4.0.14",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run git:worktree-checkpoint --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "9bbc8f829129f05e0fb620d1a18b808f84d68dba1adce36ede79fec5ee7d35de"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 16857,
+  "proof_id": "proof-6b10d7eea210f8d0d308f755",
+  "created_at": "2026-06-20T03:05:41.880Z"
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "update:secret-migration-journal",
+  "cache_key": "920d0d8448d6e9064b92f387f3bb36c856141d7a2b0c7590b314e4bf7f964a70",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "a7e2da8d3ef87102387d984bc8c20cf9500bf9ef01ef885c66ece97303debb61",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run update:secret-migration-journal --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "794c471c6eab6423dbc51c15601d72daba7647d47223326ec1f76fef756ff30c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 6525,
+  "proof_id": "proof-9f400917e8de6d408b8b03e7",
+  "created_at": "2026-06-17T19:35:13.349Z"
+}

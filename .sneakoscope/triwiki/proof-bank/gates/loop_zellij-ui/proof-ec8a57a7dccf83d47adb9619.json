@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:zellij-ui",
+  "cache_key": "000d3d3189416d92bbd54d6907474a2ead4e6bbd6d3d2e44b6f3a4a0db61e4ba",
+  "input_hash": "cadaf1701ef551d4789a3156d18b135a7262fe6cdd53ff704e05fd06ebe907e4",
+  "implementation_hash": "5a43a3558ffee62afa6086028b0afdd3491d1e55fa9f0a8f79e6c2dda7275158",
+  "gate_impl_hash": "5a43a3558ffee62afa6086028b0afdd3491d1e55fa9f0a8f79e6c2dda7275158",
+  "package_lock_hash": "0f39d33737d6e7c062be8db984c6fc8cdf1a9c3d90c064ed7d298e1eb2440d24",
+  "release_gates_hash": "7d985b3bc9a1ca2580debb886bb2c72a8d023f6c5589babd82ed360950e5b590",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.2"
+  },
+  "tool_version": "4.0.2",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:zellij-ui --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a3c60f45ff2fd7ea8f95ba2b64f327887fbb9ad26879546b4625b29a62515914"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 103929,
+  "proof_id": "proof-ec8a57a7dccf83d47adb9619",
+  "created_at": "2026-06-18T07:39:11.720Z"
+}

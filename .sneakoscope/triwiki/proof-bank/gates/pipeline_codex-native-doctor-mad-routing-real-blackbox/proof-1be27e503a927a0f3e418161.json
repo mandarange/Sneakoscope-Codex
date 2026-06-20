@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "pipeline:codex-native-doctor-mad-routing-real-blackbox",
+  "cache_key": "52d6c4ead9eaafe5cc0fcd90149d596794561cd363c52f18187fd68ee2b48643",
+  "input_hash": "72a452d395ae4ef47a7c8df08b518cafba678c1a968be794d5aaa36360ed0055",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run pipeline:codex-native-doctor-mad-routing-real-blackbox --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "13580f5fe02e0dcb49ae03092b54b7722003a09647ee13792a16745e0f4afc07"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 44168,
+  "proof_id": "proof-1be27e503a927a0f3e418161",
+  "created_at": "2026-06-17T19:35:09.359Z"
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "skill:sync-atomic",
+  "cache_key": "0716e567ef61867f7070dc352807c1e9ffa0d4485d4ab5f8ca2ccf928107b702",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "9e24313786f0908844c773b91d736070433f67387ad52ee73e4e7d00adb5e2d7",
+  "gate_impl_hash": "9e24313786f0908844c773b91d736070433f67387ad52ee73e4e7d00adb5e2d7",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run skill:sync-atomic --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "800cef303d919bbb88b19f4ab0fe25981d71ad36943a4f62fb476724ebf1b6a1"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 13440,
+  "proof_id": "proof-e22877580da19caaa0bde05b",
+  "created_at": "2026-06-18T02:24:59.493Z"
+}

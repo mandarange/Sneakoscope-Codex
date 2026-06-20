@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "loop:integration-merge-strategy",
+  "cache_key": "4d244baba0b2c754e276a8d7ed7fa24377dd289620daa659e5188f708ca35de4",
+  "input_hash": "591c82dccf61cb0161f6897d72a69e1e1ef677cefb5e61667df5263226bda59e",
+  "implementation_hash": "1250136a030a3e3b5be54d52a4b09d3b6fed2fd81310596c27a71bf565e442a0",
+  "gate_impl_hash": "1250136a030a3e3b5be54d52a4b09d3b6fed2fd81310596c27a71bf565e442a0",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run loop:integration-merge-strategy --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "f85249ee777284200feeb306c69d97448eb9a620a6f3a707a3e7964a101dc85d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9166,
+  "proof_id": "proof-e019be6dc497d9c3a1853ce4",
+  "created_at": "2026-06-18T13:49:31.522Z"
+}

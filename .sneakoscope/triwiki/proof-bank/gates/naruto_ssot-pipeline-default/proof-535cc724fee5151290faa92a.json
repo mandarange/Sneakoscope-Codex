@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "naruto:ssot-pipeline-default",
+  "cache_key": "66f8dbf7f25e0a49d12b87a608fb159dcd77eb2b8805bb731fe8ed95aed9d826",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "215b5945fae7a3a0836e419cb0e3fd1c80c5c95d6059369851a79ac29a7e4072",
+  "gate_impl_hash": "215b5945fae7a3a0836e419cb0e3fd1c80c5c95d6059369851a79ac29a7e4072",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run naruto:ssot-pipeline-default --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "ef7cd75b3cd447ddcde8e5d7a45ea86e8877d70a2fabe5521510d52fcdc7186f"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4934,
+  "proof_id": "proof-535cc724fee5151290faa92a",
+  "created_at": "2026-06-18T13:29:27.695Z"
+}

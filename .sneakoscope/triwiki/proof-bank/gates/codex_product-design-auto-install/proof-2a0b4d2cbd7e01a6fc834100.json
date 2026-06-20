@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:product-design-auto-install",
+  "cache_key": "5f508f3db333e3029b343d644447941e84d7be58f94df1ca89ccec9d271108aa",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "72dcd0c1cfd2c0058fe0085a5c98bc3ca69fd5e2f38fa843cf81e53112f2a99a",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:product-design-auto-install --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "4966ad201aeba637ab240b54d48ba13fbf4a35935e28183a740ae2fb3a9ce783"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 3949,
+  "proof_id": "proof-2a0b4d2cbd7e01a6fc834100",
+  "created_at": "2026-06-17T19:30:52.237Z"
+}

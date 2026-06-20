@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "runtime:ts-python-boundary",
+  "cache_key": "80dc9ebbea7bc68e9728504f471540a0709e857d2af4893b262b4f94f37b5791",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "4a24775f708b9e69801fb7013ded4f998a2b21308f828e143dc98d629a07d53c",
+  "gate_impl_hash": "4a24775f708b9e69801fb7013ded4f998a2b21308f828e143dc98d629a07d53c",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run runtime:ts-python-boundary --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "bd3674f776876a10ab459c0439e3074914b6547faa7cb12a5ce5b93a135c154d"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11827,
+  "proof_id": "proof-fb2d5a2494e93e265a9e2e09",
+  "created_at": "2026-06-18T00:09:21.118Z"
+}

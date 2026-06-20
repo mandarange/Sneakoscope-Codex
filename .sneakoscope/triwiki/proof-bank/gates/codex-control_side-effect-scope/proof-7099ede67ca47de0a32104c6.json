@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-control:side-effect-scope",
+  "cache_key": "d15a2276c637e857be515b0befa9fef680285e55bd291b0f9a1c9c422004c2e4",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "c6cbe0ec489562e53b1bdc6c0c3f04d3de212c102c01a33517925e9a25c2dd06",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-control:side-effect-scope --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "991c62d146dbc165c2fe8f276c3b60b515213b38c4c3864171294f4c7a909632"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11740,
+  "proof_id": "proof-7099ede67ca47de0a32104c6",
+  "created_at": "2026-06-17T19:30:27.497Z"
+}

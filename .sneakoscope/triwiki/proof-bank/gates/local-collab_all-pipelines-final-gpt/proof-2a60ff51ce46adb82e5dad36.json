@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "local-collab:all-pipelines-final-gpt",
+  "cache_key": "09848995f347f0a957f78e038b7a31fc66e0a1a175f747a39d7361e4a8db8725",
+  "input_hash": "081de8814bf3ae57d270c5ac1efd7b125de9d5f4eebf300b6f5535f2e430ab92",
+  "implementation_hash": "b01e5a62a842ff520d048fff6814cb88e0691be4b60cae20663259fc1753636e",
+  "gate_impl_hash": "b01e5a62a842ff520d048fff6814cb88e0691be4b60cae20663259fc1753636e",
+  "package_lock_hash": "9d3c564b7e2999c17a7fd2191b64cf5eaedbc61a1b03cbcc527acac69fa526df",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.3"
+  },
+  "tool_version": "4.0.3",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run local-collab:all-pipelines-final-gpt --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "2b33782590de877aa35c8677c2e11d5a854e6ae978fd411359553e83cc11f8a2"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 21187,
+  "proof_id": "proof-2a60ff51ce46adb82e5dad36",
+  "created_at": "2026-06-18T13:48:19.711Z"
+}

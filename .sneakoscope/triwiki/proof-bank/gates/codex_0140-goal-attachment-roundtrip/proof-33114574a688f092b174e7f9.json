@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex:0140-goal-attachment-roundtrip",
+  "cache_key": "c911bf5a62de91fc7cfbca9b0d903edd03aee1c3163838501b9652fcee4def1d",
+  "input_hash": "8c88f61ae652186a7da16c1df087088174f9fb2b0d6918aa09d799c807ca7c6c",
+  "implementation_hash": "5dfbea9450033e7b5018d7b9a4f7bb60905fabde006128474ea3bc76babc06a2",
+  "gate_impl_hash": "5dfbea9450033e7b5018d7b9a4f7bb60905fabde006128474ea3bc76babc06a2",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex:0140-goal-attachment-roundtrip --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "62d54583754ba569624ae3fa9ee80faf60efa604cf44198d8804f78f4b11a140"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 9648,
+  "proof_id": "proof-33114574a688f092b174e7f9",
+  "created_at": "2026-06-18T18:01:25.482Z"
+}

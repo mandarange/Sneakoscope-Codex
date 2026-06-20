@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-sdk:zellij-pane-binding",
+  "cache_key": "eb85eff871d5517de6b2473d3758266aaf9648721c624a88d46521c535b7cb87",
+  "input_hash": "e2e54814d67e3b93d05a5ac633e485dcb3c311d8e804c6553b3330176b57c424",
+  "implementation_hash": "47381723c56f806aa870a061bb86a8cce5acdc4b0d08f1ace26aa0194a6fb4c4",
+  "gate_impl_hash": "47381723c56f806aa870a061bb86a8cce5acdc4b0d08f1ace26aa0194a6fb4c4",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-sdk:zellij-pane-binding --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "de8457134a7e1d4e5514399bd33e983048c161a00dce6e0e7eaa64bf54236686"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 4819,
+  "proof_id": "proof-7d103dd7fa8e4c3b88ef0ec0",
+  "created_at": "2026-06-18T02:13:11.408Z"
+}

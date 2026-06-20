@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "legacy:gate-purge",
+  "cache_key": "73eafd87f60fdaf84e0d50718297873af3ff420e2f47a82d426a40e3c593ab24",
+  "input_hash": "7fc6faa9adb2be3d2fef87a3e13fdc3ddb749627995af9a606684bf3bcada2d0",
+  "implementation_hash": "ae86e366e62046a28a000555f2f8e6849b79b8e4a719cfc6e07288b8bd9e7bb6",
+  "gate_impl_hash": "ae86e366e62046a28a000555f2f8e6849b79b8e4a719cfc6e07288b8bd9e7bb6",
+  "package_lock_hash": "8d1ee28820a7344fb1b703bdae8ec10f81b9ec8c3cee46abf4537731f0811c4d",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.4"
+  },
+  "tool_version": "4.0.4",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run legacy:gate-purge --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "9a2f4215b76848d2694ed11d696f7b2ca33ad0d635c9447a4f196478a839c86c"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 12072,
+  "proof_id": "proof-938fa239ca2aba59b0ab3577",
+  "created_at": "2026-06-18T14:35:02.383Z"
+}

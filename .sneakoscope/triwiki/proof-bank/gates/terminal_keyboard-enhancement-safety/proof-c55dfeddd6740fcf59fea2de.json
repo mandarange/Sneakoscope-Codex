@@ -1,0 +1,24 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "terminal:keyboard-enhancement-safety",
+  "cache_key": "c8c0ce1e0fc18de500a26023431c754b491b4b85024eef7a59d5925f1bb7393e",
+  "input_hash": "d2523db064c8a4f638c4406a7b0ff9cd50203d6ff5232ba5b292d48b49abc2d0",
+  "implementation_hash": "b79043f75dcca86aaeca4a746a19837bdf5a040e709fe32c497bf790e597cb3e",
+  "tool_version": "4.0.0",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run terminal:keyboard-enhancement-safety --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "903e16f9590a73bcd183f8f01aba058c95d4e43f3cac3b2dd5874b23a85efe10"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 7684,
+  "proof_id": "proof-c55dfeddd6740fcf59fea2de",
+  "created_at": "2026-06-17T19:33:55.314Z"
+}

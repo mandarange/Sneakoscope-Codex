@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "codex-app:handoff-launch",
+  "cache_key": "10b7e24c8a442f07c099d145afb4132b70d8dc228794b2b0a192aec5698c7f86",
+  "input_hash": "a0080aaf1d345dd1f04706e42b87a8a5c580fd836c2b336f09219ffe100c510f",
+  "implementation_hash": "c52ec1fdcca49be8cdc9fc66219573797d619e6bdd6420bd6468038433080aca",
+  "gate_impl_hash": "c52ec1fdcca49be8cdc9fc66219573797d619e6bdd6420bd6468038433080aca",
+  "package_lock_hash": "5c175ff50deb848b3fa57a43f39bb808dc0e47e514c7957c2acaf29af5374543",
+  "release_gates_hash": "0b3b5153ae818b1fc2fedb1727a6eab80c3036f303a5ac3655fb63f01b433e78",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run codex-app:handoff-launch --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "a1d5151e048b27f93c5c499ee538e50a08230dd2d410c85f7499d6668a892ca3"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 11750,
+  "proof_id": "proof-60b6c97b8afe4b4711e2b756",
+  "created_at": "2026-06-18T02:13:39.827Z"
+}

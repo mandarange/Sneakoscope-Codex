@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "doctor:codex-0138-fix",
+  "cache_key": "9c7df10c9c85b76ad74a63231c28ed25b4094d50a4b3c3401f9180d5ec67c2f1",
+  "input_hash": "df127ffc2b9e047d5a27f338f5466bcec54b195e5bd7c35f22c836d378af29a1",
+  "implementation_hash": "03f8cf0488fd90372afbdca87f0d6d44e52b53944887b079d0c65b907efb02ed",
+  "gate_impl_hash": "03f8cf0488fd90372afbdca87f0d6d44e52b53944887b079d0c65b907efb02ed",
+  "package_lock_hash": "e7a75dd616a040519304e46a217f42e070b15dfba34b573c8065180ba4c0de4b",
+  "release_gates_hash": "59f3d273ec9fe5a0f86f5e11d1f4762266ff9b7fd3fb5771131b7f7be5f4a81f",
+  "env_allowlist_hash": "f0ac0253d577d17c265d1a50fc56acc99b4ea513be75afd608abca58139f8821",
+  "tool_versions": {
+    "sks": "4.0.6"
+  },
+  "tool_version": "4.0.6",
+  "fixture_version": "sks-4.0.1",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run doctor:codex-0138-fix --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "4d9602d7107e5bf4efbb77f3102fdfd1eaac6259838968fa13424d606fbdb454"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 1283,
+  "proof_id": "proof-5020c45a97812b9562796690",
+  "created_at": "2026-06-18T17:54:59.176Z"
+}

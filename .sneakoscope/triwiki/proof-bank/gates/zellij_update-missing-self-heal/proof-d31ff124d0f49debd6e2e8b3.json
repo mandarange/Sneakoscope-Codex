@@ -1,0 +1,31 @@
+{
+  "schema": "sks.triwiki-proof-card.v1",
+  "subject_type": "gate",
+  "subject_id": "zellij:update-missing-self-heal",
+  "cache_key": "3fe83de49b572e70ee216973799f7c71a182854cc34306da4de0f0a78ffe42e2",
+  "input_hash": "c05598b3be76104e09958214a88fb63dc81ea363ad48f257162b3dae97426c31",
+  "implementation_hash": "c2811bfea0fc5d1ec74f3513cf87c653f344fd1f64bf0fab3ee2fd26a0937d8e",
+  "gate_impl_hash": "c2811bfea0fc5d1ec74f3513cf87c653f344fd1f64bf0fab3ee2fd26a0937d8e",
+  "package_lock_hash": "legacy-missing",
+  "release_gates_hash": "legacy-missing",
+  "env_allowlist_hash": "legacy-missing",
+  "tool_versions": {
+    "sks": "4.0.1"
+  },
+  "tool_version": "4.0.1",
+  "fixture_version": "sks-4.0.0",
+  "result": "passed",
+  "reusable": false,
+  "evidence": {
+    "command": "npm run zellij:update-missing-self-heal --silent",
+    "cache_key_schema": "release-cache-v2-compatible",
+    "triwiki_key": "fd648e367575585fe5c9cb9695db834401946e04b698ad1507c08d4112009f32"
+  },
+  "invalidation_reasons": [
+    "blackbox"
+  ],
+  "expires_at": null,
+  "duration_ms": 5644,
+  "proof_id": "proof-d31ff124d0f49debd6e2e8b3",
+  "created_at": "2026-06-18T00:15:18.735Z"
+}
