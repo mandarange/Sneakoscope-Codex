@@ -1,4 +1,4 @@
-import { projectRoot, dirSize, exists, formatBytes } from '../core/fsx.js';
+import { projectRoot, exists, formatBytes } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { getCodexInfo } from '../core/codex-adapter.js';
@@ -38,6 +38,7 @@ import { runDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
 import { planDoctorDirtyRepair } from '../core/doctor/doctor-dirty-planner.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
+import { writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -47,6 +48,20 @@ export async function run(_command: any, args: any = []) {
 }
 
 async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
+  const startedAtMs = Date.now();
+  const doctorProfile = doctorProfileFromArgs(args, doctorFix);
+  const machineOnly = flag(args, '--machine-only');
+  const reportFile = readOption(args, '--report-file', null);
+  const deepDiagnostics = doctorProfile === 'full' || doctorProfile === 'capabilities';
+  const codexBin = readOption(args, '--codex-bin', process.env.SKS_DOCTOR_CODEX_BIN || '');
+  const actualCodexProbeRequested = flag(args, '--actual-codex') || flag(args, '--require-actual-codex') || Boolean(codexBin);
+  const actualCodexProbeEnabled = deepDiagnostics || actualCodexProbeRequested;
+  const requireActualCodexProbe = flag(args, '--require-actual-codex') || (deepDiagnostics && doctorFix);
+  const shouldEvaluateCodexAppUiRepair = deepDiagnostics || flag(args, '--repair-codex-app-ui');
+  const shouldRunZellijRepair = deepDiagnostics || flag(args, '--repair-zellij') || flag(args, '--install-homebrew') || process.env.SKS_REQUIRE_ZELLIJ === '1';
+  const nativeCapabilityDiagnosticsRequested = deepDiagnostics || flag(args, '--repair-native-capabilities');
+  const doctorPhaseIds = doctorPhaseIdsForProfile(doctorProfile);
+  const doctorDirtyPlan = doctorFix ? planDoctorDirtyRepair(root, doctorPhaseIds) : null;
   let setupRepair = null;
   const sksUpdate = doctorFix
     ? {
@@ -63,20 +78,17 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     // Snapshot config content before ANY mutation so the migration journal can
     // record real before/after hashes for the whole --fix transaction.
     migrationPreFix = await captureCodexConfigSnapshot();
-    const { setupCommand } = await import('../core/commands/basic-cli.js');
     const installScope = installScopeFromArgs(args);
-    // Back up the existing managed project config before --force regeneration so a
-    // hand-edited .codex/config.toml is always recoverable (mirrors the splitter/structure
-    // repair backup contract).
-    const preFixBackup = await backupProjectConfigBeforeFix();
-    const setupArgs = ['--force', '--install-scope', installScope];
-    if (flag(args, '--local-only')) setupArgs.push('--local-only');
-    await setupCommand(setupArgs);
     setupRepair = {
+      schema: 'sks.doctor-setup-phase.v2',
+      ok: true,
+      status: 'semantic_dirty_plan_only',
+      reason: 'setup_force_removed_from_doctor_hot_path',
+      profile: doctorProfile,
       install_scope: installScope,
-      config_backup_path: preFixBackup,
+      config_backup_path: null,
       global_skills: installScope === 'global' && !flag(args, '--local-only')
-        ? await ensureGlobalCodexSkillsDuringInstall({ force: true })
+        ? deepDiagnostics ? await ensureGlobalCodexSkillsDuringInstall({ force: true }) : { status: 'skipped', reason: 'default_doctor_no_global_skill_regeneration' }
         : { status: 'skipped', reason: 'project or local-only repair' },
       // Re-seed the Codex App Fast-mode UI table ([user.fast_mode] visible/enabled/
       // default_profile) in the global ~/.codex/config.toml so existing installs whose
@@ -84,7 +96,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       // backs up + parse-validates before writing, no-op when already present.
       codex_app_fast_mode: flag(args, '--local-only')
         ? { status: 'skipped', reason: 'local-only repair' }
-        : await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
+        : deepDiagnostics ? await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) })) : { status: 'skipped', reason: 'default_doctor_no_global_fast_mode_regeneration' }
     };
   }
   const commandAliasCleanup = await runDoctorCommandAliasCleanup({
@@ -106,9 +118,10 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }));
   const doctorNativeCapabilityRepair = await runDoctorNativeCapabilityRepair({
     root,
-    fix: doctorFix || flag(args, '--repair-native-capabilities'),
+    fix: nativeCapabilityDiagnosticsRequested && doctorFix,
     yes: flag(args, '--yes') || flag(args, '-y'),
-    flags: args.map((arg: any) => String(arg))
+    flags: args.map((arg: any) => String(arg)),
+    skipNativeCapabilities: !nativeCapabilityDiagnosticsRequested
   }).catch((err: any) => ({
     schema: 'sks.doctor-native-capability-repair.v1',
     ok: false,
@@ -119,13 +132,16 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     skill_dedupe: null,
     native_capabilities: null,
     secret_preservation_guard: '.sneakoscope/reports/secret-preservation-guard.json',
+    core_blockers: [err?.message || String(err)],
+    route_blockers: {},
+    optional_manual_required: [],
+    optional_warnings: [],
     blockers: [err?.message || String(err)]
   }));
-  const codexBin = readOption(args, '--codex-bin', process.env.SKS_DOCTOR_CODEX_BIN || '');
   const configProbeOpts = {
-    codexProbe: flag(args, '--fix') || flag(args, '--actual-codex') || Boolean(codexBin),
-    actualCodex: flag(args, '--fix') || flag(args, '--actual-codex') || Boolean(codexBin),
-    requireActualCodex: flag(args, '--fix') || flag(args, '--require-actual-codex'),
+    codexProbe: actualCodexProbeEnabled,
+    actualCodex: actualCodexProbeEnabled,
+    requireActualCodex: requireActualCodexProbe,
     codexBin: codexBin || undefined
   };
   let codexStartupRepair = await runDoctorCodexStartupRepair({ root, fix: doctorFix }).catch((err: any) => ({
@@ -141,13 +157,15 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     warnings: [],
     report_path: `${root}/.sneakoscope/reports/doctor-codex-startup-repair.json`
   }));
-  const codexDoctorBefore = flag(args, '--fix') ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') }).catch(() => null) : null;
+  const codexDoctorBefore = flag(args, '--fix') && deepDiagnostics ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') }).catch(() => null) : null;
   const configRepair = flag(args, '--fix') ? await repairCodexConfigEperm(root, { fix: true, ...configProbeOpts }) : null;
   const migrationJournal = flag(args, '--fix')
     ? await writeFixMigrationJournal(root, migrationPreFix, configRepair, setupRepair).catch(() => null)
     : null;
   let codexConfig = configRepair?.after || await inspectCodexConfigReadability(root, configProbeOpts);
-  const preRepairCodexDoctor = await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') });
+  const preRepairCodexDoctor = deepDiagnostics || flag(args, '--require-actual-codex')
+    ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') })
+    : null;
   const codexDoctorDiff = compareCodexDoctorBridge(codexDoctorBefore, preRepairCodexDoctor);
   codexStartupRepair = mergeObservedCodexStartupWarnings(codexStartupRepair, preRepairCodexDoctor);
   const codex = codexBin
@@ -160,45 +178,83 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     version: null,
     error: err.message
   }));
-  const codexApp = await codexAppIntegrationStatus({ codex }).catch((err: any) => ({ ok: false, error: err.message }));
+  const codexApp = deepDiagnostics
+    ? await codexAppIntegrationStatus({ codex }).catch((err: any) => ({ ok: false, error: err.message }))
+    : { ok: false, skipped: true, warnings: ['codex_app_optional_diagnostic_skipped'] };
   const codexLb = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
-  const providerContext = await resolveProviderContext({ root, route: '$Doctor', serviceTier: process.env.SKS_SERVICE_TIER || 'fast' }).catch((err: any) => ({
-    schema: 'sks.provider-context.v1',
-    generated_at: new Date().toISOString(),
-    provider: 'unknown',
-    auth_mode: 'unknown',
-    route: '$Doctor',
-    service_tier: 'unknown',
-    source: 'unknown',
-    confidence: 'low',
-    conflict: false,
-    warnings: [err?.message || String(err)],
-    signals: {
-      openai_api_key_present: false,
-      codex_lb_key_present: false,
-      codex_lb_explicit: false,
-      codex_app_auth_present: false,
-      model_provider: null
-    }
-  }));
-  const explicitCodexAppUiRepair = flag(args, '--repair-codex-app-ui') || flag(args, '--yes');
-  const codexAppUiPlan = await repairCodexAppFastUi(root, {
-    apply: false,
-    reportPath: `${root}/.sneakoscope/reports/codex-app-fast-ui-repair-plan.json`
-  }).catch((err: any) => ({
-    schema: 'sks.codex-app-fast-ui-repair.v1',
-    ok: false,
-    apply: false,
-    safe_auto_apply: false,
-    requires_confirmation: true,
-    fast_selector: 'manual_action_required',
-    provider_selector: 'ok',
-    host_owned_config: 'diagnostic_failed',
-    next_action: 'Review Codex App UI config manually.',
-    actions: [],
-    blockers: [err?.message || String(err)]
-  }));
-  const shouldApplyCodexAppUiRepair = doctorFix && (
+  const providerContext = deepDiagnostics
+    ? await resolveProviderContext({ root, route: '$Doctor', serviceTier: process.env.SKS_SERVICE_TIER || 'fast' }).catch((err: any) => ({
+        schema: 'sks.provider-context.v1',
+        generated_at: new Date().toISOString(),
+        provider: 'unknown',
+        auth_mode: 'unknown',
+        route: '$Doctor',
+        service_tier: 'unknown',
+        source: 'unknown',
+        confidence: 'low',
+        conflict: false,
+        warnings: [err?.message || String(err)],
+        signals: {
+          openai_api_key_present: false,
+          codex_lb_key_present: false,
+          codex_lb_explicit: false,
+          codex_app_auth_present: false,
+          model_provider: null
+        }
+      }))
+    : {
+        schema: 'sks.provider-context.v1',
+        generated_at: new Date().toISOString(),
+        provider: 'unknown',
+        auth_mode: 'unknown',
+        route: '$Doctor',
+        service_tier: process.env.SKS_SERVICE_TIER || 'fast',
+        source: 'skipped',
+        confidence: 'low',
+        conflict: false,
+        warnings: ['provider_context_optional_diagnostic_skipped'],
+        signals: {
+          openai_api_key_present: false,
+          codex_lb_key_present: false,
+          codex_lb_explicit: false,
+          codex_app_auth_present: false,
+          model_provider: null
+        }
+      };
+  const explicitCodexAppUiRepair = flag(args, '--repair-codex-app-ui');
+  const codexAppUiPlan = shouldEvaluateCodexAppUiRepair
+    ? await repairCodexAppFastUi(root, {
+        apply: false,
+        reportPath: `${root}/.sneakoscope/reports/codex-app-fast-ui-repair-plan.json`
+      }).catch((err: any) => ({
+        schema: 'sks.codex-app-fast-ui-repair.v1',
+        ok: false,
+        apply: false,
+        safe_auto_apply: false,
+        requires_confirmation: true,
+        fast_selector: 'manual_action_required',
+        provider_selector: 'ok',
+        host_owned_config: 'diagnostic_failed',
+        next_action: 'Review Codex App UI config manually.',
+        actions: [],
+        blockers: [err?.message || String(err)]
+      }))
+    : {
+        schema: 'sks.codex-app-fast-ui-repair.v1',
+        ok: true,
+        apply: false,
+        skipped: true,
+        safe_auto_apply: false,
+        requires_confirmation: false,
+        fast_selector: 'skipped_optional',
+        provider_selector: 'skipped_optional',
+        host_owned_config: 'not_inspected',
+        next_action: 'Run `sks doctor --fix --repair-codex-app-ui` for Codex App UI repair.',
+        actions: [],
+        blockers: [],
+        warnings: ['codex_app_ui_repair_deferred']
+      };
+  const shouldApplyCodexAppUiRepair = shouldEvaluateCodexAppUiRepair && doctorFix && (
     explicitCodexAppUiRepair ||
     codexAppUiPlan.safe_auto_apply === true
   );
@@ -221,23 +277,42 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         blockers: [err?.message || String(err)]
       }))
     : codexAppUiPlan;
-  const zellijRepair = await runDoctorZellijRepair({ root, args, doctorFix }).catch((err: any) => ({
-    schema: 'sks.zellij-self-heal.v1',
-    ok: false,
-    requested_by: 'doctor --fix',
-    fix_requested: doctorFix,
-    auto_approved: flag(args, '--yes') || flag(args, '-y'),
-    install_homebrew_allowed: false,
-    before: { status: 'unknown', version: null, bin: null },
-    latest_version: null,
-    strategy: 'failed',
-    command: 'sks doctor --fix --yes',
-    after: { status: 'unknown', version: null, bin: null },
-    mutation_guard_artifact: null,
-    homebrew: { present: false, bin: null, install_attempted: false, install_allowed: false },
-    blockers: [err?.message || String(err)],
-    warnings: []
-  }));
+  const zellijRepair = shouldRunZellijRepair
+    ? await runDoctorZellijRepair({ root, args, doctorFix }).catch((err: any) => ({
+        schema: 'sks.zellij-self-heal.v1',
+        ok: false,
+        requested_by: 'doctor --fix',
+        fix_requested: doctorFix,
+        auto_approved: flag(args, '--yes') || flag(args, '-y'),
+        install_homebrew_allowed: false,
+        before: { status: 'unknown', version: null, bin: null },
+        latest_version: null,
+        strategy: 'failed',
+        command: 'sks doctor --fix --yes',
+        after: { status: 'unknown', version: null, bin: null },
+        mutation_guard_artifact: null,
+        homebrew: { present: false, bin: null, install_attempted: false, install_allowed: false },
+        blockers: [err?.message || String(err)],
+        warnings: []
+      }))
+    : {
+        schema: 'sks.zellij-self-heal.v1',
+        ok: true,
+        skipped: true,
+        requested_by: 'doctor --fix',
+        fix_requested: doctorFix,
+        auto_approved: false,
+        install_homebrew_allowed: false,
+        before: { status: 'skipped', version: null, bin: null },
+        latest_version: null,
+        strategy: 'deferred',
+        command: 'sks doctor --fix --full --yes',
+        after: { status: 'skipped', version: null, bin: null },
+        mutation_guard_artifact: null,
+        homebrew: { present: false, bin: null, install_attempted: false, install_allowed: false },
+        blockers: [],
+        warnings: ['zellij_repair_deferred_to_full_doctor_or_route_gate']
+      };
   const context7Repair = await runDoctorContext7Repair({ root, fix: doctorFix }).catch((err: any) => ({
     schema: 'sks.doctor-context7-repair.v1',
     ok: false,
@@ -269,7 +344,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         warnings: []
       }))
     : null;
-  const supabaseMcpRepair = doctorFix
+  const supabaseMcpRepair = doctorFix && doctorPhaseIds.includes('supabase_mcp_repair')
     ? await repairSupabaseMcp({ root, apply: true }).catch((err: any) => ({
         schema: 'sks.doctor-supabase-mcp-repair.v1',
         ok: false,
@@ -288,18 +363,6 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         warnings: [],
         raw_secret_values_recorded: false
       }))
-    : null;
-  const doctorDirtyPlan = doctorFix
-    ? planDoctorDirtyRepair(root, [
-        'setup',
-        'codex_startup_repair',
-        'startup_config_repair',
-        'context7_repair',
-        'context7_mcp_repair',
-        'supabase_mcp_repair',
-        'command_alias_cleanup',
-        'native_capability_repair'
-      ])
     : null;
   const doctorFixTransaction = doctorFix
     ? await runDoctorFixTransaction({
@@ -386,15 +449,20 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
           },
           {
             id: 'native_capability_repair',
+            required_for_ready: false,
             run: async () => ({
               id: 'native_capability_repair',
               ok: (doctorNativeCapabilityRepair as any)?.ok !== false,
               repaired: doctorFix,
+              manual_required: Array.isArray((doctorNativeCapabilityRepair as any)?.optional_manual_required) && (doctorNativeCapabilityRepair as any).optional_manual_required.length > 0,
+              required_for_ready: false,
               blockers: (doctorNativeCapabilityRepair as any)?.blockers || [],
+              warnings: (doctorNativeCapabilityRepair as any)?.optional_warnings || (doctorNativeCapabilityRepair as any)?.warnings || [],
+              route_blockers: (doctorNativeCapabilityRepair as any)?.route_blockers || {},
               rollback_evidence: (doctorNativeCapabilityRepair as any)?.secret_preservation_guard || 'native_capability_repair_report'
-            })
+            } as any)
           }
-        ]
+        ].filter((phase) => doctorPhaseIds.includes(phase.id))
       }).catch((err: any) => ({
         schema: 'sks.doctor-fix-transaction.v2',
         generated_at: new Date().toISOString(),
@@ -436,19 +504,27 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     warnings_suppressed: false,
     blockers: [err?.message || String(err)]
   }));
-  const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
+  const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only') && deepDiagnostics
     ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
     : null;
   const { detectImagegenCapability } = await import('../core/imagegen/imagegen-capability.js');
-  const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null }));
-  const codex0138Capability = await writeCodex0138CapabilityArtifacts(root, { codexBin: codexBin || null }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
-  const codex0138Doctor = await runCodex0138Doctor(root, { fix: doctorFix }).catch((err: any) => ({ schema: 'sks.codex-0138-doctor.v1', ok: false, error: err?.message || String(err), blockers: ['codex_0138_doctor_exception'], warnings: [] }));
-  const pluginInventory = await writeCodexPluginInventoryArtifacts(root).catch((err: any) => ({ error: err?.message || String(err), report: null, artifact: null }));
+  const imagegen = deepDiagnostics
+    ? await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null }))
+    : { ok: false, skipped: true, auth_readiness: null, warnings: ['imagegen_optional_diagnostic_skipped'] };
+  const codex0138Capability = deepDiagnostics
+    ? await writeCodex0138CapabilityArtifacts(root, { codexBin: codexBin || null }).catch((err: any) => ({ error: err?.message || String(err), report: null }))
+    : { skipped: true, report: null };
+  const codex0138Doctor = deepDiagnostics
+    ? await runCodex0138Doctor(root, { fix: doctorFix }).catch((err: any) => ({ schema: 'sks.codex-0138-doctor.v1', ok: false, error: err?.message || String(err), blockers: ['codex_0138_doctor_exception'], warnings: [] }))
+    : { schema: 'sks.codex-0138-doctor.v1', ok: true, skipped: true, blockers: [], warnings: ['historical_codex_0138_doctor_skipped'] };
+  const pluginInventory = deepDiagnostics
+    ? await writeCodexPluginInventoryArtifacts(root).catch((err: any) => ({ error: err?.message || String(err), report: null, artifact: null }))
+    : { skipped: true, report: null, artifact: null };
   const pluginPolicy = (pluginInventory as any)?.report ? pluginAppTemplatePolicy((pluginInventory as any).report) : null;
   const mcpPluginInventory = (pluginInventory as any)?.report
     ? await writeMcpPluginInventoryArtifacts(root, { inventory: (pluginInventory as any).report }).catch((err: any) => ({ error: err?.message || String(err), candidates: null }))
     : null;
-  const repairCodexNative = doctorFix;
+  const repairCodexNative = doctorFix && doctorPhaseIds.includes('native_capability_repair');
   const codexNativeRepair = repairCodexNative
     ? await repairCodexNativeManagedAssets({
         root,
@@ -464,31 +540,28 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         warnings: []
       }))
     : null;
-  const codexAppHarnessMatrix = await buildCodexAppHarnessMatrix({ root, mode: 'read-only' }).catch((err: any) => ({
-    schema: 'sks.codex-app-harness-matrix.v1',
-    ok: false,
-    codex_cli: { available: false, version: null },
-    app_features: {},
-    sks_integrations: {},
-    blockers: [err?.message || String(err)],
-    warnings: []
-  }));
-  const codexNativeFeatureMatrix = await buildCodexNativeFeatureMatrix({ root, mode: 'read-only' }).catch((err: any) => ({
-    schema: 'sks.codex-native-feature-matrix.v1',
-    ok: false,
-    codex_cli: { available: Boolean(codex.bin), version: codex.version || null, bin: codex.bin || null },
-    features: {},
-    invocation_defaults: {
-      loop_worker_role_strategy: 'message-role',
-      qa_visual_review_strategy: 'blocked',
-      research_source_strategy: 'local-files',
-      image_followup_strategy: 'blocked',
-      hook_evidence_policy: 'unknown-do-not-count',
-      skill_bridge_strategy: 'cli-only'
-    },
-    blockers: [err?.message || String(err)],
-    warnings: []
-  }));
+  const codexAppHarnessMatrix = deepDiagnostics
+    ? await buildCodexAppHarnessMatrix({ root, mode: 'read-only' }).catch((err: any) => ({
+        schema: 'sks.codex-app-harness-matrix.v1',
+        ok: false,
+        codex_cli: { available: false, version: null },
+        app_features: {},
+        sks_integrations: {},
+        blockers: [err?.message || String(err)],
+        warnings: []
+      }))
+    : {
+        schema: 'sks.codex-app-harness-matrix.v1',
+        ok: true,
+        skipped: true,
+        app_features: {},
+        sks_integrations: {},
+        blockers: [],
+        warnings: ['codex_app_harness_optional_diagnostic_skipped']
+      };
+  const codexNativeFeatureMatrix = deepDiagnostics
+    ? await buildCodexNativeFeatureMatrix({ root, mode: 'read-only' }).catch((err: any) => fallbackCodexNativeFeatureMatrix(codex, [err?.message || String(err)]))
+    : fallbackCodexNativeFeatureMatrix(codex, [], ['native_feature_matrix_deferred_to_full_doctor_or_route_gate']);
   // Re-probe the Codex config AFTER the MCP transport repairs (Context7 remote
   // migration, Supabase read-only, startup config) have landed. `repairCodexConfigEperm`
   // ran its config-load probe ~before~ those repairs, so a config that those repairs
@@ -500,7 +573,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     const reinspected = await inspectCodexConfigReadability(root, configProbeOpts).catch(() => null);
     if (reinspected) codexConfig = reinspected;
   }
-  const postRepairCodexDoctor = doctorFix
+  const postRepairCodexDoctor = doctorFix && (deepDiagnostics || flag(args, '--require-actual-codex'))
     ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--fix') || flag(args, '--require-actual-codex') }).catch((err: any) => ({
         schema: 'sks.codex-doctor-bridge.v2',
         generated_at: new Date().toISOString(),
@@ -526,7 +599,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     : preRepairCodexDoctor;
   const authoritativeCodexDoctor = postRepairCodexDoctor;
   const codexDoctorAuthoritativeDiff = compareCodexDoctorBridge(codexDoctorBefore, authoritativeCodexDoctor as any);
-  const pkgBytes = await dirSize(root).catch(() => 0);
+  const pkgBytes = 0;
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,
     codex_config: codexConfig,
@@ -535,7 +608,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     codex_doctor: authoritativeCodexDoctor,
     pre_repair_codex_doctor: preRepairCodexDoctor,
     post_repair_codex_doctor: postRepairCodexDoctor,
-    require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
+    require_codex_doctor: deepDiagnostics || flag(args, '--require-actual-codex'),
     zellij,
     context7_repair: context7Repair,
     codex_startup_repair: codexStartupRepair,
@@ -554,7 +627,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     codex_plugin_inventory: (pluginInventory as any)?.report || null,
     codex_plugin_app_template_policy: pluginPolicy,
     codex_app_harness_matrix: codexAppHarnessMatrix,
-    require_codex_cli_config_load: flag(args, '--fix') || flag(args, '--require-actual-codex'),
+    require_codex_cli_config_load: requireActualCodexProbe,
     operator_actions: [
       ...(codexConfig.operator_actions || []),
       ...(configRepair?.operator_actions || []),
@@ -563,10 +636,22 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       ...(pluginPolicy?.doctor_warnings || [])
     ]
   });
+  if (doctorFix && ready.ready === true) {
+    await writeProjectUpdateMigrationReceipt({
+      root,
+      source: `doctor-${doctorProfile}`,
+      blockers: [],
+      warnings: [
+        ...((doctorNativeCapabilityRepair as any)?.optional_warnings || []),
+        ...((doctorFixPostcheck as any)?.optional_warnings || [])
+      ]
+    }).catch(() => undefined);
+  }
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
   const result = {
     schema: 'sks.doctor-status.v2',
+    elapsed_ms: Date.now() - startedAtMs,
     ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false && (!doctorFixPostcheck || (doctorFixPostcheck as any).ok !== false),
     root,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
@@ -616,6 +701,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
     repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
   };
+  if (reportFile) await writeJsonReportFile(reportFile, result);
+  if (machineOnly && !flag(args, '--json')) {
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
   if (flag(args, '--json')) {
     printJson(result);
     if (!result.ok) process.exitCode = 1;
@@ -824,6 +914,61 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     ],
     repair_actions: [...new Set(repairActions)]
   };
+}
+
+function fallbackCodexNativeFeatureMatrix(codex: any, blockers: string[] = [], warnings: string[] = []) {
+  return {
+    schema: 'sks.codex-native-feature-matrix.v1',
+    ok: blockers.length === 0,
+    skipped: blockers.length === 0,
+    codex_cli: { available: Boolean(codex?.bin || codex?.available), version: codex?.version || null, bin: codex?.bin || null },
+    features: {},
+    invocation_defaults: {
+      loop_worker_role_strategy: 'message-role',
+      multi_agent_mode: 'none',
+      rollout_budget_strategy: 'sks-local-only',
+      qa_visual_review_strategy: 'route-gated',
+      research_source_strategy: 'local-files',
+      image_followup_strategy: 'artifact-path',
+      hook_evidence_policy: 'unknown-do-not-count',
+      skill_bridge_strategy: 'cli-only',
+      current_time_source: 'external-clock',
+      overload_retry_policy: 'generic'
+    },
+    blockers,
+    warnings
+  };
+}
+
+type DoctorProfile = 'fast' | 'fix' | 'migration' | 'full' | 'capabilities';
+
+function doctorProfileFromArgs(args: any[] = [], doctorFix = false): DoctorProfile {
+  const explicit = readOption(args, '--profile', null);
+  if (explicit === 'migration' || explicit === 'full' || explicit === 'capabilities' || explicit === 'fast' || explicit === 'fix') return explicit;
+  if (flag(args, '--full')) return 'full';
+  if (flag(args, '--capabilities')) return 'capabilities';
+  return doctorFix ? 'fix' : 'fast';
+}
+
+function doctorPhaseIdsForProfile(profile: DoctorProfile): string[] {
+  const required = [
+    'codex_startup_repair',
+    'startup_config_repair',
+    'context7_repair',
+    'context7_mcp_repair',
+    'command_alias_cleanup'
+  ];
+  if (profile === 'migration') return required;
+  const optional = ['supabase_mcp_repair', 'native_capability_repair'];
+  if (profile === 'full' || profile === 'capabilities') return ['setup', ...required, ...optional];
+  return [...required, ...optional];
+}
+
+async function writeJsonReportFile(file: string, value: unknown): Promise<void> {
+  const fsp = await import('node:fs/promises');
+  const path = await import('node:path');
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
 function nativeCapabilityStatus(rows: any[], id: string, fallback: string): string {

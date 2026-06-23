@@ -11,6 +11,7 @@ const chrome = postcheck.capabilities.find((state) => state.id === 'chrome_web_r
 const repairedManual = await repairNativeCapabilities({ root, fix: true, yes: true, fixture: 'manual-required' });
 const imagePath = repairedManual.capabilities.find((state) => state.id === 'image_path_exposure');
 assertGate(chrome?.after !== 'verified', 'postcheck must not verify Chrome/web review without extension readiness', postcheck);
+assertGate(postcheck.ok === true && postcheck.blockers.length === 0 && Array.isArray(postcheck.route_blockers['route-chrome-web-review']), 'postcheck must keep Chrome manual readiness as route blocker only', postcheck);
 assertGate(imagePath?.after === 'degraded', 'saved artifact path fallback must be degraded, not verified native image path exposure', repairedManual);
 assertGate(postcheck.capabilities.every((state) => state.after !== null), 'postcheck must set after state for each capability', postcheck);
 emitGate('native-capability:postcheck');

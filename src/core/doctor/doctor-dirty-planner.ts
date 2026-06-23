@@ -3,7 +3,6 @@ import path from 'node:path';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { PACKAGE_VERSION, packageRoot, sha256 } from '../fsx.js';
 import { hashJson } from '../triwiki/triwiki-cache-key.js';
-import { triWikiProofBankDir } from '../triwiki/triwiki-proof-bank.js';
 
 export const DOCTOR_DIRTY_PLAN_SCHEMA = 'sks.doctor-dirty-plan.v2';
 
@@ -220,9 +219,14 @@ function parseConfigTargets(text: string): string[] {
 function proofExists(root: string, proofId: string): boolean {
   const transaction = path.join(root, '.sneakoscope', 'reports', 'doctor-fix-transaction.json');
   if (fs.existsSync(transaction) && fs.readFileSync(transaction, 'utf8').includes(proofId)) return true;
-  const bank = triWikiProofBankDir(root);
-  if (!fs.existsSync(bank)) return false;
-  return walkFiles(bank).some((file) => path.basename(file) === `${proofId}.json` || fs.readFileSync(file, 'utf8').includes(proofId));
+  const index = path.join(root, '.sneakoscope', 'cache', 'proof-index.json');
+  if (!fs.existsSync(index)) return false;
+  try {
+    const text = fs.readFileSync(index, 'utf8');
+    return text.includes(`"${proofId}"`) || text.includes(proofId);
+  } catch {
+    return false;
+  }
 }
 
 function phaseRequiresPostcheck(id: string): boolean {

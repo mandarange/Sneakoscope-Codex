@@ -29,4 +29,5 @@ const postcheck = doctorRepairPostcheck(tx);
 assertGate(rollbackCalled && tx.rollback_performed === true, 'doctor transaction runner must execute rollback hooks for failed phases', tx);
 assertGate(tx.ok === false && postcheck.ok === false, 'required failed phase must block readiness', { tx, postcheck });
 assertGate(tx.phases.find((phase) => phase.id === 'optional_manual')?.required_for_ready === false, 'optional manual phase must be explicitly marked', tx);
+assertGate(!postcheck.blockers.includes('operator_action_required') && postcheck.optional_warnings.includes('optional:operator_action_required'), 'optional blockers must stay out of required blocker output', { tx, postcheck });
 emitGate('doctor:transaction-engine', { phases: tx.phases.length });

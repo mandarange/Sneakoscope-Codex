@@ -72,7 +72,10 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
   const entry = COMMANDS[command];
   const migrationGate = await ensureCurrentMigrationBeforeCommand({ command, args: rest });
   if (!migrationGate.ok) {
-    console.error(`SKS update migration blocked: ${migrationGate.blockers.join(', ')}`);
+    console.error('SKS project migration blocked.');
+    for (const blocker of migrationGate.blockers) console.error(`Required blocker: ${blocker}`);
+    for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
+    console.error(`Receipt: ${migrationGate.receipt_path}`);
     console.error('Run: sks doctor --fix --yes');
     process.exitCode = 1;
     return migrationGate;

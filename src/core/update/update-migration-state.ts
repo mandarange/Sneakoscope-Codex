@@ -1,8 +1,20 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, runProcess, which, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, runProcess, sha256, which, writeJsonAtomic } from '../fsx.js';
+import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 
-export const UPDATE_MIGRATION_SCHEMA = 'sks.update-migration.v1' as const;
+export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
+export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
+
+export interface InstallationEpoch {
+  schema: typeof INSTALLATION_EPOCH_SCHEMA;
+  sks_version: string;
+  package_realpath: string;
+  build_sha256: string;
+  managed_asset_version: string;
+  installed_at: string;
+  source: string;
+}
 
 export interface PackageLocalDoctorRun {
   schema: 'sks.package-local-doctor-run.v1';
@@ -13,6 +25,8 @@ export interface PackageLocalDoctorRun {
   args: string[];
   exit_code: number | null;
   parsed_ok: boolean | null;
+  required_blockers: string[];
+  optional_warnings: string[];
   stdout_tail: string;
   stderr_tail: string;
   error: string | null;
@@ -25,9 +39,15 @@ export interface UpdateMigrationReceipt {
   root: string;
   source: string;
   generated_at: string;
+  project_root_hash?: string;
+  installation_epoch_sha256?: string;
+  project_semantic_hash?: string;
   pending_marker_path?: string | null;
+  installation_epoch_path?: string | null;
   doctor?: PackageLocalDoctorRun | null;
   update_stages?: unknown[];
+  required_blockers?: string[];
+  optional_warnings?: string[];
   blockers: string[];
   warnings: string[];
 }
@@ -40,6 +60,7 @@ export interface UpdateMigrationGateResult {
   command: string;
   receipt_path: string;
   pending_marker_path: string;
+  installation_epoch_path: string;
   receipt: UpdateMigrationReceipt | null;
   doctor: PackageLocalDoctorRun | null;
   blockers: string[];
@@ -56,11 +77,19 @@ const ALLOWLIST_COMMANDS = new Set([
   'commands',
   'usage',
   'root',
-  'rollback'
+  'rollback',
+  'status',
+  'paths',
+  'codex',
+  'zellij'
 ]);
 
+export function installationEpochPath(): string {
+  return path.join(globalSksRoot(), 'update', 'installation-epoch.json');
+}
+
 export function pendingUpdateMigrationPath(): string {
-  return path.join(globalSksRoot(), 'update', 'pending-migration.json');
+  return installationEpochPath();
 }
 
 export function projectUpdateMigrationReceiptPath(root: string): string {
@@ -68,7 +97,21 @@ export function projectUpdateMigrationReceiptPath(root: string): string {
 }
 
 export async function readPendingUpdateMigration(): Promise<UpdateMigrationReceipt | null> {
-  return readJson<UpdateMigrationReceipt | null>(pendingUpdateMigrationPath(), null).catch(() => null);
+  const epoch = await readInstallationEpoch();
+  if (!epoch) return null;
+  return {
+    schema: UPDATE_MIGRATION_SCHEMA,
+    status: 'pending_project_receipt',
+    sks_version: epoch.sks_version,
+    root: globalSksRoot(),
+    source: epoch.source,
+    generated_at: epoch.installed_at,
+    pending_marker_path: installationEpochPath(),
+    installation_epoch_path: installationEpochPath(),
+    installation_epoch_sha256: installationEpochSha256(epoch),
+    blockers: [],
+    warnings: []
+  };
 }
 
 export async function readProjectUpdateMigrationReceipt(root: string): Promise<UpdateMigrationReceipt | null> {
@@ -79,8 +122,22 @@ export function isUpdateMigrationReceiptCurrent(receipt: UpdateMigrationReceipt 
   return receipt?.schema === UPDATE_MIGRATION_SCHEMA
     && receipt.status === 'current'
     && receipt.sks_version === PACKAGE_VERSION
+    && typeof receipt.installation_epoch_sha256 === 'string'
     && Array.isArray(receipt.blockers)
-    && receipt.blockers.length === 0;
+    && receipt.blockers.length === 0
+    && (!Array.isArray(receipt.required_blockers) || receipt.required_blockers.length === 0);
+}
+
+export async function readInstallationEpoch(): Promise<InstallationEpoch | null> {
+  return readJson<InstallationEpoch | null>(installationEpochPath(), null).catch(() => null);
+}
+
+export async function ensureInstallationEpoch(source = 'runtime'): Promise<InstallationEpoch> {
+  const current = await buildInstallationEpoch(source);
+  const existing = await readInstallationEpoch();
+  if (existing && isInstallationEpochCurrent(existing, current)) return existing;
+  await writeJsonAtomic(installationEpochPath(), current);
+  return current;
 }
 
 export async function writePendingUpdateMigration(input: {
@@ -89,7 +146,8 @@ export async function writePendingUpdateMigration(input: {
   blockers?: string[];
   warnings?: string[];
 }): Promise<UpdateMigrationReceipt> {
-  const pendingPath = pendingUpdateMigrationPath();
+  const epoch = await ensureInstallationEpoch(input.source);
+  const pendingPath = installationEpochPath();
   const receipt: UpdateMigrationReceipt = {
     schema: UPDATE_MIGRATION_SCHEMA,
     status: 'pending_project_receipt',
@@ -98,16 +156,20 @@ export async function writePendingUpdateMigration(input: {
     source: input.source,
     generated_at: nowIso(),
     pending_marker_path: pendingPath,
+    installation_epoch_path: pendingPath,
+    installation_epoch_sha256: installationEpochSha256(epoch),
     doctor: input.doctor || null,
+    required_blockers: input.blockers || [],
+    optional_warnings: input.warnings || [],
     blockers: input.blockers || [],
     warnings: input.warnings || []
   };
-  await writeJsonAtomic(pendingPath, receipt);
   return receipt;
 }
 
 export async function clearPendingUpdateMigration(): Promise<void> {
-  await fsp.rm(pendingUpdateMigrationPath(), { force: true }).catch(() => undefined);
+  // v2 keeps a persistent installation epoch; project receipts are compared
+  // independently and one project must not consume global migration state.
 }
 
 export async function writeProjectUpdateMigrationReceipt(input: {
@@ -120,6 +182,9 @@ export async function writeProjectUpdateMigrationReceipt(input: {
   warnings?: string[];
 }): Promise<UpdateMigrationReceipt> {
   const receiptPath = projectUpdateMigrationReceiptPath(input.root);
+  const epoch = await ensureInstallationEpoch(input.source);
+  const requiredBlockers = input.blockers || [];
+  const optionalWarnings = input.warnings || [];
   const receipt: UpdateMigrationReceipt = {
     schema: UPDATE_MIGRATION_SCHEMA,
     status: input.status || 'current',
@@ -127,14 +192,19 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     root: input.root,
     source: input.source,
     generated_at: nowIso(),
-    pending_marker_path: pendingUpdateMigrationPath(),
+    project_root_hash: projectRootHash(input.root),
+    installation_epoch_sha256: installationEpochSha256(epoch),
+    project_semantic_hash: await projectSemanticHash(input.root),
+    pending_marker_path: installationEpochPath(),
+    installation_epoch_path: installationEpochPath(),
     doctor: input.doctor || null,
     update_stages: input.updateStages || [],
-    blockers: input.blockers || [],
-    warnings: input.warnings || []
+    required_blockers: requiredBlockers,
+    optional_warnings: optionalWarnings,
+    blockers: requiredBlockers,
+    warnings: optionalWarnings
   };
   await writeJsonAtomic(receiptPath, receipt);
-  if (isUpdateMigrationReceiptCurrent(receipt)) await clearPendingUpdateMigration();
   return receipt;
 }
 
@@ -148,13 +218,14 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
   const command = input.command;
   const root = await projectRoot(input.cwd || process.cwd()).catch(() => path.resolve(input.cwd || process.cwd()));
   const receiptPath = projectUpdateMigrationReceiptPath(root);
-  const pendingPath = pendingUpdateMigrationPath();
+  const pendingPath = installationEpochPath();
   const empty: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings'> = {
     schema: 'sks.update-migration-gate.v1',
     root,
     command,
     receipt_path: receiptPath,
-    pending_marker_path: pendingPath
+    pending_marker_path: pendingPath,
+    installation_epoch_path: pendingPath
   };
   if (env.SKS_UPDATE_MIGRATION_GATE_DISABLED === '1') {
     return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, blockers: [], warnings: ['gate_disabled_by_env'] };
@@ -163,47 +234,46 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
     return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, blockers: [], warnings: [`allowlisted_command:${command}`] };
   }
 
-  const [pending, receipt] = await Promise.all([
-    readPendingUpdateMigration(),
+  const [epoch, receipt] = await Promise.all([
+    ensureInstallationEpoch('first-command-gate'),
     readProjectUpdateMigrationReceipt(root)
   ]);
   const requireReceipt = env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT === '1';
-  if (!pending && isUpdateMigrationReceiptCurrent(receipt) && !requireReceipt) {
+  if (isProjectReceiptCurrentForEpoch(receipt, epoch) && !requireReceipt) {
     return { ...empty, ok: true, status: 'current', receipt, doctor: null, blockers: [], warnings: [] };
-  }
-  if (!pending && !requireReceipt) {
-    return { ...empty, ok: true, status: 'skipped', receipt: receipt || null, doctor: null, blockers: [], warnings: ['no_pending_update_migration'] };
   }
 
   return withUpdateMigrationLock(root, empty, async () => {
+    const reportFile = path.join(root, '.sneakoscope', 'update', `doctor-migration-${Date.now()}.json`);
     const doctor = await runPackageLocalDoctor({
       root,
-      args: ['doctor', '--fix', '--json'],
+      args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', reportFile],
       env: {
         ...env,
         SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
         SKS_DISABLE_UPDATE_CHECK: '1'
       },
-      timeoutMs: 10 * 60 * 1000,
-      maxOutputBytes: 128 * 1024
+      timeoutMs: 15_000,
+      maxOutputBytes: 32 * 1024
     });
     if (!doctor.ok) {
+      const requiredBlockers = doctor.required_blockers.length ? doctor.required_blockers : ['doctor_migration_profile_failed'];
       const blocked = await writeProjectUpdateMigrationReceipt({
         root,
         source: 'first-command-gate',
         status: 'blocked',
         doctor,
-        blockers: ['update_migration_doctor_failed'],
-        warnings: pending?.warnings || []
+        blockers: requiredBlockers,
+        warnings: doctor.optional_warnings
       });
-      return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, blockers: ['update_migration_doctor_failed'], warnings: [] };
+      return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, blockers: requiredBlockers, warnings: doctor.optional_warnings };
     }
     const current = await writeProjectUpdateMigrationReceipt({
       root,
       source: 'first-command-gate',
       doctor,
       blockers: [],
-      warnings: pending?.warnings || []
+      warnings: doctor.optional_warnings
     });
     return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, blockers: [], warnings: [] };
   });
@@ -223,15 +293,15 @@ export async function runPostinstallGlobalDoctorAndMarkPending(input: {
   }
   const doctor = await runPackageLocalDoctor({
     root: globalSksRoot(),
-    args: ['doctor', '--fix', '--json'],
+    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRoot(), 'update', `postinstall-doctor-${Date.now()}.json`)],
     env: {
       ...env,
       SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
       SKS_DISABLE_UPDATE_CHECK: '1',
       SKS_POSTINSTALL_NO_BOOTSTRAP: '1'
     },
-    timeoutMs: 10 * 60 * 1000,
-    maxOutputBytes: 128 * 1024
+    timeoutMs: 15_000,
+    maxOutputBytes: 32 * 1024
   });
   const pending = await writePendingUpdateMigration({
     source: 'postinstall',
@@ -269,6 +339,8 @@ export async function runPackageLocalDoctor(input: {
       args,
       exit_code: null,
       parsed_ok: null,
+      required_blockers: ['missing_package_local_sks_entrypoint'],
+      optional_warnings: [],
       stdout_tail: '',
       stderr_tail: '',
       error: `missing package-local sks entrypoint: ${entrypoint}`
@@ -289,9 +361,14 @@ export async function runPackageLocalDoctor(input: {
     stdout: '',
     stderr: err?.message || String(err)
   }));
-  const parsed = parseDoctorJson((result as any).stdout);
+  const reportFile = reportFileFromArgs(args);
+  const parsed = reportFile
+    ? await readJson(reportFile, null).catch(() => null)
+    : parseDoctorJson((result as any).stdout);
   const parsedOk = typeof parsed?.ok === 'boolean' ? parsed.ok : null;
-  const ok = (result as any).code === 0 && parsedOk !== false;
+  const ok = (result as any).code === 0 && (reportFile ? parsedOk === true : parsedOk !== false);
+  const requiredBlockers = extractRequiredBlockers(parsed, ok);
+  const optionalWarnings = extractOptionalWarnings(parsed);
   return {
     schema: 'sks.package-local-doctor-run.v1',
     ok,
@@ -301,9 +378,11 @@ export async function runPackageLocalDoctor(input: {
     args,
     exit_code: (result as any).code ?? null,
     parsed_ok: parsedOk,
+    required_blockers: requiredBlockers,
+    optional_warnings: optionalWarnings,
     stdout_tail: tail((result as any).stdout || ''),
     stderr_tail: tail((result as any).stderr || ''),
-    error: ok ? null : tail((result as any).stderr || (result as any).stdout || 'doctor failed')
+    error: ok ? null : tail((result as any).stderr || (result as any).stdout || requiredBlockers.join(', ') || 'doctor failed')
   };
 }
 
@@ -326,7 +405,8 @@ export async function resolveInstalledSksEntrypoint(input: {
 async function withUpdateMigrationLock(
   root: string,
   base: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings'>,
-  fn: () => Promise<UpdateMigrationGateResult>
+  fn: () => Promise<UpdateMigrationGateResult>,
+  staleRetry = false
 ): Promise<UpdateMigrationGateResult> {
   const lockPath = path.join(root, '.sneakoscope', 'update', 'migration.lock');
   await ensureDir(path.dirname(lockPath));
@@ -337,6 +417,9 @@ async function withUpdateMigrationLock(
     return await fn();
   } catch (err: any) {
     if (err?.code === 'EEXIST') {
+      if (!staleRetry && await removeStaleMigrationLock(lockPath)) {
+        return withUpdateMigrationLock(root, base, fn, true);
+      }
       return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: ['update_migration_lock_held'], warnings: [] };
     }
     return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
@@ -344,6 +427,97 @@ async function withUpdateMigrationLock(
     await handle?.close().catch(() => undefined);
     if (handle) await fsp.rm(lockPath, { force: true }).catch(() => undefined);
   }
+}
+
+async function removeStaleMigrationLock(lockPath: string): Promise<boolean> {
+  const raw = await fsp.readFile(lockPath, 'utf8').catch(() => '');
+  let parsed: { pid?: number; created_at?: string } | null = null;
+  try {
+    parsed = raw.trim() ? JSON.parse(raw) : null;
+  } catch {
+    parsed = null;
+  }
+  const pid = Number(parsed?.pid || 0);
+  const createdMs = parsed?.created_at ? Date.parse(parsed.created_at) : 0;
+  const ageMs = Number.isFinite(createdMs) && createdMs > 0 ? Date.now() - createdMs : Number.POSITIVE_INFINITY;
+  const stale = !pidAlive(pid) || ageMs > 120_000;
+  if (!stale) return false;
+  await fsp.rm(lockPath, { force: true }).catch(() => undefined);
+  return true;
+}
+
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err: any) {
+    return err?.code === 'EPERM';
+  }
+}
+
+async function buildInstallationEpoch(source: string): Promise<InstallationEpoch> {
+  const root = packageRoot();
+  const realpath = await fsp.realpath(root).catch(() => root);
+  return {
+    schema: INSTALLATION_EPOCH_SCHEMA,
+    sks_version: PACKAGE_VERSION,
+    package_realpath: realpath,
+    build_sha256: await packageBuildSha256(root),
+    managed_asset_version: MANAGED_ASSET_VERSION,
+    installed_at: nowIso(),
+    source
+  };
+}
+
+function isInstallationEpochCurrent(existing: InstallationEpoch, current: InstallationEpoch): boolean {
+  return existing.schema === INSTALLATION_EPOCH_SCHEMA
+    && existing.sks_version === current.sks_version
+    && existing.package_realpath === current.package_realpath
+    && existing.build_sha256 === current.build_sha256
+    && existing.managed_asset_version === current.managed_asset_version;
+}
+
+async function packageBuildSha256(root: string): Promise<string> {
+  const candidates = [
+    path.join(root, 'dist', 'build-manifest.json'),
+    path.join(root, 'package.json')
+  ];
+  const rows = await Promise.all(candidates.map(async (file) => {
+    const text = await fsp.readFile(file, 'utf8').catch(() => '');
+    return { file: path.relative(root, file), sha256: text ? sha256(text) : 'missing' };
+  }));
+  return sha256(JSON.stringify(rows));
+}
+
+function installationEpochSha256(epoch: InstallationEpoch): string {
+  return sha256(JSON.stringify({
+    schema: epoch.schema,
+    sks_version: epoch.sks_version,
+    package_realpath: epoch.package_realpath,
+    build_sha256: epoch.build_sha256,
+    managed_asset_version: epoch.managed_asset_version
+  }));
+}
+
+function isProjectReceiptCurrentForEpoch(receipt: UpdateMigrationReceipt | null, epoch: InstallationEpoch): boolean {
+  return isUpdateMigrationReceiptCurrent(receipt)
+    && receipt?.installation_epoch_sha256 === installationEpochSha256(epoch);
+}
+
+function projectRootHash(root: string): string {
+  return sha256(path.resolve(root));
+}
+
+async function projectSemanticHash(root: string): Promise<string> {
+  const configPath = path.join(root, '.codex', 'config.toml');
+  const config = await fsp.readFile(configPath, 'utf8').catch(() => '');
+  return sha256(JSON.stringify({
+    root: projectRootHash(root),
+    sks_version: PACKAGE_VERSION,
+    managed_asset_version: MANAGED_ASSET_VERSION,
+    codex_config_sha256: config ? sha256(config) : 'missing'
+  }));
 }
 
 function parseDoctorJson(text: string): any | null {
@@ -359,6 +533,37 @@ function parseDoctorJson(text: string): any | null {
     } catch {}
   }
   return null;
+}
+
+function reportFileFromArgs(args: string[]): string | null {
+  const index = args.indexOf('--report-file');
+  return index >= 0 && args[index + 1] ? String(args[index + 1]) : null;
+}
+
+function extractRequiredBlockers(parsed: any, ok: boolean): string[] {
+  if (ok) return [];
+  const candidates = [
+    parsed?.ready?.blockers,
+    parsed?.ready?.repair_readiness?.blockers,
+    parsed?.doctor_fix_postcheck?.required_blockers,
+    parsed?.doctor_fix_postcheck?.blockers,
+    parsed?.blockers
+  ];
+  for (const value of candidates) {
+    if (Array.isArray(value) && value.length) return [...new Set(value.map(String).filter(Boolean))];
+  }
+  return [];
+}
+
+function extractOptionalWarnings(parsed: any): string[] {
+  const candidates = [
+    parsed?.ready?.warnings,
+    parsed?.ready?.repair_readiness?.warnings,
+    parsed?.doctor_fix_postcheck?.optional_warnings,
+    parsed?.doctor_native_capability?.optional_warnings,
+    parsed?.warnings
+  ];
+  return [...new Set(candidates.flatMap((value) => Array.isArray(value) ? value.map(String) : []).filter(Boolean))];
 }
 
 function tail(text: string, max = 4096): string {

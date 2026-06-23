@@ -27,7 +27,22 @@ const matrix = buildDoctorReadinessMatrix({
     ]
   },
   codex_doctor: codexDoctor,
-  require_codex_doctor: true
+  require_codex_doctor: true,
+  doctor_native_capability: {
+    ok: true,
+    blockers: [],
+    optional_warnings: ['computer_use_manual_required', 'chrome_extension_manual_required'],
+    native_capabilities: {
+      capabilities: [
+        { id: 'computer_use', availability: 'manual-required', repairability: 'manual-required', after: 'unknown' },
+        { id: 'chrome_web_review', availability: 'manual-required', repairability: 'manual-required', after: 'unknown' }
+      ],
+      route_blockers: {
+        'route-computer-use': ['computer_use_os_permission_or_capability_unknown'],
+        'route-chrome-web-review': ['codex_chrome_extension_readiness_not_verified']
+      }
+    }
+  }
 })
 
 const report = {
@@ -35,9 +50,11 @@ const report = {
   ready: matrix.ready,
   core_ready: matrix.core_ready,
   primary_blocker: matrix.primary_blocker,
+  optional_capabilities: matrix.optional_capabilities,
   blockers: matrix.blockers,
   warnings: matrix.warnings
 }
 
 assertGate(matrix.ready === true && matrix.primary_blocker === null && matrix.blockers.length === 0, 'warning-only Codex Doctor must not block readiness', report)
+assertGate(matrix.optional_capabilities.computer_use === 'manual_required' && matrix.optional_capabilities.chrome_web_review === 'manual_required', 'optional native capabilities must remain route-gated warnings', report)
 emitGate('doctor:warning-only-not-blocker', report)

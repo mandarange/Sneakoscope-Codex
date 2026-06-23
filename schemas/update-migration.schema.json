@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["schema", "status", "sks_version", "root", "source", "generated_at", "blockers", "warnings"],
   "properties": {
-    "schema": { "const": "sks.update-migration.v1" },
+    "schema": { "const": "sks.project-migration-receipt.v2" },
     "status": {
       "enum": ["current", "pending_project_receipt", "blocked", "skipped"]
     },
@@ -13,7 +13,11 @@
     "root": { "type": "string" },
     "source": { "type": "string" },
     "generated_at": { "type": "string" },
+    "project_root_hash": { "type": "string" },
+    "installation_epoch_sha256": { "type": "string" },
+    "project_semantic_hash": { "type": "string" },
     "pending_marker_path": { "type": ["string", "null"] },
+    "installation_epoch_path": { "type": ["string", "null"] },
     "doctor": {
       "type": ["object", "null"],
       "additionalProperties": true
@@ -26,7 +30,15 @@
       "type": "array",
       "items": { "type": "string" }
     },
+    "required_blockers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "optional_warnings": {
       "type": "array",
       "items": { "type": "string" }
     }

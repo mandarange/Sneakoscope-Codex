@@ -71,7 +71,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     && capability.status === 'ok'
     && process.env.SKS_ZELLIJ_KEEP_SESSION !== '1'
   const sessionReset = resetSession
-    ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, timeoutMs: 5000, optional: true })
+    ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, timeoutMs: 200, optional: true })
     : null
   const launch: any = opts.dryRun === true || capability.status !== 'ok'
     ? null
@@ -88,10 +88,21 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     expectedCwd: opts.cwd || root
   }
   if (layout.main_pane_kind === 'codex_interactive') paneProofOpts.expectedMainCommandIncludes = 'codex'
-  const paneProof = await writeZellijPaneProof(root, paneProofOpts).catch((err: any) => ({
-    ok: false,
-    blockers: [`zellij_pane_proof_exception:${err?.message || String(err)}`]
-  }))
+  const strictPaneProof = opts.requireZellij === true || opts.dryRun === true || process.env.SKS_ZELLIJ_STRICT_PANE_PROOF === '1'
+  const paneProof = strictPaneProof
+    ? await writeZellijPaneProof(root, paneProofOpts).catch((err: any) => ({
+        ok: false,
+        blockers: [`zellij_pane_proof_exception:${err?.message || String(err)}`]
+      }))
+    : {
+        ok: true,
+        status: 'deferred_background',
+        blockers: [],
+        warnings: ['zellij_pane_proof_deferred_until_after_attach']
+      }
+  if (!strictPaneProof && opts.dryRun !== true && capability.status === 'ok') {
+    void writeZellijPaneProof(root, paneProofOpts).catch(() => undefined)
+  }
   if (launch?.create_background) {
     launch.create_background = normalizeExistingZellijSession(sessionName, launch.create_background)
   }
@@ -136,6 +147,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     clipboard_mouse_mode: clipboard.mouse_mode,
     pane_proof_path: path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json'),
     pane_proof: paneProof,
+    pane_proof_background: !strictPaneProof,
     dry_run: opts.dryRun === true,
     capability,
     launch,

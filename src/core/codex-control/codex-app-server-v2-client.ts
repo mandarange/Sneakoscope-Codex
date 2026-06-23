@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { nowIso } from '../fsx.js';
+import { nowIso, PACKAGE_VERSION } from '../fsx.js';
 import { resolveCodexRuntime, type CodexRuntimeIdentity } from '../codex-runtime/resolve-codex-runtime.js';
 
 type JsonRpcId = number | string;
@@ -75,7 +75,7 @@ export class CodexAppServerV2Client {
       clientInfo: {
         name: 'sneakoscope-codex-app-server-v2',
         title: 'Sneakoscope Codex app-server v2',
-        version: '4.1.0'
+        version: PACKAGE_VERSION
       },
       capabilities: {
         experimentalApi: true,

@@ -7,4 +7,5 @@ delete process.env.SKS_COMPUTER_USE_CAPABILITY;
 const report = await repairNativeCapabilities({ root, fix: true, yes: true, capabilities: ['computer_use'], fixture: 'manual-required' });
 const state = report.capabilities[0];
 assertGate(state?.repairability === 'manual-required' && state.after !== 'verified', 'computer use must stay manual-required when OS permission/capability is unknown', report);
+assertGate(report.ok === true && report.blockers.length === 0 && Array.isArray(report.route_blockers['route-computer-use']), 'computer use must not block core readiness', report);
 emitGate('native:computer-use-repair');

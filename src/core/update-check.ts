@@ -286,10 +286,10 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   }
   const oldVersionDoctor = await runPackageLocalDoctor({
     root: projectReceiptRoot,
-    args: ['doctor', '--json'],
+    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', `old-version-doctor-${Date.now()}.json`)],
     env,
-    timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
-    maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+    timeoutMs: 15_000,
+    maxOutputBytes: 32 * 1024
   });
   stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.status, { entrypoint: oldVersionDoctor.entrypoint, exit_code: oldVersionDoctor.exit_code });
   if (!oldVersionDoctor.ok && env.SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT !== '1') {
@@ -392,10 +392,10 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       newVersionDoctor = await runPackageLocalDoctor({
         root: globalSksRootPath(),
         entrypoint: newBinary,
-        args: ['doctor', '--json'],
+        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(), 'update', `new-version-doctor-${Date.now()}.json`)],
         env,
-        timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
-        maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+        timeoutMs: 15_000,
+        maxOutputBytes: 32 * 1024
       });
       stage('new_version_global_doctor', newVersionDoctor.ok, newVersionDoctor.status, { entrypoint: newBinary, exit_code: newVersionDoctor.exit_code });
     }

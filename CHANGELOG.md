@@ -3,6 +3,22 @@
 ## [Unreleased]
 
 
+## [4.1.1] - 2026-06-23
+
+### Fixed
+
+- Split optional native capability readiness from core Doctor readiness so Computer Use and Chrome Extension manual setup remains route-gated instead of blocking core CLI, managed migration receipts, or ordinary MAD startup.
+- Reworked update migration state around a persistent installation epoch plus per-project v2 receipts, with migration-profile Doctor machine reports and exact required blocker output.
+- Removed `setup --force`, recursive project size scans, historical/plugin/native optional diagnostics, and repeated schema generation from the default Doctor hot path.
+- Deferred MAD update prompts, provider setup prompts, Codex App UI snapshots, native capability artifacts, pane proof, and native swarm startup until after the bootstrap UI path is opened.
+- Gave logical managed verifier roles unique physical agent config filenames.
+
+### Added
+
+- Added Doctor `--profile migration`, `--machine-only`, and `--report-file` support for update/postinstall gates.
+- Added route-specific native capability blocker fields, optional manual action fields, and Codex 0.142 shipped-schema/cache probe behavior.
+
+
 ## [4.1.0] - 2026-06-23
 
 ### Added
