@@ -1,8 +1,10 @@
+import { CURRENT_CODEX_RELEASE_MANIFEST } from './codex-release-manifest.js';
+
 export const CODEX_COMPAT_SCHEMA = 'sks.codex-compat.v2';
-export const CODEX_REQUIRED_BASELINE_TAG = 'rust-v0.136.0';
-export const CODEX_REQUIRED_VERSION = '0.136.0';
-export const CODEX_HOOK_SCHEMA_BASELINE_TAG = 'latest';
-export const CODEX_HOOK_SCHEMA_VERSION = 'main-2026-06-01';
+export const CODEX_REQUIRED_BASELINE_TAG = CURRENT_CODEX_RELEASE_MANIFEST.targetTag;
+export const CODEX_REQUIRED_VERSION = CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion;
+export const CODEX_HOOK_SCHEMA_BASELINE_TAG = CURRENT_CODEX_RELEASE_MANIFEST.targetTag;
+export const CODEX_HOOK_SCHEMA_VERSION = CURRENT_CODEX_RELEASE_MANIFEST.targetTag;
 
 export function compareSemverLike(a: unknown, b: unknown): number {
   const pa = parseVersionParts(a);

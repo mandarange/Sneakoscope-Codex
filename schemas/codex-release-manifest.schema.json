@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/codex-release-manifest.schema.json",
+  "title": "Sneakoscope Codex Release Manifest",
+  "type": "object",
+  "required": [
+    "schema",
+    "targetTag",
+    "requiredCliVersion",
+    "sdkVersion",
+    "minimumSupportedVersion",
+    "protocolMode",
+    "generatedSchemaSha256",
+    "upstreamCommit",
+    "featurePolicies",
+    "requiredRealProbes",
+    "supportedPlatforms"
+  ],
+  "properties": {
+    "schema": { "const": "sks.codex-release-manifest.v1" },
+    "targetTag": { "type": "string", "pattern": "^rust-v\\d+\\.\\d+\\.\\d+$" },
+    "requiredCliVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "sdkVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "minimumSupportedVersion": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "protocolMode": { "enum": ["exec-sdk", "app-server-v2"] },
+    "generatedSchemaSha256": { "type": "string", "minLength": 8 },
+    "upstreamCommit": { "type": "string", "minLength": 1 },
+    "featurePolicies": {
+      "type": "object",
+      "additionalProperties": { "enum": ["delegate", "probe", "wrap", "disable"] }
+    },
+    "requiredRealProbes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "supportedPlatforms": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}

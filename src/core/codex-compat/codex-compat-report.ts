@@ -1,6 +1,7 @@
 import { projectRoot } from '../fsx.js';
 import { codexVersionReport } from './codex-version.js';
 import { CODEX_COMPAT_SCHEMA, CODEX_HOOK_SCHEMA_BASELINE_TAG, CODEX_REQUIRED_BASELINE_TAG } from './codex-version-policy.js';
+import { codexReleaseManifestParity } from './codex-release-manifest.js';
 import { codexSchemaSnapshotReport } from './codex-schema-snapshot.js';
 import { codexHookWarningCheck } from './codex-hook-warning-detector.js';
 import { codex0133Matrix } from './codex-0-133.js';
@@ -12,6 +13,14 @@ import { collectCodex0136LocalEvidence, codex0136Matrix } from '../codex/codex-0
 export async function codexCompatibilityReport(opts: any = {}) {
   const root = opts.root || await projectRoot();
   const version = await codexVersionReport(opts);
+  const releaseManifest = await codexReleaseManifestParity(root).catch((err: any) => ({
+    ok: false,
+    mismatches: ['manifest_load_failed'],
+    manifest: null,
+    manifest_path: null,
+    manifest_sha256: null,
+    error: err?.message || String(err)
+  }));
   const snapshot = await codexSchemaSnapshotReport();
   const hooks = await codexHookWarningCheck(root, { recordWrongness: false });
   const outputSchema = await detectCodexExecResumeOutputSchema(opts).catch((err: any) => ({
@@ -81,10 +90,11 @@ export async function codexCompatibilityReport(opts: any = {}) {
     available: version.detected?.available,
     execResumeHelp: outputSchema.output_schema_supported ? '--output-schema' : ''
   });
-  const ok = Boolean(version.policy.ok && snapshot.ok && hooks.ok && matrix0136.ok && matrix0135.ok && matrix0134.ok);
+  const ok = Boolean(version.policy.ok && releaseManifest.ok && snapshot.ok && hooks.ok && matrix0136.ok && matrix0135.ok && matrix0134.ok);
   return {
     schema: CODEX_COMPAT_SCHEMA,
     required_baseline: opts.requiredBaseline || opts.require || CODEX_REQUIRED_BASELINE_TAG,
+    release_manifest: releaseManifest,
     detected: version.detected,
     hooks_schema: {
       snapshot: CODEX_HOOK_SCHEMA_BASELINE_TAG,

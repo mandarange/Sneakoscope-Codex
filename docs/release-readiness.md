@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.0.15 is the Codex `rust-v0.142.0` compatibility-preparation patch after 4.0.14. It requires package, lockfile, CLI constants, Codex release manifest, generated app-server schema hash, app-server-v2 client proof, thread-store concurrency proof, runtime binary identity, SDK child-env isolation, package script contract evidence, built output, provenance, and npm registry unpublished-version checks to agree on 4.0.15 before publication.
+
+4.0.15 release readiness adds proof that `@openai/codex-sdk` is exactly pinned to `0.142.0`, the resolved Codex binary is identified by realpath/version/SHA-256, generated app-server schemas come from that binary, app-server-v2 can initialize and list native threads, 0.142 capability gates do not use `assumed_by_version`, SDK execution policy keeps sandbox/approval/network/web/git/mutation axes separate, Codex thread registry writes are lock/journal protected, and the published tarball includes public script targets.
+
 SKS 4.0.14 is the GLM Naruto parallelism-seal patch after 4.0.13. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, provenance, npm registry unpublished-version checks, and GLM Naruto parallelism-seal metadata to agree on 4.0.14 before publication.
 
 4.0.14 release readiness adds proof that GLM Naruto records real parallel-stage execution metrics, uses bounded parallel queues for candidate gate, worktree, and verifier phases, tracks requirement coverage so parallel workers do not miss task details, preserves `sks --mad` GPT/Codex/MAD route isolation from GLM/OpenRouter mode, and repairs benchmark/proof metadata regressions carried over from 4.0.13.

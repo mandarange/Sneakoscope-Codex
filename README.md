@@ -35,7 +35,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.14** seals GLM Naruto real parallelism while preserving the existing GPT/Codex/MAD `sks --mad` route. GLM mode stays locked to OpenRouter `z-ai/glm-5.2`; non-GLM MAD does not require OpenRouter, does not select GLM, and does not enter the GLM Naruto scheduler.
+SKS **4.0.15** prepares the Codex `rust-v0.142.0` compatibility surface while preserving the existing GPT/Codex/MAD `sks --mad` route. The release pins `@openai/codex-sdk` to `0.142.0`, records a Codex release manifest, resolves one Codex binary identity per mission, isolates SDK child environment variables, and restores the published tarball script contract by shipping the verification scripts that package metadata exposes.
+
+What changed in 4.0.15:
+
+- **Codex 0.142 release manifest.** `rust-v0.142.0`, `codex-cli 0.142.0`, SDK `0.142.0`, generated app-server schema hash, required probes, and supported platforms are captured as a single manifest.
+- **Runtime identity proof.** Codex compatibility now resolves the project/env/PATH binary through one resolver and records realpath, version, SHA-256, package root, platform, and arch.
+- **Safer SDK execution policy.** SDK tasks no longer inherit `process.env` wholesale and no longer hard-code `approvalPolicy: never`, `skipGitRepoCheck: true`, or network access from sandbox mode.
+- **0.142 app-server evidence.** Generated app-server TypeScript and JSON Schema snapshots are stored under versioned paths; app-server-v2 wraps `thread/list`, `thread/read`, list search, and `currentTime/read` handling, while capability gates reject `assumed_by_version` evidence.
+- **Transactional thread registry guard.** Codex thread registration now uses an atomic lock and append-only journal, with a 100-write gate covering concurrent updates and corruption preservation.
+- **Package contract repair.** The npm tarball includes `dist/scripts` verification targets so public package scripts do not point at files excluded from the package.
 
 What changed in 4.0.14:
 

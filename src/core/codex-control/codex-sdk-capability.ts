@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CURRENT_CODEX_RELEASE_MANIFEST } from '../codex-compat/codex-release-manifest.js'
 
 export interface CodexSdkCapability {
   schema: 'sks.codex-sdk-capability.v1'
@@ -46,7 +47,7 @@ export async function detectCodexSdkCapability(input: { fakeSmoke?: boolean } = 
     node_compatible: nodeCompatible,
     dynamic_import_ok: dynamicImportOk,
     structured_output_fake_smoke: structuredFake,
-    setup_action: blockers.includes('codex_sdk_unavailable') ? 'npm install @openai/codex-sdk@0.137.0' : null,
+    setup_action: blockers.includes('codex_sdk_unavailable') ? `npm install @openai/codex-sdk@${CURRENT_CODEX_RELEASE_MANIFEST.sdkVersion}` : null,
     blockers
   }
 }

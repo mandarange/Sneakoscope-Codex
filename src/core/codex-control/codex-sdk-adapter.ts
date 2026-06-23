@@ -1,10 +1,11 @@
 import path from 'node:path'
 import { appendJsonl } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
-import { buildCodexSdkConfig } from './codex-sdk-config-policy.js'
+import { buildCodexExecutionPolicy, buildCodexSdkConfig } from './codex-sdk-config-policy.js'
 import { buildCodexSdkEnv } from './codex-sdk-env-policy.js'
 import { translateCodexSdkEvent } from './codex-event-translator.js'
 import type { CodexSdkSandboxMode } from './codex-sdk-sandbox-policy.js'
+import { resolveCodexRuntime } from '../codex-runtime/resolve-codex-runtime.js'
 
 export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   sandboxMode: CodexSdkSandboxMode
@@ -14,16 +15,24 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   const mod: any = await import('@openai/codex-sdk')
   const Codex = mod.Codex || mod.default?.Codex || mod.default
   if (typeof Codex !== 'function') throw new Error('Codex SDK export Codex not found')
+  const runtime = await resolveCodexRuntime({
+    explicitPath: typeof input.requestedScopeContract?.codex_bin === 'string' ? input.requestedScopeContract.codex_bin : null,
+    requestedBy: 'codex-sdk-adapter'
+  })
+  if (!runtime.identity) throw new Error(`Codex runtime not found: ${runtime.blockers.join(',')}`)
+  const executionPolicy = buildCodexExecutionPolicy(input)
   const codex = new Codex({
+    codexPathOverride: runtime.identity.realpath,
     env: policy.env,
     config: policy.config
   })
   const threadOptions = {
     workingDirectory: input.cwd,
-    sandboxMode: policy.sandboxMode,
-    approvalPolicy: 'never',
-    skipGitRepoCheck: true,
-    networkAccessEnabled: policy.sandboxMode !== 'read-only'
+    sandboxMode: executionPolicy.sandbox || policy.sandboxMode,
+    approvalPolicy: executionPolicy.approval,
+    skipGitRepoCheck: executionPolicy.gitRepoCheck === 'allow-explicit-non-git',
+    networkAccessEnabled: executionPolicy.network === 'full',
+    webSearchMode: executionPolicy.webSearch === 'indexed' ? undefined : executionPolicy.webSearch
   }
   const resumeId = typeof input.requestedScopeContract?.resume_thread_id === 'string'
     ? input.requestedScopeContract.resume_thread_id
@@ -42,7 +51,23 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     }
     if (event?.type === 'item.completed' && event?.item?.type === 'agent_message') finalResponse = String(event.item.text || '')
   }
-  const structuredOutput = parseStructuredOutput(finalResponse)
+  const failed = events.find((event) => event?.type === 'turn.failed' || event?.type === 'error')
+  if (failed) {
+    return {
+      ok: false,
+      sdkThreadId: String(thread.id || events.find((event) => event?.type === 'thread.started')?.thread_id || ''),
+      sdkRunId: extractRunId(events),
+      events,
+      finalResponse,
+      structuredOutput: null,
+      blockers: ['codex_turn_failed'],
+      liveEventsWritten,
+      runtimeIdentity: runtime.identity,
+      executionPolicy,
+      raw: { failed_event: failed }
+    }
+  }
+  const structuredOutput = parseStructuredOutput(finalResponse, Boolean(input.outputSchema))
   return {
     ok: true,
     sdkThreadId: String(thread.id || events.find((event) => event?.type === 'thread.started')?.thread_id || ''),
@@ -51,6 +76,8 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     finalResponse,
     structuredOutput,
     blockers: [],
+    runtimeIdentity: runtime.identity,
+    executionPolicy,
     liveEventsWritten,
     raw: { item_count: events.filter((event) => String(event?.type || '').startsWith('item.')).length }
   }
@@ -75,12 +102,13 @@ function buildSdkInput(input: CodexTaskInput): any {
   ]
 }
 
-function parseStructuredOutput(text: string) {
+function parseStructuredOutput(text: string, strict = false) {
   const trimmed = String(text || '').trim()
   if (!trimmed) return null
   try {
     return JSON.parse(trimmed)
   } catch {
+    if (strict) return null
     const start = trimmed.indexOf('{')
     const end = trimmed.lastIndexOf('}')
     if (start >= 0 && end > start) {

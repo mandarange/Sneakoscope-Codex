@@ -1,4 +1,5 @@
 import { runProcess, which } from '../fsx.js';
+import { resolveCodexRuntime } from '../codex-runtime/resolve-codex-runtime.js';
 import { codexVersionPolicy, parseCodexVersionText } from './codex-version-policy.js';
 
 export type CodexDetectedVersion = {
@@ -9,9 +10,11 @@ export type CodexDetectedVersion = {
 };
 
 export async function detectCodexVersion(opts: any = {}): Promise<CodexDetectedVersion> {
-  const codexBin = opts.codexBin || await which('codex').catch(() => null);
+  const runtime = await resolveCodexRuntime({ explicitPath: opts.codexBin || null, requestedBy: 'codex-version-report' }).catch(() => null);
+  const codexBin = runtime?.identity?.realpath || opts.codexBin || await which('codex').catch(() => null);
   if (codexBin) {
-    const fromVersion = await detectFromCommand(codexBin, ['--version'], 'codex --version', opts);
+    const source = runtime?.identity ? `codex runtime ${runtime.identity.source}` : 'codex --version';
+    const fromVersion = await detectFromCommand(codexBin, ['--version'], source, opts);
     if (fromVersion.version) return fromVersion;
     const fromHelp = await detectFromCommand(codexBin, ['--help'], 'codex --help', opts);
     if (fromHelp.version) return fromHelp;

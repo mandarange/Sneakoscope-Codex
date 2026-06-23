@@ -18918,6 +18918,326 @@
       "preset": [
         "release"
       ]
+    },
+    {
+      "id": "codex:0142:manifest",
+      "command": "npm run codex:0142:manifest --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0142:binary-identity",
+      "command": "npm run codex:0142:binary-identity --silent",
+      "deps": [
+        "codex:0142:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0142:policy",
+      "command": "npm run codex:0142:policy --silent",
+      "deps": [
+        "codex:0142:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0142:app-server-v2",
+      "command": "npm run codex:0142:app-server-v2 --silent",
+      "deps": [
+        "codex:0142:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0142:thread-store",
+      "command": "npm run codex:0142:thread-store --silent",
+      "deps": [
+        "codex:0142:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex:0142:capability",
+      "command": "npm run codex:0142:capability --silent",
+      "deps": [
+        "codex:0142:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "release:codex-current",
+      "command": "npm run release:codex-current --silent",
+      "deps": [
+        "codex:0142:manifest",
+        "codex:0142:binary-identity",
+        "codex:0142:policy",
+        "codex:0142:app-server-v2",
+        "codex:0142:thread-store",
+        "codex:0142:capability"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "publish:packlist-performance",
+      "command": "npm run publish:packlist-performance --silent",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/scripts/packlist-performance-check.ts",
+          "dist/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "package:published-contract",
+      "command": "npm run package:published-contract --silent",
+      "deps": [
+        "publish:packlist-performance"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/core/codex-app-server/**",
+          "config/codex-releases/**",
+          "schemas/codex-*.json",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
     }
   ]
 }

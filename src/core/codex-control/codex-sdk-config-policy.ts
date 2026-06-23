@@ -1,5 +1,14 @@
 import type { CodexTaskInput } from './codex-control-plane.js'
 
+export interface CodexExecutionPolicy {
+  sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
+  approval: 'untrusted' | 'on-request' | 'never'
+  network: 'disabled' | 'proxy-limited' | 'full'
+  webSearch: 'disabled' | 'cached' | 'indexed' | 'live'
+  gitRepoCheck: 'required' | 'allow-explicit-non-git'
+  mutation: 'deny' | 'ledgered' | 'transactional'
+}
+
 export function buildCodexSdkConfig(input: CodexTaskInput) {
   const config: Record<string, unknown> = {
     model: String(process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5'),
@@ -30,6 +39,23 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
     }
   }
   return config
+}
+
+export function buildCodexExecutionPolicy(input: CodexTaskInput): CodexExecutionPolicy {
+  const sandbox = String(input.requestedScopeContract?.sandbox || process.env.SKS_CODEX_SANDBOX || 'workspace-write') as CodexExecutionPolicy['sandbox']
+  const approval = String(process.env.SKS_CODEX_APPROVAL || (String(input.tier || '') === 'verifier' ? 'never' : 'on-request')) as CodexExecutionPolicy['approval']
+  const network = String(process.env.SKS_CODEX_NETWORK || 'disabled') as CodexExecutionPolicy['network']
+  const webSearch = String(process.env.SKS_CODEX_WEB_SEARCH || 'cached') as CodexExecutionPolicy['webSearch']
+  const gitRepoCheck = process.env.SKS_CODEX_ALLOW_NON_GIT === '1' ? 'allow-explicit-non-git' : 'required'
+  const mutation = String(input.tier || '') === 'verifier' || sandbox === 'read-only' ? 'deny' : 'ledgered'
+  return {
+    sandbox,
+    approval,
+    network,
+    webSearch,
+    gitRepoCheck,
+    mutation
+  }
 }
 
 export function redactCodexSdkConfig(config: Record<string, unknown>) {

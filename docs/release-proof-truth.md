@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.0.15 keeps release proof truth aligned with the 4.0.15 package metadata, built output, provenance, npm unpublished-version evidence, Codex 0.142 release manifest, generated app-server schema hash, app-server-v2 proof, thread-store proof, runtime binary identity proof, SDK child-env isolation proof, and package published-contract evidence before publication.
+
+SKS 4.0.15 release proof truth also requires proof that 0.142 publish authorization does not rely on `assumed_by_version` or fixture-only evidence, that SDK/app-server/Doctor/compatibility surfaces use the same resolved Codex binary identity, that native thread list/read/search and current-time handling are represented by app-server-v2 evidence, that host secrets are not inherited by SDK child processes, and that postinstall/update paths do not install global `@openai/codex@latest` unattended.
+
 SKS 4.0.14 keeps release proof truth aligned with the 4.0.14 package metadata, built output, provenance, npm unpublished-version evidence, GLM Naruto parallel-stage execution metrics, bounded parallel queue proof, requirement coverage tracking proof, MAD route isolation proof, and benchmark/proof metadata regression-fix evidence before publication.
 
 SKS 4.0.14 release proof truth also requires proof that GLM requests stay locked to `z-ai/glm-5.2`, provider/model fallbacks remain disabled, parallel candidate/worktree/verifier queues stay bounded, requirement coverage artifacts exist for every parallel worker, and `sks --mad` keeps GPT/Codex/MAD routes isolated from GLM/OpenRouter mode.
