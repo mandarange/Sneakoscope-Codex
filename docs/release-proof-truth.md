@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.1.0 keeps release proof truth aligned with the 4.1.0 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, semantic Doctor readiness, post-repair authoritative Doctor checks, managed asset manifest parity, update migration lifecycle evidence, and local machine-evidence cleanup before publication.
+
+SKS 4.1.0 release proof truth also requires proof that optional Codex/native capability warnings stay non-blocking for core readiness, plain `sks doctor --fix` repairs native managed assets, update completion is gated on a current project migration receipt, postinstall uses the package-local global Doctor path, and release metadata mentions 4.1.0 across version-gated docs.
+
 SKS 4.0.15 keeps release proof truth aligned with the 4.0.15 package metadata, built output, provenance, npm unpublished-version evidence, Codex 0.142 release manifest, generated app-server schema hash, app-server-v2 proof, thread-store proof, runtime binary identity proof, SDK child-env isolation proof, and package published-contract evidence before publication.
 
 SKS 4.0.15 release proof truth also requires proof that 0.142 publish authorization does not rely on `assumed_by_version` or fixture-only evidence, that SDK/app-server/Doctor/compatibility surfaces use the same resolved Codex binary identity, that native thread list/read/search and current-time handling are represented by app-server-v2 evidence, that host secrets are not inherited by SDK child processes, and that postinstall/update paths do not install global `@openai/codex@latest` unattended.
