@@ -64,6 +64,13 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'side-effect:runtime-report',
   'release:version-truth',
   'release:provenance',
+  'release:codex-current',
+  'codex:0142:manifest',
+  'codex:0142:binary-identity',
+  'codex:0142:policy',
+  'codex:0142:app-server-v2',
+  'codex:0142:thread-store',
+  'codex:0142:capability',
   'publish:packlist-performance',
   'postinstall:safe-side-effects',
   'legacy:upgrade-zero-break',
@@ -122,7 +129,23 @@ export function affectedGlobsFor(id: string): string[] {
     case 'codex':
     case 'codex-app':
     case 'codex-lb':
-      return ['src/core/codex/**', 'src/core/codex-app.ts', 'src/core/codex-lb-circuit.ts', `src/scripts/${prefix}-*.ts`]
+      return [
+        'src/core/codex/**',
+        'src/core/codex-control/**',
+        'src/core/codex-compat/**',
+        'src/core/codex-runtime/**',
+        'src/core/codex-app-server/**',
+        'src/core/codex-policy/**',
+        'src/commands/codex.ts',
+        'src/cli/install-helpers.ts',
+        'config/codex-releases/**',
+        'schemas/codex-*.json',
+        'package.json',
+        'package-lock.json',
+        'src/core/codex-app.ts',
+        'src/core/codex-lb-circuit.ts',
+        `src/scripts/${prefix}-*.ts`
+      ]
     case 'release':
       return ['src/core/release/**', 'src/scripts/release-parallel-check.ts', 'src/scripts/release-*.ts', 'package.json']
     default:

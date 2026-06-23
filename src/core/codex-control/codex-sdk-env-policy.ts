@@ -2,12 +2,26 @@ import type { CodexTaskInput } from './codex-control-plane.js'
 import path from 'node:path'
 
 const SECRET_RE = /(?:key|token|secret|password|credential|auth|cookie)/i
+const BASE_ALLOWED_ENV = new Set([
+  'PATH',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TERM',
+  'SHELL',
+  'USER',
+  'LOGNAME',
+  'CI',
+  'NODE_ENV',
+  'SKS_CODEX_BIN',
+  'CODEX_BIN'
+])
 
 export function buildCodexSdkEnv(input: CodexTaskInput): { env: Record<string, string>; proof: Record<string, unknown> } {
   const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = String(value)
-  }
   env.SKS_CODEX_CONTROL_PLANE = '1'
   env.SKS_PARENT_MISSION_ID = input.missionId
   env.SKS_ROUTE = input.route
@@ -19,12 +33,21 @@ export function buildCodexSdkEnv(input: CodexTaskInput): { env: Record<string, s
   const isolatedRoot = path.resolve(input.mutationLedgerRoot, 'codex-sdk-home')
   env.HOME = path.join(isolatedRoot, 'home')
   env.CODEX_HOME = path.join(isolatedRoot, 'codex')
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined || key in env) continue
+    if (BASE_ALLOWED_ENV.has(key) || key.startsWith('LC_')) env[key] = String(value)
+  }
   env.SKS_CODEX_CONTROL_PLANE_CONFIG_ISOLATED = '1'
+  const inheritedKeys = Object.keys(env).filter((key) => !key.startsWith('SKS_') && key !== 'HOME' && key !== 'CODEX_HOME').sort()
+  const blockedHostKeys = Object.keys(process.env).filter((key) => !(key in env)).sort()
   return {
     env,
     proof: {
       injected_keys: Object.keys(env).filter((key) => key.startsWith('SKS_')).sort(),
-      inherited_key_count: Object.keys(process.env).length,
+      inherited_allowed_keys: inheritedKeys,
+      inherited_key_count: inheritedKeys.length,
+      blocked_host_env_key_count: blockedHostKeys.length,
+      blocked_sensitive_host_env_key_count: blockedHostKeys.filter((key) => SECRET_RE.test(key)).length,
       redacted_sensitive_keys: Object.keys(env).filter((key) => SECRET_RE.test(key)).sort(),
       codex_home_isolated: true,
       codex_home: env.CODEX_HOME,

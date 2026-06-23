@@ -1,6 +1,6 @@
 import type { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
 
-export const GLM_BENCHMARK_VERSION = '4.0.14' as const;
+export const GLM_BENCHMARK_VERSION = '4.0.15' as const;
 
 export type GlmBenchmarkRunnerId =
   | 'direct-glm-speed'
@@ -78,7 +78,7 @@ export interface GlmBenchmarkComparison {
 
 export interface GlmBenchmarkResult {
   readonly schema: 'sks.glm-benchmark-result.v1';
-  readonly version: '4.0.14';
+  readonly version: '4.0.15';
   readonly generated_at: string;
   readonly status: 'dry_run' | 'live' | 'blocked';
   readonly model: typeof GLM_52_OPENROUTER_MODEL;

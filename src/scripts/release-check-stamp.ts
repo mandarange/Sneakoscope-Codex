@@ -109,7 +109,8 @@ function collectFiles(dir, out) {
 function gitFiles() {
   const result = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
     cwd: root,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024
   });
   if (result.status !== 0) fail('unable to list release-relevant files', result.stderr || result.stdout);
   return result.stdout.split('\0').filter(Boolean);

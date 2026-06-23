@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.0.15 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving the active release-authorizing Codex surface to `rust-v0.142.0`: exact SDK/CLI pinning, shared runtime binary identity, app-server-v2 schema evidence, isolated SDK child environment policy, and package contract repair.
+
 SKS 4.0.14 keeps the Codex 0.139 compatibility baseline while sealing GLM Naruto parallelism: real parallel-stage execution metrics, bounded parallel queues for candidate gate, worktree, and verifier phases, requirement coverage tracking to prevent parallel workers from missing task details, preserved `sks --mad` GPT/Codex/MAD route isolation from GLM/OpenRouter mode, and benchmark/proof metadata regression fixes from 4.0.13.
 
 SKS 4.0.12 keeps the Codex 0.139 compatibility baseline while sealing the GLM Naruto runtime: extracted-diff worktrees, bounded adaptive scheduling, true direct-vs-Naruto benchmarking, targeted apply checks, dirty-tree guards, and final seal stop-gate evidence.

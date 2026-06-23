@@ -11,6 +11,15 @@ for (const id of ['release:version-truth', 'release:dag-full-coverage', 'runtime
   assertGate(ids.has(id), `affected selector must always keep ${id}`, selected.selection)
 }
 
+const codexCurrentOnly = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+  changedFiles: ['src/core/codex-control/codex-sdk-adapter.ts'],
+  preset: 'affected'
+})
+const codexCurrentIds = new Set<string>(codexCurrentOnly.selection.selected_gate_ids.map(String))
+for (const id of ['release:codex-current', 'codex:0142:manifest', 'codex:0142:binary-identity', 'codex:0142:policy', 'codex:0142:app-server-v2', 'codex:0142:thread-store', 'codex:0142:capability']) {
+  assertGate(codexCurrentIds.has(id), `codex current surface change must select ${id}`, codexCurrentOnly.selection)
+}
+
 const releaseScriptOnly = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
   changedFiles: ['src/scripts/release-full-parallelism-blackbox.ts'],
   preset: 'affected'

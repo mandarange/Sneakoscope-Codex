@@ -3,6 +3,26 @@
 ## [Unreleased]
 
 
+## [4.0.15] - 2026-06-23
+
+### Added
+
+- Added a Codex `rust-v0.142.0` release manifest SSOT with SDK/CLI version parity, generated app-server schema hash, feature policies, and required real probe names.
+- Added a Codex runtime resolver that records one binary identity with realpath, version, SHA-256, package root, platform, and arch.
+- Added Codex 0.142 manifest, binary identity, policy, app-server-v2, thread-store, and capability gates plus generated app-server TypeScript/JSON Schema snapshots.
+- Added an app-server-v2 JSON-RPC client for resolved Codex 0.142 binaries with native thread list/read/search wrappers and a deterministic `currentTime/read` response handler.
+
+### Fixed
+
+- Pinned `@openai/codex-sdk` exactly to `0.142.0` and updated the lockfile to the matching `@openai/codex` optional platform package graph.
+- Stopped the SDK path from inheriting all host environment variables and removed hard-coded `approvalPolicy: never`, `skipGitRepoCheck: true`, and sandbox-derived network access.
+- Replaced Codex thread registry read-modify-write updates with an atomic-lock plus journal path that preserves corruption evidence instead of silently swallowing it.
+- Restored the published package contract by allowing `dist/scripts` verification targets into the npm tarball.
+
+### Compatibility
+
+- CI/CD, GitHub Actions, publish workflow, and release automation files are unchanged.
+
 
 
 ## [4.0.14] - 2026-06-19

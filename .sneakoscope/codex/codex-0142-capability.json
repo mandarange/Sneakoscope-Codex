@@ -1,0 +1,129 @@
+{
+  "schema": "sks.codex-0142-capability.v1",
+  "generated_at": "2026-06-23T08:34:58.451Z",
+  "ok": true,
+  "release_authorizing": true,
+  "target_tag": "rust-v0.142.0",
+  "required_version": "0.142.0",
+  "runtime_identity": {
+    "requestedBy": "codex-0142-capability",
+    "path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/node_modules/.bin/codex",
+    "realpath": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/node_modules/@openai/codex/bin/codex.js",
+    "version": "0.142.0",
+    "source": "project",
+    "sha256": "d3be844c45c4fd89392536e56e1010963f94785592596b50cd0c45bb8a341406",
+    "packageRoot": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/node_modules/@openai/codex",
+    "packageVersion": "0.142.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "generated_schema_sha256": "fc3c48943de51865e81c8320876fd5310e9d96bd066fc63b74616d26c0e6dd12",
+  "manifest_schema_sha256": "fc3c48943de51865e81c8320876fd5310e9d96bd066fc63b74616d26c0e6dd12",
+  "probe_mode": "real-schema",
+  "feature_states": {
+    "runtime_identity": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "runtime_identity_realpath_version_sha256"
+      ],
+      "blockers": []
+    },
+    "protocol_schema_generation": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "codex_app_server_generate_json_schema"
+      ],
+      "blockers": []
+    },
+    "multi_agent_mode_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:MultiAgentMode"
+      ],
+      "blockers": []
+    },
+    "rollout_budget_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:budgetLimited"
+      ],
+      "blockers": []
+    },
+    "indexed_web_search_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:indexed"
+      ],
+      "blockers": []
+    },
+    "current_time_read_schema": {
+      "supported": true,
+      "certainty": "discovered",
+      "evidence": [
+        "sks_app_server_v2_client_handles:currentTime/read"
+      ],
+      "blockers": []
+    },
+    "native_thread_list_search_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:thread/list",
+        "generated_schema_contains:ThreadSearchResult",
+        "generated_schema_contains:thread/read"
+      ],
+      "blockers": []
+    },
+    "plugin_catalog_refresh_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:plugin/list",
+        "generated_schema_contains:plugin/install",
+        "generated_schema_contains:AppListUpdatedNotification"
+      ],
+      "blockers": []
+    },
+    "terminal_subagent_error_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:subagentStart",
+        "generated_schema_contains:subagentStop",
+        "generated_schema_contains:error"
+      ],
+      "blockers": []
+    },
+    "exec_mcp_reconnect_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:mcp"
+      ],
+      "blockers": []
+    },
+    "remote_native_environment_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:remote"
+      ],
+      "blockers": []
+    },
+    "app_server_overload_schema": {
+      "supported": true,
+      "certainty": "actual",
+      "evidence": [
+        "generated_schema_contains:JSONRPCError"
+      ],
+      "blockers": []
+    }
+  },
+  "blockers": [],
+  "warnings": []
+}

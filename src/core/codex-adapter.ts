@@ -1,17 +1,15 @@
 import path from 'node:path';
-import { exists, packageRoot, runProcess, which, type RunProcessResult } from './fsx.js';
+import { runProcess, type RunProcessResult } from './fsx.js';
 import { forceGpt55CodexArgs } from './codex-model-guard.js';
 import { managedProxyEnvForChild } from './codex/managed-proxy-env.js';
+import { resolveCodexRuntime } from './codex-runtime/resolve-codex-runtime.js';
 
 export async function findCodexBinary(): Promise<string | null> {
-  const env = process.env.SKS_CODEX_BIN || process.env.DCODEX_CODEX_BIN || process.env.CODEX_BIN;
-  if (env && await exists(env)) return env;
-  const global = await which('codex');
-  if (global) return global;
-  const root = packageRoot();
-  const local = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'codex.cmd' : 'codex');
-  if (await exists(local)) return local;
-  return null;
+  const resolved = await resolveCodexRuntime({
+    explicitPath: process.env.DCODEX_CODEX_BIN || null,
+    requestedBy: 'codex-adapter'
+  });
+  return resolved.identity?.realpath || null;
 }
 
 export async function codexVersion(bin: string | null): Promise<string | null> {

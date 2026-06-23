@@ -4,6 +4,13 @@ import type { ReleaseGateManifestV2, ReleaseGateNode } from './release-gate-node
 const ALWAYS_KEEP = new Set([
   'release:version-truth',
   'release:dag-full-coverage',
+  'release:codex-current',
+  'codex:0142:manifest',
+  'codex:0142:binary-identity',
+  'codex:0142:policy',
+  'codex:0142:app-server-v2',
+  'codex:0142:thread-store',
+  'codex:0142:capability',
   'runtime:ts-source-of-truth',
   'typecheck',
   'schema:check'
@@ -78,6 +85,9 @@ function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], pres
   if (changedFiles.some((file) => file === 'release-gates.v2.json' || file.startsWith('src/core/release/'))) {
     if (releaseGate) return 'release_gate_system_changed'
   }
+  if (changedFiles.some((file) => isCodexCurrentFile(file))) {
+    if (gate.id.startsWith('codex:0142') || gate.id === 'release:codex-current' || gate.id.startsWith('codex-control:') || gate.id.startsWith('codex-sdk:')) return 'codex_current_surface_changed'
+  }
   const matchingReleaseScript = changedFiles.some((file) => releaseScriptGateCandidates(file).includes(gate.id))
   if (matchingReleaseScript) return 'release_script_changed'
   if (changedFiles.some((file) => file.startsWith('src/scripts/prepublish-') || file.startsWith('src/scripts/publish-'))) {
@@ -92,6 +102,20 @@ function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], pres
   const inputs = (gate.cache?.inputs || []).filter((pattern) => !isBroadAffectedInput(pattern))
   if (inputs.some((pattern) => changedFiles.some((file) => matchesGlobish(file, pattern)))) return 'cache_input_changed'
   return null
+}
+
+function isCodexCurrentFile(file: string) {
+  return file.startsWith('src/core/codex-control/')
+    || file.startsWith('src/core/codex-compat/')
+    || file.startsWith('src/core/codex-runtime/')
+    || file.startsWith('src/core/codex-app-server/')
+    || file.startsWith('src/core/codex-policy/')
+    || file === 'src/commands/codex.ts'
+    || file === 'src/cli/install-helpers.ts'
+    || file.startsWith('config/codex-releases/')
+    || file.startsWith('schemas/codex-')
+    || file === 'package.json'
+    || file === 'package-lock.json'
 }
 
 function selectionResult(all: ReleaseGateNode[], selected: ReleaseGateNode[], changedFiles: string[], mode: 'affected' | 'full', reasons: Record<string, string>, skipped: string[]) {

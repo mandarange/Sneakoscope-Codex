@@ -20,7 +20,7 @@ export interface GatePackManifest {
 
 export const REQUIRED_GATE_PACK_IDS = [
   'release-parity',
-  'codex-0140',
+  'codex-current',
   'doctor-production',
   'startup-mcp',
   'native-capability',
@@ -64,7 +64,7 @@ export function buildGatePackManifest(root: string, gates?: ReleaseGateNode[]): 
 
 export function packForGateId(id: string): string {
   if (id.startsWith('triwiki:')) return 'triwiki';
-  if (id.startsWith('codex:') || id.includes('0140')) return 'codex-0140';
+  if (id.startsWith('codex:') || id.includes('0140') || id.includes('0142')) return 'codex-current';
   if (id.startsWith('doctor:')) return 'doctor-production';
   if (id.startsWith('sksd:') || id.startsWith('probes:') || id.includes('mcp')) return 'startup-mcp';
   if (id.includes('native') || id.startsWith('agent:')) return 'native-capability';
@@ -80,7 +80,7 @@ export function packForGateId(id: string): string {
 function descriptionForPack(id: string): string {
   const descriptions: Record<string, string> = {
     'release-parity': 'Version, DAG, parity, and package release gates.',
-    'codex-0140': 'Codex 0.140 capability and integration checks.',
+    'codex-current': 'Current Codex release capability and integration checks.',
     'doctor-production': 'Doctor repair and production safety checks.',
     'startup-mcp': 'Startup, MCP, daemon, and probe readiness checks.',
     'native-capability': 'Native agent and desktop capability checks.',
@@ -97,7 +97,7 @@ function descriptionForPack(id: string): string {
 
 function maxParallelForPack(id: string): number {
   if (id === 'secret' || id === 'zellij') return 1;
-  if (id === 'qa-research-image' || id === 'codex-0140') return 2;
+  if (id === 'qa-research-image' || id === 'codex-current') return 2;
   return 4;
 }
 
@@ -113,6 +113,6 @@ function resourceClassesForPack(id: string): string[] {
   if (id === 'secret') return ['secret-sensitive', 'fs-read'];
   if (id === 'zellij') return ['zellij-real'];
   if (id === 'qa-research-image') return ['browser-real', 'cpu-heavy', 'io-heavy'];
-  if (id === 'codex-0140') return ['remote-model-real'];
+  if (id === 'codex-current') return ['remote-model-real'];
   return ['cpu-light', 'fs-read'];
 }

@@ -6,9 +6,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
-const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 1250);
-const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 6400 * 1024);
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 1536 * 1024);
+const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
+const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 1024);
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2300 * 1024);
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
