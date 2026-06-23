@@ -134,6 +134,7 @@ export async function updateCommand(sub: any = 'check', args: any = []) {
   const result = await withSecretPreservationGuard(root, 'update-now', async () => runSksUpdateNow({
     version: valueAfter(args, '--version') || valueAfter(args, '-v'),
     dryRun: flag(args, '--dry-run'),
+    projectRoot: root,
     timeoutMs: 10 * 60 * 1000,
     maxOutputBytes: 128 * 1024
   }));
@@ -142,6 +143,10 @@ export async function updateCommand(sub: any = 'check', args: any = []) {
   console.log(`SKS update ${result.status}`);
   if (result.command) console.log(`Command: ${result.command}`);
   if (result.global_root) console.log(`Global root: ${result.global_root}`);
+  if (result.new_binary) console.log(`New binary: ${result.new_binary}`);
+  if (result.new_version) console.log(`New version: ${result.new_version}`);
+  if (result.project_receipt) console.log(`Migration receipt: ${result.project_receipt.root} (${result.migration_current ? 'current' : 'not current'})`);
+  for (const stage of result.stages || []) console.log(`Stage ${stage.id}: ${stage.ok ? 'ok' : 'failed'} ${stage.status}`);
   if (result.error) console.log(`Error: ${result.error}`);
   if (!result.ok) process.exitCode = 1;
 }

@@ -1,9 +1,0 @@
-{
-  "schema": "sks.skill-quarantine-record.v1",
-  "generated_at": "2026-06-15T16:12:34.060Z",
-  "source_path": "/Users/weklem/.codex/skills/image-ux-review",
-  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/image-ux-review/1781539954058-3316/image-ux-review",
-  "canonical_name": "image-ux-review",
-  "reason": "duplicate SKS-managed skill",
-  "content_sha256": "f1945ac8b405c41109d4a7c6cee94f47c012c83ab0e4a19e887f0ae70552b9d7"
-}

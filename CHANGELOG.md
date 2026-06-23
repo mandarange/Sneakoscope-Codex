@@ -3,6 +3,28 @@
 ## [Unreleased]
 
 
+## [4.1.0] - 2026-06-23
+
+### Added
+
+- Added Codex Doctor semantic readiness v2: structured blockers/warnings drive readiness, warning-only Doctor output remains ready, and unknown non-zero/unparseable output fails closed.
+- Added Doctor post-repair authority artifacts so `sks doctor --fix` records pre-repair Doctor output but bases readiness on the final post-repair Doctor run.
+- Added a managed asset manifest for skills, agent roles, hooks, and Context7 transport with 4.1.0 role metadata.
+- Added Codex 0.142 broker wiring for multi-agent mode, rollout budget strategy, indexed web search, current time, app-server overload, MCP reconnect, plugin refresh, native thread search, remote native environment, and terminal subagent error handling.
+- Added update migration receipts: `sks update now`, postinstall, and first normal command execution now share pending/current project migration state.
+- Added release gates for Doctor semantic truth, Doctor transaction rollback evidence, managed role manifest parity, Codex 0.142 Doctor wiring, and zero tracked machine-local evidence.
+
+### Fixed
+
+- Plain `sks doctor --fix` now performs safe managed native asset repair; `--repair-codex-native` remains a compatibility alias rather than the only repair path.
+- Context7 managed defaults now prefer the remote streamable-HTTP transport consistently across setup and Doctor repair.
+- Package, CLI fast version, Rust crate metadata, lockfile metadata, and documentation now report 4.1.0.
+
+### Compatibility
+
+- CI/CD, GitHub Actions, publish workflow, and release automation files are unchanged.
+
+
 ## [4.0.15] - 2026-06-23
 
 ### Added

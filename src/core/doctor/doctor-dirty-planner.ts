@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
+import { PACKAGE_VERSION, packageRoot, sha256 } from '../fsx.js';
 import { hashJson } from '../triwiki/triwiki-cache-key.js';
 import { triWikiProofBankDir } from '../triwiki/triwiki-proof-bank.js';
 
-export const DOCTOR_DIRTY_PLAN_SCHEMA = 'sks.doctor-dirty-plan.v1';
+export const DOCTOR_DIRTY_PLAN_SCHEMA = 'sks.doctor-dirty-plan.v2';
 
 export interface DoctorDirtyPlan {
   schema: typeof DOCTOR_DIRTY_PLAN_SCHEMA;
@@ -56,7 +58,18 @@ export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorD
 export function markDoctorPhaseClean(root: string, id: string, proofId = `doctor-${id}-${Date.now()}`, postcheckPassed = true): string {
   const file = markerPath(root, id);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ schema: 'sks.doctor-dirty-clean-proof.v1', proof_id: proofId, cleaned_at: new Date().toISOString(), input_hash: phaseInputHash(root, id), postcheck_passed: postcheckPassed }, null, 2)}\n`);
+  fs.writeFileSync(file, `${JSON.stringify({
+    schema: 'sks.doctor-phase-receipt.v2',
+    phase_id: id,
+    proof_id: proofId,
+    sks_version: PACKAGE_VERSION,
+    managed_asset_version: MANAGED_ASSET_VERSION,
+    cleaned_at: new Date().toISOString(),
+    input_hash: phaseInputHash(root, id),
+    target_semantic_hash: phaseInputHash(root, id),
+    postcheck_id: `${id}:postcheck`,
+    postcheck_passed: postcheckPassed
+  }, null, 2)}\n`);
   return proofId;
 }
 
@@ -86,7 +99,7 @@ function phaseInputHash(root: string, id: string): string {
     if (!fs.existsSync(file)) return { rel, hash: 'missing' };
     return hashSemanticPath(root, rel);
   });
-  return hashJson({ id, files, env: phaseEnvPresence(id), semantic_state: phaseSemanticState(root, id) });
+  return hashJson({ id, package: packageIdentity(), files, env: phaseEnvPresence(id), semantic_state: phaseSemanticState(root, id), phase_schema_version: 2 });
 }
 
 function phaseInputFiles(id: string): string[] {
@@ -97,7 +110,34 @@ function phaseInputFiles(id: string): string[] {
   if (id.includes('skill')) return ['.agents/skills', 'src/scripts/skill-registry-ledger-check.ts'];
   if (id.includes('native')) return ['src/core/codex-native', 'src/scripts/native-capability-postcheck-check.ts'];
   if (id.includes('secret')) return ['safety-mutation-allowlist.json', 'src/scripts/secret-preservation-check.ts'];
-  return ['package.json', 'src/core/doctor'];
+  return ['package.json', 'config/codex-releases/rust-v0.142.0.json'];
+}
+
+function packageIdentity(): Record<string, string | null> {
+  const root = packageRoot();
+  return {
+    sks_version: PACKAGE_VERSION,
+    package_realpath: realpathOrNull(root),
+    package_json_sha256: hashFileIfExists(path.join(root, 'package.json')),
+    build_manifest_sha256: hashFileIfExists(path.join(root, 'dist', 'build-manifest.json')),
+    managed_asset_version: MANAGED_ASSET_VERSION
+  };
+}
+
+function realpathOrNull(target: string): string | null {
+  try {
+    return fs.realpathSync(target);
+  } catch {
+    return null;
+  }
+}
+
+function hashFileIfExists(file: string): string | null {
+  try {
+    return sha256(fs.readFileSync(file));
+  } catch {
+    return null;
+  }
 }
 
 function phaseEnvPresence(id: string): Record<string, boolean> {

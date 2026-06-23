@@ -1,9 +1,0 @@
-{
-  "schema": "sks.skill-quarantine-record.v1",
-  "generated_at": "2026-06-17T09:22:25.944Z",
-  "source_path": "/Users/weklem/.codex/skills/research",
-  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/research/1781688145943-93906/research",
-  "canonical_name": "research",
-  "reason": "duplicate SKS-managed skill",
-  "content_sha256": "5db2314adc6a47f5e09f4aa99ecfd0306fd6f5929827fa7c48ce1dfac9c62318"
-}

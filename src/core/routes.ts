@@ -90,10 +90,14 @@ export const RECOMMENDED_MCP_SERVERS = [
   {
     id: 'context7',
     required: true,
-    transport: 'local',
-    command: 'npx',
-    args: ['-y', '@upstash/context7-mcp@latest'],
+    transport: 'remote',
+    url: 'https://mcp.context7.com/mcp',
     remote_url: 'https://mcp.context7.com/mcp',
+    local_fallback: {
+      transport: 'local',
+      command: 'npx',
+      args: ['-y', '@upstash/context7-mcp@latest']
+    },
     purpose: 'Current library/API/framework documentation for route gates.'
   }
 ];
@@ -1080,7 +1084,7 @@ export function dollarCommandNames() {
   ])).join(', ');
 }
 
-export function context7ConfigToml(transport: any = 'local') {
+export function context7ConfigToml(transport: any = 'remote') {
   if (transport === 'remote') return '[mcp_servers.context7]\nurl = "https://mcp.context7.com/mcp"\n';
   return '[mcp_servers.context7]\ncommand = "npx"\nargs = ["-y", "@upstash/context7-mcp@latest"]\n';
 }

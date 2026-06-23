@@ -13,7 +13,7 @@ assertGate(parity.ok, 'Codex release manifest TS/JSON parity must hold', parity)
 assertGate(dep === manifest.sdkVersion, 'package.json must pin @openai/codex-sdk exactly to manifest sdkVersion', { dep, sdkVersion: manifest.sdkVersion });
 assertGate(lockSdk === manifest.sdkVersion, 'package-lock must resolve @openai/codex-sdk to manifest sdkVersion', { lockSdk, sdkVersion: manifest.sdkVersion });
 assertGate(lockCli === manifest.requiredCliVersion, 'package-lock must resolve @openai/codex to manifest requiredCliVersion', { lockCli, requiredCliVersion: manifest.requiredCliVersion });
-assertGate(pkg.version === '4.0.15', 'package version must be 4.0.15', { version: pkg.version });
+assertGate(pkg.version === '4.1.0', 'package version must be 4.1.0', { version: pkg.version });
 emitGate('codex:0142:manifest', {
   manifest_sha256: parity.manifest_sha256,
   target_tag: manifest.targetTag,

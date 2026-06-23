@@ -418,7 +418,7 @@ export async function initProject(root: any, opts: any = {}) {
       context7: {
         ...(policy.context7 || {}),
         required_for_external_docs: true,
-        default_transport: 'local',
+        default_transport: 'remote',
         mcp_config: '.codex/config.toml',
         required_flow: ['resolve-library-id', 'query-docs']
       },
@@ -553,7 +553,7 @@ export async function initProject(root: any, opts: any = {}) {
       },
       context7: {
         required_for_external_docs: true,
-        default_transport: 'local',
+        default_transport: 'remote',
         mcp_config: '.codex/config.toml',
         required_flow: ['resolve-library-id', 'query-docs']
       },

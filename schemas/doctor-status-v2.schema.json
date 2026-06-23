@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/doctor-status-v2.schema.json",
+  "title": "SKS Doctor Status V2",
+  "type": "object",
+  "required": ["schema", "ok", "ready", "codex_doctor", "post_repair_codex_doctor"],
+  "properties": {
+    "schema": { "const": "sks.doctor-status.v2" },
+    "ok": { "type": "boolean" },
+    "codex_doctor": { "$ref": "#/$defs/codexDoctorBridge" },
+    "pre_repair_codex_doctor": { "$ref": "#/$defs/codexDoctorBridge" },
+    "post_repair_codex_doctor": { "$ref": "#/$defs/codexDoctorBridge" },
+    "ready": {
+      "type": "object",
+      "required": ["schema", "ready", "core_ready", "managed_state_current", "blockers", "warnings"],
+      "properties": {
+        "schema": { "const": "sks.doctor-readiness-matrix.v2" },
+        "ready": { "type": "boolean" },
+        "core_ready": { "type": "boolean" },
+        "managed_state_current": { "type": "boolean" },
+        "blockers": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "codexDoctorBridge": {
+      "type": ["object", "null"],
+      "required": ["schema", "disposition", "semantic_ok", "blockers", "warnings"],
+      "properties": {
+        "schema": { "const": "sks.codex-doctor-bridge.v2" },
+        "disposition": { "enum": ["pass", "warn", "block"] },
+        "semantic_ok": { "type": "boolean" },
+        "blockers": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
