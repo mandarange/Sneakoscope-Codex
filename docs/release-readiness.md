@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.1.0 is the Codex `rust-v0.142.0` Doctor/update readiness patch after 4.0.15. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, semantic Doctor readiness, managed asset manifest parity, and update migration lifecycle checks to agree on 4.1.0 before publication.
+
+4.1.0 release readiness adds proof that Codex Doctor warnings do not block core readiness, post-repair Doctor status is authoritative, managed native assets are repaired from plain `sks doctor --fix`, update/postinstall paths run the correct package-local Doctor lifecycle, first-command migration receipts are current, and local machine evidence is not tracked in the release commit.
+
 SKS 4.0.15 is the Codex `rust-v0.142.0` compatibility-preparation patch after 4.0.14. It requires package, lockfile, CLI constants, Codex release manifest, generated app-server schema hash, app-server-v2 client proof, thread-store concurrency proof, runtime binary identity, SDK child-env isolation, package script contract evidence, built output, provenance, and npm registry unpublished-version checks to agree on 4.0.15 before publication.
 
 4.0.15 release readiness adds proof that `@openai/codex-sdk` is exactly pinned to `0.142.0`, the resolved Codex binary is identified by realpath/version/SHA-256, generated app-server schemas come from that binary, app-server-v2 can initialize and list native threads, 0.142 capability gates do not use `assumed_by_version`, SDK execution policy keeps sandbox/approval/network/web/git/mutation axes separate, Codex thread registry writes are lock/journal protected, and the published tarball includes public script targets.
