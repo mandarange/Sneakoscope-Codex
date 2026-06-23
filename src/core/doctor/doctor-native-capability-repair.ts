@@ -16,6 +16,10 @@ export interface DoctorNativeCapabilityRepairReport {
   skill_dedupe: unknown;
   native_capabilities: unknown;
   secret_preservation_guard: string;
+  core_blockers: string[];
+  route_blockers: Record<string, string[]>;
+  optional_manual_required: string[];
+  optional_warnings: string[];
   blockers: string[];
 }
 
@@ -24,6 +28,7 @@ export async function runDoctorNativeCapabilityRepair(input: {
   fix: boolean;
   yes: boolean;
   flags?: string[];
+  skipNativeCapabilities?: boolean;
 }): Promise<DoctorNativeCapabilityRepairReport> {
   const root = path.resolve(input.root);
   const operation = async () => {
@@ -34,16 +39,24 @@ export async function runDoctorNativeCapabilityRepair(input: {
       yes: input.yes,
       quarantineUserDuplicates: (input.flags || []).includes('--quarantine-user-duplicate-skills')
     });
-    const nativeCapabilities = await repairNativeCapabilities({
-      root,
-      fix: input.fix,
-      yes: input.yes,
-      allowManualInstructions: true
-    });
+    const nativeCapabilities = input.skipNativeCapabilities === true
+      ? skippedNativeCapabilityDiagnostics(root)
+      : await repairNativeCapabilities({
+          root,
+          fix: input.fix,
+          yes: input.yes,
+          allowManualInstructions: true
+        });
     const blockers = [
       ...((coreSkills as { blockers?: string[] }).blockers || []),
       ...((skillDedupe as { blockers?: string[] }).blockers || []),
-      ...((nativeCapabilities as { blockers?: string[] }).blockers || [])
+      ...((nativeCapabilities as { core_blockers?: string[]; blockers?: string[] }).core_blockers || (nativeCapabilities as { blockers?: string[] }).blockers || [])
+    ];
+    const routeBlockers = (nativeCapabilities as { route_blockers?: Record<string, string[]> }).route_blockers || {};
+    const optionalManualRequired = (nativeCapabilities as { optional_manual_required?: string[] }).optional_manual_required || [];
+    const optionalWarnings = [
+      ...((nativeCapabilities as { warnings?: string[] }).warnings || []),
+      ...optionalManualRequired.map((id) => `${id}_manual_required`)
     ];
     const report: DoctorNativeCapabilityRepairReport = {
       schema: 'sks.doctor-native-capability-repair.v1',
@@ -56,6 +69,10 @@ export async function runDoctorNativeCapabilityRepair(input: {
       skill_dedupe: skillDedupe,
       native_capabilities: nativeCapabilities,
       secret_preservation_guard: '.sneakoscope/reports/secret-preservation-guard.json',
+      core_blockers: blockers,
+      route_blockers: routeBlockers,
+      optional_manual_required: optionalManualRequired,
+      optional_warnings: [...new Set(optionalWarnings)],
       blockers
     };
     await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'doctor-native-capability-repair.json'), report).catch(() => undefined);
@@ -63,4 +80,28 @@ export async function runDoctorNativeCapabilityRepair(input: {
   };
   if (!input.fix) return operation();
   return withSecretPreservationGuard(root, 'doctor-native-capability-repair', operation);
+}
+
+function skippedNativeCapabilityDiagnostics(root: string) {
+  return {
+    schema: 'sks.native-capability-repair-matrix.v1',
+    generated_at: nowIso(),
+    ok: true,
+    root,
+    skipped: true,
+    reason: 'optional_native_capabilities_deferred_to_doctor_capabilities_or_route_gate',
+    capabilities: [],
+    core_blockers: [],
+    route_blockers: {
+      'route-computer-use': ['computer_use_os_permission_or_capability_unknown'],
+      'route-chrome-web-review': ['codex_chrome_extension_readiness_not_verified']
+    },
+    optional_manual_required: ['computer_use', 'chrome_web_review'],
+    blockers: [],
+    warnings: [
+      'computer_use_manual_required_before_route',
+      'chrome_extension_manual_required_before_browser_route',
+      'optional_native_capability_diagnostics_skipped'
+    ]
+  };
 }

@@ -7,4 +7,5 @@ delete process.env.SKS_CHROME_EXTENSION_READY;
 const report = await repairNativeCapabilities({ root, fix: true, yes: true, capabilities: ['chrome_web_review'], fixture: 'manual-required' });
 const state = report.capabilities[0];
 assertGate(state?.repairability === 'manual-required' && state.after !== 'verified', 'Chrome/web review must not verify without extension readiness', report);
+assertGate(report.ok === true && report.blockers.length === 0 && Array.isArray(report.route_blockers['route-chrome-web-review']), 'Chrome/web review must not block core readiness', report);
 emitGate('native:chrome-web-review-repair');

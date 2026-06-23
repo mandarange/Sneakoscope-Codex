@@ -176,7 +176,7 @@ export async function writeDoctorFixTransaction(input: {
     duration_ms: Number.isFinite(phase.duration_ms) ? Number(phase.duration_ms) : null,
     rollback_performed: phase.rollback_performed === true
   }));
-  const postcheckOk = phases.every((phase) => phase.ok || (phase.manual_required && !phase.required_for_ready));
+  const postcheckOk = phases.every((phase) => phase.ok || phase.required_for_ready === false);
   const mutationsWithoutRollback = phases.filter((phase) => phase.required_for_ready && phase.repaired && !phase.rollback_evidence).length;
   const report: DoctorFixTransaction = {
     schema: 'sks.doctor-fix-transaction.v2',

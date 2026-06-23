@@ -99,7 +99,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     }
     return report;
   }
-  const codexUpdate = deps.maybePromptCodexUpdateForLaunch ? await deps.maybePromptCodexUpdateForLaunch(args, { label: glmMadLaunch ? 'GLM MAD launch' : 'MAD launch' }) : { status: 'skipped' };
+  const codexUpdate: any = { status: 'deferred_background', reason: 'update_prompt_deferred_until_after_mad_ui' };
   if (codexUpdate.status === 'failed' || codexUpdate.status === 'updated_not_reflected') {
     console.error(`Codex CLI update failed: ${codexUpdate.error || 'updated version was not visible on PATH'}`);
     process.exitCode = 1;
@@ -147,14 +147,15 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   }
   const lb = glmMadLaunch
     ? { status: 'skipped_glm_openrouter', ok: false, reason: 'glm_mad_uses_openrouter_directly' }
-    : deps.maybePromptCodexLbSetupForLaunch ? await deps.maybePromptCodexLbSetupForLaunch(args) : { status: 'skipped' };
+    : { status: 'deferred_until_provider_route', ok: true, reason: 'codex_lb_setup_prompt_deferred_until_provider_route' };
   if (!glmMadLaunch && lb.status === 'missing_api_key') {
     process.exitCode = 1;
     return;
   }
   const profile = buildMadHighLaunchProfileNoWrite();
   const uiSnapshotId = Date.now().toString(36);
-  const beforeUi = await writeCodexAppUiSnapshot(launchRoot, `mad-before-${uiSnapshotId}`).catch(() => null);
+  const strictUiSnapshot = process.env.SKS_MAD_STRICT_UI_SNAPSHOT === '1';
+  const beforeUi = strictUiSnapshot ? await writeCodexAppUiSnapshot(launchRoot, `mad-before-${uiSnapshotId}`).catch(() => null) : null;
   // launchFast skips the redundant live-`codex exec` config probe (up to ~20s, run
   // up to 3x via repair re-inspections): the real codex profile is exercised moments
   // later when the Zellij session opens. All filesystem/permission/EPERM/symlink/ACL
@@ -232,22 +233,22 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     });
     await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.capability_created', grant_source: madDbGrant.source, cycle_id: madDbCapability.cycle_id, expires_at: madDbCapability.expires_at });
   }
-  const updateNotice = await checkSksUpdateNotice({
-    packageName: deps.packageName || 'sneakoscope',
-    currentVersion: deps.packageVersion || PACKAGE_VERSION,
-    missionDir: madLaunch.dir
-  }).catch((err: any) => ({
+  const updateNotice = {
     schema: 'sks.update-notice.v1',
     checked_at: nowIso(),
     package_name: deps.packageName || 'sneakoscope',
     current_version: deps.packageVersion || PACKAGE_VERSION,
     latest_version: null,
     update_available: false,
-    source: 'error',
+    source: 'deferred_background',
     cache_ttl_ms: 0,
-    message: 'SKS update notice check failed; MAD launch continues.',
-    error: err?.message || String(err)
-  }));
+    message: 'SKS update notice refresh deferred until after MAD UI launch.'
+  };
+  void checkSksUpdateNotice({
+    packageName: deps.packageName || 'sneakoscope',
+    currentVersion: deps.packageVersion || PACKAGE_VERSION,
+    missionDir: madLaunch.dir
+  }).then((notice: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_refreshed_background', non_blocking: true, update_available: notice.update_available === true, source: notice.source })).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_background_failed', error: err?.message || String(err) }));
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${glmRuntime?.profile?.profile_name || madHighProfileName()} | gate ${madLaunch.mission_id}`);
   if (glmRuntime?.profile) console.log(`GLM MAD launch active: ${glmRuntime.profile.model} via OpenRouter; GPT fallback blocked.`);
@@ -305,7 +306,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     worker_panes_created: 0,
     right_column_mode: 'spawn-on-first-worker'
   });
-  const madNativeSwarm = await startMadNativeSwarm(madLaunch.root, madLaunch, args, launchProfile, {
+  const madNativeSwarmPromise = startMadNativeSwarm(madLaunch.root, madLaunch, args, launchProfile, {
     env: {
       ...madSksEnv,
       ...(launch.session_name ? { SKS_ZELLIJ_SESSION_NAME: launch.session_name } : {})
@@ -314,7 +315,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     zellijSessionName: launch.session_name || null,
     workerPlacement: headlessZellij ? 'process' : shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
     zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || 8)
-  });
+  }).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_swarm_background_failed', error: err?.message || String(err) }));
+  void madNativeSwarmPromise;
   // The launcher only creates a detached background session. In an interactive
   // terminal, immediately attach so the session actually opens for the user
   // instead of leaving them to copy/paste the attach command by hand.
@@ -641,15 +643,7 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   const has = (scope: string) => allowedScopes.has(scope as any);
   const dbWriteAllowed = has('db_write');
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: `${activatedBy} Zellij scoped high-power maintenance session` });
-  await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch(() => null);
-  await writeCodex0139CapabilityArtifacts(root, { missionId: id }).catch(() => null);
-  const codexNativeInvocation = await resolveCodexNativeInvocationPlan({
-    root,
-    missionId: id,
-    route: '$MAD',
-    desiredCapability: 'hook-evidence'
-  }).catch(() => null);
-  if (codexNativeInvocation) await writeJsonAtomic(path.join(dir, 'mad-codex-native-invocation.json'), codexNativeInvocation).catch(() => undefined);
+  void refreshMadNativeLaunchArtifacts(root, id, dir).catch((err: any) => appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_artifact_background_failed', error: err?.message || String(err) }));
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
   // The interactive launch 'before' snapshot is only persisted (env + policy json)
   // and is never compared against an 'after' snapshot during the session, so the
@@ -693,13 +687,13 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
     protected_core_policy: protectedCorePolicyPath,
     protected_core_before: protectedCoreBeforePath,
     protected_core_digest: protectedCoreBefore.digest,
-    codex_native_invocation_plan: codexNativeInvocation ? {
-      selected_strategy: codexNativeInvocation.selected_strategy,
-      hook_evidence_policy: codexNativeInvocation.env.SKS_CODEX_NATIVE_HOOK_EVIDENCE_POLICY,
-      blockers: codexNativeInvocation.blockers,
-      warnings: codexNativeInvocation.warnings,
+    codex_native_invocation_plan: {
+      selected_strategy: 'message-role-fallback',
+      hook_evidence_policy: 'background-verification-do-not-count-until-refreshed',
+      blockers: [],
+      warnings: ['native_invocation_plan_deferred_until_after_ui'],
       artifact_path: 'mad-codex-native-invocation.json'
-    } : null,
+    },
     activated_by: activatedBy,
     cwd: path.resolve(cwd || process.cwd())
   };
@@ -733,6 +727,19 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
     prompt: gate.activated_by
   });
   return { mission_id: id, dir, gate, root };
+}
+
+async function refreshMadNativeLaunchArtifacts(root: string, missionId: string, dir: string) {
+  await writeCodex0138CapabilityArtifacts(root, { missionId }).catch(() => null);
+  await writeCodex0139CapabilityArtifacts(root, { missionId }).catch(() => null);
+  const codexNativeInvocation = await resolveCodexNativeInvocationPlan({
+    root,
+    missionId,
+    route: '$MAD',
+    desiredCapability: 'hook-evidence'
+  }).catch(() => null);
+  if (codexNativeInvocation) await writeJsonAtomic(path.join(dir, 'mad-codex-native-invocation.json'), codexNativeInvocation).catch(() => undefined);
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_artifacts_refreshed_background', ok: Boolean(codexNativeInvocation) });
 }
 
 function baseMadLaunchOnlyFlags() {

@@ -34,6 +34,7 @@ const autoAttachOk = madCommand.includes('shouldAutoAttachZellij(args)')
   && madCommand.includes("list.includes('--attach')")
   && madCommand.includes('process.stdout.isTTY && process.stdin.isTTY');
 const nativeSwarmOk = madCommand.includes('startMadNativeSwarm(')
+  && madCommand.includes('void madNativeSwarmPromise')
   && madCommand.includes('stripMadLaunchOnlyArgs(args, { includeGlmFlags: glmMadLaunch })')
   && madCommand.includes('function madLaunchValueFlags(includeGlmFlags = false)')
   && madCommand.includes("route: '$MAD-SKS'")
@@ -42,6 +43,10 @@ const nativeSwarmOk = madCommand.includes('startMadNativeSwarm(')
   && madCommand.includes('slotCount: 0')
   && madCommand.includes('zellijSessionName: launch.session_name')
   && madCommand.includes('mad_sks.native_swarm_started');
+const instantBootstrapOk = madCommand.includes("status: 'deferred_background'")
+  && madCommand.includes('SKS_MAD_STRICT_UI_SNAPSHOT')
+  && madCommand.includes('refreshMadNativeLaunchArtifacts')
+  && madCommand.includes('background-verification-do-not-count-until-refreshed');
 const codexPaneChecks = {
   main_pane_kind: report.main_pane_kind === 'codex_interactive',
   report_enabled: report.codex_pane?.enabled === true,
@@ -86,9 +91,10 @@ const ok = report.kind === 'mad'
   && consoleDetailOk
   && autoAttachOk
   && nativeSwarmOk
+  && instantBootstrapOk
   && clipboardCliOk
   && codexPaneOk;
-const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, native_swarm_ok: nativeSwarmOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
+const gate = { schema: 'sks.mad-sks-zellij-launch-check.v1', ok, install_safety_ok: installSafetyOk, console_detail_ok: consoleDetailOk, auto_attach_ok: autoAttachOk, native_swarm_ok: nativeSwarmOk, instant_bootstrap_ok: instantBootstrapOk, clipboard_cli_ok: clipboardCliOk, codex_pane_ok: codexPaneOk, codex_pane_checks: codexPaneChecks, report };
 await writeMadZellijLaunchGate(gate);
 emit(gate);
 async function writeMadZellijLaunchGate(gate) {

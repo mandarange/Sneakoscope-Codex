@@ -204,8 +204,11 @@ function buildRepairReadiness(input: any = {}) {
       ok: input.doctor_fix_postcheck.ok === true,
       required_for_core_ready: true,
       manual_required: false,
-      blockers: normalizeList(input.doctor_fix_postcheck.blockers),
-      warnings: normalizeList(input.doctor_fix_postcheck.warnings)
+      blockers: normalizeList(input.doctor_fix_postcheck.required_blockers || input.doctor_fix_postcheck.blockers),
+      warnings: [
+        ...normalizeList(input.doctor_fix_postcheck.optional_warnings),
+        ...normalizeList(input.doctor_fix_postcheck.warnings)
+      ]
     })
   }
   const blockers = phases
@@ -232,14 +235,15 @@ function buildOptionalCapabilities(input: any = {}) {
   const find = (id: string, fallback: 'verified' | 'manual_required' | 'unavailable') => {
     const row = nativeRows.find((entry: any) => entry?.id === id)
     if (!row) return fallback
-    if (row.ok === true || row.status === 'verified' || row.status === 'available') return 'verified'
-    if (row.manual_required === true || row.status === 'manual_required') return 'manual_required'
+    if (row.availability === 'verified' || row.after === 'verified' || row.before === 'verified' || row.ok === true || row.status === 'verified' || row.status === 'available') return 'verified'
+    if (row.availability === 'manual-required' || row.manual_required === true || row.status === 'manual_required' || row.repairability === 'manual-required') return 'manual_required'
     return 'unavailable'
   }
   return {
     computer_use: find('computer_use', 'manual_required'),
     chrome_web_review: find('chrome_web_review', 'manual_required'),
-    codex_app: input.codex_app?.ok === true ? 'verified' : 'optional_missing'
+    codex_app: input.codex_app?.ok === true ? 'verified' : 'optional_missing',
+    route_blockers: input.doctor_native_capability?.route_blockers || input.doctor_native_capability?.native_capabilities?.route_blockers || {}
   }
 }
 

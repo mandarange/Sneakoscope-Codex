@@ -19,6 +19,7 @@ import { runGlmDirectBenchCase } from './glm-direct-bench-runner.js';
 import { computeGlmBenchmarkComparison } from './glm-bench-comparison.js';
 import { buildGlmBenchModelLockProof } from './glm-bench-model-lock-proof.js';
 import { writeGlmBenchReport } from './glm-bench-report.js';
+import { GLM_BENCHMARK_VERSION } from './glm-benchmark-types.js';
 import type {
   GlmBenchmarkResult,
   GlmBenchmarkCaseResult,
@@ -174,7 +175,7 @@ export async function runGlmBenchmark(
 
   const result: GlmBenchmarkResult = {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.1.0',
+    version: GLM_BENCHMARK_VERSION,
     generated_at: nowIso(),
     status: 'live',
     model: GLM_52_OPENROUTER_MODEL,
@@ -204,7 +205,7 @@ export async function runGlmBenchmark(
 function dryRunResult(root: string, startedMs: number): GlmBenchmarkResult {
   return {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.1.0',
+    version: GLM_BENCHMARK_VERSION,
     generated_at: nowIso(),
     status: 'dry_run',
     model: GLM_52_OPENROUTER_MODEL,
@@ -228,7 +229,7 @@ function dryRunResult(root: string, startedMs: number): GlmBenchmarkResult {
 function blockedResult(root: string, warnings: string[]): GlmBenchmarkResult {
   return {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.1.0',
+    version: GLM_BENCHMARK_VERSION,
     generated_at: nowIso(),
     status: 'blocked',
     model: GLM_52_OPENROUTER_MODEL,

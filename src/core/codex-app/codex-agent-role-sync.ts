@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { nowIso, writeJsonAtomic, writeTextAtomic, ensureDir } from '../fsx.js'
+import { PACKAGE_VERSION, nowIso, writeJsonAtomic, writeTextAtomic, ensureDir } from '../fsx.js'
 import { repairAgentRoleConfigs } from '../agents/agent-role-config.js'
 import { agentRolePayloadFor, probeCodexAgentTypeSupport } from './codex-agent-type-probe.js'
 import type { CodexAgentRolePayload, CodexAgentTypeProbe } from './codex-app-types.js'
@@ -114,12 +114,12 @@ export async function syncCodexAgentRoles(input: {
 function roleToml(role: string, payload: CodexAgentRolePayload | undefined): string {
   return [
     `name = "${role}"`,
-    `description = "SKS managed 4.1.0 directive role: ${role}"`,
+    `description = "SKS managed ${PACKAGE_VERSION} directive role: ${role}"`,
     'model_reasoning_effort = "medium"',
     role.includes('implementer') ? 'sandbox_mode = "workspace-write"' : 'sandbox_mode = "read-only"',
     'approval_policy = "never"',
     'developer_instructions = """',
-    `You are ${role}. SKS managed 4.1.0 directive role with bounded ownership.`,
+    `You are ${role}. SKS managed ${PACKAGE_VERSION} directive role with bounded ownership.`,
     'Bounded ownership: use only the assigned owner files/directories and treat memory as guidance, not permission.',
     role.includes('implementer') ? 'Maker/checker separation: implementer may patch only owner scope and cannot self-approve.' : 'Maker/checker separation: checker is read-only and must reject missing gates or missing proof artifacts.',
     role.includes('implementer') ? 'Allowed sandbox: workspace-write only within assigned owner scope.' : 'Allowed sandbox: read-only; checker roles cannot mutate.',
@@ -136,7 +136,7 @@ function roleToml(role: string, payload: CodexAgentRolePayload | undefined): str
 }
 
 function isSksManagedDirectiveRole(text: string): boolean {
-  return /SKS managed (?:3\.1\.(?:4|5|6|7|11)|4\.1\.0) (?:directive|bounded) role/.test(text)
+  return /SKS managed (?:3\.1\.(?:4|5|6|7|11)|4\.1\.\d+) (?:directive|bounded) role/.test(text)
     || /\bmessage_role_prefix\s*=/.test(text) && /SKS managed 3\.1\./.test(text)
 }
 

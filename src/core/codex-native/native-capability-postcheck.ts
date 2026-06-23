@@ -15,13 +15,19 @@ export async function postcheckNativeCapabilities(input: {
   const fixture = input.fixture || false;
   const matrix = input.matrix || await buildNativeCapabilityRepairMatrix({ root, fixture, reportPath: null });
   const capabilities = await Promise.all(matrix.capabilities.map((state) => postcheckCapability(root, state, fixture)));
-  const blockers = capabilities.flatMap((state) => state.after === 'verified' || state.after === 'degraded' ? [] : state.blockers);
+  const coreBlockers = capabilities.flatMap((state) => state.core_blockers || []);
+  const routeBlockers = mergeRouteBlockers(capabilities);
   const checked: NativeCapabilityRepairMatrix = {
     ...matrix,
     generated_at: new Date().toISOString(),
-    ok: blockers.length === 0,
+    ok: coreBlockers.length === 0,
     capabilities,
-    blockers,
+    core_blockers: coreBlockers,
+    route_blockers: routeBlockers,
+    optional_manual_required: capabilities
+      .filter((state) => state.availability === 'manual-required' && state.after !== 'verified')
+      .map((state) => state.id),
+    blockers: coreBlockers,
     warnings: capabilities.flatMap((state) => state.warnings)
   };
   const reportPath = input.reportPath === null
@@ -48,16 +54,18 @@ function postcheckImageGeneration(state: NativeCapabilityRepairState, fixture: F
   return {
     ...state,
     after: 'unknown',
-    blockers: ['imagegen_auth_or_codex_app_builtin_missing'],
+    core_blockers: [],
+    route_blockers: mergeStateRouteBlockers(state, 'route-image', ['imagegen_auth_or_codex_app_builtin_missing']),
+    blockers: [],
     warnings: [...new Set([...state.warnings, 'image_generation_not_verified_without_real_capability'])]
   };
 }
 
 async function postcheckImageFollowupEdit(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {
   const contract = await validateSavedArtifactPathContract(root);
-  if (!contract.ok) return { ...state, after: 'blocked', blockers: contract.blockers };
+  if (!contract.ok) return routeBlocked(state, 'route-image', contract.blockers);
   const sample = path.join(contract.imageArtifacts, 'postcheck-followup-sample.txt');
-  if (!(await writeReadSample(sample))) return { ...state, after: 'blocked', blockers: ['image_followup_sample_artifact_unwritable'] };
+  if (!(await writeReadSample(sample))) return routeBlocked(state, 'route-image', ['image_followup_sample_artifact_unwritable']);
   return verified(state);
 }
 
@@ -66,7 +74,9 @@ function postcheckComputerUse(state: NativeCapabilityRepairState, _fixture: Fixt
   return {
     ...state,
     after: 'unknown',
-    blockers: ['computer_use_os_permission_or_capability_unknown'],
+    core_blockers: [],
+    route_blockers: mergeStateRouteBlockers(state, 'route-computer-use', ['computer_use_os_permission_or_capability_unknown']),
+    blockers: [],
     warnings: [...new Set([...state.warnings, 'manual_os_permission_required'])]
   };
 }
@@ -76,7 +86,9 @@ function postcheckChromeWebReview(state: NativeCapabilityRepairState, fixture: F
   return {
     ...state,
     after: 'unknown',
-    blockers: ['codex_chrome_extension_readiness_not_verified'],
+    core_blockers: [],
+    route_blockers: mergeStateRouteBlockers(state, 'route-chrome-web-review', ['codex_chrome_extension_readiness_not_verified']),
+    blockers: [],
     warnings: [...new Set([...state.warnings, 'manual_chrome_extension_setup_required'])]
   };
 }
@@ -89,11 +101,11 @@ async function postcheckAppScreenshot(root: string, state: NativeCapabilityRepai
   const dir = path.join(root, '.sneakoscope', 'app-screenshots');
   const registry = path.join(dir, 'screenshot-registry.json');
   if (!(await writeReadSample(path.join(dir, 'postcheck-screenshot-sample.txt')))) {
-    return { ...state, after: 'blocked', blockers: ['app_screenshot_directory_unwritable'] };
+    return routeBlocked(state, 'route-image', ['app_screenshot_directory_unwritable']);
   }
   await writeJsonAtomic(registry, { schema: 'sks.app-screenshot-registry.v1', generated_at: new Date().toISOString(), screenshots: [] }).catch(() => undefined);
   const json = await readJson(registry, {}).catch(() => ({})) as { schema?: string };
-  if (json.schema !== 'sks.app-screenshot-registry.v1') return { ...state, after: 'blocked', blockers: ['app_screenshot_registry_invalid'] };
+  if (json.schema !== 'sks.app-screenshot-registry.v1') return routeBlocked(state, 'route-image', ['app_screenshot_registry_invalid']);
   return verified(state);
 }
 
@@ -102,7 +114,9 @@ function postcheckAppHandoff(state: NativeCapabilityRepairState, fixture: Fixtur
   return {
     ...state,
     after: 'unknown',
-    blockers: ['codex_app_handoff_not_verified'],
+    core_blockers: [],
+    route_blockers: mergeStateRouteBlockers(state, 'route-app-handoff', ['codex_app_handoff_not_verified']),
+    blockers: [],
     warnings: [...new Set([...state.warnings, 'manual_app_handoff_approval_required'])]
   };
 }
@@ -114,23 +128,55 @@ async function postcheckImagePathExposure(root: string, state: NativeCapabilityR
     return {
       ...state,
       after: 'degraded',
+      availability: 'available-unverified',
+      core_blockers: [],
+      route_blockers: {},
       blockers: [],
       warnings: [...new Set([...state.warnings, 'using_saved_artifact_path_contract_fallback'])]
     };
   }
-  return { ...state, after: 'blocked', blockers: ['image_path_exposure_missing_without_fallback_contract', ...contract.blockers] };
+  return routeBlocked(state, 'route-image', ['image_path_exposure_missing_without_fallback_contract', ...contract.blockers]);
 }
 
 async function postcheckSavedArtifactPathContract(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {
   const contract = await validateSavedArtifactPathContract(root);
-  if (!contract.ok) return { ...state, after: 'blocked', blockers: contract.blockers };
-  if (!(await writeReadSample(path.join(contract.imageArtifacts, 'postcheck-contract-image.txt')))) return { ...state, after: 'blocked', blockers: ['image_artifacts_directory_unwritable'] };
-  if (!(await writeReadSample(path.join(contract.appScreenshots, 'postcheck-contract-screenshot.txt')))) return { ...state, after: 'blocked', blockers: ['app_screenshots_directory_unwritable'] };
+  if (!contract.ok) return routeBlocked(state, 'route-image', contract.blockers);
+  if (!(await writeReadSample(path.join(contract.imageArtifacts, 'postcheck-contract-image.txt')))) return routeBlocked(state, 'route-image', ['image_artifacts_directory_unwritable']);
+  if (!(await writeReadSample(path.join(contract.appScreenshots, 'postcheck-contract-screenshot.txt')))) return routeBlocked(state, 'route-image', ['app_screenshots_directory_unwritable']);
   return verified(state);
 }
 
 function verified(state: NativeCapabilityRepairState): NativeCapabilityRepairState {
-  return { ...state, after: 'verified', blockers: [] };
+  return { ...state, after: 'verified', availability: 'verified', core_blockers: [], route_blockers: {}, blockers: [] };
+}
+
+function routeBlocked(state: NativeCapabilityRepairState, scope: keyof NativeCapabilityRepairState['route_blockers'], blockers: string[]): NativeCapabilityRepairState {
+  return {
+    ...state,
+    after: 'blocked',
+    core_blockers: [],
+    route_blockers: mergeStateRouteBlockers(state, scope, blockers),
+    blockers: []
+  };
+}
+
+function mergeStateRouteBlockers(state: NativeCapabilityRepairState, scope: keyof NativeCapabilityRepairState['route_blockers'], blockers: string[]) {
+  return {
+    ...(state.route_blockers || {}),
+    [scope]: [...new Set([...(state.route_blockers?.[scope] || []), ...blockers])]
+  };
+}
+
+function mergeRouteBlockers(states: NativeCapabilityRepairState[]) {
+  const merged: NativeCapabilityRepairMatrix['route_blockers'] = {};
+  for (const state of states) {
+    for (const [scope, blockers] of Object.entries(state.route_blockers || {})) {
+      merged[scope as keyof NativeCapabilityRepairMatrix['route_blockers']] = [
+        ...new Set([...(merged[scope as keyof NativeCapabilityRepairMatrix['route_blockers']] || []), ...blockers])
+      ];
+    }
+  }
+  return merged;
 }
 
 async function validateSavedArtifactPathContract(root: string): Promise<{ ok: boolean; imageArtifacts: string; appScreenshots: string; blockers: string[] }> {

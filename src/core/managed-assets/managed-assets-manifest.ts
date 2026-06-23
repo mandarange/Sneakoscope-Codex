@@ -1,7 +1,7 @@
 import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
-export const MANAGED_ASSET_VERSION = '4.1.0'
+export const MANAGED_ASSET_VERSION = '4.1.1'
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 
 export type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual'
@@ -38,9 +38,9 @@ export const MANAGED_AGENT_ROLES: readonly ManagedAgentRole[] = Object.freeze([
   role('sks-planner', 'team-consensus.toml', 'team_consensus', 'Planning and debate specialist for SKS Team mode.', 'read-only', ['team-consensus', 'team_consensus']),
   role('sks-implementer', 'implementation-worker.toml', 'implementation_worker', 'Implementation specialist for bounded SKS Team write sets.', 'workspace-write', ['implementation-worker', 'implementation_worker']),
   role('sks-checker', 'qa-reviewer.toml', 'qa_reviewer', 'Strict read-only verification reviewer for correctness, regressions, and final evidence.', 'read-only', ['qa-reviewer', 'qa_reviewer']),
-  role('sks-release-verifier', 'native-agent-intake.toml', 'native_agent', 'Read-only Team native agent for repository/docs/tests/API/risk slices.', 'read-only', ['native-agent-intake', 'native_agent']),
-  role('sks-zellij-ui-verifier', 'native-agent-intake.toml', 'native_agent', 'Read-only Team native agent for repository/docs/tests/API/risk slices.', 'read-only', ['native-agent-intake', 'native_agent']),
-  role('sks-codex-probe-verifier', 'native-agent-intake.toml', 'native_agent', 'Read-only Team native agent for repository/docs/tests/API/risk slices.', 'read-only', ['native-agent-intake', 'native_agent']),
+  role('sks-release-verifier', 'sks-release-verifier.toml', 'sks_release_verifier', 'Read-only release verifier for repository, docs, tests, API, and risk slices.', 'read-only', ['native-agent-intake', 'native_agent', 'release-verifier']),
+  role('sks-zellij-ui-verifier', 'sks-zellij-ui-verifier.toml', 'sks_zellij_ui_verifier', 'Read-only Zellij UI verifier for session, pane, layout, and terminal evidence.', 'read-only', ['native-agent-intake', 'native_agent', 'zellij-ui-verifier']),
+  role('sks-codex-probe-verifier', 'sks-codex-probe-verifier.toml', 'sks_codex_probe_verifier', 'Read-only Codex probe verifier for CLI, App, SDK, MCP, and native capability evidence.', 'read-only', ['native-agent-intake', 'native_agent', 'codex-probe-verifier']),
   role('db-safety-reviewer', 'db-safety-reviewer.toml', 'db_safety_reviewer', 'Read-only database safety reviewer for SQL, migrations, Supabase, and rollback safety.', 'read-only', ['db-safety-reviewer', 'db_safety_reviewer'])
 ])
 
@@ -76,6 +76,7 @@ export const CONTEXT7_MANAGED_SERVER = Object.freeze({
 
 export function managedAgentRoleByFile(filename: string): ManagedAgentRole | null {
   const base = filename.split(/[\\/]/).pop() || filename
+  assertUniqueManagedAgentRoleFilenames()
   return MANAGED_AGENT_ROLES.find((role) => role.filename === base) || null
 }
 
@@ -125,6 +126,15 @@ export function managedAgentRoleOwnsText(text: string, role: ManagedAgentRole): 
 
 export function normalizeRoleName(name: string): string {
   return String(name || '').trim().replace(/\.toml$/i, '').replace(/_/g, '-').toLowerCase()
+}
+
+export function assertUniqueManagedAgentRoleFilenames(): void {
+  const seen = new Map<string, string>()
+  for (const role of MANAGED_AGENT_ROLES) {
+    const existing = seen.get(role.filename)
+    if (existing) throw new Error(`duplicate managed agent role filename: ${role.filename} for ${existing} and ${role.id}`)
+    seen.set(role.filename, role.id)
+  }
 }
 
 function role(

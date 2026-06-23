@@ -17,6 +17,7 @@ import { codexNativeFeatureState, computeCodexNativeInvocationDefaults, type Cod
 const REPORT_PATH = '.sneakoscope/reports/codex-native-feature-matrix.json'
 const REQUIRED_SKILL_NAMES = MANAGED_SKILLS.map((skill) => skill.id)
 const REQUIRED_AGENT_ROLES = MANAGED_AGENT_ROLES.map((role) => role.id)
+const invocationMatrixCache = new Map<string, CodexNativeFeatureMatrix>()
 
 export async function buildCodexNativeFeatureMatrix(input: {
   root: string
@@ -24,11 +25,31 @@ export async function buildCodexNativeFeatureMatrix(input: {
   applyRepairs?: boolean
   repairManagedAssets?: boolean
   mode?: 'read-only' | 'repair'
+  snapshot?: CodexNativeFeatureMatrix | null
 } = { root: process.cwd() }): Promise<CodexNativeFeatureMatrix> {
   const root = path.resolve(input.root || process.cwd())
+  if (input.snapshot) {
+    await writeCodexNativeFeatureMatrix(root, input.snapshot, input.missionDir)
+    return input.snapshot
+  }
   const deprecatedApplyRepairs = input.applyRepairs === true
   const mode = input.mode || (deprecatedApplyRepairs || input.repairManagedAssets === true ? 'repair' : 'read-only')
   const repairManagedAssets = mode === 'repair' && (input.repairManagedAssets === true || deprecatedApplyRepairs)
+  const cacheKey = JSON.stringify({
+    root,
+    mode,
+    repairManagedAssets,
+    fixture: [
+      process.env.SKS_CODEX_0138_FAKE,
+      process.env.SKS_CODEX_0139_FAKE,
+      process.env.SKS_CODEX_0140_FAKE,
+      process.env.SKS_CODEX_0142_FAKE,
+      process.env.SKS_CODEX_PLUGIN_JSON_FAKE
+    ]
+  })
+  if (!input.missionDir && !repairManagedAssets && invocationMatrixCache.has(cacheKey)) {
+    return invocationMatrixCache.get(cacheKey) as CodexNativeFeatureMatrix
+  }
   const fixtureMode = process.env.SKS_CODEX_0138_FAKE === '1' || process.env.SKS_CODEX_0139_FAKE === '1' || process.env.SKS_CODEX_0140_FAKE === '1' || process.env.SKS_CODEX_0142_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
   const version = codexBin ? await codexVersion(codexBin) : null
@@ -198,6 +219,7 @@ export async function buildCodexNativeFeatureMatrix(input: {
     invocation_defaults: computeCodexNativeInvocationDefaults(matrixBase)
   }
   await writeCodexNativeFeatureMatrix(root, matrix, input.missionDir)
+  if (!input.missionDir && !repairManagedAssets) invocationMatrixCache.set(cacheKey, matrix)
   return matrix
 }
 
