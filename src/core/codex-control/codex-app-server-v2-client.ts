@@ -75,7 +75,7 @@ export class CodexAppServerV2Client {
       clientInfo: {
         name: 'sneakoscope-codex-app-server-v2',
         title: 'Sneakoscope Codex app-server v2',
-        version: '4.0.15'
+        version: '4.1.0'
       },
       capabilities: {
         experimentalApi: true,

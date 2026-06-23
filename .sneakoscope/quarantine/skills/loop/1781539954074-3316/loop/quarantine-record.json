@@ -1,9 +1,0 @@
-{
-  "schema": "sks.skill-quarantine-record.v1",
-  "generated_at": "2026-06-15T16:12:34.077Z",
-  "source_path": "/Users/weklem/.codex/skills/loop",
-  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/loop/1781539954074-3316/loop",
-  "canonical_name": "loop",
-  "reason": "duplicate SKS-managed skill",
-  "content_sha256": "46bcd3e01bc5fb557d9897ebecdd0bfa10bec72c68a245a8622d7f1375e80a74"
-}

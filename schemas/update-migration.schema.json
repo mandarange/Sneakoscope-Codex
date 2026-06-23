@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.local/schemas/update-migration.schema.json",
+  "title": "SKS Update Migration Receipt",
+  "type": "object",
+  "required": ["schema", "status", "sks_version", "root", "source", "generated_at", "blockers", "warnings"],
+  "properties": {
+    "schema": { "const": "sks.update-migration.v1" },
+    "status": {
+      "enum": ["current", "pending_project_receipt", "blocked", "skipped"]
+    },
+    "sks_version": { "type": "string" },
+    "root": { "type": "string" },
+    "source": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "pending_marker_path": { "type": ["string", "null"] },
+    "doctor": {
+      "type": ["object", "null"],
+      "additionalProperties": true
+    },
+    "update_stages": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}

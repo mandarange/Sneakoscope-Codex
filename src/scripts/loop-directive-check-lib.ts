@@ -303,7 +303,7 @@ async function readJson(file) {
 
 async function productionFixtureNegativeCheck() {
   const code = `
-import { runLoopMakerWorkers } from './dist/core/loops/loop-worker-runtime.js';
+import { runLoopMakerWorkers } from '../core/loops/loop-worker-runtime.js';
 const node = {
   mission_id: 'M-production-fixture-negative',
   loop_id: 'loop-production-fixture-negative',

@@ -35,7 +35,16 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.0.15** prepares the Codex `rust-v0.142.0` compatibility surface while preserving the existing GPT/Codex/MAD `sks --mad` route. The release pins `@openai/codex-sdk` to `0.142.0`, records a Codex release manifest, resolves one Codex binary identity per mission, isolates SDK child environment variables, and restores the published tarball script contract by shipping the verification scripts that package metadata exposes.
+SKS **4.1.0** turns the Codex `rust-v0.142.0` compatibility surface into the authoritative Doctor/update readiness path. Doctor now consumes structured Codex Doctor semantics, separates pre-repair observation from post-repair truth, repairs managed native assets from plain `sks doctor --fix`, and gates update completion on a current project migration receipt.
+
+What changed in 4.1.0:
+
+- **Semantic Doctor readiness.** Warning-only Codex Doctor output stays ready, blocking checks block readiness, and unknown non-zero/unparseable Doctor output fails closed.
+- **Post-repair authority.** `sks doctor --fix` records pre-repair Codex Doctor output but bases readiness on the final post-repair Doctor run.
+- **Managed native assets.** Skills, agent roles, hooks, and Context7 transport share the 4.1.0 managed manifest; stale directive markers no longer appear in generated role content.
+- **Codex 0.142 wiring.** The native feature broker exposes multi-agent mode, rollout budget strategy, indexed web search, current time, app-server overload, MCP reconnect, plugin refresh, thread search, remote native environment, and terminal subagent error handling as current capabilities.
+- **Update lifecycle receipts.** `sks update now` runs old-version Doctor preflight, installs through the guarded npm path, re-resolves the new package-local binary, runs new-version global Doctor, and writes a project migration receipt before reporting `updated`.
+- **Local evidence hygiene.** Machine-local `.sneakoscope` runtime evidence is ignored and guarded so release commits do not carry host paths, secrets, or transient proof logs.
 
 What changed in 4.0.15:
 

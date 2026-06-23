@@ -174,7 +174,7 @@ export async function runGlmBenchmark(
 
   const result: GlmBenchmarkResult = {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.0.15',
+    version: '4.1.0',
     generated_at: nowIso(),
     status: 'live',
     model: GLM_52_OPENROUTER_MODEL,
@@ -204,7 +204,7 @@ export async function runGlmBenchmark(
 function dryRunResult(root: string, startedMs: number): GlmBenchmarkResult {
   return {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.0.15',
+    version: '4.1.0',
     generated_at: nowIso(),
     status: 'dry_run',
     model: GLM_52_OPENROUTER_MODEL,
@@ -228,7 +228,7 @@ function dryRunResult(root: string, startedMs: number): GlmBenchmarkResult {
 function blockedResult(root: string, warnings: string[]): GlmBenchmarkResult {
   return {
     schema: 'sks.glm-benchmark-result.v1',
-    version: '4.0.15',
+    version: '4.1.0',
     generated_at: nowIso(),
     status: 'blocked',
     model: GLM_52_OPENROUTER_MODEL,

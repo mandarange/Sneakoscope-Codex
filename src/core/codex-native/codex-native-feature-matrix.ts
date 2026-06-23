@@ -21,11 +21,15 @@ export interface CodexNativeFeatureState {
 
 export interface CodexNativeInvocationDefaults {
   loop_worker_role_strategy: 'agent_type' | 'message-role'
+  multi_agent_mode: 'none' | 'explicitRequestOnly' | 'proactive'
+  rollout_budget_strategy: 'codex-0142-shared' | 'sks-local-only'
   qa_visual_review_strategy: 'app-handoff' | 'headless-artifact' | 'blocked'
-  research_source_strategy: 'mcp-plugin-candidates' | 'web-sources' | 'local-files'
+  research_source_strategy: 'indexed-web-search' | 'mcp-plugin-candidates' | 'web-sources' | 'local-files'
   image_followup_strategy: 'model-visible-path' | 'artifact-path' | 'blocked'
   hook_evidence_policy: 'approved-only' | 'unknown-do-not-count' | 'not-installed'
   skill_bridge_strategy: 'sks-managed-skills' | 'cli-only'
+  current_time_source: 'codex-currentTime-read' | 'external-clock'
+  overload_retry_policy: 'codex-0142-retryable' | 'generic'
 }
 
 export interface CodexNativeFeatureMatrix {
@@ -49,6 +53,17 @@ export interface CodexNativeFeatureMatrix {
     app_handoff: CodexNativeFeatureState
     image_path_exposure: CodexNativeFeatureState
     code_mode_web_search: CodexNativeFeatureState
+    codex_0142: CodexNativeFeatureState
+    multi_agent_mode: CodexNativeFeatureState
+    rollout_budget: CodexNativeFeatureState
+    indexed_web_search: CodexNativeFeatureState
+    current_time_read: CodexNativeFeatureState
+    terminal_subagent_error: CodexNativeFeatureState
+    exec_mcp_reconnect: CodexNativeFeatureState
+    plugin_catalog_refresh: CodexNativeFeatureState
+    native_thread_list_search: CodexNativeFeatureState
+    remote_native_environment: CodexNativeFeatureState
+    app_server_overload: CodexNativeFeatureState
     codex_0140: CodexNativeFeatureState
     usage_views: CodexNativeFeatureState
     goal_attachment_preservation: CodexNativeFeatureState
@@ -93,13 +108,22 @@ export function codexNativeFeatureState(input: {
 export function computeCodexNativeInvocationDefaults(matrix: Pick<CodexNativeFeatureMatrix, 'features'>): CodexNativeInvocationDefaults {
   const features = matrix.features
   const hookStatus = features.hook_approval.status
+  const multiAgentOk = features.multi_agent_mode?.ok === true
+  const rolloutBudgetOk = features.rollout_budget?.ok === true
+  const indexedSearchOk = features.indexed_web_search?.ok === true
+  const currentTimeOk = features.current_time_read?.ok === true
+  const overloadOk = features.app_server_overload?.ok === true
   return {
     loop_worker_role_strategy: features.agent_type.ok ? 'agent_type' : 'message-role',
+    multi_agent_mode: multiAgentOk && features.agent_type.ok ? 'proactive' : multiAgentOk ? 'explicitRequestOnly' : 'none',
+    rollout_budget_strategy: rolloutBudgetOk ? 'codex-0142-shared' : 'sks-local-only',
     qa_visual_review_strategy: features.app_handoff.ok ? 'app-handoff' : 'headless-artifact',
-    research_source_strategy: features.mcp_inventory.ok ? 'mcp-plugin-candidates' : features.code_mode_web_search.ok ? 'web-sources' : 'local-files',
+    research_source_strategy: indexedSearchOk ? 'indexed-web-search' : features.mcp_inventory.ok ? 'mcp-plugin-candidates' : features.code_mode_web_search.ok ? 'web-sources' : 'local-files',
     image_followup_strategy: features.image_path_exposure.ok ? 'model-visible-path' : 'artifact-path',
     hook_evidence_policy: hookStatus === 'available' ? 'approved-only' : hookStatus === 'unavailable' ? 'not-installed' : 'unknown-do-not-count',
-    skill_bridge_strategy: features.skill_sync.ok || features.skill_picker.ok ? 'sks-managed-skills' : 'cli-only'
+    skill_bridge_strategy: features.skill_sync.ok || features.skill_picker.ok ? 'sks-managed-skills' : 'cli-only',
+    current_time_source: currentTimeOk ? 'codex-currentTime-read' : 'external-clock',
+    overload_retry_policy: overloadOk ? 'codex-0142-retryable' : 'generic'
   }
 }
 

@@ -1,9 +1,0 @@
-{
-  "schema": "sks.skill-quarantine-record.v1",
-  "generated_at": "2026-06-17T09:22:25.803Z",
-  "source_path": "/Users/weklem/.codex/skills/computer-use",
-  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/computer-use/1781688145795-93906/computer-use",
-  "canonical_name": "computer-use",
-  "reason": "duplicate SKS-managed skill",
-  "content_sha256": "bf9a9543c758e5f06b38c9d7d2a4b876ba33a432d8de831178df84b8340e90c5"
-}

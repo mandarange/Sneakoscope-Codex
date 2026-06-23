@@ -4,6 +4,7 @@ import {
   type CommandName,
 } from './command-registry.js';
 import { detectGlobalMode, glmWithoutMadResult } from './global-mode-router.js';
+import { ensureCurrentMigrationBeforeCommand } from '../core/update/update-migration-state.js';
 
 export interface NormalizedCommand {
   command: CommandName | null;
@@ -69,6 +70,13 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
     return result;
   }
   const entry = COMMANDS[command];
+  const migrationGate = await ensureCurrentMigrationBeforeCommand({ command, args: rest });
+  if (!migrationGate.ok) {
+    console.error(`SKS update migration blocked: ${migrationGate.blockers.join(', ')}`);
+    console.error('Run: sks doctor --fix --yes');
+    process.exitCode = 1;
+    return migrationGate;
+  }
   const mod = await entry.lazy();
   if (typeof mod.run !== 'function') throw new Error(`Command ${command} must export run(command, args)`);
   return mod.run(rawCommand || command, rest);

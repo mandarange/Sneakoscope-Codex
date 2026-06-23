@@ -1,29 +1,29 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
+import {
+  MANAGED_AGENT_ROLES,
+  managedAgentRoleByFile,
+  managedAgentRoleByName,
+  managedAgentRoleContent,
+  managedAgentRoleOwnsText
+} from '../managed-assets/managed-assets-manifest.js'
 
 export const AGENT_ROLE_CONFIG_REPAIR_SCHEMA = 'sks.agent-role-config-repair.v1'
 
-export const SKS_OWNED_AGENT_CONFIGS = new Map<string, { name: string; sandbox: 'read-only' | 'workspace-write'; content: string }>([
-  ['analysis-scout.toml', roleConfig('analysis_scout', 'Read-only SKS analysis scout retained for stale Codex agent-role config repair.', 'read-only')],
-  ['native-agent-intake.toml', roleConfig('native_agent', 'Read-only Team native agent for repository/docs/tests/API/risk slices.', 'read-only')],
-  ['team-consensus.toml', roleConfig('team_consensus', 'Planning and debate specialist for SKS Team mode.', 'read-only')],
-  ['implementation-worker.toml', roleConfig('implementation_worker', 'Implementation specialist for bounded SKS Team write sets.', 'workspace-write')],
-  ['db-safety-reviewer.toml', roleConfig('db_safety_reviewer', 'Read-only database safety reviewer for SQL, migrations, Supabase, and rollback safety.', 'read-only')],
-  ['qa-reviewer.toml', roleConfig('qa_reviewer', 'Strict read-only verification reviewer for correctness, regressions, and final evidence.', 'read-only')]
-])
+export const SKS_OWNED_AGENT_CONFIGS = new Map(MANAGED_AGENT_ROLES.map((role) => [
+  role.filename,
+  { name: role.codex_name, sandbox: role.sandbox, content: managedAgentRoleContent(role), id: role.id }
+]))
 
 export function managedAgentRoleConfigForFile(file: string): string | null {
-  return SKS_OWNED_AGENT_CONFIGS.get(path.basename(file))?.content || null
+  const role = managedAgentRoleByFile(file)
+  return role ? managedAgentRoleContent(role) : null
 }
 
 export function managedAgentRoleConfigForRole(role: string): { file: string; content: string } | null {
-  const normalized = String(role || '').trim().replace(/-/g, '_')
-  for (const [file, config] of SKS_OWNED_AGENT_CONFIGS) {
-    if (config.name === normalized || path.basename(file, '.toml').replace(/-/g, '_') === normalized) return { file, content: config.content }
-  }
-  return null
+  const match = managedAgentRoleByName(role)
+  return match ? { file: match.filename, content: managedAgentRoleContent(match) } : null
 }
 
 export async function repairAgentRoleConfigs(input: {
@@ -40,12 +40,14 @@ export async function repairAgentRoleConfigs(input: {
   const created: string[] = []
   const repaired: string[] = []
   const existing: string[] = []
-  for (const [file, config] of SKS_OWNED_AGENT_CONFIGS) {
+  for (const role of MANAGED_AGENT_ROLES) {
+    const file = role.filename
+    const content = managedAgentRoleContent(role)
     const found = candidates.find((dir) => fs.existsSync(path.join(dir, file)))
     if (found) {
       const foundPath = path.join(found, file)
       const text = fs.readFileSync(foundPath, 'utf8')
-      if (isValidRoleConfig(text, config)) {
+      if (isValidRoleConfig(text, role)) {
         existing.push(path.relative(root, foundPath) || foundPath)
         continue
       }
@@ -53,7 +55,7 @@ export async function repairAgentRoleConfigs(input: {
       if (input.apply) {
         const target = foundPath.startsWith(path.join(root, '.codex', 'agents')) ? foundPath : path.join(root, '.codex', 'agents', file)
         await ensureDir(path.dirname(target))
-        await writeTextAtomic(target, config.content)
+        await writeTextAtomic(target, content)
         repaired.push(path.relative(root, target))
       }
       continue
@@ -62,7 +64,7 @@ export async function repairAgentRoleConfigs(input: {
     if (input.apply) {
       const target = path.join(root, '.codex', 'agents', file)
       await ensureDir(path.dirname(target))
-      await writeTextAtomic(target, config.content)
+      await writeTextAtomic(target, content)
       created.push(path.relative(root, target))
     }
   }
@@ -78,6 +80,7 @@ export async function repairAgentRoleConfigs(input: {
     existing,
     created,
     repaired,
+    manifest_role_ids: MANAGED_AGENT_ROLES.map((role) => role.id),
     warnings_suppressed: true,
     blockers: input.apply && requiredFixes !== appliedFixes ? ['agent_role_config_repair_incomplete'] : []
   }
@@ -85,28 +88,8 @@ export async function repairAgentRoleConfigs(input: {
   return report
 }
 
-function roleConfig(name: string, description: string, sandbox: 'read-only' | 'workspace-write') {
-  const content = [
-    `name = "${name}"`,
-    `description = "${description}"`,
-    `model = "${REQUIRED_CODEX_MODEL}"`,
-    'model_reasoning_effort = "medium"',
-    `sandbox_mode = "${sandbox}"`,
-    'approval_policy = "never"',
-    'developer_instructions = """',
-    `You are the SKS ${name} role.`,
-    sandbox === 'read-only' ? 'Do not edit files.' : 'Only edit the bounded files assigned by the parent orchestrator.',
-    'Return concise source-backed findings and LIVE_EVENT lines when applicable.',
-    '"""',
-    ''
-  ].join('\n')
-  return { name, sandbox, content }
-}
-
-function isValidRoleConfig(text: string, config: { name: string; sandbox: string }) {
-  return text.includes(`name = "${config.name}"`)
+function isValidRoleConfig(text: string, role: { id: string; codex_name: string; sandbox: string }) {
+  return managedAgentRoleOwnsText(text, role as any)
     && text.includes('description = "')
-    && text.includes(`model = "${REQUIRED_CODEX_MODEL}"`)
-    && text.includes(`sandbox_mode = "${config.sandbox}"`)
     && text.includes('developer_instructions = """')
 }

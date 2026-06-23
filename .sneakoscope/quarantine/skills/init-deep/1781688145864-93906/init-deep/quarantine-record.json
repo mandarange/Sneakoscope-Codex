@@ -1,9 +1,0 @@
-{
-  "schema": "sks.skill-quarantine-record.v1",
-  "generated_at": "2026-06-17T09:22:25.867Z",
-  "source_path": "/Users/weklem/.codex/skills/init-deep",
-  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/init-deep/1781688145864-93906/init-deep",
-  "canonical_name": "init-deep",
-  "reason": "duplicate SKS-managed skill",
-  "content_sha256": "5da770328079263d54ec68ea390c71e105a0f792c891b20699a3d0e0106f1ffc"
-}

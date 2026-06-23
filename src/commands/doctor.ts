@@ -50,10 +50,12 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   let setupRepair = null;
   const sksUpdate = doctorFix
     ? {
-        schema: 'sks.update-now.v1',
+        schema: 'sks.update-now.v2',
         ok: true,
         status: 'skipped',
-        reason: 'manual_update_commands_only'
+        reason: 'manual_update_commands_only',
+        stages: [],
+        migration_current: true
       }
     : null;
   let migrationPreFix: Record<string, string | null> | null = null;
@@ -145,9 +147,9 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     ? await writeFixMigrationJournal(root, migrationPreFix, configRepair, setupRepair).catch(() => null)
     : null;
   let codexConfig = configRepair?.after || await inspectCodexConfigReadability(root, configProbeOpts);
-  const codexDoctor = await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') });
-  const codexDoctorDiff = compareCodexDoctorBridge(codexDoctorBefore, codexDoctor);
-  codexStartupRepair = mergeObservedCodexStartupWarnings(codexStartupRepair, codexDoctor);
+  const preRepairCodexDoctor = await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--require-actual-codex') });
+  const codexDoctorDiff = compareCodexDoctorBridge(codexDoctorBefore, preRepairCodexDoctor);
+  codexStartupRepair = mergeObservedCodexStartupWarnings(codexStartupRepair, preRepairCodexDoctor);
   const codex = codexBin
     ? { bin: codexBin, version: 'fixture-or-explicit', available: true }
     : await getCodexInfo().catch(() => ({ bin: null, version: null, available: false }));
@@ -310,7 +312,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               id: 'setup',
               ok: setupRepair !== null,
               repaired: setupRepair !== null,
-              blockers: setupRepair === null ? ['setup_repair_not_recorded'] : []
+              blockers: setupRepair === null ? ['setup_repair_not_recorded'] : [],
+              rollback_evidence: (setupRepair as any)?.config_backup_path || 'setup_force_regeneration_idempotent_manifest'
             })
           },
           {
@@ -320,7 +323,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               ok: (codexStartupRepair as any)?.ok !== false,
               repaired: doctorFix,
               blockers: (codexStartupRepair as any)?.blockers || [],
-              warnings: (codexStartupRepair as any)?.warnings || []
+              warnings: (codexStartupRepair as any)?.warnings || [],
+              rollback_evidence: (codexStartupRepair as any)?.report_path || 'codex_startup_repair_report'
             })
           },
           {
@@ -329,7 +333,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               id: 'startup_config_repair',
               ok: (startupConfigRepair as any)?.ok === true,
               repaired: (startupConfigRepair as any)?.apply === true,
-              blockers: (startupConfigRepair as any)?.blockers || []
+              blockers: (startupConfigRepair as any)?.blockers || [],
+              rollback_evidence: (startupConfigRepair as any)?.backup_path || 'startup_config_repair_idempotent_report'
             })
           },
           {
@@ -339,7 +344,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               ok: (context7Repair as any)?.ok !== false,
               repaired: doctorFix,
               blockers: (context7Repair as any)?.blockers || [],
-              warnings: (context7Repair as any)?.warnings || []
+              warnings: (context7Repair as any)?.warnings || [],
+              rollback_evidence: (context7Repair as any)?.report_path || 'context7_repair_report'
             })
           },
           {
@@ -350,7 +356,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               repaired: (context7McpRepair as any)?.repaired === true,
               manual_required: (context7McpRepair as any)?.manual_required === true,
               blockers: (context7McpRepair as any)?.blockers || [],
-              warnings: (context7McpRepair as any)?.warnings || []
+              warnings: (context7McpRepair as any)?.warnings || [],
+              rollback_evidence: (context7McpRepair as any)?.backup_path || 'context7_mcp_repair_idempotent_report'
             })
           },
           {
@@ -363,7 +370,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               manual_required: (supabaseMcpRepair as any)?.manual_required === true,
               required_for_ready: false,
               blockers: (supabaseMcpRepair as any)?.blockers || [],
-              warnings: (supabaseMcpRepair as any)?.warnings || []
+              warnings: (supabaseMcpRepair as any)?.warnings || [],
+              rollback_evidence: 'optional_supabase_no_ready_mutation_required'
             })
           },
           {
@@ -372,7 +380,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               id: 'command_alias_cleanup',
               ok: (commandAliasCleanup as any)?.ok !== false,
               repaired: Array.isArray((commandAliasCleanup as any)?.actions) && (commandAliasCleanup as any).actions.length > 0,
-              blockers: (commandAliasCleanup as any)?.blockers || []
+              blockers: (commandAliasCleanup as any)?.blockers || [],
+              rollback_evidence: (commandAliasCleanup as any)?.report_path || 'command_alias_cleanup_report'
             })
           },
           {
@@ -381,14 +390,17 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               id: 'native_capability_repair',
               ok: (doctorNativeCapabilityRepair as any)?.ok !== false,
               repaired: doctorFix,
-              blockers: (doctorNativeCapabilityRepair as any)?.blockers || []
+              blockers: (doctorNativeCapabilityRepair as any)?.blockers || [],
+              rollback_evidence: (doctorNativeCapabilityRepair as any)?.secret_preservation_guard || 'native_capability_repair_report'
             })
           }
         ]
       }).catch((err: any) => ({
-        schema: 'sks.doctor-fix-transaction.v1',
+        schema: 'sks.doctor-fix-transaction.v2',
+        generated_at: new Date().toISOString(),
         ok: false,
         postcheck_ok: false,
+        dirty_plan: doctorDirtyPlan,
         phases: [
           {
             id: 'doctor_fix_transaction',
@@ -397,9 +409,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
             manual_required: false,
             blockers: [err?.message || String(err)],
             warnings: [],
-            artifact_path: null
+            artifact_path: null,
+            rollback_evidence: null
           }
         ],
+        mutations_without_rollback: 0,
         rollback_performed: false,
         raw_secret_values_recorded: false
       } as any))
@@ -434,7 +448,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const mcpPluginInventory = (pluginInventory as any)?.report
     ? await writeMcpPluginInventoryArtifacts(root, { inventory: (pluginInventory as any).report }).catch((err: any) => ({ error: err?.message || String(err), candidates: null }))
     : null;
-  const repairCodexNative = doctorFix && flag(args, '--repair-codex-native');
+  const repairCodexNative = doctorFix;
   const codexNativeRepair = repairCodexNative
     ? await repairCodexNativeManagedAssets({
         root,
@@ -486,13 +500,41 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     const reinspected = await inspectCodexConfigReadability(root, configProbeOpts).catch(() => null);
     if (reinspected) codexConfig = reinspected;
   }
+  const postRepairCodexDoctor = doctorFix
+    ? await runCodexDoctorBridge({ codexBin: codexBin || null, cwd: root, required: flag(args, '--fix') || flag(args, '--require-actual-codex') }).catch((err: any) => ({
+        schema: 'sks.codex-doctor-bridge.v2',
+        generated_at: new Date().toISOString(),
+        available: false,
+        exit_code: null,
+        process_exit_code: null,
+        disposition: 'block',
+        semantic_ok: false,
+        source_format: 'text-fallback',
+        blocking_checks: [],
+        warning_checks: [],
+        informational_checks: [],
+        environment_diagnostics_ok: false,
+        git_diagnostics_ok: false,
+        terminal_diagnostics_ok: false,
+        app_server_diagnostics_ok: false,
+        thread_inventory_ok: false,
+        stdout_tail: '',
+        stderr_tail: '',
+        blockers: [`post_repair_codex_doctor_exception:${err?.message || String(err)}`],
+        warnings: []
+      } as any))
+    : preRepairCodexDoctor;
+  const authoritativeCodexDoctor = postRepairCodexDoctor;
+  const codexDoctorAuthoritativeDiff = compareCodexDoctorBridge(codexDoctorBefore, authoritativeCodexDoctor as any);
   const pkgBytes = await dirSize(root).catch(() => 0);
   const ready = await writeDoctorReadinessMatrix(root, {
     codex,
     codex_config: codexConfig,
     codex_app: codexApp,
     codex_lb: codexLb,
-    codex_doctor: codexDoctor,
+    codex_doctor: authoritativeCodexDoctor,
+    pre_repair_codex_doctor: preRepairCodexDoctor,
+    post_repair_codex_doctor: postRepairCodexDoctor,
     require_codex_doctor: flag(args, '--fix') || flag(args, '--require-actual-codex'),
     zellij,
     context7_repair: context7Repair,
@@ -503,6 +545,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     doctor_fix_transaction: doctorFixTransaction,
     doctor_dirty_plan: doctorDirtyPlan,
     doctor_fix_postcheck: doctorFixPostcheck,
+    doctor_native_capability: doctorNativeCapabilityRepair,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
@@ -523,7 +566,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
   const result = {
-    schema: 'sks.doctor-status.v1',
+    schema: 'sks.doctor-status.v2',
     ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false && (!doctorFixPostcheck || (doctorFixPostcheck as any).ok !== false),
     root,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
@@ -534,8 +577,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     codex_app_ui: codexAppUi,
     provider_context: providerContext,
     codex_lb: codexLb,
-    codex_doctor: codexDoctor,
-    codex_doctor_diff: codexDoctorDiff,
+    codex_doctor: authoritativeCodexDoctor,
+    pre_repair_codex_doctor: preRepairCodexDoctor,
+    post_repair_codex_doctor: postRepairCodexDoctor,
+    codex_doctor_diff: codexDoctorAuthoritativeDiff,
+    observational_codex_doctor_diff: codexDoctorDiff,
     zellij,
     zellij_repair: zellijRepair,
     context7_repair: context7Repair,
@@ -603,7 +649,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   for (const action of (codexStartupRepair as any).actions || []) console.log(`  - ${action}`);
   for (const action of (codexStartupRepair as any).manual_actions || []) console.log(`  manual: ${action}`);
   for (const warning of (codexStartupRepair as any).warnings || []) console.log(`  warning: ${warning}`);
-  console.log(`  codex doctor:    ${codexDoctor.available ? (codexDoctor.exit_code === 0 ? 'ok' : 'warning') : 'unavailable'}`);
+  console.log(`  codex doctor:    ${(authoritativeCodexDoctor as any).available ? ((authoritativeCodexDoctor as any).disposition || ((authoritativeCodexDoctor as any).exit_code === 0 ? 'pass' : 'warn')) : 'unavailable'}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
   console.log('SKS Runtime Readiness:');
@@ -673,7 +719,14 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     }
   }
   const codex0138 = (codex0138Capability as any).report || {};
-  console.log('Codex 0.138 features:');
+  console.log('Codex current compatibility:');
+  console.log(`  target: rust-v0.142.0`);
+  console.log(`  runtime: ${codex.version || 'unknown'}`);
+  console.log(`  multi-agent mode: ${(codexNativeFeatureMatrix as any).features?.multi_agent_mode?.ok ? 'verified' : 'unverified'}`);
+  console.log(`  rollout budget: ${(codexNativeFeatureMatrix as any).features?.rollout_budget?.ok ? 'verified' : 'unverified'}`);
+  console.log(`  indexed search: ${(codexNativeFeatureMatrix as any).features?.indexed_web_search?.ok ? 'verified' : 'unverified'}`);
+  console.log(`  current time: ${(codexNativeFeatureMatrix as any).features?.current_time_read?.ok ? 'verified' : 'unverified'}`);
+  console.log('Historical compatibility: Codex 0.138 features');
   console.log(`  /app handoff: ${codex0138.supports_app_handoff ? 'ok' : 'unavailable'}`);
   console.log(`  plugin JSON: ${codex0138.supports_plugin_json ? 'ok' : 'unavailable'}`);
   console.log(`  image path exposure: ${codex0138.supports_image_path_exposure ? 'ok' : 'unavailable'}`);
@@ -701,6 +754,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   console.log('Ready:');
   console.log(`  cli_ready: ${ready.cli_ready ? 'yes' : 'no'}`);
   console.log(`  mad_ready: ${ready.mad_ready ? 'yes' : 'no'}`);
+  console.log(`  managed_state_current: ${ready.managed_state_current ? 'yes' : 'no'}`);
   console.log(`  ready:     ${ready.ready ? 'yes' : 'no'}`);
   if (!ready.ready) {
     console.log('Primary blocker:');
@@ -730,6 +784,9 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
   const defaults = matrix?.invocation_defaults || {};
   const hookPolicy = defaults.hook_evidence_policy || 'unknown-do-not-count';
   const agentStrategy = defaults.loop_worker_role_strategy || 'message-role';
+  const multiAgentMode = defaults.multi_agent_mode || 'none';
+  const rolloutBudget = defaults.rollout_budget_strategy || 'sks-local-only';
+  const researchSource = defaults.research_source_strategy || 'local-files';
   const zellijStatus = zellijReadiness?.status === 'ok'
     ? 'ok'
     : zellijReadiness?.cli_ready ? 'headless_available' : 'repair_required';
@@ -741,7 +798,7 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     repairActions.push('Zellij: sks doctor --fix --yes');
     repairActions.push('Homebrew + Zellij: sks doctor --fix --install-homebrew --yes');
   }
-  if (codexNative !== 'ok') repairActions.push('Codex Native managed assets: sks doctor --fix --repair-codex-native --yes');
+  if (codexNative !== 'ok') repairActions.push('Codex Native managed assets: sks doctor --fix --yes');
   if (matrix?.features?.project_memory?.ok !== true) repairActions.push('Project memory: sks codex-native init-deep --apply --directory-local');
   return {
     schema: 'sks.runtime-readiness-story.v1',
@@ -749,14 +806,21 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     codex_native: codexNative,
     loop_mesh: agentStrategy === 'agent_type' ? 'ok' : 'fallback',
     qa_visual: defaults.qa_visual_review_strategy || 'blocked',
-    research_sources: defaults.research_source_strategy || 'local-files',
+    research_sources: researchSource,
     image_followup: defaults.image_followup_strategy || 'blocked',
     hook_evidence_policy: hookPolicy,
     agent_role_strategy: agentStrategy,
+    multi_agent_mode: multiAgentMode,
+    rollout_budget_strategy: rolloutBudget,
+    current_time_source: defaults.current_time_source || 'external-clock',
+    overload_retry_policy: defaults.overload_retry_policy || 'generic',
     notes: [
       ...(zellijStatus === 'headless_available' ? ['MAD can run with --headless; live panes require repair'] : []),
       ...(hookPolicy !== 'approved-only' ? ['hook-derived evidence will not count'] : []),
-      ...(agentStrategy !== 'agent_type' ? ['message-role fallback active'] : [])
+      ...(agentStrategy !== 'agent_type' ? ['message-role fallback active'] : []),
+      ...(multiAgentMode === 'proactive' ? ['Codex 0.142 multi-agent proactive mode available for Naruto-style routes'] : []),
+      ...(rolloutBudget === 'codex-0142-shared' ? ['Codex 0.142 rollout budget can be recorded in route proof'] : []),
+      ...(researchSource === 'indexed-web-search' ? ['Codex 0.142 indexed web search selected for source-intelligence routes'] : [])
     ],
     repair_actions: [...new Set(repairActions)]
   };

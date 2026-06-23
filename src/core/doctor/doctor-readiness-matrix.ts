@@ -2,7 +2,7 @@ import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { resolveLocalCollaborationPolicy } from '../local-llm/local-collaboration-policy.js'
 
-export const DOCTOR_READINESS_MATRIX_SCHEMA = 'sks.doctor-readiness-matrix.v1'
+export const DOCTOR_READINESS_MATRIX_SCHEMA = 'sks.doctor-readiness-matrix.v2'
 
 export async function writeDoctorReadinessMatrix(root: string, input: any = {}) {
   const matrix = buildDoctorReadinessMatrix(input)
@@ -37,7 +37,14 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const zellijStatus = zellij?.status || 'missing'
   const zellijReadyForInteractive = zellij?.ok === true && zellijStatus === 'ok'
   if (!zellijReadyForInteractive) warnings.add(`zellij_${zellijStatus}`)
-  if (codexDoctor && codexDoctor.available && codexDoctor.exit_code !== 0 && input.require_codex_doctor === true) blockers.add('codex_doctor_failed')
+  const codexDoctorBlockers = normalizeList(codexDoctor?.blockers)
+  const codexDoctorBlockingChecks = Array.isArray(codexDoctor?.blocking_checks)
+    ? codexDoctor.blocking_checks.map((check: any) => String(check?.issue || check?.id || '')).filter(Boolean)
+    : []
+  if (codexDoctor?.disposition === 'block' || codexDoctorBlockers.length || codexDoctorBlockingChecks.length) {
+    for (const blocker of [...codexDoctorBlockers, ...codexDoctorBlockingChecks]) blockers.add(blocker)
+    if (!codexDoctorBlockers.length && !codexDoctorBlockingChecks.length) blockers.add('codex_doctor_blocked')
+  }
   if (codexDoctor?.warnings?.length) for (const warning of codexDoctor.warnings) warnings.add(String(warning))
   if (input.codex_app?.ok === false) warnings.add('codex_app_needs_setup_optional_for_cli')
   if (input.codex_app_ui?.fast_selector === 'manual_action_required') warnings.add('codex_app_fast_selector_manual_action_required')
@@ -62,6 +69,9 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const agentRoleConfig = input.agent_role_config || {}
   if (agentRoleConfig.ok === false) blockers.add('agent_role_config_repair_failed')
   if (Array.isArray(agentRoleConfig.missing) && agentRoleConfig.missing.length && agentRoleConfig.apply !== true) warnings.add('agent_role_config_missing_repair_available')
+  const repairReadiness = buildRepairReadiness(input)
+  for (const blocker of repairReadiness.blockers) blockers.add(blocker)
+  for (const warning of repairReadiness.warnings) warnings.add(warning)
   const localCollaborationPolicy = resolveLocalCollaborationPolicy({ mode: input.local_collaboration?.mode || null })
   const gptFinalAvailable = input.local_collaboration?.gpt_final_arbiter_available === undefined
     ? codexBinOk
@@ -73,10 +83,12 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   const cliReady = codexBinOk && codexConfigNode && codexConfigChild && cliConfigOk
   const madReady = cliReady && zellijReadyForInteractive
   const nextActions = normalizeList(input.operator_actions || codexConfig.operator_actions)
-  if (!nextActions.length && blockers.size) nextActions.push('Run `sks doctor --fix`, then run `sks mad repair-config --apply` if config-load still fails.')
+  if (!nextActions.length && blockers.size) nextActions.push(...nextActionsForBlockers([...blockers]))
   if (input.codex_app_ui?.requires_confirmation === true) nextActions.push(input.codex_app_ui.next_action || 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.')
   if (!zellijReadyForInteractive) nextActions.push('Install Zellij for `sks --mad` and interactive lane UI. On macOS: `brew install zellij`.')
 
+  const managedStateCurrent = repairReadiness.ok && agentRoleConfig.ok !== false
+  const coreReady = blockers.size === 0 && cliReady && managedStateCurrent
   return {
     schema: DOCTOR_READINESS_MATRIX_SCHEMA,
     generated_at: nowIso(),
@@ -110,6 +122,10 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     hooks_ready: input.hooks_ready !== false,
     codex_app_ready: input.codex_app?.ok === true,
     codex_app_required_for_cli: false,
+    managed_state_current: managedStateCurrent,
+    core_ready: coreReady,
+    optional_capabilities: buildOptionalCapabilities(input),
+    repair_readiness: repairReadiness,
     local_collaboration: {
       mode: localCollaborationPolicy.mode,
       local_backend: input.local_collaboration?.local_backend || localModel.provider || 'ollama',
@@ -130,7 +146,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
       blockers: normalizeList(localModel.blockers)
     },
     agent_role_config: agentRoleConfig,
-    ready: blockers.size === 0 && cliReady,
+    ready: coreReady,
     primary_blocker: [...blockers][0] || null,
     blockers: [...blockers],
     warnings: [...warnings],
@@ -140,4 +156,99 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
 
 function normalizeList(value: any) {
   return Array.isArray(value) ? value.filter(Boolean).map(String) : []
+}
+
+function buildRepairReadiness(input: any = {}) {
+  const phases: Array<{
+    id: string
+    ok: boolean
+    required_for_core_ready: boolean
+    manual_required: boolean
+    blockers: string[]
+    warnings: string[]
+  }> = []
+  const add = (id: string, value: any, required = true) => {
+    if (!value) return
+    const ok = value.ok !== false && value.status !== 'blocked'
+    phases.push({
+      id,
+      ok,
+      required_for_core_ready: required,
+      manual_required: value.manual_required === true || value.requires_confirmation === true,
+      blockers: normalizeList(value.blockers),
+      warnings: normalizeList(value.warnings)
+    })
+  }
+  add('codex_startup_repair', input.codex_startup_repair, true)
+  add('startup_config_repair', input.startup_config_repair, true)
+  add('context7_repair', input.context7_repair, true)
+  add('context7_mcp_repair', input.context7_mcp_repair, true)
+  add('supabase_mcp_repair', input.supabase_mcp_repair, input.supabase_mcp_repair?.ready_blocking === true)
+  add('command_alias_cleanup', input.command_aliases, true)
+  add('native_capability_repair', input.doctor_native_capability, false)
+  if (input.doctor_fix_transaction) {
+    for (const phase of input.doctor_fix_transaction.phases || []) {
+      phases.push({
+        id: `transaction:${phase.id || 'unknown'}`,
+        ok: phase.ok === true,
+        required_for_core_ready: phase.required_for_ready !== false,
+        manual_required: phase.manual_required === true,
+        blockers: normalizeList(phase.blockers),
+        warnings: normalizeList(phase.warnings)
+      })
+    }
+  }
+  if (input.doctor_fix_postcheck) {
+    phases.push({
+      id: 'doctor_fix_postcheck',
+      ok: input.doctor_fix_postcheck.ok === true,
+      required_for_core_ready: true,
+      manual_required: false,
+      blockers: normalizeList(input.doctor_fix_postcheck.blockers),
+      warnings: normalizeList(input.doctor_fix_postcheck.warnings)
+    })
+  }
+  const blockers = phases
+    .filter((phase) => phase.required_for_core_ready && !phase.ok)
+    .flatMap((phase) => phase.blockers.length ? phase.blockers : [`doctor_required_phase_failed:${phase.id}`])
+  const warnings = phases
+    .filter((phase) => !phase.required_for_core_ready && !phase.ok)
+    .flatMap((phase) => phase.blockers.length ? phase.blockers.map((blocker) => `optional:${blocker}`) : [`doctor_optional_phase_unready:${phase.id}`])
+    .concat(phases.flatMap((phase) => phase.warnings))
+  return {
+    schema: 'sks.doctor-repair-readiness.v1',
+    ok: blockers.length === 0,
+    authoritative_probe: input.post_repair_codex_doctor ? 'post_repair_codex_doctor' : input.codex_doctor ? 'codex_doctor' : null,
+    phases,
+    blockers: [...new Set(blockers)],
+    warnings: [...new Set(warnings)]
+  }
+}
+
+function buildOptionalCapabilities(input: any = {}) {
+  const nativeRows = Array.isArray(input.doctor_native_capability?.native_capabilities?.capabilities)
+    ? input.doctor_native_capability.native_capabilities.capabilities
+    : []
+  const find = (id: string, fallback: 'verified' | 'manual_required' | 'unavailable') => {
+    const row = nativeRows.find((entry: any) => entry?.id === id)
+    if (!row) return fallback
+    if (row.ok === true || row.status === 'verified' || row.status === 'available') return 'verified'
+    if (row.manual_required === true || row.status === 'manual_required') return 'manual_required'
+    return 'unavailable'
+  }
+  return {
+    computer_use: find('computer_use', 'manual_required'),
+    chrome_web_review: find('chrome_web_review', 'manual_required'),
+    codex_app: input.codex_app?.ok === true ? 'verified' : 'optional_missing'
+  }
+}
+
+function nextActionsForBlockers(blockers: string[]) {
+  return blockers.map((blocker) => {
+    if (blocker.includes('config')) return 'Review Codex config repair output, then rerun `sks doctor --fix --yes`.'
+    if (blocker.includes('context7')) return 'Run `sks doctor --fix --yes` to migrate Context7 MCP to the managed remote transport.'
+    if (blocker.includes('codex_doctor')) return 'Inspect the Codex Doctor section above; fix the listed blocker and rerun `sks doctor --fix --yes`.'
+    if (blocker.includes('agent_role')) return 'Run `sks doctor --fix --yes` to refresh SKS-managed agent roles.'
+    return `Resolve blocker: ${blocker}`
+  })
 }

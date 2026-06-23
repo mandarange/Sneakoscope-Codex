@@ -1,9 +1,0 @@
-{
-  "schema": "sks.skill-quarantine-record.v1",
-  "generated_at": "2026-06-15T16:12:34.052Z",
-  "source_path": "/Users/weklem/.codex/skills/dfix",
-  "quarantine_path": "/Users/weklem/Desktop/devs/Sneakoscope-Codex/.sneakoscope/quarantine/skills/dfix/1781539954050-3316/dfix",
-  "canonical_name": "dfix",
-  "reason": "duplicate SKS-managed skill",
-  "content_sha256": "62e3359697b2c21cf0c8abb364c832362c0468d50f76dd703b99573a8b0bdc6f"
-}

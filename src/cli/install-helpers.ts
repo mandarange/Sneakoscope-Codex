@@ -22,6 +22,7 @@ import {
   type CodexLbPersistenceSummary,
   type CodexLbPersistenceMode
 } from '../core/codex-lb/codex-lb-setup.js';
+import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -155,6 +156,15 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   else if (fastModeRepair.status === 'skipped_unsafe_rewrite') console.log(`Codex App Fast mode: skipped (managed rewrite would not parse; ${fastModeRepair.config_path} left untouched).`);
   else if (fastModeRepair.status === 'skipped') console.log(`Codex App Fast mode: skipped (${fastModeRepair.reason}).`);
   else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
+  const postinstallDoctor = await runPostinstallGlobalDoctorAndMarkPending().catch((err: any) => ({
+    ok: false,
+    doctor: null,
+    pending: null,
+    blockers: [err?.message || String(err)],
+    warnings: []
+  }));
+  if (postinstallDoctor.ok) console.log('SKS update migration: global Doctor ran; project receipt will be finalized on first normal command.');
+  else console.log(`SKS update migration: global Doctor did not complete; first normal command will retry. ${(postinstallDoctor.blockers || []).join(', ')}`.trim());
   // Terminating a third-party app's processes during `npm i` is unsafe by default; opt-in only.
   const appProcessRepair: any = process.env.SKS_POSTINSTALL_RECONCILE_APP_PROCESSES === '1'
     ? await reconcileCodexAppUpgradeProcesses()

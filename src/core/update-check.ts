@@ -3,6 +3,14 @@ import path from 'node:path';
 import { PACKAGE_VERSION, packageRoot, readJson, runProcess, which } from './fsx.js';
 import { createRequestedScopeContract } from './safety/requested-scope-contract.js';
 import { guardedPackageInstall, guardContextForRoute } from './safety/mutation-guard.js';
+import {
+  isUpdateMigrationReceiptCurrent,
+  resolveInstalledSksEntrypoint,
+  runPackageLocalDoctor,
+  type PackageLocalDoctorRun,
+  type UpdateMigrationReceipt,
+  writeProjectUpdateMigrationReceipt
+} from './update/update-migration-state.js';
 
 export interface SksUpdateCheckOptions {
   packageName?: string;
@@ -55,10 +63,18 @@ const DEFAULT_REGISTRY = 'https://registry.npmjs.org/';
 export interface SksUpdateNowOptions extends SksUpdateCheckOptions {
   version?: string | null;
   dryRun?: boolean;
+  projectRoot?: string | null;
+}
+
+export interface SksUpdateNowStage {
+  id: string;
+  ok: boolean;
+  status: string;
+  detail?: Record<string, unknown>;
 }
 
 export interface SksUpdateNowResult {
-  schema: 'sks.update-now.v1';
+  schema: 'sks.update-now.v2';
   ok: boolean;
   status: 'updated' | 'current' | 'dry_run' | 'unavailable' | 'failed';
   package: string;
@@ -73,6 +89,13 @@ export interface SksUpdateNowResult {
   registry: string;
   global_root: string | null;
   install_code: number | null;
+  old_version_doctor: PackageLocalDoctorRun | null;
+  new_binary: string | null;
+  new_version: string | null;
+  new_version_doctor: PackageLocalDoctorRun | null;
+  project_receipt: UpdateMigrationReceipt | null;
+  migration_current: boolean;
+  stages: SksUpdateNowStage[];
   error: string | null;
 }
 
@@ -169,6 +192,11 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const npmArgs = installVersion ? sksGlobalInstallArgs(packageName, installVersion, registry) : [];
   const command = npmBin && npmArgs.length ? [npmBin, ...npmArgs].join(' ') : null;
   const globalRoot = npmBin ? await detectNpmGlobalRoot(npmBin, env, options).catch(() => null) : null;
+  const projectReceiptRoot = path.resolve(options.projectRoot || env.SKS_MUTATION_LEDGER_ROOT || process.cwd());
+  const stages: SksUpdateNowStage[] = [];
+  const stage = (id: string, ok: boolean, status: string, detail: Record<string, unknown> = {}) => {
+    stages.push({ id, ok, status, detail });
+  };
 
   if (!npmBin) {
     return buildUpdateNowResult({
@@ -186,6 +214,13 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       status: 'unavailable',
       ok: false,
       installCode: null,
+      oldVersionDoctor: null,
+      newBinary: null,
+      newVersion: null,
+      newVersionDoctor: null,
+      projectReceipt: null,
+      migrationCurrent: false,
+      stages,
       error: 'npm not found on PATH'
     });
   }
@@ -205,10 +240,25 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       status: 'unavailable',
       ok: false,
       installCode: null,
+      oldVersionDoctor: null,
+      newBinary: null,
+      newVersion: null,
+      newVersionDoctor: null,
+      projectReceipt: null,
+      migrationCurrent: false,
+      stages,
       error: check.error || 'latest version unavailable'
     });
   }
   if (!requestedVersion && check.latest && !check.update_available) {
+    const receipt = await writeProjectUpdateMigrationReceipt({
+      root: projectReceiptRoot,
+      source: 'update-now-current',
+      blockers: [],
+      warnings: ['package_already_current']
+    }).catch(() => null);
+    const migrationCurrent = isUpdateMigrationReceiptCurrent(receipt);
+    stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
     return buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -222,12 +272,54 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       registry,
       globalRoot,
       status: 'current',
-      ok: true,
+      ok: migrationCurrent,
       installCode: null,
+      oldVersionDoctor: null,
+      newBinary: null,
+      newVersion: check.current,
+      newVersionDoctor: null,
+      projectReceipt: receipt,
+      migrationCurrent,
+      stages,
       error: null
     });
   }
+  const oldVersionDoctor = await runPackageLocalDoctor({
+    root: projectReceiptRoot,
+    args: ['doctor', '--json'],
+    env,
+    timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
+    maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+  });
+  stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.status, { entrypoint: oldVersionDoctor.entrypoint, exit_code: oldVersionDoctor.exit_code });
+  if (!oldVersionDoctor.ok && env.SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT !== '1') {
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'failed',
+      ok: false,
+      installCode: null,
+      oldVersionDoctor,
+      newBinary: null,
+      newVersion: null,
+      newVersionDoctor: null,
+      projectReceipt: null,
+      migrationCurrent: false,
+      stages,
+      error: oldVersionDoctor.error || 'old-version Doctor preflight failed'
+    });
+  }
   if (options.dryRun) {
+    stage('npm_install', true, 'dry_run', { command });
     return buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -243,6 +335,13 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       status: 'dry_run',
       ok: true,
       installCode: null,
+      oldVersionDoctor,
+      newBinary: null,
+      newVersion: null,
+      newVersionDoctor: null,
+      projectReceipt: null,
+      migrationCurrent: false,
+      stages,
       error: null
     });
   }
@@ -271,7 +370,49 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     stdout: '',
     stderr: err instanceof Error ? err.message : String(err)
   }));
-  const ok = install.code === 0;
+  const installOk = install.code === 0;
+  stage('npm_global_install', installOk, installOk ? 'installed' : 'failed', { command, code: install.code });
+  let newBinary: string | null = null;
+  let newVersion: string | null = null;
+  let newVersionDoctor: PackageLocalDoctorRun | null = null;
+  let projectReceipt: UpdateMigrationReceipt | null = null;
+  let migrationCurrent = false;
+  if (installOk) {
+    newBinary = await resolveInstalledSksEntrypoint({ packageName, globalRoot, env });
+    stage('resolve_new_package_local_binary', Boolean(newBinary), newBinary ? 'resolved' : 'missing', { new_binary: newBinary });
+    if (newBinary) {
+      const versionProbe = await runProcess(process.execPath, [newBinary, '--version'], {
+        cwd,
+        env: { ...env, SKS_UPDATE_MIGRATION_GATE_DISABLED: '1', SKS_DISABLE_UPDATE_CHECK: '1' },
+        timeoutMs: 5000,
+        maxOutputBytes: 4096
+      }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+      newVersion = parseVersionText(versionProbe.stdout || versionProbe.stderr || '') || null;
+      stage('new_version_probe', Boolean(newVersion), newVersion ? 'version_detected' : 'failed', { new_version: newVersion, code: versionProbe.code });
+      newVersionDoctor = await runPackageLocalDoctor({
+        root: globalSksRootPath(),
+        entrypoint: newBinary,
+        args: ['doctor', '--json'],
+        env,
+        timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
+        maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+      });
+      stage('new_version_global_doctor', newVersionDoctor.ok, newVersionDoctor.status, { entrypoint: newBinary, exit_code: newVersionDoctor.exit_code });
+    }
+    if (newVersionDoctor?.ok) {
+      projectReceipt = await writeProjectUpdateMigrationReceipt({
+        root: projectReceiptRoot,
+        source: 'update-now',
+        doctor: newVersionDoctor,
+        updateStages: stages,
+        blockers: [],
+        warnings: []
+      }).catch(() => null);
+      migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt);
+      stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
+    }
+  }
+  const ok = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && migrationCurrent;
   return buildUpdateNowResult({
     packageName,
     from: check.current,
@@ -287,7 +428,14 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     status: ok ? 'updated' : 'failed',
     ok,
     installCode: install.code,
-    error: ok ? null : `${install.stderr || install.stdout || 'npm global install failed'}`.trim()
+    oldVersionDoctor,
+    newBinary,
+    newVersion,
+    newVersionDoctor,
+    projectReceipt,
+    migrationCurrent,
+    stages,
+    error: ok ? null : updateNowError(install, newBinary, newVersionDoctor, migrationCurrent)
   });
 }
 
@@ -453,10 +601,17 @@ function buildUpdateNowResult(input: {
   status: SksUpdateNowResult['status'];
   ok: boolean;
   installCode: number | null;
+  oldVersionDoctor: PackageLocalDoctorRun | null;
+  newBinary: string | null;
+  newVersion: string | null;
+  newVersionDoctor: PackageLocalDoctorRun | null;
+  projectReceipt: UpdateMigrationReceipt | null;
+  migrationCurrent: boolean;
+  stages: SksUpdateNowStage[];
   error: string | null;
 }): SksUpdateNowResult {
   return {
-    schema: 'sks.update-now.v1',
+    schema: 'sks.update-now.v2',
     ok: input.ok,
     status: input.status,
     package: input.packageName,
@@ -471,6 +626,13 @@ function buildUpdateNowResult(input: {
     registry: input.registry,
     global_root: input.globalRoot,
     install_code: input.installCode,
+    old_version_doctor: input.oldVersionDoctor,
+    new_binary: input.newBinary,
+    new_version: input.newVersion,
+    new_version_doctor: input.newVersionDoctor,
+    project_receipt: input.projectReceipt,
+    migration_current: input.migrationCurrent,
+    stages: input.stages,
     error: input.error
   };
 }
@@ -491,6 +653,23 @@ function versionOverrideEnvName(packageName: string): string {
 function parseVersionText(text: string): string | null {
   const match = String(text || '').match(/\b\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?\b/);
   return match ? match[0] : null;
+}
+
+function globalSksRootPath(): string {
+  return path.join(process.env.HOME || os.homedir(), '.sneakoscope-global');
+}
+
+function updateNowError(
+  install: { code: number | null; stdout: string; stderr: string },
+  newBinary: string | null,
+  newVersionDoctor: PackageLocalDoctorRun | null,
+  migrationCurrent: boolean
+): string {
+  if (install.code !== 0) return `${install.stderr || install.stdout || 'npm global install failed'}`.trim();
+  if (!newBinary) return 'new package-local sks binary could not be resolved after install';
+  if (!newVersionDoctor?.ok) return newVersionDoctor?.error || 'new-version global Doctor failed';
+  if (!migrationCurrent) return 'project update migration receipt was not current';
+  return 'update failed';
 }
 
 function highestPackageVersion(versions: Array<string | null | undefined>): string {

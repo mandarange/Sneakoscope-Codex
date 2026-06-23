@@ -7,14 +7,16 @@ import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-pr
 import { detectCodex0138Capability } from '../codex-control/codex-0138-capability.js'
 import { detectCodex0139Capability } from '../codex-control/codex-0139-capability.js'
 import { detectCodex0140Capability } from '../codex-control/codex-0140-capability.js'
+import { detectCodex0142Capability, type Codex0142FeatureKey } from '../codex-control/codex-0142-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
 import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+import { MANAGED_AGENT_ROLES, MANAGED_SKILLS, managedAgentRoleOwnsText } from '../managed-assets/managed-assets-manifest.js'
 import { buildMcpPluginServerCandidates } from '../mcp/mcp-plugin-inventory.js'
 import { codexNativeFeatureState, computeCodexNativeInvocationDefaults, type CodexNativeFeatureMatrix, type CodexNativeFeatureState } from './codex-native-feature-matrix.js'
 
 const REPORT_PATH = '.sneakoscope/reports/codex-native-feature-matrix.json'
-const REQUIRED_SKILL_NAMES = ['loop', 'naruto', 'qa-loop', 'research', 'dfix', 'image-ux-review', 'computer-use', 'init-deep']
-const REQUIRED_AGENT_ROLES = ['sks-explorer', 'sks-planner', 'sks-implementer', 'sks-checker', 'sks-release-verifier', 'sks-zellij-ui-verifier', 'sks-codex-probe-verifier']
+const REQUIRED_SKILL_NAMES = MANAGED_SKILLS.map((skill) => skill.id)
+const REQUIRED_AGENT_ROLES = MANAGED_AGENT_ROLES.map((role) => role.id)
 
 export async function buildCodexNativeFeatureMatrix(input: {
   root: string
@@ -27,12 +29,20 @@ export async function buildCodexNativeFeatureMatrix(input: {
   const deprecatedApplyRepairs = input.applyRepairs === true
   const mode = input.mode || (deprecatedApplyRepairs || input.repairManagedAssets === true ? 'repair' : 'read-only')
   const repairManagedAssets = mode === 'repair' && (input.repairManagedAssets === true || deprecatedApplyRepairs)
-  const fixtureMode = process.env.SKS_CODEX_0138_FAKE === '1' || process.env.SKS_CODEX_0139_FAKE === '1' || process.env.SKS_CODEX_0140_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
+  const fixtureMode = process.env.SKS_CODEX_0138_FAKE === '1' || process.env.SKS_CODEX_0139_FAKE === '1' || process.env.SKS_CODEX_0140_FAKE === '1' || process.env.SKS_CODEX_0142_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
   const version = codexBin ? await codexVersion(codexBin) : null
   const cap0138 = await detectCodex0138Capability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const cap0139 = await detectCodex0139Capability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const cap0140 = await detectCodex0140Capability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
+  const cap0142 = await detectCodex0142Capability({ codexBin, root }).catch((err: unknown) => ({
+    schema: 'sks.codex-0142-capability.v1',
+    ok: false,
+    release_authorizing: false,
+    feature_states: {},
+    blockers: [messageOf(err)],
+    warnings: ['codex_0142_probe_exception']
+  }))
   const app = await codexAppIntegrationStatus({ codex: { bin: codexBin, version, available: Boolean(codexBin) } }).catch((err: unknown) => ({ ok: false, blockers: [messageOf(err)] }))
   const plugins = await buildCodexPluginInventory().catch((err: unknown) => ({
     schema: 'sks.codex-plugin-inventory.v1' as const,
@@ -116,6 +126,17 @@ export async function buildCodexNativeFeatureMatrix(input: {
     app_handoff: boolState(booleanFeature(cap0138, 'supports_app_handoff'), 'actual-probe', '.sneakoscope/codex-0138-capability.json', blockersOf(cap0138)),
     image_path_exposure: boolState(booleanFeature(cap0138, 'supports_image_path_exposure'), 'actual-probe', '.sneakoscope/codex-0138-capability.json', blockersOf(cap0138)),
     code_mode_web_search: boolState(booleanFeature(cap0139, 'supports_code_mode_web_search'), 'actual-probe', '.sneakoscope/codex-0139-capability.json', blockersOf(cap0139)),
+    codex_0142: boolState(recordOk(cap0142) === true, 'actual-probe', '.sneakoscope/codex/codex-0142-capability.json', blockersOf(cap0142), warningsOf(cap0142)),
+    multi_agent_mode: codex0142State(cap0142, 'multi_agent_mode_schema'),
+    rollout_budget: codex0142State(cap0142, 'rollout_budget_schema'),
+    indexed_web_search: codex0142State(cap0142, 'indexed_web_search_schema'),
+    current_time_read: codex0142State(cap0142, 'current_time_read_schema'),
+    terminal_subagent_error: codex0142State(cap0142, 'terminal_subagent_error_schema'),
+    exec_mcp_reconnect: codex0142State(cap0142, 'exec_mcp_reconnect_schema'),
+    plugin_catalog_refresh: codex0142State(cap0142, 'plugin_catalog_refresh_schema'),
+    native_thread_list_search: codex0142State(cap0142, 'native_thread_list_search_schema'),
+    remote_native_environment: codex0142State(cap0142, 'remote_native_environment_schema'),
+    app_server_overload: codex0142State(cap0142, 'app_server_overload_schema'),
     codex_0140: boolState(booleanFeature(cap0140, 'supports_0140'), 'actual-probe', '.sneakoscope/codex-0140-capability.json', blockersOf(cap0140)),
     usage_views: boolState(booleanFeature((cap0140 as any)?.features || {}, 'usage_views'), 'actual-probe', '.sneakoscope/codex-0140-capability.json', blockersOf(cap0140)),
     goal_attachment_preservation: boolState(booleanFeature((cap0140 as any)?.features || {}, 'goal_attachment_preservation'), 'actual-probe', '.sneakoscope/codex-0140-capability.json', blockersOf(cap0140)),
@@ -140,6 +161,7 @@ export async function buildCodexNativeFeatureMatrix(input: {
       codex_0138: cap0138,
       codex_0139: cap0139,
       codex_0140: cap0140,
+      codex_0142: cap0142,
       app,
       plugin_inventory: plugins,
       mcp_candidates: mcpCandidates,
@@ -150,11 +172,15 @@ export async function buildCodexNativeFeatureMatrix(input: {
     },
     invocation_defaults: {
       loop_worker_role_strategy: 'message-role' as const,
+      multi_agent_mode: 'none' as const,
+      rollout_budget_strategy: 'sks-local-only' as const,
       qa_visual_review_strategy: 'headless-artifact' as const,
       research_source_strategy: 'local-files' as const,
       image_followup_strategy: 'artifact-path' as const,
       hook_evidence_policy: 'unknown-do-not-count' as const,
-      skill_bridge_strategy: 'cli-only' as const
+      skill_bridge_strategy: 'cli-only' as const,
+      current_time_source: 'external-clock' as const,
+      overload_retry_policy: 'generic' as const
     },
     blockers: [
       ...(!codexBin ? ['codex_cli_missing'] : []),
@@ -188,7 +214,7 @@ async function inspectManagedSkillState(root: string): Promise<{ ok: boolean; ap
     for (const name of REQUIRED_SKILL_NAMES) {
       if (managed.has(name)) continue
       const text = await fs.readFile(path.join(dir, name, 'SKILL.md'), 'utf8').catch(() => '')
-      if (text.includes('BEGIN SKS MANAGED SKILL')) managed.add(name)
+      if (text.includes('BEGIN SKS MANAGED SKILL') || text.includes('BEGIN SKS IMMUTABLE CORE SKILL')) managed.add(name)
     }
   }
   const missing = REQUIRED_SKILL_NAMES.filter((name) => !managed.has(name))
@@ -214,10 +240,10 @@ async function inspectManagedAgentRoleState(root: string): Promise<{ ok: boolean
   for (const dir of dirs) {
     const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
     existingCount += rows.filter((row) => row.isFile() && row.name.endsWith('.toml')).length
-    for (const role of REQUIRED_AGENT_ROLES) {
-      if (managed.has(role)) continue
-      const text = await fs.readFile(path.join(dir, `${role}.toml`), 'utf8').catch(() => '')
-      if (text.includes('SKS managed 3.1.7 directive role')) managed.add(role)
+    for (const role of MANAGED_AGENT_ROLES) {
+      if (managed.has(role.id)) continue
+      const text = await fs.readFile(path.join(dir, role.filename), 'utf8').catch(() => '')
+      if (managedAgentRoleOwnsText(text, role)) managed.add(role.id)
     }
   }
   const missing = REQUIRED_AGENT_ROLES.filter((role) => !managed.has(role))
@@ -264,6 +290,41 @@ function blockersOf(value: unknown): string[] {
 
 function recordOk(value: unknown): boolean | undefined {
   return isRecord(value) && typeof value.ok === 'boolean' ? value.ok : undefined
+}
+
+function warningsOf(value: unknown): string[] {
+  if (!isRecord(value) || !Array.isArray(value.warnings)) return []
+  return value.warnings.map((item) => String(item)).filter(Boolean)
+}
+
+function codex0142State(capability: unknown, key: Codex0142FeatureKey): CodexNativeFeatureState {
+  const state = isRecord(capability)
+    && isRecord(capability.feature_states)
+    && isRecord(capability.feature_states[key])
+    ? capability.feature_states[key]
+    : null
+  const evidence = Array.isArray(state?.evidence) ? state.evidence.map(String) : []
+  const blockers = Array.isArray(state?.blockers) ? state.blockers.map(String) : [`codex_0142_${key}_not_verified`]
+  const supported = state?.supported === true
+  const certainty = typeof state?.certainty === 'string' ? state.certainty : ''
+  const input: {
+    ok: boolean
+    source: CodexNativeFeatureState['source']
+    artifact_path: string
+    evidence: string[]
+    blockers: string[]
+    warnings: string[]
+    unavailableStatus?: 'unavailable' | 'unknown' | 'blocked' | 'fallback'
+  } = {
+    ok: supported,
+    source: 'actual-probe',
+    artifact_path: '.sneakoscope/codex/codex-0142-capability.json',
+    evidence,
+    blockers: supported ? [] : blockers,
+    warnings: certainty && certainty !== 'actual' && certainty !== 'discovered' ? [`codex_0142_${key}_${certainty}`] : []
+  }
+  if (!supported) input.unavailableStatus = 'fallback'
+  return codexNativeFeatureState(input)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

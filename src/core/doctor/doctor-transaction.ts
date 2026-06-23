@@ -7,6 +7,7 @@ export interface DoctorFixTransactionPhase {
   id: string;
   ok: boolean;
   repaired?: boolean;
+  rollback_evidence?: string | null;
   manual_required?: boolean;
   required_for_ready?: boolean;
   blockers?: string[];
@@ -27,7 +28,7 @@ export interface DoctorFixPhaseDefinition {
 }
 
 export interface DoctorFixTransaction {
-  schema: 'sks.doctor-fix-transaction.v1';
+  schema: 'sks.doctor-fix-transaction.v2';
   ok: boolean;
   root: string;
   started_at: string;
@@ -41,6 +42,7 @@ export interface DoctorFixTransaction {
     blockers: string[];
     warnings: string[];
     artifact_path: string | null;
+    rollback_evidence: string | null;
     started_at: string | null;
     completed_at: string | null;
     duration_ms: number | null;
@@ -48,6 +50,7 @@ export interface DoctorFixTransaction {
   }>;
   postcheck_ok: boolean;
   rollback_performed: boolean;
+  mutations_without_rollback: number;
   raw_secret_values_recorded: false;
   skipped_clean_phases: string[];
   dirty_phases: string[];
@@ -86,6 +89,7 @@ export async function runDoctorFixTransaction(input: {
       phases.push({
         ...phase,
         ok: true,
+        rollback_evidence: 'clean_phase_no_mutation',
         warnings: [`dirty_plan_skipped_clean_phase${proofId ? `:${proofId}` : ''}`],
         completed_at: nowIso(),
         duration_ms: Math.max(0, Date.now() - startedMs)
@@ -119,6 +123,7 @@ export async function runDoctorFixTransaction(input: {
     }
     phase.completed_at = phase.completed_at || nowIso();
     phase.duration_ms = phase.duration_ms ?? Math.max(0, Date.now() - startedMs);
+    phase.rollback_evidence = phase.rollback_evidence || (definition.rollback ? 'phase_rollback_function' : phase.repaired ? null : 'no_mutation');
     if (phase.ok) {
       const proofId = `doctor-${definition.id}-${Date.now()}`;
       markDoctorPhaseClean(input.root, definition.id, proofId, true);
@@ -165,21 +170,24 @@ export async function writeDoctorFixTransaction(input: {
     blockers: phase.blockers || [],
     warnings: phase.warnings || [],
     artifact_path: phase.artifact_path || null,
+    rollback_evidence: phase.rollback_evidence || null,
     started_at: phase.started_at || null,
     completed_at: phase.completed_at || null,
     duration_ms: Number.isFinite(phase.duration_ms) ? Number(phase.duration_ms) : null,
     rollback_performed: phase.rollback_performed === true
   }));
   const postcheckOk = phases.every((phase) => phase.ok || (phase.manual_required && !phase.required_for_ready));
+  const mutationsWithoutRollback = phases.filter((phase) => phase.required_for_ready && phase.repaired && !phase.rollback_evidence).length;
   const report: DoctorFixTransaction = {
-    schema: 'sks.doctor-fix-transaction.v1',
-    ok: postcheckOk,
+    schema: 'sks.doctor-fix-transaction.v2',
+    ok: postcheckOk && mutationsWithoutRollback === 0,
     root,
     started_at: input.startedAt || nowIso(),
     completed_at: nowIso(),
     phases,
-    postcheck_ok: postcheckOk,
+    postcheck_ok: postcheckOk && mutationsWithoutRollback === 0,
     rollback_performed: input.rollbackPerformed === true,
+    mutations_without_rollback: mutationsWithoutRollback,
     raw_secret_values_recorded: false,
     skipped_clean_phases: phases.filter((phase) => phase.warnings.some((warning) => warning.startsWith('dirty_plan_skipped_clean_phase'))).map((phase) => phase.id),
     dirty_phases: input.dirtyPlan?.phases.filter((phase) => phase.status === 'dirty').map((phase) => phase.id) || phases.filter((phase) => !phase.warnings.some((warning) => warning.startsWith('dirty_plan_skipped_clean_phase'))).map((phase) => phase.id),
@@ -207,6 +215,7 @@ function normalizePhase(
     blockers: phase.blockers || [],
     warnings: phase.warnings || [],
     artifact_path: phase.artifact_path || null,
+    rollback_evidence: phase.rollback_evidence || null,
     started_at: phase.started_at || fallback.started_at || nowIso(),
     completed_at: phase.completed_at || nowIso(),
     duration_ms: phase.duration_ms ?? Math.max(0, Date.now() - startedMs),
@@ -221,6 +230,7 @@ function mergePhase(phase: DoctorFixTransactionPhase, update: Partial<DoctorFixT
     ok: phase.ok === true && update.ok !== false,
     repaired: phase.repaired === true || update.repaired === true,
     manual_required: phase.manual_required === true || update.manual_required === true,
+    rollback_evidence: update.rollback_evidence || phase.rollback_evidence || null,
     blockers: [...(phase.blockers || []), ...(update.blockers || [])],
     warnings: [...(phase.warnings || []), ...(update.warnings || [])]
   };
