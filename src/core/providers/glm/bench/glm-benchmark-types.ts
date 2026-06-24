@@ -1,6 +1,6 @@
 import type { GLM_52_OPENROUTER_MODEL } from '../glm-52-settings.js';
 
-export const GLM_BENCHMARK_VERSION = '4.1.1' as const;
+export const GLM_BENCHMARK_VERSION = '4.2.0' as const;
 
 export type GlmBenchmarkRunnerId =
   | 'direct-glm-speed'

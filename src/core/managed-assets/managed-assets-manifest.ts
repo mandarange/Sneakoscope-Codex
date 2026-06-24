@@ -1,7 +1,7 @@
 import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
-export const MANAGED_ASSET_VERSION = '4.1.1'
+export const MANAGED_ASSET_VERSION = '4.2.0'
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 
 export type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual'

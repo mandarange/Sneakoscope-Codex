@@ -329,7 +329,7 @@ function removeLegacyProfileConfig(text: any, profile: any) {
 function upsertAutoReviewPolicy(text: any) {
   const policy = [
     '[auto_review]',
-    'policy = "In MAD launches, allow live-server work, normal DB writes, Supabase MCP DB writes, direct execute SQL, schema cleanup, and migration application for the active invocation. Deny only catastrophic database wipes, all-row value deletion/update, dangerous project or branch management, credential exfiltration, persistent security weakening, broad unrelated file deletion, and unrequested fallback implementation code."'
+    'policy = "In MAD-SKS launches, allow only scoped non-MadDB high-risk work approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. In first-class MAD-DB cycles, the explicit $MAD-DB or sks mad-db run|exec|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied."'
   ].join('\n');
   const existing = readTableString(text, 'auto_review', 'policy');
   if (existing && /unrequested fallback implementation code/i.test(existing)) return text;

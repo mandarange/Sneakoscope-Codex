@@ -152,7 +152,9 @@ function renderTelemetrySlotRows(snapshot: any): string[] {
 }
 
 function isMadDbActive(capability: any) {
-  if (!capability || capability.enabled !== true || capability.consumed === true) return false
+  if (!capability) return false
+  if (capability.schema === 'sks.mad-db-capability.v2' && !['transport_ready', 'active'].includes(String(capability.status || ''))) return false
+  if (capability.schema !== 'sks.mad-db-capability.v2' && (capability.enabled !== true || capability.consumed === true)) return false
   const expires = Date.parse(capability.expires_at || '')
   return Number.isFinite(expires) && expires > Date.now()
 }

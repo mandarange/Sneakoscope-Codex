@@ -25,7 +25,7 @@ export async function appendMadDbOperationLifecycle(root: string, missionId: str
   toolName?: string | null
   sqlHash?: string | null
   destructive?: boolean
-  resultStatus?: 'unknown_pending_tool_result' | 'succeeded' | 'failed'
+  resultStatus?: 'pending_tool_result' | 'succeeded' | 'failed'
   rowCount?: number | null
   error?: string | null
 }) {
@@ -37,7 +37,7 @@ export async function appendMadDbOperationLifecycle(root: string, missionId: str
     tool_name: input.toolName || null,
     sql_hash: input.sqlHash || null,
     destructive: input.destructive === true,
-    result_status: input.resultStatus || 'unknown_pending_tool_result',
+    result_status: input.resultStatus || 'pending_tool_result',
     row_count: input.rowCount ?? null,
     error: input.error || null
   })

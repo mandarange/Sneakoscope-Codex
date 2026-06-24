@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+## [4.2.0] - 2026-06-24
+
+### Added
+
+- Added a first-class `$MAD-DB` route and `sks mad-db run|exec|apply-migration` execution path with mission-bound capability v2, SQL-plane operation classes, Supabase MCP tool inventory, read-back verification plumbing, and read-only restoration proof.
+- Added mission-local ephemeral Supabase MCP write profiles for active MadDB cycles while keeping persistent Supabase MCP configuration read-only.
+- Added MadDB release gates for route identity, hook idempotency, parallel lifecycle correlation, runtime profile lifecycle, policy snapshot coverage, capability v2, real Supabase E2E entrypoint, and operation lifecycle blackboxes.
+- Added MadDB documentation and generated policy text from the typed MadDB policy SSOT.
+
+### Fixed
+
+- Removed `$MAD-DB` from `$MAD-SKS` aliases so MadDB authorization no longer disappears across mission preparation.
+- Replaced pending-latest/tool-name lifecycle matching with canonical `tool_call_id` correlation and idempotent operation reservation.
+- Stopped `sks mad-db enable` from creating a half-bound executable capability; real execution now goes through the first-class MadDB route.
+- Quarantined `publish:fast` so release publication uses the normal release gates instead of a bypass script.
+
+### Compatibility
+
+- GitHub Actions, CI/CD workflows, and publish workflow files are unchanged.
+
+
 ## [4.1.1] - 2026-06-23
 
 ### Fixed

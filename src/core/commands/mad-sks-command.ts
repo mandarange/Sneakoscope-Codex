@@ -19,7 +19,6 @@ import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js';
 import { runCodexLaunchPreflight } from '../preflight/parallel-preflight-engine.js';
 import { diffCodexAppUiSnapshots, writeCodexAppUiSnapshot } from '../codex-app/codex-app-ui-state-snapshot.js';
 import { checkSksUpdateNotice } from '../update/update-notice.js';
-import { createMadDbCapability, MAD_DB_ACK } from '../mad-db/mad-db-capability.js';
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js';
 import { resolveCodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js';
@@ -200,38 +199,22 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     process.exitCode = 1;
     return glmRuntime;
   }
-  const madDbCapability = madDbGrant.enabled
-    ? await createMadDbCapability(madLaunch.root, { missionId: madLaunch.mission_id, ack: madDbGrant.ack, cwd: process.cwd() })
-    : null;
-  if (madDbCapability) {
+  if (madDbGrant.requested) {
     const grantReport = {
-      schema: 'sks.mad-sks-launch-grants.v1',
+      schema: 'sks.mad-sks-launch-grants.v2',
       generated_at: nowIso(),
       mission_id: madLaunch.mission_id,
       mad_sks_active: true,
-      mad_db_active: true,
-      mad_db_default_grant: madDbGrant.source === 'sks_mad_default',
+      mad_db_active: false,
+      mad_db_default_grant: false,
       mad_db_grant_source: madDbGrant.source,
-      mad_db_one_cycle_only: true,
-      mad_db_capability_file: 'mad-db-capability.json',
-      mad_db_cycle_id: madDbCapability.cycle_id,
-      mad_db_expires_at: madDbCapability.expires_at,
+      mad_db_requires_first_class_route: true,
+      mad_db_cli: 'sks mad-db run|exec|apply-migration',
+      mad_db_capability_file: null,
       standalone_mad_db_enable_still_requires_ack: true
     };
     await writeJsonAtomic(path.join(madLaunch.dir, 'mad-sks-launch-grants.json'), grantReport);
-    await setCurrent(madLaunch.root, {
-      mission_id: madLaunch.mission_id,
-      mad_db_active: true,
-      mad_db_cycle_id: madDbCapability.cycle_id,
-      mad_db_capability_file: 'mad-db-capability.json',
-      mad_db_break_glass: true,
-      mad_db_default_grant: madDbGrant.source === 'sks_mad_default',
-      mad_db_grant_source: madDbGrant.source,
-      mad_db_one_cycle_only: true,
-      mad_db_priority_override_active: true,
-      mad_sks_launch_grants_file: 'mad-sks-launch-grants.json'
-    });
-    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.capability_created', grant_source: madDbGrant.source, cycle_id: madDbCapability.cycle_id, expires_at: madDbCapability.expires_at });
+    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_db.first_class_route_required', grant_source: madDbGrant.source, cli: grantReport.mad_db_cli });
   }
   const updateNotice = {
     schema: 'sks.update-notice.v1',
@@ -252,9 +235,9 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${glmRuntime?.profile?.profile_name || madHighProfileName()} | gate ${madLaunch.mission_id}`);
   if (glmRuntime?.profile) console.log(`GLM MAD launch active: ${glmRuntime.profile.model} via OpenRouter; GPT fallback blocked.`);
-  if (madDbCapability) console.log(`MAD-DB one-cycle capability active (${madDbGrant.source}); expires ${madDbCapability.expires_at}.`);
+  if (madDbGrant.requested) console.log('MAD-DB flag observed; use the first-class route: sks mad-db run|exec|apply-migration.');
   if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
-  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. MAD-DB one-cycle DB break-glass is already active for this launch; protected-core, audit, and one-cycle bounds remain.');
+  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. MAD-DB SQL-plane execution is not active in MAD-SKS; use the first-class MadDB route for DROP/TRUNCATE/all-row SQL-plane work.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
   const madSksEnv = {
     SKS_PROTECTED_CORE_POLICY: madLaunch.gate.protected_core_policy,
@@ -406,10 +389,11 @@ function buildGlmMadLaunchOpts(cleanArgs: any[] = [], opts: any = {}) {
 
 export function resolveMadLaunchMadDbGrant(args: any[] = []) {
   const list = (args || []).map((arg: any) => String(arg));
+  const requested = list.includes('--mad-db');
   return {
-    enabled: true,
-    source: list.includes('--mad-db') ? 'sks_mad_explicit_redundant_flag' : 'sks_mad_default',
-    ack: MAD_DB_ACK,
+    enabled: false,
+    requested,
+    source: requested ? 'mad_db_first_class_route_required' : 'not_requested',
     one_cycle_only: true
   };
 }

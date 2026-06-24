@@ -35,15 +35,18 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.1.1** tightens the 4.1 readiness path for publishing and first-command migration. Doctor now keeps optional native surfaces route-gated, writes v2 project migration receipts tied to an installation epoch, and keeps the migration profile fast enough for update gates.
+SKS **4.2.0** stabilizes MadDB SQL-plane execution so explicit `$MAD-DB` and `sks mad-db run|exec|apply-migration` invocations use a first-class, mission-bound break-glass route instead of inheriting `$MAD-SKS` state.
+
+What changed in 4.2.0:
+
+- **First-class MadDB route.** `$MAD-DB` no longer aliases `$MAD-SKS`; it creates one authoritative mission, capability, runtime profile, inventory check, execution, read-back, and closeout cycle.
+- **Capability v2 binding.** MadDB capabilities bind project root, project ref hash, mission/cycle/session identity, runtime profile hash, TTL, operator intent, and SQL-plane operation classes.
+- **Ephemeral Supabase write profile.** Persistent Supabase MCP config stays read-only; write-capable MCP settings exist only inside the active MadDB mission and are removed in `finally`.
+- **Exact lifecycle correlation.** Hook/result handling is keyed by canonical `tool_call_id`, uses idempotent operation state, and avoids unsafe tool-name result matching under parallel calls.
+- **Policy/docs/test SSOT.** MadDB route metadata, generated skill guidance, DB safety wording, Doctor guidance, release gates, docs, scanner coverage, and local regression tests share the typed MadDB policy surface.
+- **Release metadata truth.** Package, CLI version constants, Rust crate metadata, README, changelog, and release checks all point at 4.2.0.
 
 What changed in 4.1.1:
-
-- **Core vs route readiness.** Computer Use and Chrome/web review are manual-required route gates, not core blockers for ordinary Doctor/update readiness.
-- **Migration receipt v2.** First-command migration writes project receipts with installation epoch, project hash, required blockers, and optional warnings so stale locks or optional capabilities do not block normal commands.
-- **Fast migration Doctor.** `sks doctor --fix --profile migration --machine-only` skips optional Codex App, Zellij, provider, native, and deep diagnostic work while preserving core readiness checks.
-- **MAD bootstrap latency.** MAD defers update prompts, provider setup, UI snapshots, pane proof, and native swarm proof until the route actually needs them.
-- **Release metadata truth.** Package, CLI version constants, Rust crate metadata, README, changelog, and release checks all point at 4.1.1.
 
 What changed in 4.1.0:
 
@@ -504,7 +507,7 @@ sks --mad
 sks --mad --allow-package-install --allow-service-control --allow-network --yes
 ```
 
-This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission read-only native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock: it is explicit user authorization to widen approved target-project scopes. Catastrophic database wipe/all-row/project-management safeguards remain active, and the pipeline contract still forbids unrequested fallback implementation code.
+This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission read-only native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock and does not create a MadDB capability. Catastrophic database wipe/all-row/project-management safeguards remain active outside the first-class MadDB route, and the pipeline contract still forbids unrequested fallback implementation code.
 
 Before launching, SKS checks npm for a newer `sneakoscope` and prints a non-blocking update notice when one is available; use `sks update now` or `sks doctor --fix` when you want SKS to update itself. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
 
@@ -717,7 +720,7 @@ Use these inside Codex App or another agent prompt. They are prompt commands, no
 
 Common prompts: `$Team`, `$From-Chat-IMG`, `$with-local-llm-on`, `$with-local-llm-off`, `$DFix`, `$Answer`, `$SKS`, `$QA-LOOP`, `$PPT`, `$Computer-Use`/`$CU`, `$Goal`, `$Research`, `$AutoResearch`, `$DB`, `$MAD-SKS`, `$MAD-DB`, `$GX`, `$Wiki`, and `$Help`.
 
-`$MAD-DB` is the prompt-visible Mad-DB alias for one-cycle DB break-glass work. It maps to the same guarded MAD-SKS permission route, while the terminal lifecycle remains `sks mad-db status|enable|revoke`; it is not a permanent DB unlock and catastrophic DB safeguards remain active.
+`$MAD-DB` is the first-class MadDB SQL-plane execution route. `sks mad-db run|exec|apply-migration` creates the bound mission/capability/runtime profile, verifies Supabase `execute_sql` and `apply_migration`, executes the requested SQL-plane mutation, reads back postconditions, and then closes the write profile while proving normal read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied. See `docs/mad-db.md`.
 
 ## 🔁 Common Workflows
 

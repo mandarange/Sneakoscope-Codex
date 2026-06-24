@@ -3,9 +3,10 @@ import { exists, readJson, writeJsonAtomic, readText, nowIso, appendJsonlBounded
 import { missionDir, setCurrent } from './mission.js';
 import { evaluateMadSksPermissionGate, isMadSksRouteState } from './permission-gates.js';
 import { resolveMadDbMutationPolicy } from './mad-db/mad-db-policy-resolver.js';
-import { recordMadDbOperation } from './mad-db/mad-db-capability.js';
-import { appendMadDbLedgerEvent, appendMadDbOperationLifecycle } from './mad-db/mad-db-ledger.js';
-import { lifecycleHookFromUnknown, recordPendingMadDbLifecycleHook, type MadDbLifecycleHook } from './mad-db/mad-db-result-lifecycle.js';
+import { appendMadDbLedgerEvent } from './mad-db/mad-db-ledger.js';
+import { lifecycleHookFromUnknown, type MadDbLifecycleHook } from './mad-db/mad-db-result-lifecycle.js';
+import { extractCanonicalToolCallId, reserveMadDbOperation, transitionMadDbOperation } from './mad-db/mad-db-operation-store.js';
+import { madDbOperationClassesFromClassification } from './mad-db/mad-db-policy.js';
 
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
@@ -450,19 +451,29 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
   const madDb = await resolveMadDbMutationPolicy(root, state, classification);
   if (madDb.allowed === true && state?.mission_id) {
     const madDbDecision: any = madDb;
-    const operationId = `mad-db-op-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const sqlHash = classification.sql?.statements?.length ? sha256(String(classification.sql.statements.join('\n'))) : null;
-    await appendMadDbOperationLifecycle(root, state.mission_id, {
-      type: 'db_operation.started',
-      operationId,
-      cycleId: madDbDecision.cycle_id,
-      toolName: classification.toolName || null,
-      sqlHash,
-      destructive: classification.level === 'destructive'
+    const sqlText = classification.sql?.statements?.length ? String(classification.sql.statements.join('\n')) : null;
+    const sqlHash = sqlText ? sha256(sqlText) : null;
+    const toolCallId = extractCanonicalToolCallId(payload) || `payload-${sha256(JSON.stringify({ tool: classification.toolName || '', sqlHash, level: classification.level })).slice(0, 16)}`;
+    const operationClasses = madDbDecision.operation_classes?.length ? madDbDecision.operation_classes : madDbOperationClassesFromClassification(classification);
+    const reservation = await reserveMadDbOperation({
+      root,
+      missionId: String(state.mission_id),
+      capability: madDbDecision.capability,
+      toolCallId,
+      toolName: classification.toolName || 'unknown_database_tool',
+      sql: sqlText,
+      operationClasses
+    });
+    await transitionMadDbOperation({
+      root,
+      missionId: String(state.mission_id),
+      toolCallId,
+      state: 'started'
     });
     const lifecycleHook: MadDbLifecycleHook = {
       mission_id: String(state.mission_id),
-      operation_id: operationId,
+      operation_id: reservation.operation.operation_id,
+      tool_call_id: toolCallId,
       cycle_id: madDbDecision.cycle_id || null,
       tool_name: classification.toolName || null,
       sql_hash: sqlHash,
@@ -477,35 +488,22 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
       mad_db: {
         active: true,
         priority: 'highest',
+        capability_schema: 'sks.mad-db-capability.v2',
         one_cycle_only: true,
         cycle_id: madDbDecision.cycle_id,
         capability_file: 'mad-db-capability.json',
-        consumed: false,
-        operation_id: operationId,
+        status: reservation.capability.status,
+        operation_id: reservation.operation.operation_id,
+        tool_call_id: toolCallId,
+        tool_call_id_missing: extractCanonicalToolCallId(payload) === null,
         lifecycle_result_pending: true,
         ledger_result_hook: lifecycleHook,
-        operation_count: Number(madDbDecision.operation_count || 0) + 1,
-        max_operations: madDbDecision.max_operations || 20
+        operation_classes: operationClasses,
+        counters: reservation.capability.counters,
+        idempotent_reservation_reused: reservation.reused
       }
     };
-    await appendMadDbLedgerEvent(root, state.mission_id, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification, operation_id: operationId });
-    await appendMadDbOperationLifecycle(root, state.mission_id, {
-      type: 'db_operation.allowed',
-      operationId,
-      cycleId: madDbDecision.cycle_id,
-      toolName: classification.toolName || null,
-      sqlHash,
-      destructive: classification.level === 'destructive',
-      resultStatus: 'unknown_pending_tool_result'
-    });
-    const updatedCapability: any = await recordMadDbOperation(root, state.mission_id, {
-      operationId,
-      ...(classification.toolName ? { toolName: classification.toolName } : {}),
-      ...(sqlHash ? { sqlHash } : {})
-    });
-    decision.mad_db.consumed = updatedCapability?.consumed === true;
-    decision.mad_db.operation_count = updatedCapability?.operation_count ?? decision.mad_db.operation_count;
-    await recordPendingMadDbLifecycleHook(root, state.mission_id, lifecycleHook);
+    await appendMadDbLedgerEvent(root, state.mission_id, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification, operation_id: reservation.operation.operation_id, tool_call_id: toolCallId });
     await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });
     return decision;
   }
@@ -546,8 +544,8 @@ export function dbBlockReason(decision: any) {
   return [
     'Sneakoscope Codex Database Safety Gate blocked this operation.',
     `Reasons: ${(decision.reasons || []).join(', ') || 'unknown'}.`,
-    'Destructive database operations are never allowed. Production writes are forbidden. Supabase/Postgres MCP write tools must not be used for live destructive changes.',
-    'Use read-only/project-scoped Supabase MCP URLs, create migration files, and apply them only to local or preview/branch environments when explicitly allowed by the sealed contract.'
+    'Default DB mode is read-only. Destructive SQL-plane operations require an explicit active MadDB v2 capability opened by $MAD-DB or sks mad-db run|exec|apply-migration.',
+    'Use read-only/project-scoped Supabase MCP URLs outside MadDB. Supabase project/account/billing/credential control-plane operations remain denied even in MadDB.'
   ].join(' ');
 }
 

@@ -22,6 +22,7 @@ import { SPEED_LANE_POLICY } from '../proof-field.js';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
 import { permissionGateSummary } from '../permission-gates.js';
+import { prepareMadDbMission } from '../mad-db/mad-db-coordinator.js';
 import { AGENT_INTAKE_STAGE_ID, AGENT_COUNT } from '../agents/agent-schema.js';
 import { normalizeAgentPolicy, routeRequiresAgentIntake, agentPipelineStage } from '../agents/agent-plan.js';
 import { readAgentGateStatus } from '../agents/agent-gate.js';
@@ -420,6 +421,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
   if (route?.id === 'ImageUXReview') lines.push(`Image UX Review route: ${imageUxReviewPipelinePolicyText()} Use ${IMAGE_UX_REVIEW_POLICY_ARTIFACT}, ${IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT}, ${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT}, and ${IMAGE_UX_REVIEW_GATE_ARTIFACT} as the route evidence set. The route may suggest safe fixes only when the user requested fixing; otherwise report findings and blockers.`);
   if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop plus seo-geo-optimizer when SEO/GEO, discoverability, README, npm, GitHub stars, ranking, or AI-search visibility is relevant.');
   if (route?.id === 'DB') lines.push('DB route: scan/check database risk first; destructive DB operations remain forbidden.');
+  if (route?.id === 'MadDB') lines.push('MadDB route: explicit invocation is the SQL-plane approval boundary. Use the mission-local write-capable Supabase MCP profile only for the bound cycle, verify execute_sql/apply_migration inventory before claiming ready, execute requested SQL-plane mutations, read back postconditions, then close the capability/profile and prove normal read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.');
   if (route?.id === 'GX') lines.push('GX route: use deterministic vgraph/beta render, validate, drift, and snapshot artifacts.');
   return lines.join('\n');
 }
@@ -474,6 +476,7 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}): Pro
   if (route.id === 'Wiki') return withSkillDreamContext(await prepareWikiQuickRoute(route, task), dreamContext);
   if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
   if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
+  if (route.id === 'MadDB') return withSkillDreamContext(await prepareMadDb(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
   const required = routeNeedsContext7(route, cleanPrompt);
   const reasoning = routeReasoning(route, cleanPrompt);
   const nativeSessionsRequired = routeRequiresSubagents(route, cleanPrompt);
@@ -1064,6 +1067,42 @@ async function prepareDb(root: any, route: any, task: any, required: any) {
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
   await setCurrent(root, routeState(id, route, 'DB_REVIEW_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
   return routeContext(route, id, task, required, 'Run sks db policy/scan/check as needed, keep DB operations read-only, record safe MCP policy, and pass db-review.json.');
+}
+
+async function prepareMadDb(root: any, route: any, task: any, required: any) {
+  const prepared = await prepareMadDbMission({ root, task, verifyTools: false });
+  const dir = missionDir(root, prepared.mission_id);
+  const pipelinePlan = await writePipelinePlan(dir, {
+    missionId: prepared.mission_id,
+    route,
+    task,
+    required,
+    ambiguity: { required: true, slots: 0, auto_sealed: true, passed: true, contract_hash: prepared.capability.operator_intent_hash }
+  });
+  await appendJsonl(path.join(dir, 'events.jsonl'), {
+    ts: nowIso(),
+    type: 'mad_db.route_prepared',
+    mission_id: prepared.mission_id,
+    cycle_id: prepared.cycle_id,
+    blockers: prepared.blockers
+  });
+  await setCurrent(root, routeState(prepared.mission_id, route, prepared.ok ? 'MADDB_SQL_PLANE_CAPABILITY_ACTIVE' : 'MADDB_BLOCKED', required, {
+    prompt: task,
+    questions_allowed: false,
+    implementation_allowed: prepared.ok,
+    ambiguity_gate_required: true,
+    ambiguity_gate_passed: true,
+    mad_db_active: prepared.ok,
+    mad_db_cycle_id: prepared.cycle_id,
+    mad_db_runtime_session_id: prepared.capability.runtime_session_id,
+    mad_db_profile_sha256: prepared.capability.transport.profile_sha256,
+    mad_db_capability_mission_id: prepared.mission_id,
+    mad_db_capability_file: 'mad-db-capability.json',
+    stop_gate: 'mad-db-gate.json',
+    pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
+    pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
+  }));
+  return routeContext(route, prepared.mission_id, task, required, `MadDB mission/capability/profile were created atomically for cycle ${prepared.cycle_id}. Verify Supabase MCP tool inventory exposes execute_sql and apply_migration before claiming ready; after execution require read-back proof, finally close the profile/capability and prove read-only restoration.`);
 }
 
 async function prepareGx(root: any, route: any, task: any, required: any) {
