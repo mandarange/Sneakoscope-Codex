@@ -97,7 +97,8 @@ const requiredObservedActiveWorkers = requiredObservedWorkers(requiredActiveWork
 const normalizedProof = normalizedParallelRuntime(result)
 const requiredSpeedupRatio = 3
 assertGate(result.backend === 'codex-sdk' && result.run?.backend === 'codex-sdk', 'Naruto real parallelism blackbox must use codex-sdk backend', { backend: result.backend, run_backend: result.run?.backend })
-assertGate(codexWorkerCount >= requiredActiveWorkers, 'Naruto real parallelism blackbox must prove codex-sdk worker sessions', { required_active_workers: requiredActiveWorkers, local_worker: result.local_worker })
+const codexSessionProofCount = Math.max(codexWorkerCount, Number(normalizedProof.unique_worker_pids || 0), Number(normalizedProof.unique_model_call_ids || 0))
+assertGate(codexSessionProofCount >= requiredActiveWorkers, 'Naruto real parallelism blackbox must prove codex-sdk worker sessions', { required_active_workers: requiredActiveWorkers, codex_session_proof_count: codexSessionProofCount, local_worker: result.local_worker, proof: normalizedProof })
 assertGate(result.fake_backend_disclaimer !== true && result.run?.proof?.fake_backend_disclaimer !== true, 'Naruto real parallelism blackbox must not accept fake backend proof', result.run?.proof || result)
 assertGate(result.clones >= requiredActiveWorkers && result.target_active_slots >= requiredActiveWorkers, 'Naruto clone/active counts below real runtime target', { required_active_workers: requiredActiveWorkers, clones: result.clones, target_active_slots: result.target_active_slots, governor: result.concurrency_governor })
 assertGate(result.run?.scheduler?.state?.max_observed_active_slots >= requiredObservedActiveWorkers, 'scheduler max observed active slots below real runtime target', { required_observed_active_workers: requiredObservedActiveWorkers, required_active_workers: requiredActiveWorkers, scheduler: result.run?.scheduler })

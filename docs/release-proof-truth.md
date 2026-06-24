@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.1.1 keeps release proof truth aligned with the 4.1.1 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, v2 project migration receipts, migration Doctor fast-profile evidence, core-vs-route readiness separation, managed role filename uniqueness, and MAD deferred-bootstrap evidence before publication.
+
+SKS 4.1.1 release proof truth also requires proof that optional native capability warnings do not block core readiness, first-command migration records exact required blockers separately from optional warnings, stale migration locks are recoverable, `doctor --fix --profile migration --machine-only` writes a report file suitable for update gates, and version-gated docs mention 4.1.1.
+
 SKS 4.1.0 keeps release proof truth aligned with the 4.1.0 package metadata, built output, release stamp, provenance, npm unpublished-version evidence, semantic Doctor readiness, post-repair authoritative Doctor checks, managed asset manifest parity, update migration lifecycle evidence, and local machine-evidence cleanup before publication.
 
 SKS 4.1.0 release proof truth also requires proof that optional Codex/native capability warnings stay non-blocking for core readiness, plain `sks doctor --fix` repairs native managed assets, update completion is gated on a current project migration receipt, postinstall uses the package-local global Doctor path, and release metadata mentions 4.1.0 across version-gated docs.

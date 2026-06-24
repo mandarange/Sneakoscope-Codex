@@ -135,6 +135,12 @@ const ALLOWLIST: AllowEntry[] = [
     pattern: /writeJsonAtomic|writeTextAtomic/,
     reason: 'migration journal writes hashes and rollback metadata, not raw secret config values',
     expires: '3.2.0'
+  },
+  {
+    file: 'src/core/providers/glm/naruto/glm-naruto-trace.ts',
+    pattern: /mission-result\.json|sanitizeArtifact/,
+    reason: 'GLM Naruto trace writer persists sanitized mission-result proof artifacts, not raw env secret files',
+    expires: '4.2.0'
   }
 ];
 

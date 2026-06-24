@@ -254,7 +254,7 @@ async function richContentGate(id: string) {
     const codexHome = path.join(rootDir, 'codex-home')
     const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true })
     const role = fs.readFileSync(path.join(codexHome, 'agents', 'sks-checker.toml'), 'utf8')
-    assertGate(/SKS managed 3\.1\.[67] directive role/.test(role) && role.includes('Execution role strategy'), 'managed agent role must include rich directive content', { role, report })
+    assertGate(/SKS managed \d+\.\d+\.\d+ directive role/.test(role) && role.includes('Execution role strategy'), 'managed agent role must include rich directive content', { role, report })
     emitGate(id, { roles: report.created.length })
   } finally {
     restoreEnv(previous)

@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.1.1 is the Doctor/update migration readiness patch after 4.1.0. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, v2 migration receipts, and core-vs-route readiness checks to agree on 4.1.1 before publication.
+
+4.1.1 release readiness adds proof that optional Computer Use and Chrome/web review capability gaps are route blockers rather than core blockers, first-command migration uses an installation epoch plus per-project receipt, stale migration locks recover without blocking ordinary commands, the migration Doctor profile stays fast and machine-readable, MAD startup defers optional UI/provider/native proof work, and managed release verifier role filenames remain unique.
+
 SKS 4.1.0 is the Codex `rust-v0.142.0` Doctor/update readiness patch after 4.0.15. It requires package, lockfile, CLI constants, Rust helper metadata, docs, built output, release stamp, provenance, npm registry unpublished-version checks, semantic Doctor readiness, managed asset manifest parity, and update migration lifecycle checks to agree on 4.1.0 before publication.
 
 4.1.0 release readiness adds proof that Codex Doctor warnings do not block core readiness, post-repair Doctor status is authoritative, managed native assets are repaired from plain `sks doctor --fix`, update/postinstall paths run the correct package-local Doctor lifecycle, first-command migration receipts are current, and local machine evidence is not tracked in the release commit.
