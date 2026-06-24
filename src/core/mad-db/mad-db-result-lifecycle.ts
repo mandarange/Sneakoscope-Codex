@@ -1,155 +1,111 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import { appendJsonlBounded, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
-import { missionDir } from '../mission.js'
-import { appendMadDbOperationLifecycle } from './mad-db-ledger.js'
+import { extractCanonicalToolCallId, transitionMadDbOperation } from './mad-db-operation-store.js';
 
 export interface MadDbLifecycleHook {
-  mission_id: string
-  operation_id: string
-  cycle_id?: string | null
-  tool_name?: string | null
-  sql_hash?: string | null
-  mcp_server?: string | null
-  destructive?: boolean
+  mission_id: string;
+  operation_id: string;
+  tool_call_id?: string | null;
+  cycle_id?: string | null;
+  tool_name?: string | null;
+  sql_hash?: string | null;
+  mcp_server?: string | null;
+  destructive?: boolean;
 }
 
-const PENDING_FILE = 'mad-db-lifecycle-pending.jsonl'
-const PENDING_LATEST_FILE = 'mad-db-lifecycle-pending.latest.json'
-
-export async function recordPendingMadDbLifecycleHook(root: string, missionId: string, hook: MadDbLifecycleHook) {
-  const dir = missionDir(root, missionId)
-  const row = {
-    schema: 'sks.mad-db-lifecycle-pending.v1',
-    ts: nowIso(),
-    mission_id: missionId,
+export async function recordPendingMadDbLifecycleHook(_root: string, _missionId: string, hook: MadDbLifecycleHook) {
+  return {
+    schema: 'sks.mad-db-lifecycle-pending.v2',
+    pending_latest_removed: true,
     hook
-  }
-  await appendJsonlBounded(path.join(dir, PENDING_FILE), row)
-  await writeJsonAtomic(path.join(dir, PENDING_LATEST_FILE), row).catch(() => undefined)
-  return row
+  };
 }
 
-export async function readLatestPendingMadDbLifecycleHook(root: string, missionId: string, payload: any = {}): Promise<MadDbLifecycleHook | null> {
-  const dir = missionDir(root, missionId)
-  const embedded = lifecycleHookFromUnknown(payload)
-  if (embedded) return embedded
-  const latest = await readJson<any>(path.join(dir, PENDING_LATEST_FILE), null).catch(() => null)
-  const latestHook = lifecycleHookFromUnknown(latest?.hook)
-  if (latestHook && hookMatchesPayload(latestHook, payload)) return latestHook
-  const text = await readText(path.join(dir, PENDING_FILE), '').catch(() => '')
-  const rows = String(text).split(/\r?\n/).map((line) => line.trim()).filter(Boolean).reverse()
-  for (const line of rows.slice(0, 50)) {
-    try {
-      const row = JSON.parse(line)
-      const hook = lifecycleHookFromUnknown(row?.hook)
-      if (hook && hookMatchesPayload(hook, payload)) return hook
-    } catch {
-      // Ignore malformed pending rows.
-    }
-  }
-  return null
+export async function readLatestPendingMadDbLifecycleHook(_root: string, _missionId: string, payload: any = {}): Promise<MadDbLifecycleHook | null> {
+  return lifecycleHookFromUnknown(payload);
 }
 
 export async function recordMadDbToolResult(input: {
-  root: string
-  missionId: string
-  hook: MadDbLifecycleHook
-  ok: boolean
-  rowCount?: number | null
-  error?: string | null
+  root: string;
+  missionId: string;
+  hook: MadDbLifecycleHook;
+  ok: boolean;
+  rowCount?: number | null;
+  error?: string | null;
 }) {
-  const terminalType = input.ok ? 'db_operation.succeeded' : 'db_operation.failed'
-  if (await hasTerminalLifecycleEvent(input.root, input.missionId, input.hook.operation_id)) {
+  if (!input.hook.tool_call_id) {
     return {
-      schema: 'sks.mad-db-tool-result-lifecycle.v1',
-      ok: true,
+      schema: 'sks.mad-db-tool-result-lifecycle.v2',
+      ok: false,
       skipped: true,
-      reason: 'mad_db_operation_terminal_event_already_recorded',
+      reason: 'tool_call_id_required_for_result_correlation',
       operation_id: input.hook.operation_id
-    }
+    };
   }
-  const event = await appendMadDbOperationLifecycle(input.root, input.missionId, {
-    type: terminalType,
-    operationId: input.hook.operation_id,
-    cycleId: input.hook.cycle_id || null,
-    mcpServer: input.hook.mcp_server || null,
-    toolName: input.hook.tool_name || null,
-    sqlHash: input.hook.sql_hash || null,
-    destructive: input.hook.destructive === true,
-    resultStatus: input.ok ? 'succeeded' : 'failed',
-    rowCount: input.rowCount ?? null,
-    error: input.error || null
-  })
-  await markPendingHookResolved(input.root, input.missionId, input.hook, input.ok)
+  const operation = await transitionMadDbOperation({
+    root: input.root,
+    missionId: input.missionId,
+    toolCallId: input.hook.tool_call_id,
+    state: input.ok ? 'succeeded' : 'failed',
+    result: { ok: input.ok, row_count: input.rowCount ?? null },
+    errorCode: input.ok ? null : input.error || 'tool_failed'
+  });
   return {
-    schema: 'sks.mad-db-tool-result-lifecycle.v1',
-    ok: true,
+    schema: 'sks.mad-db-tool-result-lifecycle.v2',
+    ok: Boolean(operation),
     skipped: false,
     operation_id: input.hook.operation_id,
+    tool_call_id: input.hook.tool_call_id,
     result_status: input.ok ? 'succeeded' : 'failed',
-    event
-  }
+    operation
+  };
 }
 
 export async function maybeRecordMadDbToolResultFromToolUse(input: {
-  root: string
-  missionId: string
-  toolCallPayload?: any
-  toolResult?: any
-  decision?: any
+  root: string;
+  missionId: string;
+  toolCallPayload?: any;
+  toolResult?: any;
+  decision?: any;
 }) {
-  const payload = input.toolResult ?? input.toolCallPayload ?? {}
+  const payload = input.toolResult ?? input.toolCallPayload ?? {};
   const hook = lifecycleHookFromUnknown(input.decision)
     || lifecycleHookFromUnknown(input.toolCallPayload)
-    || lifecycleHookFromUnknown(input.toolResult)
-    || await readLatestPendingMadDbLifecycleHook(input.root, input.missionId, input.toolCallPayload || payload)
-  if (!hook) return null
-  const ok = !madDbToolUseFailed(payload)
+    || lifecycleHookFromUnknown(input.toolResult);
+  const toolCallId = extractCanonicalToolCallId(payload) || hook?.tool_call_id || null;
+  if (!toolCallId && !hook) return null;
+  const ok = !madDbToolUseFailed(payload);
   return recordMadDbToolResult({
     root: input.root,
     missionId: input.missionId,
-    hook,
+    hook: hook || {
+      mission_id: input.missionId,
+      operation_id: `unknown-${toolCallId}`,
+      tool_call_id: toolCallId
+    },
     ok,
     rowCount: extractRowCount(payload),
     error: ok ? null : extractToolError(payload)
-  })
+  });
 }
 
 export function lifecycleHookFromUnknown(value: any): MadDbLifecycleHook | null {
-  const candidate = value?.ledger_result_hook || value?.mad_db?.ledger_result_hook || value
-  const missionId = stringOrNull(candidate?.mission_id || candidate?.missionId)
-  const operationId = stringOrNull(candidate?.operation_id || candidate?.operationId)
-  if (!missionId || !operationId) return null
+  const candidate = value?.ledger_result_hook || value?.mad_db?.ledger_result_hook || value;
+  const missionId = stringOrNull(candidate?.mission_id || candidate?.missionId);
+  const operationId = stringOrNull(candidate?.operation_id || candidate?.operationId);
+  if (!missionId || !operationId) return null;
   return {
     mission_id: missionId,
     operation_id: operationId,
+    tool_call_id: stringOrNull(candidate?.tool_call_id || candidate?.toolCallId),
     cycle_id: stringOrNull(candidate?.cycle_id || candidate?.cycleId),
     tool_name: stringOrNull(candidate?.tool_name || candidate?.toolName),
     sql_hash: stringOrNull(candidate?.sql_hash || candidate?.sqlHash),
     mcp_server: stringOrNull(candidate?.mcp_server || candidate?.mcpServer),
     destructive: candidate?.destructive === true
-  }
-}
-
-function hookMatchesPayload(hook: MadDbLifecycleHook, payload: any) {
-  if (!hook.tool_name) return true
-  const toolText = [
-    payload.tool_name,
-    payload.toolName,
-    payload.name,
-    payload.tool?.name,
-    payload.server,
-    payload.mcp_tool,
-    payload.tool,
-    payload.type
-  ].filter(Boolean).join(' ').toLowerCase()
-  if (!toolText) return true
-  return toolText.includes(String(hook.tool_name).toLowerCase()) || String(hook.tool_name).toLowerCase().includes(toolText)
+  };
 }
 
 function madDbToolUseFailed(payload: any = {}) {
-  if (payload?.isError === true || payload?.tool_response?.isError === true || payload?.toolResponse?.isError === true || payload?.result?.isError === true) return true
+  if (payload?.isError === true || payload?.tool_response?.isError === true || payload?.toolResponse?.isError === true || payload?.result?.isError === true) return true;
   const candidates = [
     payload.exit_code,
     payload.exitCode,
@@ -157,15 +113,15 @@ function madDbToolUseFailed(payload: any = {}) {
     payload.toolResponse?.exitCode,
     payload.result?.exit_code,
     payload.result?.exitCode
-  ]
+  ];
   for (const candidate of candidates) {
-    if (candidate === undefined || candidate === null || candidate === '') continue
-    const n = Number(candidate)
-    if (Number.isFinite(n)) return n !== 0
+    if (candidate === undefined || candidate === null || candidate === '') continue;
+    const n = Number(candidate);
+    if (Number.isFinite(n)) return n !== 0;
   }
-  if (payload.success === false || payload.tool_response?.success === false || payload.toolResponse?.success === false || payload.result?.success === false) return true
-  if (payload.executed === false) return true
-  return false
+  if (payload.success === false || payload.tool_response?.success === false || payload.toolResponse?.success === false || payload.result?.success === false) return true;
+  if (payload.executed === false) return true;
+  return false;
 }
 
 function extractRowCount(payload: any = {}) {
@@ -179,47 +135,24 @@ function extractRowCount(payload: any = {}) {
     payload.result?.rowCount,
     payload.result?.rows_affected,
     payload.tool_response?.rows_affected
-  ]
+  ];
   for (const candidate of candidates) {
-    if (candidate === undefined || candidate === null || candidate === '') continue
-    const parsed = Number(candidate)
-    if (Number.isFinite(parsed)) return parsed
+    if (candidate === undefined || candidate === null || candidate === '') continue;
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed)) return parsed;
   }
-  return null
+  return null;
 }
 
 function extractToolError(payload: any = {}) {
   if (payload?.result?.isError === true && Array.isArray(payload.result.content)) {
-    const text = payload.result.content.map((entry: any) => entry?.text || entry?.message || '').filter(Boolean).join('\n')
-    if (text.trim()) return text.trim()
+    const text = payload.result.content.map((entry: any) => entry?.text || entry?.message || '').filter(Boolean).join('\n');
+    if (text.trim()) return text.trim();
   }
-  return String(payload.error || payload.message || payload.stderr || payload.tool_response?.stderr || payload.toolResponse?.stderr || payload.result?.stderr || payload.result?.error || 'tool_failed')
-}
-
-async function hasTerminalLifecycleEvent(root: string, missionId: string, operationId: string) {
-  const ledger = path.join(missionDir(root, missionId), 'mad-db-ledger.jsonl')
-  const text = await readText(ledger, '').catch(() => '')
-  return String(text).split(/\r?\n/).some((line) => {
-    if (!line.includes(operationId)) return false
-    return line.includes('db_operation.succeeded') || line.includes('db_operation.failed')
-  })
-}
-
-async function markPendingHookResolved(root: string, missionId: string, hook: MadDbLifecycleHook, ok: boolean) {
-  const dir = missionDir(root, missionId)
-  const row = {
-    schema: 'sks.mad-db-lifecycle-pending-resolution.v1',
-    ts: nowIso(),
-    mission_id: missionId,
-    operation_id: hook.operation_id,
-    cycle_id: hook.cycle_id || null,
-    result_status: ok ? 'succeeded' : 'failed'
-  }
-  await appendJsonlBounded(path.join(dir, 'mad-db-lifecycle-resolved.jsonl'), row).catch(() => undefined)
-  await fs.rm(path.join(dir, PENDING_LATEST_FILE), { force: true }).catch(() => undefined)
+  return String(payload.error || payload.message || payload.stderr || payload.tool_response?.stderr || payload.toolResponse?.stderr || payload.result?.stderr || payload.result?.error || 'tool_failed');
 }
 
 function stringOrNull(value: unknown): string | null {
-  const text = String(value || '').trim()
-  return text ? text : null
+  const text = String(value || '').trim();
+  return text ? text : null;
 }

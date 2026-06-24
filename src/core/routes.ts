@@ -243,7 +243,7 @@ export function stackCurrentDocsPolicy(commandPrefix: any = 'sks') {
     validate_command: `${prefix} wiki validate .sneakoscope/wiki/context-pack.json`,
     priority: 'must_precede_coding_style_defaults',
     examples: [
-      'Supabase hosted projects should prefer sb_publishable_ and sb_secret_ keys over legacy anon/service_role keys when current docs apply.',
+      'Supabase hosted projects should prefer sb_publishable_ and sb_secret_ keys over legacy anon and service role keys when current docs apply.',
       'Next.js 16 deprecates the middleware file convention in favor of proxy.ts/proxy.js.',
       'Vercel Function duration limits, including the 300s default with Fluid Compute, are deployment constraints that must shape long-running server work.'
     ]
@@ -252,7 +252,7 @@ export function stackCurrentDocsPolicy(commandPrefix: any = 'sks') {
 
 export function stackCurrentDocsPolicyText(commandPrefix: any = 'sks') {
   const policy = stackCurrentDocsPolicy(commandPrefix);
-  return `Stack current-docs policy: whenever project tech stack is added or a framework/package/runtime/platform version changes, fetch current docs with Context7 (resolve-library-id then query-docs) or official vendor web docs before coding, record the syntax/limits/security guidance as high-priority TriWiki claims in ${policy.memory_path}, run "${policy.refresh_command}", then "${policy.validate_command}". Treat these claims as higher priority than model-memory defaults. Examples include Supabase publishable/secret keys replacing legacy anon/service_role guidance for hosted projects, Next.js 16 proxy.ts/proxy.js replacing the deprecated middleware file convention, avoiding stale webpack defaults when newer framework guidance says otherwise, and Vercel Function duration limits such as the 300s default under Fluid Compute.`;
+  return `Stack current-docs policy: whenever project tech stack is added or a framework/package/runtime/platform version changes, fetch current docs with Context7 (resolve-library-id then query-docs) or official vendor web docs before coding, record the syntax/limits/security guidance as high-priority TriWiki claims in ${policy.memory_path}, run "${policy.refresh_command}", then "${policy.validate_command}". Treat these claims as higher priority than model-memory defaults. Examples include Supabase publishable/secret keys replacing legacy anon and service role guidance for hosted projects, Next.js 16 proxy.ts/proxy.js replacing the deprecated middleware file convention, avoiding stale webpack defaults when newer framework guidance says otherwise, and Vercel Function duration limits such as the 300s default under Fluid Compute.`;
 }
 
 export function triwikiContextTrackingText(commandPrefix: any = 'sks') {
@@ -572,20 +572,33 @@ export const ROUTES = [
     examples: ['$DB check this migration safely']
   },
   {
+    id: 'MadDB',
+    command: '$MAD-DB',
+    mode: 'MADDB',
+    route: 'first-class MadDB SQL-plane execution',
+    description: 'Explicit one-cycle MadDB route. When invoked by $MAD-DB or sks mad-db run|exec|apply-migration, SQL-plane mutations such as CREATE, ALTER, table/schema DROP, column add/drop/rename, INSERT, UPDATE, DELETE including all-row mutations, TRUNCATE, execute_sql, and apply_migration are authorized for the bound Supabase project and must be executed with tool-result plus read-back proof. Supabase project/account/billing/credential control-plane actions remain denied.',
+    requiredSkills: ['mad-db', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
+    appSkillAliases: ['mad-db'],
+    lifecycle: ['explicit_invocation', 'single_mission_capability_v2', 'ephemeral_write_profile', 'tool_inventory', 'execute_sql_or_apply_migration', 'read_back_verification', 'close_and_read_only_restore', 'post_route_reflection', 'honest_mode'],
+    context7Policy: 'required',
+    reasoningPolicy: 'xhigh',
+    stopGate: 'mad-db-gate.json',
+    cliEntrypoint: 'sks mad-db run|exec|apply-migration|status|close|revoke|doctor',
+    examples: ['$MAD-DB public.users legacy_code 컬럼 삭제', '$MAD-DB truncate public.staging_events']
+  },
+  {
     id: 'MadSKS',
     command: '$MAD-SKS',
     mode: 'MADSKS',
     route: 'explicit scoped permission-widening modifier',
-    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open approved target-project scopes such as files, shell, package installs, services, network, Computer Use/browser workflows, generated assets, file permissions, migrations, Supabase MCP DB writes, direct execute SQL, schema cleanup, and normal targeted DB writes for the active invocation, while preserving catastrophic wipe/all-row/project-management, credential-exfiltration, persistent security-weakening, and unrequested fallback safeguards.',
+    description: 'Explicit high-risk authorization modifier that can be combined with other $ commands to temporarily open approved target-project scopes such as files, shell, package installs, services, network, Computer Use/browser workflows, generated assets, file permissions, migrations, Supabase MCP DB writes, direct execute SQL, schema cleanup, and normal targeted DB writes for the active invocation, while preserving catastrophic wipe/all-row/project-management, credential-exfiltration, persistent security-weakening, and unrequested fallback safeguards. It is not the first-class MadDB destructive SQL-plane route.',
     requiredSkills: ['mad-sks', 'db-safety-guard', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
-    dollarAliases: ['$MAD-DB'],
-    appSkillAliases: ['mad-db'],
     lifecycle: ['explicit_invocation', 'auto_sealed_permission_scope', 'scoped_permission_override', 'catastrophic_guard', 'permission_deactivation', 'post_route_reflection', 'honest_mode'],
     context7Policy: 'required',
     reasoningPolicy: 'xhigh',
     stopGate: 'mad-sks-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $MAD-SKS <task>',
-    examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS', '$MAD-DB enable one-cycle DB break-glass only after explicit ack']
+    examples: ['$MAD-SKS $Team target project maintenance with package/service/file and DB scopes', '$DB Supabase 점검 $MAD-SKS']
   },
   {
     id: 'GX',
@@ -956,6 +969,7 @@ export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
   if (route.id === 'PPT') return false;
   if (route.id === 'ImageUXReview') return false;
+  if (route.id === 'MadDB') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
   if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
   if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
@@ -981,7 +995,7 @@ export function simpleGitOnlyRouteId(prompt: any = '') {
 
 export function reflectionRequiredForRoute(route: any) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|naruto|shadowclone|shadow-clone|kagebunshin|kage-bunshin|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|gx)$/i.test(id);
+  return /^(team|naruto|shadowclone|shadow-clone|kagebunshin|kage-bunshin|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|maddb|mad-db|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt: any = '') {
@@ -1026,7 +1040,7 @@ export function routeReasoning(route: any, prompt: any = '') {
   const text = String(prompt || '');
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
-  if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\bmad-sks\b|\bmadsks\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
+  if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\$MAD-DB\b|\bmad-sks\b|\bmadsks\b|\bmad-db\b|\bmaddb\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
   if (route?.id === 'Team' || route?.id === 'Naruto') return teamRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');

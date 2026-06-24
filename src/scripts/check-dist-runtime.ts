@@ -9,6 +9,7 @@ import { sourceSnapshot } from './lib/ensure-dist-fresh.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const distRoot = path.join(root, 'dist');
 const issues = [];
+const contractOnlyMarker = 'contract' + '_only';
 
 if (!fs.existsSync(distRoot)) issues.push('dist_missing');
 requiredFile('dist/bin/sks.js');
@@ -52,7 +53,7 @@ if (fs.existsSync(distRoot)) {
     if (rel.endsWith('.mjs')) issues.push(`dist_mjs:${rel}`);
     if (!rel.endsWith('.js')) continue;
     const text = fs.readFileSync(file, 'utf8');
-    if (text.includes('contract_only')) issues.push(`contract_only:${rel}`);
+    if (text.includes(contractOnlyMarker)) issues.push(`${contractOnlyMarker}:${rel}`);
     if (/from\s+['"][^'"]+\.mjs['"]|import\(\s*['"][^'"]+\.mjs['"]\s*\)/.test(text)) {
       issues.push(`imports_mjs:${rel}`);
     }

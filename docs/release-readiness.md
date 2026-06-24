@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.2.0 is the MadDB execution stabilization release after 4.1.1. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, first-class MadDB route metadata, capability v2 evidence, runtime profile lifecycle proof, and real disposable Supabase E2E status to agree on 4.2.0 before publication.
+
+4.2.0 release readiness adds proof that `$MAD-DB` is no longer a `$MAD-SKS` alias, normal Supabase MCP config remains read-only, mission-local write profiles close in `finally`, `execute_sql` and `apply_migration` inventory is checked inside a bound cycle, lifecycle correlation uses canonical `tool_call_id`, destructive SQL-plane classes are covered by policy tests, and a missing disposable Supabase E2E is reported as unverified rather than passed.
+
 SKS 4.1.1 is the Doctor/update migration readiness patch after 4.1.0. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, v2 migration receipts, and core-vs-route readiness checks to agree on 4.1.1 before publication.
 
 4.1.1 release readiness adds proof that optional Computer Use and Chrome/web review capability gaps are route blockers rather than core blockers, first-command migration uses an installation epoch plus per-project receipt, stale migration locks recover without blocking ordinary commands, the migration Doctor profile stays fast and machine-readable, MAD startup defers optional UI/provider/native proof work, and managed release verifier role filenames remain unique.

@@ -3,25 +3,22 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { closeMadDbCycle, createMadDbCapability, MAD_DB_ACK, readMadDbCapability } from '../core/mad-db/mad-db-capability.js'
+import { closeMadDbCycle, createMadDbCapability, isMadDbCapabilityActive, MAD_DB_ACK, readMadDbCapability } from '../core/mad-db/mad-db-capability.js'
 import { checkDbOperation } from '../core/db-safety.js'
+import { createMission } from '../core/mission.js'
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-mad-db-bounded-'))
-const missionId = 'M-mad-db-bounded'
-process.env.SKS_MAD_DB_MAX_OPERATIONS = '2'
-const cap = await createMadDbCapability(root, { missionId, ack: MAD_DB_ACK, ttlMs: 60000 })
-assertGate(cap.max_operations >= 2 && cap.operation_count === 0, 'capability must start as bounded one-cycle', cap)
-const payload = { tool_name: 'supabase.execute_sql', sql: 'update users set flag = true where id = 1' }
-const first = await checkDbOperation(root, { mission_id: missionId }, payload)
-const afterFirst = await readMadDbCapability(root, missionId)
-assertGate(first.allowed === true && afterFirst.operation_count === 1 && afterFirst.consumed === false, 'capability must remain active after operation 1 when max_operations > 1', { first, afterFirst })
-const second = await checkDbOperation(root, { mission_id: missionId }, payload)
-const afterSecond = await readMadDbCapability(root, missionId)
-assertGate(second.allowed === true && afterSecond.operation_count === 2 && afterSecond.consumed === true, 'capability must be consumed when operation_count reaches max_operations', { second, afterSecond })
+const mission = await createMission(root, { mode: 'mad-db', prompt: 'bounded fixture' })
+const cap = await createMadDbCapability(root, { missionId: mission.id, ack: MAD_DB_ACK, ttlMs: 60000, projectRef: 'fixture-project-ref', status: 'active' })
+assertGate(isMadDbCapabilityActive(cap) === true && Date.parse(cap.expires_at) > Date.now(), 'capability must start active with bounded TTL', cap)
+const payload = { tool_name: 'supabase.execute_sql', tool_call_id: 'bounded-call-1', sql: 'update users set flag = true where id = 1' }
+const first = await checkDbOperation(root, { mission_id: mission.id }, payload)
+const afterFirst = await readMadDbCapability(root, mission.id)
+assertGate(first.allowed === true && afterFirst.counters.reserved === 1 && afterFirst.status === 'active', 'capability must reserve one operation and remain active before final close', { first, afterFirst })
+const second = await checkDbOperation(root, { mission_id: mission.id }, payload)
+const afterSecond = await readMadDbCapability(root, mission.id)
+assertGate(second.allowed === true && second.mad_db?.idempotent_reservation_reused === true && afterSecond.counters.reserved === 1, 'same canonical tool_call_id must be idempotent and not double-counted', { second, afterSecond })
 
-const closeMissionId = 'M-mad-db-close-cycle'
-process.env.SKS_MAD_DB_MAX_OPERATIONS = '20'
-const closeCap = await createMadDbCapability(root, { missionId: closeMissionId, ack: MAD_DB_ACK, ttlMs: 60000 })
-const closed = await closeMadDbCycle(root, closeMissionId, closeCap.cycle_id)
-assertGate(closed?.consumed === true && closed?.consumed_by === 'mad-db-cycle-close', 'explicit cycle close must consume active capability', closed)
-emitGate('mad-db:one-cycle-bounded', { cycle_id: cap.cycle_id, operation_count: afterSecond.operation_count, max_operations: afterSecond.max_operations, close_cycle: closed?.consumed === true })
+const closed = await closeMadDbCycle(root, mission.id, cap.cycle_id)
+assertGate(closed?.status === 'closed' && isMadDbCapabilityActive(closed) === false, 'explicit cycle close must deactivate active capability', closed)
+emitGate('mad-db:one-cycle-bounded', { cycle_id: cap.cycle_id, reserved: afterSecond.counters.reserved, close_cycle: closed?.status === 'closed' })

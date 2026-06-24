@@ -60,8 +60,8 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
     manual_required: manualRequired,
     next_action: manualRequired
       ? tokenEnvPresent
-        ? 'Set Supabase MCP to read-only or explicitly approve write-scoped MCP use.'
-        : 'Set SUPABASE_ACCESS_TOKEN only if Supabase write MCP features are required; otherwise keep Supabase MCP disabled/read-only.'
+        ? 'Set persistent Supabase MCP to read-only. Write-scoped Supabase MCP is allowed only through a mission-local MadDB runtime profile.'
+        : 'Set SUPABASE_ACCESS_TOKEN only when an explicit MadDB run needs Supabase MCP auth; otherwise keep persistent Supabase MCP disabled/read-only.'
       : null,
     blockers: readyBlocking ? ['supabase_mcp_write_access_not_safe_by_default'] : [],
     warnings: [

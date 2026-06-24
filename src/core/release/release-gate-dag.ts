@@ -125,15 +125,16 @@ export async function runReleaseGateDag(input: {
   const preset = input.preset || 'release'
   const manifest = loadReleaseGateManifest(root)
   const presetGates = selectReleaseGatePreset(manifest, preset)
-  const triwikiGraph = input.triwiki !== false && (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
-    ? computeTriWikiAffectedGraph({ root, tier: preset === 'fast' ? 'affected' : 'confidence', changedSince: input.changedSince || 'auto', ...(input.changedFiles ? { changedFiles: input.changedFiles } : {}) })
-    : null
   const affected = (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
     ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', ...(input.changedFiles ? { changedFiles: input.changedFiles } : {}), preset })
     : selectAffectedReleaseGates(root, manifest, presetGates, { full: true, preset })
+  const rootReleaseSurfaceChanged = affected.selection.changed_files.some((file) => file === 'package.json' || file === 'package-lock.json' || file === 'release-gates.v2.json')
+  const triwikiGraph = input.triwiki !== false && !rootReleaseSurfaceChanged && (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
+    ? computeTriWikiAffectedGraph({ root, tier: preset === 'fast' ? 'affected' : 'confidence', changedSince: input.changedSince || 'auto', ...(input.changedFiles ? { changedFiles: input.changedFiles } : {}) })
+    : null
   const triwikiSelectionUsed = Boolean(triwikiGraph)
   const triwikiConservative = Boolean(triwikiGraph?.conservative_reason)
-  const triwikiSelectedIds = new Set(triwikiGraph && !triwikiConservative ? triwikiGraph.gates : presetGates.map((gate) => gate.id))
+  const triwikiSelectedIds = new Set(triwikiGraph && !triwikiConservative ? triwikiGraph.gates : affected.gates.map((gate) => gate.id))
   const selected = triwikiGraph
     ? presetGates.filter((gate) => triwikiSelectedIds.has(gate.id))
     : affected.gates
@@ -142,7 +143,7 @@ export async function runReleaseGateDag(input: {
     affected.selection.mode = 'affected'
     affected.selection.selected_gate_ids = selected.map((gate) => gate.id)
     affected.selection.skipped_gate_ids = triwikiSkippedGates
-    affected.selection.reasons = Object.fromEntries(selected.map((gate) => [gate.id, triwikiConservative ? `triwiki_conservative:${triwikiGraph.conservative_reason}` : 'triwiki-affected']))
+    affected.selection.reasons = Object.fromEntries(selected.map((gate) => [gate.id, triwikiConservative ? `triwiki_conservative_fallback:${triwikiGraph.conservative_reason}` : 'triwiki-affected']))
   }
   const selectedIds = new Set(selected.map((gate) => gate.id))
   const affectedExternalSatisfiedDeps = affected.selection.mode === 'affected'

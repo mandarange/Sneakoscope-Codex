@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.2.0 keeps release proof truth aligned with the 4.2.0 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, first-class MadDB route evidence, capability v2/runtime profile proof, hook idempotency and parallel lifecycle proof, Supabase MCP tool inventory evidence, and real disposable Supabase E2E status before publication.
+
+SKS 4.2.0 release proof truth also requires proof that persistent Supabase MCP configuration is read-only after every MadDB cycle, mission-local write profiles do not persist, `$MAD-DB` and `$MAD-SKS` remain separate routes, control-plane Supabase operations stay denied, `publish:fast` is quarantined, and any missing disposable Supabase project ref blocks real-E2E claims.
+
 SKS 4.1.1 keeps release proof truth aligned with the 4.1.1 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, v2 project migration receipts, migration Doctor fast-profile evidence, core-vs-route readiness separation, managed role filename uniqueness, and MAD deferred-bootstrap evidence before publication.
 
 SKS 4.1.1 release proof truth also requires proof that optional native capability warnings do not block core readiness, first-command migration records exact required blockers separately from optional warnings, stale migration locks are recoverable, `doctor --fix --profile migration --machine-only` writes a report file suitable for update gates, and version-gated docs mention 4.1.1.

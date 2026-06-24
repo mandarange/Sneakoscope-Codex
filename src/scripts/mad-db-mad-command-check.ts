@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { madHighCommand } from '../core/commands/mad-sks-command.js'
+import { madHighCommand, resolveMadLaunchMadDbGrant } from '../core/commands/mad-sks-command.js'
 import { checkDbOperation } from '../core/db-safety.js'
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
 
@@ -59,30 +59,33 @@ try {
 
   const state = await readJson(path.join(tmp, '.sneakoscope', 'state', 'current.json'))
   assert.equal(state.mad_sks_active, true)
-  assert.equal(state.mad_db_active, true)
-  assert.equal(state.mad_db_grant_source, 'sks_mad_default')
-  assert.equal(state.mad_db_priority_override_active, true)
+  assert.notEqual(state.mad_db_active, true)
+  assert.notEqual(state.mad_db_grant_source, 'sks_mad_default')
+  assert.notEqual(state.mad_db_priority_override_active, true)
 
   const missionDir = path.join(tmp, '.sneakoscope', 'missions', state.mission_id)
-  const grants = await readJson(path.join(missionDir, 'mad-sks-launch-grants.json'))
-  const capability = await readJson(path.join(missionDir, 'mad-db-capability.json'))
-  assert.equal(grants.mad_sks_active, true)
-  assert.equal(grants.mad_db_active, true)
-  assert.equal(grants.mad_db_default_grant, true)
-  assert.equal(capability.enabled, true)
-  assert.equal(capability.one_cycle_only, true)
-  assert.equal(capability.consumed, false)
+  await assertMissing(path.join(missionDir, 'mad-db-capability.json'), 'bare sks --mad must not create a MadDB capability')
+  await assertMissing(path.join(missionDir, 'mad-sks-launch-grants.json'), 'bare sks --mad must not create MadDB grant artifacts')
 
   const decision: any = await checkDbOperation(tmp, state, {
     tool_name: 'supabase.execute_sql',
-    sql: "insert into sks_mad_db_probe(message) values ('default grant proof');"
+    tool_call_id: 'mad-sks-default-does-not-open-maddb',
+    sql: 'truncate sks_mad_db_probe;'
   })
-  assertGate(decision.allowed === true && decision.mad_db?.active === true, 'sks --mad default MAD-DB grant must satisfy DB mutation policy locally', decision)
+  assertGate(decision.allowed === false && decision.mad_db?.active !== true, 'sks --mad default must not satisfy MadDB mutation policy locally', decision)
+
+  const defaultGrant = resolveMadLaunchMadDbGrant([])
+  const explicitGrant = resolveMadLaunchMadDbGrant(['--mad-db'])
+  assert.equal(defaultGrant.enabled, false)
+  assert.equal(defaultGrant.requested, false)
+  assert.equal(explicitGrant.enabled, false)
+  assert.equal(explicitGrant.requested, true)
+  assert.equal(explicitGrant.source, 'mad_db_first_class_route_required')
 
   emitGate('mad-db:mad-command', {
     mission_id: state.mission_id,
-    grant_source: state.mad_db_grant_source,
-    cycle_id: capability.cycle_id
+    default_mad_db_active: state.mad_db_active === true,
+    explicit_flag_source: explicitGrant.source
   })
 } finally {
   process.chdir(original.cwd)
@@ -99,6 +102,16 @@ try {
 
 async function readJson(file: string) {
   return JSON.parse(await fs.readFile(file, 'utf8'))
+}
+
+async function assertMissing(file: string, message: string) {
+  try {
+    await fs.access(file)
+    assertGate(false, message, { file })
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') return
+    throw err
+  }
 }
 
 function restoreEnv(key: string, value: string | undefined) {

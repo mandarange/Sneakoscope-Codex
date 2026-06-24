@@ -886,7 +886,7 @@ function routeVoxelContract(command: any) {
 function routeKnownGaps(command: any) {
   if (['$Image-UX-Review', '$UX-Review', '$PPT'].includes(command)) return ['live imagegen/CU evidence required'];
   if (command === '$MAD-SKS') return ['permission closed by owning gate'];
-  if (command === '$MAD-DB') return ['one-cycle capability must be explicitly enabled, consumed, or revoked'];
+  if (command === '$MAD-DB') return ['active cycle must execute requested SQL-plane work, read back postconditions, and close the mission-local write profile'];
   return [];
 }
 

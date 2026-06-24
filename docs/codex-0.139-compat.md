@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while stabilizing the active MadDB release surface: first-class `$MAD-DB` routing, capability v2 binding, mission-local Supabase write profiles, read-only restoration proof, and exact lifecycle correlation are release-gated without changing the Codex 0.139 compatibility baseline.
+
 SKS 4.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening the active `rust-v0.142.0` Doctor/update readiness path: optional Computer Use and Chrome/web review stay route-gated, migration receipts use schema v2 with installation epoch evidence, migration Doctor runs on the fast profile, and release metadata remains publish-ready.
 
 SKS 4.1.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving the active release-authorizing Codex surface to `rust-v0.142.0`: semantic Codex Doctor readiness, post-repair authoritative checks, managed asset manifest parity, update migration lifecycle, and publish-time release metadata gates.

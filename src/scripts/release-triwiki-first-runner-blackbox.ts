@@ -29,7 +29,11 @@ const result = await dag.runReleaseGateDag({ root: tmp, preset: 'confidence', ch
 assertGate(result.triwiki_selection_used === true, 'TriWiki selection must be marked used', result);
 assertGate(result.selected_gate_ids.includes('triwiki:proof-card'), 'TriWiki graph must select the TriWiki gate', result.selected_gate_ids);
 assertGate(!result.selected_gate_ids.includes('scheduler:resource-budget'), 'unaffected scheduler gate must be skipped by TriWiki selection', result);
-emitGate('release:triwiki-first-runner-blackbox', { selected: result.selected_gate_ids, skipped: result.triwiki_skipped_gates });
+const rootSurfaceResult = await dag.runReleaseGateDag({ root: tmp, preset: 'affected', changedFiles: ['package.json'], noCache: true });
+assertGate(rootSurfaceResult.triwiki_selection_used === false, 'root release surface changes should use focused affected selector instead of expensive TriWiki graph', rootSurfaceResult);
+assertGate(rootSurfaceResult.selected_gate_ids.includes('release:version-truth'), 'root release surface should keep release safety gate', rootSurfaceResult.selected_gate_ids);
+assertGate(!rootSurfaceResult.selected_gate_ids.includes('scheduler:resource-budget'), 'root release surface affected selector should not full-sweep unrelated scheduler gate', rootSurfaceResult.selected_gate_ids);
+emitGate('release:triwiki-first-runner-blackbox', { selected: result.selected_gate_ids, skipped: result.triwiki_skipped_gates, root_surface_selected: rootSurfaceResult.selected_gate_ids });
 
 function gate(id: string, inputs: string[]) {
   return {
