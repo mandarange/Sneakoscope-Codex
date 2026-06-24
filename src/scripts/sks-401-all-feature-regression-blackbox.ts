@@ -32,7 +32,7 @@ const certificate = certificateMod.buildTriWikiSlaCertificate({
 });
 assertGate(graph.gate_packs.length > 0, 'regression must compute affected graph gate packs', graph);
 assertGate(plan.schema === 'sks.extreme-parallel-scheduler.v1', 'regression must exercise scheduler planning', plan);
-assertGate(dirty.schema === 'sks.doctor-dirty-plan.v1', 'regression must exercise semantic dirty doctor', dirty);
+assertGate(dirty.schema === 'sks.doctor-dirty-plan.v2', 'regression must exercise semantic dirty doctor', dirty);
 assertGate(certificate.mode === 'actual' && certificate.sla_met === true, 'regression must create actual SLA certificate', certificate);
 emitGate('sks:401-all-feature-regression', { required: required.length, packs: graph.gate_packs.length });
 

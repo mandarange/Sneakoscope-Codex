@@ -816,7 +816,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   console.log(`  rollout budget: ${(codexNativeFeatureMatrix as any).features?.rollout_budget?.ok ? 'verified' : 'unverified'}`);
   console.log(`  indexed search: ${(codexNativeFeatureMatrix as any).features?.indexed_web_search?.ok ? 'verified' : 'unverified'}`);
   console.log(`  current time: ${(codexNativeFeatureMatrix as any).features?.current_time_read?.ok ? 'verified' : 'unverified'}`);
-  console.log('Historical compatibility: Codex 0.138 features');
+  console.log('Historical compatibility: Codex 0.138 features:');
   console.log(`  /app handoff: ${codex0138.supports_app_handoff ? 'ok' : 'unavailable'}`);
   console.log(`  plugin JSON: ${codex0138.supports_plugin_json ? 'ok' : 'unavailable'}`);
   console.log(`  image path exposure: ${codex0138.supports_image_path_exposure ? 'ok' : 'unavailable'}`);
@@ -888,7 +888,7 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
     repairActions.push('Zellij: sks doctor --fix --yes');
     repairActions.push('Homebrew + Zellij: sks doctor --fix --install-homebrew --yes');
   }
-  if (codexNative !== 'ok') repairActions.push('Codex Native managed assets: sks doctor --fix --yes');
+  if (codexNative !== 'ok') repairActions.push('Codex Native managed assets: sks doctor --fix --repair-codex-native --yes');
   if (matrix?.features?.project_memory?.ok !== true) repairActions.push('Project memory: sks codex-native init-deep --apply --directory-local');
   return {
     schema: 'sks.runtime-readiness-story.v1',

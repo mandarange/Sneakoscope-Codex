@@ -243,6 +243,16 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
     return { ...empty, ok: true, status: 'current', receipt, doctor: null, blockers: [], warnings: [] };
   }
 
+  const recheck = requireReceipt
+    ? undefined
+    : async (): Promise<UpdateMigrationGateResult | null> => {
+        const fresh = await readProjectUpdateMigrationReceipt(root);
+        if (isProjectReceiptCurrentForEpoch(fresh, epoch)) {
+          return { ...empty, ok: true, status: 'current', receipt: fresh, doctor: null, blockers: [], warnings: [] };
+        }
+        return null;
+      };
+
   return withUpdateMigrationLock(root, empty, async () => {
     const reportFile = path.join(root, '.sneakoscope', 'update', `doctor-migration-${Date.now()}.json`);
     const doctor = await runPackageLocalDoctor({
@@ -276,7 +286,7 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
       warnings: doctor.optional_warnings
     });
     return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, blockers: [], warnings: [] };
-  });
+  }, recheck ? { recheck } : {});
 }
 
 export async function runPostinstallGlobalDoctorAndMarkPending(input: {
@@ -402,30 +412,60 @@ export async function resolveInstalledSksEntrypoint(input: {
   return which('sks');
 }
 
+const MIGRATION_LOCK_WAIT_MS = 20_000;
+const MIGRATION_LOCK_POLL_MS = 150;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function withUpdateMigrationLock(
   root: string,
   base: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings'>,
   fn: () => Promise<UpdateMigrationGateResult>,
-  staleRetry = false
+  options: { recheck?: () => Promise<UpdateMigrationGateResult | null>; maxWaitMs?: number } = {}
 ): Promise<UpdateMigrationGateResult> {
   const lockPath = path.join(root, '.sneakoscope', 'update', 'migration.lock');
   await ensureDir(path.dirname(lockPath));
-  let handle: fsp.FileHandle | null = null;
-  try {
-    handle = await fsp.open(lockPath, 'wx');
-    await handle.writeFile(JSON.stringify({ pid: process.pid, created_at: nowIso(), version: PACKAGE_VERSION }) + '\n', 'utf8');
-    return await fn();
-  } catch (err: any) {
-    if (err?.code === 'EEXIST') {
-      if (!staleRetry && await removeStaleMigrationLock(lockPath)) {
-        return withUpdateMigrationLock(root, base, fn, true);
+  const recheck = options.recheck ?? null;
+  const deadline = Date.now() + (options.maxWaitMs ?? MIGRATION_LOCK_WAIT_MS);
+  let reapedStale = false;
+  for (;;) {
+    let handle: fsp.FileHandle | null = null;
+    try {
+      handle = await fsp.open(lockPath, 'wx');
+    } catch (err: any) {
+      if (err?.code !== 'EEXIST') {
+        return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
       }
+      // The lock is held by a concurrent process. Cooperate instead of failing fast:
+      // 1) a sibling may have already completed the migration we need.
+      if (recheck) {
+        const done = await recheck();
+        if (done) return done;
+      }
+      // 2) reap a genuinely stale lock (dead holder or older than the stale threshold).
+      if (!reapedStale && await removeStaleMigrationLock(lockPath)) {
+        reapedStale = true;
+        continue;
+      }
+      // 3) wait for the in-flight holder to finish, then retry acquisition.
+      if (Date.now() < deadline) {
+        await delay(MIGRATION_LOCK_POLL_MS);
+        continue;
+      }
+      // 4) gave up waiting on a live holder.
       return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: ['update_migration_lock_held'], warnings: [] };
     }
-    return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
-  } finally {
-    await handle?.close().catch(() => undefined);
-    if (handle) await fsp.rm(lockPath, { force: true }).catch(() => undefined);
+    try {
+      await handle.writeFile(JSON.stringify({ pid: process.pid, created_at: nowIso(), version: PACKAGE_VERSION }) + '\n', 'utf8');
+      return await fn();
+    } catch (err: any) {
+      return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
+    } finally {
+      await handle.close().catch(() => undefined);
+      await fsp.rm(lockPath, { force: true }).catch(() => undefined);
+    }
   }
 }
 

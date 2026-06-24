@@ -1206,6 +1206,156 @@
       "symbol": "writeMadGlmCodexWrapper",
       "token": "chmod",
       "reason": "GLM MAD launch marks only the mission-local Codex wrapper executable after writing it under the scoped mission artifact directory."
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "symbol": "writeJsonReportFile",
+      "token": "fsp.writeFile",
+      "reason": "Doctor writes only the explicit --report-file JSON path requested by the caller for machine-readable output."
+    },
+    {
+      "file": "src/core/codex-control/codex-0142-capability.ts",
+      "symbol": "generateSchemaProbe",
+      "token": "fsp.rm",
+      "reason": "Codex 0.142 schema probe removes only its scoped generated schema output directory before refresh."
+    },
+    {
+      "file": "src/core/codex-control/codex-thread-registry.ts",
+      "symbol": "withRegistryLock",
+      "token": "fs.writeFile",
+      "reason": "Thread registry lock writes/removes only its scoped lock owner metadata during the critical section."
+    },
+    {
+      "file": "src/core/codex-control/codex-thread-registry.ts",
+      "symbol": "withRegistryLock",
+      "token": "fs.rm",
+      "reason": "Thread registry lock writes/removes only its scoped lock owner metadata during the critical section."
+    },
+    {
+      "file": "src/core/providers/glm/bench/__tests__/glm-bench-fixture.test.ts",
+      "symbol": "module",
+      "token": "fs.rm",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/bench/__tests__/glm-bench-fixture.test.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/bench/__tests__/glm-bench-no-mutation.test.ts",
+      "symbol": "gitExec",
+      "token": "fs.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/bench/__tests__/glm-bench-no-mutation.test.ts",
+      "symbol": "gitExec",
+      "token": "fs.rm",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/bench/glm-bench-fixture.ts",
+      "symbol": "createGlmBenchFixture",
+      "token": "fsp.writeFile",
+      "reason": "GLM benchmark fixture creates or removes only isolated benchmark fixture directories."
+    },
+    {
+      "file": "src/core/providers/glm/bench/glm-bench-fixture.ts",
+      "symbol": "cleanupFixture",
+      "token": "fsp.rm",
+      "reason": "GLM benchmark fixture creates or removes only isolated benchmark fixture directories."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-apply-transaction-targeted-checks.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-apply-transaction.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-combined-patch.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-dirty-tree-policy.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-dirty-tree-policy.test.ts",
+      "symbol": "patchEnvelope",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-patch-candidate-gate.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-secret-audit.test.ts",
+      "symbol": "module",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-targeted-checks.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-worktree-candidate-extraction.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-worktree-isolation.test.ts",
+      "symbol": "tempRepo",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/stop-gate/__tests__/stop-gate-naruto.test.ts",
+      "symbol": "writeCurrent",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/core/update/update-migration-state.ts",
+      "symbol": "withUpdateMigrationLock",
+      "token": "fsp.rm",
+      "reason": "Update migration lock cleanup removes only the scoped .sneakoscope/update/migration.lock file after stale/dead-owner checks."
+    },
+    {
+      "file": "src/core/update/update-migration-state.ts",
+      "symbol": "removeStaleMigrationLock",
+      "token": "fsp.rm",
+      "reason": "Update migration lock cleanup removes only the scoped .sneakoscope/update/migration.lock file after stale/dead-owner checks."
+    },
+    {
+      "file": "src/scripts/codex-0142-thread-store-check.ts",
+      "symbol": "module",
+      "token": "fsp.writeFile",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/scripts/codex-0142-thread-store-check.ts",
+      "symbol": "module",
+      "token": "fsp.rm",
+      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
     }
   ]
 }

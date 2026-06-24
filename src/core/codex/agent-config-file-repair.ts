@@ -20,7 +20,8 @@ export interface AgentConfigFileRepairReport {
 export async function repairAgentConfigFileReferences(input: { root: string; apply?: boolean; reportPath?: string | null }): Promise<AgentConfigFileRepairReport> {
   const root = path.resolve(input.root);
   const configPath = path.join(root, '.codex', 'config.toml');
-  const original = await fs.readFile(configPath, 'utf8').catch(() => '');
+  const configExists = await fs.stat(configPath).then((stat) => stat.isFile()).catch(() => false);
+  const original = configExists ? await fs.readFile(configPath, 'utf8').catch(() => '') : minimalManagedConfigToml();
   const createdFiles: string[] = [];
   const repairedPaths: string[] = [];
   const removedUnsupportedFields: string[] = [];
@@ -51,7 +52,11 @@ export async function repairAgentConfigFileReferences(input: { root: string; app
     }
   }
   if (edits.length) text = applyEdits(original, edits);
-  if (input.apply && text !== original) {
+  if (input.apply && !configExists) {
+    await ensureDir(path.dirname(configPath));
+    await writeTextAtomic(configPath, text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n'));
+    createdFiles.push(configPath);
+  } else if (input.apply && text !== original) {
     await writeTextAtomic(configPath, text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n'));
   }
   const effectiveText = input.apply ? await fs.readFile(configPath, 'utf8').catch(() => text) : text;
@@ -174,4 +179,41 @@ function escapeToml(value: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function minimalManagedConfigToml(): string {
+  return [
+    'model = "gpt-5.5"',
+    'model_reasoning_effort = "medium"',
+    'service_tier = "fast"',
+    '',
+    '[features]',
+    'hooks = true',
+    'remote_control = true',
+    'multi_agent = true',
+    'fast_mode = true',
+    '',
+    '[mcp_servers.context7]',
+    'url = "https://mcp.context7.com/mcp"',
+    '',
+    agentConfigBlock('native_agent', 'Read-only SKS analysis agent.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']),
+    '',
+    agentConfigBlock('team_consensus', 'SKS planning/debate agent.', './agents/team-consensus.toml', ['Consensus', 'Atlas']),
+    '',
+    agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']),
+    '',
+    agentConfigBlock('db_safety_reviewer', 'Read-only DB safety reviewer.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']),
+    '',
+    agentConfigBlock('qa_reviewer', 'Read-only QA reviewer.', './agents/qa-reviewer.toml', ['Verifier', 'Reviewer']),
+    ''
+  ].join('\n');
+}
+
+function agentConfigBlock(table: string, description: string, configFile: string, nicknames: string[] = []): string {
+  return [
+    `[agents.${table}]`,
+    `description = "${description}"`,
+    `config_file = "${configFile}"`,
+    `nickname_candidates = [${nicknames.map((name) => `"${name}"`).join(', ')}]`
+  ].join('\n');
 }

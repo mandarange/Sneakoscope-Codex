@@ -35,10 +35,13 @@ export async function buildCodexNativeFeatureMatrix(input: {
   const deprecatedApplyRepairs = input.applyRepairs === true
   const mode = input.mode || (deprecatedApplyRepairs || input.repairManagedAssets === true ? 'repair' : 'read-only')
   const repairManagedAssets = mode === 'repair' && (input.repairManagedAssets === true || deprecatedApplyRepairs)
+  const managedAssetFingerprint = await readManagedAssetFingerprint(root)
   const cacheKey = JSON.stringify({
     root,
     mode,
     repairManagedAssets,
+    codexHome: process.env.CODEX_HOME || null,
+    managedAssetFingerprint,
     fixture: [
       process.env.SKS_CODEX_0138_FAKE,
       process.env.SKS_CODEX_0139_FAKE,
@@ -279,6 +282,31 @@ async function inspectManagedAgentRoleState(root: string): Promise<{ ok: boolean
     blockers: missing.length ? [`managed_agent_roles_missing:${missing.join(',')}`] : [],
     warnings: existingCount > managed.size ? ['non_sks_agent_roles_ignored'] : []
   }
+}
+
+async function readManagedAssetFingerprint(root: string): Promise<string[]> {
+  const dirs = [
+    path.join(root, '.agents', 'skills'),
+    path.join(root, '.codex', 'agents'),
+    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'skills'), path.join(process.env.CODEX_HOME, 'agents')] : [])
+  ]
+  const rows: string[] = []
+  for (const dir of dirs) {
+    const stat = await fs.stat(dir).catch(() => null)
+    rows.push(`${dir}:${stat ? `${stat.mtimeMs}:${stat.size}` : 'missing'}`)
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      const file = path.join(dir, entry.name)
+      const childStat = await fs.stat(file).catch(() => null)
+      rows.push(`${file}:${entry.isDirectory() ? 'dir' : 'file'}:${childStat ? `${childStat.mtimeMs}:${childStat.size}` : 'missing'}`)
+      if (entry.isDirectory()) {
+        const skillFile = path.join(file, 'SKILL.md')
+        const skillStat = await fs.stat(skillFile).catch(() => null)
+        if (skillStat) rows.push(`${skillFile}:file:${skillStat.mtimeMs}:${skillStat.size}`)
+      }
+    }
+  }
+  return rows
 }
 
 export async function writeCodexNativeFeatureMatrix(root: string, matrix: CodexNativeFeatureMatrix, missionDir?: string | null): Promise<void> {

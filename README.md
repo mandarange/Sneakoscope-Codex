@@ -35,9 +35,19 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.1.0** turns the Codex `rust-v0.142.0` compatibility surface into the authoritative Doctor/update readiness path. Doctor now consumes structured Codex Doctor semantics, separates pre-repair observation from post-repair truth, repairs managed native assets from plain `sks doctor --fix`, and gates update completion on a current project migration receipt.
+SKS **4.1.1** tightens the 4.1 readiness path for publishing and first-command migration. Doctor now keeps optional native surfaces route-gated, writes v2 project migration receipts tied to an installation epoch, and keeps the migration profile fast enough for update gates.
+
+What changed in 4.1.1:
+
+- **Core vs route readiness.** Computer Use and Chrome/web review are manual-required route gates, not core blockers for ordinary Doctor/update readiness.
+- **Migration receipt v2.** First-command migration writes project receipts with installation epoch, project hash, required blockers, and optional warnings so stale locks or optional capabilities do not block normal commands.
+- **Fast migration Doctor.** `sks doctor --fix --profile migration --machine-only` skips optional Codex App, Zellij, provider, native, and deep diagnostic work while preserving core readiness checks.
+- **MAD bootstrap latency.** MAD defers update prompts, provider setup, UI snapshots, pane proof, and native swarm proof until the route actually needs them.
+- **Release metadata truth.** Package, CLI version constants, Rust crate metadata, README, changelog, and release checks all point at 4.1.1.
 
 What changed in 4.1.0:
+
+SKS **4.1.0** turns the Codex `rust-v0.142.0` compatibility surface into the authoritative Doctor/update readiness path. Doctor now consumes structured Codex Doctor semantics, separates pre-repair observation from post-repair truth, repairs managed native assets from plain `sks doctor --fix`, and gates update completion on a current project migration receipt.
 
 - **Semantic Doctor readiness.** Warning-only Codex Doctor output stays ready, blocking checks block readiness, and unknown non-zero/unparseable Doctor output fails closed.
 - **Post-repair authority.** `sks doctor --fix` records pre-repair Codex Doctor output but bases readiness on the final post-repair Doctor run.
