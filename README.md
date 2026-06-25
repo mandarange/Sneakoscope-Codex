@@ -11,6 +11,8 @@
 
 `npm i -g sneakoscope` → `sks --mad` → watch up to **100 shadow-clone workers** code in parallel,<br/>each in a live Zellij pane, every claim backed by Completion Proof.
 
+Current package release: **4.4.0**.
+
 </div>
 
 ---
@@ -182,13 +184,12 @@ Change-aware release checks live behind `npm run release:check`; publish-authori
 
 - **Image generation under codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` works when you are authenticated only through codex-lb (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; the codex-lb/OpenAI API path is the fallback. Opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
 
-- **xAI / Grok search.** Wire xAI Live Search into source intelligence as an MCP provider:
+- **UltraSearch source intelligence.** Run provider-independent source acquisition without requiring xAI/Grok credentials:
 
   ```bash
-  sks xai check
-  sks xai setup --scope project --command "npx" --arg "-y" --arg "<your-grok-search-mcp>"
-  export XAI_API_KEY=xai-...
-  sks xai docs
+  sks ultra-search doctor
+  sks ultra-search run "current package release notes" --mode balanced
+  sks ultra-search x "site:x.com product launch"
   ```
 
 - **CLI-only SKS update notices.** Codex App hooks no longer stop normal work to ask for an SKS update. CLI launch surfaces such as `sks --mad` print a non-blocking latest-version notice, `sks update-check` / `sks update check` show the explicit status, and `sks doctor --fix` runs the guarded global SKS update path before repair.
@@ -274,7 +275,7 @@ The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the def
 - Codex App Hooks/PAT: [docs/hooks-pat.md](docs/hooks-pat.md)
 - codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
 - Source Intelligence Layer: [docs/source-intelligence-layer.md](docs/source-intelligence-layer.md)
-- X AI / Context7 / Codex Web policy: [docs/xai-context7-codex-web-policy.md](docs/xai-context7-codex-web-policy.md)
+- UltraSearch / Context7 / Codex Web policy: [docs/ultra-search-source-intelligence-policy.md](docs/ultra-search-source-intelligence-policy.md)
 - Main no-Scout / worker Scout policy: [docs/main-no-scout-worker-scout-policy.md](docs/main-no-scout-worker-scout-policy.md)
 - Real Codex dynamic smoke: [docs/real-codex-dynamic-smoke.md](docs/real-codex-dynamic-smoke.md)
 - Appshots pipeline: [docs/appshots-pipeline.md](docs/appshots-pipeline.md)

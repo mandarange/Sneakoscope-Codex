@@ -3136,6 +3136,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "ultra-search:provider-interface",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/ultra-search-*.ts",
+        "src/scripts/ultra-search-provider-interface-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "ux-ppt:structured-extraction",
       "tier": "P1",
       "cost": "hermetic",
@@ -3322,18 +3334,6 @@
       "affected_by": [
         "src/scripts/wrongness-*.ts",
         "src/scripts/wrongness-fixtures-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "xai-mcp:capability",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/xai-mcp-*.ts",
-        "src/scripts/xai-mcp-capability-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,

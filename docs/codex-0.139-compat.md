@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to UltraSearch: provider-independent planning/proof, x-search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring xAI/Grok runtime dependency.
+
 SKS 4.2.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the publish path with `npm publish --ignore-scripts`: the release wrapper now runs the full prepublish gate explicitly before invoking npm with lifecycle scripts disabled.
 
 SKS 4.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while stabilizing the active MadDB release surface: first-class `$MAD-DB` routing, capability v2 binding, mission-local Supabase write profiles, read-only restoration proof, and exact lifecycle correlation are release-gated without changing the Codex 0.139 compatibility baseline.

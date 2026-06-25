@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.4.0 is the UltraSearch source-intelligence replacement release after 4.2.1. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, UltraSearch provider-interface gates, Source Intelligence Policy v2 gates, and the `publish:ignore-scripts` wrapper to agree on 4.4.0 before publication.
+
+4.4.0 release readiness adds proof that xAI/Grok is not a runtime dependency, X public discovery is not promoted to full parity without a real corpus, and `npm publish --ignore-scripts` packages the prebuilt dist surface.
+
 SKS 4.2.1 is the publish-path hardening patch after 4.2.0. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, and the `publish:ignore-scripts` wrapper to agree on 4.2.1 before publication.
 
 4.2.1 release readiness adds proof that `npm publish --ignore-scripts` is reached only after the explicit full `prepublishOnly` gate has run, so disabling npm lifecycle scripts at publish time does not bypass SKS release checks.
@@ -212,7 +216,7 @@ The operator-facing publish entrypoint is `npm run publish:npm` (or
 final npm lifecycle hooks are disabled on purpose.
 
 ```bash
-npm run xai-mcp:capability
+npm run ultra-search:provider-interface
 npm run source-intelligence:policy
 npm run source-intelligence:all-modes
 npm run codex-web:adapter
@@ -398,10 +402,10 @@ The report covers version drift, release metadata freshness, stale `dist` preven
 | Priority | Status Surface |
 | --- | --- |
 | P0 | Source Intelligence, safety, release, proof, runtime, task graph, follow-up schema, route backfill, no-Scout, terminal, real Zellij proof, cleanup executor, retention cleanup, fake-vs-real policy, and Goal blockers |
-| P1 | Codex App dashboard/operator visibility for active slots, total work items, pending/active/completed counts, backfill, generation history, source, X AI, Codex Web, Goal, terminal, Zellij physical proof, cleanup status, and work graph score |
+| P1 | Codex App dashboard/operator visibility for active slots, total work items, pending/active/completed counts, backfill, generation history, source, UltraSearch, Codex Web, Goal, terminal, Zellij physical proof, cleanup status, and work graph score |
 | P2 | Parallel provider queries, release DAG groups, local-only caches, refill latency, queue metrics, janitor throttling, capture-pane caps, bounded work graph scans, and worker-pool speed summaries |
 | P3 | README, policy docs, migration, troubleshooting, CLI help, `--work-items`, active-slot semantics, real smoke envs, cleanup commands, retention cleanup wording, and onboarding |
-| P4 | Human-readable summaries for source intelligence, X AI used/not used, Goal fallback, terminal close, Zellij persistence, physical pane proof, cleanup, scheduler health, and worker Scout evidence |
+| P4 | Human-readable summaries for source intelligence, UltraSearch proof, Goal fallback, terminal close, Zellij persistence, physical pane proof, cleanup, scheduler health, and worker Scout evidence |
 | P5 | Regression catalog for fake pane rejection, missing capture/list-panes, output-last-message absence, cleanup dry-run/apply, retention preserve/remove safety, work graph partial quality, non-agent route stand-ins, source refs, and Goal refs |
 | P6 | Codex 0.136 compatibility, inherited Codex 0.135/0.134 compatibility, MCP 0.134 policy, managed proxy propagation, local Codex history search, strategy-first orchestration, Appshots evidence, parallel write kernel proof, and release gate existence audit |
 | P7 | Patch swarm runtime truth, transaction journal, conflict rebase, strict strategy-to-patch coverage, rollback command proof, and real Codex patch smoke optional/required state |
@@ -424,4 +428,4 @@ codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, `
 sks codex-lb setup --write-env-file --keychain --launchctl
 ```
 
-Privacy statement: secrets are redacted, Codex Chrome Extension screenshots, native Computer Use screenshots, X AI raw responses, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.
+Privacy statement: secrets are redacted, Codex Chrome Extension screenshots, native Computer Use screenshots, UltraSearch raw/source artifacts, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.

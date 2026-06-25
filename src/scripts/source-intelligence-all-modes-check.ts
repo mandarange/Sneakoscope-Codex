@@ -7,26 +7,16 @@ import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js';
 
 const mod = await importDist('core/source-intelligence/source-intelligence-runner.js');
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-source-intelligence-'));
-const noXai = await mod.runSourceIntelligence({
-  missionDir: dir,
-  route: '$Team',
-  query: 'fixture',
-  context7: async () => [{ title: 'docs' }],
-  codexWebSearch: async () => [{ title: 'web', url: 'https://example.com' }],
-  xaiDetection: { configured: false, search_capable: false, configured_but_unverified: false, status: 'missing' },
-  env: { SKS_CODEX_WEB_SEARCH_AVAILABLE: '1' }
-});
-const withXai = await mod.runSourceIntelligence({
+const common = {
   missionDir: dir,
   route: '$Research',
-  query: 'fixture',
-  context7: async () => [{ title: 'docs' }],
+  context7: async () => [{ title: 'docs', url: 'https://docs.example.com' }],
   codexWebSearch: async () => [{ title: 'web', url: 'https://example.com' }],
-  xaiSearch: async () => [{ title: 'x', url: 'https://x.ai' }],
-  xaiDetection: { configured: true, search_capable: true, configured_but_unverified: false, status: 'search_capable' },
   env: { SKS_CODEX_WEB_SEARCH_AVAILABLE: '1' }
-});
-assertGate(noXai.ok === true && noXai.mode === 'context7_codex_web', 'no-XAI mode must pass with Context7+Codex Web', noXai);
-assertGate(withXai.ok === true && withXai.mode === 'context7_codex_web_xai', 'XAI mode must pass with all providers', withXai);
-assertGate(withXai.parallel.providers_requested.length === 3, 'providers must run through parallel provider plan', withXai.parallel);
-emitGate('source-intelligence:all-modes', { modes: [noXai.mode, withXai.mode] });
+};
+const balanced = await mod.runSourceIntelligence({ ...common, query: 'fixture' });
+const xSearch = await mod.runSourceIntelligence({ ...common, query: 'site:x.com product launch', xaiDetection: { configured: true, search_capable: true } });
+assertGate(balanced.ok === true && balanced.mode === 'ultra_balanced', 'balanced UltraSearch mode must pass with provider-independent proof', balanced);
+assertGate(xSearch.ok === false && xSearch.mode === 'x_search' && xSearch.blockers.includes('x_search_parity_not_proven'), 'X mode must not treat discovery-only public X evidence as parity', xSearch);
+assertGate(xSearch.parallel.providers_requested.includes('x_public'), 'X public provider must be capability-selected', xSearch.parallel);
+emitGate('source-intelligence:all-modes', { modes: [balanced.mode, xSearch.mode], x_parity_claim: 'not_proven_without_real_corpus' });

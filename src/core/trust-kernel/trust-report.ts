@@ -140,9 +140,8 @@ function sourceIntelligenceTrust(proof: any = {}) {
   if (!evidence) return { issues: [], summary: { required: false, status: 'not_required' } };
   const proofBlockers = evidence.proof?.blockers || evidence.blockers || [];
   const issues = [...proofBlockers];
-  if (evidence.policy?.xai_mcp?.required === true && evidence.xai_search?.ok !== true) issues.push('xai_available_not_used');
   if (evidence.policy?.context7?.required === true && evidence.context7?.ok !== true) issues.push('context7_missing');
-  if (evidence.policy?.codex_web_search?.required === true && evidence.codex_web_search?.ok !== true && evidence.mode !== 'context7_only_degraded') issues.push('codex_web_search_missing');
+  if (evidence.policy?.codex_web_search?.required === true && evidence.ultra_search?.proof?.provider_independent !== true) issues.push('ultra_search_provider_independent_proof_missing');
   return {
     issues: [...new Set(issues.map(String))],
     summary: {
@@ -152,7 +151,7 @@ function sourceIntelligenceTrust(proof: any = {}) {
       mode: evidence.mode || evidence.policy?.mode || 'unknown',
       context7_status: evidence.context7?.status || 'unknown',
       codex_web_status: evidence.codex_web_search?.status || 'not_required',
-      xai_status: evidence.xai_search?.status || 'not_required',
+      ultra_search_status: evidence.ultra_search?.proof?.ok === true ? 'verified' : evidence.ultra_search ? 'partial' : 'not_required',
       providers_completed: evidence.parallel?.providers_completed || [],
       blockers: proofBlockers
     }

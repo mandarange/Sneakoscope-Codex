@@ -4,6 +4,23 @@
 
 
 
+## [4.4.0] - 2026-06-25
+
+### Added
+
+- Added the provider-independent UltraSearch runtime, CLI surface, typed source/claim/convergence proof artifacts, and release gates.
+- Added Source Intelligence Policy v2 with capability-based provider selection and x-search parity gaps separated from general source readiness.
+
+### Changed
+
+- Replaced the xAI/Grok source-intelligence path with UltraSearch. `sks xai` is now a deprecation-only compatibility notice and does not configure MCP servers or require credentials.
+- Updated publish/release metadata for the 4.4.0 package surface.
+
+### Verification
+
+- `npm publish --dry-run --ignore-scripts` passes for `sneakoscope@4.4.0`; real X parity remains an explicit unproven gate unless a real corpus is supplied.
+
+
 ## [4.2.1] - 2026-06-25
 
 ### Fixed

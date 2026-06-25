@@ -105,7 +105,7 @@ const checks = {
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
   release_readiness: scriptContains('release:check:parallel', 'release:readiness'),
-  xai_mcp_capability: scriptContains('release:check:parallel', 'xai-mcp:capability'),
+  ultra_search_provider_interface: scriptContains('release:check:parallel', 'ultra-search:provider-interface'),
   source_intelligence_policy: scriptContains('release:check:parallel', 'source-intelligence:policy'),
   source_intelligence_all_modes: scriptContains('release:check:parallel', 'source-intelligence:all-modes'),
   codex_web_adapter: scriptContains('release:check:parallel', 'codex-web:adapter'),
@@ -330,7 +330,7 @@ for (const [name, ok] of Object.entries({
   verification_parallel_engine: checks.verification_parallel_engine,
   release_metadata: checks.release_metadata,
   release_readiness: checks.release_readiness,
-  xai_mcp_capability: checks.xai_mcp_capability,
+  ultra_search_provider_interface: checks.ultra_search_provider_interface,
   source_intelligence_policy: checks.source_intelligence_policy,
   source_intelligence_all_modes: checks.source_intelligence_all_modes,
   codex_web_adapter: checks.codex_web_adapter,
@@ -813,13 +813,13 @@ const report = {
     flagship_proof_graph_v4_report_ok: runtimeChecks.flagship_proof_graph_v4
   },
   source_intelligence_1_18: {
-    status: checks.xai_mcp_capability
+    status: checks.ultra_search_provider_interface
       && checks.source_intelligence_policy
       && checks.source_intelligence_all_modes
       && checks.codex_web_adapter ? 'present' : 'missing',
-    mode_default: 'context7_codex_web',
-    xai_when_available: checks.xai_mcp_capability,
-    xai_missing_fallback: checks.source_intelligence_all_modes,
+    mode_default: 'ultra_balanced',
+    x_search_public_discovery: checks.ultra_search_provider_interface,
+    no_xai_runtime_dependency: checks.source_intelligence_all_modes,
     codex_web_adapter: checks.codex_web_adapter
   },
   agent_terminal_zellij_1_18: {
