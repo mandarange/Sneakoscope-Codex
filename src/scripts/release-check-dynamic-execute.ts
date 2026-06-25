@@ -67,7 +67,7 @@ for (const gate of plan.selected) {
     continue;
   }
   const command = `npm run ${gate.id}`;
-  if (FORBIDDEN_RECURSIVE_GATES.has(gate.id) || /npm\s+run\s+(release:check|release:real-check|release:publish|publish:npm|publish:dry|prepublishOnly)\b/.test(command)) {
+  if (FORBIDDEN_RECURSIVE_GATES.has(gate.id) || /npm\s+run\s+(release:check|release:real-check|release:publish|publish:ignore-scripts|publish:npm|publish:dry|prepublishOnly)\b/.test(command)) {
     failures.push({ id: gate.id, exit_code: null, stdout_tail: '', stderr_tail: 'forbidden_recursive_gate_spawn' });
     continue;
   }

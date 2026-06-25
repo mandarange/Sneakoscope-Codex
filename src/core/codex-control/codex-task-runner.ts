@@ -112,6 +112,8 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     patchEnvelopePath,
     blockers: finalBlockers,
     reliabilityShield: adapterResult?.reliabilityShield || null,
+    capacityFallback: adapterResult?.reliabilityShield?.selected_model_capacity_fallback === true,
+    modelCapacityRetryCount: Number(adapterResult?.reliabilityShield?.model_capacity_retry_count || 0),
     ultraRouterDecision: routerDecision as unknown as Record<string, unknown>,
     outputSchemaId: task.outputSchemaId,
     finalResponse: adapterResult?.finalResponse || '',
@@ -140,7 +142,11 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     result,
     capability: capability as unknown as Record<string, unknown>,
     sandbox,
-    envProof: runtime.env.proof,
+    envProof: {
+      ...runtime.env.proof,
+      capacity_fallback_selected: result.capacityFallback === true,
+      model_capacity_retry_count: result.modelCapacityRetryCount
+    },
     config: runtime.config,
     reliabilityShield: adapterResult?.reliabilityShield || null,
     routerDecision: routerDecision as unknown as Record<string, unknown>,
