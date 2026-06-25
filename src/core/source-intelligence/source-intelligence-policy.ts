@@ -1,15 +1,17 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
-import type { XaiMcpDetection } from '../mcp/xai-mcp-detector.js'
 import type { CodexWebSearchCapability } from '../codex/codex-web-search-adapter.js'
 
-export const SOURCE_INTELLIGENCE_POLICY_SCHEMA = 'sks.source-intelligence-policy.v1'
+export const SOURCE_INTELLIGENCE_POLICY_SCHEMA = 'sks.source-intelligence-policy.v2'
 
 export type SourceIntelligenceMode =
-  | 'context7_codex_web'
-  | 'context7_codex_web_xai'
-  | 'offline_context7_only'
-  | 'context7_only_degraded'
+  | 'ultra_fast'
+  | 'ultra_balanced'
+  | 'ultra_deep'
+  | 'ultra_exhaustive'
+  | 'url_acquisition'
+  | 'x_search'
+  | 'offline_cache'
   | 'blocked'
 
 export interface SourceIntelligencePolicy {
@@ -18,23 +20,32 @@ export interface SourceIntelligencePolicy {
   ok: boolean
   route: string
   mode: SourceIntelligenceMode
+  requirements: {
+    official_sources: boolean
+    full_content: boolean
+    counter_search: boolean
+    claim_ledger: boolean
+    social_recency: boolean
+    code_execution_verification: boolean
+  }
+  capabilities: {
+    docs: string[]
+    web_search: string[]
+    repo_search: string[]
+    social: string[]
+    browser: string[]
+  }
+  selected_providers: string[]
   context7: {
     required: boolean
     available: boolean
-    status: 'available' | 'missing' | 'offline_only'
+    status: 'available' | 'missing' | 'offline_only' | 'not_required'
   }
   codex_web_search: {
     required: boolean
     available: boolean
     status: CodexWebSearchCapability['status']
     reason: string | null
-  }
-  xai_mcp: {
-    required: boolean
-    configured: boolean
-    search_capable: boolean
-    configured_but_unverified: boolean
-    status: string
   }
   wrongness_kinds: string[]
   blockers: string[]
@@ -46,10 +57,16 @@ export function buildSourceIntelligencePolicy(input: {
   offline?: boolean
   context7Available?: boolean
   codexWebCapability?: CodexWebSearchCapability
-  xaiDetection?: XaiMcpDetection
+  query?: string
+  mode?: SourceIntelligenceMode
+  xaiDetection?: unknown
 } = {}): SourceIntelligencePolicy {
   const route = input.route || 'unknown'
   const offline = input.offline === true
+  const query = input.query || ''
+  const docsIntent = /\b(package|npm|SDK|API|MCP|framework|library|docs?|문서|React|Next\.js|Prisma|Tailwind)\b/i.test(query)
+  const xIntent = /\b(?:x\.com|twitter\.com|X\/Twitter|트위터|엑스|site:x\.com|site:twitter\.com)\b/i.test(query)
+  const urlIntent = /https?:\/\/[^\s)"']+/i.test(query)
   const context7Available = input.context7Available !== false
   const codex = input.codexWebCapability || {
     schema: 'sks.codex-web-search-capability.v1',
@@ -57,33 +74,37 @@ export function buildSourceIntelligencePolicy(input: {
     status: 'degraded_unverified' as const,
     reason: 'capability_not_checked'
   }
-  const xai = input.xaiDetection
-  const xaiSearchCapable = xai?.search_capable === true
-  const xaiConfigured = xai?.configured === true
   const blockers: string[] = []
   const warnings: string[] = []
   const wrongnessKinds: string[] = []
 
-  if (!context7Available) {
+  if (docsIntent && !context7Available) {
     blockers.push('docs_context_missing')
     wrongnessKinds.push('context7_missing')
   }
   if (!offline && codex.status === 'unavailable') {
-    warnings.push('codex_web_search_unavailable_degraded_to_context7_only')
+    warnings.push('codex_web_search_unavailable_degraded_to_ultra_cache_or_docs')
     wrongnessKinds.push('codex_web_search_missing')
   }
-  if (xaiSearchCapable) warnings.push('xai_search_evidence_required_for_verified_current_claims')
-  if (xaiConfigured && !xaiSearchCapable && xai?.configured_but_unverified) warnings.push('xai_mcp_configured_but_search_capability_unverified')
+  if (input.xaiDetection) warnings.push('xai_detection_input_ignored_by_source_intelligence_v2')
 
-  const mode: SourceIntelligenceMode = !context7Available
+  const mode: SourceIntelligenceMode = input.mode || (!context7Available && docsIntent
     ? 'blocked'
     : offline
-      ? 'offline_context7_only'
-      : xaiSearchCapable
-        ? 'context7_codex_web_xai'
-        : codex.status === 'unavailable'
-          ? 'context7_only_degraded'
-          : 'context7_codex_web'
+      ? 'offline_cache'
+      : urlIntent
+        ? 'url_acquisition'
+        : xIntent
+          ? 'x_search'
+          : /deep|exhaustive|가능한 전부|누락 없이|완벽하게 조사/i.test(query)
+            ? 'ultra_deep'
+            : 'ultra_balanced')
+
+  const selected = new Set<string>()
+  if (docsIntent && context7Available) selected.add('context7')
+  if (!offline && codex.status !== 'unavailable') selected.add('codex_web')
+  if (xIntent || mode === 'x_search') selected.add('x_public')
+  if (offline) selected.add('offline_cache')
 
   return {
     schema: SOURCE_INTELLIGENCE_POLICY_SCHEMA,
@@ -91,23 +112,32 @@ export function buildSourceIntelligencePolicy(input: {
     ok: blockers.length === 0,
     route,
     mode,
+    requirements: {
+      official_sources: docsIntent,
+      full_content: mode !== 'ultra_fast',
+      counter_search: mode === 'ultra_deep' || mode === 'ultra_exhaustive',
+      claim_ledger: true,
+      social_recency: xIntent || mode === 'x_search',
+      code_execution_verification: /\b(code|implementation|test|runtime|구현)\b/i.test(query)
+    },
+    capabilities: {
+      docs: context7Available ? ['context7', 'official_web'] : ['official_web'],
+      web_search: !offline ? ['codex_web'] : [],
+      repo_search: ['github'],
+      social: xIntent || mode === 'x_search' ? ['x_public', 'authenticated_chrome_optional', 'official_x_api_optional'] : [],
+      browser: ['codex_browser_optional', 'codex_chrome_optional']
+    },
+    selected_providers: [...selected],
     context7: {
-      required: true,
+      required: docsIntent,
       available: context7Available,
-      status: context7Available ? (offline ? 'offline_only' : 'available') : 'missing'
+      status: docsIntent ? (context7Available ? (offline ? 'offline_only' : 'available') : 'missing') : 'not_required'
     },
     codex_web_search: {
       required: !offline,
       available: codex.available,
       status: codex.status,
       reason: codex.reason
-    },
-    xai_mcp: {
-      required: xaiSearchCapable,
-      configured: xaiConfigured,
-      search_capable: xaiSearchCapable,
-      configured_but_unverified: xai?.configured_but_unverified === true,
-      status: xai?.status || 'not_checked'
     },
     wrongness_kinds: wrongnessKinds,
     blockers,

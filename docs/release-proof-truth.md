@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.4.0 keeps release proof truth aligned with the 4.4.0 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, UltraSearch provider-independent proof, Source Intelligence Policy v2 proof, and publish wrapper evidence before publication.
+
+SKS 4.4.0 release proof truth also requires proof that X public discovery remains marked partial until a real parity corpus passes, and that `sks xai` is deprecation-only rather than a provider authority.
+
 SKS 4.2.1 keeps release proof truth aligned with the 4.2.1 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, and publish wrapper evidence before publication.
 
 SKS 4.2.1 release proof truth also requires proof that `publish:ignore-scripts` and `publish:npm` run `prepublishOnly` explicitly before `npm publish --ignore-scripts`, preserving release checks even when npm lifecycle scripts are disabled for the actual publish command.

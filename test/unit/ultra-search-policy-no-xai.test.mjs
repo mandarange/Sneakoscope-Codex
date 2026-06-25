@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSourceIntelligencePolicy } from '../../dist/core/source-intelligence/source-intelligence-policy.js';
 
-test('xAI missing uses UltraSearch balanced mode', () => {
+test('source intelligence v2 ignores xAI detection as an authority signal', () => {
   const policy = buildSourceIntelligencePolicy({
+    query: 'site:x.com product launch',
     context7Available: true,
     codexWebCapability: { available: true, status: 'available', reason: 'fixture' },
-    xaiDetection: { configured: false, search_capable: false, configured_but_unverified: false, status: 'missing' }
+    xaiDetection: { configured: true, search_capable: true, status: 'search_capable' }
   });
-  assert.equal(policy.ok, true);
-  assert.equal(policy.mode, 'ultra_balanced');
+  assert.equal(policy.mode, 'x_search');
+  assert.ok(policy.selected_providers.includes('x_public'));
   assert.equal(Object.hasOwn(policy, ['xai', 'mcp'].join('_')), false);
 });
