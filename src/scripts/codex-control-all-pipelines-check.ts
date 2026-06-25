@@ -11,6 +11,7 @@ const required = [
   'codex-control:thread-registry',
   'codex-control:side-effect-scope',
   'codex-control:empty-result-retry',
+  'codex-control:model-capacity-fallback',
   'codex-control:stream-idle-watchdog',
   'codex-control:tool-call-sequence-repair',
   'codex-control:keepalive-no-cot-leak'

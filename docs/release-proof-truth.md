@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.2.1 keeps release proof truth aligned with the 4.2.1 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, and publish wrapper evidence before publication.
+
+SKS 4.2.1 release proof truth also requires proof that `publish:ignore-scripts` and `publish:npm` run `prepublishOnly` explicitly before `npm publish --ignore-scripts`, preserving release checks even when npm lifecycle scripts are disabled for the actual publish command.
+
 SKS 4.2.0 keeps release proof truth aligned with the 4.2.0 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, first-class MadDB route evidence, capability v2/runtime profile proof, hook idempotency and parallel lifecycle proof, Supabase MCP tool inventory evidence, and real disposable Supabase E2E status before publication.
 
 SKS 4.2.0 release proof truth also requires proof that persistent Supabase MCP configuration is read-only after every MadDB cycle, mission-local write profiles do not persist, `$MAD-DB` and `$MAD-SKS` remain separate routes, control-plane Supabase operations stay denied, `publish:fast` is quarantined, and any missing disposable Supabase project ref blocks real-E2E claims.

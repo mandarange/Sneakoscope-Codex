@@ -12,7 +12,7 @@ export interface SlaSchedulerPlan {
   highest_confidence_subset: string[];
 }
 
-export function planFiveMinuteSla(root: string, graph: TriWikiAffectedGraph = computeTriWikiAffectedGraph({ root, tier: 'affected' }), slaMs = 300_000): SlaSchedulerPlan {
+export function planFiveMinuteSla(root: string, graph: TriWikiAffectedGraph = computeTriWikiAffectedGraph({ root, tier: 'affected', includeProofLookup: false }), slaMs = 300_000): SlaSchedulerPlan {
   const schedule = planExtremeParallelSchedule(root, graph);
   const certificate = buildTriWikiSlaCertificate({
     graph,

@@ -29,8 +29,11 @@ test('publish lifecycle requires the full release stamp for publish readiness', 
   assert.match(scripts['publish:dry'], /release-check-stamp\.js verify/);
   assert.match(scripts['publish:dry'], /--dry-run/);
   assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
-  assert.doesNotMatch(scripts['publish:npm'], /--tag rc/);
-  assert.equal(scripts['release:publish'], 'npm run publish:npm');
+  assert.match(scripts['publish:ignore-scripts'], /npm run prepublishOnly/);
+  assert.match(scripts['publish:ignore-scripts'], /--ignore-scripts/);
+  assert.doesNotMatch(scripts['publish:ignore-scripts'], /--tag rc/);
+  assert.equal(scripts['publish:npm'], 'npm run publish:ignore-scripts');
+  assert.equal(scripts['release:publish'], 'npm run publish:ignore-scripts');
 });
 
 test('prepack rebuild keeps the release stamp stable', () => {

@@ -1,15 +1,19 @@
 import path from 'node:path';
 import { exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic, PACKAGE_VERSION } from './fsx.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, CODEX_WEB_VERIFICATION_POLICY, type QaInteractionSurface, evidenceMentionsForbiddenBrowserAutomation, evidenceMentionsForbiddenWebComputerUseEvidence } from './routes.js';
 import { appendAgentLedgerEvent, initializeAgentCentralLedger } from './agents/agent-central-ledger.js';
 import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
 import { resolveCodexNativeInvocationPlan } from './codex-native/codex-native-invocation-router.js';
 import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
+import { initializeQaRuntimeArtifacts } from './qa-loop/qa-runtime-artifacts.js';
+import { evaluateQaGateV2 } from './qa-loop/qa-gate-v2.js';
+import { DEFAULT_QA_MAX_CYCLES, QA_GATE_V2_ARTIFACT, QA_SURFACE_SELECTION_ARTIFACT } from './qa-loop/qa-types.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
 export const QA_LOOP_VISUAL_EVIDENCE_ARTIFACT = 'qa-loop/visual-evidence.json';
 const QA_REPORT_SUFFIX = 'qa-report.md';
-const UI_CHROME_EXTENSION_FIRST_ACK = 'use_codex_chrome_extension_first_no_computer_use_for_web_ui_or_mark_unverified';
+const UI_SURFACE_ROUTER_ACK = 'use_codex_surface_router_browser_chrome_computer_no_synthetic_evidence';
+const LEGACY_UI_CHROME_EXTENSION_FIRST_ACK = 'use_codex_chrome_extension_first_no_computer_use_for_web_ui_or_mark_unverified';
 const GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK = 'yes_gpt_image_2_annotated_review';
 const IMAGE_FILE_RE = /\.(png|jpe?g|webp|gif)$/i;
 
@@ -172,7 +176,7 @@ export function inferQaLoopAnswers(prompt: any = '') {
     '주요 내비게이션과 핵심 화면 진입에서 콘솔/화면상 치명 오류가 없다.',
     '검증하지 못한 UI/API 범위는 통과로 주장하지 않고 QA 리포트에 남긴다.'
   ];
-  if (isUiScope(scope)) acceptance.push('UI E2E 통과 증거는 실제 Codex Chrome Extension screenshot artifact path와 sha256을 기록해야 한다.');
+  if (isUiScope(scope)) acceptance.push('UI E2E 통과 증거는 surface router가 고른 @Browser/@Chrome/@Computer 실제 action·observation ledger와 필요한 screenshot/hash를 기록해야 한다.');
   if (wantsGptImage2Review) acceptance.push('gpt-image-2 annotated review image가 필요한 경우 실제 Codex App $imagegen/gpt-image-2 출력 파일 path, sha256, model, provider를 기록해야 한다.');
   return {
     GOAL_PRECISE: text ? `현재 요청 범위에서 QA-LOOP를 안전하게 실행한다: ${text}` : '현재 로컬 개발 환경에서 핵심 사용자 흐름을 안전하게 QA한다.',
@@ -186,17 +190,17 @@ export function inferQaLoopAnswers(prompt: any = '') {
     EXTERNAL_SIDE_EFFECT_POLICY: 'block_all_external_side_effects',
     ...login,
     CREDENTIAL_STORAGE_ACK: 'never_store_credentials_in_artifacts_or_wiki',
-    UI_CHROME_EXTENSION_ACK: UI_CHROME_EXTENSION_FIRST_ACK,
+    UI_CHROME_EXTENSION_ACK: UI_SURFACE_ROUTER_ACK,
     QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED: wantsGptImage2Review ? GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK : 'not_required',
     TEAM_MODE_ALLOWED: 'no_parent_only',
-    MAX_QA_CYCLES: '1',
+    MAX_QA_CYCLES: String(DEFAULT_QA_MAX_CYCLES),
     ACCEPTANCE_CRITERIA: acceptance,
     NON_GOALS: [
       '결제, 실제 이메일/SMS 발송, 관리자 권한 변경, 데이터 삭제, 프로덕션 데이터 변경은 테스트하지 않는다.'
     ],
     RISK_BOUNDARY: [
       '실제 사용자 데이터, 인증 권한, 결제, 메시지 발송, 웹훅, 외부 서비스 상태를 생성/수정/삭제하지 않는다.',
-      'Codex Chrome Extension readiness/evidence가 없으면 web/browser UI 검증 완료로 주장하지 않는다.',
+      '선택된 Codex App visual surface의 실제 action·observation evidence가 없으면 UI 검증 완료로 주장하지 않는다.',
       '로그인이 필요하지만 임시 테스트 자격증명이 없으면 인증 구간은 차단/미검증으로 기록한다.'
     ],
     MID_RUN_UNKNOWN_POLICY: ['preserve_existing_behavior', 'defer_optional_scope', 'block_only_if_no_safe_path']
@@ -257,7 +261,7 @@ export function qaLoopQuestionSlots() {
       { id: 'TEMP_TEST_CREDENTIALS_READY', question: 'If login is required, are test-only credentials ready to provide ephemerally during the run?', required: true, type: 'enum', options: ['not_required', 'yes_temp_only', 'no_block_authenticated_tests'] },
       { id: 'TEST_CREDENTIALS_RUNTIME_SOURCE', question: 'If login is required, how will test-only credentials be provided without saving the values?', required: true, type: 'enum', options: ['not_required', 'ephemeral_chat_only', 'environment_variables', 'secret_manager'] },
       { id: 'CREDENTIAL_STORAGE_ACK', question: 'Acknowledge credential handling policy.', required: true, type: 'enum', options: ['never_store_credentials_in_artifacts_or_wiki'] },
-      { id: 'UI_CHROME_EXTENSION_ACK', question: 'Acknowledge UI E2E evidence policy: Codex Chrome Extension first for web/browser/webapp verification; no Computer Use or unofficial browser automation substitute.', required: true, type: 'enum', options: [UI_CHROME_EXTENSION_FIRST_ACK] },
+      { id: 'UI_CHROME_EXTENSION_ACK', question: 'Acknowledge UI E2E evidence policy: QA-LOOP routes local/public web to @Browser, signed-in web to @Chrome, native/cross-app GUI to @Computer, and never treats synthetic artifacts as real proof.', required: true, type: 'enum', options: [UI_SURFACE_ROUTER_ACK, LEGACY_UI_CHROME_EXTENSION_FIRST_ACK] },
       { id: 'TEAM_MODE_ALLOWED', question: 'May QA-LOOP use Team/subagents where useful?', required: true, type: 'enum', options: ['yes_parallel_where_safe', 'no_parent_only'] },
       { id: 'MAX_QA_CYCLES', question: 'How many no-question QA cycles are allowed before pausing?', required: true, type: 'string' },
       { id: 'ACCEPTANCE_CRITERIA', question: 'List the QA completion criteria.', required: true, type: 'array_or_string' },
@@ -277,7 +281,7 @@ export function validateQaLoopAnswers(schema: any, answers: any = {}) {
   if (env !== 'local_dev_server' && mutation === 'seeded_create_change_remove_local_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'destructive_removal_tests_are_local_dev_only' });
   if (env === 'deployed_production_domain' && mutation !== 'read_only_smoke_only') errors.push({ slot: 'QA_MUTATION_POLICY', error: 'production_deployed_qa_is_read_only_smoke_only' });
   if (answers.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED !== 'never') errors.push({ slot: 'DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED', error: 'destructive_deployed_tests_never_allowed' });
-  if (isUiScope(answers.QA_SCOPE) && answers.UI_CHROME_EXTENSION_ACK !== UI_CHROME_EXTENSION_FIRST_ACK) errors.push({ slot: 'UI_CHROME_EXTENSION_ACK', error: 'ui_e2e_requires_codex_chrome_extension_first_ack' });
+  if (isUiScope(answers.QA_SCOPE) && ![UI_SURFACE_ROUTER_ACK, LEGACY_UI_CHROME_EXTENSION_FIRST_ACK].includes(answers.UI_CHROME_EXTENSION_ACK)) errors.push({ slot: 'UI_CHROME_EXTENSION_ACK', error: 'ui_e2e_requires_codex_surface_router_ack' });
   if (answers.LOGIN_REQUIRED === 'yes' && !['yes_temp_only', 'no_block_authenticated_tests'].includes(answers.TEMP_TEST_CREDENTIALS_READY)) errors.push({ slot: 'TEMP_TEST_CREDENTIALS_READY', error: 'authenticated_tests_require_ephemeral_test_credentials_or_must_be_blocked' });
   if (answers.LOGIN_REQUIRED === 'yes' && answers.TEMP_TEST_CREDENTIALS_READY === 'yes_temp_only' && answers.TEST_CREDENTIALS_RUNTIME_SOURCE === 'not_required') errors.push({ slot: 'TEST_CREDENTIALS_RUNTIME_SOURCE', error: 'credential_runtime_source_required' });
   if (answers.CREDENTIAL_STORAGE_ACK !== 'never_store_credentials_in_artifacts_or_wiki') errors.push({ slot: 'CREDENTIAL_STORAGE_ACK', error: 'credential_temp_only_ack_required' });
@@ -331,6 +335,7 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
   const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, contract.prompt);
   const reportFile = opts.reportFile || qaReportFilename();
   const corrective = a.QA_CORRECTIVE_POLICY !== 'report_only_no_code_changes';
+  const selectedSurface = opts.qaRuntime?.surface?.selected_surface || null;
   return {
     passed: false,
     clarification_contract_sealed: Boolean(contract.sealed_hash),
@@ -342,6 +347,15 @@ export function defaultQaGate(contract: any = {}, opts: any = {}) {
     deployed_destructive_tests_blocked: a.TARGET_ENVIRONMENT === 'local_dev_server' || a.DESTRUCTIVE_DEPLOYED_TESTS_ALLOWED === 'never',
     credentials_not_persisted: false,
     ui_e2e_required: uiRequired,
+    qa_contract_v2_required: opts.qaRuntime ? true : false,
+    qa_surface_selection_artifact: opts.qaRuntime ? QA_SURFACE_SELECTION_ARTIFACT : null,
+    qa_gate_v2_artifact: opts.qaRuntime ? QA_GATE_V2_ARTIFACT : null,
+    qa_surface_selected: selectedSurface,
+    ui_selected_surface: selectedSurface,
+    ui_live_surface_preflight_passed: !uiRequired,
+    ui_real_action_count: 0,
+    ui_observation_count: 0,
+    same_flow_replay_complete: false,
     chrome_extension_preflight_passed: !uiRequired,
     ui_chrome_extension_evidence: !uiRequired,
     ui_computer_use_evidence: false,
@@ -395,6 +409,13 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
   const root = missionRootFromDir(dir);
   const executionProfile = root ? await resolveCodexAppExecutionProfile({ root }).catch(() => null) : null;
   const codexNativeInvocation = root ? await resolveQaCodexNativeInvocation(root, mission.id).catch(() => null) : null;
+  const qaRuntime = await initializeQaRuntimeArtifacts(dir, {
+    ...contract,
+    prompt: mission.prompt || contract.prompt,
+    mission_id: mission.id || contract.mission_id
+  }, {
+    missionId: mission.id || contract.mission_id || null
+  }).catch(() => null);
   if (executionProfile) await writeJsonAtomic(path.join(dir, 'qa-loop', 'execution-profile.json'), executionProfile).catch(() => undefined);
   if (codexNativeInvocation) await writeJsonAtomic(path.join(dir, 'qa-loop', 'codex-native-invocation.json'), codexNativeInvocation).catch(() => undefined);
   await writeJsonAtomic(path.join(dir, 'qa-ledger.json'), {
@@ -405,11 +426,19 @@ export async function writeQaLoopArtifacts(dir: any, mission: any, contract: any
     codex_app_execution_profile: executionProfile ? compactExecutionProfile(executionProfile) : null,
     codex_native_invocation: codexNativeInvocation,
     target: { scope: a.QA_SCOPE, environment: a.TARGET_ENVIRONMENT, base_url: a.TARGET_BASE_URL, api_base_url: a.API_BASE_URL },
-    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_chrome_extension_first_required_for_web_ui_e2e', visual_review: 'gpt_image_2_annotated_review_required_when_contract_requests_it' },
+    qa_runtime_v2: qaRuntime ? {
+      contract_artifact: 'qa-loop/qa-contract-v2.json',
+      surface_selection_artifact: QA_SURFACE_SELECTION_ARTIFACT,
+      selected_surface: qaRuntime.surface.selected_surface,
+      journey_graph_artifact: 'qa-loop/qa-journey-graph.json',
+      gate_artifact: QA_GATE_V2_ARTIFACT
+    } : null,
+    safety: { mutation_policy: a.QA_MUTATION_POLICY, deployed_destructive_tests_allowed: 'never', credentials: 'temp_only_never_saved', ui_evidence: 'codex_surface_router_live_action_required_for_ui_e2e', visual_review: 'gpt_image_2_annotated_review_required_when_contract_requests_it' },
     checklist
   });
   await writeJsonAtomic(path.join(dir, QA_LOOP_VISUAL_EVIDENCE_ARTIFACT), buildQaLoopVisualEvidenceArtifact(mission, contract));
-  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile, executionProfile, codexNativeInvocation }));
+  await writeJsonAtomic(path.join(dir, 'qa-gate.json'), defaultQaGate(contract, { reportFile, executionProfile, codexNativeInvocation, qaRuntime }));
+  if (qaRuntime) await evaluateQaGateV2(dir).catch(() => undefined);
   await writeTextAtomic(path.join(dir, reportFile), qaReportTemplate(mission, contract, checklist));
   return { checklist_count: checklist.length, report_file: reportFile };
 }
@@ -449,8 +478,17 @@ export async function ensureQaLoopVisualEvidenceContract(dir: any, mission: any 
 
 export async function evaluateQaGate(dir: any) {
   const gate = await readJson(path.join(dir, 'qa-gate.json'), {});
+  const surfaceSelection = await readJson(path.join(dir, QA_SURFACE_SELECTION_ARTIFACT), null);
+  const selectedSurface = gate.ui_selected_surface || gate.qa_surface_selected || surfaceSelection?.selected_surface || null;
+  const expectedEvidenceSource = evidenceSourceForSurface(selectedSurface);
+  const gateV2 = gate.qa_contract_v2_required === true ? await evaluateQaGateV2(dir).catch((err: any) => ({
+    passed: false,
+    blockers: [`qa_gate_v2_evaluation_failed:${err?.message || String(err)}`],
+    unverified: []
+  })) : null;
   const reportFile = qaReportFileFromGate(gate);
   const reasons: any[] = [];
+  if (gateV2 && gateV2.passed !== true) reasons.push(...(gateV2.blockers || []));
   for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete']) {
     if (gate[key] !== true) reasons.push(`${key}_missing`);
   }
@@ -462,12 +500,16 @@ export async function evaluateQaGate(dir: any) {
   }
   if (gate.unsafe_external_side_effects === true) reasons.push('unsafe_external_side_effects');
   if (gate.ui_e2e_required === true) {
-    if (gate.chrome_extension_preflight_passed !== true) reasons.push('chrome_extension_preflight_missing');
-    if (gate.ui_chrome_extension_evidence !== true) reasons.push('ui_chrome_extension_evidence_missing');
-    if (gate.ui_computer_use_evidence === true) reasons.push('ui_computer_use_evidence_forbidden_for_web');
-    if (gate.ui_evidence_source !== CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE) reasons.push('ui_evidence_source_not_codex_chrome_extension');
+    if (!selectedSurface || selectedSurface === 'codex_chrome_extension') {
+      if (gate.chrome_extension_preflight_passed !== true) reasons.push('chrome_extension_preflight_missing');
+      if (gate.ui_chrome_extension_evidence !== true) reasons.push('ui_chrome_extension_evidence_missing');
+    } else if (gate.ui_live_surface_preflight_passed !== true) {
+      reasons.push('ui_live_surface_preflight_missing');
+    }
+    if (gate.ui_computer_use_evidence === true && selectedSurface !== 'codex_computer_use') reasons.push('ui_computer_use_evidence_forbidden_for_web');
+    if (expectedEvidenceSource && gate.ui_evidence_source !== expectedEvidenceSource) reasons.push(`ui_evidence_source_not_${expectedEvidenceSource}`);
     if (evidenceMentionsForbiddenBrowserAutomation({ evidence: gate.evidence, notes: gate.notes, ui_evidence_source: gate.ui_evidence_source })) reasons.push('forbidden_browser_automation_evidence');
-    if (evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
+    if (selectedSurface !== 'codex_computer_use' && evidenceMentionsForbiddenWebComputerUseEvidence({ evidence: gate.evidence, ui_evidence_source: gate.ui_evidence_source })) reasons.push('computer_use_web_evidence_forbidden');
     reasons.push(...await missingQaLoopVisualEvidence(dir, gate));
   } else if (gate.gpt_image_2_annotated_review_required === true) {
     reasons.push(...await missingQaLoopVisualEvidence(dir, gate));
@@ -487,7 +529,7 @@ export async function evaluateQaGate(dir: any) {
   if (!(await exists(path.join(dir, 'qa-ledger.json')))) reasons.push('qa_ledger_missing');
   const uniqueReasons = [...new Set(reasons)];
   const passed = gate.passed === true && uniqueReasons.length === 0;
-  const result = { checked_at: nowIso(), passed, reasons: uniqueReasons, gate };
+  const result = { checked_at: nowIso(), passed, reasons: uniqueReasons, gate, gate_v2: gateV2 };
   await writeJsonAtomic(path.join(dir, 'qa-gate.evaluated.json'), result);
   return result;
 }
@@ -580,9 +622,9 @@ CONTRACT:
 ${JSON.stringify(contract, null, 2)}
 ${imageContractText}${appHandoffText}${executionProfileText}
 VISUAL EVIDENCE CONTRACT:
-- For web UI QA, do not set chrome_extension_preflight_passed/ui_chrome_extension_evidence to true unless the Codex Chrome Extension path is ready and ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} records a real saved Chrome Extension screenshot artifact with path, sha256, and dimensions.
-- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK}, use Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the Chrome Extension screenshot. Record its path, sha256, model=gpt-image-2, provider=Codex App $imagegen, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
-- Do not substitute prose-only critique, Playwright/Selenium/Puppeteer/Browser Use screenshots, Computer Use browser screenshots, placeholder images, fake fixtures, or direct API fallback as full web UI visual evidence.
+- For UI QA, do not mark live UI evidence true unless qa-loop/qa-surface-selection.json selected the correct @Browser/@Chrome/@Computer surface and action/observation ledgers record real user-like actions.
+- If decision-contract.json answers set QA_VISUAL_REVIEW_IMAGEGEN_REQUIRED=${GPT_IMAGE_2_ANNOTATED_REVIEW_REQUIRED_ACK}, use Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to produce a real generated annotated review image from the selected-surface source screenshot. Record its path, sha256, model=gpt-image-2, provider=Codex App $imagegen, and source_screenshot_artifact in ${QA_LOOP_VISUAL_EVIDENCE_ARTIFACT} and qa-gate.json.
+- Do not substitute prose-only critique, Playwright/Selenium/Puppeteer screenshots, static screenshots, plugin cache, placeholder images, fake fixtures, or direct API fallback as full UI visual evidence.
 Previous tail:
 ${String(previous || '').slice(-2500)}
 `;
@@ -613,7 +655,7 @@ function qaChecklist(a: any) {
     ['preflight.roles', 'Map roles, permissions, protected areas.']
   ];
   if (qaUiRequired(a)) cases.push(
-    ['ui.chrome_extension_first', CODEX_WEB_VERIFICATION_POLICY],
+    ['ui.surface_router', CODEX_WEB_VERIFICATION_POLICY],
     ['ui.navigation', 'Check primary navigation, deep links, back/forward, refresh, and protected routes.'],
     ['ui.auth', 'Check login, logout, session expiry, unauthorized access, and role-specific visibility.'],
     ['ui.forms', 'Check required fields, validation, disabled states, success, and failure.'],
@@ -686,6 +728,8 @@ async function missingQaLoopVisualEvidence(dir: any, gate: any = {}) {
   const visual = await readJson(path.join(dir, QA_LOOP_VISUAL_EVIDENCE_ARTIFACT), null);
   const reasons: string[] = [];
   const uiRequired = gate.ui_e2e_required === true;
+  const selectedSurface = gate.ui_selected_surface || gate.qa_surface_selected || (gate.ui_chrome_extension_evidence === true ? 'codex_chrome_extension' : null);
+  const expectedSource = evidenceSourceForSurface(selectedSurface) || CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE;
   if (uiRequired) {
     const screenshot = visual?.chrome_extension_screenshot || {};
     if (gate.ui_chrome_extension_screenshot_captured !== true && !positiveVisualStatus(screenshot.status, ['captured', 'attached', 'verified'])) reasons.push('ui_chrome_extension_screenshot_missing');
@@ -711,7 +755,7 @@ async function missingQaLoopVisualEvidence(dir: any, gate: any = {}) {
     if (!screenshotPath) reasons.push('ui_chrome_extension_screenshot_artifact_missing');
     else reasons.push(...await imageEvidenceFileReasons(dir, screenshotPath, screenshotSha, 'ui_chrome_extension_screenshot', screenshotDims));
     const screenshotSource = firstNonEmpty(gate.ui_chrome_extension_screenshot_source, screenshot.evidence_source, gate.ui_evidence_source);
-    if (screenshotSource !== CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE) reasons.push('ui_chrome_extension_screenshot_source_not_codex_chrome_extension');
+    if (screenshotSource !== expectedSource) reasons.push(`ui_chrome_extension_screenshot_source_not_${expectedSource}`);
   }
 
   const review = visual?.gpt_image_2_annotated_review || {};
@@ -816,4 +860,12 @@ function qaReportTemplate(mission: any, contract: any, checklist: any) {
 function positiveCount(value: any) {
   const n = Number(value || 0);
   return Number.isFinite(n) && n > 0;
+}
+
+function evidenceSourceForSurface(surface: any): string | null {
+  const value = String(surface || '').trim() as QaInteractionSurface;
+  if (value === 'codex_in_app_browser') return CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE;
+  if (value === 'codex_chrome_extension') return CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE;
+  if (value === 'codex_computer_use') return CODEX_COMPUTER_USE_EVIDENCE_SOURCE;
+  return null;
 }

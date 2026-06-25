@@ -122,6 +122,28 @@ test('QA Loop visual evidence gate accepts real Chrome screenshot and Codex App 
       height: 1
     }
   }, null, 2)}\n`);
+  await fs.appendFile(path.join(missionDir, 'qa-loop', 'action-ledger.jsonl'), `${JSON.stringify({
+    schema: 'sks.qa-loop-action.v2',
+    ts: new Date().toISOString(),
+    mission_id: prepared.mission_id,
+    surface: 'codex_chrome_extension',
+    kind: 'click',
+    status: 'completed',
+    real: true,
+    journey_fingerprint: 'fixture-chrome-visual-flow',
+    data: { selector: 'fixture-save-button' }
+  })}\n`);
+  await fs.appendFile(path.join(missionDir, 'qa-loop', 'observation-ledger.jsonl'), `${JSON.stringify({
+    schema: 'sks.qa-loop-observation.v2',
+    ts: new Date().toISOString(),
+    mission_id: prepared.mission_id,
+    surface: 'codex_chrome_extension',
+    kind: 'visual_state',
+    status: 'observed',
+    real: true,
+    journey_fingerprint: 'fixture-chrome-visual-flow',
+    data: { artifact_path: 'qa-loop/chrome-extension-screenshot.png' }
+  })}\n`);
 
   const evaluated = await evaluateQaGate(missionDir);
   assert.equal(evaluated.passed, true);

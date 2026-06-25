@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 
+
+## [4.2.1] - 2026-06-25
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Added an explicit `publish:ignore-scripts` / `publish:npm` release wrapper so the real npm publish path still runs the full prepublish gate before `npm publish --ignore-scripts`.
+
 ## [4.2.0] - 2026-06-24
 
 ### Added

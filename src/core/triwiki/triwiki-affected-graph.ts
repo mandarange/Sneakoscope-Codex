@@ -17,6 +17,7 @@ export interface TriWikiAffectedGraphInput {
   baseRef?: string | null;
   headRef?: string | null;
   full?: boolean;
+  includeProofLookup?: boolean;
 }
 
 export interface TriWikiAffectedGraph {
@@ -58,7 +59,8 @@ export function computeTriWikiAffectedGraph(input: TriWikiAffectedGraphInput): T
   const selected = impactMap.impacts.filter((impact) => input.full || impact.modules.some((moduleId) => affectedModules.has(moduleId)) || conservativeReason === 'root_release_surface_changed');
   const gatePacks = new Set<string>();
   for (const impact of selected) gatePacks.add(impact.gate_pack);
-  const proofLookup = selected.map((impact) => {
+  const includeProofLookup = input.includeProofLookup !== false;
+  const proofLookup = includeProofLookup ? selected.map((impact) => {
     const cacheKey = computeTriWikiCacheKey({
       root: input.root,
       id: impact.gate_id,
@@ -69,7 +71,7 @@ export function computeTriWikiAffectedGraph(input: TriWikiAffectedGraphInput): T
     });
     const hit = readReusableTriWikiProofCard({ root: input.root, subjectId: impact.gate_id, cacheKey: cacheKey.key });
     return { impact, hit };
-  });
+  }) : [];
   const reusedProofs = proofLookup
     .filter((row) => row.hit.hit && row.hit.card && row.hit.path)
     .map((row) => ({ gate_id: row.impact.gate_id, proof_id: row.hit.card!.proof_id, path: row.hit.path! }))

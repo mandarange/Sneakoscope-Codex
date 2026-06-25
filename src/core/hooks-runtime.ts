@@ -590,7 +590,7 @@ function clarificationAnswerToolAllowed(payload: any = {}) {
   if (!payloadMentionsAnswersJson(payload)) return false;
   if (!command) return true;
   if (/\bpipeline\s+answer\b/i.test(command)) return true;
-  return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:npm|doctor|team|qa-loop|wiki|db|test)\b/i.test(command);
+  return !/\b(npm|git|selftest|packcheck|release:check|publish:dry|publish:ignore-scripts|publish:npm|doctor|team|qa-loop|wiki|db|test)\b/i.test(command);
 }
 
 function payloadMentionsAnswersJson(payload: any = {}) {

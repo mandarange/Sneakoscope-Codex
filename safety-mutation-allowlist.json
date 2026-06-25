@@ -1034,10 +1034,34 @@
       "reason": "Release/check script writes only scoped temporary slot telemetry snapshots under mkdtemp for stale detection proof."
     },
     {
-      "file": "src/core/mad-db/mad-db-result-lifecycle.ts",
-      "symbol": "markPendingHookResolved",
+      "file": "src/core/mad-db/mad-db-lock.ts",
+      "symbol": "withMadDbLock",
       "token": "fs.rm",
-      "reason": "MAD-DB result lifecycle removes only the scoped latest pending-hook pointer after terminal result ledger resolution."
+      "reason": "MAD-DB lock cleanup removes only the scoped mission-local runtime lock directory after the guarded operation exits."
+    },
+    {
+      "file": "src/core/mad-db/mad-db-recovery.ts",
+      "symbol": "quarantineStaleMadDbRuntimeProfiles",
+      "token": "rename",
+      "reason": "MAD-DB recovery quarantines only stale mission-local runtime Codex profile files before restoring read-only operation."
+    },
+    {
+      "file": "src/core/mad-db/mad-db-recovery.ts",
+      "symbol": "quarantineStaleMadDbRuntimeProfiles",
+      "token": "fs.rm",
+      "reason": "MAD-DB recovery removes only stale mission-local runtime Codex profile files when quarantine rename fails."
+    },
+    {
+      "file": "src/core/mad-db/mad-db-runtime-profile.ts",
+      "symbol": "closeMadDbRuntimeProfile",
+      "token": "rename",
+      "reason": "MAD-DB close moves only the scoped mission-local runtime Codex profile aside before verifying read-only restoration."
+    },
+    {
+      "file": "src/core/mad-db/mad-db-runtime-profile.ts",
+      "symbol": "closeMadDbRuntimeProfile",
+      "token": "fs.rm",
+      "reason": "MAD-DB close removes only the scoped mission-local runtime Codex profile when quarantine rename fails."
     },
     {
       "file": "src/core/daemon/sksd-ipc.ts",

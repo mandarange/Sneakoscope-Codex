@@ -35,6 +35,8 @@ export interface CodexReliabilityReport {
   heartbeat_count: number
   repaired_tool_result_count: number
   no_duplicate_streamed_output: boolean
+  model_capacity_retry_count: number
+  selected_model_capacity_fallback: boolean
   blockers: string[]
 }
 
@@ -48,6 +50,8 @@ export interface CodexReliabilityAttemptReport {
   retry_reason: string | null
   idle_timeout: boolean
   fatal_error: boolean
+  model_capacity_error: boolean
+  capacity_fallback_hint: string | null
   repaired_tool_result_count: number
   heartbeat_count: number
   blockers: string[]
@@ -95,6 +99,7 @@ export async function runWithCodexReliabilityShield(
   }
 
   const blockers = attempts.flatMap((attempt) => attempt.blockers)
+  const modelCapacityRetryCount = attempts.filter((attempt) => attempt.model_capacity_error && attempt.retryable).length
   const report: CodexReliabilityReport = {
     schema: CODEX_RELIABILITY_SHIELD_SCHEMA,
     generated_at: nowIso(),
@@ -110,6 +115,8 @@ export async function runWithCodexReliabilityShield(
     heartbeat_count: attempts.reduce((sum, attempt) => sum + attempt.heartbeat_count, 0),
     repaired_tool_result_count: attempts.reduce((sum, attempt) => sum + attempt.repaired_tool_result_count, 0),
     no_duplicate_streamed_output: attempts.slice(0, -1).every((attempt) => attempt.meaningful_event_count === 0),
+    model_capacity_retry_count: modelCapacityRetryCount,
+    selected_model_capacity_fallback: selectedAttempt > 1 && modelCapacityRetryCount > 0,
     blockers
   }
   return {
@@ -125,7 +132,8 @@ export function evaluateCodexReliabilityAttempt(
   attempt: number
 ): CodexReliabilityAttemptReport {
   const meaningful = events.filter(isMeaningfulEvent)
-  const fatal = hasFatalError(result, events)
+  const modelCapacity = isCodexModelCapacityError(result, events)
+  const fatal = !modelCapacity && hasFatalError(result, events)
   const idle = hasIdleTimeout(events, policy.idleTimeoutMs)
   const empty = events.length === 0 || (!String(result.finalResponse || '').trim() && meaningful.length === 0)
   const partial = meaningful.length > 0 && !result.structuredOutput
@@ -133,14 +141,15 @@ export function evaluateCodexReliabilityAttempt(
   let retryable = false
   let retryReason: string | null = null
 
-  if (idle && partial) blockers.push('codex_reliability_idle_after_partial_output')
-  if (partial && !idle) blockers.push('codex_reliability_partial_output_without_structured_result')
+  if (modelCapacity) blockers.push('codex_model_capacity_unavailable')
+  if (!modelCapacity && idle && partial) blockers.push('codex_reliability_idle_after_partial_output')
+  if (!modelCapacity && partial && !idle) blockers.push('codex_reliability_partial_output_without_structured_result')
   if (fatal) blockers.push('codex_reliability_fatal_error_no_retry')
 
-  if (!fatal && idle && meaningful.length === 0) {
+  if (!modelCapacity && !fatal && idle && meaningful.length === 0) {
     retryable = true
     retryReason = 'stream_idle_before_meaningful_event'
-  } else if (!fatal && empty) {
+  } else if (!modelCapacity && !fatal && empty) {
     retryable = true
     retryReason = 'empty_sdk_result_before_meaningful_event'
   }
@@ -155,10 +164,26 @@ export function evaluateCodexReliabilityAttempt(
     retry_reason: retryReason,
     idle_timeout: idle,
     fatal_error: fatal,
+    model_capacity_error: modelCapacity,
+    capacity_fallback_hint: null,
     repaired_tool_result_count: 0,
     heartbeat_count: 0,
     blockers
   }
+}
+
+export function isCodexModelCapacityError(result: CodexReliabilityAttemptResult, events: any[]) {
+  const text = [
+    String(result.finalResponse || ''),
+    ...(Array.isArray(result.blockers) ? result.blockers : []),
+    ...events.map((event) => [
+      event?.error?.message,
+      event?.message,
+      event?.item?.text,
+      event?.raw?.failed_event?.error?.message
+    ].filter(Boolean).join('\n'))
+  ].join('\n')
+  return /selected model is at capacity|model(?:\s+[\w.-]+)?\s+is\s+at\s+capacity|try a different model|capacity(?:\s+is)?\s+exhausted|temporarily at capacity/i.test(text)
 }
 
 export function repairToolCallSequence(events: any[]) {

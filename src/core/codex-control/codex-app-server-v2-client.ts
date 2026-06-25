@@ -5,6 +5,17 @@ import { resolveCodexRuntime, type CodexRuntimeIdentity } from '../codex-runtime
 type JsonRpcId = number | string;
 type JsonObject = Record<string, unknown>;
 
+export interface CodexAppServerApprovalPolicy {
+  readonly commandExecution?: (params: JsonObject) => JsonObject;
+  readonly fileChange?: (params: JsonObject) => JsonObject;
+  readonly permissions?: (params: JsonObject) => JsonObject;
+  readonly toolRequestUserInput?: (params: JsonObject) => JsonObject;
+  readonly dynamicToolCall?: (params: JsonObject) => JsonObject;
+  readonly mcpElicitation?: (params: JsonObject) => JsonObject;
+  readonly attestation?: (params: JsonObject) => JsonObject;
+  readonly chatgptAuthTokensRefresh?: (params: JsonObject) => JsonObject;
+}
+
 interface PendingRequest {
   readonly method: string;
   readonly resolve: (value: unknown) => void;
@@ -26,6 +37,7 @@ export interface CodexAppServerV2ClientOptions {
   readonly env?: NodeJS.ProcessEnv;
   readonly timeoutMs?: number;
   readonly currentTimeProvider?: () => Date;
+  readonly approvalPolicy?: CodexAppServerApprovalPolicy;
 }
 
 export interface CodexAppServerThreadListParams {
@@ -53,10 +65,12 @@ export class CodexAppServerV2Client {
   readonly cwd: string;
   readonly timeoutMs: number;
   readonly currentTimeProvider: () => Date;
+  readonly approvalPolicy: CodexAppServerApprovalPolicy;
   child: ChildProcessWithoutNullStreams | null = null;
   nextId = 1;
   pending = new Map<JsonRpcId, PendingRequest>();
   notifications: JsonObject[] = [];
+  listeners = new Set<(event: JsonObject) => void>();
   stdoutBuffer = '';
   stderr = '';
 
@@ -67,6 +81,7 @@ export class CodexAppServerV2Client {
     this.cwd = options.cwd || process.cwd();
     this.timeoutMs = Number(options.timeoutMs || 20_000);
     this.currentTimeProvider = options.currentTimeProvider || (() => new Date());
+    this.approvalPolicy = options.approvalPolicy || {};
   }
 
   async initialize(): Promise<unknown> {
@@ -83,12 +98,20 @@ export class CodexAppServerV2Client {
         optOutNotificationMethods: []
       }
     });
-    this.notify('notifications/initialized', {});
+    this.notify('initialized', {});
     return result;
   }
 
   async listThreads(params: CodexAppServerThreadListParams = {}): Promise<unknown> {
     return await this.request('thread/list', normalizeThreadListParams(params));
+  }
+
+  async startThread(params: JsonObject = {}): Promise<unknown> {
+    return await this.request('thread/start', params);
+  }
+
+  async resumeThread(params: JsonObject = {}): Promise<unknown> {
+    return await this.request('thread/resume', params);
   }
 
   async searchThreads(searchTerm: string, params: Omit<CodexAppServerThreadListParams, 'searchTerm'> = {}): Promise<unknown> {
@@ -97,6 +120,46 @@ export class CodexAppServerV2Client {
 
   async readThread(threadId: string, includeTurns = false): Promise<unknown> {
     return await this.request('thread/read', { threadId, includeTurns });
+  }
+
+  async startTurn(params: JsonObject = {}): Promise<unknown> {
+    return await this.request('turn/start', params);
+  }
+
+  async steerTurn(params: JsonObject = {}): Promise<unknown> {
+    return await this.request('turn/steer', params);
+  }
+
+  async interruptTurn(params: JsonObject = {}): Promise<unknown> {
+    return await this.request('turn/interrupt', params);
+  }
+
+  onEvent(listener: (event: JsonObject) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  waitForNotification(methods: string | readonly string[], timeoutMs = this.timeoutMs): Promise<JsonObject> {
+    const expected = new Set(Array.isArray(methods) ? methods.map(String) : [String(methods)]);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        dispose();
+        reject(new Error(`Timed out waiting for app-server notification: ${Array.from(expected).join(', ')}`));
+      }, timeoutMs);
+      timer.unref?.();
+      const dispose = this.onEvent((event) => {
+        if (event && expected.has(String(event.method || ''))) {
+          clearTimeout(timer);
+          dispose();
+          resolve(event);
+        }
+      });
+    });
+  }
+
+  async waitForTurnCompletion(threadId: string, turnId?: string | null, timeoutMs = this.timeoutMs): Promise<JsonObject> {
+    const expected = turnId ? ['turn/completed', 'thread/closed', 'thread/status/changed'] : ['turn/completed', 'thread/closed'];
+    return await this.waitForNotification(expected, timeoutMs);
   }
 
   start(): void {
@@ -155,7 +218,11 @@ export class CodexAppServerV2Client {
       } else if (message.id !== undefined && typeof message.method === 'string') {
         void this.respondToServerRequest(message);
       } else {
-        this.notifications.push({ ...message, received_at: nowIso() });
+        const event = { ...message, received_at: nowIso() };
+        this.notifications.push(event);
+        for (const listener of this.listeners) {
+          try { listener(event); } catch {}
+        }
       }
     }
   }
@@ -166,6 +233,38 @@ export class CodexAppServerV2Client {
     try {
       if (method === 'currentTime/read') {
         this.write({ jsonrpc: '2.0', id, result: currentTimeResponse(this.currentTimeProvider()) });
+        return;
+      }
+      if (method === 'item/commandExecution/requestApproval' || method === 'commandExecution/requestApproval') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.commandExecution?.(message.params as JsonObject) || { decision: 'cancel' } });
+        return;
+      }
+      if (method === 'item/fileChange/requestApproval' || method === 'fileChange/requestApproval') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.fileChange?.(message.params as JsonObject) || { decision: 'cancel' } });
+        return;
+      }
+      if (method === 'item/permissions/requestApproval' || method === 'permissions/requestApproval') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.permissions?.(message.params as JsonObject) || { permissions: { network: { enabled: false }, fileSystem: { read: [], write: [], entries: [] } }, scope: 'turn', strictAutoReview: true } });
+        return;
+      }
+      if (method === 'item/tool/requestUserInput') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.toolRequestUserInput?.(message.params as JsonObject) || { answers: {} } });
+        return;
+      }
+      if (method === 'item/tool/call') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.dynamicToolCall?.(message.params as JsonObject) || { contentItems: [], success: false } });
+        return;
+      }
+      if (method === 'mcpServer/elicitation/request') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.mcpElicitation?.(message.params as JsonObject) || { contentItems: [], success: false } });
+        return;
+      }
+      if (method === 'attestation/generate') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.attestation?.(message.params as JsonObject) || { decision: 'cancel' } });
+        return;
+      }
+      if (method === 'account/chatgptAuthTokens/refresh') {
+        this.write({ jsonrpc: '2.0', id, result: this.approvalPolicy.chatgptAuthTokensRefresh?.(message.params as JsonObject) || { ok: false } });
         return;
       }
       this.write({
@@ -228,12 +327,14 @@ export async function createCodexAppServerV2Client(
     env?: NodeJS.ProcessEnv;
     timeoutMs?: number;
     currentTimeProvider?: () => Date;
+    approvalPolicy?: CodexAppServerApprovalPolicy;
   } = { command: runtime.identity.realpath };
   if (options.args !== undefined) clientOptions.args = options.args;
   if (options.cwd !== undefined) clientOptions.cwd = options.cwd;
   if (options.env !== undefined) clientOptions.env = options.env;
   if (options.timeoutMs !== undefined) clientOptions.timeoutMs = options.timeoutMs;
   if (options.currentTimeProvider !== undefined) clientOptions.currentTimeProvider = options.currentTimeProvider;
+  if (options.approvalPolicy !== undefined) clientOptions.approvalPolicy = options.approvalPolicy;
   return {
     client: new CodexAppServerV2Client(clientOptions),
     runtimeIdentity: runtime.identity

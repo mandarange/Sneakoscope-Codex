@@ -17,6 +17,8 @@ import { runCodexAppHandoff, qaLoopShouldRequestAppHandoff } from '../codex-app/
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 import { writeCodexAccountUsageArtifacts } from '../usage/codex-account-usage.js';
 import { buildQaLoopBudgetPolicy, selectQaLoopEscalatedEffort } from '../qa-loop/qa-loop-budget-policy.js';
+import { initializeQaRuntimeArtifacts } from '../qa-loop/qa-runtime-artifacts.js';
+import { DEFAULT_QA_MAX_CYCLES, QA_SURFACE_SELECTION_ARTIFACT } from '../qa-loop/qa-types.js';
 import { writeCodexModelEffortCapabilityArtifact } from '../codex-control/codex-model-capabilities.js';
 import { discoverImageArtifactsInDir, writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 import { pluginAppTemplatePolicy } from '../codex-plugins/codex-plugin-json.js';
@@ -37,7 +39,7 @@ export async function qaLoopCommand(sub: any, args: any = []) {
 Usage:
   sks qa-loop prepare "target"
   sks qa-loop answer <mission-id|latest> <answers.json>
-  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--app-handoff] [--app-handoff-required] [--app-handoff-launch] [--app-handoff-artifact-only]
+  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--surface auto|codex_in_app_browser|codex_chrome_extension|codex_computer_use] [--report-only] [--app-handoff] [--app-handoff-required] [--app-handoff-launch] [--app-handoff-artifact-only]
   sks qa-loop app-confirm <mission-id|latest> --verdict pass|fail --notes "..."
   sks qa-loop status <mission-id|latest> [--desktop]
 `);
@@ -117,6 +119,17 @@ async function qaLoopRun(args: any) {
   const contract = await readJson(contractPath, {});
   if (!(await exists(path.join(dir, 'qa-ledger.json')))) await writeQaLoopArtifacts(dir, mission, contract);
   else await ensureQaLoopVisualEvidenceContract(dir, mission, contract);
+  const requestedSurface = readFlagValue(args, '--surface', 'auto');
+  const reportOnly = flag(args, '--report-only');
+  await initializeQaRuntimeArtifacts(dir, {
+    ...contract,
+    prompt: mission.prompt || contract.prompt,
+    mission_id: id
+  }, {
+    missionId: id,
+    requestedSurface,
+    reportOnly
+  }).catch(() => null);
   const safetyScan = await scanDbSafety(root);
   if (!safetyScan.ok) {
     console.error('QA-LOOP cannot run: SKS safety scan found unsafe project data-tool configuration.');
@@ -124,7 +137,7 @@ async function qaLoopRun(args: any) {
     process.exitCode = 2;
     return;
   }
-  const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || 8;
+  const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || DEFAULT_QA_MAX_CYCLES;
   const maxCycles = readMaxCycles(args, fallbackCycles);
   const requestedAgents = readBoundedIntegerFlag(args, '--agents', 3, 1, 20);
   const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', requestedAgents, 1, 20);
@@ -132,15 +145,18 @@ async function qaLoopRun(args: any) {
   const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
   const profile = readFlagValue(args, '--profile', 'sks-logic-high') || 'sks-logic-high';
-  const writeMode = readFlagValue(args, '--write-mode', flag(args, '--parallel-write') ? 'parallel' : 'off');
-  const applyPatches = flag(args, '--apply-patches');
+  const mock = flag(args, '--mock');
+  const sourceFixesEnabled = !reportOnly;
+  const writeMode = readFlagValue(args, '--write-mode', sourceFixesEnabled && !mock ? (flag(args, '--parallel-write') ? 'parallel' : 'proof-safe') : 'off');
+  const applyPatches = sourceFixesEnabled && !mock && !flag(args, '--no-fix');
   const dryRunPatches = flag(args, '--dry-run-patches') || flag(args, '--dryrun-patches');
   const maxWriteAgents = readBoundedIntegerFlag(args, '--max-write-agents', Math.min(requestedAgents, 5), 1, 20);
-  const mock = flag(args, '--mock');
   const qaGate = await readJson(path.join(dir, 'qa-gate.json'), {});
   const reportFile = qaGate.qa_report_file;
   const executionProfile = await readJson(path.join(dir, 'qa-loop', 'execution-profile.json'), null);
   const uiRequired = qaUiRequired(contract.answers || {});
+  const surfaceSelection = await readJson(path.join(dir, QA_SURFACE_SELECTION_ARTIFACT), null);
+  const selectedSurface = surfaceSelection?.selected_surface || null;
   const gptImage2ReviewRequired = qaGptImage2AnnotatedReviewRequired(contract, mission.prompt);
   const capabilityArtifact = await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), report: null }));
   const usageArtifact = await writeCodexAccountUsageArtifacts(root, { missionId: id }).catch((err: any) => ({ error: err?.message || String(err), snapshot: null }));
@@ -236,7 +252,7 @@ async function qaLoopRun(args: any) {
       return;
     }
   }
-  if (uiRequired && !mock) {
+  if (uiRequired && !mock && selectedSurface === 'codex_chrome_extension') {
     const chrome = await codexChromeExtensionStatus();
     if (!chrome.ok) {
       const blockedGate = {
@@ -266,7 +282,7 @@ async function qaLoopRun(args: any) {
       await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: blockedGate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], statusHint: 'blocked', blockers: blockedGate.blockers, command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
       await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_CHROME_EXTENSION_SETUP_REQUIRED', questions_allowed: true });
       if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked', blocker: 'codex_chrome_extension_setup_required', mission_id: id, chrome_extension: chrome, gate: blockedGate }, null, 2));
-      console.error('QA-LOOP blocked: install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming.');
+      console.error('QA-LOOP blocked: this journey was routed to @Chrome, but the Codex Chrome Extension is not connected. Install/enable it, then resume.');
       console.error(chrome.docs_url);
       process.exitCode = 2;
       return;

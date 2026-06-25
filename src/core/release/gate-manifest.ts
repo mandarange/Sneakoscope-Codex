@@ -21,6 +21,7 @@ export const FORBIDDEN_RECURSIVE_GATES = new Set<string>([
   'release:check:dynamic:execute',
   'release:real-check',
   'release:publish',
+  'publish:ignore-scripts',
   'publish:npm',
   'publish:dry',
   'prepublishOnly'
