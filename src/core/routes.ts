@@ -1,6 +1,8 @@
 import { PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS, PRODUCT_DESIGN_PLUGIN, PRODUCT_DESIGN_REQUIRED_SKILLS, productDesignPluginPolicyText } from './product-design-plugin.js';
+import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engineering-policy.js';
 
 export { productDesignPluginPolicyText };
+export { leanEngineeringCompactText, leanEngineeringLongText };
 
 const REFLECTION_SKILL_NAME = 'reflection';
 export const SOLUTION_SCOUT_SKILL_NAME = 'solution-scout';
@@ -32,7 +34,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|research|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|ultra-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|research|seo-geo-optimizer|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|ultra-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE = 'codex_in_app_browser';
 export const CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE = 'codex_chrome_extension';
@@ -194,6 +196,8 @@ export const RECOMMENDED_SKILLS = [
   'pipeline-runner',
   'solution-scout',
   'context7-docs',
+  'ultra-search',
+  'search-visibility-core',
   'seo-geo-optimizer',
   'autoresearch-loop',
   'performance-evaluator',
@@ -301,15 +305,15 @@ export function chatCaptureIntakeText() {
 }
 
 export function noUnrequestedFallbackCodePolicyText() {
-  return 'No unrequested fallback implementation code: every pipeline stage, executor, reviewer, auto-review profile, and MAD/MAD-SKS invocation must implement only the requested contract. Do not invent alternate code paths, substitute features, compatibility shims, mock behavior, or hidden fallbacks unless the user explicitly requested them or the sealed decision contract names them; if the requested path is impossible, block with evidence instead.';
+  return leanEngineeringCompactText();
 }
 
 export function outcomeRubricPolicyText() {
-  return 'Outcome rubric policy: before adding pipeline stages, use the existing Proof Field, route gate, reflection, and Honest Mode evidence as a compact rubric: goal fit, minimum touched surface, bounded verification, and explicit escalation triggers. Apply Hyperplan-derived adversarial lenses inside that rubric: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Prefer deleting or skipping unrelated work with evidence over adding a background loop; only add a new mechanism when it reduces net route weight or closes a proven gate gap.';
+  return 'Outcome rubric policy: use the Lean Engineering Policy plus existing Proof Field, route gate, reflection, and Honest Mode evidence as the compact rubric: goal fit, minimum touched surface, bounded verification, and explicit escalation triggers.';
 }
 
 export function speedLanePolicyText() {
-  return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. If `execution_lane.lane` is `proof_field_fast_lane`, keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode while skipping Team debate, fresh executor teams, broad route rework, and unrelated checks. If blockers include database, security, visual-forensic, unknown surface, broad change set, failed verification, or unsupported claims, fail closed to the normal Team/Honest path.';
+  return 'Proof Field speed lane policy: after the intended write scope is known, run or mentally apply `sks proof-field scan --intent "<goal>" --changed <files>`. Fast lanes keep the parent-owned minimal patch, listed verification, TriWiki validate, and Honest Mode; DB, security, visual-forensic, unknown surface, broad changes, failed verification, or unsupported claims fail closed to the normal Team/Honest path.';
 }
 
 export function hasFromChatImgSignal(prompt: any = '') {
@@ -566,12 +570,41 @@ export const ROUTES = [
     examples: ['$Research investigate this idea']
   },
   {
+    id: 'UltraSearch',
+    command: '$Ultra-Search',
+    mode: 'ULTRA_SEARCH',
+    route: 'provider-independent source intelligence',
+    description: 'Run UltraSearch source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring xAI/Grok.',
+    requiredSkills: ['ultra-search', 'pipeline-runner', 'context7-docs', 'honest-mode'],
+    dollarAliases: ['$UltraSearch'],
+    lifecycle: ['source_intent', 'query_variants', 'provider_plan', 'source_ledgers', 'claim_ledgers', 'ultra_search_gate', 'honest_mode'],
+    context7Policy: 'if_external_docs',
+    reasoningPolicy: 'high',
+    stopGate: 'ultra-search/ultra-search-gate.json',
+    cliEntrypoint: 'sks ultra-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai',
+    examples: ['$Ultra-Search run "current package release notes"', '$UltraSearch x "site:x.com product launch"']
+  },
+  {
+    id: 'SEOGEOOptimizer',
+    command: '$SEO-GEO-OPTIMIZER',
+    mode: 'SEO_GEO_OPTIMIZER',
+    route: 'search visibility optimization audit/apply/verify',
+    description: 'Unified SEO/GEO optimizer route for Search Engine Optimization and Generative Engine Optimization. Uses one shared kernel with mode-specific evidence, gates, safe apply, rollback, and Completion Proof. Not a ranking, traffic, or AI citation guarantee.',
+    requiredSkills: ['seo-geo-optimizer', 'search-visibility-core', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    lifecycle: ['doctor', 'read_only_audit', 'mode_specific_evidence', 'mutation_plan', 'explicit_apply_only', 'rollback_manifest', 'source_verify', 'seo_or_geo_gate', 'completion_proof', 'honest_mode'],
+    context7Policy: 'if_external_docs',
+    reasoningPolicy: 'high',
+    stopGate: 'seo-gate.json|geo-gate.json',
+    cliEntrypoint: 'sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo',
+    examples: ['$SEO-GEO-OPTIMIZER audit this site', 'sks seo-geo-optimizer audit --mode seo --target package --json', 'sks seo-geo-optimizer apply latest --mode geo --include-llms-txt --apply']
+  },
+  {
     id: 'AutoResearch',
     command: '$AutoResearch',
     mode: 'AUTORESEARCH',
     route: 'iterative experiment loop',
     description: 'Program, hypothesize, test, measure, keep/discard, falsify, and report evidence.',
-    requiredSkills: ['autoresearch', 'autoresearch-loop', 'seo-geo-optimizer', 'performance-evaluator', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
+    requiredSkills: ['autoresearch', 'autoresearch-loop', 'performance-evaluator', 'pipeline-runner', 'context7-docs', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['experiment_ledger', 'metric', 'keep_or_discard', 'falsification', 'post_route_reflection', 'honest_conclusion'],
     context7Policy: 'required',
     reasoningPolicy: 'xhigh',
@@ -706,7 +739,7 @@ export const COMMAND_CATALOG = [
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
   { name: 'codex-lb', usage: 'sks codex-lb status|health|metrics|doctor|circuit|repair|setup ...', description: 'Configure, health-check, repair, and record circuit evidence for codex-lb provider auth without confusing ChatGPT OAuth and proxy keys.' },
   { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks naruto dashboard latest | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD and Naruto lane UI.' },
-  { name: 'tmux', usage: 'sks tmux [--json]', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
+  { name: 'tmux', usage: 'removed-runtime migration notice (replacement: zellij)', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
   { name: 'mad-sks', usage: 'sks mad-sks plan|run|status|proof ... | sks --mad [--high]', description: 'Open or inspect MAD-SKS scoped permission workflows and the Zellij permission launcher.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Naruto.' },
@@ -739,6 +772,7 @@ export const COMMAND_CATALOG = [
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
   { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
+  { name: 'seo-geo-optimizer', usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--json]', description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates and proof.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh agent Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
@@ -782,6 +816,7 @@ export function routeByDollarCommand(commandName: any): any {
   return ROUTES.find((route: any) => [
     dollarSkillName(route.command),
     ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
+    ...(route.hiddenDollarAliases || []).map((alias: any) => dollarSkillName(alias)),
     ...(route.appSkillAliases || [])
   ].includes(key)) || null;
 }
@@ -883,6 +918,26 @@ export function looksLikeImageUxReviewRequest(prompt: any = '') {
   return commandCue || (reviewCue && imagegenCue);
 }
 
+export function looksLikeGeoLocationRequest(prompt: any = '') {
+  return /\b(?:geolocation|geoip|geo\s*ip|map\s+coordinates?|coordinates?|latitude|longitude|location\s+permission|cdn\s+edge\s+geography|regional?\s+redirect|country\s+routing|지도\s*좌표|위치\s*권한|지역\s*리다이렉트|국가별\s*라우팅)\b/i.test(String(prompt || ''));
+}
+
+export function looksLikeSeoRequest(prompt: any = '') {
+  const text = String(prompt || '');
+  return /\b(?:SEO|search\s+engine\s+optimization|technical\s+seo|canonical|sitemap|robots\.txt|hreflang|structured\s+data|json-ld|indexability|crawlability|metadata|meta\s+description|npm\s+seo|package\s+seo|검색\s*엔진\s*최적화|검색\s*노출|사이트맵|캐노니컬|구조화\s*데이터)\b/i.test(text);
+}
+
+export function looksLikeGenerativeEngineOptimizationRequest(prompt: any = '') {
+  if (looksLikeGeoLocationRequest(prompt)) return false;
+  const text = String(prompt || '');
+  return /\b(?:GEO|generative\s+engine\s+optimization|AI\s+(?:answer|search)\s+(?:visibility|discoverability)|LLM\s+(?:citation|answer|visibility|discoverability)|answerability|entity\s+(?:facts?|clarity)|claim\s+evidence|crawler\s+policy|OAI-SearchBot|GPTBot|ChatGPT-User|Claude-SearchBot|ClaudeBot|Claude-User|llms\.txt|AI\s*검색\s*가시성|AI\s*답변\s*가시성|생성형\s*엔진\s*최적화)\b/i.test(text);
+}
+
+export function looksLikeUltraSearchRequest(prompt: any = '') {
+  const text = String(prompt || '');
+  return /\b(?:UltraSearch|Ultra-Search|ultra\s*search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search)\b|울트라\s*서치|소스\s*인텔리전스/i.test(text);
+}
+
 export function routePrompt(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
   const command = dollarCommand(text);
@@ -913,7 +968,10 @@ export function routePrompt(prompt: any): any {
   if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Naruto');
   if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Team');
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
-  if (/\b(autoresearch|experiment|benchmark|SEO|GEO|ranking|optimi[sz]e|improve metric|discoverability|visibility|github stars?|npm downloads?|검색|노출|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
+  if (looksLikeUltraSearchRequest(text) && !looksLikeCodeChangingWork(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('UltraSearch');
+  if (looksLikeGenerativeEngineOptimizationRequest(text)) return routeById('SEOGEOOptimizer');
+  if (looksLikeSeoRequest(text)) return routeById('SEOGEOOptimizer');
+  if (/\b(autoresearch|experiment|benchmark|ranking|optimi[sz]e|improve metric|github stars?|npm downloads?|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
   if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return routeById('Research');
   if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return routeById('Wiki');
   if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return routeById('GX');
@@ -992,6 +1050,8 @@ export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
   if (route.id === 'PPT') return false;
   if (route.id === 'ImageUXReview') return false;
+  if (route.id === 'UltraSearch') return false;
+  if (route.id === 'SEOGEOOptimizer') return false;
   if (route.id === 'MadDB') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
   if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
@@ -1018,7 +1078,7 @@ export function simpleGitOnlyRouteId(prompt: any = '') {
 
 export function reflectionRequiredForRoute(route: any) {
   const id = String(route?.id || route?.mode || route?.route || route || '').replace(/^\$/, '');
-  return /^(team|naruto|shadowclone|shadow-clone|kagebunshin|kage-bunshin|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|db|database|madsks|mad-sks|maddb|mad-db|gx)$/i.test(id);
+  return /^(team|naruto|shadowclone|shadow-clone|kagebunshin|kage-bunshin|qaloop|qa-loop|ppt|imageuxreview|image-ux-review|research|autoresearch|seo|geo|db|database|madsks|mad-sks|maddb|mad-db|gx)$/i.test(id);
 }
 
 export function looksLikeCodeChangingWork(prompt: any = '') {
@@ -1066,8 +1126,10 @@ export function routeReasoning(route: any, prompt: any = '') {
   if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\$MAD-DB\b|\bmad-sks\b|\bmadsks\b|\bmad-db\b|\bmaddb\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
   if (route?.id === 'Team' || route?.id === 'Naruto') return teamRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
+  if (route?.id === 'UltraSearch') return reasoning('high', 'source_intelligence_route');
+  if (route?.id === 'SEOGEOOptimizer') return reasoning('high', 'search_visibility_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');
-  if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|SEO|GEO|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');
+  if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');
   if (base === 'xhigh') return reasoning('xhigh', 'route_policy_xhigh');
   if (base === 'high' || /\b(architecture|design|migration|database|security|parallel|orchestrat|refactor|algorithm|logic|tradeoff|검토|설계|마이그레이션|보안|병렬|팀|논리)\b/i.test(text)) return reasoning('high', 'logical_or_safety_work');
   if (base === 'low') return reasoning('low', 'route_policy_low');

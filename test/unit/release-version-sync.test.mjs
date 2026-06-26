@@ -13,7 +13,8 @@ test('stable release metadata and runtime versions stay synchronized', () => {
   const expected = pkg.version;
   assert.match(expected, /^\d+\.\d+\.\d+$/);
   assert.doesNotMatch(expected, /-/);
-  assert.equal(pkg.publishConfig?.tag, 'latest');
+  assert.equal(pkg.publishConfig?.tag, 'backfill-4-3');
+  assert.match(read('.npmrc'), /^tag=backfill-4-3$/m);
 
   const versions = [
     ['package-lock.json version', lock.version],

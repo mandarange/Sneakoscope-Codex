@@ -10,10 +10,10 @@ function run(env = {}) {
   });
 }
 
-test('plain npm publish lifecycle accepts latest tag for stable release', () => {
-  const result = run({ npm_lifecycle_event: 'prepublishOnly', npm_config_tag: 'latest' });
+test('plain npm publish accepts the root backfill tag for 4.3.0', () => {
+  const result = run({ npm_config_tag: '' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /-> latest/);
+  assert.match(result.stdout, /-> backfill-4-3/);
 });
 
 test('stable release rejects rc publish tag', () => {

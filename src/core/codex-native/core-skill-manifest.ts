@@ -1,4 +1,5 @@
 import { PACKAGE_VERSION, nowIso, sha256 } from '../fsx.js';
+import { leanPolicyReference } from '../lean-engineering-policy.js';
 import { canonicalSkillName } from './skill-name-canonicalizer.js';
 
 export type SksCoreSkillRoute =
@@ -9,7 +10,8 @@ export type SksCoreSkillRoute =
   | '$DFix'
   | '$Image-UX-Review'
   | '$Computer-Use'
-  | '$Init-Deep';
+  | '$Init-Deep'
+  | '$SEO-GEO-OPTIMIZER';
 
 export interface SksCoreSkillTemplate {
   id: string;
@@ -124,6 +126,26 @@ const CORE_SKILL_DEFINITIONS: Array<{
     when: 'Use when deeper local context or directory-specific recall is required.',
     evidence: '.sneakoscope/context/AGENTS.generated.md and managed memory artifacts.',
     fallback: 'Preserve user content and skip directories that cannot be safely updated.'
+  },
+  {
+    id: 'sks-core-search-visibility-core',
+    canonical_name: 'search-visibility-core',
+    display_name: 'search-visibility-core',
+    route: '$SEO-GEO-OPTIMIZER',
+    purpose: 'provide the shared search-visibility kernel for SEO and GEO audit, plan, explicit apply, verify, rollback, and Completion Proof without ranking, traffic, or citation guarantees.',
+    when: 'Use when $SEO-GEO-OPTIMIZER or sks seo-geo-optimizer needs typed mode-specific evidence, gates, artifacts, or safe mutation planning.',
+    evidence: 'search-visibility artifacts, seo-gate.json or geo-gate.json, mutation-plan.json, rollback-manifest.json, verification-report.json, and completion-proof.json.',
+    fallback: 'Keep unsupported frameworks plan-only, record unverified production/browser/Search Console/AI citation outcomes, and never invent guarantee evidence.'
+  },
+  {
+    id: 'sks-core-seo-geo-optimizer',
+    canonical_name: 'seo-geo-optimizer',
+    display_name: 'seo-geo-optimizer',
+    route: '$SEO-GEO-OPTIMIZER',
+    purpose: 'run the unified SEO/GEO optimizer route for Search Engine Optimization and Generative Engine Optimization, not geolocation or GeoIP, with no ranking, traffic, indexing, rich-result, answer inclusion, or AI citation guarantee.',
+    when: 'Use the CLI entrypoint: sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo for SEO and GEO visibility work.',
+    evidence: 'site inventory, route graph, seo-findings.json or geo-findings.json, claim-evidence-ledger.json, ai-crawler-policy.json, llms-txt-plan.json, verification report, route gate, and Completion Proof.',
+    fallback: 'Do not auto-allow training crawlers or fabricate AI answer visibility; mark missing live outcomes unverified and keep recovery on the unified optimizer route.'
   }
 ];
 
@@ -140,6 +162,7 @@ export function renderCoreSkillTemplate(name: string): string {
   const canonical = canonicalSkillName(name);
   const skill = CORE_SKILL_DEFINITIONS.find((entry) => entry.canonical_name === canonical);
   if (!skill) throw new Error(`Unknown SKS core skill: ${name}`);
+  const lean = leanPolicyReference();
   return [
     '---',
     `name: ${skill.display_name}`,
@@ -160,6 +183,7 @@ export function renderCoreSkillTemplate(name: string): string {
     `Command: ${skill.route}`,
     `Purpose: ${skill.purpose}`,
     `Use when: ${skill.when}`,
+    `Lean policy: ${lean.policy_id}/${lean.policy_hash}`,
     `Proof paths: ${skill.evidence}`,
     'Safety rules: preserve user-authored skills, keep route state bounded, and stop on hard blockers instead of fabricating fallback behavior.',
     `Failure recovery: ${skill.fallback}`,

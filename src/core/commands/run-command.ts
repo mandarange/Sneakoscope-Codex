@@ -4,6 +4,7 @@ import { createMission, missionDir, setCurrent } from '../mission.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { routePrompt } from '../routes.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
+import { normalizeTrustStatus, TRUST_REPORT_SCHEMA, trustKernelMetadata } from '../trust-kernel/trust-kernel-schema.js';
 import { flag, positionalArgs } from './command-utils.js';
 
 export type RunMode = 'prepare' | 'mock' | 'execute' | 'auto';
@@ -267,8 +268,11 @@ async function executeRunRoute(root: string, context: ExecuteRunContext): Promis
     blockers: execution.ok ? [] : execution.blockers,
     unverified: execution.unverified,
     command: { cmd: execution.command || `sks run "${prompt}" --execute`, status: execution.exit_code ?? (execution.ok ? 0 : 2) },
+    lightweightEvidence: execution.execution_kind === 'safe_deterministic',
   });
-  const trust = await loadTrustReport(root, id);
+  const trust = execution.execution_kind === 'safe_deterministic'
+    ? await writeLightweightTrustReport(root, id, route.command, statusHint, proof.ok)
+    : await loadTrustReport(root, id);
   const autoVerification = auto ? await runAutoVerification(root, id) : null;
   const autoOk = autoVerification?.ok ?? true;
   await setCurrent(root, {
@@ -367,7 +371,7 @@ async function executeRouteCommand(
   return routeExecutionResult(route, ['sks', ...commandArgs].join(' '), result, {
     okStatus: 'completed',
     trustStatus: 'verified_partial',
-      executionKind: route.command === '$DB' || route.command === '$Wiki' || route.command === '$Fast-Mode' || route.command === '$with-local-llm-on' || route.command === '$Commit' || route.command === '$Commit-And-Push' ? 'safe_deterministic' : 'mock_safe',
+      executionKind: route.command === '$DB' || route.command === '$Wiki' || route.command === '$Fast-Mode' || route.command === '$with-local-llm-on' || route.command === '$Commit' || route.command === '$Commit-And-Push' || route.command === '$Ultra-Search' || route.command === '$SEO-GEO-OPTIMIZER' ? 'safe_deterministic' : 'mock_safe',
   });
 }
 
@@ -486,12 +490,61 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
 
 function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] {
   if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
+  if (route.command === '$Ultra-Search') return ultraSearchExecutionArgs(prompt);
+  if (route.command === '$SEO-GEO-OPTIMIZER') return ['seo-geo-optimizer', searchVisibilityActionFromPrompt(prompt), '--mode', searchVisibilityModeFromPrompt(prompt), '--target', searchVisibilityTargetFromPrompt(prompt), '--offline', '--json'];
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];
   if (route.command === '$Fast-Mode') return ['fast-mode', fastModeActionFromPrompt(prompt), '--json'];
   if (route.command === '$with-local-llm-on') return ['with-local-llm', localModelActionFromPrompt(prompt), '--json'];
   if (route.command === '$Commit') return ['commit', '--json'];
   if (route.command === '$Commit-And-Push') return ['commit-and-push', '--json'];
   return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-open-zellij'] : [])];
+}
+
+function ultraSearchExecutionArgs(prompt = ''): string[] {
+  const stripped = stripUltraSearchPrompt(prompt);
+  const lower = stripped.toLowerCase();
+  if (!stripped || /^(?:doctor|check|status)\b/.test(lower)) return ['ultra-search', 'doctor', '--json'];
+  if (/^(?:x|x-search|x_search)\b/.test(lower)) {
+    const query = stripped.replace(/^(?:x|x-search|x_search)\b[:\s-]*/i, '').trim() || 'source intelligence fixture';
+    return ['ultra-search', 'x', query, '--json'];
+  }
+  const url = stripped.match(/\bhttps?:\/\/\S+/)?.[0];
+  if (/^(?:fetch|url)\b/.test(lower) || url) return ['ultra-search', 'fetch', url || stripped.replace(/^(?:fetch|url)\b[:\s-]*/i, '').trim() || 'https://example.com', '--json'];
+  const query = stripped.replace(/^run\b[:\s-]*/i, '').trim() || 'source intelligence fixture';
+  return ['ultra-search', 'run', query, '--mode', 'balanced', '--json'];
+}
+
+function stripUltraSearchPrompt(prompt = ''): string {
+  return String(prompt || '')
+    .trim()
+    .replace(/^\[\$Ultra-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\[\$UltraSearch\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\$Ultra-Search(?:\s|:)?\s*/i, '')
+    .replace(/^\$UltraSearch(?:\s|:)?\s*/i, '')
+    .trim();
+}
+
+function searchVisibilityActionFromPrompt(prompt = ''): string {
+  const text = String(prompt || '').toLowerCase();
+  if (/\bdoctor\b|진단/.test(text)) return 'doctor';
+  if (/\bverify\b|검증/.test(text)) return 'fixture';
+  if (/\bplan\b|계획/.test(text)) return 'audit';
+  if (/\bapply\b|--apply\b|적용/.test(text)) return 'audit';
+  return 'audit';
+}
+
+function searchVisibilityTargetFromPrompt(prompt = ''): string {
+  const text = String(prompt || '').toLowerCase();
+  if (/\bpackage\b|npm|readme|github/.test(text)) return 'package';
+  if (/\bdocs?\b|documentation/.test(text)) return 'docs';
+  if (/\bwebsite\b|site\b|페이지|사이트/.test(text)) return 'website';
+  return 'auto';
+}
+
+function searchVisibilityModeFromPrompt(prompt = ''): 'seo' | 'geo' {
+  const text = String(prompt || '');
+  if (/generative\s+engine\s+optimization|AI\s+(?:answer|search)\s+(?:visibility|discoverability)|LLM\s+(?:citation|answer|visibility|discoverability)|answerability|entity\s+(?:facts?|clarity)|claim\s+evidence|crawler\s+policy|OAI-SearchBot|GPTBot|ChatGPT-User|Claude-SearchBot|ClaudeBot|Claude-User|llms\.txt|AI\s*검색\s*가시성|AI\s*답변\s*가시성|생성형\s*엔진\s*최적화/i.test(text)) return 'geo';
+  return 'seo';
 }
 
 function fastModeActionFromPrompt(prompt = ''): string {
@@ -596,4 +649,41 @@ async function loadTrustReport(root: string, missionId: string): Promise<TrustRe
   const report = await latestTrustReport(root, missionId);
   if (report && typeof report === 'object' && 'status' in report) return report as TrustReportLike;
   return { status: 'not_verified', ok: false, issues: ['trust_report_invalid'] };
+}
+
+async function writeLightweightTrustReport(
+  root: string,
+  missionId: string,
+  route: string,
+  statusHint: unknown,
+  proofOk: boolean
+): Promise<TrustReportLike> {
+  const status = normalizeTrustStatus(statusHint);
+  const issues = proofOk ? [] : ['completion_proof_not_ok'];
+  const report: TrustReportLike = {
+    schema: TRUST_REPORT_SCHEMA,
+    ...trustKernelMetadata(),
+    ok: proofOk && !['blocked', 'failed', 'not_verified'].includes(status),
+    mission_id: missionId,
+    route,
+    status,
+    proof_status: status,
+    evidence_status: 'verified_partial',
+    route_contract_status: 'verified_partial',
+    issues,
+    route_state_machine: {
+      state: 'trust_report',
+      lightweight: true,
+      reason: 'safe_deterministic_run_wrapper'
+    },
+    evidence: {
+      completion_proof: `.sneakoscope/missions/${missionId}/completion-proof.json`,
+      route_contract: null,
+      evidence_index: null,
+      evidence_records: 0,
+      lightweight: true
+    }
+  };
+  await writeJsonAtomic(path.join(missionDir(root, missionId), 'trust-report.json'), report);
+  return report;
 }

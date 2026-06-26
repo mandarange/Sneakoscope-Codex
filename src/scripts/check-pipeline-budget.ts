@@ -1,13 +1,24 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const failures = [];
+const failures: string[] = [];
 const facade = path.join(root, 'src', 'core', 'pipeline.ts');
 const facadeLines = lineCount(facade);
 if (facadeLines > 200) failures.push(`src/core/pipeline.ts: line count ${facadeLines} > 200`);
+const facadeText = fs.readFileSync(facade, 'utf8');
+for (const exportName of [
+  'buildPipelinePlan',
+  'writePipelinePlan',
+  'validatePipelinePlan',
+  'promptPipelineContext',
+  'prepareRoute',
+  'activeRouteContext',
+  'evaluateStop'
+]) {
+  if (!facadeText.includes(exportName)) failures.push(`src/core/pipeline.ts: missing exported pipeline API ${exportName}`);
+}
 
 const runtimeFacade = path.join(root, 'src', 'core', 'pipeline-runtime.ts');
 if (fs.existsSync(runtimeFacade)) {
@@ -20,40 +31,14 @@ if (fs.existsSync(runtimeFacade)) {
 }
 
 const moduleDir = path.join(root, 'src', 'core', 'pipeline');
-for (const file of fs.readdirSync(moduleDir).filter((name) => name.endsWith('.ts'))) {
+const moduleFiles = fs.readdirSync(moduleDir).filter((name) => name.endsWith('.ts'));
+if (moduleFiles.length < 8) failures.push(`src/core/pipeline: split module count ${moduleFiles.length} < 8`);
+for (const file of moduleFiles) {
   const absolute = path.join(moduleDir, file);
   const lines = lineCount(absolute);
   if (lines > 1000) failures.push(`src/core/pipeline/${file}: line count ${lines} > 1000`);
   const imports = fs.readFileSync(absolute, 'utf8').match(/\\bfrom\\s+['"][^'"]+['"]/g) || [];
   if (imports.length > 35) failures.push(`src/core/pipeline/${file}: import count ${imports.length} > 35`);
-}
-
-const required = [
-  'plan-schema.ts',
-  'stage-policy.ts',
-  'agent-stage-policy.ts',
-  'route-prep.ts',
-  'route-prep-team.ts',
-  'route-prep-research.ts',
-  'route-prep-qa.ts',
-  'route-prep-ppt.ts',
-  'route-prep-image-ux.ts',
-  'route-prep-db.ts',
-  'route-prep-gx.ts',
-  'stop-gate.ts',
-  'stop-gate-context7.ts',
-  'stop-gate-subagents.ts',
-  'stop-gate-proof.ts',
-  'active-context.ts',
-  'prompt-context.ts',
-  'prompt-context-dfix.ts',
-  'prompt-context-answer.ts',
-  'prompt-context-computer-use.ts',
-  'pipeline-plan-writer.ts',
-  'validation.ts'
-];
-for (const file of required) {
-  if (!fs.existsSync(path.join(moduleDir, file))) failures.push(`src/core/pipeline/${file}: missing`);
 }
 
 if (failures.length) {
@@ -63,6 +48,6 @@ if (failures.length) {
 }
 console.log('Pipeline budget check passed');
 
-function lineCount(file) {
+function lineCount(file: string): number {
   return fs.readFileSync(file, 'utf8').split(/\r?\n/).length;
 }

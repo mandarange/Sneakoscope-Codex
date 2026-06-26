@@ -1,5 +1,28 @@
 # Post Route Reflection
 
+## 2026-06-26 UltraSearch Dollar Command Visibility Reflection
+
+- Mission: M-20260626-132916-d2a6
+- Route: Naruto-selected repair with parent-owned integration
+- Outcome: Added UltraSearch dollar-command visibility and execution routing so `$Ultra-Search`, `$UltraSearch`, and the app picker alias `$ultra-search` are discoverable and covered by a blackbox test.
+
+### Summary
+
+The issue was route discovery, not the UltraSearch runtime itself. The fix registered UltraSearch as a dollar-command route, added the generated skill template, mapped safe deterministic `sks run --execute` execution to `sks ultra-search`, and added feature fixtures plus a packed blackbox test for command visibility and alias execution.
+
+### Evidence
+
+- `npm run build --silent` passed.
+- `node --test test/blackbox/ultra-search-dollar-command-packed.test.mjs` passed.
+- `sks dollar-commands --json` exposed `$Ultra-Search`, `$UltraSearch`, and `$ultra-search`.
+- Feature registry entries for `cli-ultra-search`, `route-ultra-search`, and `route-ultrasearch` reported fixture status `pass`.
+
+### Lessons
+
+1. Dollar-command route fixes need coverage for both user-visible command listings and `sks run --execute` alias execution, because either side can drift independently.
+2. Packed route tests that run in a temporary project should disable the update migration gate explicitly when migration behavior is not the subject under test.
+3. When a workspace already contains unrelated route work, final verification should separate target-route pass evidence from existing registry blockers.
+
 ## 2026-06-18 SKS Five-Minute Confidence Path Reflection
 
 - Mission: M-20260618-004108-a2a1

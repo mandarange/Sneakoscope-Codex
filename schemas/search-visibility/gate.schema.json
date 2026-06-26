@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/search-visibility/gate.schema.json",
+  "title": "SKS Search Visibility Gate",
+  "type": "object",
+  "required": ["schema", "mission_id", "route", "ok", "passed", "status", "command_identity", "required_artifacts", "unsupported_claims", "blockers", "unverified", "completion_proof"],
+  "properties": {
+    "schema": { "const": "sks.search-visibility.gate.v1" },
+    "mission_id": { "type": "string" },
+    "route": { "const": "$SEO-GEO-OPTIMIZER" },
+    "ok": { "type": "boolean" },
+    "passed": { "type": "boolean" },
+    "status": { "enum": ["verified_partial", "blocked", "locally_verified", "production_verified"] },
+    "command_identity": { "type": "boolean" },
+    "required_artifacts": { "type": "array" },
+    "unsupported_claims": { "type": "array" },
+    "blockers": { "type": "array" },
+    "unverified": { "type": "array" },
+    "completion_proof": { "type": "string" }
+  },
+  "additionalProperties": true
+}

@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.3.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding the unified `seo-geo-optimizer` search-visibility route and Lean Engineering Policy evidence: SEO and Generative Engine Optimization share one command surface, mode-specific gates, safe apply/rollback, backfill publish tagging, and `npm publish --ignore-scripts` readiness without restoring legacy split `$SEO`/`$GEO` routes.
+
 SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to UltraSearch: provider-independent planning/proof, x-search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring xAI/Grok runtime dependency.
 
 SKS 4.2.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the publish path with `npm publish --ignore-scripts`: the release wrapper now runs the full prepublish gate explicitly before invoking npm with lifecycle scripts disabled.

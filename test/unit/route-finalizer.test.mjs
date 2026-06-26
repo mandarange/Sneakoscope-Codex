@@ -20,6 +20,8 @@ test('route finalizer writes completion proof and visual image anchors', async (
   assert.equal(result.proof.status, 'verified_partial');
   assert.equal(result.proof.evidence.image_voxels.anchor_count, 1);
   assert.equal(result.proof.evidence.image_voxels.relations, 1);
+  assert.equal(result.proof.evidence.lean_engineering.schema, 'sks.lean-change-evidence.v1');
+  assert.equal(result.proof.evidence.lean_engineering.policy_id, 'sks.lean-engineering-policy.v1');
   const ledger = await readJson(path.join(root, '.sneakoscope/missions/M-fixture/image-voxel-ledger.json'));
   assert.equal(ledger.anchors.length, 1);
   assert.equal(ledger.relations.length, 1);

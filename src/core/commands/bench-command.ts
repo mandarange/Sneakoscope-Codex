@@ -1,4 +1,4 @@
-import { TRUST_VALIDATE_BENCH_COMMAND, benchRoot, runCoreBench } from '../bench.js';
+import { TRUST_VALIDATE_BENCH_COMMAND, benchRoot, runCoreBench, runLeanPolicyBench } from '../bench.js';
 import { runProcess } from '../fsx.js';
 import { flag, readFlagValue } from './command-utils.js';
 
@@ -16,8 +16,15 @@ export async function benchCommand(args: any = []) {
     return result;
   }
   if (action === 'route-fixtures') return commandBench('sks.route-fixture-bench.v1', ['all-features', 'selftest', '--mock', '--execute-fixtures', '--strict-artifacts', '--json'], args);
+  if (action === 'lean-policy') {
+    const report = await runLeanPolicyBench(root);
+    if (!report.ok) process.exitCode = 1;
+    if (flag(args, '--json')) return console.log(JSON.stringify(report, null, 2));
+    console.log(`lean-policy: ${report.ok ? 'pass' : 'blocked'}`);
+    return report;
+  }
   if (action === 'blackbox') return commandBench('sks.blackbox-bench.v1', ['blackbox-matrix-placeholder'], args);
-  console.error('Usage: sks bench core|route-fixtures|blackbox|trust-kernel [--json] [--iterations N]');
+  console.error('Usage: sks bench core|route-fixtures|lean-policy|blackbox|trust-kernel [--json] [--iterations N]');
   process.exitCode = 2;
 }
 

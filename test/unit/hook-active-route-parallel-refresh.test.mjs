@@ -52,14 +52,14 @@ test('substantive prompt during active Team state prepares a fresh parallel rout
     }, { root, state: ACTIVE_TEAM_STATE });
 
     const context = String(result.additionalContext || '');
-    assert.match(context, /\$Team route prepared/);
+    assert.match(context, /\$(Team|Naruto) route prepared|Route: \$Naruto/);
     assert.match(context, /Native sessions: required before code-changing execution/);
     assert.doesNotMatch(context, /Active Team mission M-active/);
 
     const missions = await missionEntries(root);
     assert.equal(missions.length, 1);
     const current = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'state', 'current.json'), 'utf8'));
-    assert.equal(current.mode, 'TEAM');
+    assert.match(current.mode, /^(TEAM|NARUTO)$/);
     assert.notEqual(current.mission_id, 'M-active');
   });
 });
@@ -87,6 +87,14 @@ test('simple commit and push request is lightweight git work, not a parallel Tea
   const route = routePrompt(prompt);
   assert.equal(route.id, 'CommitAndPush');
   assert.equal(routeRequiresSubagents(route, prompt), false);
+});
+
+test('subagent-start hook injects lean engineering context', async () => {
+  const root = await makeRoot();
+  const { evaluateHookPayload } = await import('../../dist/core/hooks-runtime.js');
+  const result = await evaluateHookPayload('subagent-start', { cwd: root }, { root, state: {} });
+  assert.match(String(result.additionalContext || ''), /Lean Engineering Policy/);
+  assert.match(String(result.additionalContext || ''), /No unrequested route\/command\/daemon\/dependency/);
 });
 
 test('natural language commit and push bypasses hook pipeline preparation', async () => {

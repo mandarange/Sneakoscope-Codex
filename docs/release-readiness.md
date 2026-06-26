@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.3.0 is a backfill release carrying the unified SEO/GEO optimizer and Lean Engineering Policy evidence surface. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, the `seo-geo-optimizer` mode-specific gate suite, and the `publish:ignore-scripts` wrapper to agree on 4.3.0 before publication.
+
+4.3.0 release readiness adds proof that `sks seo-geo-optimizer` and `$SEO-GEO-OPTIMIZER` are the single public Search Engine Optimization and Generative Engine Optimization surface, that old split `seo`/`geo` public commands are removed, that Lean Engineering Policy evidence reaches planning, workers, code-structure, GPT final review, and Completion Proof, and that `npm publish --ignore-scripts` packages the prebuilt dist surface with the backfill dist-tag.
+
 SKS 4.4.0 is the UltraSearch source-intelligence replacement release after 4.2.1. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, UltraSearch provider-interface gates, Source Intelligence Policy v2 gates, and the `publish:ignore-scripts` wrapper to agree on 4.4.0 before publication.
 
 4.4.0 release readiness adds proof that xAI/Grok is not a runtime dependency, X public discovery is not promoted to full parity without a real corpus, and `npm publish --ignore-scripts` packages the prebuilt dist surface.

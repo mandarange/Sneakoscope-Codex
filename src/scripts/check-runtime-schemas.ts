@@ -80,6 +80,27 @@ for (const file of [
   }
 }
 
+const searchVisibilitySchemaDir = path.join(root, 'schemas', 'search-visibility');
+for (const file of [
+  'site-inventory.schema.json',
+  'finding-ledger.schema.json',
+  'gate.schema.json',
+  'mutation-plan.schema.json',
+  'verification-report.schema.json'
+]) {
+  const full = path.join(searchVisibilitySchemaDir, file);
+  if (!fs.existsSync(full)) {
+    issues.push(`search_visibility_schema_missing:${file}`);
+    continue;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+    if (parsed.type !== 'object' || !parsed.$id) issues.push(`search_visibility_schema_shape:${file}`);
+  } catch (err) {
+    issues.push(`search_visibility_schema_invalid_json:${file}:${err.message}`);
+  }
+}
+
 const result = { schema: 'sks.runtime-schema-check.v1', ok: issues.length === 0, validators_ok: validatorsOk, issues };
 console.log(JSON.stringify(result, null, 2));
 if (!result.ok) process.exitCode = 1;

@@ -475,6 +475,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-fix-path': ['fix-path', '--json'],
   'cli-selftest': ['selftest', '--mock'],
   'cli-git': ['git', 'policy', '--json'],
+  'cli-seo-geo-optimizer': ['seo-geo-optimizer', 'fixture', '--mode', 'seo', '--json'],
   'cli-paths': ['paths', 'managed', '--json'],
   'cli-rollback': ['rollback', 'list', '--json'],
   'cli-proof-field': ['proof-field', 'scan', '--json', '--intent', 'fixture'],
@@ -507,6 +508,7 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'route-image-ux-review': ['image-ux-review', 'fixture', '--mock', '--json'],
   'route-computer-use': ['computer-use', 'import-fixture', '--mock', '--json'],
   'route-dfix': ['dfix', 'fixture', '--json'],
+  'route-seo-geo-optimizer': ['seo-geo-optimizer', 'fixture', '--mode', 'geo', '--json'],
   'route-fast-mode': ['fast-mode', 'status', '--json'],
   'route-db': ['db', 'check', '--sql', 'SELECT 1', '--json'],
   'route-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
@@ -849,7 +851,7 @@ function commandCategory(name: any) {
 
 function commandMaturity(name: any) {
   if (['help', 'version', 'commands', 'usage', 'root', 'quickstart', 'setup', 'doctor', 'selftest', 'update-check', 'fast-mode'].includes(name)) return 'stable';
-  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'computer-use', 'mad-sks'].includes(name)) return 'beta';
+  if (['codex', 'codex-app', 'codex-native', 'codex-lb', 'hooks', 'features', 'all-features', 'wiki', 'wrongness', 'team', 'pipeline', 'goal', 'db', 'guard', 'computer-use', 'mad-sks', 'seo-geo-optimizer'].includes(name)) return 'beta';
   return 'labs';
 }
 

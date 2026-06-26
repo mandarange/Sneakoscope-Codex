@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,26 +12,28 @@ const requirePublishAuth = process.argv.includes('--require-publish-auth');
 const skipNetwork = process.env.SKS_SKIP_REGISTRY_NETWORK_CHECK === '1';
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
-function fail(message, detail = '') {
+type AnyRecord = Record<string, any>;
+
+function fail(message: string, detail = ''): never {
   console.error(`Release registry check failed: ${message}`);
   if (detail) console.error(detail.trim());
   process.exit(2);
 }
 
-function normalizeRegistry(value) {
+function normalizeRegistry(value: unknown): string {
   if (!value) return '';
   return String(value).trim().replace(/\/?$/, '/');
 }
 
-function readJson(file) {
+function readJson(file: string): AnyRecord {
   try {
     return JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
-  } catch (err) {
-    fail(`unable to read ${file}`, err.message);
+  } catch (err: unknown) {
+    fail(`unable to read ${file}`, err instanceof Error ? err.message : String(err));
   }
 }
 
-function run(cmd, args, options = {}) {
+function run(cmd: string, args: string[], options: AnyRecord = {}) {
   return spawnSync(cmd, args, {
     cwd: root,
     encoding: 'utf8',
@@ -41,14 +42,14 @@ function run(cmd, args, options = {}) {
   });
 }
 
-function npmRegistryReadEnv(overrides = {}) {
+function npmRegistryReadEnv(overrides: Record<string, string | undefined> = {}) {
   const env = { ...process.env, ...overrides };
   delete env.npm_config_tag;
   delete env.NPM_CONFIG_TAG;
   return env;
 }
 
-function checkPackagePublishConfig(pkg) {
+function checkPackagePublishConfig(pkg: AnyRecord) {
   if (pkg.private) fail('package.json private=true would block public npm publication');
   if (pkg.publishConfig?.access !== 'public') {
     fail('package.json publishConfig.access must be public', `found: ${pkg.publishConfig?.access || 'missing'}`);
@@ -61,17 +62,24 @@ function checkPackagePublishConfig(pkg) {
   if (isPrerelease && pkg.publishConfig?.tag !== 'rc') {
     fail('package.json publishConfig.tag must be rc for prerelease versions', `found: ${pkg.publishConfig?.tag || 'missing'}\nversion: ${pkg.version}`);
   }
-  if (!isPrerelease && pkg.publishConfig?.tag && pkg.publishConfig.tag !== 'latest') {
-    fail('package.json publishConfig.tag must be latest or omitted for stable versions', `found: ${pkg.publishConfig.tag}\nversion: ${pkg.version}`);
+  if (!isPrerelease && pkg.publishConfig?.tag && pkg.publishConfig.tag !== 'latest' && !isBackfillTag(pkg.publishConfig.tag)) {
+    fail('package.json publishConfig.tag must be latest, omitted, or explicit backfill-* for stable backfill versions', `found: ${pkg.publishConfig.tag}\nversion: ${pkg.version}`);
   }
 }
 
-function checkRootNpmrc(pkg) {
+function checkRootNpmrc(pkg: AnyRecord) {
   const npmrcPath = path.join(root, '.npmrc');
-  if (!fs.existsSync(npmrcPath)) return;
+  const publishConfigTag = String(pkg.publishConfig?.tag || '');
+  if (!fs.existsSync(npmrcPath)) {
+    if (isBackfillTag(publishConfigTag)) {
+      fail('root .npmrc must pin the backfill publish tag for npm publish --ignore-scripts', `expected: tag=${publishConfigTag}`);
+    }
+    return;
+  }
   const text = fs.readFileSync(npmrcPath, 'utf8');
-  const unsafe = [];
+  const unsafe: string[] = [];
   const isPrerelease = /-/.test(String(pkg.version || ''));
+  let npmrcTag = '';
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
@@ -79,17 +87,24 @@ function checkRootNpmrc(pkg) {
     if (match && normalizeRegistry(match[1]) !== expectedRegistry) unsafe.push(`${index + 1}: ${trimmed}`);
     const tagMatch = trimmed.match(/^tag\s*=\s*(.+)$/);
     if (tagMatch) {
-      const tag = tagMatch[1].trim();
+      const tag = String(tagMatch[1] || '').trim();
+      npmrcTag = tag;
       if (isPrerelease && tag !== 'rc') unsafe.push(`${index + 1}: ${trimmed}`);
-      if (!isPrerelease && tag !== 'latest') unsafe.push(`${index + 1}: ${trimmed}`);
+      if (!isPrerelease && tag !== 'latest' && !isBackfillTag(tag)) unsafe.push(`${index + 1}: ${trimmed}`);
     }
   }
   if (unsafe.length) {
     fail('root .npmrc contains publish config incompatible with this release', unsafe.join('\n'));
   }
+  if (publishConfigTag && npmrcTag && publishConfigTag !== npmrcTag) {
+    fail('root .npmrc tag disagrees with package.json publishConfig.tag', `.npmrc tag: ${npmrcTag}\npublishConfig.tag: ${publishConfigTag}`);
+  }
+  if (isBackfillTag(publishConfigTag) && npmrcTag !== publishConfigTag) {
+    fail('root .npmrc must pin the backfill publish tag for npm publish --ignore-scripts', `.npmrc tag: ${npmrcTag || 'missing'}\nexpected: ${publishConfigTag}`);
+  }
 }
 
-function checkLockfile(pkg) {
+function checkLockfile(pkg: AnyRecord) {
   const lock = readJson('package-lock.json');
   const rootPackage = lock.packages?.[''];
   const mismatches = [
@@ -102,9 +117,9 @@ function checkLockfile(pkg) {
     fail('package-lock metadata is not synchronized', mismatches.map(([label, actual, expected]) => `${label}: ${actual || 'missing'} (expected ${expected})`).join('\n'));
   }
 
-  const unsafeResolved = [];
+  const unsafeResolved: string[] = [];
   for (const [entry, meta] of Object.entries(lock.packages || {})) {
-    const resolved = meta?.resolved;
+    const resolved = (meta as AnyRecord)?.resolved;
     if (!resolved || resolved.startsWith('file:') || resolved.startsWith('link:')) continue;
     let parsed;
     try {
@@ -121,7 +136,7 @@ function checkLockfile(pkg) {
   }
 }
 
-function checkPackedMetadata(pkg) {
+function checkPackedMetadata(pkg: AnyRecord) {
   const env = npmRegistryReadEnv({
     npm_config_cache: process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache')
   });
@@ -139,19 +154,21 @@ function checkPackedMetadata(pkg) {
   }
 }
 
-function compareVersions(a, b) {
+function compareVersions(a: unknown, b: unknown): number {
   const pa = String(a || '').split(/[.-]/).map((part) => Number.parseInt(part, 10));
   const pb = String(b || '').split(/[.-]/).map((part) => Number.parseInt(part, 10));
   const len = Math.max(pa.length, pb.length);
   for (let i = 0; i < len; i += 1) {
-    const da = Number.isFinite(pa[i]) ? pa[i] : 0;
-    const db = Number.isFinite(pb[i]) ? pb[i] : 0;
+    const paValue = pa[i];
+    const pbValue = pb[i];
+    const da = Number.isFinite(paValue) ? paValue || 0 : 0;
+    const db = Number.isFinite(pbValue) ? pbValue || 0 : 0;
     if (da !== db) return da > db ? 1 : -1;
   }
   return 0;
 }
 
-function checkPublishedVersion(pkg) {
+function checkPublishedVersion(pkg: AnyRecord) {
   if (skipNetwork) {
     console.log('Registry network check skipped by SKS_SKIP_REGISTRY_NETWORK_CHECK=1.');
     return;
@@ -185,16 +202,20 @@ function checkPublishedVersion(pkg) {
     fail('package version is already published on npm', `${pkg.name}@${pkg.version}`);
   }
   const cmp = compareVersions(pkg.version, latest);
-  if (requireUnpublished && cmp <= 0) {
+  if (requireUnpublished && cmp <= 0 && !isBackfillTag(pkg.publishConfig?.tag || '')) {
     fail('package version is not newer than the npm latest dist-tag', `package.json: ${pkg.version}\nnpm latest: ${latest}`);
   }
   const note = exactPublished
     ? `exact version already exists; current npm latest is ${latest}`
-    : (cmp > 0 ? `ready for new publish over npm latest ${latest}` : `current npm latest is ${latest}`);
+    : (cmp > 0 ? `ready for new publish over npm latest ${latest}` : `ready as backfill over current npm latest ${latest} with tag ${pkg.publishConfig?.tag || 'missing'}`);
   console.log(`Registry metadata check passed: ${pkg.name}@${pkg.version}; ${note}.`);
 }
 
-function checkPublishAuth(pkg) {
+function isBackfillTag(value: unknown): boolean {
+  return /^backfill(?:[-_][a-z0-9.-]+)?$/i.test(String(value || ''));
+}
+
+function checkPublishAuth(pkg: AnyRecord) {
   if (skipNetwork) {
     fail('publish auth check cannot run when SKS_SKIP_REGISTRY_NETWORK_CHECK=1 is set');
   }
@@ -247,8 +268,8 @@ function checkPublishAuth(pkg) {
   console.log(`Publish auth check passed: ${pkg.name}@${pkg.version} as ${user}.`);
 }
 
-function publishAuthRepairInstructions(pkg, authHints) {
-  const lines = [];
+function publishAuthRepairInstructions(pkg: AnyRecord, authHints: string[]): string[] {
+  const lines: string[] = [];
   if (authHints.length > 0) {
     lines.push(`npm auth config was found (${authHints.join(', ')}), but the npm registry rejected it.`);
     lines.push('That usually means the token is expired, revoked, not valid for npmjs.org, or not publish-capable for this package.');
@@ -261,8 +282,8 @@ function publishAuthRepairInstructions(pkg, authHints) {
   return lines;
 }
 
-function npmAuthSourceHints(env) {
-  const hints = [];
+function npmAuthSourceHints(env: Record<string, string | undefined>): string[] {
+  const hints: string[] = [];
   if (env.NODE_AUTH_TOKEN) hints.push('NODE_AUTH_TOKEN env');
   if (env.NPM_TOKEN) hints.push('NPM_TOKEN env (requires npmrc interpolation)');
   for (const file of npmConfigCandidateFiles(env)) {
@@ -271,7 +292,7 @@ function npmAuthSourceHints(env) {
   return [...new Set(hints)];
 }
 
-function npmConfigCandidateFiles(env) {
+function npmConfigCandidateFiles(env: Record<string, string | undefined>): string[] {
   const files = [
     path.join(root, '.npmrc'),
     env.npm_config_userconfig,
@@ -281,7 +302,7 @@ function npmConfigCandidateFiles(env) {
   return [...new Set(files.map((file) => path.resolve(String(file))))];
 }
 
-function npmAuthHintsFromFile(file) {
+function npmAuthHintsFromFile(file: string): string[] {
   if (!fs.existsSync(file)) return [];
   let text = '';
   try {
@@ -289,7 +310,7 @@ function npmAuthHintsFromFile(file) {
   } catch {
     return [];
   }
-  const hints = [];
+  const hints: string[] = [];
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
@@ -302,7 +323,7 @@ function npmAuthHintsFromFile(file) {
   return hints;
 }
 
-function packageMaintainers(pkg, env) {
+function packageMaintainers(pkg: AnyRecord, env: Record<string, string | undefined>): string[] {
   const result = run(npmBin, ['view', pkg.name, 'maintainers', '--json', '--registry', expectedRegistry], { env });
   if (result.status !== 0) {
     const text = `${result.stdout || ''}\n${result.stderr || ''}`;
@@ -318,9 +339,12 @@ function packageMaintainers(pkg, env) {
   }
 }
 
-function normalizeNpmUser(value) {
+function normalizeNpmUser(value: unknown): string {
   if (!value) return '';
-  if (typeof value === 'object') return normalizeNpmUser(value.name || value.username || '');
+  if (typeof value === 'object') {
+    const record = value as AnyRecord;
+    return normalizeNpmUser(record.name || record.username || '');
+  }
   const text = String(value).trim();
   if (/^["[{]/.test(text)) {
     try {
@@ -329,10 +353,10 @@ function normalizeNpmUser(value) {
       // Fall through for legacy plain-text npm output.
     }
   }
-  return text.replace(/^@/, '').split(/\s+/)[0].toLowerCase();
+  return String(text.replace(/^@/, '').split(/\s+/)[0] || '').toLowerCase();
 }
 
-function tail(value, limit = 1200) {
+function tail(value: unknown, limit = 1200): string {
   const text = String(value || '').trim();
   return text.length > limit ? text.slice(-limit) : text;
 }

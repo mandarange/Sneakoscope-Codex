@@ -31,22 +31,44 @@ export async function runFakeCodexSdkTask(input: CodexTaskInput) {
 
 function fakeStructuredOutput(input: CodexTaskInput) {
   if (input.outputSchemaId === GPT_FINAL_ARBITER_RESULT_SCHEMA_ID) {
-    const unsafe = /\b(truncate|delete all|drop table|credential)\b/i.test(input.prompt || '')
+    const prompt = String(input.prompt || '')
+    const leanEnabled = /\b(Lean review|Lean Engineering Policy|sks\.lean-engineering-policy)\b/i.test(prompt)
+    const unsafe = /\b(truncate|delete all|drop table|credential|delete validation|validation removed|path traversal|sql injection|secret leak)\b/i.test(prompt)
+    const overbuild = leanEnabled ? classifyLeanOverbuild(prompt) : null
+    const status = unsafe ? 'rejected' : overbuild ? 'needs_more_work' : 'approved'
+    const leanStatus = unsafe ? 'rejected' : overbuild ? 'needs_more_work' : 'pass'
+    const blockers = unsafe ? ['unsafe_candidate_patch'] : overbuild?.blockers || []
+    const findings = unsafe
+      ? [{ id: 'unsafe-candidate', severity: 'high', summary: 'unsafe candidate rejected' }]
+      : overbuild ? overbuild.findings : []
     return {
       schema: GPT_FINAL_ARBITER_RESULT_SCHEMA_ID,
-      status: unsafe ? 'rejected' : 'approved',
+      status,
       summary: unsafe
         ? 'Fake Codex SDK GPT final arbiter rejected an unsafe candidate for hermetic verification.'
-        : 'Fake Codex SDK GPT final arbiter approved the candidate for hermetic verification.',
-      gpt_review_findings: unsafe ? [{ id: 'unsafe-candidate', severity: 'high', summary: 'unsafe candidate rejected' }] : [],
-      accepted_patch_envelopes: unsafe ? [] : [],
+        : overbuild
+          ? 'Fake Codex SDK GPT final arbiter requested a leaner candidate for hermetic verification.'
+          : 'Fake Codex SDK GPT final arbiter approved the candidate for hermetic verification.',
+      gpt_review_findings: findings,
+      accepted_patch_envelopes: status === 'approved' ? [] : [],
       modified_patch_envelopes: [],
-      rejected_patch_envelopes: unsafe ? [{ id: 'unsafe-candidate', summary: 'unsafe candidate', patch_envelope_json: '{}' }] : [],
-      required_followup_work: unsafe ? [{ id: 'unsafe_candidate_patch', severity: 'high', summary: 'unsafe_candidate_patch' }] : [],
+      rejected_patch_envelopes: status === 'rejected' ? [{ id: blockers[0] || 'rejected-candidate', summary: blockers[0] || 'rejected candidate', patch_envelope_json: '{}' }] : [],
+      required_followup_work: blockers.map((blocker) => ({ id: blocker, severity: unsafe ? 'high' : 'medium', summary: blocker })),
       verification_plan: ['schema validation', 'local collaboration final gate'],
       rollback_notes: [],
-      blockers: unsafe ? ['unsafe_candidate_patch'] : [],
-      confidence: unsafe ? 'medium' : 'high'
+      blockers,
+      lean_review: {
+        status: leanStatus,
+        selected_rung: unsafe ? 'unknown' : overbuild?.selected_rung || 'minimal-custom',
+        unnecessary_files: [],
+        unnecessary_dependencies: overbuild?.unnecessary_dependencies || [],
+        unnecessary_abstractions: overbuild?.unnecessary_abstractions || [],
+        fallback_findings: unsafe ? ['unsafe_candidate_patch'] : overbuild?.fallback_findings || [],
+        root_cause_review: overbuild?.root_cause_review || [],
+        verification_minimum_present: !unsafe && !/\b(missing runnable check|no runnable check)\b/i.test(prompt),
+        net_lines: null
+      },
+      confidence: unsafe || overbuild ? 'medium' : 'high'
     }
   }
   return {
@@ -58,5 +80,61 @@ function fakeStructuredOutput(input: CodexTaskInput) {
     verification: { status: 'passed', checks: ['codex-sdk-fake-adapter', input.outputSchemaId] },
     rollback_notes: [],
     blockers: []
+  }
+}
+
+function classifyLeanOverbuild(prompt: string): null | {
+  selected_rung: string
+  blockers: string[]
+  findings: Array<{ id: string; severity: string; summary: string }>
+  unnecessary_dependencies?: string[]
+  unnecessary_abstractions?: string[]
+  fallback_findings?: string[]
+  root_cause_review?: string[]
+} {
+  if (/\b(existing helper reimplementation|same helper reimplementation|reimplement existing helper)\b/i.test(prompt)) {
+    return leanFinding('reuse_existing_helper', 'reuse-existing', 'Candidate reimplements an existing helper instead of reusing the repository authority.', {
+      root_cause_review: ['reuse existing helper or fix the common helper once']
+    })
+  }
+  if (/\b(new dependency|dependency bloat|native platform instead of dependency)\b/i.test(prompt)) {
+    return leanFinding('unnecessary_dependency', 'stdlib', 'Candidate adds a dependency where stdlib or platform support is sufficient.', {
+      unnecessary_dependencies: ['unjustified dependency']
+    })
+  }
+  if (/\b(one implementation factory|single implementation factory|one implementation interface)\b/i.test(prompt)) {
+    return leanFinding('single_impl_abstraction', 'minimal-custom', 'Candidate adds an abstraction without a second implementation or real variation axis.', {
+      unnecessary_abstractions: ['single implementation factory/interface']
+    })
+  }
+  if (/\b(hidden mock fallback|silent mock fallback|fixture fallback)\b/i.test(prompt)) {
+    return leanFinding('hidden_fallback', 'minimal-custom', 'Candidate hides a production failure behind a mock or fixture fallback.', {
+      fallback_findings: ['hidden mock fallback']
+    })
+  }
+  if (/\b(caller duplicate guard|duplicate caller guard|symptom patch)\b/i.test(prompt)) {
+    return leanFinding('root_cause_missing', 'minimal-custom', 'Candidate patches a caller symptom instead of the shared root cause.', {
+      root_cause_review: ['move duplicated guard to the shared root-cause helper']
+    })
+  }
+  return null
+}
+
+function leanFinding(
+  id: string,
+  selectedRung: string,
+  summary: string,
+  extra: {
+    unnecessary_dependencies?: string[]
+    unnecessary_abstractions?: string[]
+    fallback_findings?: string[]
+    root_cause_review?: string[]
+  } = {}
+) {
+  return {
+    selected_rung: selectedRung,
+    blockers: [id],
+    findings: [{ id, severity: 'medium', summary }],
+    ...extra
   }
 }
