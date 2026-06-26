@@ -138,6 +138,7 @@ const requiredReleasePresetIds = [
   'mad-db:operation-lifecycle-ledger',
   'mad-db:route-identity',
   'mad-db:hook-idempotency',
+  'mad-db:direct-apply-migration-hook',
   'mad-db:parallel-lifecycle',
   'mad-db:runtime-profile',
   'mad-db:skill-policy',

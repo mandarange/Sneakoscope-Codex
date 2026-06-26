@@ -8392,6 +8392,31 @@
       "id": "mad-db:parallel-lifecycle",
       "command": "npm run mad-db:parallel-lifecycle --silent",
       "deps": [
+        "mad-db:direct-apply-migration-hook"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "mad-db:direct-apply-migration-hook",
+      "command": "npm run mad-db:direct-apply-migration-hook --silent",
+      "deps": [
         "mad-db:hook-idempotency"
       ],
       "resource": [

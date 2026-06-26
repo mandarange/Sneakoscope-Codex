@@ -448,16 +448,17 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
   const policy = await loadDbSafetyPolicy(root);
   const contract = await loadMissionContract(root, state);
   const classification = classifyToolPayload(payload);
-  const madDb = await resolveMadDbMutationPolicy(root, state, classification);
-  if (madDb.allowed === true && state?.mission_id) {
-    const madDbDecision: any = madDb;
+  const madDb: any = await resolveMadDbMutationPolicy(root, state, classification);
+  if (madDb.allowed === true && madDb.mission_id) {
+    const madDbDecision = madDb;
+    const madDbMissionId = String(madDbDecision.mission_id);
     const sqlText = classification.sql?.statements?.length ? String(classification.sql.statements.join('\n')) : null;
     const sqlHash = sqlText ? sha256(sqlText) : null;
     const toolCallId = extractCanonicalToolCallId(payload) || `payload-${sha256(JSON.stringify({ tool: classification.toolName || '', sqlHash, level: classification.level })).slice(0, 16)}`;
     const operationClasses = madDbDecision.operation_classes?.length ? madDbDecision.operation_classes : madDbOperationClassesFromClassification(classification);
     const reservation = await reserveMadDbOperation({
       root,
-      missionId: String(state.mission_id),
+      missionId: madDbMissionId,
       capability: madDbDecision.capability,
       toolCallId,
       toolName: classification.toolName || 'unknown_database_tool',
@@ -466,12 +467,12 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
     });
     await transitionMadDbOperation({
       root,
-      missionId: String(state.mission_id),
+      missionId: madDbMissionId,
       toolCallId,
       state: 'started'
     });
     const lifecycleHook: MadDbLifecycleHook = {
-      mission_id: String(state.mission_id),
+      mission_id: madDbMissionId,
       operation_id: reservation.operation.operation_id,
       tool_call_id: toolCallId,
       cycle_id: madDbDecision.cycle_id || null,
@@ -499,12 +500,13 @@ export async function checkDbOperation(root: any, state: any, payload: any, { du
         lifecycle_result_pending: true,
         ledger_result_hook: lifecycleHook,
         operation_classes: operationClasses,
+        state_source: madDbDecision.state_source || 'hook_state',
         counters: reservation.capability.counters,
         idempotent_reservation_reused: reservation.reused
       }
     };
-    await appendMadDbLedgerEvent(root, state.mission_id, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification, operation_id: reservation.operation.operation_id, tool_call_id: toolCallId });
-    await appendJsonlBounded(path.join(missionDir(root, state.mission_id), 'db-safety.jsonl'), { ts: nowIso(), decision });
+    await appendMadDbLedgerEvent(root, madDbMissionId, { type: 'db_mutation.allowed', cycle_id: madDbDecision.cycle_id, mode: madDbDecision.mode, classification, operation_id: reservation.operation.operation_id, tool_call_id: toolCallId });
+    await appendJsonlBounded(path.join(missionDir(root, madDbMissionId), 'db-safety.jsonl'), { ts: nowIso(), decision });
     return decision;
   }
   const madSks = await madSksOverrideState(root, state);
