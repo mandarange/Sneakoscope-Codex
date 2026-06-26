@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 
-## [4.3.0] - 2026-06-26
+## [4.6.0] - 2026-06-26
 
 ### Added
 
@@ -18,7 +18,7 @@
 
 - Preserved package/README/npm SEO as `target=package` while adding website/docs technical SEO and Generative Engine Optimization evidence layers.
 - SEO/GEO no longer collapse into `$AutoResearch`; research remains an optional child discovery stage while the parent route and Completion Proof stay `$SEO-GEO-OPTIMIZER`.
-- Updated package release metadata, README, feature inventory generation path, npm keywords, and backfill publish tag handling for `4.3.0`.
+- Updated package release metadata, README, feature inventory generation path, npm keywords, and latest publish tag handling for `4.6.0`.
 
 ### Safety
 
