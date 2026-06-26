@@ -1,10 +1,28 @@
 import { isMadDbCapabilityActive, readMadDbCapability, type MadDbCapabilityV2 } from './mad-db-capability.js';
 import { activeMadDbAllowsSqlPlane, isMadDbControlPlaneDeniedTool, madDbOperationClassesFromClassification } from './mad-db-policy.js';
-import { sha256 } from '../fsx.js';
+import { readJson, sha256 } from '../fsx.js';
+import { stateFile } from '../mission.js';
 
 export const MAD_DB_POLICY_DECISION_SCHEMA = 'sks.mad-db-policy-decision.v2';
 
 export async function resolveMadDbMutationPolicy(root: string, state: any = {}, classification: any = {}, explicitCapability?: MadDbCapabilityV2 | null) {
+  const primary = await resolveMadDbMutationPolicyForState(root, state, classification, explicitCapability);
+  if (primary.allowed === true || explicitCapability) return primary;
+  const persistedState = await readJson<any>(stateFile(root), null).catch(() => null);
+  if (persistedState && persistedState !== state) {
+    const fallback = await resolveMadDbMutationPolicyForState(root, persistedState, classification, null);
+    if (fallback.allowed === true) {
+      return {
+        ...fallback,
+        state_source: 'persisted_sks_state',
+        reasons: [...fallback.reasons, 'mad_db_persisted_state_binding_used']
+      };
+    }
+  }
+  return primary;
+}
+
+async function resolveMadDbMutationPolicyForState(root: string, state: any = {}, classification: any = {}, explicitCapability?: MadDbCapabilityV2 | null) {
   const missionId = explicitCapability?.mission_id || state?.mad_db_capability_mission_id || state?.mission_id;
   if (!missionId) return inactive('mission_id_missing');
   const capability = explicitCapability || await readMadDbCapability(root, String(missionId));
@@ -35,7 +53,9 @@ export function validateCapabilityBinding(capability: MadDbCapabilityV2 | null, 
   if (!capability) return { ok: false, reason: 'mad_db_capability_missing' };
   if (!isMadDbCapabilityActive(capability)) return { ok: false, reason: `mad_db_capability_${capability.status || 'inactive'}` };
   if (!capability.project_ref) return { ok: false, reason: 'mad_db_project_ref_missing' };
-  if (state?.mission_id && String(state.mission_id) !== capability.mission_id) return { ok: false, reason: 'mad_db_mission_binding_mismatch' };
+  const boundMadDbMissionId = state?.mad_db_capability_mission_id ? String(state.mad_db_capability_mission_id) : null;
+  if (boundMadDbMissionId === capability.mission_id && state?.mad_db_active === false) return { ok: false, reason: 'mad_db_state_inactive' };
+  if (state?.mission_id && String(state.mission_id) !== capability.mission_id && boundMadDbMissionId !== capability.mission_id) return { ok: false, reason: 'mad_db_mission_binding_mismatch' };
   if (state?.mad_db_cycle_id && String(state.mad_db_cycle_id) !== capability.cycle_id) return { ok: false, reason: 'mad_db_cycle_binding_mismatch' };
   if (state?.mad_db_runtime_session_id && String(state.mad_db_runtime_session_id) !== capability.runtime_session_id) return { ok: false, reason: 'mad_db_runtime_session_binding_mismatch' };
   if (state?.mad_db_profile_sha256 && String(state.mad_db_profile_sha256) !== capability.transport.profile_sha256) return { ok: false, reason: 'mad_db_profile_hash_mismatch' };

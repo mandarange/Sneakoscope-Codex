@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 
+## [4.6.1] - 2026-06-26
+
+### Fixed
+
+- Fixed the MadDB DB safety hook so direct Supabase MCP `apply_migration` calls can use the persisted active MadDB capability even when Codex hook payload state is not the MadDB route state.
+- Reserved drifted direct MCP `apply_migration` operations against the real MadDB mission instead of the incoming hook payload mission id.
+
+### Verification
+
+- Added `mad-db:direct-apply-migration-hook` to prove direct MCP `apply_migration` remains covered by the MadDB capability ledger.
+
 ## [4.6.0] - 2026-06-26
 
 ### Added
