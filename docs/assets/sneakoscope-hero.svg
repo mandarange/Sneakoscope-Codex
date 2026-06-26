@@ -1,0 +1,171 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" role="img" aria-labelledby="t d" font-family="'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif">
+  <title id="t">Sneakoscope Codex — proof-first Codex orchestration</title>
+  <desc id="d">Pipeline from a Codex task through the Naruto parallel worker swarm, live Zellij panes, and safety gates, ending in Completion Proof.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0c1014"/>
+      <stop offset="1" stop-color="#10161d"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#0e9f8e"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#19212b"/>
+      <stop offset="1" stop-color="#141b23"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.15"/>
+      <stop offset="0.5" stop-color="#2dd4bf" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0.15"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#2dd4bf"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="600" fill="url(#bg)"/>
+  <!-- faint decorative wave -->
+  <path d="M0 120 Q400 60 800 120 T1600 120" fill="none" stroke="#2dd4bf" stroke-opacity="0.06" stroke-width="2"/>
+  <path d="M0 500 Q400 560 800 500 T1600 500" fill="none" stroke="#2dd4bf" stroke-opacity="0.06" stroke-width="2"/>
+
+  <!-- ===== Header ===== -->
+  <g transform="translate(96,52)">
+    <rect width="86" height="86" rx="22" fill="#0d0f12" stroke="url(#teal)" stroke-width="2"/>
+    <text x="43" y="50" text-anchor="middle" dominant-baseline="middle" font-size="34" font-weight="800" letter-spacing="2" fill="#f6f2e8">ㅅㅋㅅ</text>
+    <path d="M22 66h42" stroke="#f0b85a" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(202,60)">
+    <text x="0" y="34" font-size="44" font-weight="800" fill="#f6f2e8" letter-spacing="0.5">Sneakoscope <tspan fill="#2dd4bf">Codex</tspan></text>
+    <text x="2" y="74" font-size="22" font-weight="500" fill="#9fb0bd">Proof-first Codex orchestration you can watch, audit, and trust</text>
+  </g>
+
+  <!-- install pill -->
+  <g transform="translate(1140,66)" font-family="'SF Mono','JetBrains Mono',Menlo,Consolas,monospace">
+    <rect width="364" height="44" rx="22" fill="#0d141b" stroke="#243240" stroke-width="1.5"/>
+    <text x="26" y="29" font-size="19" fill="#2dd4bf">$</text>
+    <text x="44" y="29" font-size="19" fill="#cdd9e3">npm i -g sneakoscope</text>
+    <text x="300" y="29" font-size="17" fill="#5f6e7b">→ sks</text>
+  </g>
+
+  <!-- ===== Pipeline ===== -->
+  <!-- connecting flow line behind cards -->
+  <rect x="96" y="338" width="1408" height="6" rx="3" fill="url(#flow)"/>
+
+  <!-- arrows between cards -->
+  <g stroke="#2dd4bf" stroke-width="2.5" marker-end="url(#arrow)" opacity="0.9">
+    <line x1="342" y1="341" x2="378" y2="341"/>
+    <line x1="636" y1="341" x2="672" y2="341"/>
+    <line x1="930" y1="341" x2="966" y2="341"/>
+    <line x1="1224" y1="341" x2="1260" y2="341"/>
+  </g>
+
+  <!-- Card template: x positions 96, 390, 684, 978, 1272 ; width 246 ; y 226 ; h 230 -->
+
+  <!-- 1: Codex Task -->
+  <g transform="translate(96,226)">
+    <rect width="246" height="230" rx="18" fill="url(#card)" stroke="#26313d" stroke-width="1.5"/>
+    <rect x="0" y="0" width="246" height="4" rx="2" fill="url(#teal)"/>
+    <g transform="translate(83,40)">
+      <rect width="80" height="62" rx="9" fill="#0c1116" stroke="#2dd4bf" stroke-width="2"/>
+      <circle cx="13" cy="13" r="3.4" fill="#f0b85a"/><circle cx="25" cy="13" r="3.4" fill="#3b4855"/><circle cx="37" cy="13" r="3.4" fill="#3b4855"/>
+      <path d="M14 34l11 9-11 9" fill="none" stroke="#2dd4bf" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M32 52h24" stroke="#7e8b97" stroke-width="3.4" stroke-linecap="round"/>
+    </g>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">Codex Task</text>
+    <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">CLI &amp; App routes</text>
+  </g>
+
+  <!-- 2: Naruto Swarm -->
+  <g transform="translate(390,226)">
+    <rect width="246" height="230" rx="18" fill="url(#card)" stroke="#26313d" stroke-width="1.5"/>
+    <rect x="0" y="0" width="246" height="4" rx="2" fill="url(#teal)"/>
+    <g transform="translate(123,72)">
+      <circle r="17" fill="url(#teal)" filter="url(#soft)"/>
+      <g fill="#2dd4bf">
+        <circle cx="-44" cy="-22" r="6"/><circle cx="-44" cy="22" r="6"/>
+        <circle cx="44" cy="-22" r="6"/><circle cx="44" cy="22" r="6"/>
+        <circle cx="-30" cy="-40" r="5"/><circle cx="30" cy="-40" r="5"/>
+        <circle cx="-30" cy="40" r="5"/><circle cx="30" cy="40" r="5"/>
+        <circle cx="0" cy="-46" r="5"/><circle cx="0" cy="46" r="5"/>
+        <circle cx="-52" cy="0" r="5"/><circle cx="52" cy="0" r="5"/>
+      </g>
+      <g stroke="#2dd4bf" stroke-width="1.4" opacity="0.4">
+        <line x1="0" y1="0" x2="-44" y2="-22"/><line x1="0" y1="0" x2="44" y2="22"/>
+        <line x1="0" y1="0" x2="44" y2="-22"/><line x1="0" y1="0" x2="-44" y2="22"/>
+      </g>
+    </g>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">$Naruto Swarm</text>
+    <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">up to <tspan fill="#f0b85a" font-weight="700">100</tspan> parallel workers</text>
+  </g>
+
+  <!-- 3: Live Zellij Panes -->
+  <g transform="translate(684,226)">
+    <rect width="246" height="230" rx="18" fill="url(#card)" stroke="#26313d" stroke-width="1.5"/>
+    <rect x="0" y="0" width="246" height="4" rx="2" fill="url(#teal)"/>
+    <g transform="translate(78,38)">
+      <rect x="0" y="0" width="90" height="20" rx="4" fill="#0c1116" stroke="#2dd4bf" stroke-width="1.8"/>
+      <rect x="0" y="0" width="26" height="20" rx="4" fill="#2dd4bf" opacity="0.25"/>
+      <rect x="0" y="26" width="90" height="20" rx="4" fill="#0c1116" stroke="#3a4a57" stroke-width="1.8"/>
+      <rect x="0" y="26" width="26" height="20" rx="4" fill="#2dd4bf" opacity="0.18"/>
+      <rect x="0" y="52" width="90" height="20" rx="4" fill="#0c1116" stroke="#3a4a57" stroke-width="1.8"/>
+      <rect x="0" y="52" width="26" height="20" rx="4" fill="#2dd4bf" opacity="0.12"/>
+      <circle cx="80" cy="10" r="3" fill="#2dd4bf"/>
+    </g>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">Live Zellij Panes</text>
+    <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">stream every worker</text>
+  </g>
+
+  <!-- 4: Safety Gates -->
+  <g transform="translate(978,226)">
+    <rect width="246" height="230" rx="18" fill="url(#card)" stroke="#26313d" stroke-width="1.5"/>
+    <rect x="0" y="0" width="246" height="4" rx="2" fill="url(#teal)"/>
+    <g transform="translate(98,32)">
+      <path d="M25 2l24 9v18c0 17-12 28-24 35-12-7-24-18-24-35V11z" fill="#0c1116" stroke="url(#teal)" stroke-width="2.4"/>
+      <rect x="14" y="26" width="22" height="18" rx="3" fill="#2dd4bf" opacity="0.18"/>
+      <path d="M25 26v-6a6 6 0 0112 0" fill="none" stroke="#f0b85a" stroke-width="2.6"/>
+      <circle cx="25" cy="34" r="3.4" fill="#f0b85a"/>
+    </g>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#f6f2e8">Safety Gates</text>
+    <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">DB &amp; destructive ops gated</text>
+  </g>
+
+  <!-- 5: Completion Proof -->
+  <g transform="translate(1272,226)">
+    <rect width="246" height="230" rx="18" fill="url(#card)" stroke="#26313d" stroke-width="1.5"/>
+    <rect x="0" y="0" width="246" height="4" rx="2" fill="url(#teal)"/>
+    <g transform="translate(90,32)">
+      <rect x="0" y="0" width="66" height="80" rx="7" fill="#0c1116" stroke="#2dd4bf" stroke-width="2"/>
+      <path d="M12 18h42M12 32h42M12 46h28" stroke="#3a4a57" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="50" cy="62" r="16" fill="#0c1116" stroke="url(#teal)" stroke-width="2.4"/>
+      <path d="M43 62l5 5 9-11" fill="none" stroke="#2dd4bf" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="123" y="158" text-anchor="middle" font-size="22" font-weight="700" fill="#2dd4bf">Completion Proof</text>
+    <text x="123" y="188" text-anchor="middle" font-size="15" fill="#8b98a5">schema-backed artifacts</text>
+  </g>
+
+  <!-- ===== Footer tags ===== -->
+  <g transform="translate(0,524)" font-size="18" font-weight="600">
+    <g transform="translate(420,0)">
+      <circle cx="0" cy="-6" r="4" fill="#2dd4bf"/>
+      <text x="14" y="0" fill="#9fb0bd">Auditable</text>
+    </g>
+    <g transform="translate(640,0)">
+      <circle cx="0" cy="-6" r="4" fill="#f0b85a"/>
+      <text x="14" y="0" fill="#9fb0bd">Reproducible</text>
+    </g>
+    <g transform="translate(900,0)">
+      <circle cx="0" cy="-6" r="4" fill="#2dd4bf"/>
+      <text x="14" y="0" fill="#9fb0bd">Evidence-bound</text>
+    </g>
+    <g transform="translate(1170,0)">
+      <circle cx="0" cy="-6" r="4" fill="#f0b85a"/>
+      <text x="14" y="0" fill="#9fb0bd">Honest Mode</text>
+    </g>
+  </g>
+</svg>

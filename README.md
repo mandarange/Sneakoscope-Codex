@@ -2,22 +2,22 @@
 
 # 🔭 Sneakoscope Codex
 
-**Proof-first Codex orchestration — massive parallel agent swarms you can actually watch, audit, and trust.**
+### Proof-first orchestration for OpenAI Codex — run massive parallel AI coding agents you can watch, audit, and trust.
 
 [![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
 [![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
 [![license](https://img.shields.io/badge/license-MIT-blue)](#license)
-[![zellij](https://img.shields.io/badge/UI-Zellij%20stacked%20panes-1e90ff)](#mad-zellij-launch)
+[![Zellij](https://img.shields.io/badge/UI-Zellij%20stacked%20panes-1e90ff)](#mad-zellij-launch)
 
-`npm i -g sneakoscope` → `sks --mad` → watch up to **100 shadow-clone workers** code in parallel,<br/>each in a live Zellij pane, every claim backed by Completion Proof.
+[![Sneakoscope Codex - proof-first Codex orchestration pipeline: a Codex task fans out to the Naruto parallel worker swarm, streams through live Zellij panes, passes safety gates, and ends in Completion Proof](docs/assets/sneakoscope-hero.svg)](https://www.npmjs.com/package/sneakoscope)
 
-Current package release: **4.6.1**.
+`npm i -g sneakoscope` → `sks --mad` → watch up to **100 parallel workers** code at once,<br/>each in a live Zellij pane, every claim backed by **Completion Proof**.
 
 </div>
 
 ---
 
-Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex work **auditable**. It does not try to clone every other harness. It focuses on one thing relentlessly: Codex work becomes visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
+**Sneakoscope Codex** (`sks`) is a Codex CLI and Codex App harness that makes repeatable Codex work **auditable**. It focuses on one thing relentlessly: every Codex run becomes visual-evidence-bound, safety-gated, and reproducible through Completion Proof.
 
 | | What you get |
 | --- | --- |
@@ -27,173 +27,29 @@ Sneakoscope Codex (`sks`) is a Codex CLI/App harness that makes repeatable Codex
 | 🛡️ **Safety gates** | DB/migration/destructive operations stay gated, 190+ release gate scripts, Honest Mode |
 | 🖼️ **Visual evidence** | Image Voxel TriWiki plus `$imagegen`/`gpt-image-2`-bound visual review flows |
 
-![Sneakoscope Codex Trust Layer](docs/assets/sneakoscope-architecture-pipeline.jpg)
-
 ## LLM Init Prompt for Codex Native Agent Builders
 
 ```text
 Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-Codex](https://github.com/mandarange/Sneakoscope-Codex)] as the repo reference and [npm i -g sneakoscope] as the recommended global install command, then run the appropriate `sks` setup, doctor, Codex App, and proof checks for this repo. Keep generated SKS state out of source control unless documented, and record every version-facing change in CHANGELOG.md.
 ```
 
-## 🚀 Current Release
+## ✨ Highlights
 
-SKS **4.6.1** keeps the 4.6 search-visibility release surface and fixes the MadDB safety hook so direct Supabase MCP `apply_migration` calls use the active persisted MadDB capability when Codex hook payload state drifts.
+- **Massive parallel swarm.** `$Naruto` fans work out to up to 100 clone workers behind a hardware-safe governor, with lease-based parallel writes and a scheduler that keeps idle slots full while runnable work remains.
+- **Live Zellij cockpit.** Workers stack as native Zellij panes that stream heartbeat, current file, tool events, and stdout every second.
+- **Completion Proof on every serious route.** Schema-backed proof artifacts replace "trust me, it's done," and Honest Mode separates implemented, locally verified, production verified, and measured outcomes.
+- **Safety-first by default.** SQL/migrations, Supabase/RLS changes, destructive filesystem operations, and published release state stay gated unless you explicitly opt in.
+- **Visual evidence.** Image Voxel TriWiki plus `$imagegen`/`gpt-image-2`-bound visual review flows.
+- **Search visibility route (SEO + GEO).** `sks seo-geo-optimizer` / `$SEO-GEO-OPTIMIZER` runs read-only audit, mutation plan, explicit apply, verification, rollback, and Completion Proof for both Search Engine Optimization and Generative Engine Optimization (GEO is generative-engine, not geolocation).
 
-- **`sks seo-geo-optimizer` / `$SEO-GEO-OPTIMIZER`.** Run read-only audit, mutation plan, explicit apply, verification, rollback, and Completion Proof for both Search Engine Optimization and Generative Engine Optimization.
-- **Mode-specific evidence.** Use `--mode seo` for package/docs/website search visibility, including metadata, canonical, robots, sitemap, locale, structured data, and internal links. Use `--mode geo` for entity facts, claim evidence, answerability, AI crawler purpose policy, and optional `llms.txt` planning. GEO means Generative Engine Optimization, not geolocation.
-- **Lean Engineering evidence.** `sks bench lean-policy --json` compares hermetic baseline-context and lean-policy-context fixtures, catching over-build candidates while preserving safety rejections without making live model accuracy claims.
-- **Safety-first mutation.** `audit` and `plan` never mutate source. `apply` requires `--apply`, uses base hashes, create-only ownership, mutation journal, rollback manifest, and post-verification.
-- **Release-gated artifacts.** SEO/GEO now have explicit runtime fixtures, schemas, feature registry mappings, release gates, route gates, and Completion Proof links.
-
-Common commands:
-
-```bash
-sks seo-geo-optimizer doctor --mode seo --json
+```sh
 sks seo-geo-optimizer audit --mode seo --target package --offline --json
 sks seo-geo-optimizer plan latest --mode seo --json
 sks seo-geo-optimizer apply latest --mode seo --apply --json
-sks seo-geo-optimizer rollback latest --mode seo --apply --json
-
-sks seo-geo-optimizer doctor --mode geo --json
 sks seo-geo-optimizer audit --mode geo --target package --offline --json
-sks seo-geo-optimizer plan latest --mode geo --json
-sks seo-geo-optimizer apply latest --mode geo --include-llms-txt --apply --json
-sks bench lean-policy --json
 ```
 
-Honest boundary: SEO/GEO reports separate implemented, locally verified, production verified, and measured outcome. Sitemaps, canonical tags, structured data, crawler policy, and `llms.txt` are evidence surfaces, not guarantees of indexing, ranking, traffic, rich results, or AI answer inclusion.
-
-What changed in 4.2.1:
-
-What changed in 4.2.0:
-
-- **First-class MadDB route.** `$MAD-DB` no longer aliases `$MAD-SKS`; it creates one authoritative mission, capability, runtime profile, inventory check, execution, read-back, and closeout cycle.
-- **Capability v2 binding.** MadDB capabilities bind project root, project ref hash, mission/cycle/session identity, runtime profile hash, TTL, operator intent, and SQL-plane operation classes.
-- **Ephemeral Supabase write profile.** Persistent Supabase MCP config stays read-only; write-capable MCP settings exist only inside the active MadDB mission and are removed in `finally`.
-- **Exact lifecycle correlation.** Hook/result handling is keyed by canonical `tool_call_id`, uses idempotent operation state, and avoids unsafe tool-name result matching under parallel calls.
-- **Policy/docs/test SSOT.** MadDB route metadata, generated skill guidance, DB safety wording, Doctor guidance, release gates, docs, scanner coverage, and local regression tests share the typed MadDB policy surface.
-- **Release metadata truth.** Package, CLI version constants, Rust crate metadata, README, changelog, and release checks all point at 4.2.0.
-
-What changed in 4.1.1:
-
-What changed in 4.1.0:
-
-SKS **4.1.0** turns the Codex `rust-v0.142.0` compatibility surface into the authoritative Doctor/update readiness path. Doctor now consumes structured Codex Doctor semantics, separates pre-repair observation from post-repair truth, repairs managed native assets from plain `sks doctor --fix`, and gates update completion on a current project migration receipt.
-
-- **Semantic Doctor readiness.** Warning-only Codex Doctor output stays ready, blocking checks block readiness, and unknown non-zero/unparseable Doctor output fails closed.
-- **Post-repair authority.** `sks doctor --fix` records pre-repair Codex Doctor output but bases readiness on the final post-repair Doctor run.
-- **Managed native assets.** Skills, agent roles, hooks, and Context7 transport share the 4.1.0 managed manifest; stale directive markers no longer appear in generated role content.
-- **Codex 0.142 wiring.** The native feature broker exposes multi-agent mode, rollout budget strategy, indexed web search, current time, app-server overload, MCP reconnect, plugin refresh, thread search, remote native environment, and terminal subagent error handling as current capabilities.
-- **Update lifecycle receipts.** `sks update now` runs old-version Doctor preflight, installs through the guarded npm path, re-resolves the new package-local binary, runs new-version global Doctor, and writes a project migration receipt before reporting `updated`.
-- **Local evidence hygiene.** Machine-local `.sneakoscope` runtime evidence is ignored and guarded so release commits do not carry host paths, secrets, or transient proof logs.
-
-What changed in 4.0.15:
-
-- **Codex 0.142 release manifest.** `rust-v0.142.0`, `codex-cli 0.142.0`, SDK `0.142.0`, generated app-server schema hash, required probes, and supported platforms are captured as a single manifest.
-- **Runtime identity proof.** Codex compatibility now resolves the project/env/PATH binary through one resolver and records realpath, version, SHA-256, package root, platform, and arch.
-- **Safer SDK execution policy.** SDK tasks no longer inherit `process.env` wholesale and no longer hard-code `approvalPolicy: never`, `skipGitRepoCheck: true`, or network access from sandbox mode.
-- **0.142 app-server evidence.** Generated app-server TypeScript and JSON Schema snapshots are stored under versioned paths; app-server-v2 wraps `thread/list`, `thread/read`, list search, and `currentTime/read` handling, while capability gates reject `assumed_by_version` evidence.
-- **Transactional thread registry guard.** Codex thread registration now uses an atomic lock and append-only journal, with a 100-write gate covering concurrent updates and corruption preservation.
-- **Package contract repair.** The npm tarball includes `dist/scripts` verification targets so public package scripts do not point at files excluded from the package.
-
-What changed in 4.0.14:
-
-- **Real stage parallelism evidence.** GLM Naruto records bounded parallel stage timelines, overlap ratios, parallelism summaries, critical-path metrics, and speed diagnosis artifacts.
-- **Parallel gate/verifier/worktree stages.** Candidate gate, worktree materialization, and verifier checks no longer have to run candidate-by-candidate when multiple candidates are available.
-- **Requirement coverage seal.** GLM Naruto writes a requirement ledger and candidate coverage artifacts, and the final seal blocks when required requirements remain uncovered.
-- **MAD route isolation.** `sks --mad` without `--glm` remains the GPT/Codex/MAD route and does not resolve OpenRouter or run GLM-specific benchmark/Naruto code.
-- **Benchmark proof honesty.** GLM benchmark proof now reports request-summary availability separately from case-level model lock checks and fixes the no-mutation proof boolean.
-
-What changed in 4.0.13:
-
-- **Extracted worktree patches.** `--worktree` parses `<sks_patch_candidate>` and records candidate/extracted patch hashes before any worker worktree apply.
-- **Adaptive scheduler.** Patch workers use a finite launch queue with provider-health backpressure and retry-once handling for retryable 429/5xx/idle-timeout failures.
-- **True direct-vs-Naruto bench.** `--bench --live --no-apply` compares direct GLM, Naruto 1, 4, 8, and 12 worker cases without fake zero metrics.
-- **Transaction guards.** Final apply blocks dirty touched paths unless `--allow-dirty-apply` is explicit, runs targeted checks, and rolls back on validation failure by default.
-- **Seal artifacts.** GLM Naruto writes `final-seal.json`, stop-gate final-seal evidence, `merge-rationale.md`, and `bench-report.md` for auditability.
-
-What changed in 4.0.8:
-
-- **`--open` alias for interactive GLM launch.** `sks --mad --glm --open` now opens the GLM interactive Zellij runtime, equivalent to `sks --mad --glm --interactive`.
-
-What changed in 4.0.6:
-
-- **No default long-lived GLM launch.** Bare `sks --mad --glm` no longer falls through to MAD/Zellij; `--interactive`, `--open`, `--zellij`, or `session` is required for that path.
-- **Fast GLM speed profile.** Speed mode keeps OpenRouter locked to `z-ai/glm-5.2`, disables GPT/model fallback, avoids high/xhigh reasoning by default, and uses `provider.require_parameters: false` with throughput-first routing.
-- **Bounded direct task runs.** `sks --mad --glm run "task"` and `sks --mad --glm "task"` use a one-shot GLM speed run with max-turn, wall-clock, request-timeout, no-progress, repeated-output, and terminal-state guards.
-- **Deterministic mutation gate.** GLM still returns patch envelopes; SKS parses the unified diff, blocks protected paths, runs `git apply --check`, and applies only after the gate passes.
-- **OpenRouter speed plumbing.** Encoded request bodies are cached without Authorization headers, request timeout/abort is wired, streaming TTFT/usage capture is scaffolded, and synthetic `--bench` remains network-free by default.
-- **Loop regression tests.** Routing, speed-profile, cache, loop-guard, patch-gate, and OpenRouter key handling are covered by targeted tests.
-
-SKS **3.1.16** was a launch-reliability patch on the 3.1.15 doctor-reliability release. It made `sks --mad` self-bootstrap a fresh project instead of dead-ending on a missing Codex config.
-
-What changed in 3.1.16:
-
-- **`sks --mad` bootstraps a fresh project.** When the only preflight blocker is a missing managed Codex config (`.codex/config.toml` absent), `sks --mad` now regenerates it — the `sks doctor --fix` equivalent — and re-runs the preflight, instead of blocking and making you run a separate command. An existing but unreadable/EPERM/parse-broken config still blocks and routes you to `sks doctor --fix`.
-- **Missing-config diagnostics are honest.** A missing config no longer cascades into misleading `macos_acl_ls_le_failed` / `macos_flags_ls_lO_failed` / `spawned_child_read_failed` blockers from running file checks on a nonexistent path; the preflight reports only `missing_config` / `missing_codex_dir`.
-
-SKS **3.1.15** was a doctor-reliability patch on the 3.1.14 production-hardening release. It ended the endless `sks doctor --fix` loop that kept reporting `codex_cli_config_toml_parse_error` / `cli_ready: no` on the very run that already repaired the config.
-
-What changed in 3.1.15:
-
-- **`sks doctor --fix` no longer loops on a config it already fixed.** The Codex config-load probe is re-run *after* the Context7/Supabase/startup MCP repairs land, so the readiness verdict reflects the repaired config instead of the stale pre-repair snapshot.
-- **Context7 is seeded on the remote transport.** Managed setup writes `[mcp_servers.context7]` with the streamable-HTTP `url` instead of a local stdio `command`, so the project config never merges with a remote `url` in the global Codex config into the `url is not supported for stdio` error Codex 0.140 rejects.
-- **The config-load operator action is accurate.** A `codex_cli_config_toml_parse_error` now points at both misplaced machine-local keys *and* the Context7/MCP stdio-vs-`url` transport conflict, instead of only suggesting a key hoist that does nothing for a transport conflict.
-
-The 3.1.14 production-hardening surface for Codex 0.140 evidence, transactional `sks doctor --fix` repair, MCP readiness, native capability proof, and protected-secret rollback remains intact.
-
-What changed in 3.1.14:
-
-- **Codex 0.140 readiness carries evidence.** Capability reports now expose per-feature state and certainty, real usage parsing, goal attachment roundtrip proof, and usage-budget provenance for loop/Naruto runtime decisions.
-- **Doctor repair is phase-based.** `sks doctor --fix` records phase durations, postchecks, optional manual readiness, and rollback evidence instead of collapsing repair work into a summary writer.
-- **Startup and MCP repair are safer.** Managed agent TOML blocks are repaired without touching unrelated config, missing role files are regenerated from real managed templates, Context7 disabled servers stay disabled, and Supabase write scope is separated from read-only readiness.
-- **Secret rollback is line-level when possible.** Protected key changes are restored without discarding unrelated operator edits, nested guard operations are recorded, and backup artifacts remain ignored.
-- **Native capability proof is stricter.** Computer Use and Chrome/web review no longer become verified from environment variables outside explicit fixture/test modes.
-- **Release metadata is aligned for 3.1.14.** Package, lockfile, CLI version constants, Rust helper metadata, README, changelog, docs, built output, and release stamp all point at the same release.
-
-SKS 3.0.0 was the parallel-runtime stabilization release. The whole live-swarm experience — what you actually *see* while 5, 20, or 100 workers run — was rebuilt and proven end-to-end.
-
-What changed in 3.0.0:
-
-- **Slot panes are finally alive.** The watch renderer froze for entire missions because the telemetry snapshot cache never invalidated; snapshot reads are now mtime-aware, multi-process flushes merge instead of clobbering each other, and the disk `updated_at` stays authoritative for stale detection.
-- **One SLOTS column, vertical stack.** Concurrent workers used to race anchor creation and split the screen into N side-by-side columns. Anchor + worker pane creation is serialized per session, and workers join a native Zellij stacked-pane group (`new-pane --stacked`, opt out with `SKS_ZELLIJ_WORKER_STACKED=0`).
-- **Live renderer is the default worker pane.** `full-debug` showed nothing until worker exit (workers run with `--json`); the default `compact-slots` renderer streams heartbeat, current file, tool events, and stdout tails every second.
-- **Zellij stays current like Codex does.** `sks --mad` / `sks naruto run` offer a `[Y/n]` upgrade to the latest stable Zellij (GitHub releases lookup, 6h cache), plus an explicit `sks zellij update [--yes]` subcommand and `SKS_SKIP_ZELLIJ_UPDATE` escape.
-- **Faster, honest dispatch.** Scheduler batch telemetry writes run concurrently per batch instead of serializing two file writes per worker; naruto backpressure throttling (50%/25% under host pressure) is reported in the run header instead of staying silent.
-- **Wired, not decorative.** The naruto finalizer gate and the agent message bus now run in production paths; dead swarm code (`naruto-work-stealing`, `zellij-right-column-layout-proof`) was removed.
-
-Quick checks:
-
-```bash
-npm run typecheck
-npm run build
-npm run codex:0138-capability
-npm run codex-sdk:version-compat
-npm run codex-app:handoff
-npm run codex-plugin:inventory
-npm run qa-loop:app-handoff
-npm run image:artifact-path-contract
-npm run codex:effort-order
-npm run codex:account-usage
-npm run codex:0138-doctor
-npm run doctor:codex-0138-fix
-npm run codex-control:capability
-npm run codex-control:structured-output
-npm run codex-control:event-stream-ledger
-npm run codex-control:thread-registry
-npm run codex-control:empty-result-retry
-npm run codex-control:stream-idle-watchdog
-npm run ultra-router:auto-router
-npm run codex-sdk:zellij-pane-binding
-npm run codex-app:fast-ui-preservation
-npm run provider:badge-context
-npm run zellij:worker-pane-manager
-npm run runtime:no-mjs-scripts
-npm run runtime:ts-python-boundary
-npm run codex-control:all-pipelines
-```
-
-Change-aware release checks live behind `npm run release:check`; publish-authorizing full DAG checks use `npm run release:check:full`. Detailed release history is in [CHANGELOG.md](CHANGELOG.md), and release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
+> 📋 **Current release: `v4.6.1`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## 🍥 Parallelism, UX, And Integrations
 
@@ -739,7 +595,7 @@ sks codex-native invocation-plan --route Loop --capability agent-role --json
 sks codex-native init-deep --apply --directory-local --json
 ```
 
-The broker records Codex-native feature availability, invocation defaults, neutral pattern evidence, and managed memory setup without exposing reference implementation branding in user-facing artifacts.
+The broker records Codex-native feature availability, invocation defaults, neutral pattern evidence, and managed memory setup to drive routing decisions.
 
 ## 💬 Prompt `$` Commands
 
@@ -856,14 +712,14 @@ sks codex-app check
 
 If Codex App UI panels or auth-dependent controls still look wrong after codex-lb setup, repair, or upgrade, restart the app first. If the UI still does not recover, sign out of Codex App, sign back in, then run `sks codex-app check` or `sks codex-lb repair` as needed.
 
-### Setup is blocked by another harness
+### Setup is blocked by another tool
 
 ```sh
 sks conflicts check
 sks conflicts prompt
 ```
 
-OMX/DCodex conflicts block setup/doctor until the user approves cleanup.
+If another agent tool's managed config conflicts with setup, SKS blocks setup/doctor until you approve the cleanup.
 
 ### The route is stuck or a final hook keeps reopening
 
