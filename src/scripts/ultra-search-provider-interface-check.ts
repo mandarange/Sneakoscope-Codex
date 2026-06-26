@@ -20,7 +20,7 @@ assertGate(result.proof.provider_independent === true, 'UltraSearch proof must b
 assertGate(result.proof.xai_runtime_dependency === false, 'UltraSearch must not require xAI runtime', result.proof);
 assertGate(result.sources.some((source) => source.acquisition_verdict === 'verified_content'), 'UltraSearch must normalize verified source evidence', result.sources);
 assertGate(result.convergence.schema === 'sks.ultra-search-convergence.v1', 'UltraSearch convergence artifact must be typed', result.convergence);
-emitGate('ultra-search:provider-interface', {
+emitGate('insane-search:provider-interface', {
   mode: result.mode,
   sources: result.sources.length,
   verified: result.proof.verified_source_count,

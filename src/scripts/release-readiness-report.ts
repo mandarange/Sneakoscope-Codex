@@ -105,7 +105,7 @@ const checks = {
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
   release_readiness: scriptContains('release:check:parallel', 'release:readiness'),
-  ultra_search_provider_interface: scriptContains('release:check:parallel', 'ultra-search:provider-interface'),
+  insane_search_provider_interface: scriptContains('release:check:parallel', 'insane-search:provider-interface'),
   source_intelligence_policy: scriptContains('release:check:parallel', 'source-intelligence:policy'),
   source_intelligence_all_modes: scriptContains('release:check:parallel', 'source-intelligence:all-modes'),
   codex_web_adapter: scriptContains('release:check:parallel', 'codex-web:adapter'),

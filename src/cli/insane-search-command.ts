@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { runUltraSearch, type UltraSearchMode } from '../core/ultra-search/index.js'
 
-export async function ultraSearchCommand(sub: string = 'help', args: string[] = []) {
+export async function insaneSearchCommand(sub: string = 'help', args: string[] = []) {
   const action = sub || 'help'
   if (action === 'run') return runCommand(args)
   if (action === 'x') return runCommand(['--mode', 'x_search', ...args])
@@ -16,11 +16,13 @@ export async function ultraSearchCommand(sub: string = 'help', args: string[] = 
   return helpCommand()
 }
 
+export const ultraSearchCommand = insaneSearchCommand
+
 async function runCommand(args: string[]) {
   const json = args.includes('--json')
   const mode = readOption(args, '--mode') as UltraSearchMode | null
   const query = positional(args).join(' ').trim()
-  if (!query) throw new Error('Usage: sks ultra-search run "<query>" [--mode fast|balanced|deep|exhaustive|x_search|url_acquisition] [--json]')
+  if (!query) throw new Error('Usage: sks insane-search run "<query>" [--mode fast|balanced|deep|exhaustive|x_search|url_acquisition] [--json]')
   const missionDir = await mkMissionDir()
   const result = await runUltraSearch({
     missionDir,
@@ -29,7 +31,7 @@ async function runCommand(args: string[]) {
   })
   if (json) console.log(JSON.stringify(result, null, 2))
   else {
-    console.log(`UltraSearch ${result.ok ? 'completed' : 'partial/blocked'}: ${result.mode}`)
+    console.log(`InsaneSearch ${result.ok ? 'completed' : 'partial/blocked'}: ${result.mode}`)
     console.log(`Mission: ${missionDir}`)
     console.log(`Sources: ${result.sources.length}, verified: ${result.proof.verified_source_count}`)
     if (result.blockers.length) console.log(`Blockers: ${result.blockers.join(', ')}`)
@@ -54,7 +56,7 @@ async function doctorCommand(args: string[]) {
     warnings: []
   }
   if (json) console.log(JSON.stringify(report, null, 2))
-  else console.log('UltraSearch doctor: core ready; xAI/Grok is not required.')
+  else console.log('InsaneSearch doctor: core ready; xAI/Grok is not required.')
   return report
 }
 
@@ -105,14 +107,17 @@ async function migrateXaiCommand(args: string[]) {
 function helpCommand() {
   console.log([
     'Usage:',
-    '  sks ultra-search doctor [--json]',
-    '  sks ultra-search run "<query>" [--mode fast|balanced|deep|exhaustive]',
-    '  sks ultra-search x "<query>"',
-    '  sks ultra-search fetch "<url>"',
-    '  sks ultra-search status|inspect|sources|claims <mission|latest>',
-    '  sks ultra-search cache status|prune|clear',
-    '  sks ultra-search bench [--suite all|x|web|docs|blocked]',
-    '  sks ultra-search migrate-xai [--apply]'
+    '  sks insane-search doctor [--json]',
+    '  sks insane-search run "<query>" [--mode fast|balanced|deep|exhaustive]',
+    '  sks insane-search x "<query>"',
+    '  sks insane-search fetch "<url>"',
+    '  sks insane-search status|inspect|sources|claims <mission|latest>',
+    '  sks insane-search cache status|prune|clear',
+    '  sks insane-search bench [--suite all|x|web|docs|blocked]',
+    '  sks insane-search migrate-xai [--apply]',
+    '',
+    'Compatibility:',
+    '  sks ultra-search ...'
   ].join('\n'))
   return { ok: true, status: 'help' }
 }

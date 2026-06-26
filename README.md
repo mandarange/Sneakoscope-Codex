@@ -49,7 +49,7 @@ sks seo-geo-optimizer apply latest --mode seo --apply --json
 sks seo-geo-optimizer audit --mode geo --target package --offline --json
 ```
 
-> 📋 **Current release: `v4.6.1`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
+> 📋 **Current release: `v4.6.2`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## 🍥 Parallelism, UX, And Integrations
 
@@ -66,12 +66,12 @@ sks seo-geo-optimizer audit --mode geo --target package --offline --json
 
 - **Image generation under codex-lb.** `gpt-image-2` routes through the same Codex `/responses` backend the load balancer already proxies, so `$imagegen` works when you are authenticated only through codex-lb (no direct `OPENAI_API_KEY`). The official Codex App `$imagegen` surface stays primary; the codex-lb/OpenAI API path is the fallback. Opt out with `SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK=0`.
 
-- **UltraSearch source intelligence.** Run provider-independent source acquisition without requiring xAI/Grok credentials:
+- **InsaneSearch source intelligence.** Run provider-independent source acquisition without requiring xAI/Grok credentials:
 
   ```bash
-  sks ultra-search doctor
-  sks ultra-search run "current package release notes" --mode balanced
-  sks ultra-search x "site:x.com product launch"
+  sks insane-search doctor
+  sks insane-search run "current package release notes" --mode balanced
+  sks insane-search x "site:x.com product launch"
   ```
 
 - **CLI-only SKS update notices.** Codex App hooks no longer stop normal work to ask for an SKS update. CLI launch surfaces such as `sks --mad` print a non-blocking latest-version notice, `sks update-check` / `sks update check` show the explicit status, and `sks doctor --fix` runs the guarded global SKS update path before repair.
@@ -157,7 +157,7 @@ The cleanup contract is policy-backed in `.sneakoscope/policy.json`, but the def
 - Codex App Hooks/PAT: [docs/hooks-pat.md](docs/hooks-pat.md)
 - codex-lb: [docs/codex-lb.md](docs/codex-lb.md)
 - Source Intelligence Layer: [docs/source-intelligence-layer.md](docs/source-intelligence-layer.md)
-- UltraSearch / Context7 / Codex Web policy: [docs/ultra-search-source-intelligence-policy.md](docs/ultra-search-source-intelligence-policy.md)
+- InsaneSearch / Context7 / Codex Web policy: [docs/ultra-search-source-intelligence-policy.md](docs/ultra-search-source-intelligence-policy.md)
 - Main no-Scout / worker Scout policy: [docs/main-no-scout-worker-scout-policy.md](docs/main-no-scout-worker-scout-policy.md)
 - Real Codex dynamic smoke: [docs/real-codex-dynamic-smoke.md](docs/real-codex-dynamic-smoke.md)
 - Appshots pipeline: [docs/appshots-pipeline.md](docs/appshots-pipeline.md)

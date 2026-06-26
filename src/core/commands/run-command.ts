@@ -490,7 +490,7 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
 
 function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] {
   if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
-  if (route.command === '$Ultra-Search') return ultraSearchExecutionArgs(prompt);
+  if (route.command === '$Insane-Search') return ultraSearchExecutionArgs(prompt);
   if (route.command === '$SEO-GEO-OPTIMIZER') return ['seo-geo-optimizer', searchVisibilityActionFromPrompt(prompt), '--mode', searchVisibilityModeFromPrompt(prompt), '--target', searchVisibilityTargetFromPrompt(prompt), '--offline', '--json'];
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];
   if (route.command === '$Fast-Mode') return ['fast-mode', fastModeActionFromPrompt(prompt), '--json'];
@@ -503,22 +503,26 @@ function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = 
 function ultraSearchExecutionArgs(prompt = ''): string[] {
   const stripped = stripUltraSearchPrompt(prompt);
   const lower = stripped.toLowerCase();
-  if (!stripped || /^(?:doctor|check|status)\b/.test(lower)) return ['ultra-search', 'doctor', '--json'];
+  if (!stripped || /^(?:doctor|check|status)\b/.test(lower)) return ['insane-search', 'doctor', '--json'];
   if (/^(?:x|x-search|x_search)\b/.test(lower)) {
     const query = stripped.replace(/^(?:x|x-search|x_search)\b[:\s-]*/i, '').trim() || 'source intelligence fixture';
-    return ['ultra-search', 'x', query, '--json'];
+    return ['insane-search', 'x', query, '--json'];
   }
   const url = stripped.match(/\bhttps?:\/\/\S+/)?.[0];
-  if (/^(?:fetch|url)\b/.test(lower) || url) return ['ultra-search', 'fetch', url || stripped.replace(/^(?:fetch|url)\b[:\s-]*/i, '').trim() || 'https://example.com', '--json'];
+  if (/^(?:fetch|url)\b/.test(lower) || url) return ['insane-search', 'fetch', url || stripped.replace(/^(?:fetch|url)\b[:\s-]*/i, '').trim() || 'https://example.com', '--json'];
   const query = stripped.replace(/^run\b[:\s-]*/i, '').trim() || 'source intelligence fixture';
-  return ['ultra-search', 'run', query, '--mode', 'balanced', '--json'];
+  return ['insane-search', 'run', query, '--mode', 'balanced', '--json'];
 }
 
 function stripUltraSearchPrompt(prompt = ''): string {
   return String(prompt || '')
     .trim()
+    .replace(/^\[\$Insane-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\[\$InsaneSearch\]\([^)]+\)(?:\s|:)?\s*/i, '')
     .replace(/^\[\$Ultra-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
     .replace(/^\[\$UltraSearch\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\$Insane-Search(?:\s|:)?\s*/i, '')
+    .replace(/^\$InsaneSearch(?:\s|:)?\s*/i, '')
     .replace(/^\$Ultra-Search(?:\s|:)?\s*/i, '')
     .replace(/^\$UltraSearch(?:\s|:)?\s*/i, '')
     .trim();
