@@ -34,7 +34,7 @@ export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|research|seo-geo-optimizer|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|ultra-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|research|seo-geo-optimizer|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|insane-search|ultra-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
 export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
 export const CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE = 'codex_in_app_browser';
 export const CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE = 'codex_chrome_extension';
@@ -570,19 +570,19 @@ export const ROUTES = [
     examples: ['$Research investigate this idea']
   },
   {
-    id: 'UltraSearch',
-    command: '$Ultra-Search',
+    id: 'InsaneSearch',
+    command: '$Insane-Search',
     mode: 'ULTRA_SEARCH',
     route: 'provider-independent source intelligence',
-    description: 'Run UltraSearch source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring xAI/Grok.',
-    requiredSkills: ['ultra-search', 'pipeline-runner', 'context7-docs', 'honest-mode'],
-    dollarAliases: ['$UltraSearch'],
+    description: 'Run InsaneSearch source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring xAI/Grok.',
+    requiredSkills: ['insane-search', 'pipeline-runner', 'context7-docs', 'honest-mode'],
+    dollarAliases: ['$InsaneSearch', '$Ultra-Search', '$UltraSearch'],
     lifecycle: ['source_intent', 'query_variants', 'provider_plan', 'source_ledgers', 'claim_ledgers', 'ultra_search_gate', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'high',
     stopGate: 'ultra-search/ultra-search-gate.json',
-    cliEntrypoint: 'sks ultra-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai',
-    examples: ['$Ultra-Search run "current package release notes"', '$UltraSearch x "site:x.com product launch"']
+    cliEntrypoint: 'sks insane-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai',
+    examples: ['$Insane-Search run "current package release notes"', '$InsaneSearch x "site:x.com product launch"']
   },
   {
     id: 'SEOGEOOptimizer',
@@ -753,8 +753,9 @@ export const COMMAND_CATALOG = [
   { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
   { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
-  { name: 'ultra-search', usage: 'sks ultra-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai', description: 'Run provider-independent UltraSearch source intelligence.' },
-  { name: 'xai', usage: 'sks xai check|status|docs', description: 'Deprecated compatibility notice; use sks ultra-search.' },
+  { name: 'insane-search', usage: 'sks insane-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai', description: 'Run provider-independent InsaneSearch source intelligence.' },
+  { name: 'ultra-search', usage: 'compatibility alias for sks insane-search', description: 'Deprecated compatibility alias; use sks insane-search.' },
+  { name: 'xai', usage: 'sks xai check|status|docs', description: 'Deprecated compatibility notice; use sks insane-search.' },
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -935,7 +936,7 @@ export function looksLikeGenerativeEngineOptimizationRequest(prompt: any = '') {
 
 export function looksLikeUltraSearchRequest(prompt: any = '') {
   const text = String(prompt || '');
-  return /\b(?:UltraSearch|Ultra-Search|ultra\s*search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search)\b|울트라\s*서치|소스\s*인텔리전스/i.test(text);
+  return /\b(?:InsaneSearch|Insane-Search|insane\s*search|UltraSearch|Ultra-Search|ultra\s*search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search)\b|인세인\s*서치|울트라\s*서치|소스\s*인텔리전스/i.test(text);
 }
 
 export function routePrompt(prompt: any): any {
@@ -968,7 +969,7 @@ export function routePrompt(prompt: any): any {
   if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Naruto');
   if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Team');
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
-  if (looksLikeUltraSearchRequest(text) && !looksLikeCodeChangingWork(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('UltraSearch');
+  if (looksLikeUltraSearchRequest(text) && !looksLikeCodeChangingWork(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('InsaneSearch');
   if (looksLikeGenerativeEngineOptimizationRequest(text)) return routeById('SEOGEOOptimizer');
   if (looksLikeSeoRequest(text)) return routeById('SEOGEOOptimizer');
   if (/\b(autoresearch|experiment|benchmark|ranking|optimi[sz]e|improve metric|github stars?|npm downloads?|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
@@ -1050,7 +1051,7 @@ export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
   if (route.id === 'PPT') return false;
   if (route.id === 'ImageUXReview') return false;
-  if (route.id === 'UltraSearch') return false;
+  if (route.id === 'InsaneSearch') return false;
   if (route.id === 'SEOGEOOptimizer') return false;
   if (route.id === 'MadDB') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
@@ -1126,7 +1127,7 @@ export function routeReasoning(route: any, prompt: any = '') {
   if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\$MAD-DB\b|\bmad-sks\b|\bmadsks\b|\bmad-db\b|\bmaddb\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
   if (route?.id === 'Team' || route?.id === 'Naruto') return teamRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
-  if (route?.id === 'UltraSearch') return reasoning('high', 'source_intelligence_route');
+  if (route?.id === 'InsaneSearch') return reasoning('high', 'source_intelligence_route');
   if (route?.id === 'SEOGEOOptimizer') return reasoning('high', 'search_visibility_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');
   if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');

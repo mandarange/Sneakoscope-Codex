@@ -1,6 +1,6 @@
-# UltraSearch, Context7, And Codex Web Policy 4.4.0
+# InsaneSearch, Context7, And Codex Web Policy
 
-UltraSearch is the source-intelligence runtime for SKS 4.4.0. It decomposes queries, selects source lanes by capability, records typed artifacts, normalizes sources, separates weak discovery from verified content, and builds claim/citation proof without requiring xAI/Grok.
+InsaneSearch is the public source-intelligence command for SKS. The underlying proof runtime was formerly exposed as UltraSearch; it decomposes queries, selects source lanes by capability, records typed artifacts, normalizes sources, separates weak discovery from verified content, and builds claim/citation proof without requiring xAI/Grok.
 
 Policy summary:
 
@@ -13,7 +13,7 @@ Policy summary:
 Release gates:
 
 ```bash
-npm run ultra-search:provider-interface
+npm run insane-search:provider-interface
 npm run source-intelligence:policy
 npm run source-intelligence:all-modes
 ```

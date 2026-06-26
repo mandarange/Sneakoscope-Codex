@@ -10,7 +10,7 @@ function run(env = {}) {
   });
 }
 
-test('plain npm publish accepts the root latest tag for 4.6.1', () => {
+test('plain npm publish accepts the root latest tag for 4.6.2', () => {
   const result = run({ npm_config_tag: '' });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /-> latest/);

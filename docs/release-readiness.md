@@ -1,8 +1,8 @@
 # Release Readiness
 
-SKS 4.6.1 is a forward patch release carrying the unified SEO/GEO optimizer, Lean Engineering Policy evidence surface, and MadDB direct `apply_migration` hook fix. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, the `seo-geo-optimizer` mode-specific gate suite, the MadDB direct apply-migration hook gate, and the `publish:ignore-scripts` wrapper to agree on 4.6.1 before publication.
+SKS 4.6.2 is a forward patch release carrying the InsaneSearch public command rename, the unified SEO/GEO optimizer, Lean Engineering Policy evidence surface, and MadDB direct `apply_migration` hook fix. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, the `insane-search` source-intelligence gate, the `seo-geo-optimizer` mode-specific gate suite, the MadDB direct apply-migration hook gate, and the `publish:ignore-scripts` wrapper to agree on 4.6.2 before publication.
 
-4.6.1 release readiness adds proof that `sks seo-geo-optimizer` and `$SEO-GEO-OPTIMIZER` are the single public Search Engine Optimization and Generative Engine Optimization surface, that old split `seo`/`geo` public commands are removed, that Lean Engineering Policy evidence reaches planning, workers, code-structure, GPT final review, and Completion Proof, that direct Supabase MCP `apply_migration` is allowed only through the active MadDB capability, and that `npm publish --ignore-scripts` packages the prebuilt dist surface with the latest dist-tag.
+4.6.2 release readiness adds proof that `sks insane-search`, `$Insane-Search`, and `$InsaneSearch` are the primary source-intelligence surface while legacy UltraSearch names remain compatibility aliases; that `sks seo-geo-optimizer` and `$SEO-GEO-OPTIMIZER` are the single public Search Engine Optimization and Generative Engine Optimization surface; that old split `seo`/`geo` public commands are removed; that Lean Engineering Policy evidence reaches planning, workers, code-structure, GPT final review, and Completion Proof; that direct Supabase MCP `apply_migration` is allowed only through the active MadDB capability; and that `npm publish --ignore-scripts` packages the prebuilt dist surface with the latest dist-tag.
 
 SKS 4.4.0 is the UltraSearch source-intelligence replacement release after 4.2.1. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release stamp, provenance, npm registry unpublished-version checks, UltraSearch provider-interface gates, Source Intelligence Policy v2 gates, and the `publish:ignore-scripts` wrapper to agree on 4.4.0 before publication.
 
@@ -220,7 +220,7 @@ The operator-facing publish entrypoint is `npm run publish:npm` (or
 final npm lifecycle hooks are disabled on purpose.
 
 ```bash
-npm run ultra-search:provider-interface
+npm run insane-search:provider-interface
 npm run source-intelligence:policy
 npm run source-intelligence:all-modes
 npm run codex-web:adapter

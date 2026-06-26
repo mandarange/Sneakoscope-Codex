@@ -60,7 +60,8 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-image-ux-review` | visual-memory | labs | sks ux-review run --image <path> --fix --json \| sks image-ux-review status <mission-id\|latest> [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-computer-use` | integration | beta | sks computer-use import\|status\|smoke\|require ... [--json] | real_optional:pass | integration_optional | none recorded |
 | `cli-context7` | integration | labs | sks context7 check\|setup\|tools\|resolve\|docs\|evidence ... | real_optional:pass | integration_optional | none recorded |
-| `cli-ultra-search` | core-cli | labs | sks ultra-search doctor\|run\|x\|fetch\|status\|inspect\|sources\|claims\|cache\|bench\|migrate-xai | execute:pass | runtime_verified | none recorded |
+| `cli-insane-search` | core-cli | labs | sks insane-search doctor\|run\|x\|fetch\|status\|inspect\|sources\|claims\|cache\|bench\|migrate-xai | execute:pass | runtime_verified | none recorded |
+| `cli-ultra-search` | core-cli | labs | compatibility alias for sks insane-search | execute:pass | runtime_verified | none recorded |
 | `cli-xai` | core-cli | labs | sks xai check\|status\|docs | real_optional:pass | integration_optional | none recorded |
 | `cli-recallpulse` | loop | labs | sks recallpulse run\|status\|eval\|governance\|checklist <mission-id\|latest> | mock:pass | runtime_mock_verified | none recorded |
 | `cli-pipeline` | proof-route | beta | sks pipeline status\|resume\|plan\|answer ... | mock:pass | runtime_mock_verified | none recorded |
@@ -125,8 +126,10 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `route-commit` | route | labs | $Commit<br>$commit | mock:pass | runtime_mock_verified | none recorded |
 | `route-commit-and-push` | route | labs | $Commit-And-Push<br>$commit-and-push | mock:pass | runtime_mock_verified | none recorded |
 | `route-research` | route | labs | $Research<br>$research | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-ultra-search` | route | labs | $Ultra-Search<br>$ultra-search | execute:pass | runtime_verified | none recorded |
-| `route-ultrasearch` | route | labs | $UltraSearch | execute:pass | runtime_verified | none recorded |
+| `route-insane-search` | route | labs | $Insane-Search<br>$insane-search | execute:pass | runtime_verified | none recorded |
+| `route-insanesearch` | route | labs | $InsaneSearch | execute:pass | runtime_verified | none recorded |
+| `route-ultra-search` | route | labs | $Ultra-Search<br>$ultra-search | execute:pass | runtime_verified | compatibility alias |
+| `route-ultrasearch` | route | labs | $UltraSearch | execute:pass | runtime_verified | compatibility alias |
 | `route-seo-geo-optimizer` | route | labs | $SEO-GEO-OPTIMIZER<br>$seo-geo-optimizer | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-autoresearch` | route | labs | $AutoResearch<br>$autoresearch | mock:pass | runtime_mock_verified | none recorded |
 | `route-db` | route | beta | $DB<br>$db | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
@@ -187,4 +190,3 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 - [x] Exposed the registry through `sks features list --json`.
 - [x] Added a release coverage check through `sks features check --json`.
 - [x] Documented fixture status for every registry feature.
-

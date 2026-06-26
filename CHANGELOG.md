@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 
+## [4.6.2] - 2026-06-27
+
+### Changed
+
+- Renamed the public source-intelligence command surface from UltraSearch to InsaneSearch: `sks insane-search`, `$Insane-Search`, and `$InsaneSearch` are now the primary names.
+- Kept `sks ultra-search`, `$Ultra-Search`, and `$UltraSearch` as compatibility aliases so existing workflows continue to resolve.
+- Updated source-intelligence docs, feature fixtures, release gates, and xAI compatibility guidance to prefer InsaneSearch.
+
+### Verification
+
+- Added/updated command and dollar-route blackbox coverage for the InsaneSearch route and legacy UltraSearch aliases.
+
 ## [4.6.1] - 2026-06-26
 
 ### Fixed

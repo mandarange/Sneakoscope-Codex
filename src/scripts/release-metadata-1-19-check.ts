@@ -98,7 +98,7 @@ const requiredScripts = [
   'agent:janitor',
   'agent:multi-project-isolation',
   'verification:parallel-engine',
-  'ultra-search:provider-interface',
+  'insane-search:provider-interface',
   'source-intelligence:policy',
   'source-intelligence:all-modes',
   'codex-web:adapter',
