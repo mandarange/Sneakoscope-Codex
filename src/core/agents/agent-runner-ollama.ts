@@ -4,6 +4,7 @@ import { loadTriWikiRuntimeContext, triWikiContextBlock, triWikiProofRecord, typ
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
 import { resolveOllamaWorkerConfig, type OllamaWorkerConfig } from './ollama-worker-config.js'
+import { leanEngineeringCompactText } from '../lean-engineering-policy.js'
 
 export const OLLAMA_WORKER_POLICY_SCHEMA = 'sks.ollama-worker-policy.v1'
 export const OLLAMA_WORKER_REQUEST_SCHEMA = 'sks.ollama-worker-request.v1'
@@ -190,6 +191,7 @@ function buildOllamaGenerateRequest(agent: any, slice: any, opts: any, config: O
   const prompt = [
     'You are an SKS local Ollama worker. You are not an architect, planner, reviewer, verifier, safety judge, or strategist.',
     'Only perform the narrow worker task below. If the task asks for strategy, planning, design, review, verification, risk judgment, or orchestration, return JSON with status "blocked" and blockers.',
+    leanEngineeringCompactText(),
     'Before writing or collecting, consult the TriWiki context below first. Treat use_first as high-trust project memory and hydrate_first as source/evidence that the parent must verify before risky or user-visible work.',
     'If TriWiki is missing, stale, or lacks current stack syntax/version guidance, do not invent from model memory. Return blocked and tell the parent SKS route to update .sneakoscope/memory/q2_facts/stack-current-docs.md with Context7 or official vendor docs, then run `sks wiki refresh` and `sks wiki validate .sneakoscope/wiki/context-pack.json` before retrying.',
     'Return JSON only. Do not wrap it in markdown.',

@@ -246,7 +246,15 @@ async function richContentGate(id: string) {
     const report = await mod.syncCodexSksSkills({ root: rootDir, skillsRoot, apply: true })
     const skill = fs.readFileSync(path.join(skillsRoot, 'loop', 'SKILL.md'), 'utf8')
     assertGate(/Purpose:|Evidence:|Fallback:/.test(skill), 'managed skill must include rich route content', { skill, report })
-    return emitGate(id, { skills: report.created.length })
+    for (const name of ['search-visibility-core', 'seo-geo-optimizer']) {
+      const file = path.join(skillsRoot, name, 'SKILL.md')
+      assertGate(fs.existsSync(file), `managed skill missing: ${name}`, { report })
+      const text = fs.readFileSync(file, 'utf8')
+      assertGate(/Purpose:|Use when:|Workflow:|Safety:|Evidence\/artifacts:|Failure\/recovery:|CLI entrypoint:/i.test(text), `managed skill lacks rich content: ${name}`, { text })
+      assertGate(/ranking|citation|traffic|guarantee|보장/i.test(text), `managed skill must name forbidden guarantee boundary: ${name}`, { text })
+      if (name === 'seo-geo-optimizer') assertGate(text.includes('sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture') && /not geolocation|GeoIP/i.test(text), 'seo-geo-optimizer skill must expose CLI entrypoint and geolocation disambiguation', { text })
+    }
+    return emitGate(id, { skills: report.created.length, search_visibility_skills_checked: 2 })
   }
   const previous = swapEnv({ SKS_CODEX_AGENT_TYPE_FIXTURE: 'supported' })
   try {

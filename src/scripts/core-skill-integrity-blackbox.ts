@@ -3,11 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { assertGate, emitGate, makeTempRoot, writeText, writeUserSkill } from './sks-3-1-8-check-lib.js';
 import { syncCoreSkillsIntegrity } from '../core/codex-native/core-skill-integrity.js';
-import { renderCoreSkillTemplate } from '../core/codex-native/core-skill-manifest.js';
+import { buildSksCoreSkillManifest, renderCoreSkillTemplate } from '../core/codex-native/core-skill-manifest.js';
 import { initProject } from '../core/init.js';
 
 const root = await makeTempRoot('sks-core-blackbox-');
 const skillsRoot = path.join(root, '.agents', 'skills');
+const expectedSkillCount = buildSksCoreSkillManifest('1970-01-01T00:00:00.000Z').skills.length;
 const first = await syncCoreSkillsIntegrity({ root, apply: true, skillsRoot });
 const second = await syncCoreSkillsIntegrity({ root, apply: true, skillsRoot });
 await writeText(path.join(skillsRoot, 'research', 'SKILL.md'), `${renderCoreSkillTemplate('research')}\nmutated\n`);
@@ -22,7 +23,7 @@ const setupIntegrity = await syncCoreSkillsIntegrity({ root: setupRoot, apply: f
 await writeText(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md'), `${renderCoreSkillTemplate('loop')}\nmutated by setup blackbox\n`);
 const setupRestore = await initProject(setupRoot, { force: true, installScope: 'project', localOnly: true, globalCommand: 'sks' });
 const restoredSetupText = await fs.readFile(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md'), 'utf8');
-assertGate(first.installed.length === 8, 'blackbox A: first sync installs missing core skills', first);
+assertGate(first.installed.length === expectedSkillCount, 'blackbox A: first sync installs missing core skills', first);
 assertGate(second.installed.length === 0 && second.restored.length === 0, 'blackbox B: second sync changes nothing', second);
 assertGate(third.restored.length === 1 && restoredText === renderCoreSkillTemplate('research'), 'blackbox C: managed drift restored exactly', third);
 assertGate(user.skipped_user_authored.length === 1, 'blackbox D: user skill is not overwritten', user);

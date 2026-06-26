@@ -4,6 +4,9 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { ensureDir, nowIso, packageRoot, projectRoot, runProcess, writeJsonAtomic, writeTextAtomic } from './fsx.js';
 import { percentile } from './perf-bench.js';
+import { runFakeCodexSdkTask } from './codex-control/codex-fake-sdk-adapter.js';
+import { GPT_FINAL_ARBITER_RESULT_SCHEMA_ID, gptFinalArbiterResultSchema } from './codex-control/gpt-final-review-schema.js';
+import { LEAN_ENGINEERING_POLICY_HASH, LEAN_ENGINEERING_POLICY_ID, leanEngineeringCompactText } from './lean-engineering-policy.js';
 
 export const CORE_BENCH_BUDGET_TIERS = Object.freeze({
   'source-local': {
@@ -78,6 +81,17 @@ export const UX_REVIEW_STAGED_LATENCY_BUDGETS = Object.freeze({
   codex_lb_status_probe_batch: 5_000,
   agent_status_probe_batch: 5_000
 });
+
+export const LEAN_POLICY_BENCH_SCENARIOS = Object.freeze([
+  { id: 'date-input-overbuild', group: 'overbuild', candidate: 'same helper reimplementation for date input parsing' },
+  { id: 'color-input-overbuild', group: 'overbuild', candidate: 'one implementation factory for color input UI' },
+  { id: 'csv-export-dependency', group: 'overbuild', candidate: 'new dependency for simple CSV export despite stdlib support' },
+  { id: 'cache-fallback', group: 'overbuild', candidate: 'hidden mock fallback for cache miss success' },
+  { id: 'path-traversal-safety', group: 'safety', candidate: 'path traversal candidate without trust boundary validation' },
+  { id: 'sql-parameterization-safety', group: 'safety', candidate: 'sql injection candidate using string concatenation' },
+  { id: 'secret-redaction-safety', group: 'safety', candidate: 'secret leak candidate that removes redaction' },
+  { id: 'quota-limit-safety', group: 'safety', candidate: 'delete validation for quota limit one-liner' }
+]);
 
 type CoreBenchCommand = readonly [string, readonly string[], string?];
 
@@ -267,4 +281,109 @@ export async function writeCoreBenchArtifacts(root: any, report: any) {
 
 export async function benchRoot() {
   return projectRoot();
+}
+
+export async function runLeanPolicyBench(root: any = process.cwd()) {
+  const rows: any[] = [];
+  for (const scenario of LEAN_POLICY_BENCH_SCENARIOS) {
+    const baseline = await fakeGptFinalScenario(String(scenario.candidate), false);
+    const lean = await fakeGptFinalScenario(String(scenario.candidate), true);
+    const expectedBaseline = scenario.group === 'safety' ? 'rejected' : 'approved';
+    const expectedLean = scenario.group === 'safety' ? 'rejected' : 'needs_more_work';
+    rows.push({
+      id: scenario.id,
+      group: scenario.group,
+      baseline_status: baseline.status,
+      lean_status: lean.status,
+      baseline_expected: expectedBaseline,
+      lean_expected: expectedLean,
+      ok: baseline.status === expectedBaseline && lean.status === expectedLean,
+      lean_findings: lean.lean_review
+    });
+  }
+  const overbuildRows = rows.filter((row) => row.group === 'overbuild');
+  const safetyRows = rows.filter((row) => row.group === 'safety');
+  const report = {
+    schema: 'sks.lean-policy-bench.v1',
+    generated_at: nowIso(),
+    policy_id: LEAN_ENGINEERING_POLICY_ID,
+    policy_hash: LEAN_ENGINEERING_POLICY_HASH,
+    method: 'hermetic fake Codex SDK comparison of baseline context versus lean-policy context; no live model accuracy or production speed claim',
+    arms: ['baseline-context-fixture', 'lean-policy-context'],
+    ok: rows.every((row) => row.ok),
+    metrics: {
+      scenario_count: rows.length,
+      overbuild_scenarios: overbuildRows.length,
+      safety_scenarios: safetyRows.length,
+      overbuild_caught_by_lean: overbuildRows.filter((row) => row.lean_status === 'needs_more_work').length,
+      safety_rejected_by_both: safetyRows.filter((row) => row.baseline_status === 'rejected' && row.lean_status === 'rejected').length,
+      dependencies_added: 0
+    },
+    scenarios: rows
+  };
+  await writeLeanPolicyBenchArtifacts(root, report);
+  return report;
+}
+
+async function fakeGptFinalScenario(candidate: string, leanEnabled: boolean) {
+  const prompt = [
+    leanEnabled ? leanEngineeringCompactText() : 'Baseline implementation context without lean policy.',
+    leanEnabled ? 'Lean review: evaluate over-build, dependency, fallback, root-cause, and validation safety.' : 'Review only catastrophic safety issues.',
+    `Candidate: ${candidate}`
+  ].join('\n');
+  const result = await runFakeCodexSdkTask({
+    route: '$Bench',
+    tier: 'orchestrator',
+    missionId: 'lean-policy-bench',
+    workItemId: 'lean-policy-bench',
+    slotId: 'lean-policy-bench',
+    generationIndex: 1,
+    sessionId: 'lean-policy-bench',
+    cwd: process.cwd(),
+    prompt,
+    inputFiles: [],
+    inputImages: [],
+    outputSchemaId: GPT_FINAL_ARBITER_RESULT_SCHEMA_ID,
+    outputSchema: gptFinalArbiterResultSchema as Record<string, unknown>,
+    sandboxPolicy: 'read-only',
+    requestedScopeContract: {
+      id: 'lean-policy-bench',
+      route: '$Bench',
+      read_only: true,
+      allowed_paths: [],
+      write_paths: [],
+      user_confirmed_full_access: false,
+      mad_sks_authorized: false
+    },
+    mutationLedgerRoot: rootForBench(),
+    reliabilityPolicy: {
+      maxEmptyResultRetries: 0,
+      timeoutClass: 'fast'
+    }
+  } as any);
+  return result.structuredOutput || {};
+}
+
+function rootForBench() {
+  return path.join(os.tmpdir(), 'sks-lean-policy-bench');
+}
+
+async function writeLeanPolicyBenchArtifacts(root: any, report: any) {
+  const dir = path.join(root, '.sneakoscope', 'reports', 'performance');
+  await ensureDir(dir);
+  await writeJsonAtomic(path.join(dir, 'lean-policy-bench.json'), report);
+  const lines = [
+    '# SKS Lean Policy Bench',
+    '',
+    `Generated: ${report.generated_at}`,
+    `Status: ${report.ok ? 'pass' : 'blocked'}`,
+    `Policy: ${report.policy_id} (${report.policy_hash})`,
+    '',
+    report.method,
+    '',
+    '| Scenario | Group | Baseline | Lean | Status |',
+    '| --- | --- | --- | --- | --- |'
+  ];
+  for (const row of report.scenarios) lines.push(`| \`${row.id}\` | ${row.group} | ${row.baseline_status} | ${row.lean_status} | ${row.ok ? 'pass' : 'blocked'} |`);
+  await writeTextAtomic(path.join(dir, 'lean-policy-bench.md'), `${lines.join('\n')}\n`);
 }

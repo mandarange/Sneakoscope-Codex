@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.3.0 keeps release proof truth aligned with the 4.3.0 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, unified `seo-geo-optimizer` route evidence, Search Engine Optimization and Generative Engine Optimization mode-specific proof, Lean Engineering Policy evidence, and publish wrapper evidence before publication.
+
+SKS 4.3.0 release proof truth also requires proof that the public split `seo` and `geo` command surfaces are removed, `$SEO-GEO-OPTIMIZER` is the single dollar-command route, crawler/claim/llms.txt gates remain mode-specific, no ranking, traffic, indexing, or AI citation guarantee is claimed, and the backfill publish tag avoids downgrading the npm `latest` dist-tag.
+
 SKS 4.4.0 keeps release proof truth aligned with the 4.4.0 package metadata, Rust helper metadata, built output, release stamp, provenance, npm unpublished-version evidence, UltraSearch provider-independent proof, Source Intelligence Policy v2 proof, and publish wrapper evidence before publication.
 
 SKS 4.4.0 release proof truth also requires proof that X public discovery remains marked partial until a real parity corpus passes, and that `sks xai` is deprecation-only rather than a provider authority.

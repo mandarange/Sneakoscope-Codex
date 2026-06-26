@@ -18,9 +18,10 @@ export async function writeRouteCompletionProof(root: any, {
   unverified = [],
   blockers = [],
   failureAnalysis = null,
-  nextHumanActions = []
+  nextHumanActions = [],
+  lightweightEvidence = false
 }: any = {}) {
-  const collected = await collectProofEvidence(root);
+  const collected = lightweightEvidence ? { files: [] } : await collectProofEvidence(root);
   const normalizedRoute = normalizeProofRoute(route);
   const mergedEvidence = {
     ...collected,
@@ -59,6 +60,7 @@ export async function writeRouteCompletionProof(root: any, {
       status: normalizedStatus
     }
   });
+  if (lightweightEvidence) return { ...written, trust: null, retention: null };
   if (!missionId) return written;
   const firstTrust: any = await writeTrustArtifactsForProof(root, written.proof);
   const evidenceSummary = proofEvidenceSummary(firstTrust.evidenceIndex);

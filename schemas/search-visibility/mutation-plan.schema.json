@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/search-visibility/mutation-plan.schema.json",
+  "title": "SKS Search Visibility Mutation Plan",
+  "type": "object",
+  "required": ["schema", "mission_id", "route", "mode", "adapter", "detection_confidence", "status", "operations", "blockers", "unverified"],
+  "properties": {
+    "schema": { "const": "sks.search-visibility.mutation-plan.v1" },
+    "mission_id": { "type": "string" },
+    "route": { "const": "$SEO-GEO-OPTIMIZER" },
+    "mode": { "enum": ["seo", "geo"] },
+    "adapter": { "type": "string" },
+    "detection_confidence": { "type": "number" },
+    "status": { "enum": ["planned", "blocked"] },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "baseSha256", "proposedSha256", "kind", "owner", "findingIds", "reversible", "preview", "risk", "requiredVerification", "scopeAuthorization", "ownershipStrategy"],
+        "additionalProperties": true
+      }
+    },
+    "blockers": { "type": "array" },
+    "unverified": { "type": "array" }
+  },
+  "additionalProperties": true
+}

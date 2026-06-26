@@ -9,6 +9,7 @@ import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-patch-schema.js'
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
+import { leanEngineeringCompactText, leanPolicyReference } from '../lean-engineering-policy.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -226,6 +227,7 @@ export async function runNativeWorkerBackendRouter(input: {
       model_authored_patch_envelopes: patchEnvelopes.some((envelope: AgentPatchEnvelope) => envelope.source === 'model_authored'),
       fixture_patch_envelopes: patchEnvelopes.some((envelope: AgentPatchEnvelope) => envelope.source === 'fixture'),
     proof_level: proofLevel,
+    lean_engineering_policy: leanPolicyReference(),
     fast_mode: input.fastModePolicy.fast_mode,
     service_tier: input.fastModePolicy.service_tier,
     sdk_thread_id: childReports.find((report) => report?.sdk_thread_id)?.sdk_thread_id || null,
@@ -300,6 +302,7 @@ function buildWorkerPrompt(slice: any) {
     write.length
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
       : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; do not report pre-existing repository dirtiness as changed_files.`,
+    leanEngineeringCompactText(),
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')
 }

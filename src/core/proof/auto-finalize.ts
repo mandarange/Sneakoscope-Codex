@@ -36,7 +36,8 @@ export async function maybeFinalizeRoute(root: any, {
   unverified = [],
   agents = undefined,
   allowActiveWrongnessPartial = false,
-  failureAnalysis = null
+  failureAnalysis = null,
+  lightweightEvidence = false
 }: any = {}): Promise<JsonData> {
   if (!missionId || !route) {
     return { ok: false, skipped: true, reason: 'mission_id_or_route_missing' };
@@ -85,7 +86,8 @@ export async function maybeFinalizeRoute(root: any, {
     visualClaim: visual,
     agents,
     allowActiveWrongnessPartial,
-    failureAnalysis
+    failureAnalysis,
+    lightweightEvidence
   });
   return { ...proof, auto_finalized: true, gate_passed: passed, status_hint: finalStatus };
 }

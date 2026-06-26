@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/search-visibility/verification-report.schema.json",
+  "title": "SKS Search Visibility Verification Report",
+  "type": "object",
+  "required": ["schema", "mission_id", "route", "status", "source_verified", "build_verified", "http_verified", "browser_verified", "production_verified", "measured_outcome", "checked_artifacts", "blockers", "unverified"],
+  "properties": {
+    "schema": { "const": "sks.search-visibility.verification-report.v1" },
+    "mission_id": { "type": "string" },
+    "route": { "const": "$SEO-GEO-OPTIMIZER" },
+    "status": { "enum": ["verified_partial", "blocked", "locally_verified", "production_verified", "measured_outcome_pending", "measured_outcome_recorded"] },
+    "source_verified": { "type": "boolean" },
+    "build_verified": { "type": "boolean" },
+    "http_verified": { "type": "boolean" },
+    "browser_verified": { "type": "boolean" },
+    "production_verified": { "type": "boolean" },
+    "measured_outcome": { "enum": ["pending", "recorded", "not_applicable"] },
+    "checked_artifacts": { "type": "array" },
+    "blockers": { "type": "array" },
+    "unverified": { "type": "array" }
+  },
+  "additionalProperties": true
+}

@@ -11,7 +11,7 @@
 
 `npm i -g sneakoscope` → `sks --mad` → watch up to **100 shadow-clone workers** code in parallel,<br/>each in a live Zellij pane, every claim backed by Completion Proof.
 
-Current package release: **4.4.0**.
+Current package release: **4.3.0**.
 
 </div>
 
@@ -37,7 +37,33 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.2.1** stabilizes MadDB SQL-plane execution so explicit `$MAD-DB` and `sks mad-db run|exec|apply-migration` invocations use a first-class, mission-bound break-glass route instead of inheriting `$MAD-SKS` state.
+SKS **4.3.0** adds the proof-backed `seo-geo-optimizer` command and route on one shared search-visibility kernel, plus Lean Engineering Policy evidence in pipeline plans, worker prompts, code-structure reports, GPT final review, and Completion Proof.
+
+- **`sks seo-geo-optimizer` / `$SEO-GEO-OPTIMIZER`.** Run read-only audit, mutation plan, explicit apply, verification, rollback, and Completion Proof for both Search Engine Optimization and Generative Engine Optimization.
+- **Mode-specific evidence.** Use `--mode seo` for package/docs/website search visibility, including metadata, canonical, robots, sitemap, locale, structured data, and internal links. Use `--mode geo` for entity facts, claim evidence, answerability, AI crawler purpose policy, and optional `llms.txt` planning. GEO means Generative Engine Optimization, not geolocation.
+- **Lean Engineering evidence.** `sks bench lean-policy --json` compares hermetic baseline-context and lean-policy-context fixtures, catching over-build candidates while preserving safety rejections without making live model accuracy claims.
+- **Safety-first mutation.** `audit` and `plan` never mutate source. `apply` requires `--apply`, uses base hashes, create-only ownership, mutation journal, rollback manifest, and post-verification.
+- **Release-gated artifacts.** SEO/GEO now have explicit runtime fixtures, schemas, feature registry mappings, release gates, route gates, and Completion Proof links.
+
+Common commands:
+
+```bash
+sks seo-geo-optimizer doctor --mode seo --json
+sks seo-geo-optimizer audit --mode seo --target package --offline --json
+sks seo-geo-optimizer plan latest --mode seo --json
+sks seo-geo-optimizer apply latest --mode seo --apply --json
+sks seo-geo-optimizer rollback latest --mode seo --apply --json
+
+sks seo-geo-optimizer doctor --mode geo --json
+sks seo-geo-optimizer audit --mode geo --target package --offline --json
+sks seo-geo-optimizer plan latest --mode geo --json
+sks seo-geo-optimizer apply latest --mode geo --include-llms-txt --apply --json
+sks bench lean-policy --json
+```
+
+Honest boundary: SEO/GEO reports separate implemented, locally verified, production verified, and measured outcome. Sitemaps, canonical tags, structured data, crawler policy, and `llms.txt` are evidence surfaces, not guarantees of indexing, ranking, traffic, rich results, or AI answer inclusion.
+
+What changed in 4.2.1:
 
 What changed in 4.2.0:
 

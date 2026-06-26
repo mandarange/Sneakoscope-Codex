@@ -26,7 +26,8 @@ import { prepareMadDbMission } from '../mad-db/mad-db-coordinator.js';
 import { AGENT_INTAKE_STAGE_ID, AGENT_COUNT } from '../agents/agent-schema.js';
 import { normalizeAgentPolicy, routeRequiresAgentIntake, agentPipelineStage } from '../agents/agent-plan.js';
 import { readAgentGateStatus } from '../agents/agent-gate.js';
-import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, looksLikeProblemSolvingRequest, noUnrequestedFallbackCodePolicyText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, speedLanePolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, looksLikeProblemSolvingRequest, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
+import { normalizeLeanDecision, validateLeanDecision } from '../lean-engineering-policy.js';
 import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../team-dag.js';
 import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from '../team-live.js';
 import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../team-review-policy.js';
@@ -98,6 +99,13 @@ export function buildPipelinePlan(input: any = {}) {
   const skipped = stages.filter((stage: any) => stage.status === 'skipped').map((stage: any) => stage.id);
   const kept = stages.filter((stage: any) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage: any) => stage.id);
   const routeEconomy = routeEconomyPlan(proof);
+  const leanDecision = normalizeLeanDecision(input.leanDecision, {
+    selected_rung: ['Answer', 'Help', 'Wiki'].includes(route?.id) ? 'skip' : 'minimal-custom',
+    task_requires_change: !['Answer', 'Help', 'Wiki'].includes(route?.id),
+    root_cause_target: route?.id ? `${route.id} route selected implementation surface` : null,
+    expected_changed_paths: input.expectedChangedPaths || input.touchedFiles || [],
+    verification_minimum: verification.slice(0, 3).map((item: any) => String(item || '').trim()).filter(Boolean)
+  });
   return {
     schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -140,6 +148,7 @@ export function buildPipelinePlan(input: any = {}) {
     verification,
     invariants: ['no_unrequested_fallback_code', 'ssot_guard', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
     proof_field: proof,
+    lean_decision: leanDecision,
     ssot_guard: buildSsotGuard({ route: route?.id || 'SKS', mode: route?.mode || 'SKS', task }),
     route_economy: routeEconomy,
     agent_intake: agentPolicy,
@@ -193,6 +202,8 @@ export function validatePipelinePlan(plan: any = {}) {
   if (!plan.route_economy?.mode) issues.push('route_economy');
   const routeEconomyLatticeIssues = validateRouteEconomyDecisionLattice(plan.route_economy, plan.proof_field);
   if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue: any) => `route_economy.decision_lattice:${issue}`));
+  const leanDecision = validateLeanDecision(plan.lean_decision);
+  if (!leanDecision.ok) issues.push(...leanDecision.issues.map((issue: any) => `lean_decision:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
   if (!plan.ssot_guard?.required || !plan.invariants?.includes('ssot_guard')) issues.push('ssot_guard');
   if (!plan.stages?.some((stage: any) => stage.id === 'ssot_guard' && !['skipped', 'not_applicable'].includes(stage.status))) issues.push('ssot_guard_stage');
@@ -397,10 +408,8 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     'Stance: infer the user intent aggressively from rough wording, local context, TriWiki, and conservative defaults; do not surface prequestion sheets before work.',
     subagentExecutionPolicyText(route, cleanPrompt),
     solutionScoutPolicyText(cleanPrompt),
-    noUnrequestedFallbackCodePolicyText(),
+    leanEngineeringCompactText(),
     ssotGuardPolicyText(),
-    outcomeRubricPolicyText(),
-    speedLanePolicyText(),
     skillDreamPolicyText(),
     route?.id === 'PPT'
       ? `${pptPipelineAllowlistPolicyText()} ${getdesignReferencePolicyText()}`
@@ -419,7 +428,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
   if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
   if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, infer and seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings from the prompt, TriWiki/current-code defaults, and conservative policy. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, actively invoke the loaded imagegen skill through Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}), save the selected raster output into the mission assets/review evidence path, and record that real path before build/final. Direct API fallback, placeholders, HTML/CSS stand-ins, and prose-only substitutes do not satisfy the route gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
   if (route?.id === 'ImageUXReview') lines.push(`Image UX Review route: ${imageUxReviewPipelinePolicyText()} Use ${IMAGE_UX_REVIEW_POLICY_ARTIFACT}, ${IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT}, ${IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, ${IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT}, and ${IMAGE_UX_REVIEW_GATE_ARTIFACT} as the route evidence set. The route may suggest safe fixes only when the user requested fixing; otherwise report findings and blockers.`);
-  if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop plus seo-geo-optimizer when SEO/GEO, discoverability, README, npm, GitHub stars, ranking, or AI-search visibility is relevant.');
+  if (route?.id === 'AutoResearch') lines.push('AutoResearch route: load autoresearch-loop for experiments and benchmarking. SEO/GEO, discoverability, README, npm, GitHub search visibility, and AI-search visibility should use the first-class $SEO-GEO-OPTIMIZER parent route unless the selected route explicitly needs a child experiment.');
   if (route?.id === 'DB') lines.push('DB route: scan/check database risk first; destructive DB operations remain forbidden.');
   if (route?.id === 'MadDB') lines.push('MadDB route: explicit invocation is the SQL-plane approval boundary. Use the mission-local write-capable Supabase MCP profile only for the bound cycle, verify execute_sql/apply_migration inventory before claiming ready, execute requested SQL-plane mutations, read back postconditions, then close the capability/profile and prove normal read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied.');
   if (route?.id === 'GX') lines.push('GX route: use deterministic vgraph/beta render, validate, drift, and snapshot artifacts.');

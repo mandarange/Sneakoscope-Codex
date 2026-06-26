@@ -1691,6 +1691,54 @@
       "can_run_incremental": true
     },
     {
+      "id": "geo:claim-evidence",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/geo-*.ts",
+        "src/scripts/geo-claim-evidence-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "geo:cli-blackbox",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/geo-*.ts",
+        "src/scripts/geo-cli-blackbox-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "geo:crawler-purpose-policy",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/geo-*.ts",
+        "src/scripts/geo-crawler-purpose-policy-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "geo:llms-txt-optional",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/geo-*.ts",
+        "src/scripts/geo-llms-txt-optional-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "git-collaboration:e2e",
       "tier": "P1",
       "cost": "hermetic",
@@ -2908,6 +2956,138 @@
       "affected_by": [
         "src/scripts/schema-*.ts",
         "src/scripts/schema-check-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo-geo:feature-fixture-quality",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-geo-*.ts",
+        "src/scripts/seo-geo-feature-fixture-quality-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo-geo:geo-disambiguation",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-geo-*.ts",
+        "src/scripts/seo-geo-geo-disambiguation-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo-geo:no-unsupported-ranking-claims",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-geo-*.ts",
+        "src/scripts/seo-geo-no-unsupported-ranking-claims-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo-geo:route-identity",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-geo-*.ts",
+        "src/scripts/seo-geo-route-identity-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo-geo:skill-rich-content",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-geo-*.ts",
+        "src/scripts/seo-geo-skill-rich-content-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo:audit-fixture",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-*.ts",
+        "src/scripts/seo-audit-fixture-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo:canonical-sitemap-locale",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-*.ts",
+        "src/scripts/seo-canonical-sitemap-locale-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo:cli-blackbox",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-*.ts",
+        "src/scripts/seo-cli-blackbox-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo:mutation-rollback",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-*.ts",
+        "src/scripts/seo-mutation-rollback-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo:no-mutation-by-default",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-*.ts",
+        "src/scripts/seo-no-mutation-by-default-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
+      "id": "seo:structured-data-visible-content",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/seo-*.ts",
+        "src/scripts/seo-structured-data-visible-content-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,

@@ -51,6 +51,8 @@ test('native worker backend router launches ollama worker and marks local model 
     assert.match(body.prompt, /consult the TriWiki context below first/);
     assert.match(body.prompt, /Context7 or official vendor docs/);
     assert.match(body.prompt, /stack-current-docs\.md/);
+    assert.match(body.prompt, /Lean Engineering Policy/);
+    assert.match(body.prompt, /No unrequested route\/command\/daemon\/dependency/);
     return {
       ok: true,
       status: 200,

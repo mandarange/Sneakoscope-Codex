@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,14 +16,18 @@ try {
   assertGate(approved.ok === true, 'GPT final arbiter fixture must approve safe candidate', approved);
   assertGate(approved.backend === 'codex-sdk', 'GPT final arbiter backend must be codex-sdk');
   assertGate(approved.result.status === 'approved', 'safe candidate must return approved');
+  assertGate(approved.result.lean_review?.status === 'pass', 'safe candidate must pass lean review');
+  assertGate(approved.result.lean_review?.selected_rung === 'minimal-custom', 'lean review must record selected rung');
   assertGate(approved.final_gate.ok === true, 'approved arbiter result must pass final gate');
   const artifact = await readJsonFile(path.join(tmp, 'gpt-final-arbiter.json'));
   assertGate(artifact.result.schema === 'sks.gpt-final-arbiter-result.v1', 'arbiter artifact must contain schema-valid result');
+  assertGate(artifact.result.lean_review?.verification_minimum_present === true, 'arbiter artifact must record lean verification minimum');
 
   const unsafeTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-gpt-final-arbiter-unsafe-'));
   const rejected = await mod.runGptFinalArbiter({ ...fixtureInput('unsafe'), candidate_diff: 'unsafe delete all credential patch' }, { cwd: root, mutationLedgerRoot: unsafeTmp });
   assertGate(rejected.ok === false, 'unsafe candidate must not pass final arbiter');
   assertGate(rejected.result.status === 'rejected', 'unsafe candidate must be rejected');
+  assertGate(rejected.result.lean_review?.status === 'rejected', 'unsafe candidate must reject lean review');
   assertGate(rejected.blockers.includes('unsafe_candidate_patch'), 'unsafe rejection blocker must be preserved');
 
   emitGate('local-collab:gpt-final-arbiter', { approved: approved.result.status, rejected: rejected.result.status });
@@ -32,7 +35,7 @@ try {
   restoreEnv(old);
 }
 
-function fixtureInput(label) {
+function fixtureInput(label: string) {
   return {
     schema: 'sks.gpt-final-arbiter-input.v1',
     route: '$Naruto',
@@ -50,7 +53,7 @@ function fixtureInput(label) {
   };
 }
 
-function snapshotEnv() {
+function snapshotEnv(): Record<string, string | undefined> {
   return {
     NODE_ENV: process.env.NODE_ENV,
     SKS_CODEX_SDK_FAKE: process.env.SKS_CODEX_SDK_FAKE,
@@ -58,7 +61,7 @@ function snapshotEnv() {
   };
 }
 
-function restoreEnv(old) {
+function restoreEnv(old: Record<string, string | undefined>) {
   for (const [key, value] of Object.entries(old)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;

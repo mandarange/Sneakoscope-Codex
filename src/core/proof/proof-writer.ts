@@ -81,6 +81,7 @@ export function renderProofMarkdown(proof: any = {}, validation: any = validateC
     `- Agents: ${proof.evidence?.agents?.agent_count ?? 0} (${proof.evidence?.agents?.status || 'not_recorded'})`,
     `- TriWiki: ${proof.evidence?.triwiki?.status || 'not_recorded'}`,
     `- Wrongness: ${proof.evidence?.wrongness?.active_count ?? 0} active (${proof.evidence?.wrongness?.high_severity_active ?? 0} high)`,
+    `- Lean engineering: ${proof.evidence?.lean_engineering?.semantic_review?.status || proof.evidence?.lean_engineering?.status || 'not_recorded'}`,
     `- Evidence router: ${proof.evidence?.evidence_router?.records ?? 0} record(s)`,
     `- Trust report: ${proof.evidence?.trust_report || 'not_recorded'}`,
     ''

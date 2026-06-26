@@ -3,12 +3,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { assertGate, emitGate, makeTempRoot, writeText } from './sks-3-1-8-check-lib.js';
 import { syncCoreSkillsIntegrity } from '../core/codex-native/core-skill-integrity.js';
-import { renderCoreSkillTemplate } from '../core/codex-native/core-skill-manifest.js';
+import { buildSksCoreSkillManifest, renderCoreSkillTemplate } from '../core/codex-native/core-skill-manifest.js';
 
 const root = await makeTempRoot('sks-core-immutable-');
 const skillsRoot = path.join(root, '.agents', 'skills');
+const expectedSkillCount = buildSksCoreSkillManifest('1970-01-01T00:00:00.000Z').skills.length;
 const first = await syncCoreSkillsIntegrity({ root, apply: true, skillsRoot });
-assertGate(first.installed.length === 8, 'first immutable sync must install missing managed core skills', first);
+assertGate(first.installed.length === expectedSkillCount, 'first immutable sync must install missing managed core skills', first);
 const second = await syncCoreSkillsIntegrity({ root, apply: true, skillsRoot });
 assertGate(second.installed.length === 0 && second.restored.length === 0, 'second immutable sync must be idempotent', second);
 await writeText(path.join(skillsRoot, 'loop', 'SKILL.md'), `${renderCoreSkillTemplate('loop')}\ncorruption\n`);

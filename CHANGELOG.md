@@ -3,6 +3,33 @@
 ## [Unreleased]
 
 
+## [4.3.0] - 2026-06-26
+
+### Added
+
+- Added first-class `sks seo-geo-optimizer` command with doctor, audit, plan, explicit apply, verify, status, rollback, and fixture subcommands, using `--mode seo|geo` for mode-specific evidence.
+- Added unified `$SEO-GEO-OPTIMIZER` route identity, classifier precedence, GEO/geolocation disambiguation, safe `sks run --execute` routing, and generated rich skill content without separate public SEO/GEO dollar surfaces.
+- Added a shared `src/core/search-visibility` kernel for adapter detection, site inventory, SEO/GEO analyzers, typed artifacts, gated verification, mutation planning, apply journaling, and rollback manifests.
+- Added search-visibility JSON schemas, explicit feature fixtures, release gates, and parallel release tasks for SEO/GEO command, route, skill, mutation, rollback, crawler policy, `llms.txt`, and unsupported-claim safety.
+- Added Lean Engineering Policy v1 with normalized `lean_decision` plan evidence, code-structure `lean_change_evidence`, GPT final `lean_review`, worker prompt injection, and Completion Proof linkage.
+- Added `sks bench lean-policy --json` for hermetic baseline-context vs lean-policy-context fixtures covering over-build and safety-sensitive candidates without live model accuracy claims.
+
+### Changed
+
+- Preserved package/README/npm SEO as `target=package` while adding website/docs technical SEO and Generative Engine Optimization evidence layers.
+- SEO/GEO no longer collapse into `$AutoResearch`; research remains an optional child discovery stage while the parent route and Completion Proof stay `$SEO-GEO-OPTIMIZER`.
+- Updated package release metadata, README, feature inventory generation path, npm keywords, and backfill publish tag handling for `4.3.0`.
+
+### Safety
+
+- `audit` and `plan` are read-only. `apply` requires `--apply`, create-only ownership, base-hash checks, mutation journal, rollback manifest, and post-verification.
+- `llms.txt` is optional and experimental, never required for a GEO gate, and never treated as proof of ranking, traffic, indexing, rich results, or AI citation.
+- GEO crawler policy separates search, training, user-directed retrieval, and ads validation with dated official source URLs.
+
+### Verification
+
+- Added targeted gates for SEO/GEO CLI blackbox, audit fixture, no-mutation-by-default, mutation rollback/idempotency, canonical/sitemap/locale, structured data visible-content parity, claim evidence, crawler purpose policy, route identity, GEO disambiguation, rich skills, unsupported claims, and runtime fixture quality.
+
 
 ## [4.4.0] - 2026-06-25
 

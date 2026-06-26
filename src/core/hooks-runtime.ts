@@ -12,6 +12,7 @@ import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
 import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
+import { leanEngineeringCompactText } from './lean-engineering-policy.js';
 import { appendMissionStatus } from './recallpulse.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
@@ -203,7 +204,14 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   if (name === 'post-tool') return hookPostTool(root, state, payload, noQuestion);
   if (name === 'permission-request') return hookPermission(root, state, payload, noQuestion);
   if (name === 'stop') return hookStop(root, state, payload, noQuestion);
+  if (name === 'subagent-start') return hookSubagentStart(root, state);
   return { continue: true };
+}
+
+async function hookSubagentStart(root: any, state: any) {
+  const active = await activeRouteContext(root, state).catch(() => '');
+  const additionalContext = [leanEngineeringCompactText(), active].filter(Boolean).join('\n\n');
+  return { continue: true, additionalContext };
 }
 
 function blockForbiddenClientModel(payload: any = {}) {

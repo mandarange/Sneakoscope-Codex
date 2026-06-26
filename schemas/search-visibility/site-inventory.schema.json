@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sneakoscope.dev/schemas/search-visibility/site-inventory.schema.json",
+  "title": "SKS Search Visibility Site Inventory",
+  "type": "object",
+  "required": ["schema", "mission_id", "route", "root", "target", "detected_adapter", "package", "routes", "policy_files"],
+  "properties": {
+    "schema": { "const": "sks.search-visibility.site-inventory.v1" },
+    "mission_id": { "type": "string" },
+    "route": { "const": "$SEO-GEO-OPTIMIZER" },
+    "root": { "type": "string" },
+    "target": { "enum": ["website", "docs", "package"] },
+    "detected_adapter": { "type": "object" },
+    "package": { "type": "object" },
+    "routes": { "type": "array" },
+    "policy_files": { "type": "array" },
+    "blockers": { "type": "array" },
+    "unverified": { "type": "array" }
+  },
+  "additionalProperties": true
+}

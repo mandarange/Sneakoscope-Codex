@@ -6,6 +6,7 @@ import { readAgentProofEvidence } from '../agents/agent-proof-evidence.js';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
 import { computerUseStatusReport } from '../computer-use-status.js';
 import { readComputerUseLiveEvidence } from '../computer-use-live-evidence.js';
+import { leanChangeEvidenceFromReport, scanCodeStructure } from '../code-structure.js';
 
 export async function finalizeRouteWithProof(root: any, {
   missionId,
@@ -29,7 +30,8 @@ export async function finalizeRouteWithProof(root: any, {
   visualClaim = undefined,
   agents = undefined,
   allowActiveWrongnessPartial = false,
-  failureAnalysis = null
+  failureAnalysis = null,
+  lightweightEvidence = false
 }: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
@@ -47,9 +49,14 @@ export async function finalizeRouteWithProof(root: any, {
       localBlockers.push(...(imageEvidence.issues?.length ? imageEvidence.issues : ['image_voxel_anchors_missing']));
     }
   }
-  const collected = await collectProofEvidence(root);
+  const collected = lightweightEvidence ? { files: [] } : await collectProofEvidence(root);
+  const leanEngineeringEvidence = await collectLeanEngineeringEvidence(root, lightweightEvidence).catch((err: any) => ({
+    schema: 'sks.lean-change-evidence.v1',
+    status: 'not_collected',
+    reason: err?.message || String(err || 'unknown_error')
+  }));
   const agentEvidence = agents === false ? null : await readAgentProofEvidence(root, missionId).catch(() => null);
-  const wrongnessEvidence = await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
+  const wrongnessEvidence = lightweightEvidence ? null : await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
   const requiresNativeComputerUseLiveEvidence = ['$Computer-Use', '$CU'].includes(String(policy.route || ''));
   const computerUse = requiresNativeComputerUseLiveEvidence
     ? await computerUseStatusReport().catch((err: any) => ({ schema: 'sks.computer-use-status.v1', status: 'unknown', ok: false, guidance: [err.message], evidence: { status: 'unknown' } }))
@@ -141,6 +148,7 @@ export async function finalizeRouteWithProof(root: any, {
       evidence: computerUse.evidence || null,
       live_evidence: computerUseLive?.evidence || null
     } } : {}),
+    lean_engineering: leanEngineeringEvidence,
     route_gate: gate || (gateFile ? { source: gateFile } : null)
   };
   return writeRouteCompletionProof(root, {
@@ -154,6 +162,7 @@ export async function finalizeRouteWithProof(root: any, {
     unverified: finalUnverified,
     blockers: localBlockers,
     failureAnalysis: resolvedFailureAnalysis,
+    lightweightEvidence,
     summary: {
       files_changed: collected.files?.length || 0,
       commands_run: evidence.commands?.length || 0,
@@ -162,6 +171,31 @@ export async function finalizeRouteWithProof(root: any, {
       manual_review_required: status !== 'verified'
     }
   });
+}
+
+async function collectLeanEngineeringEvidence(root: any, lightweightEvidence: boolean) {
+  if (lightweightEvidence) {
+    return leanChangeEvidenceFromReport({
+      changed_scope: {
+        mode: 'lightweight',
+        base: 'HEAD',
+        changed_files: [],
+        files_added: 0,
+        files_deleted: 0,
+        lines_added: 0,
+        lines_deleted: 0,
+        net_lines: 0,
+        source_files: [],
+        entries: []
+      },
+      semantic_review: {
+        status: 'needs-review',
+        findings: [{ tag: 'verify', severity: 'review', summary: 'lightweight proof skipped changed-scope code-structure scan' }]
+      }
+    });
+  }
+  const report = await scanCodeStructure(root, { changed: true });
+  return leanChangeEvidenceFromReport(report);
 }
 
 function inferRouteFailureAnalysis({

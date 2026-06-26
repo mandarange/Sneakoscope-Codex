@@ -6,10 +6,12 @@ const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const scripts = pkg.scripts || {};
 const buildManifestWriter = fs.readFileSync('dist/scripts/write-build-manifest.js', 'utf8');
 const distRuntimeCheck = fs.readFileSync('dist/scripts/check-dist-runtime.js', 'utf8');
+const npmrc = fs.readFileSync('.npmrc', 'utf8');
 
 test('publish lifecycle requires the full release stamp for publish readiness', () => {
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
-  assert.equal(pkg.publishConfig?.tag, 'latest');
+  assert.equal(pkg.publishConfig?.tag, 'backfill-4-3');
+  assert.match(npmrc, /^tag=backfill-4-3$/m);
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
   assert.equal(scripts.prepack, 'npm run build');
