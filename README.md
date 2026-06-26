@@ -11,7 +11,7 @@
 
 `npm i -g sneakoscope` → `sks --mad` → watch up to **100 shadow-clone workers** code in parallel,<br/>each in a live Zellij pane, every claim backed by Completion Proof.
 
-Current package release: **4.3.0**.
+Current package release: **4.6.0**.
 
 </div>
 
@@ -37,7 +37,7 @@ Set up this agent project with Sneakoscope Codex. Use [[mandarange/Sneakoscope-C
 
 ## 🚀 Current Release
 
-SKS **4.3.0** adds the proof-backed `seo-geo-optimizer` command and route on one shared search-visibility kernel, plus Lean Engineering Policy evidence in pipeline plans, worker prompts, code-structure reports, GPT final review, and Completion Proof.
+SKS **4.6.0** adds the proof-backed `seo-geo-optimizer` command and route on one shared search-visibility kernel, plus Lean Engineering Policy evidence in pipeline plans, worker prompts, code-structure reports, GPT final review, and Completion Proof.
 
 - **`sks seo-geo-optimizer` / `$SEO-GEO-OPTIMIZER`.** Run read-only audit, mutation plan, explicit apply, verification, rollback, and Completion Proof for both Search Engine Optimization and Generative Engine Optimization.
 - **Mode-specific evidence.** Use `--mode seo` for package/docs/website search visibility, including metadata, canonical, robots, sitemap, locale, structured data, and internal links. Use `--mode geo` for entity facts, claim evidence, answerability, AI crawler purpose policy, and optional `llms.txt` planning. GEO means Generative Engine Optimization, not geolocation.

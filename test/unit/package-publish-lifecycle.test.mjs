@@ -10,8 +10,8 @@ const npmrc = fs.readFileSync('.npmrc', 'utf8');
 
 test('publish lifecycle requires the full release stamp for publish readiness', () => {
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
-  assert.equal(pkg.publishConfig?.tag, 'backfill-4-3');
-  assert.match(npmrc, /^tag=backfill-4-3$/m);
+  assert.equal(pkg.publishConfig?.tag, 'latest');
+  assert.match(npmrc, /^tag=latest$/m);
   assert.match(scripts['feature-quality:check'], /--release/);
   assert.doesNotMatch(scripts['feature-quality:check'], /--rc/);
   assert.equal(scripts.prepack, 'npm run build');

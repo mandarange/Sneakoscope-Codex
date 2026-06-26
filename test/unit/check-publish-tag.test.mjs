@@ -10,10 +10,10 @@ function run(env = {}) {
   });
 }
 
-test('plain npm publish accepts the root backfill tag for 4.3.0', () => {
+test('plain npm publish accepts the root latest tag for 4.6.0', () => {
   const result = run({ npm_config_tag: '' });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /-> backfill-4-3/);
+  assert.match(result.stdout, /-> latest/);
 });
 
 test('stable release rejects rc publish tag', () => {
