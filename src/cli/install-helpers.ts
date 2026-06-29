@@ -165,6 +165,9 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   }));
   if (postinstallDoctor.ok) console.log('SKS update migration: global Doctor ran; project receipt will be finalized on first normal command.');
   else console.log(`SKS update migration: global Doctor did not complete; first normal command will retry. ${(postinstallDoctor.blockers || []).join(', ')}`.trim());
+  const postinstallRetention = await runPostinstallProjectRetentionCleanup(installRoot);
+  if (postinstallRetention.status === 'completed' && postinstallRetention.action_count > 0) console.log(`SKS mission cleanup: removed ${postinstallRetention.action_count} disposable runtime artifact(s) from closed missions.`);
+  else if (postinstallRetention.status === 'failed') console.log(`SKS mission cleanup: skipped (${postinstallRetention.error || 'cleanup failed'}).`);
   // Terminating a third-party app's processes during `npm i` is unsafe by default; opt-in only.
   const appProcessRepair: any = process.env.SKS_POSTINSTALL_RECONCILE_APP_PROCESSES === '1'
     ? await reconcileCodexAppUpgradeProcesses()
@@ -206,6 +209,36 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   } finally {
     await restorePostinstallCodexLbConfigSnapshot(codexLbConfigSnapshot).catch(() => {});
     await reportPostinstallCodexLbAuth().catch(() => {});
+  }
+}
+
+async function runPostinstallProjectRetentionCleanup(root: string) {
+  const projectRoot = path.resolve(root || process.cwd());
+  if (process.env.SKS_POSTINSTALL_RETENTION_CLEANUP === '0') {
+    return { status: 'skipped', reason: 'disabled_by_env', action_count: 0 };
+  }
+  if (!(await exists(path.join(projectRoot, '.sneakoscope', 'missions')))) {
+    return { status: 'skipped', reason: 'missions_missing', action_count: 0 };
+  }
+  try {
+    const { enforceRetention } = await import('../core/retention.js');
+    const result = await enforceRetention(projectRoot, {
+      mode: 'postinstall_update',
+      pruneReportLogs: true,
+      policy: { max_tmp_age_hours: 0 }
+    });
+    return {
+      status: 'completed',
+      root: projectRoot,
+      action_count: Array.isArray(result.actions) ? result.actions.length : 0
+    };
+  } catch (err: any) {
+    return {
+      status: 'failed',
+      root: projectRoot,
+      action_count: 0,
+      error: err?.message || String(err)
+    };
   }
 }
 

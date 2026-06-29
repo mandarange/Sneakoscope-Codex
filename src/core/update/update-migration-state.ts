@@ -2,6 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, runProcess, sha256, which, writeJsonAtomic } from '../fsx.js';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
+import { enforceRetention } from '../retention.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -32,6 +33,20 @@ export interface PackageLocalDoctorRun {
   error: string | null;
 }
 
+export interface UpdateRetentionCleanupRun {
+  schema: 'sks.update-retention-cleanup.v1';
+  ok: boolean;
+  status: 'completed' | 'skipped' | 'failed';
+  root: string;
+  source: string;
+  generated_at: string;
+  action_count: number;
+  cleanup_report_path: string | null;
+  storage_report_path: string | null;
+  reason?: string;
+  error?: string | null;
+}
+
 export interface UpdateMigrationReceipt {
   schema: typeof UPDATE_MIGRATION_SCHEMA;
   status: 'current' | 'pending_project_receipt' | 'blocked' | 'skipped';
@@ -45,6 +60,7 @@ export interface UpdateMigrationReceipt {
   pending_marker_path?: string | null;
   installation_epoch_path?: string | null;
   doctor?: PackageLocalDoctorRun | null;
+  retention_cleanup?: UpdateRetentionCleanupRun | null;
   update_stages?: unknown[];
   required_blockers?: string[];
   optional_warnings?: string[];
@@ -183,6 +199,7 @@ export async function writeProjectUpdateMigrationReceipt(input: {
 }): Promise<UpdateMigrationReceipt> {
   const receiptPath = projectUpdateMigrationReceiptPath(input.root);
   const epoch = await ensureInstallationEpoch(input.source);
+  const retentionCleanup = await runUpdateRetentionCleanup(input.root, input.source);
   const requiredBlockers = input.blockers || [];
   const optionalWarnings = input.warnings || [];
   const receipt: UpdateMigrationReceipt = {
@@ -198,6 +215,7 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     pending_marker_path: installationEpochPath(),
     installation_epoch_path: installationEpochPath(),
     doctor: input.doctor || null,
+    retention_cleanup: retentionCleanup,
     update_stages: input.updateStages || [],
     required_blockers: requiredBlockers,
     optional_warnings: optionalWarnings,
@@ -206,6 +224,71 @@ export async function writeProjectUpdateMigrationReceipt(input: {
   };
   await writeJsonAtomic(receiptPath, receipt);
   return receipt;
+}
+
+export async function runUpdateRetentionCleanup(root: string, source = 'update-migration'): Promise<UpdateRetentionCleanupRun> {
+  const missionsPath = path.join(root, '.sneakoscope', 'missions');
+  const cleanupPath = path.join(root, '.sneakoscope', 'reports', 'retention-cleanup.json');
+  const storagePath = path.join(root, '.sneakoscope', 'reports', 'storage.json');
+  if (process.env.SKS_UPDATE_RETENTION_CLEANUP === '0') {
+    return {
+      schema: 'sks.update-retention-cleanup.v1',
+      ok: true,
+      status: 'skipped',
+      root,
+      source,
+      generated_at: nowIso(),
+      action_count: 0,
+      cleanup_report_path: null,
+      storage_report_path: null,
+      reason: 'disabled_by_env'
+    };
+  }
+  if (!(await exists(missionsPath))) {
+    return {
+      schema: 'sks.update-retention-cleanup.v1',
+      ok: true,
+      status: 'skipped',
+      root,
+      source,
+      generated_at: nowIso(),
+      action_count: 0,
+      cleanup_report_path: null,
+      storage_report_path: null,
+      reason: 'missions_missing'
+    };
+  }
+  try {
+    const result = await enforceRetention(root, {
+      mode: 'update_migration',
+      pruneReportLogs: true,
+      policy: { max_tmp_age_hours: 0 }
+    });
+    return {
+      schema: 'sks.update-retention-cleanup.v1',
+      ok: true,
+      status: 'completed',
+      root,
+      source,
+      generated_at: nowIso(),
+      action_count: Array.isArray(result.actions) ? result.actions.length : 0,
+      cleanup_report_path: cleanupPath,
+      storage_report_path: storagePath
+    };
+  } catch (err: any) {
+    return {
+      schema: 'sks.update-retention-cleanup.v1',
+      ok: false,
+      status: 'failed',
+      root,
+      source,
+      generated_at: nowIso(),
+      action_count: 0,
+      cleanup_report_path: null,
+      storage_report_path: null,
+      error: err?.message || String(err)
+    };
+  }
 }
 
 export async function ensureCurrentMigrationBeforeCommand(input: {

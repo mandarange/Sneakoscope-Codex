@@ -22,6 +22,11 @@ assertGate(
   'postinstall process reconciliation must be gated behind SKS_POSTINSTALL_RECONCILE_APP_PROCESSES'
 );
 
+assertGate(
+  helpers.includes('runPostinstallProjectRetentionCleanup') && helpers.includes('SKS_POSTINSTALL_RETENTION_CLEANUP'),
+  'postinstall mission retention cleanup must be project-scoped and disableable'
+);
+
 // Config writes are gated (unparseable preserved / unsafe rewrite skipped) and backed up.
 assertGate(helpers.includes('unparseable_config_preserved'), 'postinstall must preserve unparseable config');
 assertGate(helpers.includes('skipped_unsafe_rewrite'), 'postinstall must skip unsafe config rewrites');

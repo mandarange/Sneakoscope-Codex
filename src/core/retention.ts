@@ -15,6 +15,7 @@ export const DEFAULT_RETENTION_POLICY = Object.freeze({
   run_gc_after_each_cycle: true,
   compact_oversize_missions: false,
   compact_closed_mission_workdirs: true,
+  compact_terminal_session_runtime_homes: true,
   prune_disposable_report_logs: false,
   max_wiki_artifacts: 40,
   max_wiki_artifact_age_days: 30,
@@ -49,7 +50,11 @@ const DISPOSABLE_MISSION_DIRS = Object.freeze([
   'tmp',
   'cycles',
   'arenas',
+  'sessions',
+  'codex-sdk-workers',
   'agents/lanes',
+  'agents/sessions',
+  'agents/codex-sdk-workers',
   'agents/tmp',
   'agents/worktrees',
   'research/cycles',
@@ -59,6 +64,11 @@ const DISPOSABLE_MISSION_DIRS = Object.freeze([
 const DISPOSABLE_MISSION_FILES = Object.freeze([
   'agents/agent-intelligent-work-graph.json',
   'agents/agent-intelligent-work-graph-v2.json'
+]);
+
+const DISPOSABLE_RUNTIME_HOME_DIR_NAMES = Object.freeze([
+  'codex-sdk-home',
+  'codex-sdk-workers'
 ]);
 
 const MISSION_CLOSE_GATES = Object.freeze([
@@ -179,6 +189,14 @@ function proofClosed(proof: any) {
   return ['verified', 'verified_partial', 'pass', 'passed'].includes(status);
 }
 
+function sessionsTerminal(cleanup: any) {
+  if (!cleanup || typeof cleanup !== 'object') return false;
+  if (cleanup.all_sessions_terminal === true || cleanup.all_sessions_closed === true) return true;
+  const terminal = Number(cleanup.terminal_session_count);
+  const total = Number(cleanup.total_sessions);
+  return Number.isFinite(terminal) && Number.isFinite(total) && total > 0 && terminal >= total;
+}
+
 async function missionClosed(mission: any, opts: any = {}) {
   const proof = await readJson(path.join(mission.path, 'completion-proof.json'), null).catch(() => null);
   if (opts.completedMissionId && mission.id === opts.completedMissionId) return proofClosed(proof);
@@ -196,6 +214,19 @@ async function missionClosed(mission: any, opts: any = {}) {
   return false;
 }
 
+async function missionSessionsTerminal(mission: any) {
+  const cleanupFiles = [
+    'agents/agent-session-cleanup.json',
+    'team-session-cleanup.json',
+    'agent-session-cleanup.json'
+  ];
+  for (const rel of cleanupFiles) {
+    const cleanup = await readJson(path.join(mission.path, rel), null).catch(() => null);
+    if (sessionsTerminal(cleanup)) return true;
+  }
+  return false;
+}
+
 async function removePath(action: string, target: string, dryRun: boolean, actions: any[], extra: any = {}) {
   const st = await fs.stat(target).catch(() => null);
   if (!st) return false;
@@ -209,17 +240,52 @@ function missionRelative(mission: any, file: string) {
   return path.relative(mission.path, file).split(path.sep).join('/');
 }
 
-function isPreservedSessionPath(rel: string) {
-  return rel.startsWith('sessions/') || rel.startsWith('agents/sessions/');
-}
-
 async function pruneMissionDisposableLogs(mission: any, dryRun: boolean, actions: any[]) {
   const files = await listFilesRecursive(mission.path, { ignore: [], maxFiles: 10000, maxDepth: 8 }).catch(() => []);
   for (const file of files) {
     const rel = missionRelative(mission, file);
-    if (isPreservedSessionPath(rel)) continue;
     if (!DISPOSABLE_LOG_RE.test(rel)) continue;
     await removePath('remove_closed_mission_raw_log', file, dryRun, actions, { mission: mission.id, reason: 'closed_mission_disposable_log' });
+  }
+}
+
+async function collectRuntimeHomeDirs(dir: string, depth = 10): Promise<string[]> {
+  if (depth < 0 || !(await exists(dir))) return [];
+  const out: string[] = [];
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const child = path.join(dir, entry.name);
+    if (DISPOSABLE_RUNTIME_HOME_DIR_NAMES.includes(entry.name)) {
+      out.push(child);
+      continue;
+    }
+    out.push(...await collectRuntimeHomeDirs(child, depth - 1));
+  }
+  return out;
+}
+
+async function pruneMissionRuntimeHomeDirs(mission: any, action: string, dryRun: boolean, actions: any[], reason: string) {
+  const dirs = await collectRuntimeHomeDirs(mission.path);
+  for (const dir of dirs) {
+    await removePath(action, dir, dryRun, actions, { mission: mission.id, rel: missionRelative(mission, dir), reason });
+  }
+}
+
+async function pruneTerminalSessionRuntimeHomes(root: any, policy: any, dryRun: boolean, actions: any[], opts: any = {}) {
+  if (policy.compact_terminal_session_runtime_homes === false && opts.compactTerminalSessionRuntimeHomes !== true) return;
+  const activeId = await activeMissionId(root);
+  const targetOnly = Boolean(opts.afterRoute && opts.completedMissionId && opts.sweepClosedMissions !== true);
+  const missions = targetOnly
+    ? [await missionDirById(root, opts.completedMissionId)]
+    : await listMissionDirs(root);
+  for (const mission of missions.filter(Boolean)) {
+    if (await missionClosed(mission, opts)) continue;
+    const active = activeId && mission.id === activeId;
+    const activeRouteTarget = Boolean(opts.afterRoute && opts.completedMissionId === mission.id);
+    if (active && !activeRouteTarget && opts.allowActiveMissionCleanup !== true) continue;
+    if (!(await missionSessionsTerminal(mission))) continue;
+    await pruneMissionRuntimeHomeDirs(mission, 'remove_terminal_session_runtime_home', dryRun, actions, 'terminal_agent_session_runtime_home');
   }
 }
 
@@ -512,6 +578,7 @@ export async function enforceRetention(root: any, opts: any = {}) {
     for (const m of await listMissionDirs(root, { includeSize: true })) await compactMission(m, policy, dryRun, actions);
   }
   if (shouldCompactClosedMissions) await compactClosedMissionWorkdirs(root, policy, dryRun, actions, opts);
+  if (fullMissionSweep || opts.compactTerminalSessionRuntimeHomes === true || Boolean(opts.afterRoute && opts.completedMissionId)) await pruneTerminalSessionRuntimeHomes(root, policy, dryRun, actions, opts);
   if (fullMissionSweep || opts.rotateLargeJsonl === true) await rotateLargeJsonl(root, policy, dryRun, actions);
   await pruneDisposableReportLogs(root, policy, dryRun, actions, opts);
   if (opts.pruneWikiArtifacts || policy.prune_wiki_artifacts) await pruneWikiArtifacts(root, { policy, dryRun, actions, lowTrust: opts.pruneWikiLowTrust });
@@ -527,6 +594,7 @@ export async function enforceRetention(root: any, opts: any = {}) {
     protected_durable_context: DURABLE_RETENTION_CLASSES,
     disposable_mission_dirs: DISPOSABLE_MISSION_DIRS,
     disposable_mission_files: DISPOSABLE_MISSION_FILES,
+    disposable_runtime_home_dir_names: DISPOSABLE_RUNTIME_HOME_DIR_NAMES,
     prune_report_logs: Boolean(opts.pruneReportLogs || policy.prune_disposable_report_logs),
     completed_mission_id: opts.completedMissionId || null,
     actions

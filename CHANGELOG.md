@@ -4,6 +4,19 @@
 
 
 
+
+## [4.6.4] - 2026-06-29
+
+### Fixed
+
+- Compact closed mission session trees and terminal inactive `codex-sdk-home` runtime homes so `.sneakoscope/missions` cannot grow without bound after agent work finishes.
+- Run mission retention cleanup during project-scoped postinstall and update migration receipt creation so users reclaim stale runtime cache on update and first normal command.
+- Keep release metadata aligned after the explicit 4.6.4 package version bump.
+
+### Verification
+
+- Added retention cleanup coverage for closed sessions, terminal blocked diagnostics, update migration cleanup, and postinstall cleanup safety.
+
 ## [4.6.3] - 2026-06-29
 
 ### Added

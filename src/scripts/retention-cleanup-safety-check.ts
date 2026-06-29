@@ -42,11 +42,12 @@ try {
     '.sneakoscope/missions/M-old/completion-proof.json',
     '.sneakoscope/missions/M-old/trust-report.json',
     '.sneakoscope/missions/M-old/reflection.md',
-    '.sneakoscope/missions/M-done/sessions/terminal-transcript.log',
-    '.sneakoscope/missions/M-done/agents/sessions/session-1/terminal-transcript.log',
     '.sneakoscope/missions/M-active/team-inbox/active.md',
+    '.sneakoscope/missions/M-active/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
     '.sneakoscope/missions/M-blocked/team-inbox/blocked.md',
-    '.sneakoscope/missions/M-blocked/scout.stderr.log'
+    '.sneakoscope/missions/M-blocked/scout.stderr.log',
+    '.sneakoscope/missions/M-blocked-terminal/team-inbox/blocked.md',
+    '.sneakoscope/missions/M-blocked-terminal/agents/sessions/session-1/gen-1/worker/worker-result.json'
   ]) {
     assertGate(exists(path.join(applyRoot, rel)), `durable or active artifact was removed: ${rel}`, { rel, actions: applied.actions });
   }
@@ -56,10 +57,15 @@ try {
     '.sneakoscope/missions/M-done/team-inbox/worker.md',
     '.sneakoscope/missions/M-done/bus/event.jsonl',
     '.sneakoscope/missions/M-done/agents/lanes/lane-1.json',
+    '.sneakoscope/missions/M-done/sessions/terminal-transcript.log',
+    '.sneakoscope/missions/M-done/agents/sessions/session-1/terminal-transcript.log',
+    '.sneakoscope/missions/M-done/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
     '.sneakoscope/missions/M-done/scout.stdout.log',
     '.sneakoscope/missions/M-done/scout.stderr.log',
     '.sneakoscope/missions/M-old/team-inbox/worker.md',
+    '.sneakoscope/missions/M-old/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
     '.sneakoscope/missions/M-old/scout.stdout.log',
+    '.sneakoscope/missions/M-blocked-terminal/agents/sessions/session-1/gen-1/worker/codex-sdk-home/codex/cache.bin',
     '.sneakoscope/reports/release-parallel-logs/build.stdout.log'
   ]) {
     assertGate(!exists(path.join(applyRoot, rel)), `disposable artifact survived cleanup: ${rel}`, { rel, actions: applied.actions });
@@ -70,6 +76,7 @@ try {
   for (const kind of ['remove_tmp', 'remove_closed_mission_raw_log', 'remove_disposable_report_log_dir']) {
     assertGate(actionKinds.has(kind), `retention cleanup did not report action kind: ${kind}`, { actions: applied.actions });
   }
+  assertGate(actionKinds.has('remove_terminal_session_runtime_home'), 'retention cleanup did not remove terminal session runtime homes', { actions: applied.actions });
   assertGate(actionKinds.has('remove_closed_mission_workdir') || actionKinds.has('remove_old_mission_workdir'), 'retention cleanup did not report mission workdir cleanup', { actions: applied.actions });
   assertGate(actionKinds.has('retain_mission_durable_context'), 'retention cleanup did not preserve old durable mission context', { actions: applied.actions });
   assertGate(dry.actions.length >= applied.actions.length, 'dry-run should plan cleanup actions without deleting files', { applied: applied.actions.length, dry: dry.actions.length });
@@ -102,6 +109,7 @@ async function writeFixture(projectRoot) {
   await writeMission(projectRoot, 'M-active', false);
   await writeOldDurableMission(projectRoot);
   await writeBlockedMission(projectRoot);
+  await writeTerminalBlockedMission(projectRoot);
   await writeText(path.join(projectRoot, '.sneakoscope', 'reports', 'release-parallel-logs', 'build.stdout.log'), 'summarized release log\n');
 }
 
@@ -118,13 +126,15 @@ async function writeMission(projectRoot, missionId, closed) {
     await write(path.join(dir, 'team-gate.json'), { passed: true });
     await write(path.join(dir, 'team-session-cleanup.json'), { passed: true, all_sessions_closed: true });
     await write(path.join(dir, 'agents', 'agent-proof-evidence.json'), { ok: true, all_sessions_closed: true });
-    await writeText(path.join(dir, 'sessions', 'terminal-transcript.log'), 'transcript stays\n');
-    await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'terminal-transcript.log'), 'agent transcript stays\n');
+    await writeText(path.join(dir, 'sessions', 'terminal-transcript.log'), 'transcript is disposable after close\n');
+    await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'terminal-transcript.log'), 'agent transcript is disposable after close\n');
+    await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'large sdk cache\n');
     await writeText(path.join(dir, 'scout.stdout.log'), 'raw stdout\n');
     await writeText(path.join(dir, 'scout.stderr.log'), 'raw stderr\n');
     await writeText(path.join(dir, 'team-inbox', 'worker.md'), 'temporary inbox\n');
   } else {
     await writeText(path.join(dir, 'team-inbox', 'active.md'), 'active mission scratch stays\n');
+    await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'active sdk cache stays\n');
   }
   await writeText(path.join(dir, 'bus', 'event.jsonl'), '{"event":"temporary"}\n');
   await writeText(path.join(dir, 'agents', 'lanes', 'lane-1.json'), '{"lane":"temporary"}\n');
@@ -137,6 +147,7 @@ async function writeOldDurableMission(projectRoot) {
   await write(path.join(dir, 'evidence-index.json'), { evidence: [] });
   await writeText(path.join(dir, 'reflection.md'), '# old retained reflection\n');
   await writeText(path.join(dir, 'team-inbox', 'worker.md'), 'old scratch\n');
+  await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'old sdk cache\n');
   await writeText(path.join(dir, 'scout.stdout.log'), 'old raw log\n');
   await old(dir);
 }
@@ -146,6 +157,15 @@ async function writeBlockedMission(projectRoot) {
   await write(path.join(dir, 'completion-proof.json'), { schema: 'sks.completion-proof.v1', status: 'blocked', blockers: ['fixture_blocker'] });
   await writeText(path.join(dir, 'team-inbox', 'blocked.md'), 'diagnostic scratch\n');
   await writeText(path.join(dir, 'scout.stderr.log'), 'diagnostic raw log\n');
+}
+
+async function writeTerminalBlockedMission(projectRoot) {
+  const dir = path.join(projectRoot, '.sneakoscope', 'missions', 'M-blocked-terminal');
+  await write(path.join(dir, 'completion-proof.json'), { schema: 'sks.completion-proof.v1', status: 'blocked', blockers: ['fixture_blocker'] });
+  await write(path.join(dir, 'agents', 'agent-session-cleanup.json'), { all_sessions_terminal: true, terminal_session_count: 1, total_sessions: 1 });
+  await writeText(path.join(dir, 'team-inbox', 'blocked.md'), 'diagnostic scratch\n');
+  await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'worker-result.json'), '{"status":"blocked"}\n');
+  await writeText(path.join(dir, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'terminal sdk cache\n');
 }
 
 async function write(file, data) {
