@@ -1,6 +1,6 @@
 # Codex 0.139 Compatibility
 
-SKS 4.6.2 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the InsaneSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, and MadDB direct Supabase MCP `apply_migration` hook fix without restoring legacy split `$SEO`/`$GEO` routes.
+SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the InsaneSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, MadDB direct Supabase MCP `apply_migration` hook fix, MadDB Supabase transport diagnostics hardening, and global npm update detection hardening without restoring legacy split `$SEO`/`$GEO` routes.
 
 SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to UltraSearch: provider-independent planning/proof, x-search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring xAI/Grok runtime dependency.
 

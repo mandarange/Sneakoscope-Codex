@@ -87,7 +87,7 @@ process.exit(1);
     env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp }
   });
 
-  assert.equal(result.schema, 'sks.update-now.v1');
+  assert.equal(result.schema, 'sks.update-now.v2');
   assert.equal(result.ok, true);
   assert.equal(result.status, 'updated');
   assert.deepEqual(result.npm_args, ['install', '--global', 'sneakoscope@99.99.99', '--registry', 'https://registry.npmjs.org/']);
@@ -133,6 +133,46 @@ process.exit(1);
   assert.equal(result.status, 'current');
   assert.equal(result.update_available, false);
   assert.equal(result.command, null);
+});
+
+test('SKS update check does not let source checkout version hide stale global npm install', async () => {
+  const { runSksUpdateCheck } = await import('../../dist/core/update-check.js');
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-check-stale-global-'));
+  const log = path.join(tmp, 'npm-log.jsonl');
+  const fakeNpm = path.join(tmp, 'npm-fake.mjs');
+  await fs.writeFile(fakeNpm, `#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify(args) + '\\n');
+if (args[0] === 'list' && args[1] === '-g' && args[2] === 'sneakoscope') {
+  console.log(JSON.stringify({ dependencies: { sneakoscope: { version: '4.6.1' } } }));
+  process.exit(0);
+}
+if (args[0] === 'root' && args[1] === '-g') {
+  console.log(path.join(process.cwd(), 'node_modules'));
+  process.exit(0);
+}
+if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'version') {
+  console.log('4.6.2');
+  process.exit(0);
+}
+process.exit(1);
+`);
+  await fs.chmod(fakeNpm, 0o755);
+  const result = await runSksUpdateCheck({
+    npmBin: fakeNpm,
+    currentVersion: '4.6.3',
+    env: { ...process.env, SKS_FAKE_NPM_LOG: log }
+  });
+  assert.equal(result.current, '4.6.1');
+  assert.equal(result.runtime_current, '4.6.3');
+  assert.equal(result.package_root_current, '4.6.3');
+  assert.equal(result.npm_global_current, '4.6.1');
+  assert.equal(result.latest, '4.6.2');
+  assert.equal(result.status, 'available');
+  assert.equal(result.update_available, true);
+  assert.equal(result.command, 'sks update now --version 4.6.2');
 });
 
 test('SKS update check can run without npm through the hermetic env override', async () => {

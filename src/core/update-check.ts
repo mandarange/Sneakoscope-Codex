@@ -487,7 +487,7 @@ export async function detectEffectiveSksVersion(options: SksUpdateCheckOptions =
   const pathCandidate = candidates.find((candidate) => candidate.source.startsWith('PATH:'))?.version || null;
   const npmGlobalCandidate = candidates.find((candidate) => candidate.source.startsWith('npm-global:'))?.version || null;
   const packageRootCandidate = candidates.find((candidate) => candidate.source === 'packageRoot:package.json')?.version || null;
-  const current = highestPackageVersion(candidates.map((candidate) => candidate.version));
+  const current = effectiveInstalledVersion(candidates);
   return {
     current,
     runtime_current: PACKAGE_VERSION,
@@ -670,6 +670,17 @@ function updateNowError(
   if (!newVersionDoctor?.ok) return newVersionDoctor?.error || 'new-version global Doctor failed';
   if (!migrationCurrent) return 'project update migration receipt was not current';
   return 'update failed';
+}
+
+function effectiveInstalledVersion(candidates: SksVersionCandidate[]): string {
+  const firstBySource = (source: string) => candidates.find((candidate) => candidate.source === source)?.version || null;
+  const firstByPrefix = (prefix: string) => candidates.find((candidate) => candidate.source.startsWith(prefix))?.version || null;
+  return firstBySource('env:SKS_INSTALLED_SKS_VERSION')
+    || firstByPrefix('npm-global:')
+    || firstByPrefix('PATH:')
+    || firstBySource('runtime')
+    || firstBySource('packageRoot:package.json')
+    || highestPackageVersion(candidates.map((candidate) => candidate.version));
 }
 
 function highestPackageVersion(versions: Array<string | null | undefined>): string {

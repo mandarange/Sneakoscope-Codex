@@ -13,6 +13,7 @@ export interface MadDbRuntimeProfile {
   profile_sha256: string;
   server_url_redacted: string;
   server_url: string;
+  server_url_source: 'generated_project_ref' | 'explicit_mcp_url';
   features: ['database'];
   write_capable: true;
   normal_config_hash_before: string | null;
@@ -36,10 +37,11 @@ export async function createMadDbRuntimeProfile(input: {
   cycleId: string;
   projectRef: string;
   runtimeSessionId: string;
+  mcpUrl?: string | null;
 }): Promise<MadDbRuntimeProfile> {
   const dir = path.join(missionDir(input.root, input.missionId), 'mad-db', 'runtime');
   await fs.mkdir(dir, { recursive: true });
-  const url = madDbMcpUrl(input.projectRef);
+  const url = madDbMcpUrl(input.projectRef, input.mcpUrl);
   const text = [
     '[mcp_servers.supabase_mad_db]',
     `url = "${url}"`,
@@ -60,6 +62,7 @@ export async function createMadDbRuntimeProfile(input: {
     profile_sha256: profileHash,
     server_url_redacted: redactSupabaseUrl(url),
     server_url: url,
+    server_url_source: input.mcpUrl ? 'explicit_mcp_url' : 'generated_project_ref',
     features: ['database'],
     write_capable: true,
     normal_config_hash_before: normalHash,
@@ -112,7 +115,14 @@ export function redactedRuntimeProfile(profile: MadDbRuntimeProfile): Omit<MadDb
   return rest;
 }
 
-export function madDbMcpUrl(projectRef: string): string {
+export function madDbMcpUrl(projectRef: string, explicitUrl?: string | null): string {
+  if (explicitUrl) {
+    const parsed = new URL(explicitUrl);
+    if (projectRef && !parsed.searchParams.get('project_ref')) parsed.searchParams.set('project_ref', projectRef);
+    parsed.searchParams.set('features', 'database');
+    parsed.searchParams.delete('read_only');
+    return parsed.toString();
+  }
   const params = new URLSearchParams();
   params.set('project_ref', projectRef);
   params.set('features', 'database');

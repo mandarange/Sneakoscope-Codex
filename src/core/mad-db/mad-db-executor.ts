@@ -11,6 +11,9 @@ export interface MadDbToolInventory {
   apply_migration_available: boolean;
   duration_ms: number;
   error_digest: string | null;
+  error_summary: string | null;
+  error_kind: string | null;
+  retry_guidance: string | null;
 }
 
 export interface MadDbToolResult {
@@ -21,6 +24,9 @@ export interface MadDbToolResult {
   row_count: number | null;
   is_error: boolean;
   duration_ms: number;
+  error_summary: string | null;
+  error_kind: string | null;
+  retry_guidance: string | null;
 }
 
 export class MadDbMcpExecutor {
@@ -53,9 +59,14 @@ export class MadDbMcpExecutor {
         execute_sql_available: hasTool(names, 'execute_sql'),
         apply_migration_available: hasTool(names, 'apply_migration'),
         duration_ms: Math.round(performance.now() - started),
-        error_digest: null
+        error_digest: null,
+        error_summary: null,
+        error_kind: null,
+        retry_guidance: null
       };
     } catch (err: unknown) {
+      const summary = summarizeMadDbError(err);
+      const kind = classifyMadDbError(summary);
       return {
         schema: 'sks.mad-db-tool-inventory.v1',
         checked_at: nowIso(),
@@ -64,7 +75,10 @@ export class MadDbMcpExecutor {
         execute_sql_available: false,
         apply_migration_available: false,
         duration_ms: Math.round(performance.now() - started),
-        error_digest: sha256(redactError(err)).slice(0, 32)
+        error_digest: sha256(summary).slice(0, 32),
+        error_summary: summary,
+        error_kind: kind,
+        retry_guidance: madDbRetryGuidance(kind)
       };
     }
   }
@@ -104,20 +118,28 @@ export class MadDbMcpExecutor {
           result_digest: sha256(JSON.stringify(redactToolResult(result))).slice(0, 32),
           row_count: extractRowCount(result),
           is_error: result.isError === true,
-          duration_ms: Math.round(performance.now() - started)
+          duration_ms: Math.round(performance.now() - started),
+          error_summary: result.isError === true ? summarizeMadDbToolError(result) : null,
+          error_kind: result.isError === true ? classifyMadDbError(summarizeMadDbToolError(result)) : null,
+          retry_guidance: result.isError === true ? madDbRetryGuidance(classifyMadDbError(summarizeMadDbToolError(result))) : null
         };
       } catch (err: unknown) {
         lastError = err;
       }
     }
+    const summary = summarizeMadDbError(lastError);
+    const kind = classifyMadDbError(summary);
     return {
       schema: 'sks.mad-db-tool-result.v1',
       ok: false,
       tool_name: tool,
-      result_digest: sha256(redactError(lastError)).slice(0, 32),
+      result_digest: sha256(summary).slice(0, 32),
       row_count: null,
       is_error: true,
-      duration_ms: 0
+      duration_ms: 0,
+      error_summary: summary,
+      error_kind: kind,
+      retry_guidance: madDbRetryGuidance(kind)
     };
   }
 }
@@ -141,9 +163,39 @@ function authHeaders(): HeadersInit | undefined {
   return { Authorization: `Bearer ${token}` };
 }
 
-function redactError(err: unknown): string {
+export function summarizeMadDbError(err: unknown): string {
   const text = err instanceof Error ? `${err.name}:${err.message}` : String(err);
-  return text.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>').replace(/(token|password|secret|apikey)=([^&\s]+)/gi, '$1=<redacted>');
+  return redactErrorText(text).slice(0, 1200);
+}
+
+function summarizeMadDbToolError(result: unknown): string {
+  return redactErrorText(JSON.stringify(redactToolResult(result))).slice(0, 1200);
+}
+
+function redactErrorText(text: string): string {
+  return String(text || '')
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>')
+    .replace(/(token|password|secret|apikey)=([^&\s]+)/gi, '$1=<redacted>')
+    .replace(/(postgres(?:ql)?:\/\/[^:\s/]+:)([^@\s]+)(@)/gi, '$1<redacted>$3');
+}
+
+export function classifyMadDbError(summary: string): string {
+  const text = String(summary || '').toLowerCase();
+  if (/read[_ -]?only|read only|permission denied.+read/i.test(text)) return 'supabase_mcp_read_only_transport';
+  if (/timeout|timed out|etimedout|i\/o timeout|aborterror|deadline/i.test(text)) return 'supabase_sql_plane_timeout';
+  if (/connection terminated|econnreset|unexpected eof|socket hang up|server closed/i.test(text)) return 'supabase_sql_plane_connection_interrupted';
+  if (/sasl|password authentication failed|invalid login|authentication failed|sqlstate 28p01/i.test(text)) return 'supabase_sql_plane_auth_failed';
+  if (/fetch failed|enotfound|econnrefused|network|dns/i.test(text)) return 'supabase_mcp_transport_unreachable';
+  return 'supabase_mcp_tool_error';
+}
+
+export function madDbRetryGuidance(kind: string): string {
+  if (kind === 'supabase_mcp_read_only_transport') return 'The active MadDB cycle must use the mission-local write-capable MCP URL. Pass --mcp-url or SKS_MAD_DB_MCP_URL if a project-local read-only Supabase MCP config is shadowing the intended transport.';
+  if (kind === 'supabase_sql_plane_timeout') return 'Retry with an explicit Supabase pooler/session/direct MCP transport if available; Supabase CLI docs also support --db-url for CLI migration paths when pooler/direct connectivity differs.';
+  if (kind === 'supabase_sql_plane_connection_interrupted') return 'Treat this as a SQL-plane connectivity interruption, not a DB safety denial. Retry after checking Supabase project health, pooler/direct connection mode, and network reachability.';
+  if (kind === 'supabase_sql_plane_auth_failed') return 'Check SUPABASE_ACCESS_TOKEN and the project/database credentials used by the Supabase MCP server; do not retry destructive SQL until auth is corrected.';
+  if (kind === 'supabase_mcp_transport_unreachable') return 'Check access to https://mcp.supabase.com/mcp or pass a trusted local MCP URL with --mcp-url for the active MadDB cycle.';
+  return 'Inspect error_summary in mad-db-result.json; the failure occurred after MadDB capability gating, so do not report it as a safety-gate denial.';
 }
 
 function redactToolResult(value: unknown): unknown {
