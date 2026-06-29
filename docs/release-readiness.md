@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.6.5 is the doctor null-safety patch after 4.6.4. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release metadata, npm unpublished-version checks, doctor console status regression coverage, default `sks doctor --fix --yes` smoke evidence, and `npm publish --ignore-scripts` dry-run evidence to agree on 4.6.5 before publication.
+
+4.6.5 release readiness adds proof that default doctor repair handles a skipped optional Codex Doctor bridge as `unavailable` instead of dereferencing `null`, while preserving full/required Codex Doctor diagnostics for deep doctor profiles.
+
 SKS 4.6.4 is the mission-retention cleanup patch after 4.6.3. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release metadata, provenance, npm unpublished-version checks, publish auth evidence, retention cleanup safety coverage, update migration cleanup coverage, postinstall side-effect safety, and `npm publish --ignore-scripts` dry-run evidence to agree on 4.6.4 before publication.
 
 4.6.4 release readiness adds proof that closed mission session trees are disposable, terminal inactive agent sessions drop heavy `codex-sdk-home` runtime homes without deleting blocked diagnostics, update migration receipts run mission retention cleanup, project-scoped postinstall cleanup is best-effort and disableable, and direct `npm publish --ignore-scripts` packages the freshly built `4.6.4` dist surface while npm lifecycle scripts remain disabled.

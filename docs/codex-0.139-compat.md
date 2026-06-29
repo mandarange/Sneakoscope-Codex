@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.6.5 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening default `sks doctor --fix` output for optional Codex Doctor bridge skips; default doctor repair can report `codex doctor: unavailable` without crashing, and full Codex compatibility diagnostics remain available through full/required doctor modes.
+
 SKS 4.6.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening mission retention for closed/terminal agent sessions, project-scoped update cleanup, and `npm publish --ignore-scripts` readiness without changing the active Codex compatibility baseline.
 
 SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the InsaneSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, MadDB direct Supabase MCP `apply_migration` hook fix, MadDB Supabase transport diagnostics hardening, and global npm update detection hardening without restoring legacy split `$SEO`/`$GEO` routes.

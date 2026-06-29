@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.6.5 keeps release proof truth aligned with the 4.6.5 package metadata, Rust helper metadata, built output, release metadata, npm unpublished-version evidence, doctor console status regression evidence, default doctor repair smoke evidence, and `npm publish --ignore-scripts` dry-run evidence before publication.
+
+SKS 4.6.5 release proof truth also requires proof that a missing/skipped optional Codex Doctor bridge is represented as `unavailable` in human console output rather than crashing default `sks doctor --fix` runs.
+
 SKS 4.6.4 keeps release proof truth aligned with the 4.6.4 package metadata, Rust helper metadata, built output, release metadata, provenance, npm unpublished-version evidence, publish auth evidence, mission-retention cleanup evidence, update migration cleanup evidence, project-scoped postinstall cleanup evidence, and `npm publish --ignore-scripts` dry-run evidence before publication.
 
 SKS 4.6.4 release proof truth also requires proof that closed missions no longer preserve raw `sessions`/`agents/sessions` trees as durable context, terminal inactive agent sessions remove heavy `codex-sdk-home` runtime caches while keeping blocked diagnostics, update migration receipts record retention cleanup results, and direct lifecycle-disabled npm publish uses a fresh built `dist` for `sneakoscope@4.6.4`.
