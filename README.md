@@ -659,7 +659,7 @@ npm install -g .
 sks doctor --fix
 ```
 
-If PATH or npm has duplicate global installs, `sks doctor --fix` keeps one global npm install and removes duplicate global `sneakoscope` installs. The Sneakoscope source checkout is exempt so local development files are not removed.
+If PATH or npm has duplicate global installs, `sks doctor --fix` keeps one global npm install, removes duplicate global `sneakoscope` installs, and clears the npm cache so old downloaded package versions do not accumulate. The Sneakoscope source checkout is exempt so local development files are not removed.
 
 ### SKS keeps asking to update after a global update
 
