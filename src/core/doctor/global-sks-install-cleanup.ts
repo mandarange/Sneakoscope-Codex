@@ -28,6 +28,20 @@ export interface GlobalSksInstallCleanupResult {
   kept: GlobalSksInstallCandidate[];
   removable: GlobalSksInstallCandidate[];
   removed: Array<{ prefix: string; package_root: string | null; ok: boolean; status: number | null; error: string | null }>;
+  npm_cache: NpmCacheCleanupResult;
+  blockers: string[];
+}
+
+export interface NpmCacheCleanupResult {
+  schema: 'sks.npm-cache-cleanup.v1';
+  ok: boolean;
+  fix: boolean;
+  status: 'skipped' | 'cleaned' | 'failed' | 'npm_missing';
+  command: string | null;
+  code: number | null;
+  scope: 'npm_cache_all_packages';
+  stdout_tail: string;
+  stderr_tail: string;
   blockers: string[];
 }
 
@@ -44,17 +58,21 @@ export async function cleanDuplicateGlobalSksInstalls(opts: {
   const planned = planGlobalSksInstallCleanup(candidates, { sourceRoot });
   const removed: GlobalSksInstallCleanupResult['removed'] = [];
   const blockers: string[] = [...planned.blockers];
-  if (opts.fix === true && planned.removable.length > 0) {
-    if (!npmBin) {
-      blockers.push('npm_not_found_for_duplicate_global_sks_cleanup');
-    } else {
-      const cleanupContract = createRequestedScopeContract({
+  const cleanupContract = opts.fix === true && npmBin
+    ? createRequestedScopeContract({
         route: 'doctor',
-        userRequest: 'sks doctor --fix duplicate global SKS cleanup',
+        userRequest: 'sks doctor --fix global SKS install and npm cache cleanup',
         projectRoot: sourceRoot,
         overrides: { package_install: true }
-      });
-      const guardContext = guardContextForRoute(sourceRoot, cleanupContract, 'sks doctor --fix duplicate global SKS cleanup');
+      })
+    : null;
+  const guardContext = cleanupContract && npmBin
+    ? guardContextForRoute(sourceRoot, cleanupContract, 'sks doctor --fix global SKS install and npm cache cleanup')
+    : null;
+  if (opts.fix === true && planned.removable.length > 0) {
+    if (!npmBin || !guardContext) {
+      blockers.push('npm_not_found_for_duplicate_global_sks_cleanup');
+    } else {
       for (const candidate of planned.removable) {
         if (!candidate.prefix) {
           blockers.push(`duplicate_global_sks_missing_prefix:${candidate.package_root || candidate.bin || 'unknown'}`);
@@ -78,9 +96,11 @@ export async function cleanDuplicateGlobalSksInstalls(opts: {
       }
     }
   }
+  const npmCache = await cleanNpmCache({ fix: opts.fix === true, npmBin, env, guardContext });
+  if (opts.fix === true && !npmCache.ok) blockers.push(...npmCache.blockers);
   return {
     schema: 'sks.global-sks-install-cleanup.v1',
-    ok: blockers.length === 0,
+    ok: blockers.length === 0 && npmCache.ok,
     fix: opts.fix === true,
     source_root: sourceRoot,
     package: 'sneakoscope',
@@ -88,6 +108,7 @@ export async function cleanDuplicateGlobalSksInstalls(opts: {
     kept: planned.kept,
     removable: planned.removable,
     removed,
+    npm_cache: npmCache,
     blockers
   };
 }
@@ -255,6 +276,73 @@ function dedupeCandidates(candidates: GlobalSksInstallCandidate[]): GlobalSksIns
 
 function scoreCandidate(candidate: GlobalSksInstallCandidate): number {
   return (candidate.bin ? 2 : 0) + (candidate.prefix ? 1 : 0);
+}
+
+async function cleanNpmCache(opts: {
+  fix: boolean;
+  npmBin: string | null;
+  env: NodeJS.ProcessEnv;
+  guardContext: ReturnType<typeof guardContextForRoute> | null;
+}): Promise<NpmCacheCleanupResult> {
+  const args = ['cache', 'clean', '--force', '--silent'];
+  const command = opts.npmBin ? [opts.npmBin, ...args].join(' ') : null;
+  if (!opts.fix) {
+    return {
+      schema: 'sks.npm-cache-cleanup.v1',
+      ok: true,
+      fix: false,
+      status: 'skipped',
+      command,
+      code: null,
+      scope: 'npm_cache_all_packages',
+      stdout_tail: '',
+      stderr_tail: '',
+      blockers: []
+    };
+  }
+  if (!opts.npmBin || !opts.guardContext) {
+    return {
+      schema: 'sks.npm-cache-cleanup.v1',
+      ok: false,
+      fix: true,
+      status: 'npm_missing',
+      command: null,
+      code: null,
+      scope: 'npm_cache_all_packages',
+      stdout_tail: '',
+      stderr_tail: '',
+      blockers: ['npm_not_found_for_npm_cache_cleanup']
+    };
+  }
+  const result = await guardedPackageInstall(
+    opts.guardContext,
+    'npm cache clean --force',
+    {
+      confirmed: true,
+      command: opts.npmBin,
+      args,
+      env: opts.env,
+      timeoutMs: 60_000,
+      maxOutputBytes: 16 * 1024
+    }
+  ).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  const ok = result.code === 0;
+  return {
+    schema: 'sks.npm-cache-cleanup.v1',
+    ok,
+    fix: true,
+    status: ok ? 'cleaned' : 'failed',
+    command,
+    code: result.code,
+    scope: 'npm_cache_all_packages',
+    stdout_tail: tail(result.stdout),
+    stderr_tail: tail(result.stderr),
+    blockers: ok ? [] : ['npm_cache_clean_failed']
+  };
+}
+
+function tail(text: string): string {
+  return String(text || '').slice(-2000);
 }
 
 async function realpathOrSelf(value: string): Promise<string> {

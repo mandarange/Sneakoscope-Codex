@@ -504,7 +504,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     warnings_suppressed: false,
     blockers: [err?.message || String(err)]
   }));
-  const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only') && deepDiagnostics
+  const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
     ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
     : null;
   const { detectImagegenCapability } = await import('../core/imagegen/imagegen-capability.js');
@@ -862,6 +862,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }
   if (globalSksInstallCleanup) {
     console.log(`Global SKS installs: kept ${(globalSksInstallCleanup as any).kept?.length ?? 0}, removed ${(globalSksInstallCleanup as any).removed?.filter((entry: any) => entry.ok).length ?? 0}, source repo exempt ${(globalSksInstallCleanup as any).candidates?.filter((entry: any) => entry.source_repo_exempt).length ?? 0}`);
+    if ((globalSksInstallCleanup as any).npm_cache) console.log(`NPM cache cleanup: ${(globalSksInstallCleanup as any).npm_cache.status}`);
   }
   if (!ready.ready && ready.next_actions?.length) {
     console.log('What still needs you:');

@@ -15,12 +15,14 @@
 
 - Keep MadDB Supabase MCP failures from collapsing into an opaque `mad_db_tool_execution_failed` digest by recording a redacted `error_summary`, `error_kind`, and retry guidance in mission artifacts.
 - Keep `sks update-check` and `sks update now` focused on the replaceable global npm install instead of letting a newer source checkout/packageRoot version hide a stale global `sneakoscope` package.
+- Make default `sks doctor --fix` remove stale duplicate global `sneakoscope` installs and purge the npm cache, instead of waiting for `--full` diagnostics before reclaiming update leftovers.
 - Keep release metadata aligned after the explicit 4.6.3 package version bump.
 
 ### Verification
 
 - Added `mad-db:supabase-transport-diagnostics` to `mad-db:unit` so the MadDB direct apply-migration capability path, destructive-operation policy, and Supabase transport diagnostics are checked together before publication.
 - Added an update-check regression proving a stale global npm install is still reported as updateable even when the current source checkout is already on a newer version.
+- Added global install cleanup coverage proving `doctor --fix` removes an older global prefix and calls `npm cache clean --force`.
 
 ## [4.6.2] - 2026-06-27
 
