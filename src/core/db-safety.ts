@@ -11,8 +11,8 @@ import { madDbOperationClassesFromClassification } from './mad-db/mad-db-policy.
 export const DEFAULT_DB_SAFETY_POLICY = Object.freeze({
   schema_version: 1,
   mode: 'read_only_default',
-  destructive_operations: 'deny_always',
-  production_writes: 'deny_always',
+  destructive_operations: 'deny_without_active_mad_db_capability',
+  production_writes: 'deny_without_active_mad_db_capability',
   mcp_live_writes: 'deny_by_default',
   require_project_scoped_mcp: true,
   require_read_only_mcp_for_real_data: true,

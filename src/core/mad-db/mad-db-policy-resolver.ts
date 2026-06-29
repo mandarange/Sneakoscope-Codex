@@ -1,7 +1,7 @@
 import { isMadDbCapabilityActive, readMadDbCapability, type MadDbCapabilityV2 } from './mad-db-capability.js';
 import { activeMadDbAllowsSqlPlane, isMadDbControlPlaneDeniedTool, madDbOperationClassesFromClassification } from './mad-db-policy.js';
 import { readJson, sha256 } from '../fsx.js';
-import { stateFile } from '../mission.js';
+import { missionsDir, stateFile } from '../mission.js';
 
 export const MAD_DB_POLICY_DECISION_SCHEMA = 'sks.mad-db-policy-decision.v2';
 
@@ -19,7 +19,45 @@ export async function resolveMadDbMutationPolicy(root: string, state: any = {}, 
       };
     }
   }
+  const latestCapability = await findLatestActiveMadDbCapability(root);
+  if (latestCapability) {
+    const fallback = await resolveMadDbMutationPolicyForState(root, {
+      mad_db_active: true,
+      mad_db_capability_mission_id: latestCapability.mission_id
+    }, classification, latestCapability);
+    if (fallback.allowed === true) {
+      return {
+        ...fallback,
+        state_source: 'latest_active_mad_db_capability',
+        reasons: [...fallback.reasons, 'mad_db_latest_active_capability_used']
+      };
+    }
+  }
   return primary;
+}
+
+async function findLatestActiveMadDbCapability(root: string): Promise<MadDbCapabilityV2 | null> {
+  const fs = await import('node:fs/promises');
+  const entries = await fs.readdir(missionsDir(root), { withFileTypes: true }).catch(() => []);
+  const candidates: Array<{ capability: MadDbCapabilityV2; issuedMs: number; expiresMs: number }> = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith('M-')) continue;
+    const capability = await readMadDbCapability(root, entry.name).catch(() => null);
+    if (!capability || !isMadDbCapabilityActive(capability)) continue;
+    const issuedMs = Date.parse(capability.issued_at || '');
+    const expiresMs = Date.parse(capability.expires_at || '');
+    candidates.push({
+      capability,
+      issuedMs: Number.isFinite(issuedMs) ? issuedMs : 0,
+      expiresMs: Number.isFinite(expiresMs) ? expiresMs : 0
+    });
+  }
+  candidates.sort((a, b) => (
+    (a.issuedMs - b.issuedMs)
+    || (a.expiresMs - b.expiresMs)
+    || a.capability.mission_id.localeCompare(b.capability.mission_id)
+  ));
+  return candidates.at(-1)?.capability || null;
 }
 
 async function resolveMadDbMutationPolicyForState(root: string, state: any = {}, classification: any = {}, explicitCapability?: MadDbCapabilityV2 | null) {

@@ -50,4 +50,29 @@ assertGate(decision.mad_db.state_source === 'persisted_sks_state', 'drifted hook
 assertGate(updated?.counters.reserved === 1, 'direct apply_migration reservation must land on the real MadDB mission capability', updated || {})
 assertGate(wrongMissionDirExists === false, 'direct apply_migration must not create or write under the drifted payload mission id')
 
-emitGate('mad-db:direct-apply-migration-hook', { mission_id: mission.id, operation_id: decision.mad_db.operation_id, counters: updated?.counters })
+const unrelatedMission = await createMission(root, { mode: 'team', prompt: 'unrelated current-state drift fixture' })
+const unrelatedStateFromCodex = { mission_id: unrelatedMission.id, mode: 'TEAM', phase: 'TOOL_CALL' }
+const executeDecision: any = await checkDbOperation(root, unrelatedStateFromCodex, {
+  tool_name: 'mcp__supabase__execute_sql',
+  tool_call_id: 'direct-execute-sql-drop-delete-call',
+  tool_input: {
+    query: 'drop table if exists public.fixture_old; delete from public.fixture;'
+  }
+})
+const afterExecute = await readMadDbCapability(root, mission.id)
+const unrelatedOperationsDir = path.join(missionDir(root, unrelatedMission.id), 'mad-db', 'runtime', 'operations')
+
+assertGate(executeDecision.allowed === true && executeDecision.mad_db?.active === true, 'active MadDB capability must allow direct execute_sql after current state drifts away from MadDB', executeDecision)
+assertGate(executeDecision.mad_db.state_source === 'latest_active_mad_db_capability', 'direct execute_sql must fall back to the latest active MadDB capability when persisted state is unrelated', executeDecision)
+for (const operation of ['direct_execute_sql', 'drop', 'all_row_delete']) {
+  assertGate(executeDecision.mad_db.operation_classes.includes(operation), `direct execute_sql destructive SQL must reserve ${operation}`, executeDecision)
+}
+assertGate(afterExecute?.counters.reserved === 2, 'direct execute_sql reservation must land on the real MadDB mission capability', afterExecute || {})
+assertGate(fs.existsSync(unrelatedOperationsDir) === false, 'direct execute_sql must not write operation lifecycle files under the unrelated current mission')
+
+emitGate('mad-db:direct-apply-migration-hook', {
+  mission_id: mission.id,
+  apply_operation_id: decision.mad_db.operation_id,
+  execute_operation_id: executeDecision.mad_db.operation_id,
+  counters: afterExecute?.counters
+})
