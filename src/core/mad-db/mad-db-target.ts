@@ -1,10 +1,15 @@
 import path from 'node:path';
 import { exists, readText, sha256 } from '../fsx.js';
+import { redactSupabaseUrl } from './mad-db-runtime-profile.js';
 
 export interface MadDbTarget {
   schema: 'sks.mad-db-target.v1';
   project_ref: string | null;
   project_ref_hash: string | null;
+  mcp_url: string | null;
+  mcp_url_hash: string | null;
+  mcp_url_redacted: string | null;
+  mcp_url_source: 'default_generated' | 'explicit_or_environment';
   target_environment: 'local' | 'branch' | 'preview' | 'production';
   allowed_schemas: string[];
   source: string;
@@ -17,22 +22,47 @@ export async function resolveMadDbTarget(root: string, input: { args?: string[];
   const explicit = input.projectRef || readOption(args, '--project-ref', '') || process.env.SKS_MAD_DB_PROJECT_REF || process.env.SKS_MAD_DB_E2E_PROJECT_REF || '';
   const candidates = explicit ? [explicit] : await projectRefCandidates(root);
   const projectRef = explicit || (candidates.length === 1 ? candidates[0] || '' : '');
+  const explicitMcpUrl = readOption(args, '--mcp-url', '') || process.env.SKS_MAD_DB_MCP_URL || process.env.SKS_MAD_DB_SUPABASE_MCP_URL || '';
+  const normalizedMcp = normalizeExplicitMcpUrl(explicitMcpUrl, projectRef || null);
   const target = normalizeTarget(input.target || readOption(args, '--target', '') || process.env.SKS_MAD_DB_TARGET || process.env.SKS_MAD_DB_E2E_TARGET || 'production');
   const allowedSchemas = input.allowedSchemas?.length
     ? input.allowedSchemas
     : splitCsv(readOption(args, '--schema', readOption(args, '--schemas', process.env.SKS_MAD_DB_SCHEMAS || 'public')));
   const blockers = [];
   if (!projectRef) blockers.push(candidates.length > 1 ? 'mad_db_project_ref_ambiguous' : 'mad_db_project_ref_missing');
+  if (normalizedMcp.blocker) blockers.push(normalizedMcp.blocker);
   return {
     schema: 'sks.mad-db-target.v1',
     project_ref: projectRef || null,
     project_ref_hash: projectRef ? sha256(projectRef).slice(0, 16) : null,
+    mcp_url: normalizedMcp.url,
+    mcp_url_hash: normalizedMcp.url ? sha256(normalizedMcp.url).slice(0, 16) : null,
+    mcp_url_redacted: normalizedMcp.url ? redactSupabaseUrl(normalizedMcp.url) : null,
+    mcp_url_source: normalizedMcp.url ? 'explicit_or_environment' : 'default_generated',
     target_environment: target,
     allowed_schemas: allowedSchemas.length ? allowedSchemas : ['public'],
     source: explicit ? 'explicit_or_environment' : candidates.length === 1 ? 'managed_config_single_candidate' : 'unresolved',
     blockers,
     candidates: candidates.map((candidate) => `${sha256(candidate).slice(0, 8)}:${candidate.slice(0, 2)}...`)
   };
+}
+
+function normalizeExplicitMcpUrl(value: string, projectRef: string | null): { url: string | null; blocker: string | null } {
+  if (!value) return { url: null, blocker: null };
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { url: null, blocker: 'mad_db_mcp_url_invalid' };
+  }
+  const isSupabaseRemote = parsed.protocol === 'https:' && parsed.hostname === 'mcp.supabase.com' && parsed.pathname === '/mcp';
+  const isLocalMcp = parsed.protocol === 'http:' && /^localhost$|^127\.0\.0\.1$/.test(parsed.hostname) && parsed.pathname.endsWith('/mcp');
+  if (!isSupabaseRemote && !isLocalMcp) return { url: null, blocker: 'mad_db_mcp_url_untrusted_host' };
+  if (parsed.searchParams.get('read_only') === 'true') return { url: null, blocker: 'mad_db_mcp_url_read_only_conflict' };
+  if (projectRef && !parsed.searchParams.get('project_ref')) parsed.searchParams.set('project_ref', projectRef);
+  parsed.searchParams.set('features', 'database');
+  parsed.searchParams.delete('read_only');
+  return { url: parsed.toString(), blocker: null };
 }
 
 export async function projectRootHash(root: string): Promise<string> {

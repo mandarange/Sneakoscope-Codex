@@ -53,9 +53,9 @@ export async function prepareMadDbMission(input: {
   const blockers = [...target.blockers];
   let profile: MadDbRuntimeProfile;
   if (!target.project_ref) {
-    profile = await createMadDbRuntimeProfile({ root: input.root, missionId: id, cycleId, projectRef: 'missing-project-ref', runtimeSessionId });
+    profile = await createMadDbRuntimeProfile({ root: input.root, missionId: id, cycleId, projectRef: 'missing-project-ref', runtimeSessionId, mcpUrl: target.mcp_url });
   } else {
-    profile = await createMadDbRuntimeProfile({ root: input.root, missionId: id, cycleId, projectRef: target.project_ref, runtimeSessionId });
+    profile = await createMadDbRuntimeProfile({ root: input.root, missionId: id, cycleId, projectRef: target.project_ref, runtimeSessionId, mcpUrl: target.mcp_url });
   }
   const capability = await createMadDbCapability(input.root, {
     missionId: id,
@@ -87,7 +87,7 @@ export async function prepareMadDbMission(input: {
     command: '$MAD-DB',
     mode: 'MADDB',
     task: input.task,
-    target: { ...target, project_ref: target.project_ref ? `<hash:${target.project_ref_hash}>` : null },
+    target: redactTarget(target),
     capability_file: 'mad-db-capability.json',
     runtime_profile_manifest: 'mad-db/runtime/runtime-profile-manifest.json',
     tool_inventory: toolInventory ? 'mad-db/runtime/tool-inventory.json' : null
@@ -161,6 +161,7 @@ export async function runMadDbCycle(input: {
     await writeJsonAtomic(path.join(missionDir(input.root, prepared.mission_id), 'mad-db', 'runtime', 'tool-inventory.json'), inventory);
     if (!inventory.ok) {
       blockers.push('mad_db_execute_sql_or_apply_migration_unavailable');
+      if (inventory.error_kind) blockers.push(inventory.error_kind);
       throw new Error('mad_db_tool_inventory_failed');
     }
     await activateMadDbCapability(input.root, prepared.mission_id);
@@ -196,6 +197,7 @@ export async function runMadDbCycle(input: {
       result: execution
     });
     if (!execution.ok) blockers.push('mad_db_tool_execution_failed');
+    if (!execution.ok && execution.error_kind) blockers.push(execution.error_kind);
     if (execution.ok && input.verifySql) {
       const verifyStart = Date.now();
       readBack = await runReadBackChecks({
@@ -266,10 +268,7 @@ async function clearMadDbCurrentState(root: string, missionId: string, ok: boole
 function redactCycleResult(result: MadDbCycleResult): MadDbCycleResult {
   return {
     ...result,
-    target: {
-      ...result.target,
-      project_ref: result.target.project_ref ? '<redacted>' : null
-    }
+    target: redactTarget(result.target)
   };
 }
 
@@ -291,11 +290,20 @@ async function recreateProfileFromPrepared(root: string, prepared: MadDbPrepared
     profile_path: prepared.runtime_profile.profile_path,
     profile_sha256: prepared.runtime_profile.profile_sha256,
     server_url_redacted: prepared.runtime_profile.server_url_redacted,
-    server_url: `https://mcp.supabase.com/mcp?project_ref=${encodeURIComponent(projectRef)}&features=database`,
+    server_url: prepared.target.mcp_url || `https://mcp.supabase.com/mcp?project_ref=${encodeURIComponent(projectRef)}&features=database`,
+    server_url_source: prepared.target.mcp_url ? 'explicit_mcp_url' : 'generated_project_ref',
     features: ['database'],
     write_capable: true,
     normal_config_hash_before: prepared.runtime_profile.normal_config_hash_before,
     created_at: prepared.runtime_profile.created_at
+  };
+}
+
+function redactTarget(target: MadDbTarget) {
+  return {
+    ...target,
+    project_ref: target.project_ref ? `<hash:${target.project_ref_hash}>` : null,
+    mcp_url: target.mcp_url ? '<redacted>' : null
   };
 }
 

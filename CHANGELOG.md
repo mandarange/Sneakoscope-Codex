@@ -3,6 +3,25 @@
 ## [Unreleased]
 
 
+
+## [4.6.3] - 2026-06-29
+
+### Added
+
+- Added a MadDB Supabase transport diagnostics release gate that proves read-only MCP transport denials, SQL-plane timeouts, and explicit write-capable MCP URL selection are reported as separate failure classes.
+- Added explicit `--mcp-url` / `SKS_MAD_DB_MCP_URL` support for active MadDB cycles so a project-local read-only Supabase MCP config cannot silently shadow the mission-local write-capable transport.
+
+### Fixed
+
+- Keep MadDB Supabase MCP failures from collapsing into an opaque `mad_db_tool_execution_failed` digest by recording a redacted `error_summary`, `error_kind`, and retry guidance in mission artifacts.
+- Keep `sks update-check` and `sks update now` focused on the replaceable global npm install instead of letting a newer source checkout/packageRoot version hide a stale global `sneakoscope` package.
+- Keep release metadata aligned after the explicit 4.6.3 package version bump.
+
+### Verification
+
+- Added `mad-db:supabase-transport-diagnostics` to `mad-db:unit` so the MadDB direct apply-migration capability path, destructive-operation policy, and Supabase transport diagnostics are checked together before publication.
+- Added an update-check regression proving a stale global npm install is still reported as updateable even when the current source checkout is already on a newer version.
+
 ## [4.6.2] - 2026-06-27
 
 ### Changed
