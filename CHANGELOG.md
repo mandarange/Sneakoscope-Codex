@@ -5,6 +5,18 @@
 
 
 
+
+## [4.6.5] - 2026-06-30
+
+### Fixed
+
+- Prevent default `sks doctor --fix` runs from crashing when the optional Codex Doctor bridge is skipped and the report is `null`; the console now prints `codex doctor: unavailable` instead of throwing.
+- Keep release metadata aligned after the explicit 4.6.5 package version bump.
+
+### Verification
+
+- Added regression coverage for skipped, unavailable, and available Codex Doctor console status formatting.
+
 ## [4.6.4] - 2026-06-29
 
 ### Fixed

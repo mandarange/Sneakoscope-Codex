@@ -739,7 +739,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   for (const action of (codexStartupRepair as any).actions || []) console.log(`  - ${action}`);
   for (const action of (codexStartupRepair as any).manual_actions || []) console.log(`  manual: ${action}`);
   for (const warning of (codexStartupRepair as any).warnings || []) console.log(`  warning: ${warning}`);
-  console.log(`  codex doctor:    ${(authoritativeCodexDoctor as any).available ? ((authoritativeCodexDoctor as any).disposition || ((authoritativeCodexDoctor as any).exit_code === 0 ? 'pass' : 'warn')) : 'unavailable'}`);
+  console.log(`  codex doctor:    ${formatCodexDoctorConsoleStatus(authoritativeCodexDoctor)}`);
   console.log(`Rust acc.: ${rust.mode || (rust.available ? 'rust_accelerated' : 'js_fallback')} ${rust.version || rust.status || ''}`);
   console.log(`Codex App: ${ready.codex_app_ready ? 'ok' : 'optional_missing'}`);
   console.log('SKS Runtime Readiness:');
@@ -1128,6 +1128,11 @@ function installScopeFromArgs(args: any = []) {
 function readOption(args: any = [], name: string, fallback: any = null) {
   const index = args.indexOf(name);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
+}
+
+export function formatCodexDoctorConsoleStatus(report: any) {
+  if (!report || report.available !== true) return 'unavailable';
+  return report.disposition || (report.exit_code === 0 ? 'pass' : 'warn');
 }
 
 function mergeObservedCodexStartupWarnings(startupRepair: any, codexDoctor: any) {
