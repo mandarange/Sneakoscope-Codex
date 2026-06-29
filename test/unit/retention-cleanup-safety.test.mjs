@@ -22,16 +22,21 @@ test('retention cleanup preserves learning proof and removes closed-mission scra
   await writeText(path.join(done, 'team-inbox', 'worker.md'), 'scratch');
   await writeText(path.join(done, 'bus', 'event.jsonl'), '{}\n');
   await writeText(path.join(done, 'scout.stdout.log'), 'raw log');
-  await writeText(path.join(done, 'sessions', 'terminal-transcript.log'), 'keep transcript');
+  await writeText(path.join(done, 'sessions', 'terminal-transcript.log'), 'drop transcript');
+  await writeText(path.join(done, 'agents', 'sessions', 'session-1', 'terminal-transcript.log'), 'drop agent transcript');
+  await writeText(path.join(done, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'large sdk cache');
+  await writeText(path.join(done, 'codex-sdk-workers', 'worker-1', 'cache.bin'), 'large sdk worker cache');
 
   const active = path.join(root, '.sneakoscope', 'missions', 'M-active');
   await writeText(path.join(active, 'team-inbox', 'worker.md'), 'active scratch');
+  await writeText(path.join(active, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'active sdk cache');
   await writeText(path.join(root, '.sneakoscope', 'tmp', 'scratch.txt'), 'tmp');
   await old(path.join(root, '.sneakoscope', 'tmp', 'scratch.txt'));
 
   const result = await enforceRetention(root, { policy: { max_tmp_age_hours: 0 } });
   assert.ok(result.actions.some((row) => row.action === 'remove_tmp'));
   assert.ok(result.actions.some((row) => row.action === 'remove_closed_mission_workdir' && row.rel === 'team-inbox'));
+  assert.ok(result.actions.some((row) => row.action === 'remove_closed_mission_workdir' && row.rel === 'agents/sessions'));
   assert.ok(result.actions.some((row) => row.action === 'remove_closed_mission_raw_log'));
 
   await assertExists(path.join(root, '.sneakoscope', 'memory', 'q2_facts', 'post-route-reflection.md'));
@@ -41,13 +46,17 @@ test('retention cleanup preserves learning proof and removes closed-mission scra
   await assertExists(path.join(done, 'evidence-index.json'));
   await assertExists(path.join(done, 'reflection.md'));
   await assertExists(path.join(done, 'agents', 'agent-proof-evidence.json'));
-  await assertExists(path.join(done, 'sessions', 'terminal-transcript.log'));
   await assertExists(path.join(active, 'team-inbox', 'worker.md'));
+  await assertExists(path.join(active, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
 
   await assertMissing(path.join(root, '.sneakoscope', 'tmp', 'scratch.txt'));
   await assertMissing(path.join(done, 'team-inbox', 'worker.md'));
   await assertMissing(path.join(done, 'bus', 'event.jsonl'));
   await assertMissing(path.join(done, 'scout.stdout.log'));
+  await assertMissing(path.join(done, 'sessions', 'terminal-transcript.log'));
+  await assertMissing(path.join(done, 'agents', 'sessions', 'session-1', 'terminal-transcript.log'));
+  await assertMissing(path.join(done, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
+  await assertMissing(path.join(done, 'codex-sdk-workers', 'worker-1', 'cache.bin'));
 });
 
 test('retention preserves durable old mission proof while compacting disposable workdirs', async () => {
@@ -61,16 +70,19 @@ test('retention preserves durable old mission proof while compacting disposable 
   await writeText(path.join(oldMission, 'reflection.md'), 'old reflection');
   await writeText(path.join(oldMission, 'team-inbox', 'worker.md'), 'old scratch');
   await writeText(path.join(oldMission, 'scout.stdout.log'), 'old raw log');
+  await writeText(path.join(oldMission, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'old sdk cache');
   await old(oldMission);
 
   const result = await enforceRetention(root, { policy: { max_tmp_age_hours: 999, max_mission_age_days: 0, max_missions: 999 } });
   assert.ok(result.actions.some((row) => row.action === 'retain_mission_durable_context' && row.mission === 'M-old'));
+  assert.ok(result.actions.some((row) => row.action === 'remove_old_mission_workdir' && row.rel === 'agents/sessions'));
   await assertExists(path.join(oldMission, 'completion-proof.json'));
   await assertExists(path.join(oldMission, 'trust-report.json'));
   await assertExists(path.join(oldMission, 'evidence-index.json'));
   await assertExists(path.join(oldMission, 'reflection.md'));
   await assertMissing(path.join(oldMission, 'team-inbox', 'worker.md'));
   await assertMissing(path.join(oldMission, 'scout.stdout.log'));
+  await assertMissing(path.join(oldMission, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
 });
 
 test('post-route cleanup does not compact blocked active mission diagnostics', async () => {
@@ -82,6 +94,7 @@ test('post-route cleanup does not compact blocked active mission diagnostics', a
   await writeText(path.join(blocked, 'team-inbox', 'worker.md'), 'diagnostic scratch');
   await writeText(path.join(blocked, 'bus', 'event.jsonl'), '{}\n');
   await writeText(path.join(blocked, 'scout.stderr.log'), 'diagnostic log');
+  await writeText(path.join(blocked, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'blocked sdk cache');
 
   const result = await enforceRetention(root, {
     afterRoute: true,
@@ -92,6 +105,33 @@ test('post-route cleanup does not compact blocked active mission diagnostics', a
   await assertExists(path.join(blocked, 'team-inbox', 'worker.md'));
   await assertExists(path.join(blocked, 'bus', 'event.jsonl'));
   await assertExists(path.join(blocked, 'scout.stderr.log'));
+  await assertExists(path.join(blocked, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
+});
+
+test('retention removes terminal inactive runtime homes without deleting blocked diagnostics', async () => {
+  const { enforceRetention } = await import('../../dist/core/retention.js');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-terminal-unit-'));
+  await writeJson(path.join(root, '.sneakoscope', 'state', 'current.json'), { mission_id: 'M-active' });
+  const blocked = path.join(root, '.sneakoscope', 'missions', 'M-blocked-terminal');
+  await writeJson(path.join(blocked, 'completion-proof.json'), { status: 'blocked', blockers: ['fixture_blocker'] });
+  await writeJson(path.join(blocked, 'agents', 'agent-session-cleanup.json'), {
+    all_sessions_terminal: true,
+    terminal_session_count: 1,
+    total_sessions: 1
+  });
+  await writeText(path.join(blocked, 'team-inbox', 'worker.md'), 'diagnostic scratch');
+  await writeText(path.join(blocked, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'worker-result.json'), '{"status":"blocked"}\n');
+  await writeText(path.join(blocked, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'terminal sdk cache');
+
+  const result = await enforceRetention(root, {
+    policy: { max_tmp_age_hours: 999, max_mission_age_days: 999, max_missions: 999 }
+  });
+
+  assert.ok(result.actions.some((row) => row.action === 'remove_terminal_session_runtime_home' && row.mission === 'M-blocked-terminal'));
+  await assertExists(path.join(blocked, 'completion-proof.json'));
+  await assertExists(path.join(blocked, 'team-inbox', 'worker.md'));
+  await assertExists(path.join(blocked, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'worker-result.json'));
+  await assertMissing(path.join(blocked, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
 });
 
 test('post-route cleanup is bounded to the completed mission', async () => {
@@ -102,10 +142,12 @@ test('post-route cleanup is bounded to the completed mission', async () => {
   const completed = path.join(root, '.sneakoscope', 'missions', 'M-completed');
   await writeJson(path.join(completed, 'completion-proof.json'), { status: 'verified', blockers: [] });
   await writeText(path.join(completed, 'team-inbox', 'worker.md'), 'completed scratch');
+  await writeText(path.join(completed, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'completed sdk cache');
 
   const unrelated = path.join(root, '.sneakoscope', 'missions', 'M-unrelated');
   await writeJson(path.join(unrelated, 'completion-proof.json'), { status: 'verified', blockers: [] });
   await writeText(path.join(unrelated, 'team-inbox', 'worker.md'), 'unrelated scratch');
+  await writeText(path.join(unrelated, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'), 'unrelated sdk cache');
 
   const result = await enforceRetention(root, {
     afterRoute: true,
@@ -116,7 +158,9 @@ test('post-route cleanup is bounded to the completed mission', async () => {
   assert.equal(result.cleanup.bounded, true);
   assert.equal(result.cleanup.full_mission_sweep, false);
   await assertMissing(path.join(completed, 'team-inbox', 'worker.md'));
+  await assertMissing(path.join(completed, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
   await assertExists(path.join(unrelated, 'team-inbox', 'worker.md'));
+  await assertExists(path.join(unrelated, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
 });
 
 async function writeJson(file, data) {
