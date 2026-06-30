@@ -9,12 +9,12 @@ export const DOCTOR_CODEX_STARTUP_REPAIR_SCHEMA = 'sks.doctor-codex-startup-repa
 type Scope = 'project' | 'global'
 
 const AGENT_ROLE_FILES = new Map<string, { file: string; description: string; sandbox: 'read-only' | 'workspace-write'; nicknames: string[] }>([
-  ['analysis_scout', { file: 'analysis-scout.toml', description: 'Read-only SKS scout.', sandbox: 'read-only', nicknames: ['Scout', 'Mapper'] }],
-  ['native_agent', { file: 'native-agent-intake.toml', description: 'Read-only SKS analysis agent.', sandbox: 'read-only', nicknames: ['Analysis', 'Mapper'] }],
-  ['team_consensus', { file: 'team-consensus.toml', description: 'SKS planning/debate agent.', sandbox: 'read-only', nicknames: ['Consensus', 'Atlas'] }],
+  ['analysis_scout', { file: 'analysis-scout.toml', description: 'SKS scout with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Scout', 'Mapper'] }],
+  ['native_agent', { file: 'native-agent-intake.toml', description: 'SKS native agent with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Analysis', 'Mapper'] }],
+  ['team_consensus', { file: 'team-consensus.toml', description: 'SKS planning/debate agent with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Consensus', 'Atlas'] }],
   ['implementation_worker', { file: 'implementation-worker.toml', description: 'SKS bounded implementation worker.', sandbox: 'workspace-write', nicknames: ['Builder', 'Mason'] }],
-  ['db_safety_reviewer', { file: 'db-safety-reviewer.toml', description: 'Read-only DB safety reviewer.', sandbox: 'read-only', nicknames: ['Sentinel', 'Ledger'] }],
-  ['qa_reviewer', { file: 'qa-reviewer.toml', description: 'Read-only QA reviewer.', sandbox: 'read-only', nicknames: ['Verifier', 'Reviewer'] }]
+  ['db_safety_reviewer', { file: 'db-safety-reviewer.toml', description: 'DB safety reviewer with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Sentinel', 'Ledger'] }],
+  ['qa_reviewer', { file: 'qa-reviewer.toml', description: 'QA reviewer with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Verifier', 'Reviewer'] }]
 ])
 
 const DIRECTIVE_ROLE_FILES = [
@@ -44,6 +44,7 @@ export interface DoctorCodexStartupRepairResult {
     optional_mcp_blocks_ignored: string[]
     blockers: string[]
     warnings: string[]
+    duplicate_toml_blocks_removed: string[]
   }>
   agent_role_files: {
     sanitized: string[]
@@ -84,7 +85,8 @@ export async function runDoctorCodexStartupRepair(input: {
     ...configs.flatMap((entry) => [
       ...entry.agent_config_files_repaired.map((file) => `${entry.scope} agent config_file now points at ${file}`),
       ...(entry.mcp_blocks_repaired || []).map((server) => `${entry.scope} MCP block repaired: ${server}`),
-      ...entry.stale_mcp_blocks_removed.map((server) => `${entry.scope} stale MCP block removed: ${server}`)
+      ...entry.stale_mcp_blocks_removed.map((server) => `${entry.scope} stale MCP block removed: ${server}`),
+      ...entry.duplicate_toml_blocks_removed.map((header) => `${entry.scope} duplicate TOML table removed: ${header}`)
     ])
   ]
   const manualActions = [
@@ -127,7 +129,8 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
       mcp_blocks_repaired: [],
       optional_mcp_blocks_ignored: [],
       blockers: [],
-      warnings: candidate.scope === 'global' ? ['codex_home_config_missing_optional'] : []
+      warnings: candidate.scope === 'global' ? ['codex_home_config_missing_optional'] : [],
+      duplicate_toml_blocks_removed: []
     }
   }
   let next = text
@@ -135,13 +138,28 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
   const staleMcpBlocksRemoved: string[] = []
   const mcpBlocksRepaired: string[] = []
   const optionalMcpBlocksIgnored: string[] = []
+  const duplicateTomlBlocksRemoved: string[] = []
   const blockers: string[] = []
   const warnings: string[] = []
 
+  const duplicateRepair = inspectOrRepairDuplicateTomlBlocks(next, candidate, fix)
+  next = duplicateRepair.text
+  duplicateTomlBlocksRemoved.push(...duplicateRepair.removed)
+  warnings.push(...duplicateRepair.warnings)
+
   for (const [tableName, role] of AGENT_ROLE_FILES) {
     const target = path.join(candidate.agentDir, role.file)
-    const table = tomlBlock(next, `agents.${tableName}`)
+    let table = tomlBlock(next, `agents.${tableName}`)
     if (!table) continue
+    const currentDescription = stringValue(table.text, 'description')
+    if (currentDescription !== role.description) {
+      if (!fix) warnings.push(`agent_description_stale:${tableName}`)
+      else {
+        next = replaceOrInsertKey(next, table, 'description', `"${escapeToml(role.description)}"`)
+        table = tomlBlock(next, `agents.${tableName}`)
+        if (!table) continue
+      }
+    }
     const current = stringValue(table.text, 'config_file')
     const targetExists = await exists(target)
     const currentValid = Boolean(current && path.isAbsolute(current) && await exists(current))
@@ -189,8 +207,96 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
     mcp_blocks_repaired: mcpBlocksRepaired,
     optional_mcp_blocks_ignored: optionalMcpBlocksIgnored,
     blockers,
-    warnings
+    warnings,
+    duplicate_toml_blocks_removed: duplicateTomlBlocksRemoved
   }
+}
+
+function inspectOrRepairDuplicateTomlBlocks(text: string, candidate: { scope: Scope; path: string; agentDir: string }, fix: boolean) {
+  const blocks = tomlBlocks(text)
+  const groups = new Map<string, Array<TomlNamedBlock>>()
+  for (const block of blocks) {
+    const list = groups.get(block.header) || []
+    list.push(block)
+    groups.set(block.header, list)
+  }
+  const warnings: string[] = []
+  const removals: TomlNamedBlock[] = []
+  for (const [header, rows] of groups) {
+    if (rows.length < 2) continue
+    warnings.push(`duplicate_toml_table:${header}`)
+    const keep = selectDuplicateTomlBlockToKeep(header, rows, candidate)
+    for (let index = 0; index < rows.length; index += 1) {
+      if (index !== keep) removals.push(rows[index] as TomlNamedBlock)
+    }
+  }
+  if (!removals.length || !fix) return { text, warnings, removed: [] as string[] }
+  return {
+    text: removeBlocks(text, removals),
+    warnings,
+    removed: removals.map((block) => block.header)
+  }
+}
+
+interface TomlNamedBlock {
+  header: string
+  start: number
+  end: number
+  text: string
+}
+
+function tomlBlocks(text: string): TomlNamedBlock[] {
+  const source = String(text || '')
+  const matches = [...source.matchAll(/(^|\n)\s*\[([^\]]+)\]\s*(?:#.*)?(?:\n|$)/g)]
+  return matches.map((match, index) => {
+    const start = Number(match.index || 0) + (match[1] ? 1 : 0)
+    const next = matches[index + 1]
+    const end = next ? Number(next.index || 0) + (next[1] ? 1 : 0) : source.length
+    return {
+      header: String(match[2] || '').trim(),
+      start,
+      end,
+      text: source.slice(start, end)
+    }
+  })
+}
+
+function selectDuplicateTomlBlockToKeep(header: string, rows: TomlNamedBlock[], candidate: { agentDir: string }): number {
+  const agentName = header.startsWith('agents.') ? header.slice('agents.'.length) : ''
+  const role = agentName ? AGENT_ROLE_FILES.get(agentName) : undefined
+  if (role) {
+    const target = path.join(candidate.agentDir, role.file)
+    return maxIndexBy(rows, (block, index) => {
+      const configFile = stringValue(block.text, 'config_file')
+      const description = stringValue(block.text, 'description')
+      return (
+        (configFile === target ? 100 : 0) +
+        (configFile && path.isAbsolute(configFile) ? 20 : 0) +
+        (description === role.description ? 30 : 0) +
+        assignmentCount(block.text) -
+        index / 1000
+      )
+    })
+  }
+  if (header.startsWith('mcp_servers.')) return 0
+  return maxIndexBy(rows, (block, index) => assignmentCount(block.text) - index / 1000)
+}
+
+function maxIndexBy<T>(rows: T[], score: (row: T, index: number) => number): number {
+  let best = 0
+  let bestScore = Number.NEGATIVE_INFINITY
+  rows.forEach((row, index) => {
+    const value = score(row, index)
+    if (value > bestScore) {
+      best = index
+      bestScore = value
+    }
+  })
+  return best
+}
+
+function assignmentCount(text: string): number {
+  return String(text || '').split(/\r?\n/).filter((line) => /^\s*[A-Za-z0-9_.-]+\s*=/.test(line)).length
 }
 
 async function inspectOrRepairNodeRepl(text: string, fix: boolean, extraCandidates: string[], includeDefaultCandidates: boolean) {
@@ -269,6 +375,12 @@ async function repairAgentRoleFiles(root: string, codexHome: string): Promise<Do
         await ensureDir(dir)
         await writeTextAtomic(file, roleConfigToml(name, role.description, role.sandbox))
         created.push(file)
+        continue
+      }
+      if (!text.includes(`sandbox_mode = "${role.sandbox}"`) || text.includes('Do not edit files.')) {
+        await backupConfig(file, text, 'role-write-capable')
+        await writeTextAtomic(file, roleConfigToml(name, role.description, role.sandbox))
+        sanitized.push(file)
       }
     }
     for (const file of DIRECTIVE_ROLE_FILES) {

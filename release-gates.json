@@ -1967,6 +1967,18 @@
       "can_run_incremental": true
     },
     {
+      "id": "insane-search:provider-interface",
+      "tier": "P1",
+      "cost": "hermetic",
+      "affected_by": [
+        "src/scripts/insane-search-*.ts",
+        "src/scripts/insane-search-provider-interface-*.ts"
+      ],
+      "always_on_release": false,
+      "required_for_publish": false,
+      "can_run_incremental": true
+    },
+    {
       "id": "install:update-preserves-config",
       "tier": "P1",
       "cost": "hermetic",
@@ -3310,18 +3322,6 @@
       "affected_by": [
         "src/scripts/typecheck-*.ts",
         "src/scripts/typecheck-*.ts"
-      ],
-      "always_on_release": false,
-      "required_for_publish": false,
-      "can_run_incremental": true
-    },
-    {
-      "id": "insane-search:provider-interface",
-      "tier": "P1",
-      "cost": "hermetic",
-      "affected_by": [
-        "src/scripts/ultra-search-*.ts",
-        "src/scripts/ultra-search-provider-interface-*.ts"
       ],
       "always_on_release": false,
       "required_for_publish": false,

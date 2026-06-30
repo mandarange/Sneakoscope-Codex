@@ -414,14 +414,14 @@ export function buildTeamRoster(roleCounts: any = DEFAULT_TEAM_ROLE_COUNTS, opts
   const debateReviewers = numberedAgents('debate_reviewer', counts.reviewer, 'Strict debate reviewer: applies validator/researcher lenses to correctness, safety, DB risk, tests, regressions, and unsupported assumptions.', 'reviewer', { prompt });
   const debateExecutorPool = numberedAgents('debate_executor', bundleSize, 'Capable developer voice in debate: applies skeptic/architect lenses to implementation shape, ownership boundaries, dependencies, coupling, and risks before coding starts.', 'executor', { prompt });
   const debateTeam = composeDebateTeam({ users: debateUsers, planners: debatePlanners, reviewers: debateReviewers, executors: debateExecutorPool, bundleSize });
-  const nativeAgents = numberedAgents('native_agent', bundleSize, 'Read-only native agent: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, and returns TriWiki-ready findings.', 'analysis', { prompt });
+  const nativeAgents = numberedAgents('native_agent', bundleSize, 'Bounded native agent: quickly maps one independent slice of repo/docs/tests/API risk, records source paths and evidence, returns TriWiki-ready findings, and edits only parent-assigned lease paths.', 'analysis', { prompt });
   const developmentExecutors = numberedAgents('executor', bundleSize, 'Capable developer executor: owns one disjoint implementation slice and coordinates without reverting others.', 'executor', { prompt });
   const validationReviewers = numberedAgents('reviewer', counts.reviewer, 'Strict reviewer: adversarial about correctness, safety, DB risk, tests, regressions, and unsupported claims.', 'reviewer', { prompt });
   const validationUsers = numberedAgents('user', counts.user, 'Impatient final user acceptance persona: low-context, self-interested, stubborn, dislikes inconvenience, rejects clever work that feels annoying.', 'user', { prompt });
   return {
     role_counts: counts,
     bundle_size: bundleSize,
-    analysis_team: nativeAgents.map((agent: any) => ({ ...agent, write_policy: 'read-only native analysis', output: 'team-analysis.md' })),
+    analysis_team: nativeAgents.map((agent: any) => ({ ...agent, write_policy: 'bounded workspace-write native analysis lease', output: 'team-analysis.md' })),
     debate_team: debateTeam,
     development_team: developmentExecutors.map((agent: any) => ({ ...agent, write_policy: 'workspace-write with explicit ownership' })),
     validation_team: [

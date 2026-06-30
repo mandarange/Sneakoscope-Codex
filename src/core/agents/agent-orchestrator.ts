@@ -25,6 +25,7 @@ import { runFakeAgent } from './agent-runner-fake.js'
 import { runProcessAgent } from './agent-runner-process.js'
 import { classifyOllamaWorkerSlice, runOllamaAgent } from './agent-runner-ollama.js'
 import { resolveOllamaWorkerConfig } from './ollama-worker-config.js'
+import { decideAgentWorkerModel } from './agent-effort-policy.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { writeAgentCleanupReport } from './agent-cleanup.js'
 import { writeAgentTrustReport } from './agent-trust-report.js'
@@ -96,7 +97,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   const selectedCoreSkill = routeSkillSelection ? skillProofRecord(routeSkillSelection) : null
   const namespace = await buildProjectNamespace({ root, missionId })
   await writeProjectNamespaceArtifact(dir, namespace)
-  let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly, maxAgentCount }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, maxAgentCount, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
+  let roster = buildProvidedAgentRoster(opts.roster, { concurrency: opts.concurrency, readonly: opts.readonly, maxAgentCount, prompt }) || buildAgentRoster({ agents: opts.agents, concurrency: opts.concurrency, prompt, maxAgentCount, ...(opts.readonly === undefined ? {} : { readonly: opts.readonly }) })
   roster = applyFastModeToRoster(roster, fastModePolicy)
   roster.roster = roster.roster.map((agent: any) => ({
     ...agent,
@@ -1642,6 +1643,19 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
   const roster = sourceRows.map((entry: any, index: number) => {
     const readOnly = opts.readonly === true || entry.read_only === true
     const id = String(entry.id || entry.agent_id || `agent_${index + 1}`)
+    const reasoningEffort = entry.reasoning_effort || entry.model_reasoning_effort || (readOnly ? 'high' : 'medium')
+    const modelDecision = decideAgentWorkerModel({
+      effort: reasoningEffort,
+      prompt: opts.prompt || input?.prompt || '',
+      role: String(entry.role || 'verifier'),
+      agentId: id,
+      readonly: readOnly,
+      writePolicy: String(entry.write_policy || '')
+    })
+    const suppliedModelEffort = String(entry.model_reasoning_effort || '')
+    const modelReasoningEffort = suppliedModelEffort === 'low' || suppliedModelEffort === 'high'
+      ? suppliedModelEffort
+      : modelDecision.model_reasoning_effort
     return {
       id,
       session_id: String(entry.session_id || `${id}-session-${String(index + 1).padStart(2, '0')}`),
@@ -1650,8 +1664,12 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
       index: index + 1,
       write_policy: String(entry.write_policy || (readOnly ? 'read-only' : 'route-local-artifact')),
       status: 'pending',
-      reasoning_effort: entry.reasoning_effort || entry.model_reasoning_effort || (readOnly ? 'high' : 'medium'),
-      model_reasoning_effort: entry.model_reasoning_effort || entry.reasoning_effort || (readOnly ? 'high' : 'medium'),
+      model: entry.model || modelDecision.model,
+      reasoning_effort: reasoningEffort,
+      model_reasoning_effort: modelReasoningEffort,
+      model_tier: entry.model_tier || modelDecision.model_tier,
+      model_profile: entry.model_profile || modelDecision.model_profile,
+      model_selection_reason: entry.model_selection_reason || modelDecision.reason,
       reasoning_profile: entry.reasoning_profile || (readOnly ? 'sks-logic-high' : 'sks-logic-medium'),
       service_tier: entry.service_tier,
       reasoning_reason: entry.reasoning_reason || 'route_native_agent_plan',
@@ -1693,6 +1711,9 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
       sessionId: String(agent.session_id || ''),
       cwd: String(opts.cwd || process.cwd()),
       prompt: buildDirectSdkWorkerPrompt(slice),
+      model: agent.model || null,
+      reasoningEffort: agent.reasoning_effort || null,
+      modelReasoningEffort: agent.model_reasoning_effort || agent.reasoning_effort || null,
       inputFiles: Array.isArray(opts.inputFiles) ? opts.inputFiles.map(String) : [],
       inputImages: Array.isArray(opts.inputImages) ? opts.inputImages.map(String) : [],
       outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,
@@ -1726,6 +1747,9 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
       structured_output_valid: sdkTask.structuredOutputValid,
       worker_result_path: path.relative(ledgerRoot, sdkTask.workerResultPath),
       patch_envelope_path: sdkTask.patchEnvelopePath ? path.relative(ledgerRoot, sdkTask.patchEnvelopePath) : null,
+      model: agent.model || null,
+      model_reasoning_effort: agent.model_reasoning_effort || null,
+      model_tier: agent.model_tier || null,
       service_tier: opts.serviceTier || 'fast',
       fast_mode: opts.fastMode !== false,
       blockers: sdkTask.blockers

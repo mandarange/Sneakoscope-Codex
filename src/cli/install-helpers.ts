@@ -15,6 +15,12 @@ import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
 import {
+  GLM_CODEX_CONFIG_PROFILE_ID,
+  GLM_CODEX_CONFIG_PROVIDER_ID,
+  GLM_CODEX_CONFIG_REASONING_PROFILES
+} from '../core/providers/glm/glm-52-profile.js';
+import { GLM_52_OPENROUTER_MODEL } from '../core/providers/glm/glm-52-settings.js';
+import {
   buildCodexLbSetupPlan,
   codexLbPersistenceSummary,
   installCodexLbShellProfileSnippet,
@@ -1482,6 +1488,64 @@ export function upsertCodexLbConfig(text: any = '', baseUrl: any, selectDefault 
   return `${next.trim()}\n`;
 }
 
+export function upsertCodexAppGlmConfig(text: any = '') {
+  let next = String(text || '');
+  const providerBlock = [
+    `[model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}]`,
+    'name = "OpenRouter"',
+    'base_url = "https://openrouter.ai/api/v1"',
+    'wire_api = "responses"',
+    'env_key = "OPENROUTER_API_KEY"',
+    'requires_openai_auth = false'
+  ].join('\n');
+  next = upsertTomlTable(next, `model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}`, providerBlock);
+  for (const profile of GLM_CODEX_CONFIG_REASONING_PROFILES) {
+    const profileBlock = [
+      `[profiles.${profile.id}]`,
+      `model_provider = "${GLM_CODEX_CONFIG_PROVIDER_ID}"`,
+      `model = "${GLM_52_OPENROUTER_MODEL}"`,
+      `model_reasoning_effort = "${profile.reasoning_effort}"`,
+      'service_tier = "default"',
+      'approval_policy = "on-request"'
+    ].join('\n');
+    next = upsertTomlTable(next, `profiles.${profile.id}`, profileBlock);
+  }
+  return `${next.trim()}\n`;
+}
+
+export async function ensureGlobalCodexAppGlmProfile(opts: any = {}) {
+  if (process.env.SKS_SKIP_CODEX_GLM_PROFILE_REPAIR === '1' && opts.force !== true) {
+    return { ok: true, status: 'skipped', reason: 'SKS_SKIP_CODEX_GLM_PROFILE_REPAIR=1' };
+  }
+  const home = opts.home || process.env.HOME || os.homedir();
+  const configPath = opts.configPath || codexLbConfigPath(home);
+  try {
+    await ensureDir(path.dirname(configPath));
+    const current = await readText(configPath, '');
+    const next = upsertCodexAppGlmConfig(current);
+    const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'glm-profile');
+    return {
+      ...safeWrite,
+      status: safeWrite.status === 'written' ? 'updated' : safeWrite.status,
+      provider: GLM_CODEX_CONFIG_PROVIDER_ID,
+      model: GLM_52_OPENROUTER_MODEL,
+      codex_config_profile: GLM_CODEX_CONFIG_PROFILE_ID,
+      reasoning_profiles: GLM_CODEX_CONFIG_REASONING_PROFILES.map((profile) => profile.id)
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      status: 'failed',
+      config_path: configPath,
+      error: err.message,
+      provider: GLM_CODEX_CONFIG_PROVIDER_ID,
+      model: GLM_52_OPENROUTER_MODEL,
+      codex_config_profile: GLM_CODEX_CONFIG_PROFILE_ID,
+      reasoning_profiles: GLM_CODEX_CONFIG_REASONING_PROFILES.map((profile) => profile.id)
+    };
+  }
+}
+
 function detectCodexLbSetupDrift(state: any = {}): string[] {
   const drift: string[] = [];
   if (state.useDefaultProvider && state.selected !== true) drift.push('default_provider_not_selected');
@@ -1550,7 +1614,10 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
         return { status: 'unparseable_config_preserved', config_path: configPath, backup_path: backupPath, parse_smoke: currentSmoke };
       }
     }
-    const next = normalizeCodexFastModeUiConfig(current, { forceFastMode: opts.forceFastMode === true });
+    const next = normalizeCodexFastModeUiConfig(current, {
+      forceFastMode: opts.forceFastMode === true,
+      forceFastModeOff: opts.forceFastModeOff === true
+    });
     if (next === ensureTrailingNewline(current)) return { status: 'present', config_path: configPath };
     // Safety gate 2: never WRITE a config that would not parse.
     const nextSmoke = codexConfigParseSmoke(next);
@@ -1579,9 +1646,11 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
   next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
-  next = opts.forceFastMode === true
-    ? upsertTopLevelTomlString(next, 'service_tier', 'fast')
-    : next;
+  if (opts.forceFastMode === true) {
+    next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
+  } else if (opts.forceFastModeOff === true) {
+    next = upsertTopLevelTomlString(next, 'service_tier', 'default');
+  }
   // Codex App feature flags / fast-mode UI / suppress-warning are SET-IF-ABSENT: a fresh
   // config still gets SKS's defaults, but SKS NEVER overrides (re-enables) a feature the
   // user disabled in the App, and never rejects-then-hides UI by forcing an unrecognized
@@ -1593,10 +1662,12 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
     'browser_use_external = true', 'image_generation = true', 'in_app_browser = true',
     'guardian_approval = true', 'tool_suggest = true', 'apps = true', 'plugins = true'
   ]) next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
-  if (opts.forceFastMode === true) {
+  if (opts.forceFastMode === true || opts.forceFastModeOff === true) {
     next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
     next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
-    next = upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"');
+    next = opts.forceFastMode === true
+      ? upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"')
+      : removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
   } else {
     next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
     next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');

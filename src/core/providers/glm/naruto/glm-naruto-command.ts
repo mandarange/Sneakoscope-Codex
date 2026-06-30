@@ -3,6 +3,7 @@ import { printJson } from '../../../../cli/output.js';
 import { runGlmNarutoMission } from './glm-naruto-orchestrator.js';
 import { runGlmNarutoBench } from './glm-naruto-bench.js';
 import type { GlmNarutoMissionResult } from './glm-naruto-types.js';
+import { stripGlmSlashModelArgs } from '../glm-profile-resolver.js';
 
 export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMissionResult | unknown> {
   if (flag(args, '--bench')) {
@@ -22,7 +23,7 @@ export async function glmNarutoCommand(args: string[] = []): Promise<GlmNarutoMi
     return result;
   }
 
-  const positional = positionalArgs(args).map(String);
+  const positional = positionalArgs(stripGlmSlashModelArgs(args)).map(String);
   const task = positional.join(' ').trim();
 
   if (!task && !flag(args, '--repair') && !flag(args, '--status')) {

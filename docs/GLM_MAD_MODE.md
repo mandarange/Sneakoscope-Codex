@@ -86,9 +86,11 @@ Use repair to rotate the stored key:
 
 ```bash
 sks --mad --glm --repair
+sks codex-app set-openrouter-key --api-key-stdin
 ```
 
 Repair prompts for a new OpenRouter key, atomically replaces the stored key, writes redacted metadata, and validates the key with a tiny GLM request unless `--skip-validation` is supplied. Validation never falls back to GPT.
+`sks codex-app set-openrouter-key --api-key-stdin` stores the same key in the SKS user secret store and installs/repairs Codex Desktop-compatible OpenRouter GLM profiles in one non-interactive command.
 
 ## Codex App Profile
 
@@ -111,7 +113,21 @@ gptFallbackAllowed: false
 defaultProfile: speed
 ```
 
-SKS does not monkey patch Codex App UI. The profile is represented as SKS metadata and follows Codex-native App/MCP dedupe and selected executor plugin boundaries.
+Install also writes Codex Desktop-compatible `~/.codex/config.toml` entries:
+
+```text
+[model_providers.openrouter]
+[profiles.sks-glm-52-mad]
+[profiles.sks-glm-52-minimal]
+[profiles.sks-glm-52-low]
+[profiles.sks-glm-52-medium]
+[profiles.sks-glm-52-high]
+[profiles.sks-glm-52-xhigh]
+```
+
+Each `sks-glm-52-*` profile selects `model = "z-ai/glm-5.2"` through OpenRouter and pins the matching `model_reasoning_effort`, so Codex Desktop can choose GLM and its reasoning level through native profile selection. SKS does not monkey patch Codex App UI; it uses Codex-native provider/profile config and follows App/MCP dedupe and selected executor plugin boundaries.
+
+Generic native-agent scheduling follows the same rule in GLM mode: every SKS child/native worker keeps `z-ai/glm-5.2` and receives a GLM effort tier. Simple slices use `minimal`, ordinary implementation uses `low`, safety/DB/schema/release lanes use `high`, and explicit xhigh work uses `xhigh`.
 
 ## Proof Artifacts
 

@@ -18,7 +18,7 @@ MAD-SKS starts disabled. Write-capable operation requires an authorization manif
 
 ## Native Swarm Cockpit
 
-`sks --mad` starts a read-only native `sks agent run` swarm in the same MAD mission before opening the Zellij cockpit. The swarm writes to the MAD mission's `agents/` ledger, and the cockpit lane count follows the swarm's requested active slots, so a MAD session is no longer just one orchestrator pane plus passive lane renderers. Startup writes `mad-sks-native-swarm.json` plus stdout/stderr logs in the mission directory.
+`sks --mad` starts a bounded native `sks agent run` swarm in the same MAD mission before opening the Zellij cockpit. The swarm writes to the MAD mission's `agents/` ledger and may use workspace-write profiles only inside assigned MAD leases; the cockpit lane count follows the swarm's requested active slots, so a MAD session is no longer just one orchestrator pane plus passive lane renderers. Startup writes `mad-sks-native-swarm.json` plus stdout/stderr logs in the mission directory.
 
 Default MAD fan-out is five workers. Operators can tune it with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; `--no-mad-swarm` or `SKS_MAD_NATIVE_SWARM=0` disables the background swarm for emergency UI-only launches.
 

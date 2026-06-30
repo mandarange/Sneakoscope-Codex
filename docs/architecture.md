@@ -42,6 +42,6 @@ GLM MAD mode is intentionally split by side-effect boundary:
 - `src/core/providers/glm/glm-52-response-guard.ts` rejects missing, GPT/OpenAI, or unknown actual model ids before mutation.
 - `src/core/providers/openrouter/openrouter-secret-store.ts` owns the user-scoped OpenRouter key lifecycle outside project files.
 - `src/core/providers/openrouter/openrouter-client.ts` is the only OpenRouter network adapter.
-- `src/core/codex-app/glm-profile-installer.ts` writes only GLM model profile metadata and avoids duplicate Codex App/MCP declarations.
+- `src/core/codex-app/glm-profile-installer.ts` writes GLM model profile metadata plus Codex Desktop provider/profile config and avoids duplicate Codex App/MCP declarations.
 
 This keeps provider policy testable without routing around the existing SKS proof-first pipeline.

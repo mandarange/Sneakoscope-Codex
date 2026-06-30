@@ -14,7 +14,7 @@ The user-scoped secret location at `${SKS_HOME:-~/.sneakoscope}/secrets/openrout
 
 ## Codex App GLM Profile
 
-The SKS model profile metadata with id `sks/glm-5.2-mad` and label `GLM 5.2 (MAD XHigh Speed / OpenRouter)`. It records provider/model policy without monkey-patching Codex App UI.
+The SKS model profile metadata with id `sks/glm-5.2-mad` and label `GLM 5.2 (MAD Speed / OpenRouter)`. `sks codex-app glm-profile install` also writes Codex Desktop `config.toml` entries for the OpenRouter provider and selectable `sks-glm-52-*` GLM reasoning profiles.
 
 ## Codex 0.141 Delegation
 

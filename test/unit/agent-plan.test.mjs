@@ -17,5 +17,7 @@ test('agent pipeline stage declares native backend and proof outputs', () => {
   const stage = agentPipelineStage(normalizeAgentPolicy('$Team', 'fixture', {}));
   assert.equal(stage.id, 'native_agent_intake');
   assert.equal(stage.backend, 'native-agent-kernel');
+  assert.equal(stage.read_only, false);
+  assert.match(stage.write_policy, /bounded workspace-write/);
   assert.ok(stage.outputs.includes('agents/agent-proof-evidence.json'));
 });

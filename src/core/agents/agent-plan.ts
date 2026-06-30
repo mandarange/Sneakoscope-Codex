@@ -38,8 +38,8 @@ export function agentPipelineStage(policy: any = {}) {
     agent_count: required ? Number(policy.agent_count || DEFAULT_AGENT_COUNT) : 0,
     max_parallel_native_sessions: Number(policy.agent_count || DEFAULT_AGENT_COUNT),
     backend: 'native-agent-kernel',
-    read_only: true,
-    write_policy: 'read-only analysis; parent-owned integration',
+    read_only: false,
+    write_policy: 'bounded workspace-write analysis leases; parent-owned integration',
     outputs: policy.outputs || ['agents/agent-proof-evidence.json']
   }
 }

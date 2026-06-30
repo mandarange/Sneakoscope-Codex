@@ -41,7 +41,11 @@ export function createAgentWorkerSlots(roster: any, targetActiveSlots: number): 
         persona_id: String(persona.persona_id || persona.id || `agent_${index + 1}`),
         role: String(persona.role || 'verifier'),
         write_policy: String(persona.write_policy || 'read-only'),
+        model: persona.model || null,
         reasoning_effort: persona.reasoning_effort || persona.model_reasoning_effort || null,
+        model_reasoning_effort: persona.model_reasoning_effort || null,
+        model_tier: persona.model_tier || null,
+        model_profile: persona.model_profile || null,
         reasoning_profile: persona.reasoning_profile || null,
         service_tier: persona.service_tier || 'fast',
         fast_mode: persona.fast_mode !== false

@@ -61,6 +61,7 @@ export async function runGlmDirectSpeedRun(input: {
   controller.transition('request');
   const request = buildGlm52Request({
     profile: 'speed',
+    ...(input.args ? { args: input.args } : {}),
     messages: [
       { role: 'system', content: 'Return only <sks_patch>, <sks_need_context>, or <sks_blocked>. Use unified diff for patches.' },
       { role: 'user', content: JSON.stringify({ task: input.task, context }) }

@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.7.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding the active Codex worker model and Desktop GLM setup surface: GPT workers can dynamically select `gpt-5.4-mini` or `gpt-5.5` effort tiers, GLM workers stay locked to `z-ai/glm-5.2`, Fast Mode and managed agent TOML repair use valid writable Codex config syntax, and `sks doctor --fix` dedupes managed TOML without clobbering external MCP settings.
+
 SKS 4.6.5 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening default `sks doctor --fix` output for optional Codex Doctor bridge skips; default doctor repair can report `codex doctor: unavailable` without crashing, and full Codex compatibility diagnostics remain available through full/required doctor modes.
 
 SKS 4.6.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening mission retention for closed/terminal agent sessions, project-scoped update cleanup, and `npm publish --ignore-scripts` readiness without changing the active Codex compatibility baseline.

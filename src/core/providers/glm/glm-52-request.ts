@@ -14,7 +14,7 @@ import {
   buildFastReasoningConfig,
   type OpenRouterModelReasoningMeta
 } from './glm-reasoning-policy.js';
-import { profileFromConst, resolveGlmProfileFromArgs, type GlmResolvedProfile } from './glm-profile-resolver.js';
+import { profileFromConst, reasoningEffortFromGlmSlashModelArgs, resolveGlmProfileFromArgs, type GlmResolvedProfile } from './glm-profile-resolver.js';
 
 export interface Glm52RequestInput {
   readonly messages: readonly OpenRouterChatMessage[];
@@ -39,8 +39,9 @@ export function buildGlm52Request(input: Glm52RequestInput): OpenRouterChatCompl
   const strictOrDeepEffort = profile.reasoning_effort || (
     input.reasoningEffort === 'high' || input.reasoningEffort === 'xhigh' ? input.reasoningEffort : undefined
   );
+  const selectedReasoningEffort = input.reasoningEffort || (input.args ? reasoningEffortFromGlmSlashModelArgs(input.args) || undefined : undefined);
   const reasoning = profile.name === 'speed'
-    ? buildFastReasoningConfig(input.reasoningMeta)
+    ? buildSpeedReasoningConfig(selectedReasoningEffort, input.reasoningMeta)
     : buildDeepReasoningConfig(strictOrDeepEffort || 'high');
   if (profile.name === 'speed' && (reasoning.effort === 'high' || reasoning.effort === 'xhigh')) {
     throw new Error(`GLM speed profile invariant violated: forbidden reasoning effort ${reasoning.effort}`);
@@ -94,4 +95,12 @@ function resolveInputProfile(
   if (reasoningEffort === 'xhigh') return profileFromConst('xhigh');
   if (reasoningEffort === 'high') return profileFromConst('deep');
   return profileFromConst(GLM_52_DEFAULT_REQUEST_SETTINGS.mode === 'mad-glm-speed' ? 'speed' : 'speed');
+}
+
+function buildSpeedReasoningConfig(reasoningEffort: Glm52RequestInput['reasoningEffort'] | null | undefined, reasoningMeta: OpenRouterModelReasoningMeta | null | undefined) {
+  if (reasoningEffort === 'none') return { exclude: true };
+  if (reasoningEffort === 'minimal' || reasoningEffort === 'low' || reasoningEffort === 'medium') {
+    return { effort: reasoningEffort, exclude: true };
+  }
+  return buildFastReasoningConfig(reasoningMeta);
 }

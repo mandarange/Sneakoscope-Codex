@@ -325,6 +325,30 @@ function isMadGlmLaunch(args: any[] = [], deps: any = {}) {
 async function prepareMadGlmLaunchRuntime(madLaunch: any, deps: any = {}): Promise<any> {
   const keyResolution = await resolveMadGlmLaunchKey(process.env);
   const profile = buildMadGlmLaunchProfileNoWrite(deps?.glmArgs || []);
+  if (profile.blockers.length) {
+    const blocked = {
+      schema: 'sks.glm-mad-launch.v1',
+      ok: false,
+      status: 'blocked',
+      mission_id: madLaunch.mission_id,
+      provider: profile.provider,
+      model: profile.model,
+      glm_profile: profile.glm_profile,
+      glm_mode: profile.glm_mode,
+      model_reasoning_effort: profile.model_reasoning_effort,
+      gpt_fallback_allowed: false,
+      blockers: profile.blockers,
+      warnings: []
+    };
+    await writeJsonAtomic(path.join(madLaunch.dir, 'mad-glm-launch.json'), blocked);
+    await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'mad_sks.glm_launch_blocked',
+      blockers: profile.blockers
+    });
+    console.error(`SKS GLM MAD launch blocked: ${profile.blockers.join(', ')}`);
+    return blocked;
+  }
   if (!keyResolution.key) {
     const blocked = {
       schema: 'sks.glm-mad-launch.v1',

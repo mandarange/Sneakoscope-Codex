@@ -10,8 +10,9 @@ export interface CodexExecutionPolicy {
 }
 
 export function buildCodexSdkConfig(input: CodexTaskInput) {
+  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5')
   const config: Record<string, unknown> = {
-    model: String(process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5'),
+    model,
     service_tier: 'fast',
     model_reasoning_effort: String(input.modelReasoningEffort || input.reasoningEffort || process.env.SKS_CODEX_REASONING || process.env.CODEX_MODEL_REASONING_EFFORT || 'medium'),
     mcp_servers: {},
