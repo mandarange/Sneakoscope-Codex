@@ -363,7 +363,7 @@ sks codex-app set-openrouter-key --api-key-stdin
 sks codex-app glm-profile install
 ```
 
-This writes the OpenRouter key to the SKS user secret store, writes redacted metadata only, and installs Codex Desktop-compatible `openrouter` provider plus selectable `sks-glm-52-*` reasoning profiles. The npm package does not patch the Codex Desktop macOS menu binary; a top-level menu between Window and Help requires upstream Codex Desktop UI support. On macOS, `sks doctor --fix` installs or refreshes a right-side `SKS` menu bar companion with codex-lb, ChatGPT OAuth, OpenRouter/GLM, Fast Check, SKS Version Check, Update SKS Now, settings, and Codex restart actions.
+This writes the OpenRouter key to the SKS user secret store, writes redacted metadata only, and installs Codex Desktop-compatible `openrouter` provider plus selectable `sks-glm-52-*` reasoning profiles. The npm package does not patch the Codex Desktop macOS menu binary; a top-level menu between Window and Help requires upstream Codex Desktop UI support. On macOS, `sks doctor --fix` installs or refreshes a right-side SKS menu bar companion that appears as a compact circled `S` status icon with codex-lb, ChatGPT OAuth, OpenRouter/GLM, Fast Check, SKS Version Check, Update SKS Now, settings, and Codex restart actions.
 
 ### Switching auth mode: codex-lb ↔ ChatGPT OAuth
 

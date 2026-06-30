@@ -271,10 +271,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.title = "SKS"
-            button.toolTip = "Sneakoscope Codex settings"
+            configureStatusButton(button)
         }
 
         let menu = NSMenu()
@@ -291,6 +290,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         add(menu, "Quit SKS Menu", #selector(quit))
         statusItem.menu = menu
+    }
+
+    func configureStatusButton(_ button: NSStatusBarButton) {
+        if #available(macOS 11.0, *), let image = NSImage(systemSymbolName: "s.circle.fill", accessibilityDescription: "SKS") {
+            image.isTemplate = true
+            button.image = image
+            button.imagePosition = .imageOnly
+            button.title = ""
+        } else {
+            button.title = "S"
+        }
+        button.toolTip = "SKS - Sneakoscope Codex settings"
+        button.setAccessibilityLabel("SKS")
+        button.setAccessibilityHelp("Open SKS menu")
     }
 
     func add(_ menu: NSMenu, _ title: String, _ selector: Selector) {
