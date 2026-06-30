@@ -6,6 +6,28 @@
 
 
 
+## [4.7.0] - 2026-06-30
+
+### Added
+
+- Add `gpt-5.4-mini` as a supported Codex worker model alongside `gpt-5.5`.
+- Add Codex App GLM 5.2 profile/key setup support through `sks codex-app set-openrouter-key`, including OpenRouter profile installation for Desktop model selection.
+
+### Changed
+
+- Allow Team/Naruto/native workers to receive dynamic model tiers: simple GPT work can downshift to `gpt-5.4-mini`, regular GPT work stays on `gpt-5.5` low, and risky/deeper work uses `gpt-5.5` high.
+- Keep GLM-mode subagents and native agents pinned to `z-ai/glm-5.2` while mapping task risk to GLM reasoning effort tiers.
+- Make managed native/agent TOML roles bounded write-capable instead of read-only, with explicit task lease constraints.
+
+### Fixed
+
+- Repair `sks doctor --fix` TOML cleanup so managed duplicate tables are deduped, stale managed startup blocks are fixed, and existing external MCP settings such as Context7 or Supabase are preserved.
+- Keep Fast Mode configuration repair aligned with valid Codex Desktop `config.toml` syntax.
+
+### Verification
+
+- Added regression coverage for Codex model guards, dynamic agent model tiering, GLM profile installation, managed role repair, doctor duplicate TOML repair, Fast Mode packed commands, and `npm publish --ignore-scripts` dry-run readiness.
+
 ## [4.6.5] - 2026-06-30
 
 ### Fixed

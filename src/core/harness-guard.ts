@@ -134,14 +134,15 @@ export function classifyHarnessPayload(root: any, payload: any = {}, policy: any
   const command = extractCommand(payload);
   const writeIntent = hasWriteIntent(toolName, command, hay);
   const maintenance = classifyMaintenanceCommand(command || hay);
-  const protectedMatches = findProtectedMatches(root, strings, policy);
-  const packageEdit = writeIntent && /\b(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)\b/i.test(hay) && /\bsneakoscope\b/i.test(hay);
+  const writeTargets = extractWriteTargets(root, payload, strings, command);
+  const protectedMatches = findProtectedMatches(root, writeTargets.length ? writeTargets : strings, policy);
+  const packageEdit = writeIntent && packageManifestEditDetected(writeTargets, hay);
   const block = maintenance.block || packageEdit || (writeIntent && protectedMatches.length > 0);
   const reasons: any[] = [];
   if (maintenance.block) reasons.push(...maintenance.reasons);
   if (packageEdit) reasons.push('package_manifest_sneakoscope_edit_blocked');
   if (writeIntent && protectedMatches.length) reasons.push('protected_harness_path_write_blocked');
-  return { block, reasons: [...new Set(reasons)], matches: protectedMatches, writeIntent, toolName, command };
+  return { block, reasons: [...new Set(reasons)], matches: protectedMatches, writeIntent, toolName, command, writeTargets };
 }
 
 export async function collectHarnessFingerprints(root: any) {
@@ -186,6 +187,79 @@ function collectPayloadStrings(obj: any, out: any = [], depth: any = 0) {
     for (const v of Object.values(obj)) collectPayloadStrings(v, out, depth + 1);
   }
   return out;
+}
+
+function extractWriteTargets(root: any, payload: any = {}, strings: any[] = [], command: any = '') {
+  const targets = new Set<string>();
+  for (const value of collectPathFieldStrings(payload)) addWriteTarget(root, targets, value);
+  for (const text of [command, ...strings]) {
+    const s = String(text || '');
+    for (const match of s.matchAll(/^\*\*\*\s+(?:Update|Add|Delete)\s+File:\s+(.+)$/gmi)) addWriteTarget(root, targets, match[1]);
+    for (const match of s.matchAll(/^\*\*\*\s+Move to:\s+(.+)$/gmi)) addWriteTarget(root, targets, match[1]);
+    for (const match of s.matchAll(/>{1,2}\s*(['"]?)([^\s;&|'"`]+)\1/g)) addWriteTarget(root, targets, match[2]);
+    collectShellCommandTargets(root, targets, s);
+  }
+  return [...targets].sort();
+}
+
+function collectPathFieldStrings(obj: any, out: any = [], depth: any = 0) {
+  if (depth > 8 || obj == null) return out;
+  if (Array.isArray(obj)) {
+    for (const value of obj) collectPathFieldStrings(value, out, depth + 1);
+    return out;
+  }
+  if (typeof obj !== 'object') return out;
+  for (const [key, value] of Object.entries(obj)) {
+    const normalized = String(key || '').toLowerCase();
+    if (typeof value === 'string' && /^(?:path|file|filename|target|destination|dest|to|from|cwd|workdir|file_path|target_path|output_path|artifact_path)$/.test(normalized)) out.push(value);
+    collectPathFieldStrings(value, out, depth + 1);
+  }
+  return out;
+}
+
+function collectShellCommandTargets(root: any, targets: Set<string>, text: string) {
+  const words = shellWords(text);
+  for (let i = 0; i < words.length; i += 1) {
+    const word = words[i] || '';
+    if (!/^(?:rm|rmdir|mv|cp|touch|mkdir|chmod|chown)$/.test(word)) continue;
+    for (let j = i + 1; j < words.length; j += 1) {
+      const candidate = words[j] || '';
+      if (!candidate || candidate.startsWith('-')) continue;
+      if (/^(?:&&|\|\||;|\|)$/.test(candidate)) break;
+      if (/^(?:rm|rmdir|mv|cp|touch|mkdir|chmod|chown|git|npm|node|python\d?)$/.test(candidate) && j > i + 1) break;
+      addWriteTarget(root, targets, candidate);
+    }
+  }
+}
+
+function shellWords(text: string) {
+  return [...String(text || '').matchAll(/"([^"]*)"|'([^']*)'|([^\s]+)/g)].map((match) => match[1] || match[2] || match[3]).filter(Boolean);
+}
+
+function addWriteTarget(root: any, targets: Set<string>, value: any) {
+  const normalized = normalizeTargetPath(root, value);
+  if (normalized) targets.add(normalized);
+}
+
+function normalizeTargetPath(root: any, value: any) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  s = s.replace(/^['"`<]+|['"`>,]+$/g, '');
+  if (!s || /^\$[\w{]/.test(s) || /^[A-Z_][A-Z0-9_]*=/.test(s)) return '';
+  if (/^(?:--?|&&|\|\||;|\|)$/.test(s)) return '';
+  s = s.replace(/\\/g, '/');
+  if (s.startsWith('a/') || s.startsWith('b/')) s = s.slice(2);
+  if (s.startsWith('./')) s = s.slice(2);
+  const rootNorm = String(root || '').replace(/\\/g, '/').replace(/\/$/, '');
+  if (rootNorm && s.startsWith(`${rootNorm}/`)) s = s.slice(rootNorm.length + 1);
+  return s.replace(/\/$/, '');
+}
+
+function packageManifestEditDetected(writeTargets: string[], hay: string) {
+  const hasPackageTarget = writeTargets.length > 0
+    ? writeTargets.some((target) => /(^|\/)(?:package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/.test(target))
+    : /\b(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)\b/i.test(hay);
+  return hasPackageTarget && /\bsneakoscope\b/i.test(hay);
 }
 
 function hasWriteIntent(toolName: any, command: any, hay: any) {

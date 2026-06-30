@@ -1,4 +1,6 @@
 export const REQUIRED_CODEX_MODEL = 'gpt-5.5';
+export const GPT54_MINI_CODEX_MODEL = 'gpt-5.4-mini';
+export const SUPPORTED_CODEX_MODELS = [REQUIRED_CODEX_MODEL, GPT54_MINI_CODEX_MODEL] as const;
 
 const MODEL_VALUE_FLAGS = new Set(['--model', '-m']);
 const CONFIG_VALUE_FLAGS = new Set(['-c', '--config']);
@@ -46,5 +48,5 @@ export function forceGpt55CodexConfigArgs(args: any = []) {
 
 export function isForbiddenCodexModel(value: any = '') {
   const model = String(value || '').trim().toLowerCase();
-  return /^gpt-5\./.test(model) && model !== REQUIRED_CODEX_MODEL;
+  return /^gpt-5\./.test(model) && !SUPPORTED_CODEX_MODELS.includes(model as any);
 }

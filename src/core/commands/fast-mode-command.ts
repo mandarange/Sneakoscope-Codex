@@ -31,8 +31,11 @@ export async function fastModeCommand(args: string[] = []) {
   }
 
   const policy = resolveFastModePolicy({ root })
-  const codexFastModeRepair = action === 'on'
-    ? await ensureGlobalCodexFastModeDuringInstall({ forceFastMode: true })
+  const codexFastModeRepair = action === 'on' || action === 'off'
+    ? await ensureGlobalCodexFastModeDuringInstall({
+      forceFastMode: action === 'on',
+      forceFastModeOff: action === 'off'
+    })
     : null
   const result = {
     schema: FAST_MODE_COMMAND_SCHEMA,

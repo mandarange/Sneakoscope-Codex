@@ -32,6 +32,21 @@ test('buildGlm52Request supports xhigh without exceeding top provider cap', () =
   assert.equal(request.max_tokens, 262144);
 });
 
+test('buildGlm52Request supports slash model reasoning selectors', () => {
+  const low = buildGlm52Request({
+    messages: [{ role: 'user', content: 'hello' }],
+    args: ['/model', 'z-ai/glm-5.2', 'low']
+  });
+  assert.deepEqual(low.reasoning, { effort: 'low', exclude: true });
+
+  const high = buildGlm52Request({
+    messages: [{ role: 'user', content: 'hello' }],
+    args: ['/model=z-ai/glm-5.2:high']
+  });
+  assert.deepEqual(high.reasoning, { effort: 'high', exclude: true });
+  assert.equal(high.max_tokens, 16384);
+});
+
 test('buildGlm52Request supports deep and strict opt-in profiles', () => {
   const deep = buildGlm52Request({
     messages: [{ role: 'user', content: 'hello' }],

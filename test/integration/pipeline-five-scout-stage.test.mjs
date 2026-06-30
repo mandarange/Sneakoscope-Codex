@@ -9,7 +9,9 @@ test('serious route pipeline includes native_agent_intake stage', () => {
   assert.ok(stage);
   assert.equal(stage.status, 'required');
   assert.equal(stage.agent_count, 5);
-  assert.equal(stage.read_only, true);
+  assert.equal(stage.read_only, false);
+  assert.match(stage.write_policy, /bounded workspace-write/);
+  assert.match(stage.write_policy, /lease/);
   assert.ok(plan.agent_intake.required);
   assert.equal(plan.lean_decision.schema, 'sks.lean-decision.v1');
   assert.equal(plan.lean_decision.policy_id, 'sks.lean-engineering-policy.v1');

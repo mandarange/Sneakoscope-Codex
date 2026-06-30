@@ -40,20 +40,28 @@ assertGate(overCap.agent_count === 100, 'clones above the ceiling clamp to 100',
 //     A neutral/no-tool prompt yields a low/medium MIX: read-only personas -> low, writers -> medium.
 const effortRoster = roster.buildNarutoCloneRoster({ clones: 24, prompt: 'review and summarize the current findings', maxAgentCount: schema.MAX_NARUTO_AGENT_COUNT });
 const efforts = new Set(effortRoster.roster.map((row) => row.reasoning_effort));
+const modelTiers = new Set(effortRoster.roster.map((row) => row.model_tier));
+const modelEfforts = new Set(effortRoster.roster.map((row) => row.model_reasoning_effort));
 const tiers = new Set(effortRoster.roster.map((row) => row.service_tier));
 const fastFlags = new Set(effortRoster.roster.map((row) => row.fast_mode));
 assertGate([...efforts].every((e) => e === 'low' || e === 'medium'), 'naruto clone efforts must be only low/medium (never high/xhigh)', { efforts: [...efforts] });
 assertGate(efforts.has('low') && efforts.has('medium'), 'naruto effort must be dynamic: a no-tool prompt must yield both low and medium clones', { efforts: [...efforts] });
+assertGate([...modelTiers].every((tier) => tier === 'gpt-5.4-mini' || tier === 'gpt-5.5-low'), 'ordinary naruto clone model tiers must be mini or gpt-5.5-low', { modelTiers: [...modelTiers] });
+assertGate(modelTiers.has('gpt-5.4-mini') && modelTiers.has('gpt-5.5-low'), 'naruto model allocation must dynamically mix gpt-5.4-mini and gpt-5.5-low', { modelTiers: [...modelTiers] });
+assertGate([...modelEfforts].length === 1 && modelEfforts.has('low'), 'ordinary naruto clone model reasoning must stay at low', { modelEfforts: [...modelEfforts] });
 assertGate([...tiers].length === 1 && tiers.has('fast'), 'every naruto clone must be fast service tier', { tiers: [...tiers] });
 assertGate([...fastFlags].length === 1 && fastFlags.has(true), 'every naruto clone must have fast_mode=true', { fastFlags: [...fastFlags] });
 
 // 4c) Unit rule: no tool use -> low; any tool use -> medium; always fast.
-const simple = effortPolicy.decideNarutoCloneEffort({ readonly: true, prompt: 'explain the architecture overview' });
+const simple = effortPolicy.decideNarutoCloneEffort({ readonly: true, prompt: 'simple docs overview' });
 const toolWrite = effortPolicy.decideNarutoCloneEffort({ readonly: false, prompt: 'add a feature' });
 const toolReadCmd = effortPolicy.decideNarutoCloneEffort({ readonly: true, prompt: 'run the build and apply the migration' });
+const simpleWrite = effortPolicy.decideNarutoCloneEffort({ readonly: false, prompt: 'simple one-line typo fix' });
 assertGate(simple.reasoning_effort === 'low' && simple.service_tier === 'fast', 'no-tool read-only work must be low + fast', { simple });
-assertGate(toolWrite.reasoning_effort === 'medium' && toolWrite.service_tier === 'fast', 'writing clone (tool use) must be medium + fast', { toolWrite });
-assertGate(toolReadCmd.reasoning_effort === 'medium' && toolReadCmd.service_tier === 'fast', 'read-only work with tool/command signals must be medium + fast', { toolReadCmd });
+assertGate(simple.model === 'gpt-5.4-mini' && simple.model_reasoning_effort === 'low', 'no-tool read-only work must downshift to gpt-5.4-mini', { simple });
+assertGate(toolWrite.reasoning_effort === 'medium' && toolWrite.service_tier === 'fast' && toolWrite.model === 'gpt-5.5' && toolWrite.model_reasoning_effort === 'low', 'writing clone (tool use) must be medium + gpt-5.5 low', { toolWrite });
+assertGate(simpleWrite.model === 'gpt-5.4-mini' && simpleWrite.model_reasoning_effort === 'low', 'simple write work must downshift native workers to gpt-5.4-mini', { simpleWrite });
+assertGate(toolReadCmd.reasoning_effort === 'medium' && toolReadCmd.service_tier === 'fast' && toolReadCmd.model_reasoning_effort === 'high', 'risky read-only command/migration work must escalate model reasoning to high', { toolReadCmd });
 
 // 5) System-safe concurrency: never spawn the whole count at once; throttle to host capacity.
 const fakeSafe = roster.systemSafeNarutoConcurrency({ backend: 'fake' });

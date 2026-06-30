@@ -3,6 +3,7 @@ import type { OpenRouterProviderPreferences } from '../openrouter/openrouter-typ
 import {
   GLM_DEEP_MODE,
   GLM_DEEP_PROFILE,
+  GLM_52_OPENROUTER_MODEL,
   GLM_SPEED_MODE,
   GLM_SPEED_PROFILE,
   GLM_STRICT_MODE,
@@ -12,6 +13,15 @@ import {
   type GlmModeId,
   type GlmProfileName
 } from './glm-52-settings.js';
+
+export type GlmSelectableReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+
+export interface GlmSlashModelSelection {
+  readonly model: string | null;
+  readonly reasoning_effort: GlmSelectableReasoningEffort | null;
+  readonly consumed_indexes: readonly number[];
+  readonly blockers: readonly string[];
+}
 
 export interface GlmResolvedProfile {
   readonly name: GlmProfileName;
@@ -32,14 +42,15 @@ export interface GlmResolvedProfile {
 export function resolveGlmProfileFromArgs(args: readonly string[] = []): GlmResolvedProfile {
   const list = args.map(String);
   const exactProvider = readOption(list, '--exact-provider', null);
+  const slashSelection = parseGlmSlashModelSelection(list);
   const providerBlockers = exactProvider && !isValidOpenRouterProviderSlug(exactProvider)
     ? [`invalid_openrouter_provider_slug:${exactProvider}`]
     : [];
-  const base = list.includes('--xhigh')
+  const base = slashSelection.reasoning_effort === 'xhigh' || list.includes('--xhigh')
     ? profileFromConst('xhigh')
     : list.includes('--strict')
       ? profileFromConst('strict')
-      : list.includes('--deep')
+      : slashSelection.reasoning_effort === 'high' || list.includes('--deep')
         ? profileFromConst('deep')
         : profileFromConst('speed');
 
@@ -60,7 +71,65 @@ export function resolveGlmProfileFromArgs(args: readonly string[] = []): GlmReso
   return {
     ...base,
     provider,
-    blockers: providerBlockers
+    blockers: [...providerBlockers, ...slashSelection.blockers]
+  };
+}
+
+export function reasoningEffortFromGlmSlashModelArgs(args: readonly string[] = []): GlmSelectableReasoningEffort | null {
+  return parseGlmSlashModelSelection(args).reasoning_effort;
+}
+
+export function stripGlmSlashModelArgs(args: readonly string[] = []): string[] {
+  const consumed = new Set(parseGlmSlashModelSelection(args).consumed_indexes);
+  return args.map(String).filter((_arg, index) => !consumed.has(index));
+}
+
+export function parseGlmSlashModelSelection(args: readonly string[] = []): GlmSlashModelSelection {
+  const list = args.map(String);
+  const consumed = new Set<number>();
+  const values: string[] = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const arg = list[i] || '';
+    if (arg === '/model') {
+      consumed.add(i);
+      for (let j = i + 1; j < list.length && values.length < 2; j += 1) {
+        const candidate = list[j] || '';
+        if (candidate.startsWith('--') || candidate.startsWith('/')) break;
+        consumed.add(j);
+        values.push(candidate);
+        if (values.length === 1 && isSelectableGlmReasoningEffort(candidate.trim().toLowerCase())) break;
+      }
+      break;
+    }
+    const inline = arg.match(/^\/model(?::|=)(.+)$/)?.[1];
+    if (inline) {
+      consumed.add(i);
+      values.push(...inline.split(/[,:]/).map((value) => value.trim()).filter(Boolean).slice(0, 2));
+      break;
+    }
+  }
+
+  let model: string | null = null;
+  let reasoning: GlmSelectableReasoningEffort | null = null;
+  const blockers: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim().toLowerCase();
+    if (isSelectableGlmReasoningEffort(normalized)) {
+      reasoning = normalized;
+      continue;
+    }
+    if (!model) {
+      model = value;
+      if (!isAllowedGlmSlashModel(value)) blockers.push(`glm_slash_model_mismatch:${value}`);
+      continue;
+    }
+    blockers.push(`glm_slash_model_unrecognized:${value}`);
+  }
+  return {
+    model,
+    reasoning_effort: reasoning,
+    consumed_indexes: [...consumed].sort((a, b) => a - b),
+    blockers
   };
 }
 
@@ -133,4 +202,13 @@ export function profileFromConst(name: GlmProfileName): GlmResolvedProfile {
 
 export function isValidOpenRouterProviderSlug(value: string): boolean {
   return /^(?!.*(?:^|\/)\.\.?(?:\/|$))[a-z0-9][a-z0-9._-]{0,63}(?:\/[a-z0-9][a-z0-9._-]{0,63}){0,3}$/i.test(value);
+}
+
+function isSelectableGlmReasoningEffort(value: string): value is GlmSelectableReasoningEffort {
+  return value === 'none' || value === 'minimal' || value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh';
+}
+
+function isAllowedGlmSlashModel(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === GLM_52_OPENROUTER_MODEL || normalized === 'glm-5.2' || normalized === 'glm5.2';
 }

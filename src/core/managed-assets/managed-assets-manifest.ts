@@ -1,7 +1,7 @@
 import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
-export const MANAGED_ASSET_VERSION = '4.2.0'
+export const MANAGED_ASSET_VERSION = '4.7.0'
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 
 export type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual'
@@ -34,14 +34,15 @@ export interface ManagedHookAsset {
 }
 
 export const MANAGED_AGENT_ROLES: readonly ManagedAgentRole[] = Object.freeze([
-  role('sks-explorer', 'analysis-scout.toml', 'analysis_scout', 'Read-only SKS analysis scout retained for stale Codex agent-role config repair.', 'read-only', ['analysis-scout', 'analysis_scout', 'native_agent']),
-  role('sks-planner', 'team-consensus.toml', 'team_consensus', 'Planning and debate specialist for SKS Team mode.', 'read-only', ['team-consensus', 'team_consensus']),
+  role('sks-explorer', 'analysis-scout.toml', 'analysis_scout', 'SKS analysis scout for bounded read/write slices retained for stale Codex agent-role config repair.', 'workspace-write', ['analysis-scout', 'analysis_scout']),
+  role('sks-native-agent', 'native-agent-intake.toml', 'native_agent', 'SKS native agent for bounded read/write intake slices.', 'workspace-write', ['native-agent-intake', 'native_agent']),
+  role('sks-planner', 'team-consensus.toml', 'team_consensus', 'Planning and debate specialist for bounded SKS Team mode write sets.', 'workspace-write', ['team-consensus', 'team_consensus']),
   role('sks-implementer', 'implementation-worker.toml', 'implementation_worker', 'Implementation specialist for bounded SKS Team write sets.', 'workspace-write', ['implementation-worker', 'implementation_worker']),
-  role('sks-checker', 'qa-reviewer.toml', 'qa_reviewer', 'Strict read-only verification reviewer for correctness, regressions, and final evidence.', 'read-only', ['qa-reviewer', 'qa_reviewer']),
-  role('sks-release-verifier', 'sks-release-verifier.toml', 'sks_release_verifier', 'Read-only release verifier for repository, docs, tests, API, and risk slices.', 'read-only', ['native-agent-intake', 'native_agent', 'release-verifier']),
-  role('sks-zellij-ui-verifier', 'sks-zellij-ui-verifier.toml', 'sks_zellij_ui_verifier', 'Read-only Zellij UI verifier for session, pane, layout, and terminal evidence.', 'read-only', ['native-agent-intake', 'native_agent', 'zellij-ui-verifier']),
-  role('sks-codex-probe-verifier', 'sks-codex-probe-verifier.toml', 'sks_codex_probe_verifier', 'Read-only Codex probe verifier for CLI, App, SDK, MCP, and native capability evidence.', 'read-only', ['native-agent-intake', 'native_agent', 'codex-probe-verifier']),
-  role('db-safety-reviewer', 'db-safety-reviewer.toml', 'db_safety_reviewer', 'Read-only database safety reviewer for SQL, migrations, Supabase, and rollback safety.', 'read-only', ['db-safety-reviewer', 'db_safety_reviewer'])
+  role('sks-checker', 'qa-reviewer.toml', 'qa_reviewer', 'Strict verification reviewer for correctness, regressions, and final evidence with bounded write capability.', 'workspace-write', ['qa-reviewer', 'qa_reviewer']),
+  role('sks-release-verifier', 'sks-release-verifier.toml', 'sks_release_verifier', 'Release verifier for repository, docs, tests, API, and risk slices with bounded write capability.', 'workspace-write', ['release-verifier']),
+  role('sks-zellij-ui-verifier', 'sks-zellij-ui-verifier.toml', 'sks_zellij_ui_verifier', 'Zellij UI verifier for session, pane, layout, and terminal evidence with bounded write capability.', 'workspace-write', ['zellij-ui-verifier']),
+  role('sks-codex-probe-verifier', 'sks-codex-probe-verifier.toml', 'sks_codex_probe_verifier', 'Codex probe verifier for CLI, App, SDK, MCP, and native capability evidence with bounded write capability.', 'workspace-write', ['codex-probe-verifier']),
+  role('db-safety-reviewer', 'db-safety-reviewer.toml', 'db_safety_reviewer', 'Database safety reviewer for SQL, migrations, Supabase, and rollback safety with bounded write capability.', 'workspace-write', ['db-safety-reviewer', 'db_safety_reviewer'])
 ])
 
 export const MANAGED_SKILLS: readonly ManagedSkillAsset[] = Object.freeze([

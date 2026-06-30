@@ -23,6 +23,7 @@ export interface MadGlmLaunchProfile {
   readonly service_tier: 'fast';
   readonly gpt_fallback_allowed: false;
   readonly writes_user_codex_config: false;
+  readonly blockers: readonly string[];
 }
 
 export interface MadGlmCodexWrapper {
@@ -71,7 +72,8 @@ export function buildMadGlmLaunchProfileNoWrite(args: readonly string[] = []): M
     model_reasoning_effort: effort,
     service_tier: 'fast',
     gpt_fallback_allowed: false,
-    writes_user_codex_config: false
+    writes_user_codex_config: false,
+    blockers: profile.blockers
   };
 }
 
@@ -156,7 +158,7 @@ export function buildMadGlmLaunchArtifact(input: {
     real_codex_bin: input.wrapper.real_codex_bin,
     raw_key_written_to_wrapper: false,
     codex_args: profile.launch_args,
-    blockers: input.keyResolution.key ? [] : input.keyResolution.blockers,
+    blockers: [...profile.blockers, ...(input.keyResolution.key ? [] : input.keyResolution.blockers)],
     warnings: input.keyResolution.warnings || []
   };
 }

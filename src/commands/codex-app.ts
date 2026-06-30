@@ -1,8 +1,8 @@
-import { flag } from '../cli/args.js';
+import { flag, readOption } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexAccessTokenStatus, codexAppIntegrationStatus, codexChromeExtensionStatus, codexProductDesignPluginStatus, formatCodexAppStatus, formatCodexProductDesignPluginStatus } from '../core/codex-app.js';
 import { codexAppRemoteControlCommand } from '../cli/codex-app-command.js';
-import { sksRoot } from '../core/fsx.js';
+import { readStdin, sksRoot } from '../core/fsx.js';
 import { buildCodexAppHarnessMatrix } from '../core/codex-app/codex-app-harness-matrix.js';
 import { syncCodexSksSkills } from '../core/codex-app/codex-skill-sync.js';
 import { syncCodexAgentRoles } from '../core/codex-app/codex-agent-role-sync.js';
@@ -11,6 +11,7 @@ import { buildCodexHookLifecycle } from '../core/codex-app/codex-hook-lifecycle.
 import { resolveCodexAppExecutionProfile } from '../core/codex-app/codex-app-execution-profile.js';
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 import { doctorCodexAppGlmProfile, installCodexAppGlmProfile } from '../core/codex-app/glm-profile-installer.js';
+import { promptForOpenRouterKeyHidden, writeStoredOpenRouterKey } from '../core/providers/openrouter/openrouter-secret-store.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
@@ -30,6 +31,28 @@ export async function run(_command: any, args: any = []) {
     const result = subcommand === 'install' || subcommand === 'repair'
       ? await installCodexAppGlmProfile({ root, apply: true })
       : await doctorCodexAppGlmProfile({ root });
+    return printCodexAppResult(args, result);
+  }
+  if (action === 'set-openrouter-key' || action === 'openrouter-key') {
+    const root = await sksRoot();
+    const key = await readOpenRouterKeyFromArgs(args.slice(1));
+    if (!key) {
+      const result = { schema: 'sks.codex-app-openrouter-key.v1', ok: false, status: 'missing_key', blockers: ['openrouter_key_missing'], warnings: [] };
+      return printCodexAppResult(args, result);
+    }
+    const record = await writeStoredOpenRouterKey(key);
+    const profile = await installCodexAppGlmProfile({ root, apply: true });
+    const result = {
+      schema: 'sks.codex-app-openrouter-key.v1',
+      ok: profile.ok,
+      status: profile.ok ? 'stored' : 'stored_profile_blocked',
+      key_preview: record.key_preview,
+      raw_key_recorded: false,
+      secret_store: 'sks-openrouter-secret-store',
+      glm_profile: profile,
+      blockers: profile.blockers || [],
+      warnings: profile.warnings || []
+    };
     return printCodexAppResult(args, result);
   }
   if (action === 'product-design' || action === 'design-product' || action === 'ensure-product-design') {
@@ -85,8 +108,15 @@ export async function run(_command: any, args: any = []) {
     if (!status.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|glm-profile [install|doctor]|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
+  console.error('Usage: sks codex-app check|status|harness-matrix|skill-sync|agent-role-sync|init-deep|hook-lifecycle|execution-profile|glm-profile [install|doctor]|set-openrouter-key [--api-key-stdin]|product-design [--check-only]|ensure-product-design|chrome-extension|pat status|remote-control [--json]');
   process.exitCode = 1;
+}
+
+async function readOpenRouterKeyFromArgs(args: any[] = []): Promise<string> {
+  const key = readOption(args, '--api-key', readOption(args, '--key', ''));
+  if (key) return String(key).trim();
+  if (flag(args, '--api-key-stdin') || flag(args, '--key-stdin')) return String(await readStdin()).trim();
+  return await promptForOpenRouterKeyHidden() || '';
 }
 
 function printCodexAppResult(args: any[] = [], result: any) {

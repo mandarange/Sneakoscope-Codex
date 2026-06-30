@@ -71,8 +71,12 @@ export interface AgentRosterEntry {
   index: number
   write_policy: string
   status: AgentStatus
+  model?: string
   reasoning_effort?: 'low' | 'medium' | 'high' | 'xhigh'
-  model_reasoning_effort?: 'low' | 'medium' | 'high' | 'xhigh'
+  model_reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  model_tier?: string
+  model_profile?: string
+  model_selection_reason?: string
   reasoning_profile?: string
   service_tier?: AgentServiceTier
   fast_mode?: boolean

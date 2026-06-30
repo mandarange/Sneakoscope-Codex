@@ -5,6 +5,7 @@ import { runGlmDirectSpeedRun } from '../providers/glm/glm-direct-run.js';
 import { runGlmReadinessAndExit } from '../providers/glm/glm-readiness.js';
 import { runGlmInteractiveLaunch } from '../providers/glm/glm-interactive-launch.js';
 import { glmNarutoCommand } from '../providers/glm/naruto/glm-naruto-command.js';
+import { stripGlmSlashModelArgs } from '../providers/glm/glm-profile-resolver.js';
 
 export async function glmCommand(args: string[] = []) {
   if (flag(args, '--naruto') || positionalArgs(args)[0] === 'naruto') {
@@ -48,7 +49,7 @@ export async function glmCommand(args: string[] = []) {
 }
 
 function extractGlmTask(args: readonly string[]): string | null {
-  const positional = positionalArgs(args).map(String);
+  const positional = positionalArgs(stripGlmSlashModelArgs(args)).map(String);
   if (positional[0] === 'run') return positional.slice(1).join(' ').trim() || null;
   if (positional[0] === 'session') return null;
   if (positional[0] === 'naruto') return null;

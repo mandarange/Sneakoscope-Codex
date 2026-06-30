@@ -17,6 +17,7 @@ test('GLM MAD launch profile targets OpenRouter GLM without codex-lb or OpenAI f
   assert.equal(profile.glm_profile, 'speed');
   assert.equal(profile.model_reasoning_effort, 'low');
   assert.equal(profile.gpt_fallback_allowed, false);
+  assert.deepEqual(profile.blockers, []);
   assert.match(joined, /model_provider="openrouter"/);
   assert.match(joined, new RegExp(`model="${GLM_52_OPENROUTER_MODEL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(joined, /model_providers\.openrouter\.env_key="OPENROUTER_API_KEY"/);
@@ -27,8 +28,21 @@ test('GLM MAD launch profile targets OpenRouter GLM without codex-lb or OpenAI f
 test('GLM MAD launch profile escalates reasoning only for explicit profiles', () => {
   assert.equal(buildMadGlmLaunchProfileNoWrite(['--deep']).model_reasoning_effort, 'high');
   assert.equal(buildMadGlmLaunchProfileNoWrite(['--xhigh']).model_reasoning_effort, 'xhigh');
+  assert.equal(buildMadGlmLaunchProfileNoWrite(['/model', 'high']).model_reasoning_effort, 'high');
+  assert.equal(buildMadGlmLaunchProfileNoWrite(['/model', 'z-ai/glm-5.2', 'xhigh']).model_reasoning_effort, 'xhigh');
   assert.equal(buildMadGlmLaunchProfileNoWrite().model_reasoning_effort, 'low');
   assert.equal(buildMadGlmLaunchProfileNoWrite(['--strict']).glm_profile, 'strict');
+});
+
+test('GLM MAD slash model selector keeps the model lock strict', () => {
+  const blocked = buildMadGlmLaunchProfileNoWrite(['/model', 'gpt-5.5', 'high']);
+  assert.equal(blocked.glm_profile, 'deep');
+  assert.deepEqual(blocked.blockers, ['glm_slash_model_mismatch:gpt-5.5']);
+  assert.deepEqual(blocked.launch_args.filter((arg) => arg.includes('model=')
+    || arg.startsWith('model_reasoning_effort=')), [
+    'model_reasoning_effort=high',
+    `model="${GLM_52_OPENROUTER_MODEL}"`
+  ]);
 });
 
 test('GLM MAD wrapper reads stored key at runtime without embedding raw OpenRouter secret', () => {

@@ -196,15 +196,15 @@ function minimalManagedConfigToml(): string {
     '[mcp_servers.context7]',
     'url = "https://mcp.context7.com/mcp"',
     '',
-    agentConfigBlock('native_agent', 'Read-only SKS analysis agent.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']),
+    agentConfigBlock('native_agent', 'SKS native agent with bounded write capability.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']),
     '',
-    agentConfigBlock('team_consensus', 'SKS planning/debate agent.', './agents/team-consensus.toml', ['Consensus', 'Atlas']),
+    agentConfigBlock('team_consensus', 'SKS planning/debate agent with bounded write capability.', './agents/team-consensus.toml', ['Consensus', 'Atlas']),
     '',
     agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']),
     '',
-    agentConfigBlock('db_safety_reviewer', 'Read-only DB safety reviewer.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']),
+    agentConfigBlock('db_safety_reviewer', 'DB safety reviewer with bounded write capability.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']),
     '',
-    agentConfigBlock('qa_reviewer', 'Read-only QA reviewer.', './agents/qa-reviewer.toml', ['Verifier', 'Reviewer']),
+    agentConfigBlock('qa_reviewer', 'QA reviewer with bounded write capability.', './agents/qa-reviewer.toml', ['Verifier', 'Reviewer']),
     ''
   ].join('\n');
 }

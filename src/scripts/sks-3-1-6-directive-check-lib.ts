@@ -230,6 +230,9 @@ async function referenceEvidence(id: string): Promise<void> {
     const report = await mod.analyzeCodexNativeReferenceSource({ root: tmp, sourceDir, writeReport: true })
     assertGate(report.schema === 'sks.codex-native-reference-evidence.v1' && report.evidence.length >= 4, 'reference evidence report incomplete', report)
     assertGate(!JSON.stringify(report).includes('secret-reference-token'), 'reference evidence should store hashes only', report)
+    await ensureCurrentReferenceSeed()
+    const currentReport = await mod.analyzeCodexNativeReferenceSource({ root, writeReport: true })
+    assertGate(currentReport.schema === 'sks.codex-native-reference-evidence.v1' && currentReport.evidence.length >= 4, 'current reference evidence report incomplete', currentReport)
   } finally {
     restoreEnv(previous)
   }
@@ -242,7 +245,20 @@ async function patternAnalysis(id: string): Promise<void> {
   const mod = await importDist('core/codex-native/codex-native-pattern-analysis.js')
   const report = await mod.writeCodexNativePatternAnalysis(tmp, { sourceDir })
   assertGate(report.schema === 'sks.codex-native-pattern-analysis.v1' && report.patterns.length >= 12, 'pattern analysis incomplete', report)
+  await ensureCurrentReferenceSeed()
+  const currentReport = await mod.writeCodexNativePatternAnalysis(root)
+  assertGate(currentReport.schema === 'sks.codex-native-pattern-analysis.v1' && currentReport.patterns.length >= 12, 'current pattern analysis incomplete', currentReport)
   emitGate(id, { patterns: report.patterns.length })
+}
+
+async function ensureCurrentReferenceSeed(): Promise<void> {
+  const cacheDir = path.join(root, '.sneakoscope', 'cache', 'codex-native-reference')
+  await fsp.mkdir(cacheDir, { recursive: true })
+  await fsp.writeFile(
+    path.join(cacheDir, 'README.md'),
+    'npx optional tooling no global install. plugin install enable marketplace lifecycle. hook approval trust. skill command picker slash command $Loop. agent_type fallback. AGENTS.md directory-local project memory. plan work proof. continuation resume stop hook. doctor readiness matrix. MCP tool candidate server candidate. non-clobber managed preserve user checksum.\n',
+    'utf8'
+  )
 }
 
 async function patternAnalysisBlackbox(id: string): Promise<void> {

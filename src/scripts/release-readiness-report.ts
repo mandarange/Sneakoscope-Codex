@@ -1093,7 +1093,7 @@ function readJson(rel, fallback) {
 
 function scriptContains(name, needle) {
   if (name === 'release:check:parallel') {
-    return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle);
+    return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle) || releaseGateIds.has(needle);
   }
   if (name === 'release:check') {
     return String(pkg.scripts?.[name] || '').includes(needle) || releaseParallelCheckSource.includes(needle) || releaseGateIds.has(needle);

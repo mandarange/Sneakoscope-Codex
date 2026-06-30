@@ -49,7 +49,7 @@ sks seo-geo-optimizer apply latest --mode seo --apply --json
 sks seo-geo-optimizer audit --mode geo --target package --offline --json
 ```
 
-> 📋 **Current release: `v4.6.5`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
+> 📋 **Current release: `v4.7.0`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## 🍥 Parallelism, UX, And Integrations
 
@@ -321,6 +321,8 @@ sks fix-path
 sks update now
 ```
 
+`sks doctor --fix` repairs stale SKS-managed Codex TOML, agent role `config_file` paths, and unsupported managed role fields. It now dedupes repeated TOML tables before repair, keeps the first existing external MCP block such as `context7` or `supabase` unchanged, and only removes/repairs SKS-owned stale MCP blocks such as broken `node_repl`.
+
 ### Open Codex CLI With Zellij
 
 ```sh
@@ -330,7 +332,7 @@ sks team open-zellij latest
 sks team attach-zellij latest
 ```
 
-Interactive SKS sessions use Zellij layouts. By default SKS launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, the selected `model_reasoning_effort`, and `--no-alt-screen` for Zellij-backed interactive panes so terminal scrollback captures the conversation transcript. Non-GLM SKS sessions force the model to `gpt-5.5`; `sks --mad --glm` is the OpenRouter GLM 5.2 exception. `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove the non-GLM model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort, and `SKS_ZELLIJ_CODEX_ALT_SCREEN=1` restores Codex's alternate-screen UI for the next launch. Use `sks --mad --workspace <name>` for an explicit MAD session and `sks help` for CLI help.
+Interactive SKS sessions use Zellij layouts. By default SKS launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, the selected `model_reasoning_effort`, and `--no-alt-screen` for Zellij-backed interactive panes so terminal scrollback captures the conversation transcript. Non-GLM SKS sessions force the model to `gpt-5.5`, while the model guard also recognizes `gpt-5.4-mini` as a supported GPT-5.4 mini model; `sks --mad --glm` is the OpenRouter GLM 5.2 exception. `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove the non-GLM model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort, and `SKS_ZELLIJ_CODEX_ALT_SCREEN=1` restores Codex's alternate-screen UI for the next launch. Use `sks --mad --workspace <name>` for an explicit MAD session and `sks help` for CLI help.
 
 Before opening the interactive runtime, SKS checks the installed Codex CLI against npm `@openai/codex@latest`. If a newer version exists, it asks `Y/n`; answering `y` updates automatically with `npm i -g @openai/codex@latest` and then opens the runtime with the updated Codex CLI.
 
@@ -338,6 +340,7 @@ For [codex-lb](https://github.com/Soju06/codex-lb), start the server, create a d
 
 ```sh
 sks codex-lb setup --host https://your-codex-lb.example.com --api-key "sk-clb-..."
+sks codex-lb setup --host https://your-codex-lb.example.com --api-key-stdin --yes
 sks codex-lb health
 sks codex-lb repair
 sks
@@ -352,6 +355,15 @@ sks codex-lb set-key --api-key-stdin   # or: sks codex-lb set-key --api-key "sk-
 ```
 
 (To also change the host, use `sks codex-lb reconfigure --host <domain> --api-key <key>`.)
+
+For OpenRouter-backed GLM 5.2 in Codex Desktop/SKS, store the key and install the GLM provider/profiles with:
+
+```sh
+sks codex-app set-openrouter-key --api-key-stdin
+sks codex-app glm-profile install
+```
+
+This writes the OpenRouter key to the SKS user secret store, writes redacted metadata only, and installs Codex Desktop-compatible `openrouter` provider plus selectable `sks-glm-52-*` reasoning profiles. The npm package does not patch the Codex Desktop macOS menu binary; a top-level `Set OpenRouter Key` menu/modal requires upstream Codex Desktop UI support. The package-owned command surface above is the supported repair path.
 
 ### Switching auth mode: codex-lb ↔ ChatGPT OAuth
 
@@ -390,7 +402,7 @@ sks --mad
 sks --mad --allow-package-install --allow-service-control --allow-network --yes
 ```
 
-This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission read-only native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock and does not create a MadDB capability. Catastrophic database wipe/all-row/project-management safeguards remain active outside the first-class MadDB route, and the pipeline contract still forbids unrequested fallback implementation code.
+This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission bounded native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock and does not create a MadDB capability. Catastrophic database wipe/all-row/project-management safeguards remain active outside the first-class MadDB route, and the pipeline contract still forbids unrequested fallback implementation code.
 
 Before launching, SKS checks npm for a newer `sneakoscope` and prints a non-blocking update notice when one is available; use `sks update now` or `sks doctor --fix` when you want SKS to update itself. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
 
@@ -429,7 +441,7 @@ Manual fan-out syntax:
 - Team prompt role counts: `$Team <task> executor:8 reviewer:5`
 - Team CLI flag: `sks team "<task>" --agents 8`
 
-Effort is assigned per agent. Simple read-only/docs slices can run low, ordinary tooling and lease mapping use medium, safety/DB/schema/release lanes use high, and frontier/forensic research can escalate to xhigh. If a lease conflict, schema failure, proof blocker, DB risk, or release risk appears, the parent can escalate that lane while keeping unrelated lanes cheaper and faster.
+Effort and model tier are assigned per agent. Managed native agents use bounded workspace-write TOML profiles, but every write still needs an assigned lease, non-overlap proof, and parent-owned integration. When the main model is GPT, simple bounded code/docs slices can downshift to `gpt-5.4-mini`, ordinary tool/lease work uses `gpt-5.5` with low model reasoning, and safety/DB/schema/release lanes use `gpt-5.5` with high model reasoning. When the main model is GLM, native workers stay locked to `z-ai/glm-5.2` and receive GLM effort tiers (`minimal`, `low`, `high`, or `xhigh`) instead of falling back to GPT. If a lease conflict, schema failure, proof blocker, DB risk, or release risk appears, the parent can escalate that lane while keeping unrelated lanes cheaper and faster.
 
 ### Naruto Massive Parallel Work Swarm (`$Naruto`)
 
@@ -527,6 +539,8 @@ sks codex-app remote-control -- --help
 ```
 
 `sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, whether Codex App Git Actions can use Commit, Push, Commit and Push, and PR flows, whether the Codex Chrome Extension path is ready for web/browser/webapp verification, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. `sks-fast-high` intentionally does not pin `sandbox_mode`, so the Codex App/IDE permissions selector owns Full Access vs workspace-write while SKS supplies the model, Fast service tier, approval, and reasoning defaults. `sks codex-app chrome-extension --json` is the rapid preflight for web QA/UX/browser routes. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
+
+For GLM in Codex Desktop, run `sks codex-app glm-profile install`. This writes the OpenRouter provider and selectable GLM 5.2 profiles into `~/.codex/config.toml`: `sks-glm-52-mad`, `sks-glm-52-minimal`, `sks-glm-52-low`, `sks-glm-52-medium`, `sks-glm-52-high`, and `sks-glm-52-xhigh`. Each profile pins `model = "z-ai/glm-5.2"` and the matching `model_reasoning_effort`, so Desktop profile selection can choose both GLM and the reasoning level without editing TOML by hand.
 
 For web-related verification, SKS follows the official Codex Chrome Extension setup path first: https://developers.openai.com/codex/app/chrome-extension. `$QA-LOOP`, `$UX-Review`, `$Image-UX-Review`, browser smoke, authenticated web checks, localhost checks, and web visual review must halt quickly if that extension is missing or disabled. Only after the user says the extension setup is complete should the pipeline resume. Codex Computer Use is for native Mac/non-web targets only; it must not be used as browser/web-app verification evidence.
 

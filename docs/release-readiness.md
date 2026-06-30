@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.7.0 is the Codex worker model, GLM 5.2 Desktop profile, Fast Mode TOML, and doctor TOML repair minor release after 4.6.5. It requires package, lockfile, CLI constants, README, changelog, version-gated release docs, built output, managed asset metadata, Codex model guard coverage, dynamic agent model-tier coverage, GLM profile/key setup coverage, Fast Mode packed-command coverage, managed role repair coverage, doctor duplicate TOML repair coverage, and `npm publish --ignore-scripts` dry-run evidence to agree on 4.7.0 before publication.
+
+4.7.0 release readiness adds proof that `gpt-5.4-mini` is accepted as a supported Codex worker model; GPT-mode workers can dynamically choose `gpt-5.4-mini`, `gpt-5.5` low, or `gpt-5.5` high; GLM-mode workers remain on `z-ai/glm-5.2` with GLM effort tiers; managed native/agent TOML roles are bounded write-capable; `sks doctor --fix` removes duplicate managed tables while preserving external MCP settings such as Context7 and Supabase; Codex App GLM profiles and OpenRouter key setup are installable; and lifecycle-disabled `npm publish --ignore-scripts` packages the freshly built 4.7.0 dist surface.
+
 SKS 4.6.5 is the doctor null-safety patch after 4.6.4. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, release metadata, npm unpublished-version checks, doctor console status regression coverage, default `sks doctor --fix --yes` smoke evidence, and `npm publish --ignore-scripts` dry-run evidence to agree on 4.6.5 before publication.
 
 4.6.5 release readiness adds proof that default doctor repair handles a skipped optional Codex Doctor bridge as `unavailable` instead of dereferencing `null`, while preserving full/required Codex Doctor diagnostics for deep doctor profiles.

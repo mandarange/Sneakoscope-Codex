@@ -20,12 +20,13 @@ async function fileExists(file) {
 
 test('sks fast-mode toggles project-local preference from an unpacked cwd', async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-cli-'));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-home-'));
   const stateFile = path.join(cwd, '.sneakoscope', 'state', 'fast-mode.json');
   const run = (...args) => {
     const result = spawnSync(process.execPath, [distCli, 'fast-mode', ...args, '--json'], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+      env: { ...process.env, HOME: home, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return JSON.parse(result.stdout);
@@ -138,6 +139,44 @@ test('sks fast-mode on repairs Codex fast-mode UI when explicitly disabled', asy
   assert.match(config, /\[user\.fast_mode\][\s\S]*visible = true/);
   assert.match(config, /\[user\.fast_mode\][\s\S]*enabled = true/);
   assert.match(config, /\[user\.fast_mode\][\s\S]*default_profile = "sks-fast-high"/);
+  assert.match(config, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
+});
+
+test('sks fast-mode off repairs Codex Desktop config without hiding the UI', async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-cli-'));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-home-'));
+  const codexDir = path.join(home, '.codex');
+  const configPath = path.join(codexDir, 'config.toml');
+  await fs.mkdir(codexDir, { recursive: true });
+  await fs.writeFile(configPath, [
+    'model = "gpt-5.5"',
+    'service_tier = "fast"',
+    '',
+    '[user.fast_mode]',
+    'visible = false',
+    'enabled = false',
+    'default_profile = "sks-fast-high"',
+    '',
+    '[profiles.sks-fast-high]',
+    'model = "gpt-5.5"',
+    'service_tier = "fast"'
+  ].join('\n') + '\n');
+
+  const result = spawnSync(process.execPath, [distCli, 'fast-mode', 'off', '--json'], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, HOME: home, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.fast_mode, false);
+  assert.equal(parsed.service_tier, 'standard');
+  assert.equal(parsed.codex_fast_mode_repair.status, 'updated');
+  const config = await fs.readFile(configPath, 'utf8');
+  assert.match(config, /^service_tier = "default"/m);
+  assert.match(config, /\[user\.fast_mode\][\s\S]*visible = true/);
+  assert.match(config, /\[user\.fast_mode\][\s\S]*enabled = true/);
+  assert.doesNotMatch(config, /\[user\.fast_mode\][\s\S]*default_profile = /);
   assert.match(config, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
 });
 
