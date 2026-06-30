@@ -15,6 +15,11 @@ const result = await installSksMenuBar({
 const executableExists = result.executable_path ? await exists(result.executable_path) : false;
 const launchAgentExists = result.launch_agent_path ? await exists(result.launch_agent_path) : false;
 const actionScriptExists = result.action_script_path ? await exists(result.action_script_path) : false;
+const generatedSourcePath = result.app_path ? path.join(path.dirname(result.app_path), 'SKSMenuBar.swift') : null;
+const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourcePath, 'utf8').catch(() => '') : '';
+const hasVisibleIconSource = generatedSource.includes('NSStatusItem.squareLength')
+  && generatedSource.includes('s.circle.fill')
+  && generatedSource.includes('configureStatusButton');
 const expectedMenuItems = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
@@ -32,6 +37,7 @@ const ok = process.platform === 'darwin'
     && launchAgentExists
     && actionScriptExists
     && hasExpectedItems
+    && hasVisibleIconSource
   : result.ok === true && result.status === 'unsupported_platform';
 
 const report = {
@@ -42,6 +48,8 @@ const report = {
   executable_exists: executableExists,
   launch_agent_exists: launchAgentExists,
   action_script_exists: actionScriptExists,
+  generated_source_path: generatedSourcePath,
+  has_visible_icon_source: hasVisibleIconSource,
   expected_menu_items: expectedMenuItems,
   missing_expected_items: missingExpectedItems,
   has_expected_items: hasExpectedItems,
