@@ -49,7 +49,7 @@ sks seo-geo-optimizer apply latest --mode seo --apply --json
 sks seo-geo-optimizer audit --mode geo --target package --offline --json
 ```
 
-> 📋 **Current release: `v4.7.0`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
+> 📋 **Current release: `v4.7.4`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## 🍥 Parallelism, UX, And Integrations
 
@@ -74,7 +74,7 @@ sks seo-geo-optimizer audit --mode geo --target package --offline --json
   sks insane-search x "site:x.com product launch"
   ```
 
-- **CLI-only SKS update notices.** Codex App hooks no longer stop normal work to ask for an SKS update. CLI launch surfaces such as `sks --mad` print a non-blocking latest-version notice, `sks update-check` / `sks update check` show the explicit status, and `sks doctor --fix` runs the guarded global SKS update path before repair.
+- **CLI-only SKS update notices.** Codex App hooks no longer stop normal work to ask for an SKS update. CLI launch surfaces such as `sks --mad` print a non-blocking latest-version notice, `sks update-check` / `sks update check` show the explicit status, bare `sks update` checks npm latest and updates the global package, and `sks doctor --fix` runs the guarded repair path.
 
 ## 🧹 Retention And Cleanup
 
@@ -318,7 +318,7 @@ sks deps check --yes
 sks codex-app check
 sks doctor --fix
 sks fix-path
-sks update now
+sks update
 ```
 
 `sks doctor --fix` repairs stale SKS-managed Codex TOML, agent role `config_file` paths, and unsupported managed role fields. It now dedupes repeated TOML tables before repair, keeps the first existing external MCP block such as `context7` or `supabase` unchanged, and only removes/repairs SKS-owned stale MCP blocks such as broken `node_repl`.
@@ -346,7 +346,7 @@ sks codex-lb repair
 sks
 ```
 
-Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider env key for interactive launches, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = false`; imagegen checks may record this provider as configured codex-lb routing, but it is not accepted as official Codex App `$imagegen` evidence. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. It does not rewrite the shared Codex `auth.json` login cache by default; set `SKS_CODEX_LB_SYNC_CODEX_LOGIN=1` only if you intentionally want the old API-key login-cache behavior. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` Zellij session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set.
+Bare `sks` can also prompt for codex-lb auth; SKS stores the base URL/key in `~/.codex/sks-codex-lb.env`, writes the codex-lb Codex CLI / IDE Extension provider block into `~/.codex/config.toml` for Codex App routing, loads the provider key for setup/repair, and syncs the macOS user launch environment so the Codex App can see `CODEX_LB_API_KEY` after restart. If the provider block disappears but the stored env file is still recoverable, bare `sks`, npm postinstall upgrades, `sks doctor --fix`, and `sks codex-lb repair` restore it with `name = "openai"`, `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = true`; `sks codex-lb use-codex-lb` switches Codex App auth to the codex-lb API key and forces Fast request intent, while `sks codex-lb use-oauth` restores the ChatGPT OAuth backup and unselects codex-lb. Imagegen checks may record this provider as configured codex-lb routing, but it is not accepted as official Codex App `$imagegen` evidence. If an older SKS release left the codex-lb dashboard key only in the shared Codex `auth.json` login cache, SKS migrates that key back into `~/.codex/sks-codex-lb.env` when a codex-lb provider or env base URL is already recoverable. When codex-lb is active, SKS opens a fresh `sks-codex-lb-*` Zellij session and sweeps older detached codex-lb sessions for the same repo before launch so stale Responses API chains are not reused. Configured launch paths run a response-chain health check. `previous_response_not_found` is treated as a stateless-LB warning and keeps codex-lb active. Hard failures are surfaced to the user; SKS only bypasses codex-lb when the user chooses OAuth fallback or `SKS_CODEX_LB_AUTOBYPASS=1` is set. `sks codex-lb fast-check` sends `service_tier=priority` and fails unless codex-lb evidence shows priority was actually requested and granted.
 
 If codex-lb provider auth drifts after launch/reinstall, run `sks doctor --fix` or `sks codex-lb repair`. To **swap only the API key** at any time (without re-typing the host — it reuses the stored base URL), run:
 
@@ -363,7 +363,7 @@ sks codex-app set-openrouter-key --api-key-stdin
 sks codex-app glm-profile install
 ```
 
-This writes the OpenRouter key to the SKS user secret store, writes redacted metadata only, and installs Codex Desktop-compatible `openrouter` provider plus selectable `sks-glm-52-*` reasoning profiles. The npm package does not patch the Codex Desktop macOS menu binary; a top-level `Set OpenRouter Key` menu/modal requires upstream Codex Desktop UI support. The package-owned command surface above is the supported repair path.
+This writes the OpenRouter key to the SKS user secret store, writes redacted metadata only, and installs Codex Desktop-compatible `openrouter` provider plus selectable `sks-glm-52-*` reasoning profiles. The npm package does not patch the Codex Desktop macOS menu binary; a top-level menu between Window and Help requires upstream Codex Desktop UI support. On macOS, `sks doctor --fix` installs or refreshes a right-side `SKS` menu bar companion with codex-lb, ChatGPT OAuth, OpenRouter/GLM, Fast Check, SKS Version Check, Update SKS Now, settings, and Codex restart actions.
 
 ### Switching auth mode: codex-lb ↔ ChatGPT OAuth
 
@@ -374,7 +374,7 @@ sks codex-lb use-oauth      # hand control back to ChatGPT OAuth
 sks codex-lb use-codex-lb   # switch back to the codex-lb API key
 ```
 
-`use-oauth` restores `~/.codex/auth.chatgpt-backup.json` (written by auto-reconcile) to `~/.codex/auth.json` and unsets `model_provider = "codex-lb"` so Codex CLI/App falls back to ChatGPT OAuth; if no saved OAuth login exists it points you to `codex login`. `use-codex-lb` re-selects and re-syncs codex-lb. (The older verbs `sks codex-lb release` / `repair` remain as aliases.)
+`use-oauth` restores `~/.codex/auth.chatgpt-backup.json` (written by auto-reconcile) to `~/.codex/auth.json` and unsets `model_provider = "codex-lb"` so Codex CLI/App falls back to ChatGPT OAuth; if no saved OAuth login exists it points you to `codex login`. `use-codex-lb` re-selects codex-lb, writes the codex-lb API key into Codex's OpenAI-style `auth.json`, forces the Fast request config, and restarts Codex App on macOS unless `--no-restart-app` is passed. (The older verbs `sks codex-lb release` / `repair` remain as aliases.)
 
 Flags:
 
@@ -404,7 +404,7 @@ sks --mad --allow-package-install --allow-service-control --allow-network --yes
 
 This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhigh maintenance profile, opens the MAD-SKS permission gate for that Zellij run, starts a same-mission bounded native agent swarm, and launches a Codex CLI layout whose right-side lanes read that MAD ledger. Bare `sks --mad` grants target-project file and shell scope only; add explicit `--allow-*` flags for packages, services, network, Computer Use, browser use, generated assets, file permissions, DB writes, or other high-risk scopes. MAD-SKS is not a DB-only unlock and does not create a MadDB capability. Catastrophic database wipe/all-row/project-management safeguards remain active outside the first-class MadDB route, and the pipeline contract still forbids unrequested fallback implementation code.
 
-Before launching, SKS checks npm for a newer `sneakoscope` and prints a non-blocking update notice when one is available; use `sks update now` or `sks doctor --fix` when you want SKS to update itself. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
+Before launching, SKS checks npm for a newer `sneakoscope` and prints a non-blocking update notice when one is available; use `sks update` when you want SKS to update itself from npm. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
 
 ### Team Missions
 
@@ -538,9 +538,9 @@ For headless remotely controllable Codex App/server sessions on Codex CLI 0.130.
 sks codex-app remote-control -- --help
 ```
 
-`sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, whether Codex App Git Actions can use Commit, Push, Commit and Push, and PR flows, whether the Codex Chrome Extension path is ready for web/browser/webapp verification, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. `sks-fast-high` intentionally does not pin `sandbox_mode`, so the Codex App/IDE permissions selector owns Full Access vs workspace-write while SKS supplies the model, Fast service tier, approval, and reasoning defaults. `sks codex-app chrome-extension --json` is the rapid preflight for web QA/UX/browser routes. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
+`sks codex-app check` reports whether the installed Codex CLI is new enough, whether the required app flags are visible, whether Fast/speed-selector config is unlocked, whether the requested native SKS macOS menu is unsupported by the official Codex extension surface, whether GLM/OpenRouter model profiles and codex-lb key-entry actions are visible, whether Codex App Git Actions can use Commit, Push, Commit and Push, and PR flows, whether the Codex Chrome Extension path is ready for web/browser/webapp verification, and whether installed OpenAI default plugins such as Browser, Chrome, Computer Use, Documents, Presentations, Spreadsheets, and LaTeX are enabled. `sks-fast-high` intentionally does not pin `sandbox_mode`, so the Codex App/IDE permissions selector owns Full Access vs workspace-write while SKS supplies the model, Fast service tier, approval, and reasoning defaults. `sks codex-app chrome-extension --json` is the rapid preflight for web QA/UX/browser routes. When codex-lb is configured, SKS keeps it selected as the top-level Codex App provider while still preserving required app flags and plugin settings. Codex CLI 0.130.0+ app-server/remote-control threads can pick up config changes live; older CLI/TUI sessions should still be restarted after `.codex/config.toml` or MCP/plugin changes.
 
-For GLM in Codex Desktop, run `sks codex-app glm-profile install`. This writes the OpenRouter provider and selectable GLM 5.2 profiles into `~/.codex/config.toml`: `sks-glm-52-mad`, `sks-glm-52-minimal`, `sks-glm-52-low`, `sks-glm-52-medium`, `sks-glm-52-high`, and `sks-glm-52-xhigh`. Each profile pins `model = "z-ai/glm-5.2"` and the matching `model_reasoning_effort`, so Desktop profile selection can choose both GLM and the reasoning level without editing TOML by hand.
+For GLM in Codex Desktop, run `sks codex-app set-openrouter-key --api-key-stdin` and `sks codex-app glm-profile install`. This writes the OpenRouter provider and selectable GLM 5.2 profiles into `~/.codex/config.toml`: `sks-glm-52-mad`, `sks-glm-52-minimal`, `sks-glm-52-low`, `sks-glm-52-medium`, `sks-glm-52-high`, and `sks-glm-52-xhigh`. Each profile pins `model = "z-ai/glm-5.2"` and the matching `model_reasoning_effort`, so Desktop profile selection can choose both GLM and the reasoning level without editing TOML by hand.
 
 For web-related verification, SKS follows the official Codex Chrome Extension setup path first: https://developers.openai.com/codex/app/chrome-extension. `$QA-LOOP`, `$UX-Review`, `$Image-UX-Review`, browser smoke, authenticated web checks, localhost checks, and web visual review must halt quickly if that extension is missing or disabled. Only after the user says the extension setup is complete should the pipeline resume. Codex Computer Use is for native Mac/non-web targets only; it must not be used as browser/web-app verification evidence.
 
@@ -679,12 +679,12 @@ If PATH or npm has duplicate global installs, `sks doctor --fix` keeps one globa
 
 ```sh
 sks update-check --json
-sks update now
+sks update
 npm ls -g sneakoscope --depth=0
 sks doctor --fix
 ```
 
-CLI update checks compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. Codex App hooks do not force update choices during ordinary work. `sks update now` installs through npm global mode instead of mutating the current project's dependencies, and `sks doctor --fix` runs that guarded global update path before setup/config repair. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
+CLI update checks compare npm latest against the effective installed version from source metadata, PATH `sks --version`, and global npm package metadata. Codex App hooks do not force update choices during ordinary work. Bare `sks update` checks npm latest and installs through npm global mode instead of mutating the current project's dependencies; `sks update check` is the status-only form, and `sks update now` remains an explicit alias. Successful/current update runs also install or refresh the macOS right-side `SKS` menu bar companion so it is already visible when Codex App is opened. If a global update succeeded but an old shim remains earlier on PATH, `sks doctor --fix` can remove duplicate global installs and refresh the managed setup.
 
 ### Zellij is missing
 

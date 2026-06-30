@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.7.4 keeps release proof truth aligned with the 4.7.4 package metadata, built output, managed asset metadata, codex-lb provider-contract evidence, codex-lb Fast Mode requested-vs-actual evidence, Codex App GLM profile/key setup evidence, Codex App native menu unsupported evidence, auth-switch restart evidence, and the existing 4.7.x release gate evidence before publication.
+
+SKS 4.7.4 release proof truth also requires proof that configured Fast Mode is not treated as actual Fast Mode for codex-lb: request-level `service_tier=priority` must be recorded separately from `actualServiceTier/serviceTier=priority`, and missing actual-tier evidence must keep the fast-check gate blocked.
+
 SKS 4.7.0 keeps release proof truth aligned with the 4.7.0 package metadata, built output, managed asset metadata, Codex model guard evidence, dynamic GPT worker tier evidence, GLM 5.2 effort routing evidence, Codex App GLM profile/key setup evidence, Fast Mode TOML evidence, doctor duplicate TOML repair evidence, and `npm publish --ignore-scripts` dry-run evidence before publication.
 
 SKS 4.7.0 release proof truth also requires proof that external MCP settings such as Context7 and Supabase are preserved while duplicate managed TOML blocks are removed, managed native/agent roles remain bounded write-capable, `gpt-5.4-mini` is accepted for simple worker tasks, GLM-mode workers stay on `z-ai/glm-5.2`, and lifecycle-disabled npm publication uses the freshly built `4.7.0` dist surface.

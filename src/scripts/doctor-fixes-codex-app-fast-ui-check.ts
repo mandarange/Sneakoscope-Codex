@@ -9,7 +9,7 @@ const codexHome = path.join(root, 'home', '.codex')
 await fs.mkdir(path.join(root, '.codex'), { recursive: true })
 await fs.mkdir(codexHome, { recursive: true })
 await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "medium"\nmodel_provider = "codex-lb"\n')
-await fs.writeFile(path.join(codexHome, 'config.toml'), '# SKS forced fast UI during legacy install\nmodel = "z-ai/glm-5.2"\nmodel_reasoning_effort = "xhigh"\nmodel_provider = "codex-lb"\nservice_tier = "fast"\n[features]\nfast_mode = false # user disabled, must remain untouched\n\n[profiles.sks-fast-high]\nmodel = "gpt-5.5"\nservice_tier = "fast"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false\n')
+await fs.writeFile(path.join(codexHome, 'config.toml'), '# SKS forced fast UI during legacy install\nmodel = "z-ai/glm-5.2"\nmodel_reasoning_effort = "xhigh"\nmodel_provider = "codex-lb"\nservice_tier = "fast"\n[features]\nfast_mode = false # user disabled, must remain untouched\n\n[profiles.sks-fast-high]\nmodel = "gpt-5.5"\nservice_tier = "fast"\n\n[model_providers.codex-lb]\nname = "openai"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n')
 
 const plan = await repairCodexAppFastUi(root, { codexHome, apply: false })
 const repaired = await repairCodexAppFastUi(root, { codexHome, apply: true })
@@ -24,8 +24,12 @@ await fs.mkdir(unsafeCodexHome, { recursive: true })
 await fs.writeFile(path.join(unsafeCodexHome, 'config.toml'), 'service_tier = "standard"\n')
 const unsafePlan = await repairCodexAppFastUi(unsafeRoot, { codexHome: unsafeCodexHome, apply: false })
 const ok = plan.fast_selector === 'manual_action_required'
+  && plan.provider_selector === 'manual_action_required'
+  && plan.provider_actions.includes('sks codex-app set-openrouter-key --api-key-stdin')
+  && plan.provider_actions.includes('sks codex-lb setup --host <domain> --api-key-stdin --yes')
   && plan.safe_auto_apply === true
   && repaired.fast_selector === 'repaired'
+  && repaired.provider_selector === 'manual_action_required'
   && repaired.safe_auto_apply === true
   && backups.length >= 2
   && !/^model\s*=/m.test(projectAfter.split(/\n\s*\[/)[0] || '')

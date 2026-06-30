@@ -1,12 +1,13 @@
 import path from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
-import { projectRoot, readStdin } from '../core/fsx.js';
+import { projectRoot, readStdin, readText } from '../core/fsx.js';
 import { flag, readOption } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { codexLbMetrics, readCodexLbCircuit, recordCodexLbHealthEvent, resetCodexLbCircuit, codexLbProofEvidence } from '../core/codex-lb-circuit.js';
 import { checkCodexLbResponseChain, codexLbStatus, configureCodexLb, formatCodexLbStatusText, releaseCodexLbAuthHold, repairCodexLbAuth, unselectCodexLbProvider } from '../cli/install-helpers.js';
 import { buildCodexLbSetupPlan, codexLbPersistenceSummary, renderCodexLbSetupPlan } from '../core/codex-lb/codex-lb-setup.js';
+import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
 
 export async function run(command: any, args: any = []) {
   const root = await projectRoot();
@@ -37,10 +38,50 @@ export async function run(command: any, args: any = []) {
   if (action === 'health' || action === 'verify-chain' || action === 'chain') {
     const status = await codexLbStatus();
     const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : 'not_configured';
-    const result = status.ok ? await checkCodexLbResponseChain(status, { force: true, root }) : { ok: false, status: blocker, codex_lb: status };
+    const result = status.ok ? await checkCodexLbResponseChain(status, { force: true, root, fastMode: flag(args, '--fast') || flag(args, '--priority') }) : { ok: false, status: blocker, codex_lb: status };
     if (flag(args, '--json')) return printJson(result);
     console.log(`codex-lb response chain: ${result.ok ? 'ok' : `failed (${result.status})`}`);
     if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'fast-check' || action === 'fast' || action === 'verify-fast') {
+    const status = await codexLbStatus();
+    const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : !status.provider_contract_ok ? 'provider_contract_drift' : 'not_configured';
+    const chain = status.env_key_configured && status.base_url
+      ? await checkCodexLbResponseChain(status, { force: true, cache: false, root, fastMode: true })
+      : { ok: false, status: blocker, codex_lb: status };
+    const evidence = await fastEvidenceFromChain(chain, readOption(args, '--request-log', readOption(args, '--request-log-json', null)));
+    const providerReady = status.provider_contract_ok === true;
+    const result = {
+      schema: 'sks.codex-lb-fast-check.v1',
+      ok: Boolean(providerReady && chain.ok && evidence.fast_requested && evidence.fast_actual),
+      status: !providerReady
+        ? 'provider_contract_drift'
+        : chain.ok
+        ? evidence.fast_actual
+          ? 'fast_verified'
+          : evidence.fast_requested
+            ? 'fast_requested_but_actual_unverified'
+            : 'fast_not_requested'
+        : chain.status,
+      codex_lb: status,
+      chain,
+      evidence,
+      blockers: [
+        ...(providerReady ? [] : ['codex_lb_provider_contract_drift']),
+        ...(chain.ok
+          ? evidence.fast_actual
+            ? []
+            : ['codex_lb_actual_fast_service_tier_unverified']
+          : [chain.status || blocker])
+      ]
+    };
+    if (flag(args, '--json')) return printJson(result);
+    console.log(`codex-lb fast check: ${result.ok ? 'ok' : `blocked (${result.status})`}`);
+    if (!result.ok) {
+      console.log('Need codex-lb request evidence: requestedServiceTier=priority and actualServiceTier/serviceTier=priority.');
+      process.exitCode = 1;
+    }
     return;
   }
   if (action === 'repair' || action === 'resync' || action === 'login') {
@@ -83,24 +124,30 @@ export async function run(command: any, args: any = []) {
       process.exitCode = 1;
       return;
     }
-    const result = await configureCodexLb({ host, apiKey: newKey });
-    if (flag(args, '--json')) return printJson({ ...result, action: 'set-key' });
+    const result = await configureCodexLb({ host, apiKey: newKey, authMode: flag(args, '--preserve-auth') ? 'preserve' : 'codex-lb', forceCodexLbApiKeyAuth: !flag(args, '--preserve-auth') });
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok));
+    const output = { ...result, action: 'set-key', restart_app: restart };
+    if (flag(args, '--json')) return printJson(output);
     console.log(result.ok ? `codex-lb API key updated (${result.base_url || host}).` : `codex-lb key update failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    if (restart?.status === 'restarted') console.log('Codex App restarted for the new codex-lb auth mode.');
     if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === 'use-codex-lb' || action === 'use-lb') {
     // Switch auth mode -> codex-lb (API key). Re-selects the provider and re-syncs auth.
-    const result = await repairCodexLbAuth();
-    if (flag(args, '--json')) return printJson({ ...result, mode: 'codex-lb' });
+    const result = await repairCodexLbAuth({ forceCodexLbApiKeyAuth: true, authMode: 'codex-lb', forceFastMode: !flag(args, '--no-fast') });
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok));
+    if (flag(args, '--json')) return printJson({ ...result, mode: 'codex-lb', restart_app: restart });
     console.log(result.ok ? 'Auth mode: codex-lb selected (API key).' : `Switch to codex-lb failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
+    if (restart?.status === 'restarted') console.log('Codex App restarted for codex-lb auth.');
     if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === 'use-oauth' || action === 'use-chatgpt') {
     // Switch auth mode -> ChatGPT OAuth. Restores the saved OAuth login if present.
     const result = await releaseCodexLbAuthHold({ force: flag(args, '--force') });
-    if (flag(args, '--json')) return printJson({ ...result, mode: 'oauth' });
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, !['no_backup', 'auth_in_use', 'failed'].includes(result.status));
+    if (flag(args, '--json')) return printJson({ ...result, mode: 'oauth', restart_app: restart });
     if (result.status === 'no_backup') {
       console.log('No saved ChatGPT OAuth credentials to restore. Switch to OAuth by logging in:');
       console.log('  codex login');
@@ -109,6 +156,7 @@ export async function run(command: any, args: any = []) {
       return;
     }
     console.log(`Auth mode: ${['released', 'oauth_restored'].includes(result.status) ? 'ChatGPT OAuth restored' : result.status}.`);
+    if (restart?.status === 'restarted') console.log('Codex App restarted for ChatGPT OAuth.');
     if (['auth_in_use', 'failed'].includes(result.status)) process.exitCode = 1;
     return;
   }
@@ -199,6 +247,9 @@ export async function run(command: any, args: any = []) {
     const result = await configureCodexLb({
       host: options.host,
       apiKey: options.apiKey,
+      authMode: flag(args, '--preserve-auth') ? 'preserve' : 'codex-lb',
+      forceCodexLbApiKeyAuth: !flag(args, '--preserve-auth'),
+      forceFastMode: !flag(args, '--no-fast'),
       keychain: options.keychain,
       storeKeychain: options.keychain,
       useDefaultProvider: options.useDefaultProvider,
@@ -209,7 +260,9 @@ export async function run(command: any, args: any = []) {
       apiKeySource: options.apiKeySource,
       allowInsecureHttp: options.allowInsecureLocalhost
     });
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok) && !flag(args, '--preserve-auth'));
     const shaped: any = { schema: 'sks.codex-lb-setup.v1', ...result, api_key: { present: Boolean(options.apiKey), redacted: true }, env_file_chmod: '0600' };
+    shaped.restart_app = restart;
     if (options.health) shaped.applied_actions = [...(shaped.applied_actions || []), { type: 'run_health_check', target: 'codex-lb response chain', ok: true }];
     if (options.health) shaped.chain_health = result.ok ? await checkCodexLbResponseChain(result, { force: true, root }) : null;
     if (flag(args, '--json')) return printJson(shaped);
@@ -250,6 +303,77 @@ export async function run(command: any, args: any = []) {
   console.error('  use-codex-lb  switch auth mode to codex-lb (API key)');
   console.error('  use-oauth     switch auth mode to ChatGPT OAuth (restores saved login, else: codex login)');
   process.exitCode = 1;
+}
+
+async function maybeRestartCodexAppForAuthSwitch(args: any[] = [], enabled: boolean) {
+  if (!enabled) return { schema: 'sks.codex-app-restart.v1', ok: true, status: 'skipped', skipped: true, reason: 'previous_step_failed', app_name: 'Codex', blockers: [] };
+  const requested = flag(args, '--restart-app') || flag(args, '--restart');
+  const shouldRestart = requested || (!flag(args, '--json') && !flag(args, '--no-restart-app') && !flag(args, '--no-restart'));
+  return restartCodexApp({ enabled: shouldRestart });
+}
+
+async function fastEvidenceFromChain(chain: any = {}, requestLogPath: any = null) {
+  const chainEvidence = chain.service_tier_evidence || {};
+  const logRows = requestLogPath ? await readRequestLogRows(String(requestLogPath)) : [];
+  const logEvidence = serviceTierEvidenceFromRows(logRows);
+  const requested = logEvidence.requested_service_tier || chainEvidence.requested_service_tier || chain.requested_service_tier || null;
+  const actual = logEvidence.actual_service_tier || chainEvidence.actual_service_tier || null;
+  const effective = logEvidence.effective_service_tier || chainEvidence.effective_service_tier || null;
+  return {
+    requested_service_tier: requested,
+    actual_service_tier: actual,
+    effective_service_tier: effective,
+    fast_requested: requested === 'priority' || chain.requested_service_tier === 'priority' || chainEvidence.fast_requested === true,
+    fast_actual: actual === 'priority' || effective === 'priority' || logEvidence.fast_actual === true || chainEvidence.fast_actual === true,
+    chain_evidence: chainEvidence,
+    request_log_path: requestLogPath || null,
+    request_log_rows: logRows.length
+  };
+}
+
+async function readRequestLogRows(file: string) {
+  if (!file) return [];
+  const text = await readText(path.isAbsolute(file) ? file : path.resolve(process.cwd(), file), '').catch(() => '');
+  const rows: any[] = [];
+  const trimmed = text.trim();
+  if (!trimmed) return rows;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.rows)) return parsed.rows;
+    if (Array.isArray(parsed?.requests)) return parsed.requests;
+    return [parsed];
+  } catch {}
+  for (const line of text.split(/\r?\n/)) {
+    const candidate = line.trim();
+    if (!candidate) continue;
+    try { rows.push(JSON.parse(candidate)); } catch {}
+  }
+  return rows;
+}
+
+function serviceTierEvidenceFromRows(rows: any[] = []) {
+  let requested: string | null = null;
+  let actual: string | null = null;
+  let effective: string | null = null;
+  for (const row of rows) {
+    requested ||= normalizeTier(row?.requestedServiceTier || row?.requested_service_tier || row?.request?.service_tier || row?.body?.service_tier);
+    actual ||= normalizeTier(row?.actualServiceTier || row?.actual_service_tier || row?.response?.actualServiceTier);
+    effective ||= normalizeTier(row?.serviceTier || row?.service_tier || row?.response?.serviceTier);
+  }
+  return {
+    requested_service_tier: requested,
+    actual_service_tier: actual,
+    effective_service_tier: effective,
+    fast_actual: actual === 'priority' || effective === 'priority'
+  };
+}
+
+function normalizeTier(value: unknown) {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'fast') return 'priority';
+  if (text === 'priority' || text === 'default' || text === 'flex') return text;
+  return null;
 }
 
 async function resolveNewApiKey(args: any = []): Promise<string> {

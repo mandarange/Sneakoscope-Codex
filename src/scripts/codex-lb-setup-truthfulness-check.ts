@@ -48,9 +48,14 @@ async function runSetup(name, args, input = 'sk-clb-test\n') {
 
 {
   const row = await runSetup('no-env', ['--no-env-file']);
+  const actions = row.json.applied_actions?.map((action) => action.type) || [];
   results.push({
     name: 'no_env_file',
-    ok: row.code === 0 && row.json.ok === true && !(await exists(row.envPath))
+    ok: row.code === 0
+      && row.json.status === 'process_env'
+      && row.json.persistence?.applied_modes?.includes('process_only_ephemeral')
+      && !actions.includes('write_env_file')
+      && !(await exists(row.envPath))
   });
 }
 

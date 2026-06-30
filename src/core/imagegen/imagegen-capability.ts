@@ -138,8 +138,8 @@ async function detectCodexLbImagegenAuth(opts: any = {}, env: any = process.env)
 function codexLbAuthBlocker(state: any) {
   if (!state.selected) return 'codex_lb_not_selected';
   if (!state.providerConfigured) return 'codex_lb_provider_missing';
-  if (state.requiresOpenAiAuth !== false) {
-    return state.requiresOpenAiAuth === true ? 'codex_lb_requires_openai_auth' : 'codex_lb_requires_openai_auth_not_disabled';
+  if (state.requiresOpenAiAuth !== true) {
+    return state.requiresOpenAiAuth === false ? 'codex_lb_legacy_openai_auth_disabled' : 'codex_lb_requires_openai_auth_missing';
   }
   if (state.envKey !== 'CODEX_LB_API_KEY') return 'codex_lb_env_key_missing_or_unsupported';
   if (!state.baseUrl) return 'codex_lb_base_url_missing';

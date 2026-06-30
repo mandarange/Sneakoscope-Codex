@@ -50,6 +50,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
   if (input.codex_app_ui?.fast_selector === 'manual_action_required') warnings.add('codex_app_fast_selector_manual_action_required')
   if (input.codex_app_ui?.requires_confirmation === true) blockers.add('codex_app_fast_ui_repair_requires_confirmation')
   if (input.codex_app_ui?.fast_selector === 'repaired') warnings.add('codex_app_fast_selector_repaired_restart_app_if_needed')
+  if (input.sks_menubar?.ok === false) warnings.add(`sks_menubar_${input.sks_menubar?.status || 'blocked'}`)
   const codex0138Doctor = input.codex_0138_doctor || null
   if (codex0138Doctor?.ok === false) for (const blocker of normalizeList(codex0138Doctor.blockers)) warnings.add(blocker)
   for (const warning of normalizeList(codex0138Doctor?.warnings)) warnings.add(warning)
@@ -119,6 +120,7 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     codex_app_harness_matrix: codexAppHarness,
     fast_mode_ready: input.fast_mode_ready !== false,
     codex_app_ui: input.codex_app_ui || null,
+    sks_menubar: input.sks_menubar || null,
     hooks_ready: input.hooks_ready !== false,
     codex_app_ready: input.codex_app?.ok === true,
     codex_app_required_for_cli: false,
@@ -184,6 +186,7 @@ function buildRepairReadiness(input: any = {}) {
   add('context7_repair', input.context7_repair, true)
   add('context7_mcp_repair', input.context7_mcp_repair, true)
   add('supabase_mcp_repair', input.supabase_mcp_repair, input.supabase_mcp_repair?.ready_blocking === true)
+  add('sks_menubar', input.sks_menubar, false)
   add('command_alias_cleanup', input.command_aliases, true)
   add('native_capability_repair', input.doctor_native_capability, false)
   if (input.doctor_fix_transaction) {

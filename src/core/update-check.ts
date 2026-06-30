@@ -11,6 +11,7 @@ import {
   type UpdateMigrationReceipt,
   writeProjectUpdateMigrationReceipt
 } from './update/update-migration-state.js';
+import { installSksMenuBar, type SksMenuBarInstallResult } from './codex-app/sks-menubar.js';
 
 export interface SksUpdateCheckOptions {
   packageName?: string;
@@ -95,6 +96,7 @@ export interface SksUpdateNowResult {
   new_version_doctor: PackageLocalDoctorRun | null;
   project_receipt: UpdateMigrationReceipt | null;
   migration_current: boolean;
+  sks_menubar: SksMenuBarInstallResult | null;
   stages: SksUpdateNowStage[];
   error: string | null;
 }
@@ -259,6 +261,9 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     }).catch(() => null);
     const migrationCurrent = isUpdateMigrationReceiptCurrent(receipt);
     stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
+    const sksMenuBar = migrationCurrent
+      ? await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage })
+      : null;
     return buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -280,18 +285,52 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       newVersionDoctor: null,
       projectReceipt: receipt,
       migrationCurrent,
+      sksMenuBar,
       stages,
       error: null
     });
   }
+  if (options.dryRun) {
+    stage('old_version_doctor_preflight', true, 'skipped_dry_run', { reason: 'dry_run_does_not_run_doctor_fix' });
+    stage('npm_install', true, 'dry_run', { command });
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'dry_run',
+      ok: true,
+      installCode: null,
+      oldVersionDoctor: null,
+      newBinary: null,
+      newVersion: null,
+      newVersionDoctor: null,
+      projectReceipt: null,
+      migrationCurrent: false,
+      stages,
+      error: null
+    });
+  }
+
+  const oldDoctorTimeoutOverride = Number.parseInt(env.SKS_UPDATE_OLD_DOCTOR_TIMEOUT_MS || '', 10);
+  const oldDoctorTimeoutMs = Number.isFinite(oldDoctorTimeoutOverride) && oldDoctorTimeoutOverride > 0
+    ? oldDoctorTimeoutOverride
+    : 60_000;
   const oldVersionDoctor = await runPackageLocalDoctor({
     root: projectReceiptRoot,
     args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', `old-version-doctor-${Date.now()}.json`)],
     env,
-    timeoutMs: 15_000,
+    timeoutMs: oldDoctorTimeoutMs,
     maxOutputBytes: 32 * 1024
   });
-  stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.status, { entrypoint: oldVersionDoctor.entrypoint, exit_code: oldVersionDoctor.exit_code });
+  stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.status, { entrypoint: oldVersionDoctor.entrypoint, exit_code: oldVersionDoctor.exit_code, timeout_ms: oldDoctorTimeoutMs });
   if (!oldVersionDoctor.ok && env.SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT !== '1') {
     return buildUpdateNowResult({
       packageName,
@@ -318,34 +357,6 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       error: oldVersionDoctor.error || 'old-version Doctor preflight failed'
     });
   }
-  if (options.dryRun) {
-    stage('npm_install', true, 'dry_run', { command });
-    return buildUpdateNowResult({
-      packageName,
-      from: check.current,
-      latest: check.latest,
-      requestedVersion,
-      installVersion,
-      npmBin,
-      npmArgs,
-      command,
-      cwd,
-      registry,
-      globalRoot,
-      status: 'dry_run',
-      ok: true,
-      installCode: null,
-      oldVersionDoctor,
-      newBinary: null,
-      newVersion: null,
-      newVersionDoctor: null,
-      projectReceipt: null,
-      migrationCurrent: false,
-      stages,
-      error: null
-    });
-  }
-
   const mutationLedgerRoot = env.SKS_MUTATION_LEDGER_ROOT || packageRoot();
   const installContract = createRequestedScopeContract({
     route: 'update',
@@ -377,6 +388,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   let newVersionDoctor: PackageLocalDoctorRun | null = null;
   let projectReceipt: UpdateMigrationReceipt | null = null;
   let migrationCurrent = false;
+  let sksMenuBar: SksMenuBarInstallResult | null = null;
   if (installOk) {
     newBinary = await resolveInstalledSksEntrypoint({ packageName, globalRoot, env });
     stage('resolve_new_package_local_binary', Boolean(newBinary), newBinary ? 'resolved' : 'missing', { new_binary: newBinary });
@@ -410,6 +422,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       }).catch(() => null);
       migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt);
       stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
+      if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage });
     }
   }
   const ok = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && migrationCurrent;
@@ -434,6 +447,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     newVersionDoctor,
     projectReceipt,
     migrationCurrent,
+    sksMenuBar,
     stages,
     error: ok ? null : updateNowError(install, newBinary, newVersionDoctor, migrationCurrent)
   });
@@ -607,6 +621,7 @@ function buildUpdateNowResult(input: {
   newVersionDoctor: PackageLocalDoctorRun | null;
   projectReceipt: UpdateMigrationReceipt | null;
   migrationCurrent: boolean;
+  sksMenuBar?: SksMenuBarInstallResult | null;
   stages: SksUpdateNowStage[];
   error: string | null;
 }): SksUpdateNowResult {
@@ -632,9 +647,49 @@ function buildUpdateNowResult(input: {
     new_version_doctor: input.newVersionDoctor,
     project_receipt: input.projectReceipt,
     migration_current: input.migrationCurrent,
+    sks_menubar: input.sksMenuBar || null,
     stages: input.stages,
     error: input.error
   };
+}
+
+async function installUpdateSksMenuBar(input: {
+  root: string;
+  env: NodeJS.ProcessEnv;
+  stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void;
+}): Promise<SksMenuBarInstallResult | null> {
+  if (input.env.SKS_UPDATE_SKIP_SKS_MENUBAR === '1') {
+    input.stage('sks_menubar', true, 'skipped', { reason: 'SKS_UPDATE_SKIP_SKS_MENUBAR=1' });
+    return null;
+  }
+  const result = await installSksMenuBar({
+    root: input.root,
+    apply: true,
+    launch: true,
+    env: input.env
+  }).catch((err: any) => ({
+    schema: 'sks.codex-app-sks-menubar.v1',
+    ok: false,
+    apply: true,
+    status: 'blocked',
+    platform: process.platform,
+    app_path: null,
+    executable_path: null,
+    launch_agent_path: null,
+    action_script_path: null,
+    report_path: path.join(input.root, '.sneakoscope', 'reports', 'sks-menubar.json'),
+    menu_items: [],
+    actions: [],
+    launch: { requested: true, method: 'none', ok: false, error: err?.message || String(err) },
+    blockers: [err?.message || String(err)],
+    warnings: []
+  } as SksMenuBarInstallResult));
+  input.stage('sks_menubar', result.ok !== false, result.status, {
+    app_path: result.app_path,
+    launch_agent_path: result.launch_agent_path,
+    launch: result.launch
+  });
+  return result;
 }
 
 async function detectNpmGlobalRoot(npmBin: string, env: NodeJS.ProcessEnv, opts: SksUpdateCheckOptions = {}): Promise<string | null> {

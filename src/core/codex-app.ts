@@ -6,6 +6,10 @@ import { EMPTY_CODEX_INFO, getCodexInfo } from './codex-adapter.js';
 import { CODEX_CHROME_EXTENSION_DOC_URL, DEFAULT_CODEX_APP_PLUGINS as DEFAULT_CODEX_APP_PLUGIN_TUPLES, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes.js';
 import { PRODUCT_DESIGN_PLUGIN, normalizeProductDesignPluginEvidence } from './product-design-plugin.js';
 import { PRODUCT_DESIGN_AUTO_INSTALL_ENV, ensureProductDesignPluginInstalled, productDesignAutoInstallRequested } from './product-design-app-server.js';
+import { GLM_CODEX_CONFIG_PROVIDER_ID, GLM_CODEX_CONFIG_REASONING_PROFILES } from './codex-app/glm-model-profile.js';
+import { GLM_52_OPENROUTER_MODEL } from './providers/glm/glm-52-settings.js';
+import { resolveOpenRouterApiKey } from './providers/openrouter/openrouter-secret-store.js';
+import { codexLbEnvPath, parseShellEnvValue } from './codex-lb/codex-lb-env.js';
 
 export const CODEX_APP_DOCS_URL = 'https://developers.openai.com/codex/app/features';
 export const CODEX_CHANGELOG_URL = 'https://developers.openai.com/codex/changelog';
@@ -128,6 +132,8 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
   const productDesignPlugin = await codexProductDesignPluginStatus(opts);
   const pluginSkillShadows = await codexPluginSkillShadowStatus(opts);
   const fastModeConfig = await codexFastModeConfigStatus(opts);
+  const providerModelUi = await codexProviderModelUiStatus(opts);
+  const nativeSksMenu = codexNativeSksMenuStatus();
   const computerUseMcpListed = /computer[-_ ]?use/i.test(mcpText);
   const browserUseMcpListed = /browser[-_ ]?use/i.test(mcpText);
   const imageGenerationReady = codexFeatureEnabled(featureText, 'image_generation');
@@ -156,7 +162,8 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
     app: {
       installed: appInstalled,
       path: appPath,
-      docs_url: CODEX_APP_DOCS_URL
+      docs_url: CODEX_APP_DOCS_URL,
+      sks_menu: nativeSksMenu
     },
     codex_cli: {
       ok: Boolean(codex.bin),
@@ -181,6 +188,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
       required_flags: requiredFeatureFlags,
       required_flags_ok: requiredFeatureFlagsOk,
       fast_mode_config: fastModeConfig,
+      provider_model_ui: providerModelUi,
       git_actions: gitActions,
       image_generation: imageGenerationReady,
       image_generation_source: imageGenerationReady ? 'codex_features_list' : 'missing',
@@ -218,7 +226,7 @@ export async function codexAppIntegrationStatus(opts: any = {}) {
       }
     },
     chrome_extension: chromeExtension,
-    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, productDesignPlugin, pluginSkillShadows, fastModeConfig, gitActions, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl })
+    guidance: codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags, requiredFeatureFlagsOk, defaultPlugins, productDesignPlugin, pluginSkillShadows, fastModeConfig, providerModelUi, nativeSksMenu, gitActions, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl })
   };
 }
 
@@ -432,7 +440,30 @@ export function codexAccessTokenStatus(env: any = process.env) {
   };
 }
 
-export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, productDesignPlugin = null, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl }: any) {
+function codexNativeSksMenuStatus() {
+  return {
+    schema: 'sks.codex-app-native-menu.v1',
+    supported: false,
+    status: 'unsupported_official_api',
+    requested_label: 'SKS',
+    requested_position: 'between Window and Help',
+    companion_supported: process.platform === 'darwin',
+    companion_position: 'right macOS menu bar status item',
+    companion_install_command: 'sks doctor --fix',
+    alternatives: [
+      'sks doctor --fix',
+      'sks codex-lb use-codex-lb',
+      'sks codex-lb use-oauth',
+      'sks codex-app set-openrouter-key --api-key-stdin',
+      'codex://settings'
+    ],
+    evidence: [
+      'Codex official docs expose settings deep links, slash commands, skills/plugins, and app-server/remote-control surfaces, not third-party native macOS menu insertion.'
+    ]
+  };
+}
+
+export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, requiredFeatureFlags = {}, requiredFeatureFlagsOk = true, defaultPlugins = { ok: true, missing_enabled: [] }, productDesignPlugin = null, pluginSkillShadows = { ok: true, blocking: [] }, fastModeConfig = { ok: true, blockers: [] }, providerModelUi = null, nativeSksMenu = null, gitActions = { ok: true, blockers: [] }, imageGenerationReady, inAppBrowserReady, browserUseFeatureReady, computerUseReady, browserUseReady, browserToolReady, computerUseMcpListed, browserUseMcpListed, chromeExtension, remoteControl }: any) {
   const lines: any[] = [];
   if (!appInstalled) {
     lines.push('Install and open Codex App for first-party MCP/plugin tools. SKS Zellij launch can still run with Codex CLI alone, but Codex Computer Use and imagegen/gpt-image-2 evidence will be unavailable until Codex App is ready.');
@@ -488,11 +519,32 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push(`Codex App speed selector can be hidden or locked by config: ${fastModeConfig.blockers.join(', ')}.`);
     lines.push('Run: sks doctor --fix');
   }
+  if (providerModelUi?.glm?.exposed && providerModelUi.glm.openrouter_key_present) {
+    lines.push(`GLM model selector profile is exposed: ${providerModelUi.glm.model} via profiles ${providerModelUi.glm.profiles_present.join(', ')}.`);
+  } else if (providerModelUi?.glm?.exposed) {
+    lines.push(`GLM model selector profile is exposed for ${providerModelUi.glm.model}, but the OpenRouter key is missing.`);
+    lines.push(`Run: ${providerModelUi.glm.key_command}; restart Codex App if the model picker was already open.`);
+  } else if (providerModelUi?.glm) {
+    lines.push(`GLM model selector profile is not exposed yet: ${providerModelUi.glm.blockers.join(', ') || 'profile setup required'}.`);
+    lines.push(`Run: ${providerModelUi.glm.key_command}; then ${providerModelUi.glm.install_command}; restart Codex App if the model picker was already open.`);
+  }
+  if (providerModelUi?.codex_lb?.key_entry_visible && providerModelUi.codex_lb.key_present && providerModelUi.codex_lb.provider_present && providerModelUi.codex_lb.provider_contract_ok && providerModelUi.codex_lb.base_url_present) {
+    lines.push(`codex-lb key entry path is visible and configured; update command ${providerModelUi.codex_lb.set_key_command}.`);
+  } else if (providerModelUi?.codex_lb?.key_entry_visible) {
+    lines.push(`codex-lb key entry path is visible, but setup is incomplete: ${providerModelUi.codex_lb.blockers.join(', ') || 'setup required'}.`);
+    lines.push(`Run: ${providerModelUi.codex_lb.setup_command} or ${providerModelUi.codex_lb.set_key_command}.`);
+  } else if (providerModelUi?.codex_lb) {
+    lines.push(`codex-lb key entry path is not exposed yet: ${providerModelUi.codex_lb.blockers.join(', ') || 'setup required'}.`);
+    lines.push(`Run: ${providerModelUi.codex_lb.setup_command} or ${providerModelUi.codex_lb.set_key_command}.`);
+  }
   if (!gitActions?.ok) {
     lines.push(`Codex App git commit/push actions are blocked: ${gitActions?.blockers?.join(', ') || 'git action readiness'}. The app Commit, Push, Commit and Push, and PR flows need codex_git_commit, hooks, and Codex CLI remote-control support.`);
     lines.push(`Run: sks doctor --fix; if remote-control is still blocked, update Codex CLI to ${CODEX_REMOTE_CONTROL_MIN_VERSION}+ and restart older app-server/TUI sessions.`);
   } else {
     lines.push('Codex App git actions are enabled for Commit, Push, Commit and Push, and PR flows; SKS hooks treat those app metadata actions as lightweight git UI actions.');
+  }
+  if (nativeSksMenu?.supported === false) {
+    lines.push('Codex App does not expose a documented third-party API for inserting SKS between Window and Help, so SKS uses a right-side macOS menu bar companion instead. Run `sks doctor --fix` to install or refresh it.');
   }
   if (appInstalled && (!computerUseReady || !browserToolReady)) {
     lines.push('Open Codex App settings and enable recommended MCP/plugin tools. Codex CLI 0.130.0+ remote-control/app-server sessions can pick up config changes live; restart older CLI/TUI sessions.');
@@ -533,6 +585,10 @@ export function formatCodexAppStatus(status: any, { includeRaw = false }: any = 
     `Remote Ctrl: ${status.remote_control?.ok ? 'ok' : 'missing'}${status.remote_control?.codex_cli?.version_number ? ` min ${status.remote_control.min_version}` : ''}`,
     `App Flags:  ${status.features?.required_flags_ok ? 'ok' : `missing ${missingRequiredFeatureFlags(status.features?.required_flags).join(', ') || 'required flags'}`}`,
     `Fast UI:    ${status.features?.fast_mode_config?.ok ? 'ok' : `locked ${(status.features?.fast_mode_config?.blockers || []).join(', ') || 'config'}`}`,
+    `SKS Menu:   ${sksNativeMenuSummary(status.app?.sks_menu)}`,
+    `Provider UI:${providerModelUiSummary(status.features?.provider_model_ui)}`,
+    `GLM Model:  ${glmModelUiSummary(status.features?.provider_model_ui?.glm)}`,
+    `codex-lb Key:${codexLbKeyUiSummary(status.features?.provider_model_ui?.codex_lb)}`,
     `Default Plugins:${status.plugins?.default_plugins?.ok ? ' ok' : ` missing ${defaultPluginMissingSummary(status.plugins?.default_plugins) || 'plugin install/config'}`}`,
     `Product Design:${productDesignStatusSummary(status.plugins?.design_product)}`,
     `Plugin Picker:${status.plugins?.picker?.ok ? ' ok' : ` blocked ${pluginPickerBlockers(status).join(', ') || 'config'}`}`,
@@ -792,6 +848,132 @@ async function codexFastModeConfigStatus(opts: any = {}) {
   };
 }
 
+export async function codexProviderModelUiStatus(opts: any = {}) {
+  const inputEnv = opts.env || process.env;
+  const home = opts.home || inputEnv.HOME || os.homedir();
+  const cwd = opts.cwd || process.cwd();
+  const env = { ...inputEnv, HOME: String(opts.home || inputEnv.HOME || home) };
+  const globalConfigPath = opts.configPath || path.join(home || '', '.codex', 'config.toml');
+  const projectConfigPath = path.join(cwd || '', '.codex', 'config.toml');
+  const globalConfig = await readTextIfExists(globalConfigPath);
+  const projectConfig = path.resolve(projectConfigPath) === path.resolve(globalConfigPath)
+    ? ''
+    : await readTextIfExists(projectConfigPath);
+  const configText = `${globalConfig}\n${projectConfig}`;
+  const openRouterKey = await resolveOpenRouterApiKey({ env }).catch((err: any) => ({
+    key: null,
+    source: null,
+    key_preview: null,
+    blockers: ['openrouter_key_lookup_failed'],
+    warnings: [err?.message || 'openrouter key lookup failed']
+  }));
+  const codexLbEnvFilePath = opts.codexLbEnvPath || codexLbEnvPath(home);
+  const codexLbEnvText = await readTextIfExists(codexLbEnvFilePath);
+  const codexLbApiKeySource = String(env.CODEX_LB_API_KEY || '').trim()
+    ? 'process.env'
+    : parseShellEnvValue(codexLbEnvText, 'CODEX_LB_API_KEY')
+      ? 'env-file'
+      : 'missing';
+  const codexLbBaseUrlSource = String(env.CODEX_LB_BASE_URL || '').trim()
+    ? 'process.env'
+    : parseShellEnvValue(codexLbEnvText, 'CODEX_LB_BASE_URL')
+      ? 'env-file'
+      : 'missing';
+  const openrouterProvider = tomlTableAny(configText, [
+    `model_providers.${GLM_CODEX_CONFIG_PROVIDER_ID}`,
+    `model_providers."${GLM_CODEX_CONFIG_PROVIDER_ID}"`
+  ]);
+  const glmProviderPresent = Boolean(openrouterProvider);
+  const profilesPresent: string[] = [];
+  const profilesMissing: string[] = [];
+  const glmProfileBlockers: string[] = [];
+  for (const profile of GLM_CODEX_CONFIG_REASONING_PROFILES) {
+    const body = tomlTableAny(configText, [`profiles.${profile.id}`, `profiles."${profile.id}"`]);
+    if (!body) {
+      profilesMissing.push(profile.id);
+      glmProfileBlockers.push(`glm_profile_missing:${profile.id}`);
+      continue;
+    }
+    profilesPresent.push(profile.id);
+    if (!hasTomlString(body, 'model_provider', GLM_CODEX_CONFIG_PROVIDER_ID)) glmProfileBlockers.push(`glm_profile_provider_invalid:${profile.id}`);
+    if (!hasTomlString(body, 'model', GLM_52_OPENROUTER_MODEL)) glmProfileBlockers.push(`glm_profile_model_invalid:${profile.id}`);
+    if (!hasTomlString(body, 'model_reasoning_effort', profile.reasoning_effort)) glmProfileBlockers.push(`glm_profile_reasoning_invalid:${profile.id}`);
+  }
+  const codexLbProvider = tomlTableAny(configText, ['model_providers.codex-lb', 'model_providers."codex-lb"']);
+  const codexLbProviderPresent = Boolean(codexLbProvider);
+  const codexLbProviderContractOk = codexLbProviderPresent
+    && hasTomlString(codexLbProvider, 'name', 'openai')
+    && hasTomlString(codexLbProvider, 'wire_api', 'responses')
+    && hasTomlString(codexLbProvider, 'env_key', 'CODEX_LB_API_KEY')
+    && hasTomlBoolean(codexLbProvider, 'supports_websockets', true)
+    && hasTomlBoolean(codexLbProvider, 'requires_openai_auth', true);
+  const codexLbSelectedDefault = /(?:^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/.test(topLevelToml(globalConfig));
+  const glmBlockers = [
+    ...(glmProviderPresent ? [] : ['glm_openrouter_provider_missing']),
+    ...glmProfileBlockers,
+    ...(openRouterKey.key ? [] : ['openrouter_key_missing'])
+  ];
+  const codexLbBlockers = [
+    ...(codexLbProviderPresent ? [] : ['codex_lb_provider_missing']),
+    ...(codexLbProviderPresent && !codexLbProviderContractOk ? ['codex_lb_provider_contract_drift'] : []),
+    ...(codexLbApiKeySource !== 'missing' ? [] : ['codex_lb_api_key_missing']),
+    ...(codexLbBaseUrlSource !== 'missing' ? [] : ['codex_lb_base_url_missing'])
+  ];
+  const blockers = [...glmBlockers, ...codexLbBlockers];
+  const keyCommand = 'sks codex-app set-openrouter-key --api-key-stdin';
+  const installCommand = 'sks codex-app glm-profile install';
+  const setupCommand = 'sks codex-lb setup --host <domain> --api-key-stdin --yes';
+  const setKeyCommand = 'sks codex-lb set-key --api-key-stdin';
+  return {
+    schema: 'sks.codex-app-provider-model-ui.v1',
+    ok: blockers.length === 0,
+    checked: true,
+    status: blockers.length === 0 ? 'ready' : 'setup_required',
+    config_paths: {
+      codex_config: globalConfigPath,
+      project_config: projectConfig ? projectConfigPath : null,
+      codex_lb_env: codexLbEnvFilePath
+    },
+    glm: {
+      exposed: glmProviderPresent && profilesMissing.length === 0 && glmProfileBlockers.length === 0,
+      provider_present: glmProviderPresent,
+      provider: GLM_CODEX_CONFIG_PROVIDER_ID,
+      model: GLM_52_OPENROUTER_MODEL,
+      profiles_present: profilesPresent,
+      profiles_missing: profilesMissing,
+      openrouter_key_present: Boolean(openRouterKey.key),
+      openrouter_key_source: openRouterKey.source || null,
+      openrouter_key_preview: openRouterKey.key_preview || null,
+      key_command: keyCommand,
+      install_command: installCommand,
+      doctor_command: 'sks codex-app glm-profile doctor',
+      blockers: glmBlockers
+    },
+    codex_lb: {
+      key_entry_visible: true,
+      provider_present: codexLbProviderPresent,
+      provider_contract_ok: codexLbProviderContractOk,
+      selected_default: codexLbSelectedDefault,
+      key_present: codexLbApiKeySource !== 'missing',
+      api_key_source: codexLbApiKeySource,
+      base_url_present: codexLbBaseUrlSource !== 'missing',
+      base_url_source: codexLbBaseUrlSource,
+      setup_command: setupCommand,
+      set_key_command: setKeyCommand,
+      status_command: 'sks codex-lb status',
+      blockers: codexLbBlockers
+    },
+    ui_actions: [
+      keyCommand,
+      installCommand,
+      setupCommand,
+      setKeyCommand,
+      'sks codex-app status'
+    ],
+    blockers
+  };
+}
+
 async function readTextIfExists(file: any) {
   try {
     return await fsp.readFile(file, 'utf8');
@@ -845,6 +1027,34 @@ function productDesignStatusSummary(status: any = {}) {
   return ' not checked';
 }
 
+function providerModelUiSummary(status: any = {}) {
+  if (!status?.checked) return ' not checked';
+  if (status.ok) return ' ok (GLM + codex-lb)';
+  return ` setup ${(status.blockers || []).join(', ') || 'required'}`;
+}
+
+function sksNativeMenuSummary(status: any = {}) {
+  if (!status) return 'not checked';
+  if (status.supported) return 'ok';
+  return `${status.status || 'unsupported'} (use CLI/settings)`;
+}
+
+function glmModelUiSummary(status: any = {}) {
+  if (!status) return 'not checked';
+  if (status.exposed) {
+    const key = status.openrouter_key_present ? `key ${status.openrouter_key_source || 'present'}` : 'key missing';
+    return `ok ${status.model} (${status.profiles_present?.length || 0} profiles, ${key})`;
+  }
+  return `setup ${(status.blockers || []).join(', ') || 'profile missing'}; run ${status.key_command || 'sks codex-app set-openrouter-key --api-key-stdin'}`;
+}
+
+function codexLbKeyUiSummary(status: any = {}) {
+  if (!status) return ' not checked';
+  if (status.key_present && status.provider_contract_ok !== false) return ` configured (${status.api_key_source || 'present'})`;
+  if (status.key_present) return ` setup provider drift; run ${status.setup_command || 'sks codex-lb setup --host <domain> --api-key-stdin --yes'}`;
+  return ` missing (input: ${status.setup_command || 'sks codex-lb setup --host <domain> --api-key-stdin --yes'})`;
+}
+
 function defaultPluginMissingSummary(defaultPlugins: any = {}) {
   return [
     ...(defaultPlugins?.missing_installed || []),
@@ -861,6 +1071,25 @@ function topLevelToml(text: any = '') {
 function tomlTable(text: any = '', table: any = '') {
   const re = new RegExp(`(?:^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`);
   return String(text || '').match(re)?.[1] || '';
+}
+
+function tomlTableAny(text: any = '', tables: any[] = []) {
+  for (const table of tables) {
+    const body = tomlTable(text, table);
+    if (body) return body;
+  }
+  return '';
+}
+
+function hasTomlString(text: any = '', key: any = '', value: any = '') {
+  const re = new RegExp(`(?:^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?(?=\\n|$)`);
+  return re.test(String(text || ''));
+}
+
+function hasTomlBoolean(text: any = '', key: any = '', value: boolean) {
+  const expected = value ? 'true' : 'false';
+  const re = new RegExp(`(?:^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*${expected}\\s*(?:#.*)?(?=\\n|$)`);
+  return re.test(String(text || ''));
 }
 
 function escapeRegExp(text: any = '') {
