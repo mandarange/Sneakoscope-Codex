@@ -8,7 +8,7 @@
 
 - Add `sks codex-lb fast-check` and the `codex-lb:fast-mode-truth` gate so codex-lb Fast Mode cannot pass unless priority service-tier evidence is present.
 - Add Codex App status reporting for the requested native SKS menu surface, explicitly marking it unsupported by the current official Codex App extension APIs instead of faking a macOS menu.
-- Add a macOS right-side `SKS` menu bar companion installed by `sks doctor --fix` for codex-lb/OAuth switching, OpenRouter/GLM setup, Fast Check, SKS Version Check, Update SKS Now, settings, and Codex restart.
+- Add a macOS right-side SKS menu bar companion installed by `sks doctor --fix` as a compact circled `S` status icon for codex-lb/OAuth switching, OpenRouter/GLM setup, Fast Check, SKS Version Check, Update SKS Now, settings, and Codex restart.
 
 ### Changed
 
