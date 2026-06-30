@@ -6,6 +6,8 @@ import { exists, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js'
 export const CODEX_APP_UI_STATE_SNAPSHOT_SCHEMA = 'sks.codex-app-ui-state-snapshot.v1'
 
 export const PROJECT_LOCAL_FORBIDDEN_CODEX_KEYS = [
+  'model',
+  'model_reasoning_effort',
   'openai_base_url',
   'chatgpt_base_url',
   'apps_mcp_product_sku',
@@ -18,7 +20,7 @@ export const PROJECT_LOCAL_FORBIDDEN_CODEX_KEYS = [
   'otel'
 ] as const
 
-const HOST_OWNED_KEY_RE = /^(?:openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|model_providers(?:\.|$)|notify|profile|profiles(?:\.|$)|experimental_realtime_ws_base_url|otel(?:\.|$)|features\.fast_mode|service_tier|user\.fast_mode(?:\.|$))/
+const HOST_OWNED_KEY_RE = /^(?:model|model_reasoning_effort|openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|model_providers(?:\.|$)|notify|profile|profiles(?:\.|$)|experimental_realtime_ws_base_url|otel(?:\.|$)|features\.fast_mode|service_tier|user\.fast_mode(?:\.|$))/
 const SECRET_KEY_RE = /(?:key|token|secret|password|credential|cookie|authorization|bearer|refresh|access)/i
 
 export interface CodexAppConfigSignal {
@@ -82,9 +84,13 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
   const providerSignals = hostOwnedSignals
     .filter((signal) => signal.provider_related)
     .map((signal) => `${signal.key_path}=${signal.value_preview}`)
-  const fastSelectorLocked = hostOwnedSignals.some((signal) => {
+  const baseConfigHostOwnedSignals = files
+    .filter((file) => !isProfileConfigSnapshotPath(file.path))
+    .flatMap((file) => file.signals.filter((signal) => signal.host_owned))
+  const fastSelectorLocked = baseConfigHostOwnedSignals.some((signal) => {
     if (signal.key_path === 'features.fast_mode' && signal.value_preview === 'false') return true
     if (signal.key_path.startsWith('user.fast_mode') && /hidden|fixed|disabled|false/i.test(signal.value_preview)) return true
+    if (signal.key_path === 'model' || signal.key_path === 'model_reasoning_effort') return true
     if (signal.key_path === 'service_tier' && signal.sks_related) return true
     return false
   })
@@ -166,7 +172,7 @@ export function scanTomlSignals(text: string): { signals: CodexAppConfigSignal[]
       value_hash: sha256(value),
       line: index + 1,
       host_owned: HOST_OWNED_KEY_RE.test(keyPath),
-      fast_ui_related: /(?:fast_mode|service_tier)/i.test(keyPath) || /(?:fast|priority|default)/i.test(value),
+      fast_ui_related: /(?:fast_mode|service_tier|model_reasoning_effort|^model$)/i.test(keyPath) || /(?:fast|priority|default)/i.test(value),
       provider_related: /(?:provider|base_url|auth|profile|openai|chatgpt|codex-lb)/i.test(lowerPath),
       sks_related: /(?:sks|sneakoscope|codex-lb)/i.test(lineText)
     })
@@ -222,6 +228,11 @@ async function profileConfigFiles(home: string) {
   } catch {
     return []
   }
+}
+
+function isProfileConfigSnapshotPath(file: string) {
+  const base = path.basename(file)
+  return /^profile-.+\.config\.toml$/.test(base) || /^[A-Za-z0-9_-]+\.config\.toml$/.test(base)
 }
 
 async function readAuthMetadata(file: string) {

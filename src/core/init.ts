@@ -72,8 +72,7 @@ export function hasTopLevelCodexModeLock(text: any = '') {
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-  const model = top.match(/^model\s*=\s*"([^"]+)"/m)?.[1];
-  return (Boolean(model) && model !== 'gpt-5.5') || /^model_reasoning_effort\s*=/m.test(top);
+  return /^model\s*=/.test(top) || /^model_reasoning_effort\s*=/m.test(top);
 }
 
 export function hasDeprecatedCodexHooksFeatureFlag(text: any = '') {
@@ -604,10 +603,8 @@ function mergeManagedCodexConfigToml(existingContent: any = '') {
   let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
-  // User-overridable top-level keys: seed defaults only when ABSENT so an
-  // upgrade never clobbers a user's chosen model/service_tier. model_reasoning_effort
-  // is intentionally left untouched at the top level.
-  next = upsertTopLevelTomlStringIfAbsent(next, 'model', 'gpt-5.5');
+  // Model/reasoning defaults live in profiles. Leaving them out of top-level config
+  // keeps Codex Desktop's native model and speed selectors available.
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
   // Codex App feature flags: SET-IF-ABSENT only (see note above).
   for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
@@ -711,7 +708,7 @@ function removeLegacyTopLevelCodexModeLocks(text: any = '') {
   const end = firstTable === -1 ? lines.length : firstTable;
   return lines.filter((line: any, index: any) => {
     if (index >= end) return true;
-    return !/^\s*model_reasoning_effort\s*=/.test(line);
+    return !/^\s*(?:model|model_reasoning_effort)\s*=/.test(line);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
