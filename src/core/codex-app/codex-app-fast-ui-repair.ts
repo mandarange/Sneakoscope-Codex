@@ -7,6 +7,7 @@ import {
   snapshotCodexAppUiState
 } from './codex-app-ui-state-snapshot.js'
 import { assertCodexAppUiMutationAllowed } from './codex-app-ui-clobber-guard.js'
+import { codexProviderModelUiStatus } from '../codex-app.js'
 
 export const CODEX_APP_FAST_UI_REPAIR_SCHEMA = 'sks.codex-app-fast-ui-repair.v1'
 
@@ -71,6 +72,12 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     })
   }
   const after = await snapshotCodexAppUiState(resolvedRoot, { codexHome: home })
+  const providerModelUi = await codexProviderModelUiStatus({
+    cwd: resolvedRoot,
+    home: path.dirname(home),
+    configPath: path.join(home, 'config.toml'),
+    codexLbEnvPath: path.join(home, 'sks-codex-lb.env')
+  })
   const changed = actions.some((action) => action.changed)
   const requiresConfirmation = unsafeReasons.length > 0 && input.force !== true
   const safeAutoApply = changed && !requiresConfirmation
@@ -91,7 +98,10 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     detected_project_local_forbidden_keys: [...new Set(detectedProjectLocalForbiddenKeys)],
     unsafe_repair_reasons: [...new Set(unsafeReasons)],
     fast_selector: changed ? (input.apply ? 'repaired' : 'manual_action_required') : before.indicators.fast_selector === 'maybe_hidden_or_locked' ? 'manual_action_required' : 'ok',
-    provider_selector: 'ok',
+    provider_selector: providerModelUi.ok ? 'ok' : 'manual_action_required',
+    provider_model_ui: providerModelUi,
+    provider_actions: providerModelUi.ui_actions || [],
+    provider_blockers: providerModelUi.blockers || [],
     host_owned_config: input.apply && changed ? 'repaired_with_backup' : changed ? 'preserved_until_explicit_apply' : 'preserved',
     actions,
     before_fast_selector: before.indicators.fast_selector,

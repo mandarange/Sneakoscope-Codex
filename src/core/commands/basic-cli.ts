@@ -122,23 +122,28 @@ export async function updateCheckCommand(args: any = []) {
   console.log(`${sksTextLogo()}\n\n${formatSksUpdateCheckText(result)}`);
 }
 
-export async function updateCommand(sub: any = 'check', args: any = []) {
-  const action = String(sub || 'check').toLowerCase();
-  if (action === 'check' || action === 'status') return updateCheckCommand(args);
+export async function updateCommand(sub: any = 'now', args: any = []) {
+  let action = String(sub || 'now').toLowerCase();
+  let effectiveArgs = args;
+  if (action.startsWith('-')) {
+    effectiveArgs = [String(sub), ...args];
+    action = 'now';
+  }
+  if (action === 'check' || action === 'status') return updateCheckCommand(effectiveArgs);
   if (action !== 'now') {
-    console.error('Usage: sks update check|now [--version <version>] [--json] [--dry-run]');
+    console.error('Usage: sks update [check|now] [--version <version>] [--json] [--dry-run]');
     process.exitCode = 1;
     return;
   }
   const root = await projectRoot();
   const result = await withSecretPreservationGuard(root, 'update-now', async () => runSksUpdateNow({
-    version: valueAfter(args, '--version') || valueAfter(args, '-v'),
-    dryRun: flag(args, '--dry-run'),
+    version: valueAfter(effectiveArgs, '--version') || valueAfter(effectiveArgs, '-v'),
+    dryRun: flag(effectiveArgs, '--dry-run'),
     projectRoot: root,
     timeoutMs: 10 * 60 * 1000,
     maxOutputBytes: 128 * 1024
   }));
-  if (flag(args, '--json')) return printJson(result);
+  if (flag(effectiveArgs, '--json')) return printJson(result);
   console.log(`${sksTextLogo()}\n`);
   console.log(`SKS update ${result.status}`);
   if (result.command) console.log(`Command: ${result.command}`);
@@ -146,6 +151,7 @@ export async function updateCommand(sub: any = 'check', args: any = []) {
   if (result.new_binary) console.log(`New binary: ${result.new_binary}`);
   if (result.new_version) console.log(`New version: ${result.new_version}`);
   if (result.project_receipt) console.log(`Migration receipt: ${result.project_receipt.root} (${result.migration_current ? 'current' : 'not current'})`);
+  if (result.sks_menubar) console.log(`SKS menu bar: ${result.sks_menubar.status}${result.sks_menubar.app_path ? ` (${result.sks_menubar.app_path})` : ''}`);
   for (const stage of result.stages || []) console.log(`Stage ${stage.id}: ${stage.ok ? 'ok' : 'failed'} ${stage.status}`);
   if (result.error) console.log(`Error: ${result.error}`);
   if (!result.ok) process.exitCode = 1;

@@ -449,12 +449,12 @@ async function ensurePythonCodexLbConfig(env: Record<string, string>, config: Re
     'approval_policy = "never"',
     '',
     '[model_providers.codex-lb]',
-    'name = "OpenAI"',
+    'name = "openai"',
     `base_url = ${tomlQuote(lbBaseUrl)}`,
     'wire_api = "responses"',
     'env_key = "CODEX_LB_API_KEY"',
     'supports_websockets = true',
-    'requires_openai_auth = false',
+    'requires_openai_auth = true',
     ''
   ].join('\n')
   await writeTextAtomic(path.join(codexHome, 'config.toml'), text)

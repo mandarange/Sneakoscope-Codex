@@ -10,6 +10,9 @@ Useful checks:
 
 ```bash
 sks codex-app check
+sks codex-app set-openrouter-key --api-key-stdin
+sks codex-app glm-profile install
+sks codex-lb status
 sks codex-app chrome-extension --json
 sks codex compatibility --json
 npm run codex:0.134-compat
@@ -25,6 +28,8 @@ sks computer-use smoke --json
 Web/browser/webapp verification uses the official Codex Chrome Extension path first: https://developers.openai.com/codex/app/chrome-extension. If the extension is not installed/enabled, QA-LOOP, UX review, and browser verification must halt rapidly and ask the user to set it up before continuing. Computer Use is reserved for native Mac, desktop-app, OS-settings, and non-web visual targets. MAD-SKS can explicitly authorize these target-project scopes (`computer_use`, `browser_use`, `generated_assets`, and file permission changes), but it cannot fake host capability availability.
 
 The generated `sks-fast-high` profile intentionally omits `sandbox_mode`. Codex App and IDE permission settings own the sandbox choice, including Full Access vs workspace-write, while SKS supplies the model, Fast service tier, approval, and reasoning defaults. High-power MAD launches continue to use the explicit `sks-mad-high` profile and `danger-full-access` launch arguments after the user opens the MAD-SKS permission gate.
+
+`sks codex-app check` prints Provider UI, GLM Model, and codex-lb Key rows. GLM setup uses `sks codex-app set-openrouter-key --api-key-stdin` plus `sks codex-app glm-profile install`; codex-lb key setup uses `sks codex-lb setup --host <domain> --api-key-stdin --yes` or `sks codex-lb set-key --api-key-stdin`. These checks report only redacted presence/source states, never raw keys.
 
 Imagegen/gpt-image-2 remains a Codex App capability first. UX-Review/PPT require generated gpt-image-2 callout evidence before verified visual claims. `npm run imagegen:capability` checks that the official Codex App `$imagegen` surface is visible, but full visual verification still needs an actual generated output file with hash/dimensions/provider metadata. Direct OpenAI API, Responses image-generation, codex-lb, or `CODEX_LB_API_KEY` fallback paths are non-Codex API fallbacks and do not satisfy Codex App imagegen evidence unless a separate API task is explicitly requested. When the official app, Chrome Extension, or OS blocks required capabilities, SKS records the external block and marks live verification unverified instead of substituting browser automation or prose-only critique.
 

@@ -96,12 +96,13 @@ SKS must never print raw CODEX_LB_API_KEY missing-env text. It reports setup gui
 
 Provider auth invariant:
 
-- `[model_providers.codex-lb]` uses `env_key = "CODEX_LB_API_KEY"` with `requires_openai_auth = false`.
-- SKS status and Codex App launch repair treat that combination plus a present `CODEX_LB_API_KEY` as configured codex-lb auth. Imagegen capability checks may record codex-lb as configured routing, but codex-lb is not official Codex App `$imagegen` evidence and must not be used for full generated-image verification unless a separate non-Codex API fallback task is explicitly requested. ChatGPT/OpenAI OAuth can be preserved as a backup, but it is not required for the selected codex-lb provider.
+- `[model_providers.codex-lb]` uses `name = "openai"`, `wire_api = "responses"`, `env_key = "CODEX_LB_API_KEY"`, `supports_websockets = true`, and `requires_openai_auth = true`.
+- `CODEX_LB_API_KEY` is SKS's persisted key source. When the user selects codex-lb auth, SKS also writes Codex's OpenAI-style `auth.json` API-key entry so Codex App actually authenticates through the codex-lb key. ChatGPT OAuth can be preserved as a backup and restored by `sks codex-lb use-oauth`.
+- Imagegen capability checks may record codex-lb as configured routing, but codex-lb is not official Codex App `$imagegen` evidence and must not be used for full generated-image verification unless a separate non-Codex API fallback task is explicitly requested.
 
 Exact setup-choice effects:
 
-- `--use-default-provider` writes `[model_providers.codex-lb]` with `env_key = "CODEX_LB_API_KEY"` and `requires_openai_auth = false`, then selects top-level `model_provider = "codex-lb"`.
+- `--use-default-provider` writes `[model_providers.codex-lb]` with the current App contract above, then selects top-level `model_provider = "codex-lb"`.
 - `--no-default-provider` writes the provider block but does not select top-level `model_provider`.
 - `--write-env-file` writes `~/.codex/sks-codex-lb.env` with mode `0600`.
 - `--no-env-file` does not write the env file; the current process can still verify the supplied key.
@@ -117,6 +118,7 @@ npm run codex-lb:setup-fixture
 npm run codex-lb:setup-truthfulness
 npm run codex-lb:persistence-truth
 npm run codex-lb:missing-env-regression
+npm run codex-lb:fast-mode-truth
 node --test test/blackbox/codex-lb-setup-stdin-no-secret-leak.test.mjs
 ```
 
@@ -136,3 +138,13 @@ Health summaries are written to `~/.codex/sks-codex-lb-health.json` and `<active
 - auth rejection opens the circuit immediately.
 - timeout, network, and 5xx failures open the circuit after three recent failures.
 - `chain_ok` updates `last_ok_at` and closes a half-open/open circuit.
+
+## Fast Mode Truth
+
+codex-lb normalizes Codex `service_tier = "fast"` to upstream `priority`. SKS therefore separates three states:
+
+- Configured intent: Codex config or launch args request Fast mode.
+- Requested proof: the codex-lb request log shows `requestedServiceTier = "priority"`.
+- Actual proof: codex-lb records `actualServiceTier = "priority"` or billable `serviceTier = "priority"`.
+
+`sks codex-lb status` may report configured Fast intent, but it does not claim actual Fast mode. `sks codex-lb fast-check --json` sends a priority-tier probe and fails unless the response or supplied request log proves priority was actually requested and granted. Use `--request-log <json-or-jsonl>` to bind a codex-lb request-log export.

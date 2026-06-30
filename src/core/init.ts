@@ -653,7 +653,7 @@ async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPat
   next = shouldSelectCodexLb
     ? upsertTopLevelTomlString(next, 'model_provider', 'codex-lb')
     : removeTopLevelTomlKeyIfValue(next, 'model_provider', 'codex-lb');
-  next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false`);
+  next = upsertTomlTable(next, 'model_providers.codex-lb', `[model_providers.codex-lb]\nname = "openai"\nbase_url = "${baseUrl}"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true`);
   return `${next.trim()}\n`;
 }
 

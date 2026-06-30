@@ -142,7 +142,7 @@ export const COMMANDS = {
   run: entry('beta', 'Classify and execute a task through the SKS trust kernel', 'dist/core/commands/run-command.js', argsCommand(() => import('../core/commands/run-command.js'), 'runCommand', 'dist/core/commands/run-command.js')),
   status: entry('stable', 'Show concise active mission and trust status', 'dist/core/commands/status-command.js', argsCommand(() => import('../core/commands/status-command.js'), 'statusCommand', 'dist/core/commands/status-command.js')),
   root: entry('stable', 'Show active SKS root', 'dist/commands/root.js', directCommand(() => import('../commands/root.js'), 'dist/commands/root.js')),
-  update: entry('stable', 'Update the global SKS npm package', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'updateCommand', 'dist/core/commands/basic-cli.js', 'check')),
+  update: entry('stable', 'Update the global SKS npm package', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'updateCommand', 'dist/core/commands/basic-cli.js', 'now')),
   'update-check': entry('stable', 'Check npm package freshness', 'dist/core/commands/basic-cli.js', basicArgs('updateCheckCommand')),
   wizard: entry('stable', 'Open setup wizard help', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
   usage: entry('stable', 'Show focused usage topic', 'dist/core/commands/basic-cli.js', basicArgs('usageCommand')),

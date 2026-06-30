@@ -38,10 +38,10 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-quickstart` | core-cli | stable | sks quickstart | execute:pass | runtime_verified | none recorded |
 | `cli-bootstrap` | install | labs | sks bootstrap [--install-scope global\|project] [--local-only] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-root` | core-cli | stable | sks root [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-update` | core-cli | labs | sks update check\|now [--version <version>] [--json] [--dry-run] | mock:pass | runtime_mock_verified | none recorded |
+| `cli-update` | core-cli | labs | sks update [check\|now] [--version <version>] [--json] [--dry-run] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-deps` | install | labs | sks deps check [--json] [--yes] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-codex` | integration | beta | sks codex compatibility\|version\|doctor\|schema\|0.142 [--json] | execute:pass | runtime_verified | none recorded |
-| `cli-codex-app` | integration | beta | sks codex-app [check\|product-design\|product-design --check-only\|ensure-product-design\|chrome-extension\|pat status\|remote-control] | real_optional:pass | integration_optional | mobile/event payload details remain unknown |
+| `cli-codex-app` | integration | beta | sks codex-app [check\|glm-profile install\|set-openrouter-key --api-key-stdin\|product-design\|chrome-extension\|pat status\|remote-control] | real_optional:pass | integration_optional | mobile/event payload details remain unknown |
 | `cli-codex-native` | integration | beta | sks codex-native status\|feature-broker\|invocation-plan\|init-deep [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-hooks` | integration | beta | sks hooks explain\|status\|trust-report\|replay\|codex-validate\|warning-check ... [--json] | mock:pass | runtime_mock_verified | mobile/event payload details remain unknown |
 | `cli-codex-lb` | integration | beta | sks codex-lb status\|health\|metrics\|doctor\|circuit\|repair\|setup ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |

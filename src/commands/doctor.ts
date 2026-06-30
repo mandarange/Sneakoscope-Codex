@@ -39,6 +39,7 @@ import { planDoctorDirtyRepair } from '../core/doctor/doctor-dirty-planner.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 import { writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
+import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -277,6 +278,27 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         blockers: [err?.message || String(err)]
       }))
     : codexAppUiPlan;
+  const sksMenuBar = await installSksMenuBar({
+    root,
+    apply: doctorFix,
+    launch: doctorFix
+  }).catch((err: any) => ({
+    schema: 'sks.codex-app-sks-menubar.v1',
+    ok: false,
+    apply: doctorFix,
+    status: 'blocked',
+    platform: process.platform,
+    app_path: null,
+    executable_path: null,
+    launch_agent_path: null,
+    action_script_path: null,
+    report_path: `${root}/.sneakoscope/reports/sks-menubar.json`,
+    menu_items: [],
+    actions: [],
+    launch: { requested: doctorFix, method: 'none', ok: false, error: err?.message || String(err) },
+    blockers: [err?.message || String(err)],
+    warnings: []
+  }));
   const zellijRepair = shouldRunZellijRepair
     ? await runDoctorZellijRepair({ root, args, doctorFix }).catch((err: any) => ({
         schema: 'sks.zellij-self-heal.v1',
@@ -435,6 +457,20 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               blockers: (supabaseMcpRepair as any)?.blockers || [],
               warnings: (supabaseMcpRepair as any)?.warnings || [],
               rollback_evidence: 'optional_supabase_no_ready_mutation_required'
+            })
+          },
+          {
+            id: 'sks_menubar',
+            required_for_ready: false,
+            run: async () => ({
+              id: 'sks_menubar',
+              ok: (sksMenuBar as any)?.ok !== false,
+              repaired: doctorFix && Array.isArray((sksMenuBar as any)?.actions) && (sksMenuBar as any).actions.length > 0,
+              required_for_ready: false,
+              blockers: (sksMenuBar as any)?.blockers || [],
+              warnings: (sksMenuBar as any)?.warnings || [],
+              artifact_path: (sksMenuBar as any)?.report_path || null,
+              rollback_evidence: (sksMenuBar as any)?.launch_agent_path || (sksMenuBar as any)?.report_path || 'sks_menubar_optional_no_core_mutation'
             })
           },
           {
@@ -623,6 +659,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     agent_role_config: agentRoleConfigRepair,
     repair: configRepair,
     codex_app_ui: codexAppUi,
+    sks_menubar: sksMenuBar,
     codex_0138_doctor: codex0138Doctor,
     codex_plugin_inventory: (pluginInventory as any)?.report || null,
     codex_plugin_app_template_policy: pluginPolicy,
@@ -660,6 +697,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     rust,
     codex_app: codexApp,
     codex_app_ui: codexAppUi,
+    sks_menubar: sksMenuBar,
     provider_context: providerContext,
     codex_lb: codexLb,
     codex_doctor: authoritativeCodexDoctor,
@@ -699,7 +737,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
   };
   if (reportFile) await writeJsonReportFile(reportFile, result);
   if (machineOnly && !flag(args, '--json')) {
@@ -790,15 +828,29 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   console.log(`  native agent_type: ${(codexAppHarnessMatrix as any).app_features?.agent_type_supported ? 'ok' : 'fallback message-role'}`);
   console.log(`  init-deep memory: ${(codexAppHarnessMatrix as any).sks_integrations?.init_deep_available ? 'available' : 'missing'}`);
   console.log(`  loop mesh app profile: ${(codexAppHarnessMatrix as any).sks_integrations?.loop_mesh_app_profile_available ? 'available' : 'missing'}`);
+  const codexAppUiStatus = codexAppUi as any;
   console.log('Codex App UI:');
   console.log(`  fast selector: ${codexAppUi.fast_selector || 'unknown'}`);
   console.log(`  provider selector: ${codexAppUi.provider_selector || 'unknown'}`);
+  if (Array.isArray(codexAppUiStatus.provider_blockers) && codexAppUiStatus.provider_blockers.length) {
+    console.log(`  provider blockers: ${codexAppUiStatus.provider_blockers.join(', ')}`);
+  }
+  if (Array.isArray(codexAppUiStatus.provider_actions) && codexAppUiStatus.provider_actions.length) {
+    console.log('  provider actions:');
+    for (const action of codexAppUiStatus.provider_actions) console.log(`    - ${action}`);
+  }
   console.log(`  host-owned config: ${codexAppUi.host_owned_config || 'unknown'}`);
   if (Array.isArray(codexAppUi.actions) && codexAppUi.actions.some((action: any) => action.changed)) {
     console.log('  repaired files:');
     for (const action of codexAppUi.actions.filter((entry: any) => entry.changed)) console.log(`    - ${action.file}${action.backup_path ? ` (backup ${action.backup_path})` : ''}`);
   }
   if (codexAppUi.next_action) console.log(`  next action: ${codexAppUi.next_action}`);
+  console.log('SKS Menu Bar:');
+  console.log(`  status: ${(sksMenuBar as any).status || ((sksMenuBar as any).ok ? 'ok' : 'blocked')}`);
+  if ((sksMenuBar as any).app_path) console.log(`  app: ${(sksMenuBar as any).app_path}`);
+  if ((sksMenuBar as any).launch_agent_path) console.log(`  launch agent: ${(sksMenuBar as any).launch_agent_path}`);
+  if (Array.isArray((sksMenuBar as any).blockers) && (sksMenuBar as any).blockers.length) console.log(`  blockers: ${(sksMenuBar as any).blockers.join(', ')}`);
+  if (Array.isArray((sksMenuBar as any).warnings) && (sksMenuBar as any).warnings.length) console.log(`  warnings: ${(sksMenuBar as any).warnings.join(', ')}`);
   console.log(`Provider: ${providerContext.provider || 'unknown'} ${providerContext.service_tier || ''} (${providerContext.source || 'unknown'}, ${providerContext.confidence || 'low'})`);
   const imagegenReady = (imagegen as any).auth_readiness;
   if (imagegenReady) {
@@ -960,7 +1012,7 @@ function doctorPhaseIdsForProfile(profile: DoctorProfile): string[] {
     'command_alias_cleanup'
   ];
   if (profile === 'migration') return required;
-  const optional = ['supabase_mcp_repair', 'native_capability_repair'];
+  const optional = ['supabase_mcp_repair', 'native_capability_repair', 'sks_menubar'];
   if (profile === 'full' || profile === 'capabilities') return ['setup', ...required, ...optional];
   return [...required, ...optional];
 }

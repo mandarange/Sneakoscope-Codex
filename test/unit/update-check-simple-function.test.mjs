@@ -84,7 +84,7 @@ process.exit(1);
   const result = await runSksUpdateNow({
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp }
+    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp, SKS_UPDATE_SKIP_SKS_MENUBAR: '1' }
   });
 
   assert.equal(result.schema, 'sks.update-now.v2');
@@ -97,6 +97,55 @@ process.exit(1);
   assert.ok(!calls.some((call) => call.args[0] === 'install' && call.args[1] !== '--global'));
   const ledger = await fs.readFile(path.join(tmp, '.sneakoscope', 'reports', 'mutation-ledger.jsonl'), 'utf8');
   assert.match(ledger, /"kind":"package_install"/);
+});
+
+test('SKS update dry-run does not run doctor fix or npm install', async () => {
+  const { runSksUpdateNow } = await import('../../dist/core/update-check.js');
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-dry-run-'));
+  const log = path.join(tmp, 'npm-log.jsonl');
+  const fakeNpm = path.join(tmp, 'npm-fake.mjs');
+  await fs.writeFile(fakeNpm, `#!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify({ args, cwd: process.cwd() }) + '\\n');
+if (args[0] === 'list' && args[1] === '-g' && args[2] === 'sneakoscope') {
+  console.log(JSON.stringify({ dependencies: { sneakoscope: { version: '1.10.0' } } }));
+  process.exit(0);
+}
+if (args[0] === 'root' && (args[1] === '-g' || args[1] === '--global')) {
+  console.log(path.join(process.env.SKS_FAKE_NPM_ROOT || process.cwd(), 'node_modules'));
+  process.exit(0);
+}
+if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'version') {
+  console.log('99.99.99');
+  process.exit(0);
+}
+if (args[0] === 'install') {
+  console.error('dry-run must not install');
+  process.exit(2);
+}
+console.error('unexpected args: ' + args.join(' '));
+process.exit(1);
+`);
+  await fs.chmod(fakeNpm, 0o755);
+
+  const result = await runSksUpdateNow({
+    npmBin: fakeNpm,
+    currentVersion: '1.10.0',
+    dryRun: true,
+    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp, SKS_UPDATE_SKIP_SKS_MENUBAR: '1' }
+  });
+
+  assert.equal(result.schema, 'sks.update-now.v2');
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'dry_run');
+  assert.equal(result.old_version_doctor, null);
+  assert.equal(result.install_code, null);
+  assert.ok(result.stages.some((stage) => stage.id === 'old_version_doctor_preflight' && stage.status === 'skipped_dry_run'));
+  assert.ok(result.stages.some((stage) => stage.id === 'npm_install' && stage.status === 'dry_run'));
+  const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  assert.ok(!calls.some((call) => call.args[0] === 'install'));
 });
 
 test('SKS update check treats current global npm package as installed even when runtime is older', async () => {
@@ -165,9 +214,10 @@ process.exit(1);
     currentVersion: '4.6.3',
     env: { ...process.env, SKS_FAKE_NPM_LOG: log }
   });
+  const packageVersion = JSON.parse(await fs.readFile(path.join(process.cwd(), 'package.json'), 'utf8')).version;
   assert.equal(result.current, '4.6.1');
-  assert.equal(result.runtime_current, '4.6.3');
-  assert.equal(result.package_root_current, '4.6.3');
+  assert.equal(result.runtime_current, packageVersion);
+  assert.equal(result.package_root_current, packageVersion);
   assert.equal(result.npm_global_current, '4.6.1');
   assert.equal(result.latest, '4.6.2');
   assert.equal(result.status, 'available');

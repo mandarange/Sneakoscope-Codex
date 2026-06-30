@@ -101,7 +101,7 @@ function authState() {
     };
   }
   const codexLb = readCodexLbAuth();
-  if (codexLb.selected && codexLb.provider_configured && codexLb.requires_openai_auth === false && codexLb.key && codexLb.base_url) {
+  if (codexLb.selected && codexLb.provider_configured && codexLb.requires_openai_auth === true && codexLb.key && codexLb.base_url) {
     return {
       ok: true,
       provider: 'openai_responses_image_generation',
@@ -111,7 +111,7 @@ function authState() {
       codex_lb: {
         selected: true,
         provider_configured: true,
-        requires_openai_auth: false,
+        requires_openai_auth: true,
         base_url: codexLb.base_url,
         env_key: codexLb.env_key,
         env_path: codexLb.env_path,

@@ -47,7 +47,7 @@ export async function resolveProviderContext(input: {
   const codexLbProviderBlockPresent = hasCodexLbProviderBlock(configText)
   const codexLbEnvKey = codexLbProviderEnvKey(configText) || (codexLbProviderBlockPresent ? 'CODEX_LB_API_KEY' : null)
   const codexLbRequiresOpenAiAuth = codexLbProviderRequiresOpenAiAuth(configText)
-  const codexLbProviderValid = codexLbProviderBlockPresent && (codexLbRequiresOpenAiAuth === false || codexLbRequiresOpenAiAuth == null)
+  const codexLbProviderValid = codexLbProviderBlockPresent && codexLbRequiresOpenAiAuth === true
   const openaiKey = Boolean(String(env.OPENAI_API_KEY || '').trim())
   const lbKey = Boolean(String((codexLbEnvKey ? env[codexLbEnvKey] : env.CODEX_LB_API_KEY) || env.CODEX_LB_API_KEY || '').trim())
   const envProvider = String(env.SKS_MODEL_PROVIDER || env.CODEX_MODEL_PROVIDER || env.OPENAI_MODEL_PROVIDER || '').trim()

@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.7.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening codex-lb App auth and Fast Mode truth: codex-lb provider config follows the current `name = "openai"` / `requires_openai_auth = true` contract, `sks codex-lb fast-check` separates requested priority from actual priority evidence, and native macOS SKS menu insertion remains blocked unless Codex exposes an official menu extension API.
+
 SKS 4.7.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding the active Codex worker model and Desktop GLM setup surface: GPT workers can dynamically select `gpt-5.4-mini` or `gpt-5.5` effort tiers, GLM workers stay locked to `z-ai/glm-5.2`, Fast Mode and managed agent TOML repair use valid writable Codex config syntax, and `sks doctor --fix` dedupes managed TOML without clobbering external MCP settings.
 
 SKS 4.6.5 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening default `sks doctor --fix` output for optional Codex Doctor bridge skips; default doctor repair can report `codex doctor: unavailable` without crashing, and full Codex compatibility diagnostics remain available through full/required doctor modes.

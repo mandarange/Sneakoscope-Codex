@@ -30,12 +30,12 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
     config.model_provider = 'codex-lb'
     config.model_providers = {
       'codex-lb': {
-        name: 'OpenAI',
+        name: 'openai',
         base_url: codexLbBaseUrl,
         wire_api: 'responses',
         env_key: 'CODEX_LB_API_KEY',
         supports_websockets: true,
-        requires_openai_auth: false
+        requires_openai_auth: true
       }
     }
   }

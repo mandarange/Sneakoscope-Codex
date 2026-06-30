@@ -12,6 +12,7 @@ import { initProject, installSkills } from '../core/init.js';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
+import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
 import {
@@ -31,6 +32,10 @@ import {
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
+
+const CODEX_LB_PROVIDER_NAME = 'openai';
+const CODEX_LB_PROVIDER_ENV_KEY = 'CODEX_LB_API_KEY';
+const CODEX_LB_CANONICAL_FAST_SERVICE_TIER = 'priority';
 
 /** Install-time shim reconciliation; fields vary by `status`. */
 export type SksPostinstallShimResult = {
@@ -260,7 +265,7 @@ async function reportPostinstallCodexLbAuth() {
   else if (codexLbAuth.status && codexLbAuth.status !== 'not_configured') console.log(`codex-lb auth: repair skipped (${codexLbAuth.status}${codexLbAuth.error ? `: ${codexLbAuth.error}` : ''}).`);
   const reconcile = codexLbAuth.auth_reconcile;
   if (reconcile?.status === 'oauth_preserved') {
-    console.log(`codex-lb auth: ChatGPT OAuth preserved as backup; codex-lb key stays in env_key (OpenAI OAuth not required, backup at ${reconcile.backup_path ?? 'unknown'}).`);
+    console.log(`codex-lb auth: ChatGPT OAuth preserved as backup; run \`sks codex-lb use-codex-lb\` to switch the App to codex-lb API-key auth (backup at ${reconcile.backup_path ?? 'unknown'}).`);
   } else if (reconcile?.status === 'oauth_restored') {
     console.log(`codex-lb auth: restored ChatGPT OAuth from ${reconcile.backup_path ?? 'unknown'} while keeping codex-lb selected.`);
   } else if (reconcile?.status === 'apikey_forced') {
@@ -471,7 +476,9 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const appliedActions: Array<Record<string, unknown>> = [];
   await ensureDir(path.dirname(configPath));
   const current = await readText(configPath, '');
-  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl, useDefaultProvider));
+  const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(current, baseUrl, useDefaultProvider), {
+    forceFastMode: opts.forceFastMode !== false
+  });
   const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'codex-lb');
   if (!safeWrite.ok) return { ok: false, status: safeWrite.status, config_path: configPath, env_path: envPath, backup_path: safeWrite.backup_path };
   appliedActions.push({ type: 'write_config_provider', target: configPath, ok: true, backup_path: safeWrite.backup_path });
@@ -500,9 +507,12 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   if (syncLaunchctl) appliedActions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment', ok: codexEnvironment.ok === true, status: codexEnvironment.status });
   const shellProfileResult = await installCodexLbShellProfileSnippet({ home, envPath, shellProfile }).catch((err: any) => ({ ok: false, status: 'failed', files: [], error: err.message }));
   if (shellProfile !== 'skip') appliedActions.push({ type: 'install_shell_profile_snippet', target: shellProfileResult.files?.join(', ') || shellProfile, ok: shellProfileResult.ok === true, status: shellProfileResult.status });
-  const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home, force: true });
   const codexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
-  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, home, status: codexLb }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const forceCodexLbApiKeyAuth = opts.forceCodexLbApiKeyAuth === true || opts.authMode === 'codex-lb';
+  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, home, status: codexLb, forceCodexLbApiKeyAuth }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const codexLogin = forceCodexLbApiKeyAuth
+    ? { ok: ['apikey_forced', 'apikey_auth_active'].includes(authReconcile.status), status: authReconcile.status, ...(authReconcile.reason ? { reason: authReconcile.reason } : {}), error: authReconcile.error || null }
+    : await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home, force: true });
   const finalCodexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   const afterState = await captureCodexLbSetupWriteState({ home, configPath, envPath, shellProfile });
@@ -574,11 +584,21 @@ export async function codexLbStatus(opts: any = {}) {
   const providerConfigured = /\[model_providers\.codex-lb\]/.test(config);
   const selected = hasTopLevelCodexLbSelected(config);
   const baseUrl = codexLbProviderBaseUrl(config) || envLoad.base_url || null;
+  const providerName = codexLbProviderName(config);
+  const providerWireApi = codexLbProviderWireApi(config);
+  const providerSupportsWebsockets = codexLbProviderSupportsWebsockets(config);
   const providerRequiresOpenAiAuth = codexLbProviderRequiresOpenAiAuth(config);
   const providerOpenAiAuthDisabled = codexLbProviderOpenAiAuthDisabled(config);
   const providerEnvKey = codexLbProviderEnvKey(config);
-  const providerUsesCodexLbEnvAuth = providerConfigured && providerEnvKey === 'CODEX_LB_API_KEY' && providerOpenAiAuthDisabled;
-  const codexAppUsableWithCodexLb = providerUsesCodexLbEnvAuth && envKeyConfigured && Boolean(baseUrl);
+  const providerContractOk = providerConfigured
+    && providerName === CODEX_LB_PROVIDER_NAME
+    && providerWireApi === 'responses'
+    && providerEnvKey === CODEX_LB_PROVIDER_ENV_KEY
+    && providerSupportsWebsockets === true
+    && providerRequiresOpenAiAuth === true;
+  const providerUsesCodexLbEnvAuth = providerConfigured && providerEnvKey === CODEX_LB_PROVIDER_ENV_KEY && providerOpenAiAuthDisabled;
+  const codexAppUsableWithCodexLb = providerContractOk && envKeyConfigured && Boolean(baseUrl) && authMode.codex_app_usable;
+  const fastMode = codexLbFastModeConfigStatus(config);
   const launchEnvironment = await inspectCodexLbMacLaunchEnvironment(baseUrl, opts).catch((err: any) => ({
     checked: true,
     available: false,
@@ -586,10 +606,14 @@ export async function codexLbStatus(opts: any = {}) {
     error: err.message
   }));
   return {
-    ok: providerConfigured && envKeyConfigured && Boolean(baseUrl) && providerUsesCodexLbEnvAuth,
+    ok: providerContractOk && envKeyConfigured && Boolean(baseUrl) && authMode.codex_app_usable,
     config_path: configPath,
     env_path: envPath,
     provider_configured: providerConfigured,
+    provider_name: providerName || null,
+    provider_wire_api: providerWireApi || null,
+    provider_supports_websockets: providerSupportsWebsockets,
+    provider_contract_ok: providerContractOk,
     provider_requires_openai_auth: providerRequiresOpenAiAuth,
     provider_openai_auth_disabled: providerOpenAiAuthDisabled,
     provider_env_key: providerEnvKey || null,
@@ -611,7 +635,8 @@ export async function codexLbStatus(opts: any = {}) {
     auth_path: authPath,
     auth_mode: authMode.mode,
     auth_usable_for_codex_app: authMode.codex_app_usable || codexAppUsableWithCodexLb,
-    auth_summary: codexAppUsableWithCodexLb ? 'codex-lb provider uses CODEX_LB_API_KEY env_key; OpenAI OAuth not required' : authMode.summary,
+    auth_summary: codexAppUsableWithCodexLb ? `codex-lb provider uses ${authMode.mode} OpenAI-style auth through Codex App` : authMode.summary,
+    fast_mode: fastMode,
     launch_environment: launchEnvironment
   };
 }
@@ -624,16 +649,22 @@ export function formatCodexLbStatusText(status: any = {}, opts: any = {}) {
     '',
     `Configured: ${status.ok ? 'yes' : 'no'}`,
     `Selected:   ${status.selected ? 'yes' : 'no'}`,
-    `Provider:   ${status.provider_configured ? 'yes' : 'no'}`,
-    `Provider OpenAI OAuth: ${status.provider_openai_auth_disabled ? 'disabled for codex-lb env_key' : status.provider_requires_openai_auth ? 'required (repair recommended)' : 'missing explicit false'}`,
+    `Provider:   ${status.provider_contract_ok ? 'codex-lb App contract ok' : status.provider_configured ? 'drifted' : 'missing'}`,
+    `Provider OpenAI Auth: ${status.provider_requires_openai_auth ? 'required' : 'not required/drifted'} (${status.provider_name || 'missing'})`,
     `Codex App auth: ${status.auth_usable_for_codex_app ? 'ok' : 'needs sign-in/repair'} (${status.auth_mode || 'unknown'})`
   ];
   if (status.auth_summary) lines.push(`Auth detail: ${status.auth_summary}`);
+  if (status.fast_mode) {
+    const fast = status.fast_mode;
+    lines.push(`Fast Mode: ${fast.configured ? `configured request=${fast.codex_request_service_tier} upstream=${fast.codex_lb_upstream_service_tier}` : 'not configured'}`);
+    if (!fast.actual_service_tier_verified) lines.push(`Fast proof: unverified until ${fast.proof_required}. Run: ${fast.verification_command}`);
+  }
   lines.push(`Env file:   ${status.env_file ? status.env_path : 'missing'}`);
   if (status.base_url) lines.push(`Base URL:   ${status.base_url}`);
   lines.push(`ChatGPT backup: ${backupPresent ? `yes (${backupPath})` : 'no'}`);
-  if (status.ok && !status.auth_usable_for_codex_app && backupPresent) lines.push('', 'Run: sks codex-lb repair to restore the ChatGPT OAuth backup while keeping codex-lb selected.');
-  else if (status.ok && !status.auth_usable_for_codex_app) lines.push('', 'Sign in to Codex App/CLI again, then run: sks codex-lb repair');
+  if (status.provider_configured && !status.provider_contract_ok) lines.push('', 'Run: sks codex-lb repair to rewrite the provider block to the current codex-lb App contract.');
+  else if (status.ok && !status.auth_usable_for_codex_app && backupPresent) lines.push('', 'Run: sks codex-lb use-oauth to restore ChatGPT OAuth, or sks codex-lb use-codex-lb to force codex-lb API-key auth.');
+  else if (status.ok && !status.auth_usable_for_codex_app) lines.push('', 'Run: sks codex-lb use-codex-lb, or sign in to Codex App/CLI again for ChatGPT OAuth.');
   else if (status.ok && !status.selected) lines.push('', 'Run: sks codex-lb repair to activate codex-lb for Codex App.');
   else if (status.ok) lines.push('', 'Status: codex-lb active; no repair needed.');
   else if (!status.ok && status.base_url && status.env_key_configured) lines.push('', 'Run: sks codex-lb repair to restore the upstream codex-lb provider block.');
@@ -649,8 +680,8 @@ export function formatCodexLbRepairResultText(result: any = {}) {
     `Key env: ${result.env_path}`
   ];
   if (result.auth_reconcile?.status === 'oauth_restored') lines.push(`Codex App auth: ChatGPT OAuth restored from ${result.auth_reconcile.backup_path}.`);
-  else if (result.auth_reconcile?.status === 'oauth_preserved') lines.push('Codex App auth: ChatGPT OAuth preserved as backup; codex-lb will use CODEX_LB_API_KEY from env_key without OpenAI OAuth.');
-  else if (result.auth_reconcile?.status === 'apikey_auth_active') lines.push('Codex App auth: API-key auth.json is still active. Sign in again if the App asks for ChatGPT OAuth.');
+  else if (result.auth_reconcile?.status === 'oauth_preserved') lines.push('Codex App auth: ChatGPT OAuth preserved as backup; run `sks codex-lb use-codex-lb` to force codex-lb API-key auth.');
+  else if (['apikey_auth_active', 'apikey_forced'].includes(result.auth_reconcile?.status)) lines.push('Codex App auth: codex-lb API-key auth.json is active.');
   return `${lines.join('\n')}\n`;
 }
 
@@ -772,6 +803,42 @@ function codexLbResponseError(json: any, events: any = []) {
   return null;
 }
 
+function codexLbServiceTierEvidence(...responses: any[]) {
+  const values: any[] = [];
+  const visit = (value: any) => {
+    if (!value || typeof value !== 'object') return;
+    values.push(value);
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    for (const child of Object.values(value)) visit(child);
+  };
+  for (const response of responses) {
+    visit(response?.json);
+    visit(response?.events);
+  }
+  const firstString = (...keys: string[]) => {
+    for (const row of values) {
+      for (const key of keys) {
+        const value = row?.[key];
+        if (typeof value === 'string' && value.trim()) return value.trim().toLowerCase();
+      }
+    }
+    return null;
+  };
+  const requested = firstString('requestedServiceTier', 'requested_service_tier', 'requested_serviceTier');
+  const actual = firstString('actualServiceTier', 'actual_service_tier', 'actual_serviceTier');
+  const effective = firstString('serviceTier', 'service_tier');
+  return {
+    requested_service_tier: requested,
+    actual_service_tier: actual,
+    effective_service_tier: effective,
+    fast_requested: requested === CODEX_LB_CANONICAL_FAST_SERVICE_TIER || effective === CODEX_LB_CANONICAL_FAST_SERVICE_TIER,
+    fast_actual: actual === CODEX_LB_CANONICAL_FAST_SERVICE_TIER || effective === CODEX_LB_CANONICAL_FAST_SERVICE_TIER
+  };
+}
+
 async function fetchCodexLbResponse(fetchImpl: any, endpoint: any, apiKey: any, body: any, timeoutMs: any) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs).unref?.();
@@ -813,10 +880,14 @@ export async function checkCodexLbResponseChain(status: any = {}, opts: any = {}
   if (typeof fetchImpl !== 'function') return { ok: true, status: 'skipped', skipped: true, reason: 'fetch unavailable' };
   const model = opts.model || env.SKS_CODEX_MODEL || 'gpt-5.5';
   const timeoutMs = Number(opts.timeoutMs || env.SKS_CODEX_LB_CHAIN_CHECK_TIMEOUT_MS || 8000);
+  const serviceTier = opts.fastMode === true || opts.serviceTier === 'fast' || opts.serviceTier === CODEX_LB_CANONICAL_FAST_SERVICE_TIER
+    ? CODEX_LB_CANONICAL_FAST_SERVICE_TIER
+    : null;
   const baseBody = {
     model,
     instructions: 'You are running a short SKS codex-lb response-chain health check.',
     input: 'SKS codex-lb response-chain health check. Reply with OK.',
+    ...(serviceTier ? { service_tier: serviceTier } : {}),
     stream: true,
     store: true,
     parallel_tool_calls: false,
@@ -831,11 +902,13 @@ export async function checkCodexLbResponseChain(status: any = {}, opts: any = {}
       chain_unhealthy: true,
       endpoint,
       http_status: first.status,
+      requested_service_tier: serviceTier,
+      service_tier_evidence: codexLbServiceTierEvidence(first),
       error: redactSecretText(first.error_payload?.error?.message || first.error_payload?.response?.error?.message || first.text || 'codex-lb first Responses request failed', [apiKey])
     }, { endpoint, home, opts, env }), opts);
   }
   const second = await fetchCodexLbResponse(fetchImpl, endpoint, apiKey, { ...baseBody, previous_response_id: first.response_id }, timeoutMs);
-  if (second.ok) return recordCodexLbChainHealth(await writeCodexLbChainCache({ ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status }, { endpoint, home, opts, env }), opts);
+  if (second.ok) return recordCodexLbChainHealth(await writeCodexLbChainCache({ ok: true, status: 'chain_ok', endpoint, response_id: first.response_id, chained_response_id: second.response_id || null, http_status: second.status, requested_service_tier: serviceTier, service_tier_evidence: codexLbServiceTierEvidence(first, second) }, { endpoint, home, opts, env }), opts);
   const previousMissing = isPreviousResponseNotFound(second.error_payload || second.json || second.text);
   return recordCodexLbChainHealth(await writeCodexLbChainCache({
     ok: false,
@@ -844,6 +917,8 @@ export async function checkCodexLbResponseChain(status: any = {}, opts: any = {}
     endpoint,
     response_id: first.response_id,
     http_status: second.status,
+    requested_service_tier: serviceTier,
+    service_tier_evidence: codexLbServiceTierEvidence(first, second),
     error: redactSecretText(second.error_payload?.error?.message || second.error_payload?.response?.error?.message || second.text || 'codex-lb chained Responses request failed', [apiKey])
   }, { endpoint, home, opts, env }), opts);
 }
@@ -864,6 +939,23 @@ function codexLbProviderBaseUrl(text: any = '') {
   return block.match(/(^|\n)\s*base_url\s*=\s*"([^"]+)"/)?.[2] || '';
 }
 
+function codexLbProviderName(text: any = '') {
+  const block = String(text || '').match(/(^|\n)\[model_providers\.codex-lb\]([\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/)?.[2] || '';
+  return (block.match(/(^|\n)\s*name\s*=\s*"([^"]+)"/)?.[2] || '').trim();
+}
+
+function codexLbProviderWireApi(text: any = '') {
+  const block = String(text || '').match(/(^|\n)\[model_providers\.codex-lb\]([\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/)?.[2] || '';
+  return (block.match(/(^|\n)\s*wire_api\s*=\s*"([^"]+)"/)?.[2] || '').trim();
+}
+
+function codexLbProviderSupportsWebsockets(text: any = '') {
+  const block = String(text || '').match(/(^|\n)\[model_providers\.codex-lb\]([\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/)?.[2] || '';
+  if (/(^|\n)\s*supports_websockets\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(block)) return true;
+  if (/(^|\n)\s*supports_websockets\s*=\s*false\s*(?:#.*)?(?=\n|$)/.test(block)) return false;
+  return null;
+}
+
 function codexLbProviderRequiresOpenAiAuth(text: any = '') {
   const block = String(text || '').match(/(^|\n)\[model_providers\.codex-lb\]([\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/)?.[2] || '';
   return /(^|\n)\s*requires_openai_auth\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(block);
@@ -877,6 +969,29 @@ function codexLbProviderOpenAiAuthDisabled(text: any = '') {
 function codexLbProviderEnvKey(text: any = '') {
   const block = String(text || '').match(/(^|\n)\[model_providers\.codex-lb\]([\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/)?.[2] || '';
   return block.match(/(^|\n)\s*env_key\s*=\s*"([^"]+)"/)?.[2] || '';
+}
+
+function codexLbFastModeConfigStatus(text: any = '') {
+  const globalServiceTier = topLevelTomlString(text, 'service_tier');
+  const profileBlock = String(text || '').match(/(^|\n)\[profiles\.sks-fast-high\]([\s\S]*?)(?=\n\[[^\]]+\]|\s*$)/)?.[2] || '';
+  const profileServiceTier = profileBlock.match(/(^|\n)\s*service_tier\s*=\s*"([^"]+)"/)?.[2] || '';
+  const configured = globalServiceTier === 'fast' || globalServiceTier === CODEX_LB_CANONICAL_FAST_SERVICE_TIER || profileServiceTier === 'fast';
+  return {
+    schema: 'sks.codex-lb-fast-mode-config.v1',
+    configured,
+    top_level_service_tier: globalServiceTier || null,
+    profile_service_tier: profileServiceTier || null,
+    codex_request_service_tier: configured ? 'fast' : null,
+    codex_lb_upstream_service_tier: configured ? CODEX_LB_CANONICAL_FAST_SERVICE_TIER : null,
+    actual_service_tier_verified: false,
+    verification_command: 'sks codex-lb fast-check --json',
+    proof_required: 'codex-lb request log must show requestedServiceTier=priority and actualServiceTier/serviceTier=priority'
+  };
+}
+
+function topLevelTomlString(text: any = '', key: string) {
+  const topLevel = String(text || '').split(/\n\s*\[/)[0] || '';
+  return topLevel.match(new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]+)"\\s*(?:#.*)?(?=\\n|$)`))?.[2] || '';
 }
 
 export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInstallResult> {
@@ -893,14 +1008,17 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
       status = await codexLbStatus(opts);
     }
   }
-  if (status.env_key_configured && status.base_url && (!status.ok || !status.selected || !status.provider_uses_codex_lb_env_auth || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig))) {
+  if (status.env_key_configured && status.base_url && (!status.provider_contract_ok || !status.selected || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig) || (opts.forceCodexLbApiKeyAuth === true && !status.ok))) {
     await ensureDir(path.dirname(status.config_path));
-    const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(currentConfig, status.base_url));
+    const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(currentConfig, status.base_url), {
+      forceFastMode: opts.forceFastMode === true || opts.forceCodexLbApiKeyAuth === true
+    });
     const safeWrite = await safeWriteCodexConfigToml(status.config_path, currentConfig, next, 'codex-lb-repair');
     configRepaired = safeWrite.ok && safeWrite.changed === true;
     status = await codexLbStatus(opts);
   }
-  if (!status.ok) {
+  const canRepairAuthMode = opts.forceCodexLbApiKeyAuth === true && status.provider_contract_ok && status.env_key_configured && Boolean(status.base_url);
+  if (!status.ok && !canRepairAuthMode) {
     return {
       ok: false,
       status: !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : 'not_configured',
@@ -912,8 +1030,11 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
   await migrateCodexAuthKeyFormat({ home: opts.home });
   const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
-  const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
-  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const forceCodexLbApiKeyAuth = opts.forceCodexLbApiKeyAuth === true || opts.authMode === 'codex-lb';
+  const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status, forceCodexLbApiKeyAuth }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
+  const codexLogin = forceCodexLbApiKeyAuth
+    ? { ok: ['apikey_forced', 'apikey_auth_active'].includes(authReconcile.status), status: authReconcile.status, ...(authReconcile.reason ? { reason: authReconcile.reason } : {}), error: authReconcile.error || null }
+    : await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
   const finalStatus = await codexLbStatus(opts);
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   return {
@@ -948,7 +1069,7 @@ export async function ensureCodexLbAuthDuringInstall(opts: any = {}): Promise<Co
     };
   }
   await migrateCodexAuthKeyFormat({ home: opts.home });
-  if (status.ok && (!status.selected || !status.provider_uses_codex_lb_env_auth)) return repairCodexLbAuth(opts);
+  if (status.ok && (!status.selected || !status.provider_contract_ok)) return repairCodexLbAuth(opts);
   if (!status.ok) {
     if (status.base_url && (status.env_key_configured || status.provider_configured || status.selected || status.env_base_url_configured)) return repairCodexLbAuth(opts);
     return { status: status.env_key_configured ? 'missing_base_url' : 'missing_env_key', codex_lb: status, config_path: status.config_path, env_path: status.env_path };
@@ -1024,10 +1145,10 @@ function codexAuthModeSummary(text: any = '') {
   if (!raw) return { mode: 'missing', codex_app_usable: false, summary: 'missing auth.json' };
   if (hasChatgptOAuthTokens(raw)) return { mode: 'chatgpt_oauth', codex_app_usable: true, summary: 'ChatGPT OAuth token blob present' };
   const apiKey = parseCodexAuthApiKey(raw);
-  if (apiKey) return { mode: 'apikey', codex_app_usable: false, summary: 'API-key auth.json; Codex App may require ChatGPT sign-in for requires_openai_auth providers' };
+  if (apiKey) return { mode: 'apikey', codex_app_usable: true, summary: 'API-key auth.json available for requires_openai_auth providers' };
   try {
     const parsed = JSON.parse(raw);
-    if (parsed?.auth_mode === 'browser') return { mode: 'browser_marker', codex_app_usable: false, summary: 'browser auth marker without refresh tokens' };
+    if (parsed?.auth_mode === 'browser') return { mode: 'browser_marker', codex_app_usable: true, summary: 'browser auth marker present; token storage is not inspectable' };
   } catch {}
   return { mode: 'unknown', codex_app_usable: false, summary: 'unrecognized auth.json shape' };
 }
@@ -1054,9 +1175,11 @@ async function migrateCodexAuthKeyFormat(opts: any = {}) {
   }
 }
 
-// codex-lb authenticates through env_key (CODEX_LB_API_KEY) and explicitly
-// disables OpenAI OAuth on the provider. SKS still preserves existing OAuth
-// blobs, but OAuth is no longer a readiness requirement for codex-lb.
+// codex-lb's current Codex App contract uses a custom provider named "openai"
+// with requires_openai_auth=true. CODEX_LB_API_KEY remains SKS's persisted key
+// source, but selecting codex-lb auth must also switch Codex's OpenAI-style
+// auth.json to that API key; otherwise the App can appear configured while still
+// running under a different ChatGPT/OAuth auth path.
 export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<CodexLbAuthReconcileResult> {
   const home = opts.home || process.env.HOME || os.homedir();
   const status = opts.status || await codexLbStatus({ ...opts, home });
@@ -1065,17 +1188,35 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
   if (!status.env_key_configured || !status.base_url) {
     return { status: 'skipped', reason: 'codex_lb_not_ready', auth_path: authPath };
   }
-  if (!(await exists(authPath))) {
-    return { status: 'skipped', reason: 'auth_missing', auth_path: authPath };
-  }
-  const authText = await readText(authPath, '');
-  if (!authText.trim()) {
-    return { status: 'skipped', reason: 'auth_empty', auth_path: authPath };
-  }
+  const authExists = await exists(authPath);
+  const authText = authExists ? await readText(authPath, '') : '';
   const envText = await readText(status.env_path, '');
   const apiKey = parseCodexLbEnvKey(envText);
   if (!apiKey) {
     return { status: 'skipped', reason: 'missing_env_key', auth_path: authPath };
+  }
+  const forceCodexLbApiKeyAuth = opts.forceCodexLbApiKeyAuth === true;
+  const writeApiKeyAuth = async (reason: string, backupPathForResult: string | null = null) => {
+    try {
+      await writeTextAtomic(authPath, `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`);
+      await fsp.chmod(authPath, 0o600).catch(() => {});
+      return {
+        status: 'apikey_forced',
+        reason,
+        auth_path: authPath,
+        backup_path: backupPathForResult || backupPath
+      };
+    } catch (err: any) {
+      return { status: 'failed', reason: 'write_failed', auth_path: authPath, backup_path: backupPathForResult || backupPath, error: err.message };
+    }
+  };
+  if (!authExists) {
+    if (forceCodexLbApiKeyAuth) return writeApiKeyAuth('codex_lb_auth_selected_missing_auth');
+    return { status: 'skipped', reason: 'auth_missing', auth_path: authPath };
+  }
+  if (!authText.trim()) {
+    if (forceCodexLbApiKeyAuth) return writeApiKeyAuth('codex_lb_auth_selected_empty_auth');
+    return { status: 'skipped', reason: 'auth_empty', auth_path: authPath };
   }
   if (hasChatgptOAuthTokens(authText)) {
     try {
@@ -1093,10 +1234,11 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
         backup_path: backupPath
       };
     }
+    if (forceCodexLbApiKeyAuth) return writeApiKeyAuth('codex_lb_auth_selected', backupPath);
     if (process.env.SKS_CODEX_LB_FORCE_APIKEY_AUTH !== '1') {
       return {
         status: 'oauth_preserved',
-        reason: 'chatgpt_oauth_preserved_while_codex_lb_uses_env_key',
+        reason: 'chatgpt_oauth_preserved_until_use_codex_lb_auth',
         auth_path: authPath,
         backup_path: backupPath
       };
@@ -1117,6 +1259,17 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
   }
 
   const currentApiKey = parseCodexAuthApiKey(authText);
+  if (forceCodexLbApiKeyAuth) {
+    if (currentApiKey && currentApiKey === apiKey) {
+      return {
+        status: 'apikey_auth_active',
+        reason: 'codex_lb_auth_selected',
+        auth_path: authPath,
+        backup_path: backupPath
+      };
+    }
+    return writeApiKeyAuth('codex_lb_auth_selected_replace_existing');
+  }
   if (currentApiKey && currentApiKey === apiKey) {
     const backupText = await readText(backupPath, '');
     if (hasChatgptOAuthTokens(backupText) && process.env.SKS_CODEX_LB_KEEP_APIKEY_AUTH !== '1') {
@@ -1311,7 +1464,7 @@ export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any
   if (status.env_key_configured && status.base_url && !status.selected && status.auth_mode === 'chatgpt_oauth') {
     return { status: 'continued_to_codex', ok: false, chain_health: null, codex_lb: status, reason: 'chatgpt_oauth_active_codex_lb_unselected' };
   }
-  if (status.env_key_configured && status.base_url && (!status.provider_configured || !status.selected || !status.provider_uses_codex_lb_env_auth)) {
+  if (status.env_key_configured && status.base_url && (!status.provider_configured || !status.selected || !status.provider_contract_ok)) {
     let promptedRestore = false;
     if (!status.provider_configured && canAskYesNo()) {
       promptedRestore = true;
@@ -1446,7 +1599,7 @@ async function inspectCodexLbMacLaunchEnvironment(baseUrl: any = '', opts: any =
 async function maybeSyncCodexLbSharedLogin(apiKey: any, opts: any = {}): Promise<CodexLbLoginSyncResult> {
   if (!apiKey) return { ok: false, status: 'missing_env_key' };
   if (!shouldSyncCodexLbSharedLogin(opts)) {
-    return { ok: true, status: 'skipped', reason: 'codex-lb uses provider env_key auth; set SKS_CODEX_LB_SYNC_CODEX_LOGIN=1 to also rewrite Codex shared login cache.' };
+    return { ok: true, status: 'skipped', reason: 'codex-lb repair preserved the current Codex App auth; run `sks codex-lb use-codex-lb` to switch the app to codex-lb API-key auth.' };
   }
   return syncCodexApiKeyLogin(apiKey, opts);
 }
@@ -1477,12 +1630,12 @@ export function upsertCodexLbConfig(text: any = '', baseUrl: any, selectDefault 
     : removeTopLevelTomlKeyIfValue(text, 'model_provider', 'codex-lb');
   const block = [
     '[model_providers.codex-lb]',
-    'name = "OpenAI"',
+    'name = "openai"',
     `base_url = "${baseUrl}"`,
     'wire_api = "responses"',
     'env_key = "CODEX_LB_API_KEY"',
     'supports_websockets = true',
-    'requires_openai_auth = false'
+    'requires_openai_auth = true'
   ].join('\n');
   next = upsertTomlTable(next, 'model_providers.codex-lb', block);
   return `${next.trim()}\n`;
@@ -2549,8 +2702,8 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   const codexLbEnv = await safeReadText(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'));
   const codexLbAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
-  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !hasTopLevelCodexLbSelected(codexLbConfig) || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'") || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || codexLbSetupJson.codex_environment?.ok !== true || codexLbSetupJson.codex_login?.status !== 'skipped' || codexLbAuth.trim()) throw new Error('selftest: codex-lb setup');
-  if (!codexLbConfig.includes('requires_openai_auth = false')) throw new Error('selftest: codex-lb setup did not disable OpenAI OAuth for codex-lb env_key auth');
+  if (!codexLbSetupJson.ok || codexLbSetupJson.base_url !== 'https://lb.example.test/backend-api/codex' || !hasTopLevelCodexLbSelected(codexLbConfig) || !codexLbConfig.includes('[model_providers.codex-lb]') || !codexLbEnv.includes("CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'") || !codexLbEnv.includes("CODEX_LB_API_KEY='sk-test'") || codexLbSetupJson.codex_environment?.ok !== true || codexLbSetupJson.codex_login?.status !== 'apikey_forced' || !codexLbAuth.includes('OPENAI_API_KEY') || !codexLbAuth.includes('sk-test')) throw new Error('selftest: codex-lb setup');
+  if (!codexLbConfig.includes('requires_openai_auth = true') || !codexLbConfig.includes('name = "openai"')) throw new Error('selftest: codex-lb setup did not write current codex-lb App provider contract');
   const codexLbFailLaunchctl = path.join(codexLbFakeBin, 'launchctl-fail');
   await writeTextAtomic(codexLbFailLaunchctl, '#!/bin/sh\necho "launchctl denied" >&2\nexit 7\n');
   await fsp.chmod(codexLbFailLaunchctl, 0o755);
@@ -2560,7 +2713,7 @@ export async function selftestCodexLb(tmp: any) {
   await initProject(codexLbHome, { installScope: 'global', force: true, repair: true });
   const codexLbRepairSetupConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   if (!hasTopLevelCodexLbSelected(codexLbRepairSetupConfig) || !codexLbRepairSetupConfig.includes('[model_providers.codex-lb]') || !codexLbRepairSetupConfig.includes('https://lb.example.test/backend-api/codex') || codexLbRepairSetupConfig.includes('sk-test')) throw new Error('selftest: init codex-lb');
-  if (!codexLbRepairSetupConfig.includes('requires_openai_auth = false')) throw new Error('selftest: init codex-lb did not preserve OpenAI OAuth disablement');
+  if (!codexLbRepairSetupConfig.includes('requires_openai_auth = true') || !codexLbRepairSetupConfig.includes('name = "openai"')) throw new Error('selftest: init codex-lb did not preserve current App provider contract');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbRepairSetupConfig)) throw new Error('selftest: init codex-lb did not suppress Codex unstable feature warning');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `${codexLbConfig}\n[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=ref&read_only=true&features=database,docs"\n`);
   const ptmp = path.join(tmp, 'codex-lb-project-config'), prevHome = process.env.HOME;
@@ -2568,7 +2721,7 @@ export async function selftestCodexLb(tmp: any) {
   finally { if (prevHome === undefined) delete process.env.HOME; else process.env.HOME = prevHome; }
   const pcfg = await safeReadText(path.join(ptmp, '.codex', 'config.toml'));
   if (!hasTopLevelCodexLbSelected(pcfg) || !pcfg.includes('[model_providers.codex-lb]') || !pcfg.includes('[mcp_servers.supabase]') || !pcfg.includes('read_only=true')) throw new Error('selftest: project codex-lb');
-  if (!pcfg.includes('requires_openai_auth = false')) throw new Error('selftest: project codex-lb did not copy OpenAI OAuth disablement');
+  if (!pcfg.includes('requires_openai_auth = true') || !pcfg.includes('name = "openai"')) throw new Error('selftest: project codex-lb did not copy current App provider contract');
   if (!hasCodexUnstableFeatureWarningSuppression(pcfg)) throw new Error('selftest: project codex-lb config did not suppress Codex unstable feature warning');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
   const codexLbRepair = await runProcess(process.execPath, [packagedSksEntrypoint(), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
@@ -2629,7 +2782,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbLoginCallsAfterBootstrap = await codexLbLoginCallCount(codexLbHome);
   if (!codexLbPostBootstrapAuth.includes('"auth_mode":"browser"') || codexLbPostBootstrapAuth.includes('sk-test') || codexLbLoginCallsAfterBootstrap !== codexLbLoginCallsBeforeBootstrap) throw new Error('selftest: postinstall drift auth');
   if (!hasTopLevelCodexLbSelected(codexLbPostBootstrapConfig) || !codexLbPostBootstrapConfig.includes('[model_providers.codex-lb]') || !codexLbPostBootstrapConfig.includes('https://lb.example.test/backend-api/codex') || codexLbPostBootstrapConfig.includes('sk-test')) throw new Error('selftest: postinstall drift config');
-  if (!codexLbPostBootstrapConfig.includes('requires_openai_auth = false')) throw new Error('selftest: postinstall drift config did not restore OpenAI OAuth disablement');
+  if (!codexLbPostBootstrapConfig.includes('requires_openai_auth = true') || !codexLbPostBootstrapConfig.includes('name = "openai"')) throw new Error('selftest: postinstall drift config did not restore current App provider contract');
   const doctorProject = tmpdir();
   await ensureDir(path.join(doctorProject, '.git'));
   await writeTextAtomic(path.join(doctorProject, 'package.json'), '{"name":"codex-lb-doctor-project","version":"0.0.0"}\n');
@@ -2647,7 +2800,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbDoctorAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   const codexLbDoctorConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
   if (!codexLbDoctorJson.repair?.codex_lb?.ok || !codexLbDoctorJson.repair.codex_lb.config_repaired || !codexLbDoctorJson.codex_lb?.ok || !codexLbDoctorAuth.includes('"auth_mode":"browser"') || codexLbDoctorAuth.includes('sk-test') || !hasTopLevelCodexLbSelected(codexLbDoctorConfig) || !codexLbDoctorConfig.includes('https://lb.example.test/backend-api/codex') || !hasCodexUnstableFeatureWarningSuppression(codexLbDoctorConfig)) throw new Error('selftest: doctor codex-lb');
-  if (!codexLbDoctorConfig.includes('requires_openai_auth = false')) throw new Error('selftest: doctor codex-lb did not restore OpenAI OAuth disablement');
+  if (!codexLbDoctorConfig.includes('requires_openai_auth = true') || !codexLbDoctorConfig.includes('name = "openai"')) throw new Error('selftest: doctor codex-lb did not restore current App provider contract');
   // codex-lb auth: ChatGPT OAuth ↔ codex-lb env_key conflict reconciliation.
   const oauthAuthJson = JSON.stringify({
     auth_mode: 'chatgpt',
@@ -2656,7 +2809,7 @@ export async function selftestCodexLb(tmp: any) {
   });
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), `${oauthAuthJson}\n`);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n");
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "openai"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n');
   await fsp.rm(path.join(codexLbHome, '.codex', 'auth.chatgpt-backup.json'), { force: true });
   const codexLbReconcileRepair = await runProcess(process.execPath, [packagedSksEntrypoint(), 'auth', 'repair', '--json'], { cwd: tmp, env: codexLbEnvForSelftest, timeoutMs: 15000, maxOutputBytes: 64 * 1024 });
   if (codexLbReconcileRepair.code !== 0) throw new Error(`selftest: codex-lb oauth reconcile repair exited ${codexLbReconcileRepair.code}: ${codexLbReconcileRepair.stderr}`);
@@ -2686,7 +2839,7 @@ export async function selftestCodexLb(tmp: any) {
   // codex-lb auth: release flow — restore ChatGPT OAuth from backup so the user can return to
   // the official ChatGPT account login. Default deselects model_provider; flags control whether
   // the provider stays selected and whether the backup file is removed after restore.
-  const codexLbReleaseConfig = 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false\n';
+  const codexLbReleaseConfig = 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "openai"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = true\n';
   const codexLbReleaseEnv = "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n";
   const codexLbReleaseApikeyAuth = '{"auth_mode":"apikey","OPENAI_API_KEY":"sk-test"}\n';
   const codexLbReleaseOauthBackup = `${oauthAuthJson}\n`;
@@ -2771,7 +2924,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbLoginCallsAfterMalformed = await codexLbLoginCallCount(codexLbHome);
   if (codexLbMalformedPostinstall.code !== 0 || !String(codexLbMalformedPostinstall.stdout || '').includes('codex-lb auth: stored key missing') || codexLbLoginCallsAfterMalformed !== codexLbLoginCallsBeforeMalformed) throw new Error('selftest: bad codex-lb env');
   await fsp.rm(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), { force: true });
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), '[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nsupports_websockets = true\nrequires_openai_auth = true\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), '[model_providers.codex-lb]\nname = "openai"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nsupports_websockets = true\nrequires_openai_auth = true\n');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"apikey","key":"sk-legacy"}\n');
   const codexLbLoginCallsBeforeLegacyPostinstall = await codexLbLoginCallCount(codexLbHome);
   const codexLbLegacyPostinstall = await runProcess(process.execPath, [packagedSksEntrypoint(), 'postinstall'], {
@@ -2786,7 +2939,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbLoginCallsAfterLegacyPostinstall = await codexLbLoginCallCount(codexLbHome);
   if (!String(codexLbLegacyPostinstall.stdout || '').includes('codex-lb auth: restored from existing Codex login cache') || !codexLbLegacyPostinstallEnv.includes("CODEX_LB_API_KEY='sk-legacy'") || !codexLbLegacyPostinstallEnv.includes("CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'") || !codexLbLegacyPostinstallAuth.includes('"auth_mode":"apikey"') || !codexLbLegacyPostinstallAuth.includes('sk-legacy') || codexLbLoginCallsAfterLegacyPostinstall !== codexLbLoginCallsBeforeLegacyPostinstall) throw new Error('selftest: legacy codex-lb postinstall restore');
   await fsp.rm(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), { force: true });
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nsupports_websockets = true\nrequires_openai_auth = true\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n\n[model_providers.codex-lb]\nname = "openai"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nsupports_websockets = true\nrequires_openai_auth = true\n');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"apikey","key":"sk-legacy-doctor"}\n');
   const codexLbLegacyDoctorProject = tmpdir();
   await ensureDir(path.join(codexLbLegacyDoctorProject, '.git'));
@@ -2952,7 +3105,7 @@ export async function selftestCodexLb(tmp: any) {
     }
   });
   const missingProviderRepairedConfig = await safeReadText(path.join(codexLbHome, '.codex', 'config.toml'));
-  if (!missingProviderLaunch.ok || missingProviderLaunch.status !== 'present' || missingProviderLaunch.chain_health?.status !== 'chain_ok' || missingProviderLaunchCalls.length !== 2 || !hasTopLevelCodexLbSelected(missingProviderRepairedConfig) || !missingProviderRepairedConfig.includes('[model_providers.codex-lb]') || !missingProviderRepairedConfig.includes('env_key = "CODEX_LB_API_KEY"') || !missingProviderRepairedConfig.includes('supports_websockets = true') || !missingProviderRepairedConfig.includes('requires_openai_auth = false')) throw new Error('selftest: bare sks launch did not restore codex-lb provider block from stored env with OpenAI OAuth disabled');
+  if (!missingProviderLaunch.ok || missingProviderLaunch.status !== 'present' || missingProviderLaunch.chain_health?.status !== 'chain_ok' || missingProviderLaunchCalls.length !== 2 || !hasTopLevelCodexLbSelected(missingProviderRepairedConfig) || !missingProviderRepairedConfig.includes('[model_providers.codex-lb]') || !missingProviderRepairedConfig.includes('env_key = "CODEX_LB_API_KEY"') || !missingProviderRepairedConfig.includes('supports_websockets = true') || !missingProviderRepairedConfig.includes('requires_openai_auth = true') || !missingProviderRepairedConfig.includes('name = "openai"')) throw new Error('selftest: bare sks launch did not restore codex-lb provider block to current App contract');
   const chainCalls: any[] = [];
   const okChain = await checkCodexLbResponseChain(
     { base_url: 'https://lb.example.test/backend-api/codex', env_path: path.join(codexLbHome, '.codex', 'sks-codex-lb.env') },

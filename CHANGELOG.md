@@ -2,8 +2,32 @@
 
 ## [Unreleased]
 
+## [4.7.4] - 2026-07-01
 
+### Added
 
+- Add `sks codex-lb fast-check` and the `codex-lb:fast-mode-truth` gate so codex-lb Fast Mode cannot pass unless priority service-tier evidence is present.
+- Add Codex App status reporting for the requested native SKS menu surface, explicitly marking it unsupported by the current official Codex App extension APIs instead of faking a macOS menu.
+- Add a macOS right-side `SKS` menu bar companion installed by `sks doctor --fix` for codex-lb/OAuth switching, OpenRouter/GLM setup, Fast Check, SKS Version Check, Update SKS Now, settings, and Codex restart.
+
+### Changed
+
+- Update codex-lb provider generation to the current `Soju06/codex-lb` Codex App contract: `name = "openai"`, `wire_api = "responses"`, `supports_websockets = true`, and `requires_openai_auth = true`.
+- Make `sks codex-lb use-codex-lb` switch Codex App auth to the codex-lb API key, force Fast request intent, and restart Codex App on macOS unless `--no-restart-app` is passed. `--json` automation skips restart unless `--restart-app` is explicit.
+- Make bare `sks update` the official npm-latest update path; `sks update check` remains status-only and successful/current update runs refresh the macOS `SKS` menu bar companion.
+
+### Fixed
+
+- Stop treating a configured codex-lb env key or Fast UI config as proof that actual Fast Mode was used. Status now separates configured intent, requested priority tier, and actual priority-tier evidence.
+- Keep GLM/OpenRouter model profile and codex-lb key-entry diagnostics visible in `sks codex-app check` while detecting legacy codex-lb provider drift.
+
+### Verification
+
+- Added regression coverage for codex-lb priority request truth, actual-tier failure, provider contract drift, GLM profile/key UI status, and auth-mode switching without printing secrets.
+
+### Notes
+
+- 4.7.4 supersedes the local 4.7.3 candidate before publication so the codex-lb Fast Mode truth fix and Codex App provider/key UI diagnostics ship under the final patch version.
 
 
 ## [4.7.0] - 2026-06-30
