@@ -57,7 +57,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const actualCodexProbeRequested = flag(args, '--actual-codex') || flag(args, '--require-actual-codex') || Boolean(codexBin);
   const actualCodexProbeEnabled = deepDiagnostics || actualCodexProbeRequested;
   const requireActualCodexProbe = flag(args, '--require-actual-codex') || (deepDiagnostics && doctorFix);
-  const shouldEvaluateCodexAppUiRepair = deepDiagnostics || flag(args, '--repair-codex-app-ui');
+  const shouldEvaluateCodexAppUiRepair = doctorFix || deepDiagnostics || flag(args, '--repair-codex-app-ui');
   const shouldRunZellijRepair = deepDiagnostics || flag(args, '--repair-zellij') || flag(args, '--install-homebrew') || process.env.SKS_REQUIRE_ZELLIJ === '1';
   const nativeCapabilityDiagnosticsRequested = deepDiagnostics || flag(args, '--repair-native-capabilities');
   const doctorPhaseIds = doctorPhaseIdsForProfile(doctorProfile);

@@ -8,8 +8,8 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-doctor-fast-ui-'))
 const codexHome = path.join(root, 'home', '.codex')
 await fs.mkdir(path.join(root, '.codex'), { recursive: true })
 await fs.mkdir(codexHome, { recursive: true })
-await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n')
-await fs.writeFile(path.join(codexHome, 'config.toml'), '# SKS forced fast UI during legacy install\nmodel_provider = "codex-lb"\nservice_tier = "fast"\n[features]\nfast_mode = false # user disabled, must remain untouched\n\n[profiles.sks-fast-high]\nmodel = "gpt-5.5"\nservice_tier = "fast"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false\n')
+await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "medium"\nmodel_provider = "codex-lb"\n')
+await fs.writeFile(path.join(codexHome, 'config.toml'), '# SKS forced fast UI during legacy install\nmodel = "z-ai/glm-5.2"\nmodel_reasoning_effort = "xhigh"\nmodel_provider = "codex-lb"\nservice_tier = "fast"\n[features]\nfast_mode = false # user disabled, must remain untouched\n\n[profiles.sks-fast-high]\nmodel = "gpt-5.5"\nservice_tier = "fast"\n\n[model_providers.codex-lb]\nname = "OpenAI"\nbase_url = "https://lb.example.test/backend-api/codex"\nwire_api = "responses"\nenv_key = "CODEX_LB_API_KEY"\nsupports_websockets = true\nrequires_openai_auth = false\n')
 
 const plan = await repairCodexAppFastUi(root, { codexHome, apply: false })
 const repaired = await repairCodexAppFastUi(root, { codexHome, apply: true })
@@ -28,6 +28,10 @@ const ok = plan.fast_selector === 'manual_action_required'
   && repaired.fast_selector === 'repaired'
   && repaired.safe_auto_apply === true
   && backups.length >= 2
+  && !/^model\s*=/m.test(projectAfter.split(/\n\s*\[/)[0] || '')
+  && !/^model_reasoning_effort\s*=/m.test(projectAfter.split(/\n\s*\[/)[0] || '')
+  && !/^model\s*=/m.test(homeTopLevel)
+  && !/^model_reasoning_effort\s*=/m.test(homeTopLevel)
   && !/model_provider\s*=/.test(projectAfter)
   && !/service_tier\s*=/.test(homeTopLevel)
   && /fast_mode = false/.test(homeAfter)
