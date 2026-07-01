@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [4.7.4] - 2026-07-01
+## [4.8.0] - 2026-07-01
 
 ### Added
 
@@ -27,7 +27,7 @@
 
 ### Notes
 
-- 4.7.4 supersedes the local 4.7.3 candidate before publication so the codex-lb Fast Mode truth fix and Codex App provider/key UI diagnostics ship under the final patch version.
+- 4.8.0 supersedes the local 4.7.3/4.7.4 candidates before publication so the codex-lb Fast Mode truth fix, Codex App provider/key UI diagnostics, and visible SKS menu bar icon ship under the final minor version.
 
 
 ## [4.7.0] - 2026-06-30
