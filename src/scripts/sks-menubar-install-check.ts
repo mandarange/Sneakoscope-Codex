@@ -29,6 +29,8 @@ const generatedSourcePath = result.app_path ? path.join(path.dirname(result.app_
 const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourcePath, 'utf8').catch(() => '') : '';
 const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLength')
   && generatedSource.includes('button.title = "SKS"')
+  && generatedSource.includes('button.attributedTitle = NSAttributedString(string: "SKS"')
+  && generatedSource.includes('NSColor.labelColor')
   && generatedSource.includes('button.image = nil');
 // The status item must persist its user-arranged position across restarts so a
 // once-dragged item does not jump back behind the notch on the next doctor --fix.

@@ -335,6 +335,21 @@ for (const script of requiredRealScripts) {
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
 assertGate(!pkg.files?.includes('src'), 'package files must not include src runtime shadows');
+assertGate(
+  pkg.scripts?.['publish:prep-ignore-scripts'] === 'npm run prepublishOnly',
+  'publish:prep-ignore-scripts must run the prepublishOnly release gate before lifecycle-disabled publish',
+  { script: pkg.scripts?.['publish:prep-ignore-scripts'] || null }
+);
+assertGate(
+  String(pkg.scripts?.['publish:ignore-scripts'] || '').includes('npm run publish:prep-ignore-scripts'),
+  'publish:ignore-scripts must run publish:prep-ignore-scripts before npm publish --ignore-scripts',
+  { script: pkg.scripts?.['publish:ignore-scripts'] || null }
+);
+assertGate(
+  String(pkg.scripts?.['publish:ignore-scripts'] || '').includes('--ignore-scripts'),
+  'publish:ignore-scripts must keep npm lifecycle scripts disabled for the final publish',
+  { script: pkg.scripts?.['publish:ignore-scripts'] || null }
+);
 
 for (const file of requiredDocs) {
   const absolute = path.join(root, file);
