@@ -38,7 +38,10 @@ export function createReleaseGateHermeticEnv(input: {
       CODEX_HOME: input.gate.isolation.codex_home === 'temp' ? codexHome : process.env.CODEX_HOME,
       XDG_CACHE_HOME: cacheHome,
       SKS_DISABLE_REAL_MODEL_CALLS: input.gate.preset.includes('real-check') ? process.env.SKS_DISABLE_REAL_MODEL_CALLS || '0' : '1',
-      SKS_DISABLE_GLOBAL_CONFIG_MUTATION: '1'
+      SKS_DISABLE_GLOBAL_CONFIG_MUTATION: '1',
+      // Gates must never spawn a real GUI menu bar status item into the user's
+      // live session. Belt to the temp-path launch guard in installSksMenuBar.
+      SKS_SKIP_SKS_MENUBAR_LAUNCH: '1'
     }
   }
 }

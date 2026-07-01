@@ -1,6 +1,6 @@
 # Codex 0.139 Compatibility
 
-SKS 4.8.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while restoring the macOS SKS menu bar companion to a visible `SKS` label, preventing temp-home fixtures from taking over the shared LaunchAgent label, and giving first-command migration Doctor runs enough timeout headroom for successful macOS repair profiles.
+SKS 4.8.2 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while seeding the macOS SKS menu bar companion's preferred Control Center position so the `SKS` label stays visible ahead of crowded notch-adjacent status items, preserving explicit visibility with a stable autosave name, and preventing temp/hermetic fixtures from launching duplicate GUI status item processes.
 
 SKS 4.8.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening codex-lb App auth and Fast Mode truth: codex-lb provider config follows the current `name = "openai"` / `requires_openai_auth = true` contract, `sks codex-lb fast-check` separates requested priority from actual priority evidence, and native macOS SKS menu insertion remains blocked unless Codex exposes an official menu extension API.
 

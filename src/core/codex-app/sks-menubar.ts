@@ -40,6 +40,8 @@ export interface SksMenuBarInstallOptions {
 }
 
 const LABEL = 'com.sneakoscope.sks-menubar';
+const CONTROL_CENTER_DOMAIN = 'com.apple.controlcenter';
+const CONTROL_CENTER_PREFERRED_POSITION = 360;
 const MENU_ITEMS = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
@@ -153,8 +155,15 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
 
   const launchWanted = opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1';
   const launchAllowedForHome = path.resolve(home) === realUserHome();
+  const installUnderTempDir = isMenuBarInstallPathUnderTempDir(executablePath, env);
   if (launchWanted && !launchAllowedForHome) warnings.push('launch_skipped_non_user_home');
-  const launchRequested = launchWanted && launchAllowedForHome;
+  if (launchWanted && installUnderTempDir) warnings.push('launch_skipped_temp_install');
+  const launchRequested = launchWanted && launchAllowedForHome && !installUnderTempDir;
+  if (launchRequested) {
+    const preferredPosition = await seedMenuBarPreferredPosition(env);
+    if (preferredPosition.ok) actions.push('seeded SKS menu bar preferred position');
+    else warnings.push(preferredPosition.warning);
+  }
   const launch = launchRequested && launchctl
     ? await launchWithLaunchctl({ launchctl, open, appPath, executablePath, launchAgentPath })
     : {
@@ -218,6 +227,56 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
 
 async function fallbackTool(candidate: string): Promise<string | null> {
   return await exists(candidate).then((ok) => ok ? candidate : null).catch(() => null);
+}
+
+async function seedMenuBarPreferredPosition(env: NodeJS.ProcessEnv): Promise<{ ok: true } | { ok: false; warning: string }> {
+  const defaults = env.SKS_MENUBAR_DEFAULTS || await which('defaults').catch(() => null) || await fallbackTool('/usr/bin/defaults');
+  if (!defaults) return { ok: false, warning: 'defaults_missing_for_menubar_position_seed' };
+
+  // macOS stores status-item ordering hints in Control Center prefs keyed by
+  // autosaveName. Seeding this keeps SKS right of the notch-overflow zone.
+  const writes = [
+    ['write', CONTROL_CENTER_DOMAIN, `NSStatusItem Preferred Position ${LABEL}`, '-int', String(CONTROL_CENTER_PREFERRED_POSITION)],
+    ['write', CONTROL_CENTER_DOMAIN, `NSStatusItem Visible ${LABEL}`, '-bool', 'true'],
+    ['write', CONTROL_CENTER_DOMAIN, `NSStatusItem VisibleCC ${LABEL}`, '-bool', 'true']
+  ];
+  for (const args of writes) {
+    const result = await runProcess(defaults, args, {
+      timeoutMs: 10_000,
+      maxOutputBytes: 16 * 1024
+    }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+    if (result.code !== 0) return { ok: false, warning: 'menubar_position_seed_failed' };
+  }
+  return { ok: true };
+}
+
+/**
+ * Refuse to auto-launch a menu bar app whose executable lives under a temp dir.
+ * Release gates run in hermetic envs rooted at os.tmpdir()/SKS_TMP_DIR; without
+ * this guard a gate could spawn a real GUI status item that leaks into the
+ * user's live menu bar (duplicate `com.sneakoscope.sks-menubar` process). This
+ * is defense-in-depth behind SKS_SKIP_SKS_MENUBAR_LAUNCH and the home check.
+ */
+export function isMenuBarInstallPathUnderTempDir(target: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const resolved = path.resolve(target);
+  const roots = new Set<string>();
+  const addRoot = (value: string | undefined | null): void => {
+    if (!value) return;
+    const abs = path.resolve(value);
+    roots.add(abs);
+    // macOS resolves TMPDIR / os.tmpdir() (/var/folders/...) through a /private symlink.
+    if (abs.startsWith('/var/')) roots.add(path.resolve('/private', abs.slice(1)));
+    else if (abs.startsWith('/private/var/')) roots.add(abs.replace('/private', ''));
+  };
+  addRoot(os.tmpdir());
+  addRoot(env.TMPDIR);
+  addRoot(env.SKS_TMP_DIR);
+  for (const root of roots) {
+    if (resolved === root) return true;
+    const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+    if (resolved.startsWith(prefix)) return true;
+  }
+  return false;
 }
 
 function realUserHome(): string {
@@ -285,6 +344,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "com.sneakoscope.sks-menubar"
+        statusItem.isVisible = true
         if let button = statusItem.button {
             configureStatusButton(button)
         }
