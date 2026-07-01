@@ -45,6 +45,7 @@ const CONTROL_CENTER_PREFERRED_POSITION = 360;
 const MENU_ITEMS = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
+  'Set codex-lb Domain and Key',
   'Set OpenRouter Key and GLM Profiles',
   'Fast Check',
   'SKS Version Check',
@@ -334,7 +335,7 @@ func runInTerminal(_ command: String) {
         .replacingOccurrences(of: "\\\\", with: "\\\\\\\\")
         .replacingOccurrences(of: "\\\"", with: "\\\\\\\"")
     let script = "tell application \\"Terminal\\" to activate\\n" +
-        "tell application \\"Terminal\\" to do script \\"\(escaped)\\""
+        "tell application \\"Terminal\\" to do script \\"\\(escaped)\\""
     runDetached("/usr/bin/osascript", ["-e", script])
 }
 
@@ -353,6 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         add(menu, "Use codex-lb", #selector(useCodexLb))
         add(menu, "Use ChatGPT OAuth", #selector(useChatGptOAuth))
+        add(menu, "Set codex-lb Domain and Key", #selector(setCodexLbDomainAndKey))
         menu.addItem(NSMenuItem.separator())
         add(menu, "Set OpenRouter Key and GLM Profiles", #selector(setOpenRouterKey))
         add(menu, "Fast Check", #selector(fastCheck))
@@ -398,6 +400,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func useChatGptOAuth() {
         runSks(["codex-lb", "use-oauth"])
+    }
+
+    @objc func setCodexLbDomainAndKey() {
+        runSks(["codex-lb", "setup"])
     }
 
     @objc func setOpenRouterKey() {

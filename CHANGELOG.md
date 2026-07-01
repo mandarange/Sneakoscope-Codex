@@ -3,6 +3,17 @@
 ## [Unreleased]
 
 
+## [4.8.4] - 2026-07-01
+
+### Fixed
+
+- Fix SKS menu bar Terminal actions so they send the generated command instead of the literal `(escaped)` placeholder.
+- Add a visible `Set codex-lb Domain and Key` menu action that opens the interactive `sks codex-lb setup` flow for entering the codex-lb base URL/domain and API key.
+
+### Verification
+
+- Extend the SKS menu bar install gate to require Swift Terminal command interpolation and the codex-lb setup menu action.
+
 ## [4.8.3] - 2026-07-01
 
 ### Fixed
