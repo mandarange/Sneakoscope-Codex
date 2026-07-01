@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.8.4 keeps release proof truth aligned with the 4.8.4 package metadata, built output, managed asset metadata, SKS menu bar install evidence, Terminal action interpolation evidence, codex-lb setup menu evidence, and publish readiness evidence before publication.
+
+SKS 4.8.4 release proof truth requires proof that SKS menu bar Terminal actions no longer execute `(escaped)` and that codex-lb base URL/API-key setup is reachable from the menu without exposing the key in generated command strings.
+
 SKS 4.8.3 keeps release proof truth aligned with the 4.8.3 package metadata, built output, managed asset metadata, SKS menu bar install evidence, LaunchAgent lifecycle evidence, idle process sample evidence, Computer Use visual evidence, and publish readiness evidence before publication.
 
 SKS 4.8.3 release proof truth requires proof that the macOS menu bar companion is event-driven while idle and that the generated LaunchAgent removes unconditional `KeepAlive`, uses `RunAtLoad` only for login/bootstrap launch, and declares `ProcessType=Interactive` for the user-facing status item.

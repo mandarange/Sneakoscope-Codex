@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.8.4 is the macOS menu bar action repair patch after 4.8.3. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, managed asset metadata, SKS menu bar install coverage, live menu action evidence, and publish readiness gates to agree on 4.8.4 before publication.
+
+4.8.4 release readiness adds proof that menu actions preserve Swift interpolation for Terminal commands instead of sending the literal `(escaped)` placeholder, and that the right-side SKS menu exposes a codex-lb domain/API-key setup action backed by `sks codex-lb setup`.
+
 SKS 4.8.3 is the macOS menu bar lifecycle/performance patch after 4.8.2. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, managed asset metadata, SKS menu bar install coverage, live LaunchAgent evidence, idle process sample evidence, and publish readiness gates to agree on 4.8.3 before publication.
 
 4.8.3 release readiness adds proof that the SKS menu bar companion has no app-side hot loop, timer, polling, crash-log churn, or growing stderr log, and that its LaunchAgent no longer carries unconditional `KeepAlive` while explicitly using `ProcessType=Interactive` for the user-facing status item.

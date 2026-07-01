@@ -37,12 +37,17 @@ const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLen
 // once-dragged item does not jump back behind the notch on the next doctor --fix.
 const hasAutosaveNameSource = generatedSource.includes('statusItem.autosaveName = "com.sneakoscope.sks-menubar"');
 const hasExplicitVisibleSource = generatedSource.includes('statusItem.isVisible = true');
+const terminalCommandLine = generatedSource.split(/\r?\n/)
+  .find((line) => line.includes('do script') && line.includes('escaped')) || '';
+const hasTerminalCommandInterpolation = terminalCommandLine.includes(String.raw`\(escaped)`)
+  && !terminalCommandLine.includes(String.raw`\"(escaped)\"`);
 const hasNoUnconditionalKeepAlive = !launchAgentSource.includes('<key>KeepAlive</key>');
 const hasInteractiveProcessType = launchAgentSource.includes('<key>ProcessType</key>')
   && launchAgentSource.includes('<string>Interactive</string>');
 const expectedMenuItems = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
+  'Set codex-lb Domain and Key',
   'Set OpenRouter Key and GLM Profiles',
   'Fast Check',
   'SKS Version Check',
@@ -77,6 +82,7 @@ const ok = process.platform === 'darwin'
     && hasVisibleLabelSource
     && hasAutosaveNameSource
     && hasExplicitVisibleSource
+    && hasTerminalCommandInterpolation
     && hasNoUnconditionalKeepAlive
     && hasInteractiveProcessType
     && launchSkippedForTempHome
@@ -96,9 +102,11 @@ const report = {
   launch_agent_exists: launchAgentExists,
   action_script_exists: actionScriptExists,
   generated_source_path: generatedSourcePath,
+  terminal_command_line: terminalCommandLine,
   has_visible_label_source: hasVisibleLabelSource,
   has_autosave_name_source: hasAutosaveNameSource,
   has_explicit_visible_source: hasExplicitVisibleSource,
+  has_terminal_command_interpolation: hasTerminalCommandInterpolation,
   has_no_unconditional_keepalive: hasNoUnconditionalKeepAlive,
   has_interactive_process_type: hasInteractiveProcessType,
   launch_skipped_for_temp_home: launchSkippedForTempHome,
