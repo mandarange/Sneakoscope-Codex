@@ -19,10 +19,7 @@ const generatedSourcePath = result.app_path ? path.join(path.dirname(result.app_
 const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourcePath, 'utf8').catch(() => '') : '';
 const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLength')
   && generatedSource.includes('button.title = "SKS"')
-  && generatedSource.includes('button.imagePosition = .imageLeading');
-const hasVisibleIconSource = generatedSource.includes('NSStatusItem.variableLength')
-  && generatedSource.includes('s.circle.fill')
-  && generatedSource.includes('configureStatusButton');
+  && generatedSource.includes('button.image = nil');
 const expectedMenuItems = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
@@ -44,7 +41,6 @@ const ok = process.platform === 'darwin'
     && actionScriptExists
     && hasExpectedItems
     && hasVisibleLabelSource
-    && hasVisibleIconSource
     && launchSkippedForTempHome
   : result.ok === true && result.status === 'unsupported_platform';
 
@@ -58,7 +54,6 @@ const report = {
   action_script_exists: actionScriptExists,
   generated_source_path: generatedSourcePath,
   has_visible_label_source: hasVisibleLabelSource,
-  has_visible_icon_source: hasVisibleIconSource,
   launch_skipped_for_temp_home: launchSkippedForTempHome,
   expected_menu_items: expectedMenuItems,
   missing_expected_items: missingExpectedItems,
