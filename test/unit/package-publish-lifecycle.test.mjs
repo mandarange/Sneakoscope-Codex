@@ -31,7 +31,8 @@ test('publish lifecycle requires the full release stamp for publish readiness', 
   assert.match(scripts['publish:dry'], /release-check-stamp\.js verify/);
   assert.match(scripts['publish:dry'], /--dry-run/);
   assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
-  assert.match(scripts['publish:ignore-scripts'], /npm run prepublishOnly/);
+  assert.equal(scripts['publish:prep-ignore-scripts'], 'npm run prepublishOnly');
+  assert.match(scripts['publish:ignore-scripts'], /npm run publish:prep-ignore-scripts/);
   assert.match(scripts['publish:ignore-scripts'], /--ignore-scripts/);
   assert.doesNotMatch(scripts['publish:ignore-scripts'], /--tag rc/);
   assert.equal(scripts['publish:npm'], 'npm run publish:ignore-scripts');

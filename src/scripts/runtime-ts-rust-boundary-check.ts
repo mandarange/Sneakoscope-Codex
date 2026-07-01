@@ -16,7 +16,7 @@ assertGate(!/cargo|rustc/.test(readText('src/scripts/build-dist.ts')), 'build-di
 assertGate(!/cargo|rustc/.test(readText('src/scripts/clean-dist.ts')), 'clean-dist must not invoke cargo/rustc');
 
 const pkg = readJson('package.json');
-for (const s of ['prepack', 'prepublishOnly', 'publish:dry', 'publish:ignore-scripts', 'publish:npm']) {
+for (const s of ['prepack', 'prepublishOnly', 'publish:dry', 'publish:prep-ignore-scripts', 'publish:ignore-scripts', 'publish:npm']) {
   assertGate(!String(pkg.scripts?.[s] || '').includes('cargo'), `publish_script_compiles_rust:${s}`);
 }
 

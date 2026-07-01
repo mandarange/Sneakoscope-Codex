@@ -369,7 +369,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func configureStatusButton(_ button: NSStatusBarButton) {
         button.image = nil
         button.title = "SKS"
-        button.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        let titleFont = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        let titleAttributes: [NSAttributedString.Key: Any] = [
+            .font: titleFont,
+            .foregroundColor: NSColor.labelColor
+        ]
+        button.font = titleFont
+        button.attributedTitle = NSAttributedString(string: "SKS", attributes: titleAttributes)
         button.toolTip = "SKS - Sneakoscope Codex settings"
         button.setAccessibilityLabel("SKS")
         button.setAccessibilityHelp("Open SKS menu")

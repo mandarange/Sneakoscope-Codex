@@ -235,9 +235,11 @@ publish-capable token; a raw `NPM_TOKEN` environment variable alone is not enoug
 unless npm config references it.
 
 The operator-facing publish entrypoint is `npm run publish:npm` (or
-`npm run release:publish`), which runs `prepublishOnly` and then calls
-`npm publish --ignore-scripts`. That keeps the publish path strict even when the
-final npm lifecycle hooks are disabled on purpose.
+`npm run release:publish`), which runs `npm run publish:prep-ignore-scripts`
+and then calls `npm publish --ignore-scripts`. That prep command runs
+`prepublishOnly` explicitly before the final npm lifecycle hooks are disabled on
+purpose. Operators who intentionally run `npm publish --ignore-scripts`
+directly must run `npm run publish:prep-ignore-scripts` immediately before it.
 
 ```bash
 npm run insane-search:provider-interface

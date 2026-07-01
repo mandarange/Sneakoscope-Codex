@@ -9,7 +9,9 @@
 
 - Seed the macOS Control Center preferred position for the SKS menu bar item so the `SKS` label stays visible ahead of crowded notch-adjacent status items.
 - Persist and force the SKS status item visible with a stable autosave name after menu bar restarts.
+- Force the SKS menu bar label through an attributed title so macOS renders the text even when a crowded status area reorders the item near the notch.
 - Prevent temp and hermetic release fixtures from launching or leaking duplicate SKS menu bar GUI processes.
+- Expose `publish:prep-ignore-scripts` so lifecycle-disabled npm publication can run release checks explicitly before `npm publish --ignore-scripts`.
 - Keep release metadata aligned after the 4.8.2 version bump.
 
 ## [4.8.1] - 2026-07-01
