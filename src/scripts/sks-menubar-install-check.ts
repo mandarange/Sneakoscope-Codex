@@ -6,7 +6,7 @@ import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-check-'));
 const result = await installSksMenuBar({
   apply: true,
-  launch: false,
+  launch: true,
   home: temp,
   root: temp,
   sksEntry: path.join(process.cwd(), 'dist', 'bin', 'sks.js')
@@ -17,7 +17,10 @@ const launchAgentExists = result.launch_agent_path ? await exists(result.launch_
 const actionScriptExists = result.action_script_path ? await exists(result.action_script_path) : false;
 const generatedSourcePath = result.app_path ? path.join(path.dirname(result.app_path), 'SKSMenuBar.swift') : null;
 const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourcePath, 'utf8').catch(() => '') : '';
-const hasVisibleIconSource = generatedSource.includes('NSStatusItem.squareLength')
+const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLength')
+  && generatedSource.includes('button.title = "SKS"')
+  && generatedSource.includes('button.imagePosition = .imageLeading');
+const hasVisibleIconSource = generatedSource.includes('NSStatusItem.variableLength')
   && generatedSource.includes('s.circle.fill')
   && generatedSource.includes('configureStatusButton');
 const expectedMenuItems = [
@@ -30,6 +33,9 @@ const expectedMenuItems = [
 ];
 const missingExpectedItems = expectedMenuItems.filter((item) => !result.menu_items.includes(item));
 const hasExpectedItems = missingExpectedItems.length === 0;
+const launchSkippedForTempHome = result.launch?.requested === false
+  && result.launch?.method === 'skipped'
+  && result.warnings.includes('launch_skipped_non_user_home');
 const ok = process.platform === 'darwin'
   ? result.ok === true
     && result.status === 'installed_launch_skipped'
@@ -37,7 +43,9 @@ const ok = process.platform === 'darwin'
     && launchAgentExists
     && actionScriptExists
     && hasExpectedItems
+    && hasVisibleLabelSource
     && hasVisibleIconSource
+    && launchSkippedForTempHome
   : result.ok === true && result.status === 'unsupported_platform';
 
 const report = {
@@ -49,7 +57,9 @@ const report = {
   launch_agent_exists: launchAgentExists,
   action_script_exists: actionScriptExists,
   generated_source_path: generatedSourcePath,
+  has_visible_label_source: hasVisibleLabelSource,
   has_visible_icon_source: hasVisibleIconSource,
+  launch_skipped_for_temp_home: launchSkippedForTempHome,
   expected_menu_items: expectedMenuItems,
   missing_expected_items: missingExpectedItems,
   has_expected_items: hasExpectedItems,

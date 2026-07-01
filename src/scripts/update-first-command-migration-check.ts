@@ -9,6 +9,7 @@ assertGate(router.includes('ensureCurrentMigrationBeforeCommand'), 'router must 
 assertGate(helper.includes('INSTALLATION_EPOCH_SCHEMA') && helper.includes('installationEpochPath'), 'migration helper must keep a persistent installation epoch');
 assertGate(helper.includes('projectUpdateMigrationReceiptPath'), 'migration helper must keep a project receipt');
 assertGate(helper.includes("'--profile', 'migration'") && helper.includes("'--machine-only'") && helper.includes("'--report-file'"), 'first normal command must repair through package-local migration Doctor machine report before continuing');
+assertGate(helper.includes('timeoutMs: 30_000'), 'first normal command migration Doctor timeout must allow slow but successful macOS repair profiles');
 assertGate(helper.includes('isProjectReceiptCurrentForEpoch'), 'project receipts must be compared against the current installation epoch');
 assertGate(helper.includes('runUpdateRetentionCleanup') && helper.includes('retention_cleanup'), 'project update migration receipt must run mission retention cleanup and record its receipt');
 assertGate(helper.includes('clearPendingUpdateMigration') && helper.includes('one project must not consume global migration state'), 'legacy clear helper must preserve the persistent epoch contract');
