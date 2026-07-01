@@ -3,6 +3,18 @@
 ## [Unreleased]
 
 
+## [4.8.3] - 2026-07-01
+
+### Fixed
+
+- Remove unconditional LaunchAgent `KeepAlive` from the macOS SKS menu bar companion so choosing `Quit SKS Menu`, transient exits, or failed launches do not immediately respawn and create background churn.
+- Mark the SKS menu bar LaunchAgent as `ProcessType=Interactive`, matching the user-facing status item instead of leaving launchd to classify the helper as a daemon.
+
+### Verification
+
+- Extend the SKS menu bar install gate to require no `KeepAlive` key and an explicit interactive process type in the generated LaunchAgent plist.
+- Validate that the live SKS menu bar sample is idle in the AppKit event loop, with no timers, polling loop, crash logs, or growing menu bar logs.
+
 ## [4.8.2] - 2026-07-01
 
 ### Fixed
