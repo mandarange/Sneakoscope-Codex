@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+
+## [4.8.2] - 2026-07-01
+
+### Fixed
+
+- Seed the macOS Control Center preferred position for the SKS menu bar item so the `SKS` label stays visible ahead of crowded notch-adjacent status items.
+- Persist and force the SKS status item visible with a stable autosave name after menu bar restarts.
+- Prevent temp and hermetic release fixtures from launching or leaking duplicate SKS menu bar GUI processes.
+- Keep release metadata aligned after the 4.8.2 version bump.
+
 ## [4.8.1] - 2026-07-01
 
 ### Fixed

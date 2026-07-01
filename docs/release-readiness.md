@@ -1,8 +1,8 @@
 # Release Readiness
 
-SKS 4.8.1 is the macOS menu bar visibility, LaunchAgent fixture isolation, and first-command migration timeout patch after 4.8.0. It requires package, lockfile, CLI constants, README, changelog, version-gated release docs, built output, managed asset metadata, SKS menu bar install coverage, first-command migration coverage, Computer Use visual evidence, and publish dry-run evidence to agree on 4.8.1 before publication.
+SKS 4.8.2 is the macOS menu bar preferred-position and fixture isolation patch after 4.8.1. It requires package, lockfile, CLI constants, README, changelog, version-gated release docs, built output, managed asset metadata, SKS menu bar install coverage, Control Center preferred-position evidence, Computer Use visual evidence, and publish dry-run evidence to agree on 4.8.2 before publication.
 
-4.8.1 release readiness adds proof that the right-side macOS SKS menu bar companion uses a visible text-only `SKS` label instead of an icon-only square status item that can be hard to identify after update, that explicit temp-home and temp-`HOME` Doctor/release fixtures cannot bootstrap the shared LaunchAgent label over the real user menu bar process, and that first-command migration Doctor runs have enough timeout headroom for successful macOS repair profiles.
+4.8.2 release readiness adds proof that the right-side macOS SKS menu bar companion seeds a stable Control Center preferred position so the text-only `SKS` label stays visible ahead of crowded notch-adjacent status items, forces visibility through a stable autosave name, and prevents temp-home, temp-`HOME`, and hermetic release fixtures from bootstrapping duplicate GUI status item processes.
 
 SKS 4.8.0 is the codex-lb App-auth and Fast Mode truth patch after 4.7.0. It requires package, lockfile, CLI constants, README, changelog, version-gated release docs, built output, managed asset metadata, codex-lb provider-contract coverage, codex-lb Fast Mode truth coverage, Codex App provider/GLM/key UI coverage, restart/auth-switch coverage, and existing 4.7.x release gates to agree on 4.8.0 before publication.
 

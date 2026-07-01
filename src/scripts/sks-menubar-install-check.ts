@@ -5,19 +5,21 @@ import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-check-'));
 const envHomeTemp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-env-home-check-'));
+const launchGuardEnv = { ...process.env, SKS_SKIP_SKS_MENUBAR_LAUNCH: '0' };
 const result = await installSksMenuBar({
   apply: true,
   launch: true,
   home: temp,
   root: temp,
-  sksEntry: path.join(process.cwd(), 'dist', 'bin', 'sks.js')
+  sksEntry: path.join(process.cwd(), 'dist', 'bin', 'sks.js'),
+  env: launchGuardEnv
 });
 const envHomeResult = await installSksMenuBar({
   apply: true,
   launch: true,
   root: envHomeTemp,
   sksEntry: path.join(process.cwd(), 'dist', 'bin', 'sks.js'),
-  env: { ...process.env, HOME: envHomeTemp }
+  env: { ...launchGuardEnv, HOME: envHomeTemp }
 });
 
 const executableExists = result.executable_path ? await exists(result.executable_path) : false;
@@ -28,6 +30,10 @@ const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourceP
 const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLength')
   && generatedSource.includes('button.title = "SKS"')
   && generatedSource.includes('button.image = nil');
+// The status item must persist its user-arranged position across restarts so a
+// once-dragged item does not jump back behind the notch on the next doctor --fix.
+const hasAutosaveNameSource = generatedSource.includes('statusItem.autosaveName = "com.sneakoscope.sks-menubar"');
+const hasExplicitVisibleSource = generatedSource.includes('statusItem.isVisible = true');
 const expectedMenuItems = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
@@ -44,6 +50,15 @@ const launchSkippedForTempHome = result.launch?.requested === false
 const launchSkippedForEnvHome = envHomeResult.launch?.requested === false
   && envHomeResult.launch?.method === 'skipped'
   && envHomeResult.warnings.includes('launch_skipped_non_user_home');
+// Temp-path guard: a temp-rooted install must never request a launch, even if
+// some caller forgets SKS_SKIP_SKS_MENUBAR_LAUNCH. Both fixtures live under
+// os.tmpdir(), so both results must carry the temp-install skip warning.
+const launchSkippedForTempInstall = result.launch?.requested === false
+  && result.warnings.includes('launch_skipped_temp_install')
+  && envHomeResult.launch?.requested === false
+  && envHomeResult.warnings.includes('launch_skipped_temp_install');
+const preferredPositionSkippedForTempInstall = !result.actions.includes('seeded SKS menu bar preferred position')
+  && !envHomeResult.actions.includes('seeded SKS menu bar preferred position');
 const ok = process.platform === 'darwin'
   ? result.ok === true
     && result.status === 'installed_launch_skipped'
@@ -54,8 +69,12 @@ const ok = process.platform === 'darwin'
     && actionScriptExists
     && hasExpectedItems
     && hasVisibleLabelSource
+    && hasAutosaveNameSource
+    && hasExplicitVisibleSource
     && launchSkippedForTempHome
     && launchSkippedForEnvHome
+    && launchSkippedForTempInstall
+    && preferredPositionSkippedForTempInstall
   : result.ok === true && result.status === 'unsupported_platform';
 
 const report = {
@@ -70,8 +89,12 @@ const report = {
   action_script_exists: actionScriptExists,
   generated_source_path: generatedSourcePath,
   has_visible_label_source: hasVisibleLabelSource,
+  has_autosave_name_source: hasAutosaveNameSource,
+  has_explicit_visible_source: hasExplicitVisibleSource,
   launch_skipped_for_temp_home: launchSkippedForTempHome,
   launch_skipped_for_env_home: launchSkippedForEnvHome,
+  launch_skipped_for_temp_install: launchSkippedForTempInstall,
+  preferred_position_skipped_for_temp_install: preferredPositionSkippedForTempInstall,
   expected_menu_items: expectedMenuItems,
   missing_expected_items: missingExpectedItems,
   has_expected_items: hasExpectedItems,
