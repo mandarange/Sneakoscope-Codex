@@ -44,6 +44,9 @@ const CORE_SKILL_DEFINITIONS: Array<{
   route: SksCoreSkillRoute;
   purpose: string;
   when: string;
+  workflow?: string;
+  safety?: string;
+  cli?: string;
   evidence: string;
   fallback: string;
 }> = [
@@ -132,9 +135,12 @@ const CORE_SKILL_DEFINITIONS: Array<{
     canonical_name: 'search-visibility-core',
     display_name: 'search-visibility-core',
     route: '$SEO-GEO-OPTIMIZER',
-    purpose: 'provide the shared search-visibility kernel for SEO and GEO audit, plan, explicit apply, verify, rollback, and Completion Proof without ranking, traffic, or citation guarantees.',
-    when: 'Use when $SEO-GEO-OPTIMIZER or sks seo-geo-optimizer needs typed mode-specific evidence, gates, artifacts, or safe mutation planning.',
-    evidence: 'search-visibility artifacts, seo-gate.json or geo-gate.json, mutation-plan.json, rollback-manifest.json, verification-report.json, and completion-proof.json.',
+    purpose: 'provide the shared search-visibility kernel for SEO and GEO audit, plan, explicit apply, verify, rollback, and Completion Proof without ranking, traffic, indexing, rich-result, answer inclusion, or AI citation guarantees.',
+    when: 'Use when $SEO-GEO-OPTIMIZER or sks seo-geo-optimizer needs typed mode-specific evidence, gates, artifacts, or safe mutation planning for websites, docs, packages, README/npm/GitHub surfaces, or storefront SEO architecture.',
+    workflow: 'Read the touched search-visibility flow before planning: SEO constants/source-of-truth, metadata builders, route topology, sitemap/robots, llms.txt, structured-data builders, target route files, internal-link sources, and SEO tests. Inventory canonical URLs, alternates/hreflang, crawlable localized sitemap rows, JSON-LD, crawler hints, claim evidence, and verification commands before compiling mutation-plan.json.',
+    safety: 'Treat SEO/GEO as an architecture compiler, not scattered page copy. Prefer existing project helpers and constants; never duplicate public route strings across files. JSON-LD must describe visible or source-of-truth facts only. Do not invent prices, reviews, ratings, availability, shipping terms, rankings, traffic, rich-result eligibility, indexing, or AI-answer outcomes.',
+    cli: 'sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo',
+    evidence: 'search-visibility/intake.json, adapter-detection.json, site-inventory.json, route-graph.json, robots-policy.json, structured-data-ledger.json, sitemap coverage, llms.txt plan/evidence, mutation-plan.json, rollback-manifest.json, verification-report.json, seo-gate.json or geo-gate.json, and completion-proof.json.',
     fallback: 'Keep unsupported frameworks plan-only, record unverified production/browser/Search Console/AI citation outcomes, and never invent guarantee evidence.'
   },
   {
@@ -143,8 +149,11 @@ const CORE_SKILL_DEFINITIONS: Array<{
     display_name: 'seo-geo-optimizer',
     route: '$SEO-GEO-OPTIMIZER',
     purpose: 'run the unified SEO/GEO optimizer route for Search Engine Optimization and Generative Engine Optimization, not geolocation or GeoIP, with no ranking, traffic, indexing, rich-result, answer inclusion, or AI citation guarantee.',
-    when: 'Use the CLI entrypoint: sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo for SEO and GEO visibility work.',
-    evidence: 'site inventory, route graph, seo-findings.json or geo-findings.json, claim-evidence-ledger.json, ai-crawler-policy.json, llms-txt-plan.json, verification report, route gate, and Completion Proof.',
+    when: 'Use the single CLI entrypoint: sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo for SEO and GEO visibility work. Legacy seo-geo wording, SEO, GEO, search visibility, AI visibility, sitemap, canonical, JSON-LD, llms.txt, metadata, keyword/intent, or crawler-policy requests should converge here.',
+    workflow: 'Follow the architecture-first playbook: identify target intent and market, locate the central SEO source of truth, update/reuse canonical helpers before page code, build metadata through project helpers, emit independently crawlable localized sitemap rows plus alternates when applicable, add factual JSON-LD only from visible/source data, add internal crawl links, update AI/GEO documentation surfaces such as llms.txt when strategic, add focused tests/guards, then verify. For CELIMAX-style storefronts, prefer STOREFRONT_PATH, buildSeoMetadata, buildSeoPath, buildSeoUrl, app/sitemap.ts, proxy.ts, public/llms.txt, and market-specific tests when those files exist.',
+    safety: 'Separate implemented, verified, and unverified claims. Competitor/retailer intent pages must be factual, helpful, and non-deceptive; block keyword stuffing, doorway pages, hidden AI-only text, fake ratings/reviews/prices/availability/shipping, competitor defamation, and unsupported "official retailer", "cheapest", "best", "exclusive", first-page, traffic, Search Console, or AI-citation claims.',
+    cli: 'sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo',
+    evidence: 'SEO intent map, canonical URL map, metadata summary, JSON-LD summary, sitemap coverage summary, internal link plan, unsupported claims ledger, Search Console/analytics follow-up plan, site inventory, route graph, seo-findings.json or geo-findings.json, claim-evidence-ledger.json, ai-crawler-policy.json, llms-txt-plan.json, verification report, route gate, and Completion Proof.',
     fallback: 'Do not auto-allow training crawlers or fabricate AI answer visibility; mark missing live outcomes unverified and keep recovery on the unified optimizer route.'
   }
 ];
@@ -183,9 +192,14 @@ export function renderCoreSkillTemplate(name: string): string {
     `Command: ${skill.route}`,
     `Purpose: ${skill.purpose}`,
     `Use when: ${skill.when}`,
+    `Workflow: ${skill.workflow || 'Run the selected route lifecycle, read source evidence before mutation planning, keep changes scoped, verify with the cheapest sufficient check, and record blockers honestly.'}`,
+    `CLI entrypoint: ${skill.cli || skill.route}`,
     `Lean policy: ${lean.policy_id}/${lean.policy_hash}`,
+    `Safety: ${skill.safety || 'Preserve user-authored content, keep route state bounded, avoid unsupported guarantees, and stop on hard blockers instead of fabricating fallback behavior.'}`,
+    `Evidence/artifacts: ${skill.evidence}`,
     `Proof paths: ${skill.evidence}`,
     'Safety rules: preserve user-authored skills, keep route state bounded, and stop on hard blockers instead of fabricating fallback behavior.',
+    `Failure/recovery: ${skill.fallback}`,
     `Failure recovery: ${skill.fallback}`,
     ''
   ].join('\n');
