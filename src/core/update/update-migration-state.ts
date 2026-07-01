@@ -346,7 +346,7 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
         SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
         SKS_DISABLE_UPDATE_CHECK: '1'
       },
-      timeoutMs: 15_000,
+      timeoutMs: 30_000,
       maxOutputBytes: 32 * 1024
     });
     if (!doctor.ok) {

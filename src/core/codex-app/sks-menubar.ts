@@ -151,7 +151,10 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   await writeTextAtomic(launchAgentPath, launchAgentSource(executablePath, installDir));
   actions.push(`wrote ${launchAgentPath}`);
 
-  const launchRequested = opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1';
+  const launchWanted = opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1';
+  const launchAllowedForHome = path.resolve(home) === path.resolve(os.homedir());
+  if (launchWanted && !launchAllowedForHome) warnings.push('launch_skipped_non_user_home');
+  const launchRequested = launchWanted && launchAllowedForHome;
   const launch = launchRequested && launchctl
     ? await launchWithLaunchctl({ launchctl, open, appPath, executablePath, launchAgentPath })
     : {
@@ -271,7 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             configureStatusButton(button)
         }
@@ -296,11 +299,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if #available(macOS 11.0, *), let image = NSImage(systemSymbolName: "s.circle.fill", accessibilityDescription: "SKS") {
             image.isTemplate = true
             button.image = image
-            button.imagePosition = .imageOnly
-            button.title = ""
-        } else {
-            button.title = "S"
+            button.imagePosition = .imageLeading
         }
+        button.title = "SKS"
+        button.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         button.toolTip = "SKS - Sneakoscope Codex settings"
         button.setAccessibilityLabel("SKS")
         button.setAccessibilityHelp("Open SKS menu")
