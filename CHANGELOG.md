@@ -6,13 +6,14 @@
 
 ### Fixed
 
-- Restore the macOS menu bar companion to a visible `SKS` label with a leading status icon so it remains easy to find after updating from 4.8.0.
+- Restore the macOS menu bar companion to a visible text-only `SKS` label so it remains easy to find after updating from 4.8.0.
 - Give the first-command migration Doctor enough time to finish successful macOS repair profiles instead of leaving a stale `doctor_migration_profile_failed` receipt.
 - Prevent temp-home Doctor/release fixtures from bootstrapping the shared macOS SKS LaunchAgent label over the real user menu bar process.
 
 ### Verification
 
-- Update the SKS menu bar install check to require the visible `SKS` label, variable-length status item, and expected menu actions before release.
+- Update the SKS menu bar install check to require the visible text-only `SKS` label, variable-length status item, and expected menu actions before release.
+- Require SKS menu bar install checks to skip launch from temp homes.
 - Add a migration gate check for the longer first-command Doctor timeout.
 
 ## [4.8.0] - 2026-07-01

@@ -2,7 +2,7 @@
 
 SKS 4.8.1 keeps release proof truth aligned with the 4.8.1 package metadata, built output, managed asset metadata, SKS menu bar install evidence, LaunchAgent fixture isolation evidence, first-command migration evidence, Computer Use visual evidence, and publish dry-run evidence before publication.
 
-SKS 4.8.1 release proof truth also requires proof that the macOS menu bar companion presents a visible `SKS` label with a leading status icon instead of relying on an icon-only status item, that temp-home fixtures do not take over the user LaunchAgent label, and that the first-command migration Doctor timeout no longer blocks successful macOS repair profiles.
+SKS 4.8.1 release proof truth also requires proof that the macOS menu bar companion presents a visible text-only `SKS` label instead of relying on an icon-only status item, that temp-home fixtures do not take over the user LaunchAgent label, and that the first-command migration Doctor timeout no longer blocks successful macOS repair profiles.
 
 SKS 4.8.0 keeps release proof truth aligned with the 4.8.0 package metadata, built output, managed asset metadata, codex-lb provider-contract evidence, codex-lb Fast Mode requested-vs-actual evidence, Codex App GLM profile/key setup evidence, Codex App native menu unsupported evidence, auth-switch restart evidence, and the existing 4.7.x release gate evidence before publication.
 

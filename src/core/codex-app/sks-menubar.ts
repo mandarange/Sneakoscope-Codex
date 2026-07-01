@@ -296,11 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func configureStatusButton(_ button: NSStatusBarButton) {
-        if #available(macOS 11.0, *), let image = NSImage(systemSymbolName: "s.circle.fill", accessibilityDescription: "SKS") {
-            image.isTemplate = true
-            button.image = image
-            button.imagePosition = .imageLeading
-        }
+        button.image = nil
         button.title = "SKS"
         button.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         button.toolTip = "SKS - Sneakoscope Codex settings"
