@@ -152,7 +152,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   actions.push(`wrote ${launchAgentPath}`);
 
   const launchWanted = opts.launch !== false && env.SKS_SKIP_SKS_MENUBAR_LAUNCH !== '1';
-  const launchAllowedForHome = path.resolve(home) === path.resolve(os.homedir());
+  const launchAllowedForHome = path.resolve(home) === realUserHome();
   if (launchWanted && !launchAllowedForHome) warnings.push('launch_skipped_non_user_home');
   const launchRequested = launchWanted && launchAllowedForHome;
   const launch = launchRequested && launchctl
@@ -218,6 +218,16 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
 
 async function fallbackTool(candidate: string): Promise<string | null> {
   return await exists(candidate).then((ok) => ok ? candidate : null).catch(() => null);
+}
+
+function realUserHome(): string {
+  try {
+    const userHome = os.userInfo().homedir;
+    if (userHome) return path.resolve(userHome);
+  } catch {
+    // Fall back below for platforms where userInfo is unavailable.
+  }
+  return path.resolve(os.homedir());
 }
 
 function resolveSksEntry(explicit?: string): string {
