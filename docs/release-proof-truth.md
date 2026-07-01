@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.8.3 keeps release proof truth aligned with the 4.8.3 package metadata, built output, managed asset metadata, SKS menu bar install evidence, LaunchAgent lifecycle evidence, idle process sample evidence, Computer Use visual evidence, and publish readiness evidence before publication.
+
+SKS 4.8.3 release proof truth requires proof that the macOS menu bar companion is event-driven while idle and that the generated LaunchAgent removes unconditional `KeepAlive`, uses `RunAtLoad` only for login/bootstrap launch, and declares `ProcessType=Interactive` for the user-facing status item.
+
 SKS 4.8.2 keeps release proof truth aligned with the 4.8.2 package metadata, built output, managed asset metadata, SKS menu bar install evidence, Control Center preferred-position evidence, LaunchAgent fixture isolation evidence, Computer Use visual evidence, and publish dry-run evidence before publication.
 
 SKS 4.8.2 release proof truth also requires proof that the macOS menu bar companion presents a visible text-only `SKS` label ahead of crowded notch-adjacent status items, seeds and persists its preferred Control Center position, and skips launch/preferred-position mutation for temp-home, temp-`HOME`, and hermetic release fixtures.

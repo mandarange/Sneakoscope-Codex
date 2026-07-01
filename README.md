@@ -49,7 +49,7 @@ sks seo-geo-optimizer apply latest --mode seo --apply --json
 sks seo-geo-optimizer audit --mode geo --target package --offline --json
 ```
 
-> 📋 **Current release: `v4.8.2`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
+> 📋 **Current release: `v4.8.3`** — full release history lives in [CHANGELOG.md](CHANGELOG.md). This README documents how Sneakoscope works today, not its version-by-version changes. Release readiness is tracked in [docs/release-readiness.md](docs/release-readiness.md).
 
 ## 🍥 Parallelism, UX, And Integrations
 

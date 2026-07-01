@@ -27,6 +27,7 @@ const launchAgentExists = result.launch_agent_path ? await exists(result.launch_
 const actionScriptExists = result.action_script_path ? await exists(result.action_script_path) : false;
 const generatedSourcePath = result.app_path ? path.join(path.dirname(result.app_path), 'SKSMenuBar.swift') : null;
 const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourcePath, 'utf8').catch(() => '') : '';
+const launchAgentSource = result.launch_agent_path ? await fs.readFile(result.launch_agent_path, 'utf8').catch(() => '') : '';
 const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLength')
   && generatedSource.includes('button.title = "SKS"')
   && generatedSource.includes('button.attributedTitle = NSAttributedString(string: "SKS"')
@@ -36,6 +37,9 @@ const hasVisibleLabelSource = generatedSource.includes('NSStatusItem.variableLen
 // once-dragged item does not jump back behind the notch on the next doctor --fix.
 const hasAutosaveNameSource = generatedSource.includes('statusItem.autosaveName = "com.sneakoscope.sks-menubar"');
 const hasExplicitVisibleSource = generatedSource.includes('statusItem.isVisible = true');
+const hasNoUnconditionalKeepAlive = !launchAgentSource.includes('<key>KeepAlive</key>');
+const hasInteractiveProcessType = launchAgentSource.includes('<key>ProcessType</key>')
+  && launchAgentSource.includes('<string>Interactive</string>');
 const expectedMenuItems = [
   'Use codex-lb',
   'Use ChatGPT OAuth',
@@ -73,6 +77,8 @@ const ok = process.platform === 'darwin'
     && hasVisibleLabelSource
     && hasAutosaveNameSource
     && hasExplicitVisibleSource
+    && hasNoUnconditionalKeepAlive
+    && hasInteractiveProcessType
     && launchSkippedForTempHome
     && launchSkippedForEnvHome
     && launchSkippedForTempInstall
@@ -93,6 +99,8 @@ const report = {
   has_visible_label_source: hasVisibleLabelSource,
   has_autosave_name_source: hasAutosaveNameSource,
   has_explicit_visible_source: hasExplicitVisibleSource,
+  has_no_unconditional_keepalive: hasNoUnconditionalKeepAlive,
+  has_interactive_process_type: hasInteractiveProcessType,
   launch_skipped_for_temp_home: launchSkippedForTempHome,
   launch_skipped_for_env_home: launchSkippedForEnvHome,
   launch_skipped_for_temp_install: launchSkippedForTempInstall,
