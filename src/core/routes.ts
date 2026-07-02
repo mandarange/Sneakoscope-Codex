@@ -1,12 +1,14 @@
-import { PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS, PRODUCT_DESIGN_PLUGIN, PRODUCT_DESIGN_REQUIRED_SKILLS, productDesignPluginPolicyText } from './product-design-plugin.js';
 import { leanEngineeringCompactText, leanEngineeringLongText } from './lean-engineering-policy.js';
-
-export { productDesignPluginPolicyText };
 export { leanEngineeringCompactText, leanEngineeringLongText };
+import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT, FROM_CHAT_IMG_WORK_ORDER_ARTIFACT, REFLECTION_SKILL_NAME, USAGE_TOPICS } from './routes/constants.js';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
+import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
+import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
 
-const REFLECTION_SKILL_NAME = 'reflection';
-export const SOLUTION_SCOUT_SKILL_NAME = 'solution-scout';
-export const SOLUTION_SCOUT_STAGE_ID = 'solution_scout';
+export * from './routes/constants.js';
+export * from './routes/design-policy.js';
+export * from './routes/evidence.js';
+export * from './routes/ppt-policy.js';
 
 export function looksLikeProblemSolvingRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
@@ -26,190 +28,6 @@ export function solutionScoutPolicyText(prompt: any = '') {
     'If web search is unavailable or the issue is fully local and trivial, state that the external-similarity search is unverified and continue from local evidence only.'
   ].join('\n');
 }
-export const FROM_CHAT_IMG_COVERAGE_ARTIFACT = 'from-chat-img-coverage-ledger.json';
-export const FROM_CHAT_IMG_WORK_ORDER_ARTIFACT = 'from-chat-img-work-order.md';
-export const FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT = 'from-chat-img-source-inventory.json';
-export const FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT = 'from-chat-img-visual-map.json';
-export const FROM_CHAT_IMG_CHECKLIST_ARTIFACT = 'from-chat-img-checklist.md';
-export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.json';
-export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
-export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|research|seo-geo-optimizer|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|insane-search|ultra-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|wrongness|code-structure|proof-field|skill-dream|rust';
-export const CODEX_COMPUTER_USE_EVIDENCE_SOURCE = 'codex_computer_use';
-export const CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE = 'codex_in_app_browser';
-export const CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE = 'codex_chrome_extension';
-export const CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE = CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE;
-export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
-export const CODEX_IN_APP_BROWSER_DOC_URL = 'https://developers.openai.com/codex/app/browser';
-export const CODEX_CHROME_EXTENSION_DOC_URL = 'https://developers.openai.com/codex/app/chrome-extension';
-export const CODEX_COMPUTER_USE_DOC_URL = 'https://developers.openai.com/codex/app/computer-use';
-export const CODEX_RECORD_REPLAY_DOC_URL = 'https://developers.openai.com/codex/record-and-replay';
-export const CODEX_APP_SERVER_DOC_URL = 'https://developers.openai.com/codex/app-server';
-export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
-export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
-export const OPENAI_CHATGPT_IMAGES_2_DOC_URL = 'https://openai.com/index/introducing-chatgpt-images-2-0/';
-export const OPENAI_GPT_IMAGE_2_MODEL_DOC_URL = 'https://developers.openai.com/api/docs/models/gpt-image-2';
-export type QaInteractionSurface =
-  | 'codex_in_app_browser'
-  | 'codex_chrome_extension'
-  | 'codex_computer_use'
-  | 'codex_app_plugin'
-  | 'structured_mcp'
-  | 'shell_or_api_diagnostic';
-export const QA_INTERACTION_SURFACES: readonly QaInteractionSurface[] = Object.freeze([
-  'codex_in_app_browser',
-  'codex_chrome_extension',
-  'codex_computer_use',
-  'codex_app_plugin',
-  'structured_mcp',
-  'shell_or_api_diagnostic'
-]);
-export const CODEX_QA_SURFACE_ROUTING_POLICY = `Codex QA surface routing follows the official Codex App split: use @Browser / in-app Browser (${CODEX_IN_APP_BROWSER_DOC_URL}) first for localhost, local development servers, file-backed previews, and public pages that do not require sign-in; use @Chrome / Codex Chrome Extension (${CODEX_CHROME_EXTENSION_DOC_URL}) for signed-in websites, cookies, browser profiles, extensions, existing tabs, or internal tools; use @Computer or @AppName (${CODEX_COMPUTER_USE_DOC_URL}) for native macOS/Windows apps, OS settings, cross-app workflows, and GUI-only bugs. Prefer structured Plugins/MCPs for repeatable data operations, then verify rendered user-visible results with Browser, Chrome, or Computer Use. Playwright, Selenium, Puppeteer, Chrome MCP, static screenshots, plugin cache, and final-agent prose are not Codex App live action proof. App Server evidence (${CODEX_APP_SERVER_DOC_URL}) must correlate thread, turn, item/tool events, approvals, diffs, actions, observations, findings, fixes, and same-flow replay before a real QA pass is claimed.`;
-export const CODEX_WEB_VERIFICATION_POLICY = CODEX_QA_SURFACE_ROUTING_POLICY;
-export const CODEX_COMPUTER_USE_ONLY_POLICY = `Codex Computer Use is a live GUI surface for supported macOS and Windows environments, invoked with @Computer or @AppName for native apps, OS settings, browser contexts that truly require GUI-level operation, and cross-app workflows. Do not replace @Browser localhost/public-page checks or @Chrome signed-in checks with Computer Use unless the surface router records a specific GUI-only/cross-app reason. If live Computer Use tools, permissions, or app access are unavailable, mark the affected native/GUI evidence blocked or unverified instead of fabricating screenshots or actions. Codex App readiness/config checks are capability evidence only, not target interaction proof.`;
-export const IMAGEGEN_SOCIAL_SOURCE_POLICY = 'Use public X/social/community reports only as prompt-quality and workflow-sentiment hints after official OpenAI/Codex docs. Social posts are not capability specs, evidence of tool availability, or proof that a generated asset was created.';
-export const CODEX_IMAGEGEN_REQUIRED_POLICY = 'Pipeline image generation, raster asset creation/editing, and generated image-review evidence must use real Codex App imagegen/$imagegen with gpt-image-2 when that evidence is required for full verification. For newest-model image requests, prompt explicitly for "ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2" instead of relying on generic image-generation wording. Do not substitute placeholder SVG/HTML/CSS, prose-only critique, stock-like stand-ins, manually fabricated files, or missing-output ledgers for requested/generated raster assets or required generated review images. If imagegen/gpt-image-2 is unavailable or generated annotated images cannot be created/linked, record the blocker and cap any closeout at verified_partial/reference-only instead of claiming generated-image evidence or full route verification; that partial closeout requires source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence. In Codex App prompts, invoke $imagegen when live image generation is needed; SKS hooks and skills can require the policy but cannot attach missing host image-generation tools to an already-started turn. Official OpenAI/Codex docs are authoritative for capabilities, surfaces, limits, and evidence rules; X/social/community reports may inform prompt style only.';
-export const DEFAULT_CODEX_APP_PLUGINS = Object.freeze([
-  ['browser', 'openai-bundled'],
-  ['chrome', 'openai-bundled'],
-  ['computer-use', 'openai-bundled'],
-  ['latex', 'openai-bundled'],
-  ['documents', 'openai-primary-runtime'],
-  ['presentations', 'openai-primary-runtime'],
-  ['spreadsheets', 'openai-primary-runtime']
-]);
-export const RESERVED_CODEX_PLUGIN_SKILL_NAMES = Object.freeze([
-  'browser-use',
-  ...DEFAULT_CODEX_APP_PLUGINS.map(([name]: any) => name)
-].sort());
-export const FORBIDDEN_BROWSER_AUTOMATION_RE = /\b(playwright|chrome\s+mcp|selenium|puppeteer)\b/i;
-
-export function evidenceMentionsForbiddenBrowserAutomation(value: any, seen: any = new Set()): boolean {
-  if (value == null) return false;
-  if (typeof value === 'string') return FORBIDDEN_BROWSER_AUTOMATION_RE.test(value);
-  if (typeof value !== 'object') return false;
-  if (seen.has(value)) return false;
-  seen.add(value);
-  if (Array.isArray(value)) return value.some((item: any) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
-  return Object.values(value).some((item: any) => evidenceMentionsForbiddenBrowserAutomation(item, seen));
-}
-
-export function evidenceMentionsForbiddenWebComputerUseEvidence(value: any, seen: any = new Set()): boolean {
-  if (value == null) return false;
-  if (typeof value === 'string') {
-    const text = String(value || '');
-    const mentionsComputerUse = /\bcomputer\s*use\b|codex[-_\s]*(?:native[-_\s]*)?computer[-_\s]*use/i.test(text);
-    if (!mentionsComputerUse) return false;
-    if (/\b(?:no|not|never)\s+(?:use|using|required|satisfy|satisfies|used)\b.*\bcomputer\s*use\b|\bcomputer\s*use\b.*\b(?:not|required|unverified|blocked|reserved|native|non-web|nonweb)\b|must\s+not\s+use\s+codex\s+computer\s+use|do\s+not\s+use\s+codex\s+computer\s+use|not_required_for_web_verification/i.test(text)) return false;
-    return /\b(?:evidence|screenshot|screen|capture|visual|source|ledger|used|using|from|via|fixture)\b|codex[-_\s]*(?:native[-_\s]*)?computer[-_\s]*use/i.test(text);
-  }
-  if (typeof value !== 'object') return false;
-  if (seen.has(value)) return false;
-  seen.add(value);
-  if (Array.isArray(value)) return value.some((item: any) => evidenceMentionsForbiddenWebComputerUseEvidence(item, seen));
-  return Object.values(value).some((item: any) => evidenceMentionsForbiddenWebComputerUseEvidence(item, seen));
-}
-
-export const RECOMMENDED_MCP_SERVERS = [
-  {
-    id: 'context7',
-    required: true,
-    transport: 'remote',
-    url: 'https://mcp.context7.com/mcp',
-    remote_url: 'https://mcp.context7.com/mcp',
-    local_fallback: {
-      transport: 'local',
-      command: 'npx',
-      args: ['-y', '@upstash/context7-mcp@latest']
-    },
-    purpose: 'Current library/API/framework documentation for route gates.'
-  }
-];
-
-export const GETDESIGN_REFERENCE = {
-  id: 'getdesign',
-  url: 'https://getdesign.md/',
-  docs_url: 'https://docs.getdesign.app/',
-  official_urls_url: 'https://docs.getdesign.app/resources/official-urls/',
-  codex_guide_url: 'https://docs.getdesign.app/guides/use-with-codex/',
-  codex_skill: 'MohtashamMurshid/getdesign',
-  codex_skill_install: 'skills add MohtashamMurshid/getdesign',
-  npm_cli: '@getdesign/cli',
-  npm_sdk: '@getdesign/sdk',
-  official_mcp_available: false,
-  surfaces: ['web', 'api', 'cli', 'sdk', 'skill'],
-  purpose: 'Ground DESIGN.md, UI/UX design systems, and presentation-like HTML/PDF artifacts in current design references.'
-};
-
-export const DESIGN_SYSTEM_SSOT = {
-  id: 'design-system-ssot',
-  authority_file: 'design.md',
-  builder_prompt: 'docs/Design-Sys-Prompt.md',
-  rule: `Product Design plugin (${PRODUCT_DESIGN_PLUGIN.id}) is the primary design authority when available. design.md is a project-local cache/compatibility authority only when already present or when Product Design is unavailable; if fallback is needed, synthesize it from the builder prompt plus approved source inputs and fuse external references into design.md or route artifacts instead of keeping parallel authorities.`
-};
-
-export const AWESOME_DESIGN_MD_REFERENCE = {
-  id: 'awesome-design-md',
-  url: 'https://github.com/VoltAgent/awesome-design-md',
-  purpose: 'Curated ready-to-use DESIGN.md examples extracted from public brand and product websites; use only as source input to the design SSOT, not as a parallel authority.'
-};
-
-export const RECOMMENDED_DESIGN_REFERENCES = [GETDESIGN_REFERENCE, AWESOME_DESIGN_MD_REFERENCE];
-
-export const PPT_PIPELINE_SKILL_ALLOWLIST = Object.freeze([
-  'ppt',
-  'imagegen',
-  'getdesign-reference',
-  'prompt-pipeline',
-  REFLECTION_SKILL_NAME,
-  'honest-mode'
-]);
-
-export const PRODUCT_DESIGN_PLUGIN_TOOL_ALLOWLIST = PRODUCT_DESIGN_REQUIRED_SKILLS;
-
-export const PPT_CONDITIONAL_SKILL_ALLOWLIST = Object.freeze([]);
-
-export const PPT_PIPELINE_MCP_ALLOWLIST = Object.freeze([
-  {
-    mcp: 'context7',
-    condition: 'only_when_current_external_documentation_is_required_for_sources_or_package_api_usage'
-  }
-]);
-
-export function pptPipelineAllowlistPolicyText() {
-  const conditionalSkills = PPT_CONDITIONAL_SKILL_ALLOWLIST.length
-    ? PPT_CONDITIONAL_SKILL_ALLOWLIST.map((entry: any) => `${entry.skill}=${entry.condition}`).join('; ')
-    : 'none';
-  return `PPT pipeline allowlist: during $PPT design/render work, ignore installed skills and MCPs that are not explicitly part of the $PPT pipeline. The purpose is to prevent AI-like generic presentation design: decorative gradients, nested cards, vague SaaS visuals, and style choices not grounded in the audience, source material, Product Design plugin evidence, getdesign fallback reference, or the project design cache. Required SKS skills are ${PPT_PIPELINE_SKILL_ALLOWLIST.join(', ')}. Product Design plugin tools are allowed and preferred for design work: ${PRODUCT_DESIGN_PLUGIN_TOOL_ALLOWLIST.join(', ')}. Use ${PRODUCT_DESIGN_PLUGIN.id} first for get-context/user-context intake, research/ideate exploration, prototype/image-to-code/url-to-code artifact direction, audit/design-qa review, and share handoff when available. The imagegen skill is required for $PPT so Codex App can invoke official built-in $imagegen/gpt-image-2 for every generated raster asset or generated visual-review image; do not route PPT imagery through direct API fallback. Do not use generic design skills such as ${PRODUCT_DESIGN_LEGACY_DESIGN_FALLBACK_SKILLS.join(', ')} for $PPT just because they are installed. $PPT design must use Product Design plugin first; if unavailable, use getdesign-reference plus the built-in PPT design implementation pipeline: existing ${DESIGN_SYSTEM_SSOT.authority_file} when present, ${DESIGN_SYSTEM_SSOT.builder_prompt} as fallback builder prompt when missing, and route-local ppt-style-tokens.json as the fused design projection. Conditional skills/MCPs are allowed only when their condition is sealed in the contract: ${conditionalSkills}; ${PPT_PIPELINE_MCP_ALLOWLIST.map((entry: any) => `${entry.mcp}=${entry.condition}`).join('; ')}. Fact, image, and review evidence are first-class artifacts: gather user-provided context and required web/Context7 evidence into ppt-fact-ledger.json, block unsupported critical claims, plan required image resources through ppt-image-asset-ledger.json, then run a bounded review loop recorded in ppt-review-policy.json, ppt-review-ledger.json, and ppt-iteration-report.json. Required raster asset or generated visual-review evidence must come from Codex App $imagegen/gpt-image-2; direct API fallback, placeholder files, and prose-only substitutes do not satisfy the route gate. The review loop caps full-deck passes at 2, slide retries at 2, requires P0/P1 issue count to be zero, targets score >= 0.88, and stops when improvement delta is below 0.03 or evidence is missing. For Codex App visual critique, invoke $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) when required; never simulate missing gpt-image-2 output. If required image-review evidence is unavailable, record the blocker instead of passing the gate. ${productDesignPluginPolicyText()} ${CODEX_IMAGEGEN_REQUIRED_POLICY}`;
-}
-
-export function getdesignReferencePolicyText() {
-  return `Design authority policy: ${PRODUCT_DESIGN_PLUGIN.id} is the first design surface for Codex App design routes. ${DESIGN_SYSTEM_SSOT.authority_file} is a project-local design cache/compatibility authority when already present or when Product Design is unavailable. If fallback creation is needed, create or update it through ${DESIGN_SYSTEM_SSOT.builder_prompt}; getdesign.md (${GETDESIGN_REFERENCE.url}), its official docs, and curated DESIGN.md examples at ${AWESOME_DESIGN_MD_REFERENCE.url} are source inputs to fuse into that fallback SSOT or into route-local style tokens, not parallel authorities. Prefer Product Design plugin tools for design context, ideation, prototype, audit, and QA; use the generated getdesign-reference skill only as fallback/source grounding. Do not claim an official getdesign MCP server is configured unless a current official MCP surface is actually available. ${productDesignPluginPolicyText()}`;
-}
-
-export function imageUxReviewPipelinePolicyText() {
-  return `Image UX review pipeline: the core mechanism is not text-only screenshot critique. Capture or receive source UI screenshots; web/browser/webapp capture must pass the Codex Chrome Extension readiness gate first, while Computer Use is only for native Mac/non-web app surfaces. Use Product Design plugin audit/design-qa when available to structure UX issue framing, but still require the imagegen visual evidence route. Then use Codex App imagegen/$imagegen with gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}) to create new annotated review images from those screenshots as reference inputs. The generated review image must visibly mark numbered callouts, P0/P1/P2/P3 labels, eye-flow, hierarchy, contrast, alignment, density, affordance problems, and a small corrected mini-comp or before/after strip when useful. Then analyze that generated review image with vision/OCR and convert the visible callouts into image-ux-issue-ledger.json rows. Missing generated review images block full Image UX verification, but the route may close as verified_partial/reference-only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist and the gate records that no annotated image, callout extraction, or full UX review evidence exists. Never pass this route from a direct API fallback, hand-written text-only substitute, placeholder asset, or fabricated ledger. ${productDesignPluginPolicyText()} ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_IMAGEGEN_REQUIRED_POLICY}`;
-}
-
-export const RECOMMENDED_SKILLS = [
-  'reasoning-router',
-  'pipeline-runner',
-  'solution-scout',
-  'context7-docs',
-  'ultra-search',
-  'search-visibility-core',
-  'seo-geo-optimizer',
-  'autoresearch-loop',
-  'performance-evaluator',
-  'getdesign-reference',
-  'imagegen',
-  'imagegen-source-scout',
-  'image-ux-review',
-  'computer-use-fast',
-  'db-safety-guard',
-  REFLECTION_SKILL_NAME,
-  'honest-mode'
-];
 
 export function dollarSkillName(commandOrId: any) {
   return String(commandOrId || '').replace(/^\$/, '').toLowerCase();
@@ -1117,8 +935,6 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
     noUnrequestedFallbackCodePolicyText()
   ].join(' ');
 }
-
-export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
 
 export function routeReasoning(route: any, prompt: any = '') {
   const text = String(prompt || '');

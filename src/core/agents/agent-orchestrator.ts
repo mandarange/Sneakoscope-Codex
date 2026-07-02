@@ -68,6 +68,7 @@ import { crossRebaseIdleWorktrees } from '../git/git-worktree-cross-rebase.js'
 import { gitOutputLine, runGitCommand } from '../git/git-worktree-runner.js'
 import type { GitWorktreeDiff } from '../git/git-worktree-diff.js'
 import { writeParallelRuntimeProof } from './parallel-runtime-proof.js'
+import { enforceRetention } from '../retention.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
@@ -344,6 +345,14 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     zellijVisiblePaneCap: Number(opts.zellijVisiblePaneCap || visualLaneCount || targetActiveSlots),
     projectRoot: root
   })
+  const schedulerHardTimeoutMs = normalizeMissionHardTimeoutMs(opts, route)
+  let lastTimeoutReapMs = 0
+  async function reapTimedOutAgentSessions(force = false) {
+    const now = Date.now()
+    if (!force && now - lastTimeoutReapMs < 30000) return null
+    lastTimeoutReapMs = now
+    return killTimedOutAgentSessions(ledgerRoot, now, { hardTimeoutMs: schedulerHardTimeoutMs })
+  }
   await nativeCliSwarm.initialize()
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
   const scheduler = await runAgentScheduler({
@@ -360,6 +369,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     sourceIntelligenceRefs: sourceIntelligenceRef,
     goalModeRef,
     launchSession: async ({ agent, workItem }) => {
+      await reapTimedOutAgentSessions()
       const slice = workItem.slice || { id: workItem.id, description: workItem.description || prompt }
       const workerWorktree = await prepareWorkerGitWorktree({
         root,
@@ -400,6 +410,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       const result = opts.nativeCliSwarm === false
         ? await runAgentByBackend(backend, runtimeAgent, runtimeSlice, backendOpts)
         : await nativeCliSwarm.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })
+      await reapTimedOutAgentSessions()
       if (route === '$Naruto') attachNarutoRuntimeProof(result, runtimeAgent, runtimeSlice)
       if (workerWorktree) await finalizeWorkerGitWorktree({
         root,
@@ -448,6 +459,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       return result
     },
     onSchedulerEvent: async ({ event, slots, state }) => {
+      await reapTimedOutAgentSessions()
       const paneBySlot = await readZellijPaneIdsBySlot(ledgerRoot)
       const enrichedSlots = slots.map((slot) => ({ ...slot, pane_id: paneBySlot.get(slot.slot_id) || null, launch_status: paneBySlot.has(slot.slot_id) ? 'launched' : slot.status }))
       await writeZellijRightLaneCockpit(ledgerRoot, { missionId, sessionName: `sks-${missionId}`, slots: enrichedSlots })
@@ -467,6 +479,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
       }
     }
   })
+  await reapTimedOutAgentSessions(true)
   await nativeCliSwarm.finalize()
   const parallelRuntimeProof = await writeParallelRuntimeProof(ledgerRoot, missionId, {
     requestedWorkers: Number(opts.agents || roster.agent_count || targetActiveSlots),
@@ -538,7 +551,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   })
   const stale = await detectStaleAgentSessions(ledgerRoot)
   if (!stale.ok) await appendAgentLedgerEvent(ledgerRoot, { agent_id: 'orchestrator', session_id: 'orchestrator', event_type: 'stale_sessions_detected', payload: stale })
-  const timeoutKill = await killTimedOutAgentSessions(ledgerRoot)
+  const timeoutKill = await killTimedOutAgentSessions(ledgerRoot, Date.now(), { hardTimeoutMs: schedulerHardTimeoutMs })
   const recursion = await writeAgentRecursionGuardReport(ledgerRoot, results)
   const consensus = await writeAgentConsensus(ledgerRoot, results)
   const outputValidation = await writeAgentOutputValidationReport(ledgerRoot, results)
@@ -606,6 +619,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     finalGptPatchStage
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
+  await enforceRetention(root, { afterRoute: true, completedMissionId: missionId, rotateLargeJsonl: true, lightweight: true }).catch(() => null)
   await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
   return {
     schema: 'sks.agent-run.v1',
@@ -652,6 +666,12 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     parallel_runtime_proof: parallelRuntimeProof,
     proof
   }
+}
+
+function normalizeMissionHardTimeoutMs(opts: any = {}, route = '') {
+  const raw = Number(opts.hardTimeoutMs || opts.agentHardTimeoutMs || process.env.SKS_AGENT_HARD_TIMEOUT_MS || 0)
+  if (Number.isFinite(raw) && raw > 0) return Math.max(1000, Math.min(Math.floor(raw), 24 * 60 * 60 * 1000))
+  return String(route || '').replace(/^\$/, '').toUpperCase() === 'NARUTO' ? 10 * 60 * 1000 : 30 * 60 * 1000
 }
 
 function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) {

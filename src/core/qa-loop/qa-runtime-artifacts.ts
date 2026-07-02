@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { appendJsonlBounded, nowIso, writeJsonAtomic } from '../fsx.js';
-import { buildQaAuthDataSandboxPolicy, buildQaContractV2, buildQaJourneyGraphV2, type QaContractV2Options, type LegacyQaLoopContract } from './qa-contract-v2.js';
+import { buildQaAuthDataSandboxPolicy, buildQaContractV2, buildQaJourneyGraphV2, type QaContractV2Options, type LegacyQaLoopContract } from './qa-contract.js';
 import { selectQaSurfaceForContract } from './qa-surface-router.js';
-import { evaluateQaGateV2 } from './qa-gate-v2.js';
+import { evaluateQaGateV2 } from './qa-gate.js';
 import {
   QA_ACTION_LEDGER_ARTIFACT,
   QA_ASSERTION_LEDGER_ARTIFACT,

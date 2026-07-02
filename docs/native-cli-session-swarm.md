@@ -16,23 +16,20 @@ sessions/<slot_id>/gen-<n>/worker/
 
 Required worker artifacts:
 
-- `worker-intake.json`
 - `worker-heartbeat.jsonl`
 - `worker-process-report.json`
 - `worker-result.json`
-- `worker-patch-envelope.json` or `worker-no-patch-reason.json`
-- `worker-terminal-close-report.json`
-- `worker-fast-mode.json`
-- `worker-recursion-guard.json`
-- `worker-session-proof.json`
+- `worker-patch-envelope.json` when a patch candidate exists
 
-The parent writes `agent-native-cli-session-swarm.json`, then `native-cli-session-proof.json` validates requested agents, target active slots, spawned worker process count, max observed worker process count, unique sessions, unique slots, unique generations, process ids, heartbeat files, close reports, and worker artifact directories.
+`worker-intake.json` is debug-only (`SKS_DEBUG_ARTIFACTS=1`). Fast-mode, recursion-guard, terminal close, and session proof fields live under `worker-process-report.json`; no-patch rationale lives under `worker-result.json.no_patch_reason`.
+
+The parent writes `agent-native-cli-session-swarm.json`, then `native-cli-session-proof.json` validates requested agents, target active slots, spawned worker process count, max observed worker process count, unique sessions, unique slots, unique generations, process ids, heartbeat files, process-report close fields, and worker artifact directories.
 
 Release blockers:
 
 - `--agents 10` with enough work must observe at least 10 native worker processes.
 - `--agents 20` with enough work must observe at least 20 native worker processes.
-- Missing process ids, missing close reports, missing heartbeats, or subagent-only proof block the release.
+- Missing process ids, missing process-report close fields, missing heartbeats, or subagent-only proof block the release.
 
 Release gates:
 

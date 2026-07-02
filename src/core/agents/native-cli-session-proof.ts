@@ -8,7 +8,7 @@ export async function writeNativeCliSessionProof(root: string, input: { requeste
   const swarm = await readJson<any>(path.join(root, 'agent-native-cli-session-swarm.json'), null)
   const scheduler = await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null)
   const workerProcessReports = await collectNamedJson(root, 'worker-process-report.json')
-  const workerCloseReports = await collectNamedJson(root, 'worker-terminal-close-report.json')
+  const workerCloseReports = workerProcessReports.filter((row) => row.json?.session_proof || row.json?.exit_code !== undefined)
   const workerHeartbeats = await collectHeartbeatCounts(root)
   const requestedAgents = Number(input.requestedAgents || swarm?.requested_agents || scheduler?.target_active_slots || 0)
   const targetActiveSlots = Number(input.targetActiveSlots || swarm?.target_active_slots || scheduler?.target_active_slots || requestedAgents)

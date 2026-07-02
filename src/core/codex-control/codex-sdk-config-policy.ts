@@ -24,6 +24,10 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
       generation_index: Number(input.generationIndex || 0)
     }
   }
+  if (input.requestedScopeContract?.no_mcp === true) {
+    config.mcp_servers = {}
+    config.sks = { ...(config.sks as Record<string, unknown>), no_mcp: true }
+  }
   const codexLbApiKey = String(process.env.CODEX_LB_API_KEY || '').trim()
   const codexLbBaseUrl = normalizeCodexLbBaseUrl(process.env.CODEX_LB_BASE_URL)
   if (codexLbApiKey && codexLbBaseUrl) {

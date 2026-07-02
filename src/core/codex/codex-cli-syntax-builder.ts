@@ -11,6 +11,7 @@ export type BuildCodexExecArgsOptions = {
   profile?: string | null
   profileAlias?: 'long' | 'short'
   ignoreUserConfig?: boolean
+  noMcp?: boolean
   ignoreRules?: boolean
   sandbox?: CodexSandboxMode
   serviceTier?: CodexServiceTier | null
@@ -41,6 +42,7 @@ export function buildCodexExecArgs(opts: BuildCodexExecArgsOptions): string[] {
   if (opts.outputLastMessage) args.push('--output-last-message', opts.outputLastMessage)
   if (opts.ephemeral) args.push('--ephemeral')
   if (opts.skipGitRepoCheck) args.push('--skip-git-repo-check')
+  if (opts.noMcp) args.push('--no-mcp')
   if (opts.profile) args.push(...buildCodexProfileArgs(opts.profile, opts.profileAlias))
   else if (opts.ignoreUserConfig) args.push('--ignore-user-config')
   if (opts.ignoreRules) args.push('--ignore-rules')

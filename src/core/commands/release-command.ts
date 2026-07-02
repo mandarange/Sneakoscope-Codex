@@ -13,7 +13,7 @@ export async function releaseCommand(args: string[] = []): Promise<unknown> {
     process.exitCode = 1;
     return null;
   }
-  const result = spawnSync('npm', ['run', command, '--silent'], {
+  const result = spawnSync(process.execPath, command.args, {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 1024 * 1024 * 20,
@@ -23,7 +23,7 @@ export async function releaseCommand(args: string[] = []): Promise<unknown> {
     schema: 'sks.release-command.v1',
     ok: result.status === 0,
     subcommand: sub,
-    script: command,
+    command: [process.execPath, ...command.args],
     status: result.status,
     stdout_tail: tail(String(result.stdout || '')),
     stderr_tail: tail(String(result.stderr || ''))
@@ -35,10 +35,10 @@ export async function releaseCommand(args: string[] = []): Promise<unknown> {
   return report;
 }
 
-function commandForSubcommand(sub: string): string | null {
-  if (sub === 'affected') return 'release:check:affected';
-  if (sub === 'full') return 'release:check:full';
-  if (sub === 'background') return 'release:check:full';
+function commandForSubcommand(sub: string): { args: string[] } | null {
+  if (sub === 'affected') return { args: ['dist/scripts/release-gate-dag-runner.js', '--preset', 'affected', '--changed-since', 'auto', '--sla', '5m'] };
+  if (sub === 'full') return { args: ['dist/scripts/release-gate-dag-runner.js', '--preset', 'release', '--full'] };
+  if (sub === 'background') return { args: ['dist/scripts/release-gate-dag-runner.js', '--preset', 'release', '--full'] };
   return null;
 }
 

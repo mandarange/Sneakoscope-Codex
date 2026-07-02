@@ -45,7 +45,7 @@ const invariants = {
 
 const distHash = distHashValue();
 const gitCommit = gitHead();
-const manifestHash = fileHash(fs.existsSync(path.join(root, 'release-gates.v2.json')) ? 'release-gates.v2.json' : 'release-gates.json');
+const manifestHash = fileHash('release-gates.v2.json');
 const packageScriptsHash = sha256(JSON.stringify(pkg.scripts || {}));
 const nodeVersion = process.version;
 const npmVersion = npmVersionValue();
@@ -66,7 +66,11 @@ for (const gate of plan.selected) {
     skipped.push({ id: gate.id, reason: 'deferred_to_real_check' });
     continue;
   }
-  const command = `npm run ${gate.id}`;
+  const command = String(gate.command || '');
+  if (!command) {
+    failures.push({ id: gate.id, exit_code: null, stdout_tail: '', stderr_tail: 'gate_command_missing' });
+    continue;
+  }
   if (FORBIDDEN_RECURSIVE_GATES.has(gate.id) || /npm\s+run\s+(release:check|release:real-check|release:publish|publish:ignore-scripts|publish:npm|publish:dry|prepublishOnly)\b/.test(command)) {
     failures.push({ id: gate.id, exit_code: null, stdout_tail: '', stderr_tail: 'forbidden_recursive_gate_spawn' });
     continue;
@@ -81,7 +85,7 @@ for (const gate of plan.selected) {
     distHash,
     manifestHash,
     packageScriptsHash,
-    gateImplementationHash: gateImplementationHash(gate.id),
+    gateImplementationHash: gateImplementationHash(gate.id, command),
     nodeVersion,
     npmVersion
   });
@@ -96,7 +100,7 @@ for (const gate of plan.selected) {
   }
   const started = Date.now();
   const childEnv = { ...process.env, SKS_RELEASE_DYNAMIC: '1', SKS_ENV_MODE: envMode };
-  const res = spawnSync('npm', ['run', gate.id, '--silent'], { cwd: root, env: childEnv, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
+  const res = spawnSync(command, { cwd: root, env: childEnv, encoding: 'utf8', shell: true, maxBuffer: 50 * 1024 * 1024 });
   const durationMs = Date.now() - started;
   const ok = res.status === 0;
   executed.push({ id: gate.id, ok, exit_code: res.status, duration_ms: durationMs });
@@ -145,31 +149,24 @@ emitGate('release:check:dynamic:execute', {
 
 function loadManifest() {
   const v2Path = path.join(root, 'release-gates.v2.json');
-  if (fs.existsSync(v2Path)) {
-    const parsed = JSON.parse(fs.readFileSync(v2Path, 'utf8'));
-    const releaseNodes = (Array.isArray(parsed.gates) ? parsed.gates : []).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'));
-    const byId = new Map(releaseNodes.map((gate) => [gate.id, gate]));
-    const dynamic = buildGateManifest(releaseNodes.map((gate) => gate.id));
-    return {
-      schema: 'sks.release-gate-manifest.v1.from-v2',
-      gates: dynamic.gates.map((entry) => {
-        const node = byId.get(entry.id);
-        const resource = Array.isArray(node?.resource) ? node.resource.join(',') : '';
+  if (!fs.existsSync(v2Path)) throw new Error('release-gates.v2.json is required; release-gates.json v1 is no longer supported');
+  const parsed = JSON.parse(fs.readFileSync(v2Path, 'utf8'));
+  const releaseNodes = (Array.isArray(parsed.gates) ? parsed.gates : []).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'));
+  const byId = new Map(releaseNodes.map((gate) => [gate.id, gate]));
+  const dynamic = buildGateManifest(releaseNodes.map((gate) => gate.id));
+  return {
+    schema: 'sks.release-gate-manifest.v1.from-v2',
+    gates: dynamic.gates.map((entry) => {
+      const node = byId.get(entry.id);
+      const resource = Array.isArray(node?.resource) ? node.resource.join(',') : '';
         return {
           ...entry,
+          command: node?.command || '',
           affected_by: usefulCacheInputs(node?.cache?.inputs, entry.affected_by),
           cost: node?.side_effect === 'real-env' || resource.includes('real') ? 'real' : entry.cost
         };
-      })
-    };
-  }
-  const p = path.join(root, 'release-gates.json');
-  if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
-  const dagSource = fs.readFileSync(path.join(root, 'src/scripts/release-parallel-check.ts'), 'utf8');
-  const dagIds = [...dagSource.matchAll(/task\('([^']+)'/g)].map((m) => m[1]);
-  const releaseCheckIds = [...String(pkg.scripts?.['release:check'] || '').matchAll(/npm run ([^\s&]+)/g)].map((m) => m[1]);
-  const ids = [...new Set([...dagIds, ...releaseCheckIds])].filter((id) => id && id !== 'build' && id !== 'release:check:parallel');
-  return buildGateManifest(ids);
+    })
+  };
 }
 
 function usefulCacheInputs(inputs, fallback) {
@@ -203,10 +200,10 @@ function fileHash(rel) {
   }
 }
 
-function gateImplementationHash(id) {
-  const script = String(pkg.scripts?.[id] || '');
-  const match = script.match(/node\s+\.\/([^ ]+\.mjs)/);
-  if (match) return fileHash(match[1]);
+function gateImplementationHash(id, command) {
+  const script = String(command || pkg.scripts?.[id] || '');
+  const matches = [...script.matchAll(/node\s+\.\/([^ &|;]+\.js)/g)].map((match) => match[1]);
+  if (matches.length) return sha256(matches.map((rel) => `${rel}:${fileHash(rel)}`).join('\n'));
   return sha256(script);
 }
 

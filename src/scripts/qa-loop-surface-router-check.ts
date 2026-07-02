@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js';
-import { buildQaContractV2 } from '../core/qa-loop/qa-contract-v2.js';
-import { evaluateQaGateV2 } from '../core/qa-loop/qa-gate-v2.js';
+import { buildQaContractV2 } from '../core/qa-loop/qa-contract.js';
+import { evaluateQaGateV2 } from '../core/qa-loop/qa-gate.js';
 import { initializeQaRuntimeArtifacts } from '../core/qa-loop/qa-runtime-artifacts.js';
 import { selectQaSurface } from '../core/qa-loop/qa-surface-router.js';
 

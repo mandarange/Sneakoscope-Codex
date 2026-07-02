@@ -135,6 +135,7 @@ export const COMMANDS = {
   version: entry('stable', 'Show SKS version', 'dist/commands/version.js', directCommand(() => import('../commands/version.js'), 'dist/commands/version.js')),
   commands: entry('stable', 'List SKS commands', 'dist/core/commands/basic-cli.js', basicArgs('commandsCommand')),
   check: entry('stable', 'Run five-minute proof-bank affected checks', 'dist/core/commands/check-command.js', argsCommand(() => import('../core/commands/check-command.js'), 'checkCommand', 'dist/core/commands/check-command.js')),
+  gates: entry('stable', 'Run release gate DAG by gate id or preset', 'dist/core/commands/gates-command.js', argsCommand(() => import('../core/commands/gates-command.js'), 'gatesCommand', 'dist/core/commands/gates-command.js')),
   task: entry('stable', 'Run an SLA-bounded SKS task check', 'dist/core/commands/task-command.js', argsCommand(() => import('../core/commands/task-command.js'), 'taskCommand', 'dist/core/commands/task-command.js')),
   release: entry('stable', 'Run affected/full/background release gates', 'dist/core/commands/release-command.js', argsCommand(() => import('../core/commands/release-command.js'), 'releaseCommand', 'dist/core/commands/release-command.js')),
   triwiki: entry('stable', 'Inspect TriWiki index, affected graph, and proof bank', 'dist/core/commands/triwiki-command.js', argsCommand(() => import('../core/commands/triwiki-command.js'), 'triwikiCommand', 'dist/core/commands/triwiki-command.js')),

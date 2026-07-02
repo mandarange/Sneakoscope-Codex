@@ -23,11 +23,10 @@ await fs.writeFile(path.join(tmp, 'agent-native-cli-session-swarm.json'), `${JSO
   }]
 }, null, 2)}\n`)
 await fs.writeFile(path.join(tmp, workerDir, 'worker-intake.json'), '{"ok":true}\n')
-await fs.writeFile(path.join(tmp, workerDir, 'worker-result.json'), '{"status":"done"}\n')
+await fs.writeFile(path.join(tmp, workerDir, 'worker-result.json'), '{"status":"done","no_patch_reason":{"ok":true,"reason":"read_only_or_no_write_paths"}}\n')
 await fs.writeFile(path.join(tmp, workerDir, 'worker-heartbeat.jsonl'), '{"event":"started"}\n')
 await fs.writeFile(path.join(tmp, workerDir, 'worker-process-report.json'), '{"pid":1234}\n')
 await fs.writeFile(path.join(tmp, workerDir, 'codex-control-proof.json'), '{"ok":true,"sdk_thread_id":"sdk-thread-1"}\n')
-await fs.writeFile(path.join(tmp, workerDir, 'worker-no-patch-reason.json'), '{"ok":true}\n')
 await fs.writeFile(path.join(tmp, workerDir, 'zellij-worker-pane-events.jsonl'), [
   '{"event_type":"session_launch_started"}',
   '{"event_type":"zellij_worker_pane_created"}',

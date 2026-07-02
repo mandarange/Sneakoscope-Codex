@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { ensureDir, nowIso, readJson, writeJsonAtomic, appendJsonl } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { scanAgentTextForRecursion } from './agent-recursion-guard.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { resolveFastModePolicy } from './fast-mode-policy.js'
@@ -52,7 +52,7 @@ export async function runNativeCliWorker(input: any = {}) {
     worker_env: process.env.SKS_AGENT_WORKER === '1',
     violations: recursion.violations
   }
-	  await writeJsonAtomic(path.join(workerDir, 'worker-intake.json'), {
+  if (process.env.SKS_DEBUG_ARTIFACTS === '1') await writeJsonAtomic(path.join(workerDir, 'worker-intake.json'), {
     schema: NATIVE_CLI_WORKER_SCHEMA,
     generated_at: nowIso(),
     parent_mission_id: String(intake.parent_mission_id || input.parentMissionId || intake.mission_id || ''),
@@ -90,10 +90,10 @@ export async function runNativeCliWorker(input: any = {}) {
 	    status: 'running',
 	    backend,
 	    serviceTier: policy.service_tier,
-	    artifacts: [path.join(workerDirRel, 'worker-intake.json'), heartbeatRel],
+	    artifacts: [heartbeatRel],
 	    logTail: String(slice.description || slice.title || slice.id || 'worker task started')
 	  })
-	  await appendJsonl(path.resolve(agentRoot, heartbeatRel), {
+	  await appendJsonlBounded(path.resolve(agentRoot, heartbeatRel), {
     schema: 'sks.native-cli-worker-heartbeat.v1',
     ts: nowIso(),
     event: 'started',
@@ -103,7 +103,7 @@ export async function runNativeCliWorker(input: any = {}) {
     generation_index: agent.generation_index || null,
     fast_mode: policy.fast_mode,
 	    service_tier: policy.service_tier
-	  })
+	  }, 2 * 1024 * 1024)
 	  await workerTelemetry(agentRoot, intake, agent, slice, {
 	    eventType: 'heartbeat',
 	    status: 'running',
@@ -112,18 +112,6 @@ export async function runNativeCliWorker(input: any = {}) {
 	    artifacts: [heartbeatRel],
 	    logTail: 'worker heartbeat started'
 	  })
-  await writeJsonAtomic(path.join(workerDir, 'worker-fast-mode.json'), {
-    schema: 'sks.native-cli-worker-fast-mode.v1',
-    generated_at: nowIso(),
-    ok: true,
-    fast_mode: policy.fast_mode,
-    service_tier: policy.service_tier,
-    env: {
-      SKS_FAST_MODE: process.env.SKS_FAST_MODE || null,
-      SKS_SERVICE_TIER: process.env.SKS_SERVICE_TIER || null
-    }
-  })
-  await writeJsonAtomic(path.join(workerDir, 'worker-recursion-guard.json'), guard)
   let noPatchReason: any = null
   const progressTelemetry = startWorkerProgressTelemetry({
     agentRoot,
@@ -181,13 +169,12 @@ export async function runNativeCliWorker(input: any = {}) {
       backend,
       blockers: Array.isArray(slice.write_paths) && slice.write_paths.length && backend !== 'fake' ? ['write_capable_no_patch_envelope'] : []
     }
-	    await writeJsonAtomic(path.join(workerDir, 'worker-no-patch-reason.json'), noPatchReason)
 	    await workerTelemetry(agentRoot, intake, agent, slice, {
 	      eventType: 'artifact_written',
 	      status: 'running',
 	      backend,
 	      serviceTier: policy.service_tier,
-	      artifacts: [path.join(workerDirRel, 'worker-no-patch-reason.json')],
+	      artifacts: [resultRel],
 	      blockers: noPatchReason.blockers || [],
 	      logTail: noPatchReason.reason
 	    })
@@ -199,6 +186,9 @@ export async function runNativeCliWorker(input: any = {}) {
     generated_at: nowIso(),
     ok: guard.ok,
     backend,
+    fast_mode: policy.fast_mode,
+    service_tier: policy.service_tier,
+    codex_desktop_service_tier: policy.codex_desktop_service_tier,
     cwd: workerCwd,
     worktree,
     agent_id: agent.id,
@@ -209,8 +199,6 @@ export async function runNativeCliWorker(input: any = {}) {
     ppid: process.ppid,
     process_id: process.pid,
     command_line: redactCommandLine(process.argv),
-    fast_mode: policy.fast_mode,
-    service_tier: policy.service_tier,
     sdk_thread_id: routed.report?.sdk_thread_id || null,
     sdk_run_id: routed.report?.sdk_run_id || null,
     stream_event_count: Number(routed.report?.stream_event_count || 0),
@@ -220,21 +208,32 @@ export async function runNativeCliWorker(input: any = {}) {
     backend_child_execution: routed.report.child_process_ids.length > 0 || Boolean(routed.report?.sdk_thread_id) || backend === 'fake' || backend === 'ollama',
     recursion_guard_env: process.env.SKS_DISABLE_ROUTE_RECURSION === '1',
     worker_env: process.env.SKS_AGENT_WORKER === '1',
+    fast_mode_report: {
+      ok: true,
+      fast_mode: policy.fast_mode,
+      service_tier: policy.service_tier,
+      env: {
+        SKS_FAST_MODE: process.env.SKS_FAST_MODE || null,
+        SKS_SERVICE_TIER: process.env.SKS_SERVICE_TIER || null
+      }
+    },
+    recursion_guard: guard,
+    session_proof: {
+      ok: guard.ok,
+      session_id: agent.session_id,
+      slot_id: agent.slot_id || null,
+      generation_index: agent.generation_index || null,
+      artifact_dir: workerDirRel,
+      patch_envelope: patchEnvelopes.length ? patchRel : null
+    },
     exit_code: guard.ok ? 0 : 1
   }
   await writeJsonAtomic(path.join(workerDir, 'worker-process-report.json'), report)
   const artifacts = [
-    path.join(workerDirRel, 'worker-intake.json'),
-    heartbeatRel,
-    path.join(workerDirRel, 'worker-process-report.json'),
-    routed.reportRel,
-    ...routed.result.artifacts.filter((artifact: string) => artifact.includes('codex-worker-') || artifact.includes('agent-process-report') || artifact.includes('agent-zellij-report')),
     resultRel,
-    patchEnvelopes.length ? patchRel : path.join(workerDirRel, 'worker-no-patch-reason.json'),
-    path.join(workerDirRel, 'worker-terminal-close-report.json'),
-    path.join(workerDirRel, 'worker-fast-mode.json'),
-    path.join(workerDirRel, 'worker-recursion-guard.json'),
-    path.join(workerDirRel, 'worker-session-proof.json')
+    path.join(workerDirRel, 'worker-process-report.json'),
+    heartbeatRel,
+    ...(patchEnvelopes.length ? [patchRel] : [])
   ]
   const result = validateAgentWorkerResult({
     ...routed.result,
@@ -264,7 +263,7 @@ export async function runNativeCliWorker(input: any = {}) {
     zellij_child_report: routed.result.zellij_child_report,
     model_authored_patch_envelopes: patchEnvelopes.some((envelope: any) => envelope.source === 'model_authored'),
     fixture_patch_envelopes: patchEnvelopes.some((envelope: any) => envelope.source === 'fixture'),
-    ...(!patchEnvelopes.length ? { no_patch_reason: noPatchReason || await readJson(path.join(workerDir, 'worker-no-patch-reason.json'), null) } : {}),
+    ...(!patchEnvelopes.length ? { no_patch_reason: noPatchReason } : {}),
     source_intelligence_refs: agent.source_intelligence_refs || intake.source_intelligence_refs || null,
     goal_mode_ref: agent.goal_mode_ref || intake.goal_mode_ref || null,
     verification: { status: guard.ok && routed.result.status === 'done' ? 'passed' : 'failed', checks: [...(routed.result.verification?.checks || []), 'native-cli-worker-process', 'worker-artifact-contract', 'fast-mode-policy', 'native-worker-backend-router'] },
@@ -280,40 +279,14 @@ export async function runNativeCliWorker(input: any = {}) {
 	    blockers: result.blockers || [],
 	    logTail: result.summary || ''
 	  })
-  await writeJsonAtomic(path.join(workerDir, 'worker-session-proof.json'), {
-    schema: 'sks.native-cli-worker-session-proof.v1',
-    generated_at: nowIso(),
-    ok: result.status === 'done',
-    session_id: result.session_id,
-    slot_id: agent.slot_id || null,
-    generation_index: agent.generation_index || null,
-    process_id: process.pid,
-    main_repo_root: String(input.mainRepoRoot || intake.main_repo_root || worktree?.main_repo_root || agentRoot),
-    cwd: workerCwd,
-    worktree,
-    artifact_dir: workerDirRel,
-    patch_envelope: patchEnvelopes.length ? patchRel : null,
-    no_patch_reason: patchEnvelopes.length ? null : path.join(workerDirRel, 'worker-no-patch-reason.json'),
-    backend_router_report: routed.reportRel,
-    backend_child_process_ids: routed.report.child_process_ids,
-    sdk_thread_id: routed.report?.sdk_thread_id || null,
-    sdk_run_id: routed.report?.sdk_run_id || null,
-    stream_event_count: Number(routed.report?.stream_event_count || 0),
-    structured_output_valid: routed.report?.structured_output_valid === true,
-    model_authored_patch_envelopes: patchEnvelopes.some((envelope: any) => envelope.source === 'model_authored'),
-    fixture_patch_envelopes: patchEnvelopes.some((envelope: any) => envelope.source === 'fixture'),
-    fast_mode: policy.fast_mode,
-    service_tier: policy.service_tier,
-    blockers: result.blockers
-  })
-	  await appendJsonl(path.resolve(agentRoot, heartbeatRel), {
+	  await appendJsonlBounded(path.resolve(agentRoot, heartbeatRel), {
     schema: 'sks.native-cli-worker-heartbeat.v1',
     ts: nowIso(),
     event: 'finished',
     pid: process.pid,
     session_id: agent.session_id,
 	    status: result.status
-	  })
+	  }, 2 * 1024 * 1024)
 	  await workerTelemetry(agentRoot, intake, agent, slice, {
 	    eventType: 'heartbeat',
 	    status: result.status === 'done' ? 'completed' : 'failed',
@@ -323,19 +296,6 @@ export async function runNativeCliWorker(input: any = {}) {
 	    blockers: result.blockers || [],
 	    logTail: 'worker heartbeat finished'
 	  })
-  await writeJsonAtomic(path.join(workerDir, 'worker-terminal-close-report.json'), {
-    schema: 'sks.native-cli-worker-terminal-close-report.v1',
-    generated_at: nowIso(),
-    ok: result.status === 'done',
-    session_id: result.session_id,
-    slot_id: agent.slot_id || null,
-    generation_index: agent.generation_index || null,
-    process_id: process.pid,
-    exit_code: result.status === 'done' ? 0 : 1,
-    fast_mode: policy.fast_mode,
-    service_tier: policy.service_tier,
-    blockers: result.blockers
-  })
   return result
 }
 
@@ -352,13 +312,12 @@ function startWorkerProgressTelemetry(input: {
   backend: string
   serviceTier: string
 }) {
-  const parsed = Number(process.env.SKS_ZELLIJ_WORKER_PROGRESS_MS || 2000)
-  const intervalMs = Math.max(500, Number.isFinite(parsed) ? Math.floor(parsed) : 2000)
+  const parsed = Number(process.env.SKS_ZELLIJ_WORKER_PROGRESS_MS || 10000)
+  const intervalMs = Math.max(1000, Number.isFinite(parsed) ? Math.floor(parsed) : 10000)
   let tick = 0
   const timer = setInterval(() => {
     tick += 1
-    const progress = { done: tick, total: 0, label: 'backend running' }
-    appendJsonl(path.resolve(input.agentRoot, input.heartbeatRel), {
+    appendJsonlBounded(path.resolve(input.agentRoot, input.heartbeatRel), {
       schema: 'sks.native-cli-worker-heartbeat.v1',
       ts: nowIso(),
       event: 'progress',
@@ -366,15 +325,14 @@ function startWorkerProgressTelemetry(input: {
       session_id: input.agent.session_id,
       slot_id: input.agent.slot_id || null,
       generation_index: input.agent.generation_index || null,
-      progress
-    }).catch(() => undefined)
+      progress: null
+    }, 2 * 1024 * 1024).catch(() => undefined)
     workerTelemetry(input.agentRoot, input.intake, input.agent, input.slice, {
-      eventType: 'task_progress',
+      eventType: 'heartbeat',
       status: 'running',
       backend: input.backend,
       serviceTier: input.serviceTier,
       artifacts: [input.heartbeatRel],
-      progress,
       logTail: `backend running ${tick}`
     }).catch(() => undefined)
   }, intervalMs)
@@ -456,7 +414,8 @@ async function workerTelemetry(agentRoot: string, intake: any, agent: any, slice
     service_tier: input.serviceTier,
     worktree_id: agent.worktree?.id || slice.worktree?.id || intake.worktree?.id || null,
     worktree_path: agent.worktree?.path || slice.worktree?.path || intake.worktree?.path || null,
-    task_title: String(slice.description || slice.title || slice.id || 'worker task'),
+    task_id: String(slice.id || 'worker-task'),
+    ...(input.eventType === 'task_started' ? { task_title: String(slice.description || slice.title || slice.id || 'worker task') } : {}),
     current_file: firstString([slice.write_paths?.[0], slice.readonly_paths?.[0], slice.input_files?.[0]]) || null,
     ...(input.progress ? { progress: input.progress } : {}),
     artifact_paths: input.artifacts || [],

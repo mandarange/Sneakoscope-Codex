@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import crypto from 'node:crypto'
 import { AGENT_LEDGER_EVENT_SCHEMA, AGENT_PROOF_EVIDENCE_SCHEMA } from './agent-schema.js'
-import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { redactSecrets } from '../secret-redaction.js'
 
 const LEDGER_LOCKS = new Map<string, Promise<unknown>>()
@@ -114,7 +114,7 @@ export async function appendAgentLedgerEvent(root: string, event: { agent_id: st
   }
   const current_hash = hashEntry(entryWithoutHash)
   const entry = { ...entryWithoutHash, current_hash }
-  await fs.appendFile(file, JSON.stringify(entry) + '\n', 'utf8')
+  await appendJsonlBounded(file, entry, 5 * 1024 * 1024)
   return entry
   })
 }
@@ -127,12 +127,17 @@ export async function validateAgentLedgerHashChain(root: string) {
   let expectedSequence = 1
   for (const line of lines) {
     const entry = JSON.parse(line)
+    if (entry?.type === 'log.rotated') {
+      expectedSequence = 0
+      previousHash = null
+      continue
+    }
     const { current_hash, ...withoutHash } = entry
-    if (entry.sequence !== expectedSequence) blockers.push('sequence_mismatch:' + entry.sequence + ':' + expectedSequence)
-    if ((entry.previous_hash || null) !== previousHash) blockers.push('previous_hash_mismatch:' + entry.sequence)
+    if (expectedSequence > 0 && entry.sequence !== expectedSequence) blockers.push('sequence_mismatch:' + entry.sequence + ':' + expectedSequence)
+    if (previousHash !== null && (entry.previous_hash || null) !== previousHash) blockers.push('previous_hash_mismatch:' + entry.sequence)
     if (hashEntry(withoutHash) !== current_hash) blockers.push('current_hash_mismatch:' + entry.sequence)
     previousHash = current_hash
-    expectedSequence += 1
+    expectedSequence = Number(entry.sequence || expectedSequence) + 1
   }
   return { ok: blockers.length === 0, entries: lines.length, blockers }
 }

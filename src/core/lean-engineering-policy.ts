@@ -66,6 +66,7 @@ const LEAN_ENGINEERING_POLICY_CANONICAL = [
   'Fix shared root causes instead of duplicating caller-specific symptom guards.',
   'Capability and compatibility fallbacks require one authority, proof, bounded scope, and honest verification level.',
   'Never remove trust-boundary validation, data-loss protection, security, permissions, rollback, accessibility, or explicit user requirements to shrink a diff.',
+  'Release verification must stay lean: release preset gates <= 200, package scripts <= 100, and one distinct user concern per gate.',
   'Non-trivial logic needs one smallest runnable check.'
 ].join('\n');
 
@@ -86,7 +87,7 @@ export function leanEngineeringCompactText() {
     `Lean Engineering Policy (${LEAN_ENGINEERING_POLICY_ID}/${LEAN_ENGINEERING_POLICY_HASH}):`,
     'Read the touched flow first, then stop at the highest sufficient rung: skip, reuse existing, stdlib, native platform, installed dependency, safe single expression, minimal custom.',
     'No unrequested route/command/daemon/dependency/abstraction/config flag/shim/hidden fallback; required capability/compatibility fallback needs one authority, proof, and bounded scope.',
-    'Fix root cause once, preserve trust-boundary validation/security/rollback/accessibility/user requirements, and leave one runnable check for non-trivial logic.'
+    'Fix root cause once, preserve trust-boundary validation/security/rollback/accessibility/user requirements, keep release gates <= 200 and package scripts <= 100, and leave one runnable check for non-trivial logic.'
   ].join('\n');
 }
 

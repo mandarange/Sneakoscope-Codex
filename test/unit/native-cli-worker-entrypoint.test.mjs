@@ -45,22 +45,26 @@ test('native CLI worker entrypoint writes required session artifacts and exits d
     assert.equal(result.status, 'done');
     const workerDir = path.join(root, 'sessions', 'slot-1', 'gen-1', 'worker');
     for (const file of [
-      'worker-intake.json',
       'worker-heartbeat.jsonl',
       'worker-process-report.json',
       'worker-result.json',
-      'worker-patch-envelope.json',
+      'worker-patch-envelope.json'
+    ]) {
+      await fs.access(path.join(workerDir, file));
+    }
+    for (const file of [
       'worker-terminal-close-report.json',
       'worker-fast-mode.json',
       'worker-recursion-guard.json',
       'worker-session-proof.json'
     ]) {
-      await fs.access(path.join(workerDir, file));
+      await assert.rejects(fs.access(path.join(workerDir, file)));
     }
     const report = JSON.parse(await fs.readFile(path.join(workerDir, 'worker-process-report.json'), 'utf8'));
     assert.equal(report.fast_mode, true);
     assert.equal(report.service_tier, 'fast');
     assert.equal(report.exit_code, 0);
+    assert.equal(report.session_proof.ok, true);
   } finally {
     restoreEnv('SKS_DISABLE_ROUTE_RECURSION', oldDisable);
     restoreEnv('SKS_AGENT_WORKER', oldWorker);

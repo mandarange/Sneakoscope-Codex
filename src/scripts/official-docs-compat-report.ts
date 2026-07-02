@@ -131,8 +131,8 @@ const checks = [
   row('codex_memory_summary_rebuild', 'rust-v0.133.0', 'src/scripts/memory-summary-rebuild-check.ts', ['memory-summary']),
   row('codex_repeated_blocker_stop', 'rust-v0.133.0', 'src/core/image-ux-review/fix-loop.ts', ['repeated_blocker_stop']),
   row('codex_app_imagegen_evidence_policy', 'Codex App image generation docs', 'src/core/imagegen/imagegen-capability.ts', ['Codex App $imagegen', 'codex_app_builtin_output_required', 'capability_detection_is_not_output_proof', 'official_codex_app_substitute']),
-  row('codex_chrome_extension_web_verification_policy', 'Codex Chrome Extension docs', 'src/core/routes.ts', ['CODEX_CHROME_EXTENSION_DOC_URL', 'CODEX_WEB_VERIFICATION_POLICY', 'CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE']),
-  row('chatgpt_images_2_prompt_policy', 'ChatGPT Images 2.0 announcement + gpt-image-2 docs', 'src/core/routes.ts', ['OPENAI_CHATGPT_IMAGES_2_DOC_URL', 'ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2', 'IMAGEGEN_SOCIAL_SOURCE_POLICY']),
+  row('codex_chrome_extension_web_verification_policy', 'Codex Chrome Extension docs', 'src/core/routes/evidence.ts', ['CODEX_CHROME_EXTENSION_DOC_URL', 'CODEX_WEB_VERIFICATION_POLICY', 'CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE']),
+  row('chatgpt_images_2_prompt_policy', 'ChatGPT Images 2.0 announcement + gpt-image-2 docs', 'src/core/routes/evidence.ts', ['OPENAI_CHATGPT_IMAGES_2_DOC_URL', 'ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2', 'IMAGEGEN_SOCIAL_SOURCE_POLICY']),
   row('gpt_image_2_generation_edit', 'OpenAI Image Generation docs', 'src/core/image-ux-review/imagegen-adapter.ts', ['gpt-image-2', '/v1/images/edits', 'FormData']),
   row('gpt_image_2_high_fidelity_auto', 'OpenAI Image Generation docs', 'src/core/image-ux-review/imagegen-adapter.ts', ['high_fidelity_automatic', 'input_fidelity']),
   row('structured_outputs_strict_schema', 'OpenAI Structured Outputs docs', 'src/core/structured-output-adapter.ts', ['json_schema', 'strict', 'additionalProperties'])

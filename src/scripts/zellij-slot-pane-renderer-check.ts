@@ -42,9 +42,10 @@ await fs.writeFile(path.join(artifactDir, 'worker-intake.json'), JSON.stringify(
   },
   worktree: { id: 'WT-0007' }
 }, null, 2))
-await fs.writeFile(path.join(artifactDir, 'worker-fast-mode.json'), JSON.stringify({
+await fs.writeFile(path.join(artifactDir, 'worker-process-report.json'), JSON.stringify({
   fast_mode: true,
-  service_tier: 'fast'
+  service_tier: 'fast',
+  session_proof: { ok: true, session_id: 'session-slot-003' }
 }, null, 2))
 await fs.writeFile(path.join(artifactDir, 'zellij-worker-pane.json'), JSON.stringify({
   provider: 'codex-lb',

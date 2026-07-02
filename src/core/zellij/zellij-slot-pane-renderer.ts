@@ -123,7 +123,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
   const result = await readJson(path.join(artifactDir, 'worker-result.json'))
   const intake = await readJson(path.join(artifactDir, 'worker-intake.json'))
   const backendReport = await readJson(path.join(artifactDir, 'worker-backend-router-report.json'))
-  const fastReport = await readJson(path.join(artifactDir, 'worker-fast-mode.json'))
+  const processReport = await readJson(path.join(artifactDir, 'worker-process-report.json'))
   const paneReport = await readJson(path.join(artifactDir, 'zellij-worker-pane.json'))
   const codexProof = await readJson(path.join(artifactDir, 'codex-control-proof.json'))
   const localProof = await readJson(path.join(artifactDir, 'local-llm-proof.json'))
@@ -151,7 +151,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
   ])
   const now = Date.now()
   const qaAppHandoff = await readQaAppHandoffNearArtifactDir(artifactDir)
-  if (!result && !intake && !backendReport && !fastReport && !paneReport && !codexProof && !localProof && !heartbeatMtime && !eventRows.length) return null
+  if (!result && !intake && !backendReport && !processReport && !paneReport && !codexProof && !localProof && !heartbeatMtime && !eventRows.length) return null
   return renderZellijSlotPane({
     slotId: input.slotId,
     generationIndex: input.generationIndex,
@@ -159,9 +159,9 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
     role: input.role || result?.persona_id || intake?.agent?.naruto_role || intake?.agent?.role || intake?.agent?.persona_id || result?.agent_id || null,
     backend: input.backend || result?.backend || backendReport?.selected_backend || intake?.backend || null,
     status: result?.status || statusFromEvents(eventRows) || (heartbeatMtime ? 'running' : 'launching'),
-    fastMode: firstDefined(fastReport?.fast_mode, backendReport?.fast_mode, result?.fast_mode, intake?.fast_mode),
+    fastMode: firstDefined(processReport?.fast_mode, backendReport?.fast_mode, result?.fast_mode, intake?.fast_mode),
     serviceTier: firstText([
-      fastReport?.service_tier,
+      processReport?.service_tier,
       paneReport?.service_tier,
       backendReport?.service_tier,
       codexProof?.config?.service_tier,
@@ -341,7 +341,7 @@ async function tryRenderTelemetrySlotPane(input: {
     ...liveRows,
     trimInline(backend, 78),
     `${slot.status}: ${trimInline(slot.task_title || 'worker task', 68)}`,
-    `${formatTelemetryProgress(slot.progress)} · latest ${slot.latest_event_type} ${heartbeat}`,
+    `${formatTelemetryProgress(slot.progress, slot.started_at || slot.latest_ts)} · latest ${slot.latest_event_type} ${heartbeat}`,
     `${slot.latest_event_type === 'patch_candidate' ? 'patch candidate' : 'patch'}: ${slot.latest_event_type === 'patch_candidate' ? 'queued' : trimInline(slot.current_file || '-', 42)}`
   ].join('\n')
 }
@@ -362,9 +362,17 @@ function findTelemetrySlot(snapshot: ZellijSlotTelemetrySnapshot, slotId: string
   return Object.values(snapshot.slots || {}).find((row) => row.slot_id === slotId && Number(row.generation_index) === generation) || null
 }
 
-function formatTelemetryProgress(progress: { done: number; total: number; label: string } | null) {
-  if (!progress) return 'progress ?'
+function formatTelemetryProgress(progress: { done: number; total: number; label: string } | null, startedAt?: string | null) {
+  if (!progress || (progress.total === 0 && progress.done > 0)) return `elapsed ${formatElapsedSince(startedAt)}`
   return `progress ${progress.done}/${progress.total}${progress.label ? ` ${trimInline(progress.label, 24)}` : ''}`
+}
+
+function formatElapsedSince(startedAt?: string | null) {
+  const start = Date.parse(String(startedAt || ''))
+  const seconds = Number.isFinite(start) ? Math.max(0, Math.floor((Date.now() - start) / 1000)) : 0
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
 function telemetryStatus(snapshot: ZellijSlotTelemetrySnapshot | null) {

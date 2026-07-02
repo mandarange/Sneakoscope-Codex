@@ -1,22 +1,13 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { assertGate, emitGate, packageScripts, readText, runFakeCodexSdkTaskFixture } from './lib/codex-sdk-gate-lib.js';
+import { assertGate, emitGate, readText, releaseGateIds, runFakeCodexSdkTaskFixture } from './lib/codex-sdk-gate-lib.js';
 
-const scripts = packageScripts();
+const releaseGates = releaseGateIds();
 const required = [
-  'codex-control:capability',
-  'codex-control:no-legacy-fallback',
-  'codex-control:structured-output',
   'codex-control:event-stream-ledger',
-  'codex-control:thread-registry',
-  'codex-control:side-effect-scope',
-  'codex-control:empty-result-retry',
-  'codex-control:model-capacity-fallback',
-  'codex-control:stream-idle-watchdog',
-  'codex-control:tool-call-sequence-repair',
-  'codex-control:keepalive-no-cot-leak'
+  'codex-control:all-pipelines'
 ];
-for (const name of required) assertGate(Boolean(scripts[name]), `required control gate missing: ${name}`);
+for (const name of required) assertGate(releaseGates.has(name), `required control gate missing from v2 manifest: ${name}`);
 const sources = {
   team: readText('src/core/commands/team-command.ts'),
   qa: readText('src/core/commands/qa-loop-command.ts'),
@@ -34,4 +25,4 @@ assertGate(sources.workerRouter.includes('runCodexTask({'), 'native worker route
 const fixture = await runFakeCodexSdkTaskFixture('control-all-pipelines');
 assertGate(fixture.result.ok === true, 'all pipeline control fixture must pass', fixture.result);
 assertGate(fixture.proof.reliability_shield?.ok === true, 'all pipeline fixture must include reliability shield proof', fixture.proof);
-emitGate('codex-control:all-pipelines', { scripts: required.length, sdk_thread_id: fixture.result.sdkThreadId });
+emitGate('codex-control:all-pipelines', { gates: required.length, sdk_thread_id: fixture.result.sdkThreadId });

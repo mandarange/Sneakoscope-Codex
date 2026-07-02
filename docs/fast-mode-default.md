@@ -44,7 +44,7 @@ may surface the same choice as `priority` and `default`; SKS normalizes
 `priority -> fast` and `default -> standard` at the command boundary so agent
 reports and CLI overrides stay consistent.
 
-The policy is attached to the roster, concurrency policy, backend report, native worker process reports, `worker-fast-mode.json`, `fast-mode-propagation-proof.json`, and runtime truth matrix row `fast_mode_default`.
+The policy is attached to the roster, concurrency policy, backend report, native worker process reports, `fast-mode-propagation-proof.json`, and runtime truth matrix row `fast_mode_default`.
 
 Explicit one-run opt-out:
 

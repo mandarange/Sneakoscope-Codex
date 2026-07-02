@@ -1,18 +1,14 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import { assertGate, emitGate, packageScripts, readText, runFakeCodexSdkTaskFixture } from './lib/codex-sdk-gate-lib.js';
+import { assertGate, emitGate, readText, releaseGateIds, runFakeCodexSdkTaskFixture } from './lib/codex-sdk-gate-lib.js';
 
-const scripts = packageScripts();
+const releaseGates = releaseGateIds();
 const required = [
   'codex-sdk:dfix-pipeline',
-  'codex-sdk:qa-pipeline',
-  'codex-sdk:research-pipeline',
-  'codex-sdk:team-naruto-agent-pipeline',
-  'codex-sdk:release-review-pipeline',
-  'codex-sdk:ux-ppt-review-pipeline',
+  'codex-sdk:all-pipelines',
   'codex-sdk:core-skill-pipeline'
 ];
-for (const name of required) assertGate(Boolean(scripts[name]), `required pipeline gate missing: ${name}`);
+for (const name of required) assertGate(releaseGates.has(name), `required pipeline gate missing from v2 manifest: ${name}`);
 const sources = {
   team: readText('src/core/commands/team-command.ts'),
   qa: readText('src/core/commands/qa-loop-command.ts'),
@@ -29,4 +25,4 @@ assertGate(sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto defaults mus
 assertGate(sources.coreSkill.includes("'codex-sdk'"), 'Core skill backend type must include codex-sdk');
 const fixture = await runFakeCodexSdkTaskFixture('all-pipelines');
 assertGate(fixture.result.ok === true, 'all pipeline SDK fixture must pass', fixture.result);
-emitGate('codex-sdk:all-pipelines', { scripts: required.length, sdk_thread_id: fixture.result.sdkThreadId });
+emitGate('codex-sdk:all-pipelines', { gates: required.length, sdk_thread_id: fixture.result.sdkThreadId });

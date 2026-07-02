@@ -6,7 +6,7 @@ import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution
 import { resolveCodexNativeInvocationPlan } from './codex-native/codex-native-invocation-router.js';
 import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
 import { initializeQaRuntimeArtifacts } from './qa-loop/qa-runtime-artifacts.js';
-import { evaluateQaGateV2 } from './qa-loop/qa-gate-v2.js';
+import { evaluateQaGateV2 } from './qa-loop/qa-gate.js';
 import { DEFAULT_QA_MAX_CYCLES, QA_GATE_V2_ARTIFACT, QA_SURFACE_SELECTION_ARTIFACT } from './qa-loop/qa-types.js';
 
 export const QA_LOOP_ROUTE = 'QALoop';
@@ -489,9 +489,14 @@ export async function evaluateQaGate(dir: any) {
   const reportFile = qaReportFileFromGate(gate);
   const reasons: any[] = [];
   if (gateV2 && gateV2.passed !== true) reasons.push(...(gateV2.blockers || []));
-  for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete']) {
+  const verificationLevel = String(gate.verification_level || 'real');
+  const mockVerification = verificationLevel === 'mock';
+  const uiEvidenceClaimed = gate.ui_e2e_required === true || gate.ui_chrome_extension_evidence === true || gate.ui_computer_use_evidence === true || gate.ui_evidence_claimed === true;
+  const apiEvidenceClaimed = gate.api_e2e_required === true || gate.api_evidence_claimed === true;
+  for (const key of ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted']) {
     if (gate[key] !== true) reasons.push(`${key}_missing`);
   }
+  if (!mockVerification && (uiEvidenceClaimed || apiEvidenceClaimed) && gate.honest_mode_complete !== true) reasons.push('honest_mode_complete_missing');
   if (gate.corrective_loop_enabled === true) {
     if (gate.safe_remediation_required !== true) reasons.push('safe_remediation_required_missing');
     if (gate.post_fix_verification_complete !== true) reasons.push('post_fix_verification_complete_missing');
@@ -529,7 +534,7 @@ export async function evaluateQaGate(dir: any) {
   if (!(await exists(path.join(dir, 'qa-ledger.json')))) reasons.push('qa_ledger_missing');
   const uniqueReasons = [...new Set(reasons)];
   const passed = gate.passed === true && uniqueReasons.length === 0;
-  const result = { checked_at: nowIso(), passed, reasons: uniqueReasons, gate, gate_v2: gateV2 };
+  const result = { checked_at: nowIso(), passed, verification_level: verificationLevel, reasons: uniqueReasons, gate, gate_v2: gateV2 };
   await writeJsonAtomic(path.join(dir, 'qa-gate.evaluated.json'), result);
   return result;
 }
@@ -559,6 +564,7 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
     codex_app_agent_role_strategy: previousGate.codex_app_agent_role_strategy || null,
     codex_native_invocation: previousGate.codex_native_invocation || null,
     blockers: previousGate.blockers || [],
+    verification_level: 'mock',
     passed: !uiRequired,
     qa_report_written: true,
     qa_ledger_complete: true,
@@ -573,7 +579,7 @@ export async function writeMockQaResult(dir: any, mission: any, contract: any) {
     unresolved_fixable_findings: 0,
     unsafe_or_deferred_findings: 0,
     post_fix_verification_complete: true,
-    honest_mode_complete: true,
+    honest_mode_complete: false,
     evidence: ['mock QA-LOOP smoke completed'],
     notes: ['No live UI/API verification was claimed.']
   });

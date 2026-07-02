@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-import fs from 'node:fs/promises'
 import path from 'node:path'
-import { ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { runCodexTask, type CodexControlBackend } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 
@@ -12,12 +11,17 @@ async function main() {
   if (!intake?.result_path || !intake?.heartbeat_path || !intake?.item?.id) {
     throw new Error('naruto worker intake is invalid')
   }
-  await fs.appendFile(intake.heartbeat_path, `${JSON.stringify({
+  const startedAt = Date.now()
+  const maxRuntimeMs = normalizeMaxRuntimeMs(intake.max_runtime_ms)
+  let finished = false
+  const heartbeatTimer = startDeadmanHeartbeat({ intake, startedAt, maxRuntimeMs, finished: () => finished })
+  await appendJsonlBounded(intake.heartbeat_path, {
     schema: 'sks.naruto-actual-worker-heartbeat.v1',
     ts: nowIso(),
-	    item_id: intake.item.id,
-	    status: 'running'
-  })}\n`)
+    item_id: intake.item.id,
+    status: 'running',
+    progress: null
+  }, 2 * 1024 * 1024)
   if (intake.backend === 'fake') process.env.SKS_CODEX_SDK_FAKE = '1'
   const controlRoot = path.join(path.dirname(intake.result_path), 'codex-control')
   await ensureDir(controlRoot)
@@ -75,13 +79,18 @@ async function main() {
       changed_files: Array.isArray(workerResult?.changed_files) ? workerResult.changed_files : [],
       blockers
     })
-    await fs.appendFile(intake.heartbeat_path, `${JSON.stringify({
+    finished = true
+    clearInterval(heartbeatTimer)
+    await appendJsonlBounded(intake.heartbeat_path, {
       schema: 'sks.naruto-actual-worker-heartbeat.v1',
       ts: nowIso(),
       item_id: intake.item.id,
-      status: blockers.length ? 'blocked' : 'done'
-    })}\n`)
+      status: blockers.length ? 'blocked' : 'done',
+      progress: { done: 1, total: 1 }
+    }, 2 * 1024 * 1024)
   } catch (err: any) {
+    finished = true
+    clearInterval(heartbeatTimer)
     await writeJsonAtomic(intake.result_path, {
       schema: 'sks.naruto-actual-worker-result.v1',
       ok: false,
@@ -92,14 +101,61 @@ async function main() {
       worktree_path: intake.worktree_path,
       blockers: [`naruto_actual_worker_control_plane_exception:${err?.message || String(err)}`]
     })
-    await fs.appendFile(intake.heartbeat_path, `${JSON.stringify({
+    await appendJsonlBounded(intake.heartbeat_path, {
       schema: 'sks.naruto-actual-worker-heartbeat.v1',
       ts: nowIso(),
       item_id: intake.item.id,
-      status: 'blocked'
-    })}\n`)
+      status: 'blocked',
+      progress: null
+    }, 2 * 1024 * 1024)
     throw err
   }
+}
+
+function startDeadmanHeartbeat(input: { intake: any; startedAt: number; maxRuntimeMs: number; finished: () => boolean }) {
+  const parsed = Number(process.env.SKS_ZELLIJ_WORKER_PROGRESS_MS || 10000)
+  const intervalMs = Math.max(1000, Number.isFinite(parsed) ? Math.floor(parsed) : 10000)
+  return setInterval(async () => {
+    if (input.finished()) return
+    const elapsedMs = Date.now() - input.startedAt
+    if (elapsedMs > input.maxRuntimeMs) {
+      await writeJsonAtomic(input.intake.result_path, {
+        schema: 'sks.naruto-actual-worker-result.v1',
+        ok: false,
+        generated_at: nowIso(),
+        item_id: input.intake.item.id,
+        placement: input.intake.placement,
+        backend: input.intake.backend,
+        worktree_path: input.intake.worktree_path,
+        status: 'timed_out',
+        blockers: ['naruto_worker_hard_timeout']
+      }).catch(() => undefined)
+      await appendJsonlBounded(input.intake.heartbeat_path, {
+        schema: 'sks.naruto-actual-worker-heartbeat.v1',
+        ts: nowIso(),
+        item_id: input.intake.item.id,
+        status: 'blocked',
+        elapsed_ms: elapsedMs,
+        progress: null
+      }, 2 * 1024 * 1024).catch(() => undefined)
+      process.exit(124)
+      return
+    }
+    await appendJsonlBounded(input.intake.heartbeat_path, {
+      schema: 'sks.naruto-actual-worker-heartbeat.v1',
+      ts: nowIso(),
+      item_id: input.intake.item.id,
+      status: 'running',
+      elapsed_ms: elapsedMs,
+      progress: null
+    }, 2 * 1024 * 1024).catch(() => undefined)
+  }, intervalMs)
+}
+
+function normalizeMaxRuntimeMs(value: unknown) {
+  const parsed = Number(value)
+  if (Number.isFinite(parsed) && parsed > 0) return Math.max(1000, Math.min(Math.floor(parsed), 24 * 60 * 60 * 1000))
+  return 10 * 60 * 1000
 }
 
 function backendPreference(value: unknown): CodexControlBackend[] {

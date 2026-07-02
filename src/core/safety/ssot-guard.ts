@@ -95,7 +95,7 @@ export function canonicalSsotSources(): SsotGuardSource[] {
       id: 'generated_outputs',
       source: 'source generators, build scripts, and schema definitions',
       authority: 'Generated files are derived from their generator or schema owner.',
-      derived: ['release-gates.json', '.sneakoscope/reports/**', 'dist/build-manifest.json'],
+      derived: ['release-gates.v2.json', 'infra-harness-gates.json', '.sneakoscope/reports/**', 'dist/build-manifest.json'],
       rule: 'Regenerate derived artifacts instead of hand-editing them as independent truth.'
     },
     {
@@ -109,7 +109,7 @@ export function canonicalSsotSources(): SsotGuardSource[] {
       id: 'release_gate_manifest',
       source: 'src/core/release/gate-manifest.ts and src/scripts/release-parallel-check.ts',
       authority: 'Release gate selection and publish-required status live in the manifest plus the release DAG.',
-      derived: ['release-gates.json', '.sneakoscope/reports/release-gate-plan.json'],
+      derived: ['.sneakoscope/reports/release-gate-plan.json', '.sneakoscope/reports/gate-policy-audit.json'],
       rule: 'Publish-blocking guard gates must appear in the DAG, manifest, and package scripts.'
     }
   ]

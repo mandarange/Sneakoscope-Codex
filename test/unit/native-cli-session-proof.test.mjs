@@ -11,8 +11,12 @@ test('native CLI session proof accepts 10 native worker process artifacts', asyn
   for (let i = 1; i <= 10; i += 1) {
     const workerDir = path.join(root, 'sessions', `slot-${i}`, 'gen-1', 'worker');
     await fs.mkdir(workerDir, { recursive: true });
-    await fs.writeFile(path.join(workerDir, 'worker-process-report.json'), JSON.stringify({ ok: true, pid: 1000 + i, exit_code: 0 }, null, 2));
-    await fs.writeFile(path.join(workerDir, 'worker-terminal-close-report.json'), JSON.stringify({ ok: true, exit_code: 0 }, null, 2));
+    await fs.writeFile(path.join(workerDir, 'worker-process-report.json'), JSON.stringify({
+      ok: true,
+      pid: 1000 + i,
+      exit_code: 0,
+      session_proof: { ok: true, session_id: `session-${i}`, slot_id: `slot-${i}`, generation_index: 1 }
+    }, null, 2));
     await fs.writeFile(path.join(workerDir, 'worker-heartbeat.jsonl'), `${JSON.stringify({ event: 'started' })}\n${JSON.stringify({ event: 'finished' })}\n`);
     records.push({
       status: 'closed',

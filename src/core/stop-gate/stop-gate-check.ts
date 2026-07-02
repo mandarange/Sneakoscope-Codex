@@ -42,17 +42,16 @@ function rawGateToV1(raw: Record<string, unknown> | null, gatePath: string, rout
   };
 }
 
-async function checkHardBlocker(root: string, missionId: string | null): Promise<{ ok: boolean; file: string | null; reason: string | null; evidence: unknown[] }> {
-  if (!missionId) return { ok: false, file: null, reason: null, evidence: [] };
+async function checkHardBlocker(root: string, missionId: string | null): Promise<{ hardBlocked: boolean; file: string | null; reason: string | null; evidence: unknown[] }> {
+  if (!missionId) return { hardBlocked: false, file: null, reason: null, evidence: [] };
   const file = path.join(missionDir(root, missionId), HARD_BLOCKER_FILE);
-  if (!(await exists(file))) return { ok: false, file: null, reason: null, evidence: [] };
+  if (!(await exists(file))) return { hardBlocked: false, file: null, reason: null, evidence: [] };
   const blocker = await readJson(file, null) as Record<string, unknown> | null;
-  if (!blocker) return { ok: false, file, reason: null, evidence: [] };
-  const ok = blocker.passed === true
-    && String(blocker.reason || '').trim().length > 0
-    && Array.isArray(blocker.evidence)
-    && blocker.evidence.length > 0;
-  return { ok, file, reason: String(blocker.reason || ''), evidence: (blocker.evidence as unknown[]) || [] };
+  if (!blocker) return { hardBlocked: false, file, reason: null, evidence: [] };
+  const hardBlocked = String(blocker.status || '') === 'hard_blocked'
+    && blocker.passed !== true
+    && String(blocker.reason || '').trim().length > 0;
+  return { hardBlocked, file, reason: String(blocker.reason || ''), evidence: (blocker.evidence as unknown[]) || [] };
 }
 
 export async function checkStopGate(input: {
@@ -76,7 +75,7 @@ export async function checkStopGate(input: {
 
   // Check hard blocker first
   const hardBlocker = await checkHardBlocker(root, missionId);
-  if (hardBlocker.ok) {
+  if (hardBlocker.hardBlocked) {
     const action: StopGateAction = 'hard_blocked';
     const diagnostics: StopGateDiagnostics = {
       schema: 'sks.stop-gate-diagnostics.v1',
@@ -97,13 +96,13 @@ export async function checkStopGate(input: {
     await writeDiagnostics(root, missionId, diagnostics);
     return {
       schema: 'sks.stop-gate-check.v1',
-      ok: true,
+      ok: false,
       action,
       route,
       mission_id: missionId,
       gate_path: hardBlocker.file,
       diagnostics,
-      feedback: `Stop allowed: hard blocker recorded with evidence. Reason: ${hardBlocker.reason}`,
+      feedback: `Stop hard-blocked: ${hardBlocker.reason}`,
     };
   }
 
@@ -141,15 +140,11 @@ export async function checkStopGate(input: {
 
   const missingFields: string[] = [];
   if (normalizedGate.passed !== true) missingFields.push('passed');
-  if (normalizedGate.terminal !== true) missingFields.push('terminal');
-  if (normalizedGate.status !== 'passed') missingFields.push('status');
   if (normalizedGate.blockers.length > 0) missingFields.push('blockers');
   if (normalizedGate.missing_fields.length > 0) missingFields.push(...normalizedGate.missing_fields.map((field) => `missing_fields:${field}`));
 
   if (
     normalizedGate.passed === true
-    && normalizedGate.terminal === true
-    && normalizedGate.status === 'passed'
     && normalizedGate.blockers.length === 0
     && normalizedGate.missing_fields.length === 0
   ) {

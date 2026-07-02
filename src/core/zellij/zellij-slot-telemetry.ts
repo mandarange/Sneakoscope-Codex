@@ -51,6 +51,7 @@ export interface ZellijSlotTelemetryEvent {
   service_tier?: string
   worktree_id?: string | null
   worktree_path?: string | null
+  task_id?: string
   task_title?: string
   current_file?: string | null
   progress?: {
@@ -83,6 +84,7 @@ export interface ZellijSlotTelemetrySnapshot {
     current_file: string | null
     latest_event_type: string
     latest_ts: string
+    started_at: string
     progress: { done: number; total: number; label: string } | null
     artifact_paths: string[]
     blockers: string[]
@@ -275,9 +277,13 @@ function normalizeTelemetryEvent(event: ZellijSlotTelemetryEvent): ZellijSlotTel
     ...(event.service_tier ? { service_tier: String(event.service_tier) } : {}),
     worktree_id: event.worktree_id == null ? null : String(event.worktree_id),
     worktree_path: event.worktree_path == null ? null : String(event.worktree_path),
+    ...(event.task_id ? { task_id: String(event.task_id) } : {}),
     ...(event.task_title ? { task_title: String(event.task_title) } : {}),
     current_file: event.current_file == null ? null : String(event.current_file),
-    ...(event.progress ? { progress: normalizeProgress(event.progress) } : {}),
+    ...(event.progress ? (() => {
+      const progress = normalizeProgress(event.progress)
+      return progress ? { progress } : {}
+    })() : {}),
     ...(Array.isArray(event.artifact_paths) ? { artifact_paths: event.artifact_paths.map(String).filter(Boolean) } : {}),
     ...(event.log_tail ? { log_tail: tail(event.log_tail, 1200) } : {}),
     ...(Array.isArray(event.blockers) ? { blockers: event.blockers.map(String).filter(Boolean) } : {})
@@ -306,10 +312,11 @@ function mergeSlotTelemetry(previous: ZellijSlotTelemetrySnapshot['slots'][strin
     service_tier: event.service_tier || previous?.service_tier || 'unknown',
     worktree_id: event.worktree_id ?? previous?.worktree_id ?? null,
     worktree_path: event.worktree_path ?? previous?.worktree_path ?? null,
-    task_title: event.task_title || previous?.task_title || 'waiting for task',
+    task_title: event.task_title || previous?.task_title || event.task_id || 'waiting for task',
     current_file: stale ? previous!.current_file ?? (terminalRegression ? null : event.current_file ?? null) : event.current_file ?? previous?.current_file ?? null,
     latest_event_type: stale ? previous!.latest_event_type : event.event_type,
     latest_ts: stale ? previous!.latest_ts : event.ts,
+    started_at: previous?.started_at || event.ts,
     progress: stale ? previous!.progress || (terminalRegression ? null : event.progress || null) : event.progress || previous?.progress || null,
     artifact_paths: unique([...(previous?.artifact_paths || []), ...(event.artifact_paths || [])]),
     blockers: unique([...(previous?.blockers || []), ...(event.blockers || [])]),
@@ -380,9 +387,12 @@ function normalizeEventType(value: unknown): ZellijSlotTelemetryEventType {
 }
 
 function normalizeProgress(value: any) {
+  const done = Math.max(0, Math.floor(Number(value?.done) || 0))
+  const total = Math.max(0, Math.floor(Number(value?.total) || 0))
+  if (total === 0 && done > 0) return null
   return {
-    done: Math.max(0, Math.floor(Number(value?.done) || 0)),
-    total: Math.max(0, Math.floor(Number(value?.total) || 0)),
+    done,
+    total,
     label: String(value?.label || 'progress')
   }
 }
@@ -418,6 +428,10 @@ async function writeTelemetrySnapshotFast(file: string, snapshot: ZellijSlotTele
     const disk = await readJson(file, null) as ZellijSlotTelemetrySnapshot | null
     const merged = disk?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA ? mergeTelemetrySnapshots(disk, snapshot) : snapshot
     const next = { ...merged, flush_count: Math.max(flushCount, Number(merged.flush_count || 0)) }
+    if (disk?.schema === ZELLIJ_SLOT_TELEMETRY_SNAPSHOT_SCHEMA && telemetrySnapshotContentKey(disk) === telemetrySnapshotContentKey(next)) {
+      telemetrySnapshotCache.set(file, disk)
+      return
+    }
     telemetrySnapshotCache.set(file, next)
     await writeTextAtomic(file, `${JSON.stringify(next)}\n`)
     const stat = await statTelemetryFile(file)
@@ -430,14 +444,10 @@ function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEv
   telemetrySnapshotWriteCounts.set(file, next)
   const now = Date.now()
   const last = telemetrySnapshotLastFlushMs.get(file) || 0
-  const parsedFlushMs = Number(process.env.SKS_ZELLIJ_SLOT_TELEMETRY_FLUSH_MS || 1000)
-  const parsedFlushEvery = Number(process.env.SKS_ZELLIJ_SLOT_TELEMETRY_FLUSH_EVERY_N || 100)
-  const flushMs = Math.max(250, Number.isFinite(parsedFlushMs) ? parsedFlushMs : 1000)
-  const flushEvery = Math.max(1, Number.isFinite(parsedFlushEvery) ? Math.floor(parsedFlushEvery) : 100)
+  const parsedFlushMs = Number(process.env.SKS_ZELLIJ_SLOT_TELEMETRY_FLUSH_MS || 5000)
+  const flushMs = Math.max(1000, Number.isFinite(parsedFlushMs) ? parsedFlushMs : 5000)
   const important =
     event.event_type === 'task_started'
-    || event.event_type === 'task_progress'
-    || event.event_type === 'artifact_written'
     || event.event_type === 'patch_candidate'
     || event.event_type === 'worker_completed'
     || event.event_type === 'worker_failed'
@@ -448,9 +458,17 @@ function shouldFlushTelemetrySnapshot(file: string, event: ZellijSlotTelemetryEv
     next === 1
     || important
     || now - last >= flushMs
-    || next % flushEvery === 0
   if (should) telemetrySnapshotLastFlushMs.set(file, now)
   return should
+}
+
+function telemetrySnapshotContentKey(snapshot: ZellijSlotTelemetrySnapshot) {
+  return JSON.stringify({
+    schema: snapshot.schema,
+    mission_id: snapshot.mission_id,
+    slots: snapshot.slots || {},
+    counts: snapshot.counts || {}
+  })
 }
 
 function inferMissionDir(root: string, missionId: string) {

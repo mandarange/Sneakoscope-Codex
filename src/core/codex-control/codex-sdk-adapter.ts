@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonl } from '../fsx.js'
+import { appendJsonlBounded } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
 import { buildCodexExecutionPolicy, buildCodexSdkConfig } from './codex-sdk-config-policy.js'
 import { buildCodexSdkEnv } from './codex-sdk-env-policy.js'
@@ -46,7 +46,7 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   for await (const event of streamed.events) {
     events.push(event)
     if (liveEventPath) {
-      await appendJsonl(liveEventPath, translateCodexSdkEvent(event))
+      await appendJsonlBounded(liveEventPath, translateCodexSdkEvent(event), 5 * 1024 * 1024)
       liveEventsWritten = true
     }
     if (event?.type === 'item.completed' && event?.item?.type === 'agent_message') finalResponse = String(event.item.text || '')

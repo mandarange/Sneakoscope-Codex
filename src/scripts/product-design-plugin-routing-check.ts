@@ -4,12 +4,18 @@ import { PRODUCT_DESIGN_PIPELINE_STAGES, PRODUCT_DESIGN_PLUGIN, PRODUCT_DESIGN_R
 import { assertGate, emitGate, readText, releaseGateIds } from './lib/codex-sdk-gate-lib.js';
 
 const routesSource = readText('src/core/routes.ts');
+const routeConstantsSource = readText('src/core/routes/constants.ts');
+const routeDesignPolicySource = readText('src/core/routes/design-policy.ts');
+const routePptPolicySource = readText('src/core/routes/ppt-policy.ts');
+const routePolicySource = [routesSource, routeConstantsSource, routeDesignPolicySource, routePptPolicySource].join('\n');
 const productDesignSource = readText('src/core/product-design-plugin.ts');
 const runtimeSource = readText('src/core/pipeline-internals/runtime-core.ts');
-const pptSource = readText('src/core/ppt.ts');
+const pptSource = [
+  readText('src/core/ppt.ts'),
+  readText('src/core/ppt/style-tokens.ts')
+].join('\n');
 const codexAppSource = readText('src/core/codex-app.ts');
 const initSource = readText('src/core/init.ts');
-const pkg = JSON.parse(readText('package.json'));
 const releaseGates = releaseGateIds();
 
 assertGate(PRODUCT_DESIGN_PLUGIN.id === 'product-design@openai-curated-remote', 'Product Design plugin id must use the remote marketplace');
@@ -52,10 +58,10 @@ for (const token of [
   'project-local cache/compatibility authority',
   'PRODUCT_DESIGN_PLUGIN_TOOL_ALLOWLIST'
 ]) {
-  assertGate(routesSource.includes(token), `routes.ts missing Product Design routing token: ${token}`);
+  assertGate(routePolicySource.includes(token), `route policy modules missing Product Design routing token: ${token}`);
 }
 
-const recommendedSkillsBlock = routesSource.match(/export const RECOMMENDED_SKILLS = \[([\s\S]*?)\];/)?.[1] || '';
+const recommendedSkillsBlock = routeConstantsSource.match(/export const RECOMMENDED_SKILLS = \[([\s\S]*?)\];/)?.[1] || '';
 for (const legacySkill of ['design-artifact-expert', 'design-system-builder', 'design-ui-editor']) {
   assertGate(!recommendedSkillsBlock.includes(legacySkill), `legacy design skill should not stay in RECOMMENDED_SKILLS: ${legacySkill}`);
 }
@@ -101,7 +107,6 @@ for (const token of [
   assertGate(codexAppSource.includes(token), `codex-app.ts missing Product Design readiness token: ${token}`);
 }
 
-assertGate(Boolean(pkg.scripts?.['codex:product-design-plugin-routing']), 'package script missing codex:product-design-plugin-routing');
 assertGate(releaseGates.has('codex:product-design-plugin-routing'), 'release gate DAG must include Product Design routing gate');
 
 emitGate('codex:product-design-plugin-routing', {

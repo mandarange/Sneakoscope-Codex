@@ -115,8 +115,8 @@ test('fast mode proof accepts Codex SDK service tier propagation evidence', asyn
     fast_mode: true,
     service_tier: 'fast'
   }));
-  await fs.writeFile(path.join(dir, 'worker-fast-mode.json'), JSON.stringify({
-    schema: 'sks.native-cli-worker-fast-mode.v1',
+  await fs.writeFile(path.join(dir, 'worker-process-report.json'), JSON.stringify({
+    schema: 'sks.native-cli-worker-process-report.v1',
     fast_mode: true,
     service_tier: 'fast'
   }));

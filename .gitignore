@@ -68,6 +68,7 @@ id_ed25519
 *.sql.gz
 *.bak
 *.backup
+*.sks-backup-*
 *.orig
 *.swp
 *.swo
@@ -140,6 +141,14 @@ id_ed25519
 .sneakoscope/harness-guard.json
 .sneakoscope/managed-paths.json
 .sneakoscope/**/*.log
+
+# Mission outputs must live under .sneakoscope/missions/<id>/, not repo root.
+/naruto-gate.json
+/reflection-gate.json
+/reflection.md
+/hard-blocker.json
+/GITHUB-RELEASE-v*.md
+/release-gates.json
 
 # Generated TriWiki indexes and transient context packs
 .sneakoscope/wiki/indexes/
