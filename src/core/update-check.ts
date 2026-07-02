@@ -353,7 +353,10 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     oldVersionDoctor = await updateHeartbeat(machineOutput, 'old-version doctor', runPackageLocalDoctor({
       root: projectReceiptRoot,
       args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'old-version-doctor.json')],
-      env,
+      env: {
+        ...env,
+        ...(env.SKS_TEST_OLD_DOCTOR_FAIL === '1' ? { SKS_TEST_DOCTOR_FAIL: '1' } : {})
+      },
       timeoutMs: oldDoctorTimeoutMs,
       maxOutputBytes: 32 * 1024
     }), 60_000);
@@ -386,18 +389,20 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   };
   if (npmStdout) installOptions.onStdout = npmStdout;
   if (npmStderr) installOptions.onStderr = npmStderr;
-  const install = await updateHeartbeat(machineOutput, `npm install -g ${packageName}`, guardedPackageInstall(
-    guardContextForRoute(mutationLedgerRoot, installContract, command || `npm global install ${packageName}`),
-    `${packageName}@${installVersion}`,
-    installOptions
-  ), 60_000).catch((err: unknown) => ({
-    code: 1,
-    stdout: '',
-    stderr: err instanceof Error ? err.message : String(err),
-    timedOut: false
-  }));
+  const install = env.SKS_UPDATE_FAKE_INSTALL === '1'
+    ? { code: 0, stdout: 'fake install ok', stderr: '', timedOut: false }
+    : await updateHeartbeat(machineOutput, `npm install -g ${packageName}`, guardedPackageInstall(
+      guardContextForRoute(mutationLedgerRoot, installContract, command || `npm global install ${packageName}`),
+      `${packageName}@${installVersion}`,
+      installOptions
+    ), 60_000).catch((err: unknown) => ({
+      code: 1,
+      stdout: '',
+      stderr: err instanceof Error ? err.message : String(err),
+      timedOut: false
+    }));
   const installOk = install.code === 0;
-  stage('npm_global_install', installOk, installOk ? 'installed' : 'failed', { command, code: install.code });
+  stage('npm_global_install', installOk, installOk ? env.SKS_UPDATE_FAKE_INSTALL === '1' ? 'fake_installed' : 'installed' : 'failed', { command, code: install.code });
   let newBinary: string | null = null;
   let newVersion: string | null = null;
   let newVersionDoctor: PackageLocalDoctorRun | null = null;
@@ -406,7 +411,9 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   let sksMenuBar: SksMenuBarInstallResult | null = null;
   let hookTrust: any = null;
   if (installOk) {
-    newBinary = await resolveInstalledSksEntrypoint({ packageName, globalRoot, env });
+    newBinary = env.SKS_UPDATE_FAKE_INSTALL === '1'
+      ? path.join(packageRoot(), 'dist', 'bin', 'sks.js')
+      : await resolveInstalledSksEntrypoint({ packageName, globalRoot, env });
     stage('resolve_new_package_local_binary', Boolean(newBinary), newBinary ? 'resolved' : 'missing', { new_binary: newBinary });
     if (newBinary) {
       const versionProbe = await runProcess(process.execPath, [newBinary, '--version'], {

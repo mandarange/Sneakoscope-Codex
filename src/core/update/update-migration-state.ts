@@ -728,6 +728,9 @@ export async function runPackageLocalDoctor(input: {
   const entrypoint = input.entrypoint || path.join(packageRoot(), 'dist', 'bin', 'sks.js');
   const cwd = input.root || globalSksRoot();
   const args = input.args || ['doctor', '--json'];
+  const env = input.env || process.env;
+  const testRun = testPackageLocalDoctorRun({ entrypoint, cwd, args, env });
+  if (testRun) return testRun;
   if (!(await exists(entrypoint))) {
     return {
       schema: 'sks.package-local-doctor-run.v1',
@@ -751,7 +754,7 @@ export async function runPackageLocalDoctor(input: {
     cwd,
     env: {
       ...process.env,
-      ...(input.env || {}),
+      ...env,
       SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
       SKS_DISABLE_UPDATE_CHECK: '1'
     },
@@ -787,6 +790,70 @@ export async function runPackageLocalDoctor(input: {
     timedOut: (result as any).timedOut === true,
     timed_out: (result as any).timedOut === true,
     error: ok ? null : tail((result as any).stderr || (result as any).stdout || requiredBlockers.join(', ') || 'doctor failed')
+  };
+}
+
+function testPackageLocalDoctorRun(input: {
+  entrypoint: string;
+  cwd: string;
+  args: string[];
+  env: NodeJS.ProcessEnv;
+}): PackageLocalDoctorRun | null {
+  if (input.env.SKS_TEST_DOCTOR_TIMEOUT_ONCE === '1' && input.env.SKS_MIGRATION_DOCTOR_RETRY !== '1') {
+    return mockPackageLocalDoctorRun(input, {
+      ok: false,
+      timedOut: true,
+      exitCode: 124,
+      blockers: ['test_doctor_timeout_once']
+    });
+  }
+  if (input.env.SKS_TEST_DOCTOR_TIMEOUT_ONCE === '1' && input.env.SKS_MIGRATION_DOCTOR_RETRY === '1') {
+    return mockPackageLocalDoctorRun(input, {
+      ok: true,
+      timedOut: false,
+      exitCode: 0,
+      warnings: ['test_doctor_retry_succeeded']
+    });
+  }
+  if (input.env.SKS_TEST_DOCTOR_FAIL === '1') {
+    return mockPackageLocalDoctorRun(input, {
+      ok: false,
+      timedOut: false,
+      exitCode: 1,
+      blockers: ['test_doctor_failed']
+    });
+  }
+  if (input.env.SKS_TEST_DOCTOR_OK === '1') {
+    return mockPackageLocalDoctorRun(input, {
+      ok: true,
+      timedOut: false,
+      exitCode: 0,
+      warnings: ['test_doctor_ok']
+    });
+  }
+  return null;
+}
+
+function mockPackageLocalDoctorRun(
+  input: { entrypoint: string; cwd: string; args: string[] },
+  result: { ok: boolean; timedOut: boolean; exitCode: number; blockers?: string[]; warnings?: string[] }
+): PackageLocalDoctorRun {
+  return {
+    schema: 'sks.package-local-doctor-run.v1',
+    ok: result.ok,
+    status: result.ok ? 'ok' : 'failed',
+    entrypoint: input.entrypoint,
+    cwd: input.cwd,
+    args: input.args,
+    exit_code: result.exitCode,
+    parsed_ok: result.ok,
+    required_blockers: result.ok ? [] : result.blockers || [],
+    optional_warnings: result.warnings || [],
+    stdout_tail: result.ok ? '{"ok":true}' : '',
+    stderr_tail: result.ok ? '' : (result.blockers || ['doctor failed']).join(', '),
+    timedOut: result.timedOut,
+    timed_out: result.timedOut,
+    error: result.ok ? null : (result.blockers || ['doctor failed']).join(', ')
   };
 }
 

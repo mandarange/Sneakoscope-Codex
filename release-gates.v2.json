@@ -2824,6 +2824,36 @@
       ]
     },
     {
+      "id": "legacy:update-e2e",
+      "command": "node ./dist/scripts/legacy-update-e2e-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-write"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 180000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/update-check.ts",
+          "src/core/update/update-migration-state.ts",
+          "src/core/codex-hooks/**",
+          "src/scripts/legacy-update-e2e-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "lint:no-ts-nocheck-core",
       "command": "node ./dist/scripts/no-ts-nocheck-core-check.js",
       "deps": [],
