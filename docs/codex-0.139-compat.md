@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 4.8.6 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the swarm gate honesty, release manifest consolidation, and lifecycle-disabled publish readiness evidence with the current 4.8.6 package metadata.
+
 SKS 4.8.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while repairing the macOS SKS menu bar action surface: Terminal commands preserve Swift interpolation instead of running `(escaped)`, and codex-lb domain/API-key setup is visible from the status menu.
 
 SKS 4.8.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening the macOS SKS menu bar companion lifecycle: the LaunchAgent no longer unconditionally respawns through `KeepAlive`, keeps login/startup launch through `RunAtLoad`, and marks the user-facing status item as `ProcessType=Interactive`.

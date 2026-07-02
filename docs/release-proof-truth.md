@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 4.8.6 keeps release proof truth aligned with the 4.8.6 package metadata, built output, release gate inventory, harness gate inventory, script-backed check inventory, worker MCP isolation evidence, gate honesty evidence, telemetry bounds evidence, module split evidence, and publish readiness evidence before `npm publish --ignore-scripts`.
+
+SKS 4.8.6 release proof truth requires proof that the swarm hardening changes are backed by real release gates instead of stale manifests, and that version truth spans package metadata, lockfiles, CLI constants, Rust helper metadata, README, changelog, version-gated docs, and built output before publication.
+
 SKS 4.8.4 keeps release proof truth aligned with the 4.8.4 package metadata, built output, managed asset metadata, SKS menu bar install evidence, Terminal action interpolation evidence, codex-lb setup menu evidence, and publish readiness evidence before publication.
 
 SKS 4.8.4 release proof truth requires proof that SKS menu bar Terminal actions no longer execute `(escaped)` and that codex-lb base URL/API-key setup is reachable from the menu without exposing the key in generated command strings.

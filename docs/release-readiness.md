@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 4.8.6 is the swarm gate honesty and release-manifest consolidation patch after the already-published 4.8.5 npm version. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, gate manifests, release DAG evidence, and publish readiness evidence to agree on 4.8.6 before `npm publish --ignore-scripts`.
+
+4.8.6 release readiness adds proof that native worker MCP isolation, auth retry behavior, zombie worker reaping, gate evidence honesty, and telemetry bounds remain enforced while the release manifest set is consolidated to the current release-gate, harness-gate, and script-backed check inventory.
+
 SKS 4.8.4 is the macOS menu bar action repair patch after 4.8.3. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, managed asset metadata, SKS menu bar install coverage, live menu action evidence, and publish readiness gates to agree on 4.8.4 before publication.
 
 4.8.4 release readiness adds proof that menu actions preserve Swift interpolation for Terminal commands instead of sending the literal `(escaped)` placeholder, and that the right-side SKS menu exposes a codex-lb domain/API-key setup action backed by `sks codex-lb setup`.

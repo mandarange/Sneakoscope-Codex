@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 
+## [4.8.6] - 2026-07-02
+
+### Fixed
+
+- Harden native worker MCP isolation, auth retry behavior, zombie worker reaping, gate honesty, and telemetry bounds so swarm execution cannot quietly pass with stale or fixture-only evidence.
+- Consolidate release manifests around 189 release gates, 52 harness gates, and 72 script-backed checks while removing stale standalone gate manifests and backup artifacts from the packaged surface.
+
+### Changed
+
+- Split oversized route, research, RecallPulse, PowerPoint, QA-loop, and hook modules into smaller policy, artifact, prompt, and rendering surfaces without changing their public command behavior.
+- Document gate policy, orchestration layers, polyglot runtime boundaries, and gate-to-script ownership so release evidence stays auditable before lifecycle-disabled publication.
+
+### Verification
+
+- Verified the 4.8.6 release surface with typecheck, incremental build, pipeline and command budget checks, gate policy audit, release gate planner, full release DAG coverage, release gate existence audit, affected dynamic release checks, Naruto active-pool runtime smoke, and whitespace checks.
+- Confirmed npm already publishes `sneakoscope@4.8.5`, so 4.8.6 is the next publishable patch version for `npm publish --ignore-scripts`.
+
 ## [4.8.4] - 2026-07-01
 
 ### Fixed
