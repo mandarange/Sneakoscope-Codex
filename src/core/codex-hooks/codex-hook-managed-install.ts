@@ -3,6 +3,7 @@ import { ensureDir, nowIso, readText, writeTextAtomic } from '../fsx.js';
 import { CODEX_HOOK_EVENTS, type CodexHookEventName } from '../codex-compat/codex-hook-events.js';
 import { buildCodexCommandHookToml, matcherApplies } from './codex-hook-config-writer.js';
 import { readCodexHookActualState } from './codex-hook-actual-discovery.js';
+import { writeTrustedHashStateForHooksFile } from './codex-hook-state-writer.js';
 
 export interface CodexManagedHookInstallOptions {
   managedDir?: string | null;
@@ -48,6 +49,9 @@ export async function installManagedCodexHooks(root: string, opts: CodexManagedH
     await writeTextAtomic(tomlPath, hooksToml);
     await writeTextAtomic(requirementsPath, requirementsToml);
   }
+  const trust = opts.dryRun === true
+    ? null
+    : await writeTrustedHashStateForHooksFile({ hooksFilePath: tomlPath, managed: true }, { allowSksHashFallback: true });
   const actual = opts.dryRun === true
     ? null
     : await readCodexHookActualState(root);
@@ -71,6 +75,7 @@ export async function installManagedCodexHooks(root: string, opts: CodexManagedH
       dual_representation: actual.dual_representation.length,
       blockers: actual.blockers
     } : null,
+    trust,
     policy: {
       official_hash_available: false,
       trusted_hash_writer_policy: 'managed_install_required_when_official_hash_is_unavailable',

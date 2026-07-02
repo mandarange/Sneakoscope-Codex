@@ -13,6 +13,7 @@ import {
 } from './update/update-migration-state.js';
 import { installSksMenuBar, type SksMenuBarInstallResult } from './codex-app/sks-menubar.js';
 import { reconcileSkills } from './init/skills.js';
+import { codexHookTrustDoctor } from './codex-hooks/codex-hook-trust-doctor.js';
 
 export interface SksUpdateCheckOptions {
   packageName?: string;
@@ -391,6 +392,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   let projectReceipt: UpdateMigrationReceipt | null = null;
   let migrationCurrent = false;
   let sksMenuBar: SksMenuBarInstallResult | null = null;
+  let hookTrust: any = null;
   if (installOk) {
     newBinary = await resolveInstalledSksEntrypoint({ packageName, globalRoot, env });
     stage('resolve_new_package_local_binary', Boolean(newBinary), newBinary ? 'resolved' : 'missing', { new_binary: newBinary });
@@ -408,12 +410,20 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
         entrypoint: newBinary,
         args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(), 'update', 'new-version-doctor.json')],
         env,
-        timeoutMs: 15_000,
+        timeoutMs: updateDoctorTimeoutMs(env),
         maxOutputBytes: 32 * 1024
       });
-      stage('new_version_global_doctor', newVersionDoctor.ok, newVersionDoctor.status, { entrypoint: newBinary, exit_code: newVersionDoctor.exit_code });
+      stage('new_version_global_doctor', newVersionDoctor.ok, newVersionDoctor.status, { entrypoint: newBinary, exit_code: newVersionDoctor.exit_code, timeout_ms: updateDoctorTimeoutMs(env), timed_out: newVersionDoctor.timedOut });
     }
     if (newVersionDoctor?.ok) {
+      hookTrust = await codexHookTrustDoctor(projectReceiptRoot, { fix: true, managed: true, actual: true })
+        .catch((err: any) => ({ ok: false, blockers: [`hook_trust_repair_failed:${err?.message || err}`] }));
+      stage('hook_trust_repair', hookTrust?.ok !== false, hookTrust?.ok !== false ? 'repaired' : 'failed', {
+        entries: hookTrust?.current_hash_count ?? null,
+        blockers: hookTrust?.blockers || []
+      });
+    }
+    if (newVersionDoctor?.ok && hookTrust?.ok !== false) {
       projectReceipt = await writeProjectUpdateMigrationReceipt({
         root: projectReceiptRoot,
         source: 'update-now',
@@ -428,7 +438,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       await runUpdateGlobalSkillsReconcile(stage);
     }
   }
-  const ok = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && migrationCurrent;
+  const ok = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && hookTrust?.ok !== false && migrationCurrent;
   return buildUpdateNowResult({
     packageName,
     from: check.current,
@@ -739,6 +749,11 @@ function parseVersionText(text: string): string | null {
 
 function globalSksRootPath(): string {
   return path.join(process.env.HOME || os.homedir(), '.sneakoscope-global');
+}
+
+function updateDoctorTimeoutMs(env: NodeJS.ProcessEnv): number {
+  const override = Number.parseInt(env.SKS_UPDATE_NEW_DOCTOR_TIMEOUT_MS || env.SKS_MIGRATION_DOCTOR_TIMEOUT_MS || '', 10);
+  return Number.isFinite(override) && override > 0 ? override : 180_000;
 }
 
 function updateNowError(

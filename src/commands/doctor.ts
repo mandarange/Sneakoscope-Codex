@@ -45,6 +45,7 @@ import { writeProjectUpdateMigrationReceipt } from '../core/update/update-migrat
 import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { reconcileSkills } from '../core/init/skills.js';
+import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -423,6 +424,16 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         raw_secret_values_recorded: false
       }))
     : null;
+  const hookTrustRepair = doctorFix && doctorPhaseIds.includes('hook_trust_repair')
+    ? await codexHookTrustDoctor(root, { fix: true, managed: true, actual: true }).catch((err: any) => ({
+        schema: 'sks.codex-hook-trust-doctor.v2',
+        ok: false,
+        actual: true,
+        blockers: [`hook_trust_repair_failed:${err?.message || String(err)}`],
+        warnings: [],
+        repair_actions: ['sks codex trust-doctor --fix --managed --actual']
+      }))
+    : null;
   const doctorFixTransaction = doctorFix
     ? await runDoctorFixTransaction({
         root,
@@ -494,6 +505,17 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
               blockers: (supabaseMcpRepair as any)?.blockers || [],
               warnings: (supabaseMcpRepair as any)?.warnings || [],
               rollback_evidence: 'optional_supabase_no_ready_mutation_required'
+            })
+          },
+          {
+            id: 'hook_trust_repair',
+            run: async () => ({
+              id: 'hook_trust_repair',
+              ok: (hookTrustRepair as any)?.ok !== false,
+              repaired: doctorFix,
+              blockers: (hookTrustRepair as any)?.blockers || [],
+              warnings: (hookTrustRepair as any)?.warnings || [],
+              rollback_evidence: (hookTrustRepair as any)?.fixed?.managed_hook_file || 'codex_hook_trust_repair_idempotent'
             })
           },
           {
@@ -789,7 +811,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
     skills: skillsReconcile,
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
   };
   if (reportFile) await writeJsonReportFile(reportFile, result);
   if (machineOnly && !flag(args, '--json')) {
@@ -1094,6 +1116,7 @@ function doctorPhaseIdsForProfile(profile: DoctorProfile): string[] {
     'startup_config_repair',
     'context7_repair',
     'context7_mcp_repair',
+    'hook_trust_repair',
     'command_alias_cleanup'
   ];
   if (profile === 'migration') return required;

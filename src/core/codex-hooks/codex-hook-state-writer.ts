@@ -2,40 +2,120 @@ import path from 'node:path';
 import { readJson, readText, writeTextAtomic } from '../fsx.js';
 import { CODEX_HOOK_EVENTS } from '../codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash, codexHookStateKey } from './codex-hook-hash.js';
+import { entriesFromInlineHooksToml } from './codex-hook-actual-discovery.js';
+
+export interface WriteTrustedHashStateInput {
+  root?: string;
+  hooksFilePath?: string;
+  hooksPath?: string;
+  statePath?: string;
+  managed?: boolean;
+}
+
+export interface WriteTrustedHashStateOptions {
+  allowSksHashFallback?: boolean;
+  reason?: string;
+  managed?: boolean;
+}
 
 export async function writeTrustedHashStateForHooksFile(
-  root: string,
-  hooksPath = path.join(root, '.codex', 'hooks.json'),
-  statePath = path.join(root, '.codex', 'config.toml'),
-  opts: { allowSksHashFallback?: boolean; reason?: string } = {}
+  input: string | WriteTrustedHashStateInput,
+  hooksPathOrOpts?: string | WriteTrustedHashStateOptions,
+  statePath?: string,
+  opts: WriteTrustedHashStateOptions = {}
 ) {
-  if (opts.allowSksHashFallback !== true) {
+  const resolved = resolveWriterInput(input, hooksPathOrOpts, statePath, opts);
+  const isSksManagedHook = resolved.managed === true || resolved.hooksPath.includes('sks-managed-hooks');
+  if (resolved.opts.allowSksHashFallback !== true && !isSksManagedHook) {
     return {
       schema: 'sks.codex-hook-state-writer.v2',
       ok: false,
-      hooks_path: hooksPath,
-      state_path: statePath,
+      hooks_path: resolved.hooksPath,
+      state_path: resolved.statePath,
       updated: 0,
       blocks: [],
       blocked: true,
       blocker: 'official_codex_hook_hash_unavailable',
       policy: 'use_sks_hooks_install_managed_instead_of_writing_sks_only_trusted_hashes',
       repair_action: 'sks hooks install --managed --json',
-      reason: opts.reason || 'SKS refuses to write trusted_hash values from its own canonicalJson hash unless official Codex hash parity is proven.'
+      reason: resolved.opts.reason || 'SKS refuses to write trusted_hash values from its own canonicalJson hash unless official Codex hash parity is proven.'
     };
   }
-  const hooksFile = await readJson(hooksPath, {});
-  const blocks = trustedHashBlocksForHooksFile(hooksPath, hooksFile);
-  const next = upsertTrustBlocks(await readText(statePath, ''), blocks);
-  await writeTextAtomic(statePath, next);
+  const blocks = await trustedHashBlocksForHooksPath(resolved.hooksPath, isSksManagedHook);
+  const next = upsertTrustBlocks(await readText(resolved.statePath, ''), blocks);
+  await writeTextAtomic(resolved.statePath, next);
   return {
     schema: 'sks.codex-hook-state-writer.v1',
     ok: true,
-    hooks_path: hooksPath,
-    state_path: statePath,
+    hooks_path: resolved.hooksPath,
+    state_path: resolved.statePath,
     updated: blocks.length,
     blocks
   };
+}
+
+function resolveWriterInput(
+  input: string | WriteTrustedHashStateInput,
+  hooksPathOrOpts: string | WriteTrustedHashStateOptions | undefined,
+  statePath: string | undefined,
+  opts: WriteTrustedHashStateOptions
+) {
+  if (typeof input === 'string') {
+    const root = path.resolve(input);
+    const resolvedOpts = typeof hooksPathOrOpts === 'object' && hooksPathOrOpts !== null
+      ? hooksPathOrOpts
+      : opts;
+    const hooksPath = typeof hooksPathOrOpts === 'string'
+      ? hooksPathOrOpts
+      : path.join(root, '.codex', 'hooks.json');
+    return {
+      root,
+      hooksPath: path.resolve(hooksPath),
+      statePath: path.resolve(statePath || path.join(root, '.codex', 'config.toml')),
+      managed: resolvedOpts.managed === true,
+      opts: resolvedOpts
+    };
+  }
+  const hooksPath = path.resolve(input.hooksFilePath || input.hooksPath || path.join(input.root || process.cwd(), '.codex', 'hooks.json'));
+  const root = path.resolve(input.root || rootFromHooksPath(hooksPath));
+  const resolvedOpts = typeof hooksPathOrOpts === 'object' && hooksPathOrOpts !== null
+    ? hooksPathOrOpts
+    : opts;
+  return {
+    root,
+    hooksPath,
+    statePath: path.resolve(input.statePath || statePathForHooksPath(root, hooksPath)),
+    managed: input.managed === true || resolvedOpts.managed === true,
+    opts: resolvedOpts
+  };
+}
+
+function rootFromHooksPath(hooksPath: string): string {
+  const dir = path.dirname(hooksPath);
+  if (path.basename(dir) === '.codex') return path.dirname(dir);
+  if (path.basename(dir) === 'managed-hooks') return path.dirname(path.dirname(dir));
+  return process.cwd();
+}
+
+function statePathForHooksPath(root: string, hooksPath: string): string {
+  const dir = path.dirname(hooksPath);
+  if (path.basename(dir) === '.codex' || path.basename(dir) === 'managed-hooks') {
+    return path.join(path.basename(dir) === '.codex' ? dir : path.dirname(dir), 'config.toml');
+  }
+  return path.join(root, '.codex', 'config.toml');
+}
+
+async function trustedHashBlocksForHooksPath(hooksPath: string, managed: boolean): Promise<Array<{ key: string; trusted_hash: string; block: string }>> {
+  if (/\.toml$/i.test(hooksPath)) {
+    const parsed = entriesFromInlineHooksToml(hooksPath, 'project', await readText(hooksPath, ''), {}, managed, managed ? 'managed_dir_toml' : 'config_toml');
+    return parsed.entries.map((entry) => ({
+      key: entry.key,
+      trusted_hash: entry.current_hash,
+      block: `[hooks.state."${tomlQuotedKey(entry.key)}"]\ntrusted_hash = "${entry.current_hash}"`
+    }));
+  }
+  const hooksFile = await readJson(hooksPath, {});
+  return trustedHashBlocksForHooksFile(hooksPath, hooksFile);
 }
 
 export function trustedHashBlocksForHooksFile(hooksPath: string, hooksFile: any): Array<{ key: string; trusted_hash: string; block: string }> {

@@ -31,6 +31,8 @@ export interface PackageLocalDoctorRun {
   optional_warnings: string[];
   stdout_tail: string;
   stderr_tail: string;
+  timedOut: boolean;
+  timed_out: boolean;
   error: string | null;
 }
 
@@ -326,7 +328,8 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
 
   return withUpdateMigrationLock(root, empty, async () => {
     const reportFile = path.join(root, '.sneakoscope', 'update', 'doctor-migration.json');
-    const doctor = await runPackageLocalDoctor({
+    const baseTimeoutMs = migrationDoctorTimeoutMs(env);
+    let doctor = await runPackageLocalDoctor({
       root,
       args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', reportFile],
       env: {
@@ -334,29 +337,51 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
         SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
         SKS_DISABLE_UPDATE_CHECK: '1'
       },
-      timeoutMs: 30_000,
+      timeoutMs: baseTimeoutMs,
       maxOutputBytes: 32 * 1024
     });
+    const timeoutWarnings: string[] = [];
+    if (!doctor.ok && doctor.timedOut) {
+      timeoutWarnings.push(`doctor_migration_timeout_retry:timeout_ms=${baseTimeoutMs}`);
+      doctor = await runPackageLocalDoctor({
+        root,
+        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', reportFile],
+        env: {
+          ...env,
+          SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+          SKS_DISABLE_UPDATE_CHECK: '1',
+          SKS_MIGRATION_DOCTOR_RETRY: '1'
+        },
+        timeoutMs: baseTimeoutMs * 2,
+        maxOutputBytes: 32 * 1024
+      });
+    }
     if (!doctor.ok) {
-      const requiredBlockers = doctor.required_blockers.length ? doctor.required_blockers : ['doctor_migration_profile_failed'];
+      const blocker = doctor.timedOut ? 'doctor_migration_timeout' : 'doctor_migration_failed';
+      const requiredBlockers = [blocker, ...(doctor.required_blockers.length ? doctor.required_blockers : [])];
+      const warnings = [
+        ...timeoutWarnings,
+        ...doctor.optional_warnings,
+        ...(doctor.timedOut ? ['doctor_migration_timeout_may_be_network_or_first_compile_slow_run_sks_doctor_fix_yes_for_live_progress'] : [])
+      ];
       const blocked = await writeProjectUpdateMigrationReceipt({
         root,
         source: 'first-command-gate',
         status: 'blocked',
         doctor,
         blockers: requiredBlockers,
-        warnings: doctor.optional_warnings
+        warnings
       });
-      return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, failed_stage_id: 'doctor:migration-profile', blockers: requiredBlockers, warnings: doctor.optional_warnings };
+      return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, failed_stage_id: 'doctor:migration-profile', blockers: requiredBlockers, warnings };
     }
     const current = await writeProjectUpdateMigrationReceipt({
       root,
       source: 'first-command-gate',
       doctor,
       blockers: [],
-      warnings: doctor.optional_warnings
+      warnings: [...timeoutWarnings, ...doctor.optional_warnings]
     });
-    return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, failed_stage_id: null, blockers: [], warnings: [] };
+    return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, failed_stage_id: null, blockers: [], warnings: [...timeoutWarnings, ...doctor.optional_warnings] };
   }, recheck ? { recheck } : {});
 }
 
@@ -381,7 +406,7 @@ export async function runPostinstallGlobalDoctorAndMarkPending(input: {
       SKS_DISABLE_UPDATE_CHECK: '1',
       SKS_POSTINSTALL_NO_BOOTSTRAP: '1'
     },
-    timeoutMs: 15_000,
+    timeoutMs: migrationDoctorTimeoutMs(env),
     maxOutputBytes: 32 * 1024
   });
   const pending = await writePendingUpdateMigration({
@@ -402,6 +427,11 @@ export async function runPostinstallGlobalDoctorAndMarkPending(input: {
 function commandSkipsMigrationGate(command: string): boolean {
   const entry = (COMMANDS as Record<string, { skipMigrationGate?: boolean; readonly?: boolean } | undefined>)[command];
   return entry?.skipMigrationGate === true || entry?.readonly === true;
+}
+
+function migrationDoctorTimeoutMs(env: NodeJS.ProcessEnv): number {
+  const override = Number.parseInt(env.SKS_MIGRATION_DOCTOR_TIMEOUT_MS || '', 10);
+  return Number.isFinite(override) && override > 0 ? override : 180_000;
 }
 
 export async function runPackageLocalDoctor(input: {
@@ -429,6 +459,8 @@ export async function runPackageLocalDoctor(input: {
       optional_warnings: [],
       stdout_tail: '',
       stderr_tail: '',
+      timedOut: false,
+      timed_out: false,
       error: `missing package-local sks entrypoint: ${entrypoint}`
     };
   }
@@ -445,7 +477,8 @@ export async function runPackageLocalDoctor(input: {
   }).catch((err: any) => ({
     code: 1,
     stdout: '',
-    stderr: err?.message || String(err)
+    stderr: err?.message || String(err),
+    timedOut: false
   }));
   const reportFile = reportFileFromArgs(args);
   const parsed = reportFile
@@ -468,6 +501,8 @@ export async function runPackageLocalDoctor(input: {
     optional_warnings: optionalWarnings,
     stdout_tail: tail((result as any).stdout || ''),
     stderr_tail: tail((result as any).stderr || ''),
+    timedOut: (result as any).timedOut === true,
+    timed_out: (result as any).timedOut === true,
     error: ok ? null : tail((result as any).stderr || (result as any).stdout || requiredBlockers.join(', ') || 'doctor failed')
   };
 }

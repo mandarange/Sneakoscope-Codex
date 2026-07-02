@@ -8,7 +8,7 @@ export async function codexHookTrustDoctor(root: string, opts: { fix?: boolean; 
   const fix = opts.fix === true;
   const trustOpts = opts.managed === undefined ? {} : { managed: opts.managed };
   const before = await readCodexHookTrustEntries(root, trustOpts);
-  const fixed = fix ? await writeTrustedHashStateForHooksFile(root, undefined, undefined, { allowSksHashFallback: false }).catch((err: unknown) => ({
+  const fixed = fix ? await writeTrustedHashStateForHooksFile({ root, managed: opts.managed === true }, { allowSksHashFallback: opts.managed === true }).catch((err: unknown) => ({
     ok: false,
     error: err instanceof Error ? err.message : String(err)
   })) : null;
@@ -74,7 +74,7 @@ async function codexHookActualTrustDoctor(root: string, opts: { fix?: boolean; m
     policy: {
       official_hash_available: false,
       trusted_hash_writer_policy: 'managed_install_required_when_official_hash_is_unavailable',
-      sks_hash_fallback_allowed: false
+      sks_hash_fallback_allowed: opts.managed === true
     }
   };
 }
