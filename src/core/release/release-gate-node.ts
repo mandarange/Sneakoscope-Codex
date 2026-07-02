@@ -17,6 +17,7 @@ export const RELEASE_GATE_RESOURCE_CLASSES = [
   'global-config',
   'publish',
   'fs-read',
+  'fs-write',
   'timing-sensitive'
 ] as const
 
@@ -30,6 +31,7 @@ export interface ReleaseGateNode {
   resource: ReleaseGateResourceClass[]
   side_effect: ReleaseGateSideEffect
   timeout_ms: number
+  output_contract?: 'sks.gate-result.v1'
   cache: {
     enabled: boolean
     inputs: string[]
@@ -65,6 +67,7 @@ export function validateReleaseGateManifest(input: any): { ok: boolean; manifest
     }
     if (gate?.side_effect !== 'hermetic' && gate?.side_effect !== 'real-env') errors.push(`gate_side_effect_invalid:${gate?.id || 'unknown'}`)
     if (!Number.isFinite(Number(gate?.timeout_ms)) || Number(gate.timeout_ms) <= 0) errors.push(`gate_timeout_missing:${gate?.id || 'unknown'}`)
+    if (gate?.output_contract !== undefined && gate.output_contract !== 'sks.gate-result.v1') errors.push(`gate_output_contract_invalid:${gate?.id || 'unknown'}`)
     if (!gate?.cache || typeof gate.cache.enabled !== 'boolean' || !Array.isArray(gate.cache.inputs)) errors.push(`gate_cache_missing:${gate?.id || 'unknown'}`)
     if (!gate?.isolation || gate.isolation.report_dir !== 'per-gate') errors.push(`gate_isolation_missing:${gate?.id || 'unknown'}`)
     if (!Array.isArray(gate?.preset)) errors.push(`gate_preset_missing:${gate?.id || 'unknown'}`)

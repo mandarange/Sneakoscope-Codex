@@ -1,9 +1,27 @@
 import path from 'node:path';
-import { projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
+import { exists, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { createMission, findLatestMission, loadMission } from '../mission.js';
 import { flag, readOption } from './command-utils.js';
 import { printJson } from '../../cli/output.js';
-import { writePptBuildArtifacts, writePptRouteArtifacts } from '../ppt.js';
+import {
+  PPT_AUDIENCE_STRATEGY_ARTIFACT,
+  PPT_CLEANUP_REPORT_ARTIFACT,
+  PPT_FACT_LEDGER_ARTIFACT,
+  PPT_GATE_ARTIFACT,
+  PPT_HTML_ARTIFACT,
+  PPT_IMAGE_ASSET_LEDGER_ARTIFACT,
+  PPT_ITERATION_REPORT_ARTIFACT,
+  PPT_PARALLEL_REPORT_ARTIFACT,
+  PPT_PDF_ARTIFACT,
+  PPT_RENDER_REPORT_ARTIFACT,
+  PPT_REVIEW_LEDGER_ARTIFACT,
+  PPT_REVIEW_POLICY_ARTIFACT,
+  PPT_SOURCE_LEDGER_ARTIFACT,
+  PPT_STORYBOARD_ARTIFACT,
+  PPT_STYLE_TOKENS_ARTIFACT,
+  writePptBuildArtifacts,
+  writePptRouteArtifacts
+} from '../ppt.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { writePptImagegenReviewFixture } from '../ppt-imagegen-review.js';
 import {
@@ -31,11 +49,15 @@ export async function pptCommand(command: any, args: any = []) {
   if (action === 'build') {
     await writePptRouteArtifacts(dir, contract);
     const build = await writePptBuildArtifacts(dir, contract);
-    const proof = await maybeFinalizeRoute(root, { missionId, route: '$PPT', gateFile: 'ppt-gate.json', gate: build.gate, mock: flag(args, '--mock'), visual: true, artifacts: Object.keys(build.files || {}), claims: [{ id: 'ppt-build-fixture', status: 'verified_partial' }], command: { cmd: `sks ppt build ${missionId}`, status: 0 } });
-    const result = { schema: 'sks.ppt-build.v1', ok: proof.ok, mission_id: missionId, build, proof: proof.validation };
+    const gate = await evaluatePptGateArtifacts(dir, build.gate);
+    await writeJsonAtomic(path.join(dir, 'ppt-gate.json'), gate);
+    const proof = await maybeFinalizeRoute(root, { missionId, route: '$PPT', gateFile: 'ppt-gate.json', gate, mock: flag(args, '--mock'), visual: true, artifacts: Object.keys(build.files || {}), claims: [{ id: 'ppt-build-fixture', status: gate.passed ? 'verified_partial' : 'blocked' }], blockers: gate.blockers || [], command: { cmd: `sks ppt build ${missionId}`, status: gate.passed ? 0 : 1 } });
+    const ok = proof.ok === true && gate.passed === true;
+    const result = { schema: 'sks.ppt-build.v1', ok, mission_id: missionId, build: { ...build, gate }, proof: proof.validation, blockers: gate.blockers || [] };
     if (flag(args, '--json')) return printJson(result);
-    console.log(`PPT build: ${proof.ok ? 'ok' : 'blocked'} ${missionId}`);
-    if (!proof.ok) process.exitCode = 1;
+    console.log(`PPT build: ${ok ? 'ok' : 'blocked'} ${missionId}`);
+    if (!ok && gate.blockers?.length) console.log(`Blockers: ${gate.blockers.join(', ')}`);
+    if (!ok) process.exitCode = 1;
     return result;
   }
   if (action === 'status') {
@@ -167,11 +189,17 @@ async function pptFixture(root: string, command: any, args: any[]) {
     visualEvidence: { ppt_review: pptReviewProofEvidence(review.gate, review) },
     artifacts: [...Object.keys(build.files || {}), ...Object.values(PPT_REVIEW_ARTIFACT_PATHS), ...Object.values(native.artifacts || {})],
     claims: [{ id: 'ppt-fixture', status: 'verified_partial' }],
-    command: { cmd: `sks ${command} fixture --mock`, status: 0 }
+    blockers: gate.blockers || [],
+    statusHint: 'blocked',
+    command: { cmd: `sks ${command} fixture --mock`, status: 1 }
   });
-  const result = { schema: 'sks.ppt-fixture.v2', ok: proof.ok && native.ok, mission_id: id, build: { ...build, ok: true, gate }, imagegen_review: review, native_agent_collaboration: native, proof: proof.validation };
-  if (flag(args, '--json')) return printJson(result);
-  console.log(`PPT fixture: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
+  const result = { schema: 'sks.ppt-fixture.v2', ok: false, mission_id: id, build: { ...build, ok: false, gate }, imagegen_review: review, native_agent_collaboration: native, proof: proof.validation };
+  if (flag(args, '--json')) {
+    process.exitCode = 1;
+    return printJson(result);
+  }
+  console.log(`PPT fixture: blocked ${id}`);
+  process.exitCode = 1;
   return result;
 }
 
@@ -247,21 +275,87 @@ function missingMission(args: any[]) {
 function mockPptFixtureGate(gate: any = {}) {
   return {
     ...gate,
-    passed: true,
+    passed: false,
+    ok: false,
+    status: 'blocked',
+    execution_class: 'mock_fixture',
     mock_fixture: true,
-    unsupported_critical_claims_zero: true,
-    image_asset_policy_satisfied: true,
-    bounded_iteration_complete: true,
-    critical_review_issues_zero: true,
-    render_report_passed: true,
-    fact_ledger_passed: true,
-    image_asset_ledger_passed: true,
-    review_ledger_passed: true,
-    iteration_report_passed: true,
-    cleanup_report_passed: true,
-    parallel_report_passed: true,
-    honest_mode_complete: true,
-    blockers: []
+    unsupported_critical_claims_zero: false,
+    image_asset_policy_satisfied: false,
+    bounded_iteration_complete: false,
+    critical_review_issues_zero: false,
+    render_report_passed: false,
+    fact_ledger_passed: false,
+    image_asset_ledger_passed: false,
+    review_ledger_passed: false,
+    iteration_report_passed: false,
+    cleanup_report_passed: false,
+    parallel_report_passed: false,
+    honest_mode_complete: false,
+    blockers: ['ppt_fixture_mode_cannot_claim_real']
+  };
+}
+
+export async function evaluatePptGateArtifacts(dir: string, baseGate: any = {}) {
+  const factLedger = await readJson(path.join(dir, PPT_FACT_LEDGER_ARTIFACT), null);
+  const imageAssetLedger = await readJson(path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT), null);
+  const reviewLedger = await readJson(path.join(dir, PPT_REVIEW_LEDGER_ARTIFACT), null);
+  const iterationReport = await readJson(path.join(dir, PPT_ITERATION_REPORT_ARTIFACT), null);
+  const renderReport = await readJson(path.join(dir, PPT_RENDER_REPORT_ARTIFACT), null);
+  const cleanupReport = await readJson(path.join(dir, PPT_CLEANUP_REPORT_ARTIFACT), null);
+  const parallelReport = await readJson(path.join(dir, PPT_PARALLEL_REPORT_ARTIFACT), null);
+  const requiredArtifacts = [
+    'decision-contract.json',
+    PPT_AUDIENCE_STRATEGY_ARTIFACT,
+    PPT_SOURCE_LEDGER_ARTIFACT,
+    PPT_FACT_LEDGER_ARTIFACT,
+    PPT_IMAGE_ASSET_LEDGER_ARTIFACT,
+    PPT_STORYBOARD_ARTIFACT,
+    PPT_STYLE_TOKENS_ARTIFACT,
+    PPT_REVIEW_POLICY_ARTIFACT,
+    PPT_REVIEW_LEDGER_ARTIFACT,
+    PPT_ITERATION_REPORT_ARTIFACT,
+    PPT_HTML_ARTIFACT,
+    PPT_PDF_ARTIFACT,
+    PPT_RENDER_REPORT_ARTIFACT,
+    PPT_CLEANUP_REPORT_ARTIFACT,
+    PPT_PARALLEL_REPORT_ARTIFACT
+  ];
+  const missing = [];
+  for (const artifact of requiredArtifacts) {
+    if (!(await exists(path.join(dir, artifact)))) missing.push(artifact);
+  }
+  const renderReportPassed = renderReport?.passed === true;
+  const factLedgerPassed = factLedger?.passed === true && Number(factLedger.unsupported_critical_claims_count || 0) === 0;
+  const imageAssetLedgerPassed = imageAssetLedger?.passed === true;
+  const reviewLedgerPassed = reviewLedger?.passed === true;
+  const iterationReportPassed = iterationReport?.passed === true;
+  const cleanupReportPassed = cleanupReport?.source_html_preserved === true && cleanupReport?.temp_cleanup_completed === true;
+  const parallelReportPassed = parallelReport?.passed === true;
+  const blockers = [
+    ...missing.map((artifact) => `missing_artifact:${artifact}`),
+    ...(renderReportPassed ? [] : ['render_report_not_passed']),
+    ...(factLedgerPassed ? [] : ['fact_ledger_not_passed']),
+    ...(imageAssetLedgerPassed ? [] : ['image_asset_ledger_not_passed']),
+    ...(reviewLedgerPassed ? [] : ['review_ledger_not_passed']),
+    ...(iterationReportPassed ? [] : ['iteration_report_not_passed']),
+    ...(cleanupReportPassed ? [] : ['cleanup_report_not_passed']),
+    ...(parallelReportPassed ? [] : ['parallel_report_not_passed'])
+  ];
+  const passed = blockers.length === 0;
+  return {
+    ...baseGate,
+    passed,
+    ok: passed,
+    status: passed ? 'pass' : 'blocked',
+    render_report_passed: renderReportPassed,
+    fact_ledger_passed: factLedgerPassed,
+    image_asset_ledger_passed: imageAssetLedgerPassed,
+    review_ledger_passed: reviewLedgerPassed,
+    iteration_report_passed: iterationReportPassed,
+    cleanup_report_passed: cleanupReportPassed,
+    parallel_report_passed: parallelReportPassed,
+    blockers
   };
 }
 

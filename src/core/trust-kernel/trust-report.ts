@@ -104,7 +104,7 @@ export function buildTrustReport({ proof = {}, evidenceIndex = {}, contract = {}
   return {
     schema: TRUST_REPORT_SCHEMA,
     ...trustKernelMetadata(),
-    ok: issues.length === 0 && !['blocked', 'failed', 'not_verified'].includes(finalStatus),
+    ok: issues.length === 0 && !['blocked', 'failed', 'not_verified', 'mock_only'].includes(finalStatus),
     mission_id: proof.mission_id || contract.mission_id || null,
     route: proof.route || contract.route || null,
     status: finalStatus,

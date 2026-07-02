@@ -6,6 +6,7 @@ import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { recordDbSafetyMismatchWrongness } from '../triwiki-wrongness/wrongness-ledger.js';
 import { flag, readOption } from './command-utils.js';
 import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
+import { context7EvidenceStatus } from './route-success-helpers.js';
 
 export async function dbCommand(sub: any, args: any = []) {
   const root = await sksRoot();
@@ -76,7 +77,9 @@ async function recordDbExpectation(root: string, input: any = {}) {
 async function finalizeDbCheck(root: any, { action, args, result, exitCode }: any) {
   const prompt = `sks db ${action} ${args.join(' ')}`.trim();
   const { id, dir } = await createMission(root, { mode: 'db', prompt });
-  const blocked = exitCode !== 0 || result.action === 'block' || result.level === 'destructive';
+  const context7 = await context7EvidenceStatus(root, id);
+  const destructiveOperationZero = result.level !== 'destructive';
+  const blocked = exitCode !== 0 || result.action === 'block' || result.level === 'destructive' || !context7.ok;
   const report = {
     schema: 'sks.db-operation-report.v1',
     mission_id: id,
@@ -88,11 +91,34 @@ async function finalizeDbCheck(root: any, { action, args, result, exitCode }: an
       ok: !blocked,
       level: result.level || result.risk || result.status || null,
       action: result.action || action,
-      destructive_blocked: blocked && /drop|delete|truncate|reset|destructive/i.test(JSON.stringify(result))
-    }
+      destructive_operation_zero: destructiveOperationZero,
+      destructive_blocked: !destructiveOperationZero || (blocked && /drop|delete|truncate|reset|destructive/i.test(JSON.stringify(result))),
+      context7_policy: context7.policy,
+      context7_evidence: context7.evidence
+    },
+    blockers: [
+      ...(!destructiveOperationZero ? ['destructive_operation_found'] : []),
+      ...(context7.ok ? [] : [context7.blocker])
+    ]
   };
   await writeJsonAtomic(path.join(dir, 'db-operation-report.json'), report);
-  const gate = { schema_version: 1, passed: !blocked, ok: !blocked, status: blocked ? 'blocked' : 'pass', db_operation_report: 'db-operation-report.json' };
+  const gateBlockers = [
+    ...(blocked && destructiveOperationZero ? ['db_operation_blocked'] : []),
+    ...(!destructiveOperationZero ? ['destructive_operation_found'] : []),
+    ...(context7.ok ? [] : [context7.blocker])
+  ];
+  const gate = {
+    schema: 'sks.db-gate.v1',
+    schema_version: 1,
+    passed: !blocked,
+    ok: !blocked,
+    status: blocked ? 'blocked' : 'pass',
+    db_operation_report: 'db-operation-report.json',
+    destructive_operation_zero: destructiveOperationZero,
+    context7_policy: context7.policy,
+    context7_evidence: context7.evidence,
+    blockers: [...new Set(gateBlockers)]
+  };
   await writeJsonAtomic(path.join(dir, 'db-gate.json'), gate);
   const native = await writeRouteCollaborationArtifacts(root, {
     missionId: id,
@@ -109,7 +135,7 @@ async function finalizeDbCheck(root: any, { action, args, result, exitCode }: an
     artifacts: ['db-operation-report.json', 'completion-proof.json', ...Object.values(native.artifacts || {})],
     dbEvidence: report.db_safety,
     statusHint: blocked ? 'blocked' : 'verified_partial',
-    blockers: blocked ? ['db_operation_blocked'] : [],
+    blockers: gate.blockers,
     command: { cmd: prompt, status: exitCode }
   });
   return { ...completion, native_agent_collaboration: native };

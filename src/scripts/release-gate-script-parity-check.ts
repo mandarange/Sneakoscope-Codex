@@ -68,7 +68,7 @@ export const REQUIRED_3110_RELEASE_IDS = [
   'config:managed-merge-callsite-coverage',
   'release:gate-script-parity',
   'release:wiring-3110-blackbox',
-  'sks:3110-all-feature-regression'
+  'sks:3112-all-feature-regression'
 ];
 
 if (isMain()) {

@@ -173,6 +173,10 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     }
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true, honestModeComplete: true });
+  artifacts.gate = await enforceImageUxRuntimeGate(dir, artifacts.gate, { mock: flag(args, '--mock') });
+  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), artifacts.gate);
+  artifacts.gate = await enforceImageUxRuntimeGate(dir, artifacts.gate, { mock: flag(args, '--mock') });
+  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), artifacts.gate);
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} run` });
   const result = { schema: 'sks.image-ux-review-run.v1', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.status || (artifacts.gate?.passed ? 'passed' : 'blocked'), mission_id: id, artifacts, proof: proof.validation };
   if (!result.ok) process.exitCode = 1;
@@ -296,6 +300,8 @@ async function rebuildExistingMission(root: string, command: string, args: any[]
     recapture: { computerUseAvailable: false },
     honestModeComplete: opts.proofRequested === true
   });
+  artifacts.gate = await enforceImageUxRuntimeGate(dir, artifacts.gate, { mock: flag(args, '--mock') });
+  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), artifacts.gate);
   const proof = await finalizeImageUx(root, missionId, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} ${opts.fixRequested ? 'fix' : opts.recaptureRequested ? 'recapture' : 'build'}` });
   const result = { schema: 'sks.image-ux-review-build.v2', ok: proof.ok && artifacts.gate?.passed === true, status: artifacts.gate?.status || (artifacts.gate?.passed ? 'passed' : 'blocked'), mission_id: missionId, artifacts, proof: proof.validation };
   if (!result.ok) process.exitCode = 1;
@@ -374,7 +380,7 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
       fix_action: 'No-op fixture recheck',
       target_surface: 'fixture',
       candidate_files: [],
-      status: 'fixed',
+      status: 'mock',
       confidence: 0.5,
       source: 'mock_fixture',
       extracted_from_generated_image: true,
@@ -386,18 +392,21 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
       severity_visible: true,
       callout_number_visible: true,
       text_ocr_confidence: 0.5,
-      fix_verification_status: 'recheck_verified',
+      fix_verification_status: 'mock',
       post_fix_recheck_issue_id: null
     }]
   });
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, imageVoxelRelationsCreated: true, wrongnessChecked: true, honestModeComplete: true });
   const gate = {
     ...artifacts.gate,
-    passed: true,
+    passed: false,
+    ok: false,
+    status: 'blocked',
+    execution_class: 'mock_fixture',
     honest_mode_complete: true,
-    blockers: [],
+    blockers: ['image_ux_fixture_mode_cannot_claim_real'],
     fixture: true,
-    verified_level: 'verified_partial',
+    verified_level: 'unverified_fixture',
     mock_fixture_cannot_claim_real: true
   };
   artifacts.gate = gate;
@@ -411,9 +420,10 @@ async function imageUxFixture(root: string, command: string, args: any[]) {
     mode: 'IMAGE_UX_REVIEW'
   });
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: true, requireRelation: flag(args, '--require-relation'), cmd: `sks ${command} fixture --mock` });
-  const result = { schema: 'sks.image-ux-review-fixture.v2', ok: proof.ok && native.ok, mission_id: id, artifacts, native_agent_collaboration: native, proof: proof.validation };
+  const result = { schema: 'sks.image-ux-review-fixture.v2', ok: false, mission_id: id, artifacts, native_agent_collaboration: native, proof: proof.validation };
+  process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
-  console.log(`Image UX fixture: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
+  console.log(`Image UX fixture: blocked ${id}`);
   return result;
 }
 
@@ -449,7 +459,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
         title: 'Mock fixture callout',
         detail: 'Mock fixture callout for schema validation.',
         fix_action: 'Apply targeted UI adjustment, then recapture and re-review.',
-        status: opts.mock ? 'fixed' : 'open',
+        status: opts.mock ? 'mock' : 'open',
         source: opts.mock ? 'mock_fixture' : 'real_gpt_image_2_callout',
         confidence: opts.mock ? 0.5 : 0.82,
         extraction_provider: 'mock_fixture',
@@ -460,7 +470,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
         severity_visible: true,
         callout_number_visible: true,
         text_ocr_confidence: 0.5,
-        fix_verification_status: 'recheck_verified',
+        fix_verification_status: opts.mock ? 'mock' : 'not_rechecked',
         post_fix_recheck_issue_id: null
       }] : []
     }],
@@ -472,6 +482,36 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
   };
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), ledger);
   return ledger;
+}
+
+async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any = {}) {
+  const inventory = await readJson(path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT), null);
+  const issueLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), null);
+  const blockers = new Set<string>(Array.isArray(gate?.blockers) ? gate.blockers.map(String) : []);
+  const sourceScreens = Array.isArray(inventory?.source_screens) ? inventory.source_screens : [];
+  if (!opts.mock) {
+    if (sourceScreens.length === 0) blockers.add('no_source_screenshots_for_imagegen_review');
+    for (const screen of sourceScreens) {
+      const width = Number(screen?.width || screen?.original_resolution?.width || 0);
+      const height = Number(screen?.height || screen?.original_resolution?.height || 0);
+      if (screen?.status !== 'captured') blockers.add(`source_screenshot_unreadable:${screen?.id || 'unknown'}`);
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width < 64 || height < 64) blockers.add(`source_screenshot_below_min_resolution:${screen?.id || 'unknown'}`);
+    }
+  }
+  const issues = Array.isArray(issueLedger?.issues) ? issueLedger.issues : [];
+  if (issues.some((issue: any) => issue?.extraction_provider === 'mock_fixture' || issue?.source === 'mock_fixture')) blockers.add('mock_issue_extraction_cannot_pass_gate');
+  if (opts.mock) blockers.add('image_ux_mock_mode_cannot_claim_real');
+  const nextBlockers = [...blockers];
+  const passed = gate?.passed === true && nextBlockers.length === 0;
+  return {
+    ...gate,
+    passed,
+    ok: passed,
+    status: passed ? 'passed' : 'blocked',
+    source_screenshot_min_resolution_passed: sourceScreens.length > 0 && sourceScreens.every((screen: any) => Number(screen?.width || 0) >= 64 && Number(screen?.height || 0) >= 64),
+    issue_ledger_real_extraction: issues.length > 0 && issues.every((issue: any) => issue?.extraction_provider !== 'mock_fixture' && issue?.source !== 'mock_fixture'),
+    blockers: nextBlockers
+  };
 }
 
 function nextActionForGate(gate: any = {}) {

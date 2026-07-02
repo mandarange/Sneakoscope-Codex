@@ -31,7 +31,8 @@ export async function finalizeRouteWithProof(root: any, {
   agents = undefined,
   allowActiveWrongnessPartial = false,
   failureAnalysis = null,
-  lightweightEvidence = false
+  lightweightEvidence = false,
+  statusHintRejected = null
 }: any = {}) {
   const policy = routeFinalizerPolicy(route, { strict, fixClaim, requireRelation, visualClaim });
   const localBlockers = [...blockers];
@@ -93,7 +94,8 @@ export async function finalizeRouteWithProof(root: any, {
     || computerUseLive.evidence.mode !== 'live_capture_success'
     || computerUseLive.evidence.image_voxel?.linked !== true
   ));
-  const status = localBlockers.length
+  const status = mock ? 'mock_only'
+    : localBlockers.length
     ? (strict ? 'blocked' : statusHint === 'verified' ? 'verified_partial' : statusHint)
     : visualComputerUseDowngrade ? 'verified_partial'
     : statusHint;
@@ -163,6 +165,8 @@ export async function finalizeRouteWithProof(root: any, {
     blockers: localBlockers,
     failureAnalysis: resolvedFailureAnalysis,
     lightweightEvidence,
+    executionClass: mock ? 'mock_fixture' : 'real',
+    statusHintRejected,
     summary: {
       files_changed: collected.files?.length || 0,
       commands_run: evidence.commands?.length || 0,

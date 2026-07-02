@@ -47,6 +47,21 @@ console.log(`SKS Release DAG
   certificate: ${result.completion_certificate.confidence} sla=${(result.completion_certificate.sla_ms / 1000).toFixed(0)}s met=${result.completion_certificate.sla_met}
   report: ${result.report_dir}`)
 
+const gateResult = {
+  schema: 'sks.gate-result.v1',
+  ok: result.ok === true,
+  blockers: result.ok ? [] : result.failures.map((failure) => `release_gate_failed:${failure.id}`),
+  summary: {
+    total_gates: result.total_gates,
+    selected_gates: result.selected_gates,
+    cached: result.cached,
+    completed: result.completed,
+    failed: result.failed,
+    report_dir: result.report_dir
+  }
+}
+console.log(JSON.stringify(gateResult))
+
 if (!result.ok) {
   for (const failure of result.failures) {
     console.error(`[fail] ${failure.id} exit=${failure.exit_code}\n${failure.stderr_tail}`)

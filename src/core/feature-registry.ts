@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { COMMANDS } from '../cli/command-registry.js';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, ROUTES } from './routes.js';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.js';
 import { runFeatureFixture, writeFeatureFixtureReports } from './feature-fixture-runner.js';
@@ -110,7 +111,8 @@ export function validateFeatureRegistry(registry: any = {}): JsonData {
   const blockers = [
     ...Object.entries(unmapped).flatMap(([kind, values]: any) => values.map((value: any) => `${kind}:${value}`)),
     ...duplicateFeatureIds.map((id: any) => `duplicate_feature_id:${id}`),
-    ...routeMentionsWithoutRoute.map((mention: any) => `doc_route_mention_without_route:${mention}`)
+    ...routeMentionsWithoutRoute.map((mention: any) => `doc_route_mention_without_route:${mention}`),
+    ...routeGateConsistencyBlockers()
   ];
   return {
     ok: blockers.length === 0,
@@ -126,6 +128,7 @@ export function validateFeatureRegistry(registry: any = {}): JsonData {
     unmapped,
     duplicate_feature_ids: duplicateFeatureIds,
     doc_route_mentions_without_route: routeMentionsWithoutRoute,
+    route_gate_consistency_blockers: routeGateConsistencyBlockers(),
     blockers,
     nonblocking_known_gaps: [
       'feature fixtures remain progressive',
@@ -134,6 +137,38 @@ export function validateFeatureRegistry(registry: any = {}): JsonData {
     fixture_summary: fixtureSummary(features),
     feature_quality_summary: featureQualitySummary(features)
   };
+}
+
+export function routeGateConsistencyBlockers() {
+  const blockers: string[] = [];
+  for (const route of ROUTES) {
+    const cliName = routeCliCommandName(route);
+    if (!cliName) continue;
+    const entry = (COMMANDS as Record<string, any>)[cliName];
+    if (!entry?.ownsGates) continue;
+    const routeGates = stopGateFiles(route.stopGate);
+    const owned = new Set((entry.ownedGateFiles || []).map((file: any) => String(file)));
+    if (!routeGates.length && owned.size > 0) blockers.push(`route_gate_mismatch:${route.id}:routes_none_registry_${[...owned].join('|')}`);
+    for (const gate of routeGates) {
+      if (!owned.has(gate)) blockers.push(`route_gate_mismatch:${route.id}:${gate}_not_owned_by_${cliName}`);
+    }
+  }
+  return blockers;
+}
+
+function routeCliCommandName(route: any) {
+  const command = String(route.command || '').replace(/^\$/, '').toLowerCase();
+  if (Object.hasOwn(COMMANDS, command)) return command;
+  const alias = (route.dollarAliases || [])
+    .map((value: any) => String(value || '').replace(/^\$/, '').toLowerCase())
+    .find((value: string) => Object.hasOwn(COMMANDS, value));
+  return alias || null;
+}
+
+function stopGateFiles(stopGate: any) {
+  const text = String(stopGate || '');
+  if (!text || text === 'none' || text === 'honest_mode' || text === 'plan-only') return [];
+  return text.split('|').map((part) => part.trim()).filter((part) => part.endsWith('.json'));
 }
 
 export async function writeFeatureInventoryDocs({ root = packageRoot(), outFile = path.join(root, 'docs', 'feature-inventory.md') }: any = {}): Promise<JsonData> {

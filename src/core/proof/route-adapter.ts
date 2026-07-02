@@ -19,7 +19,9 @@ export async function writeRouteCompletionProof(root: any, {
   blockers = [],
   failureAnalysis = null,
   nextHumanActions = [],
-  lightweightEvidence = false
+  lightweightEvidence = false,
+  executionClass = null,
+  statusHintRejected = null
 }: any = {}) {
   const collected = lightweightEvidence ? { files: [] } : await collectProofEvidence(root);
   const normalizedRoute = normalizeProofRoute(route);
@@ -36,6 +38,7 @@ export async function writeRouteCompletionProof(root: any, {
     unverified
   });
   const written = await writeCompletionProof(root, {
+    execution_class: executionClass,
     mission_id: missionId,
     route: normalizedRoute,
     status: normalizedStatus,
@@ -51,6 +54,7 @@ export async function writeRouteCompletionProof(root: any, {
     claims,
     unverified,
     blockers,
+    ...(statusHintRejected ? { status_hint_rejected: statusHintRejected } : {}),
     failure_analysis: normalizeFailureAnalysis(failureAnalysis || evidence.failure_analysis || evidence.root_cause_analysis),
     next_human_actions: nextHumanActions
   }, {
@@ -103,6 +107,7 @@ function normalizeFailureAnalysis(value: any) {
 }
 
 function normalizeRouteProofStatus(status: any, { route, evidence, blockers, unverified }: any) {
+  if (status === 'mock_only') return 'mock_only';
   if (blockers?.length) return status === 'failed' ? 'failed' : 'blocked';
   if (status === 'verified' && unverified?.length) return 'verified_partial';
   if (routeRequiresImageVoxelAnchors(route)) {

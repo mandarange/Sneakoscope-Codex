@@ -28,7 +28,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:codex-child-overlap",
@@ -57,7 +58,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:fast-mode-default",
@@ -85,7 +87,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:fast-mode-worker-propagation",
@@ -113,7 +116,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:message-bus-reader",
@@ -142,7 +146,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:model-authored-patch-envelope",
@@ -170,7 +175,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:native-cli-session-proof",
@@ -198,7 +204,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:native-cli-session-swarm",
@@ -226,7 +233,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:native-cli-session-swarm-10",
@@ -254,7 +262,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:native-cli-session-swarm-20",
@@ -283,7 +292,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "agent:no-subagent-scaling",
@@ -311,7 +321,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "appshots:thread-attachment-discovery",
@@ -339,7 +350,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "brand-neutrality:rename-map",
@@ -369,7 +381,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "build-once:runner",
@@ -399,7 +412,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "certificate:sla",
@@ -429,7 +443,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "changelog:loop-productionization",
@@ -458,7 +473,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "cli:check-tiers",
@@ -488,7 +504,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:agent-role-rich-content",
@@ -520,7 +537,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:agent-role-sync",
@@ -550,7 +568,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:agent-type-blackbox",
@@ -582,7 +601,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:agent-type-probe",
@@ -614,7 +634,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:agent-type-routing",
@@ -646,7 +667,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:execution-profile",
@@ -676,7 +698,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:fast-ui-preservation",
@@ -704,7 +727,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-lb:fast-ui-preservation",
@@ -734,7 +758,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-lb:gpt55-fast-profile",
@@ -764,7 +789,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "hooks:concurrent-session-collision",
@@ -794,7 +820,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-app:handoff",
@@ -825,7 +852,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-control:all-pipelines",
@@ -853,7 +881,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-control:event-stream-ledger",
@@ -882,7 +911,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-native:agent-role-content",
@@ -912,7 +942,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-native:feature-broker",
@@ -942,7 +973,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-native:feature-broker-blackbox",
@@ -974,7 +1006,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-native:harness-compat",
@@ -1004,7 +1037,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-native:hook-lifecycle-proof",
@@ -1034,7 +1068,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-native:interop-policy",
@@ -1064,7 +1099,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-plugin:app-template-policy",
@@ -1093,7 +1129,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-sdk:all-pipelines",
@@ -1121,7 +1158,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-sdk:backend-router",
@@ -1149,7 +1187,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-sdk:capability",
@@ -1177,7 +1216,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-sdk:core-skill-pipeline",
@@ -1205,7 +1245,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-sdk:dfix-pipeline",
@@ -1233,7 +1274,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex-sdk:event-stream-ledger",
@@ -1261,7 +1303,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0.134-runner-truth",
@@ -1289,7 +1332,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0.137-compat",
@@ -1317,7 +1361,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0138-capability",
@@ -1346,7 +1391,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0138-capability-artifact",
@@ -1377,7 +1423,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0138-doctor",
@@ -1408,7 +1455,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0138-feature-probes",
@@ -1439,7 +1487,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0139-capability",
@@ -1468,7 +1517,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0139-code-mode-web-search",
@@ -1497,7 +1547,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0139-doctor-env-redaction",
@@ -1526,7 +1577,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0139-feature-probes",
@@ -1560,7 +1612,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0139-interrupt-agent",
@@ -1589,7 +1642,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:0139-marketplace-source",
@@ -1618,7 +1672,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:app-handoff-comprehensive",
@@ -1646,7 +1701,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "codex:product-design-plugin-routing",
@@ -1680,7 +1736,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "config:managed-merge",
@@ -1712,7 +1769,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "context7:evidence-dedupe",
@@ -1740,7 +1798,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:card-schema",
@@ -1768,7 +1827,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:route-runtime-integration",
@@ -1796,7 +1856,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:deployment-snapshot",
@@ -1824,7 +1885,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:heldout-validation",
@@ -1852,7 +1914,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:legacy-promotion-api-audit",
@@ -1880,7 +1943,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:no-inference-optimizer",
@@ -1908,7 +1972,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "core-skill:patch",
@@ -1937,7 +2002,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "dfix:patch-swarm-route-blackbox",
@@ -1965,7 +2031,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "docs:brand-neutrality",
@@ -1995,7 +2062,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:codex-0138-fix",
@@ -2026,7 +2094,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:codex-0139-real-probes",
@@ -2056,7 +2125,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:codex-app-harness",
@@ -2086,7 +2156,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:codex-doctor-parity",
@@ -2114,7 +2185,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:codex-native-readiness-ux",
@@ -2144,7 +2216,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:codex-native-repair-actions",
@@ -2174,7 +2247,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:fix-proves-codex-read",
@@ -2203,7 +2277,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "doctor:fixes-codex-app-fast-ui",
@@ -2231,7 +2306,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "fast:codex-service-tier-proof",
@@ -2259,7 +2335,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "gate-pack:manifest",
@@ -2289,7 +2366,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "geo:claim-evidence",
@@ -2317,7 +2395,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "geo:cli-blackbox",
@@ -2345,7 +2424,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "geo:crawler-purpose-policy",
@@ -2373,7 +2453,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git-collaboration:e2e",
@@ -2401,7 +2482,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-batch-allocation",
@@ -2424,7 +2506,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-checkpoint",
@@ -2454,7 +2537,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-cross-rebase",
@@ -2484,7 +2568,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-diff-envelope",
@@ -2511,7 +2596,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-manifest-append",
@@ -2537,7 +2623,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-dirty-main-detection",
@@ -2563,7 +2650,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-untracked-diff",
@@ -2591,7 +2679,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-integration-primary",
@@ -2620,7 +2709,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "git:worktree-dirty-lock",
@@ -2646,7 +2736,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "naruto:worktree-coding:blackbox",
@@ -2676,7 +2767,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "goal:artifact-compat",
@@ -2706,7 +2798,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "image:artifact-path-contract",
@@ -2735,7 +2828,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "init-deep:backup-retention",
@@ -2765,7 +2859,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "insane-search:provider-interface",
@@ -2793,7 +2888,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "legacy:upgrade-zero-break",
@@ -2821,7 +2917,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "legacy:update-e2e",
@@ -2852,7 +2949,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "lint:no-ts-nocheck-core",
@@ -2882,7 +2980,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "local-collab:all-pipelines-final-gpt",
@@ -2910,7 +3009,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "local-llm:all-pipelines",
@@ -2937,7 +3037,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "loop-integration-finalizer-check",
@@ -2965,7 +3066,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-db:capability",
@@ -2993,7 +3095,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-db:command",
@@ -3021,7 +3124,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-db:ledger",
@@ -3049,7 +3153,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-db:lifecycle-hook-decision",
@@ -3072,7 +3177,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-db:mad-command",
@@ -3100,7 +3206,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-db:mcp-result-lifecycle",
@@ -3125,7 +3232,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad-sks:app-ui-no-mutation",
@@ -3153,7 +3261,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mad:preflight-blocks-unreadable-config",
@@ -3181,7 +3290,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "mcp:plugin-inventory",
@@ -3210,7 +3320,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "model-call:concurrency",
@@ -3233,7 +3344,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "naruto:canonical-stop-gate",
@@ -3261,7 +3373,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "native-capability:repair-matrix",
@@ -3291,7 +3404,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "native-swarm:heartbeat-does-not-serialize-launch",
@@ -3314,7 +3428,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "native:image-generation-repair",
@@ -3346,7 +3461,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "orphan:gate-detection",
@@ -3376,7 +3492,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "package:published-contract",
@@ -3412,7 +3529,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "parallel:claim-enforcement",
@@ -3435,7 +3553,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "pipeline:codex-native-doctor-mad-routing",
@@ -3465,7 +3584,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "pipeline:codex-native-e2e-blackbox",
@@ -3497,7 +3617,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "pipeline:codex-native-image-routing",
@@ -3527,7 +3648,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "pipeline:codex-native-loop-routing",
@@ -3557,7 +3679,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "pipeline:codex-native-qa-routing",
@@ -3587,7 +3710,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "pipeline:codex-native-research-routing",
@@ -3617,7 +3741,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "policy:gate-audit",
@@ -3650,7 +3775,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "postinstall:safe-side-effects",
@@ -3678,7 +3804,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "probes:memoization",
@@ -3708,7 +3835,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "prompt:placeholder-guard",
@@ -3736,7 +3864,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "proof:root-cause-policy",
@@ -3769,7 +3898,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "provider:badge-context",
@@ -3797,7 +3927,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "publish:packlist-performance",
@@ -3826,7 +3957,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "python-sdk:all-pipelines",
@@ -3853,7 +3985,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "qa-loop:budget-policy",
@@ -3882,7 +4015,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "qa-loop:comprehensive-verification",
@@ -3910,7 +4044,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release-scripts:type-safe",
@@ -3940,7 +4075,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:affected-selector",
@@ -3968,7 +4104,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:aggressive-resource-governor",
@@ -3996,7 +4133,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:batch-runner",
@@ -4024,7 +4162,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:cache-glob-hashing",
@@ -4054,7 +4193,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:cache-input-classifier",
@@ -4083,7 +4223,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:cache-neutralization-report",
@@ -4112,7 +4253,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:cache-version-neutral-fixtures",
@@ -4143,7 +4285,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:dag-full-coverage",
@@ -4173,7 +4316,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:dag-runner",
@@ -4201,7 +4345,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:dynamic-presets",
@@ -4229,7 +4374,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:full-parallelism-blackbox",
@@ -4256,7 +4402,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:gate-batch-runner",
@@ -4284,7 +4431,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:gate-budget",
@@ -4312,7 +4460,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:gate-planner",
@@ -4340,7 +4489,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:github-body-helper",
@@ -4365,7 +4515,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:parallel-speed-budget",
@@ -4452,7 +4603,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:proof-truth",
@@ -4475,7 +4627,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:provenance",
@@ -4503,7 +4656,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:readiness",
@@ -4534,7 +4688,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "release:runtime-truth-matrix",
@@ -4563,7 +4718,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:blueprint-densifier",
@@ -4593,7 +4749,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:claim-builder",
@@ -4621,7 +4778,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:claim-matrix",
@@ -4649,7 +4807,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:complete-package-fixture",
@@ -4677,7 +4836,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:execution-profile-routing",
@@ -4709,7 +4869,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:experiment-plan",
@@ -4737,7 +4898,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:final-reviewer",
@@ -4765,7 +4927,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "research:final-reviewer-blackbox",
@@ -4796,7 +4959,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "responses:retry-policy-centralized",
@@ -4824,7 +4988,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "runtime:no-mjs-scripts",
@@ -4852,7 +5017,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "runtime:no-tmux",
@@ -4880,7 +5046,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "runtime:proof-summary",
@@ -4903,7 +5070,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "safety:mutation-callsite-coverage",
@@ -4931,7 +5099,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "scheduler:batch-dispatch",
@@ -4954,7 +5123,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "scheduler:no-false-pending-block",
@@ -4979,7 +5149,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "scheduler:parallel-proof-consistency",
@@ -5005,7 +5176,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "scheduler:utilization-integral",
@@ -5029,7 +5201,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "schema:check",
@@ -5057,7 +5230,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "secret:preservation",
@@ -5087,7 +5261,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "seo-geo:geo-disambiguation",
@@ -5115,7 +5290,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "seo-geo:route-identity",
@@ -5143,7 +5319,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "seo-geo:skill-rich-content",
@@ -5171,7 +5348,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "seo:audit-fixture",
@@ -5199,7 +5377,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "seo:cli-blackbox",
@@ -5227,7 +5406,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "seo:no-mutation-by-default",
@@ -5255,7 +5435,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "shared-memory:check",
@@ -5283,7 +5464,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "side-effect:runtime-report",
@@ -5311,7 +5493,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "skill:name-canonicalizer",
@@ -5341,37 +5524,8 @@
       },
       "preset": [
         "release"
-      ]
-    },
-    {
-      "id": "sks:3110-all-feature-regression",
-      "command": "node ./dist/scripts/sks-3110-all-feature-regression-blackbox.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
       ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "sks:3112-all-feature-regression",
@@ -5401,35 +5555,8 @@
       },
       "preset": [
         "release"
-      ]
-    },
-    {
-      "id": "sks:team-alias-to-naruto",
-      "command": "node ./dist/scripts/team-alias-to-naruto-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
       ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ]
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "sksd:daemon",
@@ -5459,7 +5586,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "team:alias-to-naruto",
@@ -5487,7 +5615,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "terminal:keyboard-enhancement-safety",
@@ -5515,7 +5644,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "test:no-orphan-dist-imports",
@@ -5543,7 +5673,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "triwiki:cache-key",
@@ -5573,7 +5704,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "triwiki:proof-bank",
@@ -5603,7 +5735,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "triwiki:proof-bank-blackbox",
@@ -5633,7 +5766,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "triwiki:proof-card",
@@ -5663,7 +5797,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "trust:check",
@@ -5691,7 +5826,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "type-surface:codex-app",
@@ -5721,7 +5857,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "typecheck",
@@ -5749,7 +5886,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "ultra-router:auto-router",
@@ -5777,7 +5915,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "update:gate-removed",
@@ -5805,7 +5944,8 @@
       },
       "preset": [
         "release"
-      ]
+      ],
+      "output_contract": "sks.gate-result.v1"
     },
     {
       "id": "wrongness:check",
@@ -5833,40 +5973,8 @@
       },
       "preset": [
         "release"
-      ]
-    },
-    {
-      "id": "coding-bench",
-      "command": "node ./dist/scripts/coding-bench-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-heavy",
-        "fs-read",
-        "git"
       ],
-      "side_effect": "hermetic",
-      "timeout_ms": 900000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "config/bench-baseline.json",
-          "bench/tasks/**",
-          "src/scripts/coding-bench-check.ts",
-          "src/core/verification/**",
-          "src/core/naruto/**",
-          "src/core/agents/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "bench"
-      ]
+      "output_contract": "sks.gate-result.v1"
     }
   ]
 }

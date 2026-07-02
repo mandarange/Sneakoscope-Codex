@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { PACKAGE_VERSION, appendJsonlBounded, exists, nowIso, packageRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
-import { createMission, setCurrent } from '../mission.js';
+import { createMission, findLatestMission, missionDir, setCurrent, stateFile } from '../mission.js';
 import { buildMadHighLaunchProfileNoWrite, madHighProfileName } from '../auto-review.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { attachZellijSessionInteractive, launchMadZellijUi, sanitizeZellijSessionName } from '../zellij/zellij-launcher.js';
@@ -31,6 +31,8 @@ import {
 } from '../providers/glm/glm-mad-launch.js';
 import { GLM_MAD_MODE } from '../providers/glm/glm-52-settings.js';
 import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
+
+const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
   const subcommand = firstSubcommand(args);
@@ -67,6 +69,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const skipZellijRepair = rawArgs.includes('--skip-zellij-repair') || rawArgs.includes('--no-auto-install-zellij');
   const launchRoot = process.cwd();
   if (!(await exists(path.join(launchRoot, '.sneakoscope')))) await initProject(launchRoot, {});
+  await cleanupExpiredMadSks(launchRoot);
   if (dryRun) {
     const zellijPlan = skipZellijRepair
       ? { schema: 'sks.zellij-self-heal.v1', ok: true, status: 'skipped', dry_run: true, planned_mutations: [], command: null, blockers: [], warnings: ['zellij_repair_skipped'] }
@@ -705,6 +708,7 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
     protected_core_policy: protectedCorePolicyPath,
     protected_core_before: protectedCoreBeforePath,
     protected_core_digest: protectedCoreBefore.digest,
+    expires_at: new Date(Date.now() + MAD_SKS_DEFAULT_TTL_MS).toISOString(),
     codex_native_invocation_plan: {
       selected_strategy: 'message-role-fallback',
       hook_evidence_policy: 'background-verification-do-not-count-until-refreshed',
@@ -893,7 +897,7 @@ function codexLbImmediateLaunchOpts(args: any = [], lb: any = {}, opts: any = {}
     const session = explicitSession || sanitizeZellijSessionName(`sks-openai-fallback-${Date.now().toString(36)}-${path.basename(root) || 'project'}`);
     console.log(`codex-lb bypass active for this launch: ${lb.chain_health?.status || lb.status}`);
     console.log(`Using fresh OpenAI fallback Zellij session: ${session}`);
-    return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], codexLbBypassed: true };
+    return { ...opts, session, codexArgs: [...(opts.codexArgs || []), '-c', 'model_provider="openai"'], 'codexLbBypassed': true };
   }
   if (!lb?.ok) return opts;
   const codexArgs = [...(opts.codexArgs || [])];
@@ -909,7 +913,17 @@ export async function madSksFixture(root: any) {
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: '$MAD-SKS fixture permission gate' });
   await writeCodex0138CapabilityArtifacts(root, { missionId: id }).catch(() => null);
   await writeCodex0139CapabilityArtifacts(root, { missionId: id }).catch(() => null);
-  const gate = { schema_version: 1, passed: true, mad_sks_permission_active: true, permissions_deactivated: true, catastrophic_safety_guard_active: true, permission_profile: permissionGateSummary(), fixture: true };
+  const gate = {
+    schema_version: 1,
+    passed: false,
+    execution_class: 'mock_fixture',
+    mad_sks_permission_active: false,
+    permissions_deactivated: false,
+    catastrophic_safety_guard_active: true,
+    permission_profile: permissionGateSummary(),
+    fixture: true,
+    blockers: ['mad_sks_fixture_mode_cannot_claim_real']
+  };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
   return { mission_id: id, dir, gate };
 }
@@ -920,6 +934,8 @@ const MAD_SKS_COMMAND_SURFACE = Object.freeze([
   'apply',
   'doctor',
   'status',
+  'close',
+  'revoke',
   'permissions',
   'proof',
   'repair-config',
@@ -936,6 +952,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
   const flags = parseMadSksFlags(['--mad-sks', subcommand === 'plan' ? '--plan-only' : '', ...args].filter(Boolean));
   const permission = buildMadSksPermissionModel({ targetRoot, userIntent, flags });
   const root = await sksRoot();
+  await cleanupExpiredMadSks(root);
 
   if (subcommand === 'permissions') {
     const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot });
@@ -990,6 +1007,10 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       protected_core_write_allowed: protectedCore.engine_source_exception,
       permission_active: false
     }, json);
+  }
+
+  if (subcommand === 'close' || subcommand === 'revoke') {
+    return closeMadSks(root, args, json, subcommand);
   }
 
   if (subcommand === 'repair-config') {
@@ -1179,19 +1200,6 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     ]
   });
   await writeMadSksProofEvidence(proofPath, proof);
-  const gate = {
-    schema_version: 1,
-    passed: proof.ok === true && executorResult.ok === true,
-    mad_sks_permission_active: true,
-    permissions_deactivated: true,
-    full_system_authority: permission.mode === 'full_system_authority',
-    immutable_harness_guard_passed: comparison.ok === true,
-    audit_ledger: auditPath,
-    rollback_plan: rollbackPath,
-    proof_evidence: proofPath,
-    permission_profile: permissionGateSummary()
-  };
-  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
   await setCurrent(root, {
     mission_id: id,
     route: 'MadSKS',
@@ -1203,9 +1211,25 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     mad_sks_gate_file: 'mad-sks-gate.json',
     prompt: userIntent
   });
+  const restore = await verifyMadSksPermissionRestored(root, id);
+  const gate = {
+    schema_version: 1,
+    passed: proof.ok === true && executorResult.ok === true && restore.permissions_deactivated === true,
+    mad_sks_permission_active: false,
+    permissions_deactivated: restore.permissions_deactivated === true,
+    full_system_authority: permission.mode === 'full_system_authority',
+    immutable_harness_guard_passed: comparison.ok === true,
+    audit_ledger: auditPath,
+    rollback_plan: rollbackPath,
+    proof_evidence: proofPath,
+    permission_restore_read_back: restore,
+    permission_profile: permissionGateSummary(),
+    blockers: restore.permissions_deactivated === true ? [] : ['permission_restore_failed']
+  };
+  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
   return emit({
     schema: opts.action === 'apply' ? 'sks.mad-sks-apply.v1' : 'sks.mad-sks-run.v1',
-    ok: proof.ok === true && executorResult.ok === true,
+    ok: gate.passed === true,
     status: executorResult.status,
     mission_id: id,
     target_root: targetRoot,
@@ -1220,6 +1244,84 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     protected_core_unchanged: comparison.ok === true,
     blocked_actions: [protectedProbe, ...(executorResult.blocked_actions || [])]
   }, json);
+}
+
+async function closeMadSks(root: string, args: any[] = [], json = false, action = 'close') {
+  const missionId = readOption(args, '--mission', null) || args.find((arg: any) => !String(arg).startsWith('--')) || await findLatestMission(root);
+  if (!missionId) {
+    const result = { schema: 'sks.mad-sks-close.v1', ok: false, action, mission_id: null, blockers: ['mad_sks_mission_missing'] };
+    process.exitCode = 1;
+    return emit(result, json);
+  }
+  await setCurrent(root, {
+    mission_id: missionId,
+    route: 'MadSKS',
+    route_command: '$MAD-SKS',
+    mode: 'MADSKS',
+    phase: action === 'revoke' ? 'MADSKS_PERMISSION_REVOKED' : 'MADSKS_PERMISSION_CLOSED',
+    mad_sks_active: false,
+    mad_sks_modifier: false,
+    mad_sks_gate_file: 'mad-sks-gate.json',
+    mad_sks_closed_at: nowIso()
+  });
+  const restore = await verifyMadSksPermissionRestored(root, missionId);
+  const result = await writeMadSksCloseGate(root, missionId, action, restore);
+  if (!result.ok) process.exitCode = 1;
+  return emit(result, json);
+}
+
+async function cleanupExpiredMadSks(root: string) {
+  const missionId = await findLatestMission(root);
+  if (!missionId) return null;
+  const gate = await readJson(path.join(missionDir(root, missionId), 'mad-sks-gate.json'), null);
+  const expires = Date.parse(String(gate?.expires_at || ''));
+  if (gate?.mad_sks_permission_active !== true || !Number.isFinite(expires) || expires > Date.now()) return gate;
+  await setCurrent(root, {
+    mission_id: missionId,
+    route: 'MadSKS',
+    route_command: '$MAD-SKS',
+    mode: 'MADSKS',
+    phase: 'MADSKS_PERMISSION_EXPIRED_CLOSED',
+    mad_sks_active: false,
+    mad_sks_modifier: false,
+    mad_sks_gate_file: 'mad-sks-gate.json'
+  });
+  const restore = await verifyMadSksPermissionRestored(root, missionId);
+  return writeMadSksCloseGate(root, missionId, 'ttl_expired_lazy_cleanup', restore);
+}
+
+async function writeMadSksCloseGate(root: string, missionId: string, action: string, restore: any) {
+  const file = path.join(missionDir(root, missionId), 'mad-sks-gate.json');
+  const previous = await readJson(file, {});
+  const gate = {
+    ...previous,
+    schema_version: previous.schema_version || 1,
+    passed: restore.permissions_deactivated === true,
+    mad_sks_permission_active: false,
+    permissions_deactivated: restore.permissions_deactivated === true,
+    permission_restore_read_back: restore,
+    closed_at: nowIso(),
+    close_reason: action,
+    blockers: restore.permissions_deactivated === true ? [] : ['permission_restore_failed']
+  };
+  await writeJsonAtomic(file, gate);
+  return { schema: 'sks.mad-sks-close.v1', ok: gate.passed === true, action, mission_id: missionId, gate };
+}
+
+async function verifyMadSksPermissionRestored(root: string, missionId: string) {
+  const state = await readJson(stateFile(root), {});
+  const gate = await readJson(path.join(missionDir(root, missionId), 'mad-sks-gate.json'), {});
+  const permissionsDeactivated = state.mission_id === missionId
+    && state.mad_sks_active !== true
+    && gate.mad_sks_permission_active !== true;
+  return {
+    schema: 'sks.mad-sks-permission-restore-readback.v1',
+    checked_at: nowIso(),
+    mission_id: missionId,
+    permissions_deactivated: permissionsDeactivated,
+    state_mad_sks_active: state.mad_sks_active === true,
+    gate_mad_sks_permission_active: gate.mad_sks_permission_active === true
+  };
 }
 
 function inferMadSksExecutor(args: any[] = []) {

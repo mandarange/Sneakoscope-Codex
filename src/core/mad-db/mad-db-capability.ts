@@ -60,7 +60,7 @@ export async function createMadDbCapability(root: string, input: {
   ack: string;
   cwd?: string;
   cycleId?: string;
-  ttlMs?: number;
+  ttlMs?: number | undefined;
   projectRef?: string;
   targetEnvironment?: MadDbCapabilityV2['target_environment'];
   allowedSchemas?: string[];

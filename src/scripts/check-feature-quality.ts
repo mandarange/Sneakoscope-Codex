@@ -40,7 +40,7 @@ if (!result.ok) process.exitCode = 1;
 function releaseQualityBlockers(counts = {}) {
   const blockers = [];
   if (Number(counts.runtime_verified || 0) < 22) blockers.push(`runtime_verified_below_release_target:${counts.runtime_verified || 0}<22`);
-  if (Number(counts.runtime_mock_verified || 0) < 45) blockers.push(`runtime_mock_verified_below_release_target:${counts.runtime_mock_verified || 0}<45`);
+  if (Number(counts.wiring_only || 0) > 30) blockers.push(`wiring_only_above_release_target:${counts.wiring_only || 0}>30`);
   if (Number(counts.integration_optional || 0) > 6) blockers.push(`integration_optional_above_release_target:${counts.integration_optional || 0}>6`);
   if (Number(counts.static_contract || 0) > 45) blockers.push(`static_contract_above_release_target:${counts.static_contract || 0}>45`);
   if (Number(counts.missing || 0) !== 0) blockers.push(`missing_above_release_target:${counts.missing || 0}`);

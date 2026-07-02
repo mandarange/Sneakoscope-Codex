@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { flag } from '../../cli/args.js'
 import { printJson } from '../../cli/output.js'
 import { projectRoot } from '../fsx.js'
+import { evaluateGateProcessOutput } from './gate-result-contract.js'
 
 export async function gatesCommand(args: string[] = []): Promise<unknown> {
   const root = await projectRoot()
@@ -26,12 +27,16 @@ export async function gatesCommand(args: string[] = []): Promise<unknown> {
     maxBuffer: 1024 * 1024 * 20,
     env: { ...process.env, CI: process.env.CI || 'true' }
   })
+  const gateEval = evaluateGateProcessOutput({ status: result.status, stdout: String(result.stdout || '') })
   const report = {
     schema: 'sks.gates-command.v1',
-    ok: result.status === 0,
+    ok: gateEval.ok,
     target,
     mode: isPreset ? 'preset' : 'gate',
     status: result.status,
+    contract: gateEval.contract,
+    gate_result: gateEval.gate_result,
+    ...(gateEval.reason ? { reason: gateEval.reason } : {}),
     stdout_tail: tail(String(result.stdout || '')),
     stderr_tail: tail(String(result.stderr || ''))
   }

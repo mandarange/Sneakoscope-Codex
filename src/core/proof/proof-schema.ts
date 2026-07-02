@@ -4,6 +4,7 @@ export const COMPLETION_PROOF_SCHEMA = 'sks.completion-proof.v1';
 export const COMPLETION_PROOF_STATUSES = Object.freeze([
   'verified',
   'verified_partial',
+  'mock_only',
   'blocked',
   'not_verified',
   'failed'
@@ -14,6 +15,7 @@ export function emptyCompletionProof(overrides: Record<string, unknown> = {}) {
     schema: COMPLETION_PROOF_SCHEMA,
     version: PACKAGE_VERSION,
     generated_at: nowIso(),
+    execution_class: null,
     mission_id: null,
     route: null,
     status: 'not_verified',
@@ -87,6 +89,7 @@ export interface ProofFailureAnalysis {
 
 export interface CompletionProof {
   schema: typeof COMPLETION_PROOF_SCHEMA;
+  execution_class: 'real' | 'mock_fixture';
   mission_id: string | null;
   route: string | null;
   status: import('../trust-kernel/trust-kernel-schema.js').TrustStatus;

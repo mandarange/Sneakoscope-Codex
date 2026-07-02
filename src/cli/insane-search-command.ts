@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { runUltraSearch, type UltraSearchMode } from '../core/ultra-search/index.js'
+import { evaluateLocalGate } from '../core/commands/route-success-helpers.js'
 
 export async function insaneSearchCommand(sub: string = 'help', args: string[] = []) {
   const action = sub || 'help'
@@ -29,14 +30,22 @@ async function runCommand(args: string[]) {
     query,
     ...(mode ? { mode } : {})
   })
-  if (json) console.log(JSON.stringify(result, null, 2))
+  const gate = await evaluateUltraSearchGate(missionDir)
+  const finalResult = {
+    ...result,
+    ok: result.ok === true && gate.ok === true,
+    blockers: [...new Set([...(result.blockers || []), ...gate.blockers])],
+    gate_evaluation: gate
+  }
+  if (json) console.log(JSON.stringify(finalResult, null, 2))
   else {
-    console.log(`InsaneSearch ${result.ok ? 'completed' : 'partial/blocked'}: ${result.mode}`)
+    console.log(`InsaneSearch ${finalResult.ok ? 'completed' : 'partial/blocked'}: ${result.mode}`)
     console.log(`Mission: ${missionDir}`)
     console.log(`Sources: ${result.sources.length}, verified: ${result.proof.verified_source_count}`)
-    if (result.blockers.length) console.log(`Blockers: ${result.blockers.join(', ')}`)
+    if (finalResult.blockers.length) console.log(`Blockers: ${finalResult.blockers.join(', ')}`)
   }
-  return result
+  if (!finalResult.ok) process.exitCode = 1
+  return finalResult
 }
 
 async function doctorCommand(args: string[]) {
@@ -66,9 +75,13 @@ async function inspectCommand(action: string, args: string[]) {
   const target = mission === 'latest' ? await latestMissionDir() : mission
   const file = path.join(target, 'ultra-search', action === 'sources' ? 'source-ledger.json' : action === 'claims' ? 'claim-ledger.json' : 'ultra-search-result.json')
   const text = await fs.readFile(file, 'utf8')
-  if (json) console.log(text.trim())
-  else console.log(text)
-  return JSON.parse(text)
+  const parsed = JSON.parse(text)
+  const gate = await evaluateUltraSearchGate(target)
+  const result = { ...parsed, ok: parsed.ok === true && gate.ok === true, gate_evaluation: gate, blockers: [...new Set([...(parsed.blockers || []), ...gate.blockers])] }
+  if (!result.ok) process.exitCode = 1
+  if (json) console.log(JSON.stringify(result, null, 2))
+  else console.log(JSON.stringify(result, null, 2))
+  return result
 }
 
 async function cacheCommand(args: string[]) {
@@ -159,4 +172,18 @@ async function latestMissionDir(): Promise<string> {
 
 function asyncDirLikelyUltra(dir: string): boolean {
   return Boolean(dir)
+}
+
+async function evaluateUltraSearchGate(missionDir: string) {
+  return evaluateLocalGate({
+    root: process.cwd(),
+    dir: missionDir,
+    gateFile: path.join('ultra-search', 'ultra-search-gate.json'),
+    requiredArtifacts: [
+      path.join('ultra-search', 'source-ledger.json'),
+      path.join('ultra-search', 'claim-ledger.json'),
+      path.join('ultra-search', 'ultra-search-proof.json'),
+      path.join('ultra-search', 'ultra-search-result.json')
+    ]
+  })
 }

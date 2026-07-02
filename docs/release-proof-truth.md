@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 5.1.1 keeps release proof truth aligned with the 5.1.1 package metadata, built output, release gate inventory, mock/real proof schemas, route stop-gate evaluator, gate-result output contract, feature fixture quality labels, and publish readiness evidence before `npm publish --ignore-scripts`.
+
+SKS 5.1.1 release proof truth requires proof that mock fixtures cannot set `passed: true` as real evidence, that `execution_class: mock_fixture` blocks success claims, and that release gates read structured `sks.gate-result.v1` output instead of trusting exit code alone.
+
 SKS 4.8.6 keeps release proof truth aligned with the 4.8.6 package metadata, built output, release gate inventory, harness gate inventory, script-backed check inventory, worker MCP isolation evidence, gate honesty evidence, telemetry bounds evidence, module split evidence, and publish readiness evidence before `npm publish --ignore-scripts`.
 
 SKS 4.8.6 release proof truth requires proof that the swarm hardening changes are backed by real release gates instead of stale manifests, and that version truth spans package metadata, lockfiles, CLI constants, Rust helper metadata, README, changelog, version-gated docs, and built output before publication.

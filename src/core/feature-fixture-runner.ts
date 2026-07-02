@@ -183,7 +183,7 @@ function inspectExpectedArtifact(root: any, tempRoot: any, artifact: any, ctx: a
   } catch {
     return { ...result, failure: 'json_parse' };
   }
-  if (schema === 'sks.completion-proof.v1') return { ...result, schema_ok: parsed.schema === schema, content_ok: ['verified', 'verified_partial', 'blocked'].includes(parsed.status), status: parsed.status };
+  if (schema === 'sks.completion-proof.v1') return { ...result, schema_ok: parsed.schema === schema, content_ok: ['verified', 'verified_partial', 'mock_only', 'blocked'].includes(parsed.status), status: parsed.status };
   if (schema === 'sks.image-voxel-ledger.v1') {
     const anchorCount = Array.isArray(parsed.anchors) ? parsed.anchors.length : 0;
     const relationCount = Array.isArray(parsed.relations) ? parsed.relations.length : 0;
@@ -238,7 +238,7 @@ function renderFeatureFixtureMarkdown(report: any = {}) {
 
 export function validateCompletionProofArtifact(file: any) {
   const proof = JSON.parse(fs.readFileSync(file, 'utf8'));
-  return proof.schema === 'sks.completion-proof.v1' && ['verified', 'verified_partial', 'blocked'].includes(proof.status);
+  return proof.schema === 'sks.completion-proof.v1' && ['verified', 'verified_partial', 'mock_only', 'blocked'].includes(proof.status);
 }
 
 export function validateImageVoxelArtifact(file: any, { requireAnchors = true, requireRelations = false }: any = {}) {

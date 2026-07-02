@@ -6,6 +6,7 @@ import { GOAL_BRIDGE_ARTIFACT, GOAL_WORKFLOW_ARTIFACT, updateGoalWorkflow, write
 import { flag, promptOf, resolveMissionId } from './command-utils.js';
 import { compileGoalToLoopPlan } from '../loops/goal-to-loop-compat.js';
 import { runLoopPlan } from '../loops/loop-runtime.js';
+import { evaluateLocalGate } from './route-success-helpers.js';
 
 export async function goalCommand(sub: any, args: any = []) {
   const known = new Set(['create', 'pause', 'resume', 'clear', 'status', 'help', '--help', '-h']);
@@ -35,9 +36,13 @@ async function goalCreate(args: any) {
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt });
   const plan = await compileGoalToLoopPlan({ root, missionId: id, goalText: prompt, legacyGoalOptions: { native_goal: workflow.native_goal } });
   const result = await runLoopPlan({ root, plan, parallelism: 'balanced' });
-  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: result.ok ? 'GOAL_LOOP_COMPLETED' : 'GOAL_LOOP_BLOCKED', questions_allowed: true, implementation_allowed: true, native_goal: workflow.native_goal, stop_gate: 'loop-graph-proof.json' }, { replace: true });
-  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.goal-create.v1', ok: result.ok, mission_id: id, workflow, loop_plan: plan, loop_result: result }, null, 2));
+  const gate = await evaluateLocalGate({ root, missionId: id, gateFile: 'loop-graph-proof.json' });
+  const ok = result.ok === true && gate.ok === true;
+  await setCurrent(root, { mission_id: id, mode: 'GOAL', route: 'Goal', route_command: '$Goal', phase: ok ? 'GOAL_LOOP_COMPLETED' : 'GOAL_LOOP_BLOCKED', questions_allowed: true, implementation_allowed: true, native_goal: workflow.native_goal, stop_gate: 'loop-graph-proof.json', stop_gate_blockers: gate.blockers }, { replace: true });
+  if (!ok) process.exitCode = 1;
+  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.goal-create.v1', ok, mission_id: id, workflow, loop_plan: plan, loop_result: result, gate }, null, 2));
   console.log(`Goal compiled to Loop Graph: ${id}`);
+  if (!ok) console.log(`Gate blocked: ${gate.blockers.join(', ') || 'loop_result_not_ok'}`);
   console.log('Use `sks loop status latest` to inspect.');
   console.log(`Artifact: ${path.relative(root, path.join(dir, GOAL_WORKFLOW_ARTIFACT))}`);
   console.log(`Bridge: ${path.relative(root, path.join(dir, GOAL_BRIDGE_ARTIFACT))}`);

@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { nowIso, projectRoot, writeJsonAtomic } from '../fsx.js';
+import fsp from 'node:fs/promises';
+import { nowIso, projectRoot, readJson, writeJsonAtomic } from '../fsx.js';
 import { createMission, findLatestMission } from '../mission.js';
 import { flag, readOption } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
@@ -111,17 +112,23 @@ export async function computerUseCommand(command: any, args: any = []) {
     return;
   }
   const route = command === 'cu' ? '$CU' : '$Computer-Use';
+  const gate = await evaluateComputerUseGate(root, missionId);
+  await writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'computer-use-gate.json'), gate);
   const proof = await maybeFinalizeRoute(root, {
     missionId,
     route,
+    gateFile: 'computer-use-gate.json',
+    gate,
     mock: flag(args, '--mock'),
     visual: true,
     requireRelation: flag(args, '--fix-claim') || flag(args, '--require-relation'),
     artifacts: ['computer-use-evidence-ledger.json', 'screen-capture-ledger.json', 'image-voxel-ledger.json', 'visual-anchors.json'],
     claims: [{ id: 'computer-use-evidence', status: flag(args, '--mock') ? 'verified_partial' : 'supported' }],
-    command: { cmd: `sks ${command} ${args.join(' ')}`.trim(), status: 0 }
+    blockers: gate.blockers || [],
+    statusHint: gate.passed ? undefined : 'blocked',
+    command: { cmd: `sks ${command} ${args.join(' ')}`.trim(), status: gate.passed ? 0 : 1 }
   });
-  const result = { schema: 'sks.computer-use-evidence.v1', ok: proof.ok, mission_id: missionId, route, proof: proof.validation };
+  const result = { schema: 'sks.computer-use-evidence.v1', ok: proof.ok && gate.passed === true, mission_id: missionId, route, gate, proof: proof.validation };
   if (flag(args, '--json')) return printJson(result);
   console.log(`Computer Use evidence: ${proof.ok ? 'ok' : 'blocked'} ${missionId}`);
   if (!proof.ok) process.exitCode = 1;
@@ -150,7 +157,18 @@ async function importFixture(root: any, command: any, args: any) {
   };
   await writeJsonAtomic(path.join(dir, 'computer-use-evidence-ledger.json'), evidence);
   await writeJsonAtomic(path.join(dir, 'screen-capture-ledger.json'), captures);
-  const gate = { schema_version: 1, passed: true, ok: true, computer_use_evidence: true, screen_capture_evidence: true, mock: true };
+  const gate = {
+    schema: 'sks.computer-use-gate.v1',
+    schema_version: 1,
+    passed: false,
+    ok: false,
+    status: 'blocked',
+    execution_class: 'mock_fixture',
+    computer_use_evidence: false,
+    screen_capture_evidence: false,
+    mock: true,
+    blockers: ['computer_use_fixture_mode_cannot_claim_real']
+  };
   await writeJsonAtomic(path.join(dir, 'computer-use-gate.json'), gate);
   const proof = await maybeFinalizeRoute(root, {
     missionId: id,
@@ -162,9 +180,42 @@ async function importFixture(root: any, command: any, args: any) {
     requireRelation: flag(args, '--fix-claim') || flag(args, '--require-relation'),
     artifacts: ['computer-use-evidence-ledger.json', 'screen-capture-ledger.json', 'image-voxel-ledger.json', 'visual-anchors.json', 'completion-proof.json'],
     claims: [{ id: 'computer-use-import-fixture', status: 'verified_partial' }],
-    command: { cmd: `sks ${command} import-fixture --mock`, status: 0 }
+    statusHint: 'blocked',
+    blockers: gate.blockers,
+    command: { cmd: `sks ${command} import-fixture --mock`, status: 1 }
   });
-  const result = { schema: 'sks.computer-use-import-fixture.v1', ok: proof.ok, mission_id: id, route, proof: proof.validation };
+  const result = { schema: 'sks.computer-use-import-fixture.v1', ok: false, mission_id: id, route, gate, proof: proof.validation };
+  process.exitCode = 1;
   if (flag(args, '--json')) return printJson(result);
-  console.log(`Computer Use fixture imported: ${proof.ok ? 'ok' : 'blocked'} ${id}`);
+  console.log(`Computer Use fixture imported: blocked ${id}`);
+}
+
+async function evaluateComputerUseGate(root: string, missionId: string) {
+  const dir = path.join(root, '.sneakoscope', 'missions', missionId);
+  const evidence = await readJson(path.join(dir, 'computer-use-evidence-ledger.json'), null);
+  const captures = await readJson(path.join(dir, 'screen-capture-ledger.json'), null);
+  const blockers = new Set<string>();
+  const actions = Array.isArray(evidence?.actions) ? evidence.actions : [];
+  const captureRows = Array.isArray(captures?.captures) ? captures.captures : [];
+  if (!actions.length) blockers.add('computer_use_actions_missing');
+  if (actions.some((action: any) => action?.status === 'mocked' || action?.mock === true) || evidence?.mock === true) blockers.add('computer_use_mock_actions_not_evidence');
+  if (!captureRows.length) blockers.add('screen_capture_evidence_missing');
+  for (const capture of captureRows) {
+    const rel = String(capture?.path || '');
+    const abs = path.isAbsolute(rel) ? rel : path.join(root, rel);
+    const stat = await fsp.stat(abs).catch(() => null);
+    if (!stat || stat.size < 256) blockers.add(`screen_capture_file_missing_or_too_small:${capture?.id || rel || 'unknown'}`);
+    if (capture?.status === 'mocked' || capture?.mock === true || captures?.mock === true) blockers.add('screen_capture_mock_not_evidence');
+  }
+  const passed = blockers.size === 0;
+  return {
+    schema: 'sks.computer-use-gate.v1',
+    schema_version: 1,
+    passed,
+    ok: passed,
+    status: passed ? 'pass' : 'blocked',
+    computer_use_evidence: actions.length > 0 && ![...blockers].includes('computer_use_mock_actions_not_evidence'),
+    screen_capture_evidence: captureRows.length > 0 && ![...blockers].some((blocker) => blocker.startsWith('screen_capture_')),
+    blockers: [...blockers]
+  };
 }

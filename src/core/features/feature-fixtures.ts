@@ -1,6 +1,6 @@
 export type FeatureQuality =
   | 'runtime_verified'
-  | 'runtime_mock_verified'
+  | 'wiring_only'
   | 'integration_optional'
   | 'static_contract'
   | 'missing';

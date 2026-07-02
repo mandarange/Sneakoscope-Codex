@@ -1,5 +1,7 @@
 # Codex 0.139 Compatibility
 
+SKS 5.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening dollar-command proof truth, mock fixture labeling, and release gate output contracts for the current package metadata.
+
 SKS 4.8.6 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the swarm gate honesty, release manifest consolidation, and lifecycle-disabled publish readiness evidence with the current 4.8.6 package metadata.
 
 SKS 4.8.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while repairing the macOS SKS menu bar action surface: Terminal commands preserve Swift interpolation instead of running `(escaped)`, and codex-lb domain/API-key setup is visible from the status menu.

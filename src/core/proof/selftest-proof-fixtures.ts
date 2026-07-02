@@ -36,19 +36,32 @@ export async function writeSelftestRouteProof(root: any, {
   return writeRouteCompletionProof(root, {
     missionId,
     route,
-    status: 'verified_partial',
-    gate: { passed: true, source: gateSource || defaults.gateSource },
+    status: 'mock_only',
+    executionClass: 'mock_fixture',
+    gate: {
+      passed: false,
+      ok: false,
+      execution_class: 'mock_fixture',
+      source: gateSource || defaults.gateSource,
+      blockers: ['selftest_fixture_cannot_claim_real_route_completion']
+    },
     summary: { selftest: true, tests_passed: 1, manual_review_required: true },
     artifacts: artifacts || defaults.artifacts,
     evidence: {
-      route_gate: { passed: true },
-      commands: [{ cmd: 'sks selftest --mock', status: 'verified_partial' }]
+      route_gate: {
+        passed: false,
+        ok: false,
+        execution_class: 'mock_fixture',
+        blockers: ['selftest_fixture_cannot_claim_real_route_completion']
+      },
+      commands: [{ cmd: 'sks selftest --mock', status: 'mock_only' }]
     },
     claims: [{
       id: `selftest-${kind.replaceAll('_', '-')}-proof`,
       text: (CLAIM_TEXT as Record<string, string>)[kind] || CLAIM_TEXT.team_gate,
       status: 'verified_partial'
     }],
-    unverified: unverified || defaults.unverified
+    unverified: unverified || defaults.unverified,
+    blockers: ['selftest_fixture_cannot_claim_real_route_completion']
   });
 }

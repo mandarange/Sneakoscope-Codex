@@ -71,7 +71,9 @@ async function qaLoopPrepare(args: any) {
     const artifactResult = await writeQaLoopArtifacts(dir, { id, prompt, mode: 'qaloop' }, result.contract);
     const nativeAgentPlan = await writeQaNativeAgentLedger(dir, { id, prompt, reportFile: artifactResult.report_file });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.prepare.auto_sealed', slots: 0, hash: result.contract.sealed_hash, checklist_count: artifactResult.checklist_count });
-    await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: true, ambiguity_gate_required: true, ambiguity_gate_passed: true, stop_gate: 'qa-gate.json', qa_loop_artifacts_ready: true, qa_report_file: artifactResult.report_file, qa_checklist_count: artifactResult.checklist_count, reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+    const clarificationPassed = true;
+    const ambiguityGatePassed = true;
+    await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: clarificationPassed, ambiguity_gate_required: true, ambiguity_gate_passed: ambiguityGatePassed, stop_gate: 'qa-gate.json', qa_loop_artifacts_ready: true, qa_report_file: artifactResult.report_file, qa_checklist_count: artifactResult.checklist_count, reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
     if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-prepare.v1', ok: true, mission_id: id, report_file: artifactResult.report_file, checklist_count: artifactResult.checklist_count, native_agent_plan: nativeAgentPlan }, null, 2));
     console.log(`QA-LOOP mission created: ${id}`);
     console.log('QA-LOOP contract auto-sealed from prompt, TriWiki/current-code defaults, and conservative safety policy.');
@@ -105,7 +107,9 @@ async function qaLoopAnswer(args: any) {
   }
   const artifactResult = await writeQaLoopArtifacts(dir, mission, result.contract);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.contract.sealed', hash: result.contract.sealed_hash, checklist_count: artifactResult.checklist_count });
-  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: true, ambiguity_gate_passed: true, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
+  const clarificationPassed = true;
+  const ambiguityGatePassed = true;
+  await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_CLARIFICATION_CONTRACT_SEALED', questions_allowed: false, implementation_allowed: true, clarification_required: false, clarification_passed: clarificationPassed, ambiguity_gate_passed: ambiguityGatePassed, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   console.log(`QA-LOOP contract sealed for ${id}`);
 }
 

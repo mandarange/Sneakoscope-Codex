@@ -23,6 +23,7 @@ export function defaultReleaseGateBudget(): ReleaseGateBudget {
     'global-config': 1,
     publish: 1,
     'fs-read': Math.min(96, cores * 10),
+    'fs-write': Math.min(12, Math.max(1, cores)),
     'timing-sensitive': 1
   }
   for (const key of Object.keys(base) as ReleaseGateResourceClass[]) {

@@ -7,6 +7,7 @@ export const TRUST_REPORT_SCHEMA = 'sks.trust-report.v1' as const;
 export type TrustStatus =
   | 'verified'
   | 'verified_partial'
+  | 'mock_only'
   | 'blocked'
   | 'failed'
   | 'not_verified';
@@ -14,6 +15,7 @@ export type TrustStatus =
 export const TRUST_STATUSES: readonly TrustStatus[] = [
   'verified',
   'verified_partial',
+  'mock_only',
   'blocked',
   'failed',
   'not_verified'

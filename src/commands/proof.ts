@@ -88,6 +88,7 @@ export async function run(_command: any, args: any = []) {
     const result = await writeRouteCompletionProof(root, {
       missionId,
       route: '$SKS',
+      executionClass: 'real',
       status: 'verified_partial',
       evidence,
       summary: {
@@ -106,8 +107,9 @@ export async function run(_command: any, args: any = []) {
   if (action === 'smoke') {
     const evidence = await collectProofEvidence(root);
     const result = await writeCompletionProof(root, {
+      execution_class: 'mock_fixture',
       route: '$SKS',
-      status: 'verified_partial',
+      status: 'mock_only',
       summary: {
         files_changed: evidence.files?.length || 0,
         commands_run: 1,
@@ -117,8 +119,9 @@ export async function run(_command: any, args: any = []) {
       },
       evidence,
       claims: [{ id: 'proof-smoke', status: 'supported', evidence: '.sneakoscope/proof/latest.json' }],
-      unverified: ['Smoke proof is fixture evidence, not a real route completion.']
-    }, { command: { cmd: 'sks proof smoke', status: 'verified_partial' } });
+      unverified: ['Smoke proof is fixture evidence, not a real route completion.'],
+      blockers: ['proof_smoke_fixture_cannot_claim_real_completion']
+    }, { command: { cmd: 'sks proof smoke', status: 'mock_only' } });
     if (flag(args, '--json')) return printJson(result);
     console.log(`Completion proof written: ${result.files.latest_json}`);
     return;

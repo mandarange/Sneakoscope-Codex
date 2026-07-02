@@ -43,6 +43,7 @@ export async function prepareMadDbMission(input: {
   root: string;
   task: string;
   args?: string[];
+  ttlMs?: number | undefined;
   verifyTools?: boolean;
   runtimeSessionId?: string;
   sessionKey?: string;
@@ -66,6 +67,7 @@ export async function prepareMadDbMission(input: {
     projectRef: target.project_ref || 'missing-project-ref',
     targetEnvironment: target.target_environment,
     allowedSchemas: target.allowed_schemas,
+    ttlMs: input.ttlMs,
     runtimeSessionId,
     operatorIntent: input.task,
     profilePath: profile.profile_path,
@@ -142,11 +144,12 @@ export async function runMadDbCycle(input: {
   migrationName?: string | null;
   migrationFile?: string | null;
   verifySql?: string | null;
+  ttlMs?: number | undefined;
   args?: string[];
 }): Promise<MadDbCycleResult> {
   const timings: Record<string, number> = {};
   const start = Date.now();
-  const prepared = await prepareMadDbMission({ root: input.root, task: input.task, args: input.args || [], verifyTools: false });
+  const prepared = await prepareMadDbMission({ root: input.root, task: input.task, args: input.args || [], ttlMs: input.ttlMs, verifyTools: false });
   timings.prepare_ms = Date.now() - start;
   const profile = await recreateProfileFromPrepared(input.root, prepared);
   const executor = new MadDbMcpExecutor(profile);

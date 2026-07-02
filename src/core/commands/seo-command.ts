@@ -11,8 +11,10 @@ import {
   runSearchVisibilityRollback,
   runSearchVisibilityStatus,
   runSearchVisibilityVerify,
+  resolveSearchVisibilityMission,
 } from '../search-visibility/index.js';
 import type { SearchVisibilityCliOptions, SearchVisibilityFramework, SearchVisibilityTarget } from '../search-visibility/types.js';
+import { evaluateLocalGate } from './route-success-helpers.js';
 
 export async function seoCommand(args: string[] = []) {
   return runSearchVisibilityCommand('seo', args, 'seo');
@@ -28,6 +30,25 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
   const rest = args.slice(1);
   const options = await parseOptions(rest);
   let result: unknown;
+  if (action === 'apply' && options.apply) {
+    const mission = await resolveSearchVisibilityMission(options.root, firstPositional(rest) || 'latest');
+    const blockers = [];
+    if (!mission) blockers.push('mission_required_for_apply');
+    else {
+      const planGate = await evaluateLocalGate({ root: mission.root, dir: mission.dir, gateFile: mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json', requiredArtifacts: ['search-visibility/mutation-plan.json'] });
+      blockers.push(...planGate.blockers.filter((blocker) => blocker !== 'gate_not_passed' && blocker !== 'gate_ok_false'));
+    }
+    if (blockers.length) {
+      result = { schema: 'sks.search-visibility.apply-command.v1', ok: false, route: mode === 'seo' ? '$SEO-GEO-OPTIMIZER' : '$SEO-GEO-OPTIMIZER', status: 'blocked', blockers };
+      process.exitCode = 1;
+      if (options.json) {
+        printJson(result);
+        return result;
+      }
+      printHuman(mode, action, result);
+      return result;
+    }
+  }
   if (action === 'doctor') result = await runSearchVisibilityDoctor(mode, options);
   else if (action === 'audit') result = await runSearchVisibilityAudit(mode, options);
   else if (action === 'plan') result = await runSearchVisibilityPlan(mode, firstPositional(rest) || 'latest', options);
@@ -37,6 +58,7 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
   else if (action === 'rollback') result = await runSearchVisibilityRollback(mode, firstPositional(rest) || 'latest', options);
   else if (action === 'fixture') result = await runSearchVisibilityFixture(mode, options);
   else return usage(mode, 2, displayCommand);
+  result = await applySearchVisibilityGateResult(mode, action, result, options);
   if (isBlocked(result)) process.exitCode = 1;
   if (options.json) {
     printJson(result);
@@ -44,6 +66,31 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
   }
   printHuman(mode, action, result);
   return result;
+}
+
+async function applySearchVisibilityGateResult(mode: 'seo' | 'geo', action: string, result: any, options: SearchVisibilityCliOptions) {
+  if (!result || typeof result !== 'object' || !result.mission_id) return result;
+  const mission = await resolveSearchVisibilityMission(options.root, result.mission_id);
+  if (!mission) return { ...result, ok: false, blockers: [...(result.blockers || []), 'mission_missing_for_gate_evaluation'] };
+  const requiredArtifacts = action === 'apply'
+    ? ['search-visibility/mutation-plan.json', 'search-visibility/rollback-manifest.json', 'search-visibility/verification-report.json']
+    : action === 'status'
+      ? []
+      : ['search-visibility/verification-report.json'];
+  const evaluated = await evaluateLocalGate({
+    root: mission.root,
+    dir: mission.dir,
+    gateFile: mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json',
+    requiredArtifacts
+  });
+  const blockers = [...new Set([...(result.blockers || []), ...evaluated.blockers])];
+  return {
+    ...result,
+    ok: result.ok === true && evaluated.ok === true,
+    status: result.ok === true && evaluated.ok === true ? result.status : 'blocked',
+    gate_evaluation: evaluated,
+    blockers
+  };
 }
 
 function normalizeOptimizerArgs(args: string[]): { mode: 'seo' | 'geo'; args: string[] } {

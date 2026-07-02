@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { initProject } from '../init.js';
 import { findLatestMission, setCurrent } from '../mission.js';
-import { exists, readText, sksRoot } from '../fsx.js';
-import { closeMadDbCycle, isMadDbCapabilityActive, MAD_DB_ACK, readMadDbCapability, resolveMadDbMissionId, revokeMadDbCapability } from '../mad-db/mad-db-capability.js';
+import { exists, nowIso, readText, sksRoot, writeJsonAtomic } from '../fsx.js';
+import { closeMadDbCycle, isMadDbCapabilityActive, MAD_DB_ACK, MAD_DB_MAX_TTL_MS, readMadDbCapability, resolveMadDbMissionId, revokeMadDbCapability } from '../mad-db/mad-db-capability.js';
 import { closeMadDbRuntimeProfile, verifyReadOnlyRestored } from '../mad-db/mad-db-runtime-profile.js';
 import { runMadDbCycle } from '../mad-db/mad-db-coordinator.js';
 import { resolveMadDbTarget } from '../mad-db/mad-db-target.js';
@@ -14,6 +14,7 @@ export async function madDbCommand(args: string[] = []) {
   const rest = action === args[0] ? args.slice(1) : args;
   const root = await sksRoot();
   if (!(await exists(path.join(root, '.sneakoscope')))) await initProject(root, {});
+  await cleanupExpiredMadDbCapability(root);
   if (action === 'run') return runMadDb(root, rest);
   if (action === 'exec') return execMadDb(root, rest);
   if (action === 'apply-migration') return applyMigrationMadDb(root, rest);
@@ -35,6 +36,7 @@ async function runMadDb(root: string, args: string[]) {
     task,
     sql: sql || null,
     verifySql: readOption(args, '--verify-sql', '') || null,
+    ttlMs: readTtlMs(args),
     args
   });
   return printResult(result, args);
@@ -48,6 +50,7 @@ async function execMadDb(root: string, args: string[]) {
     task: sql || 'sks mad-db exec',
     sql: sql || null,
     verifySql: readOption(args, '--verify-sql', '') || null,
+    ttlMs: readTtlMs(args),
     args
   });
   return printResult(result, args);
@@ -64,6 +67,7 @@ async function applyMigrationMadDb(root: string, args: string[]) {
     migrationName: readOption(args, '--name', `mad_db_${Date.now()}`),
     migrationFile: file || null,
     verifySql: readOption(args, '--verify-sql', '') || null,
+    ttlMs: readTtlMs(args),
     args
   });
   return printResult(result, args);
@@ -112,12 +116,15 @@ async function enableMadDb(root: string, args: string[]) {
 async function statusMadDb(root: string, args: string[]) {
   const missionId = await resolveMadDbMissionId(root, {}, readOption(args, '--mission', 'latest'));
   const capability = missionId ? await readMadDbCapability(root, missionId) : null;
+  const active = isMadDbCapabilityActive(capability);
   const result = {
     schema: 'sks.mad-db-status.v2',
     ok: true,
     action: 'status',
     mission_id: missionId,
-    active: isMadDbCapabilityActive(capability),
+    active,
+    expires_at: capability?.expires_at || null,
+    ttl_remaining_ms: active && capability?.expires_at ? Math.max(0, Date.parse(capability.expires_at) - Date.now()) : null,
     capability: capability ? redactCapability(capability) : null
   };
   return printJsonOrText(result, args, !missionId || !capability ? 'MadDB: no capability found.' : `MadDB: ${result.active ? 'active' : 'inactive'} for ${missionId}; status=${capability.status}; expires=${capability.expires_at}.`);
@@ -129,7 +136,9 @@ async function closeMadDb(root: string, args: string[]) {
   const restoration = missionId ? await closeMadDbRuntimeProfile({ root, missionId, reason: 'operator_close' }) : null;
   const closed = missionId && capability ? await closeMadDbCycle(root, missionId, capability.cycle_id, 'operator_close') : null;
   if (missionId) await setCurrent(root, { mad_db_active: false, phase: 'MADDB_CLOSED' });
-  const result = { schema: 'sks.mad-db-close.v2', ok: Boolean(closed), action: 'close', mission_id: missionId, capability: closed ? redactCapability(closed) : null, read_only_restoration: restoration };
+  const readBackVerification = Boolean(closed) && restoration?.ok === true && isMadDbCapabilityActive(closed) === false;
+  if (missionId) await writeMadDbCloseGate(root, missionId, closed, restoration, 'operator_close');
+  const result = { schema: 'sks.mad-db-close.v2', ok: Boolean(closed) && readBackVerification, action: 'close', mission_id: missionId, closed: Boolean(closed), closed_at: closed?.closed_at || null, capability: closed ? redactCapability(closed) : null, read_back_verification: readBackVerification, read_only_restoration: restoration };
   return printJsonOrText(result, args, closed ? `MadDB cycle closed for ${missionId}.` : 'MadDB: no capability to close.');
 }
 
@@ -138,8 +147,42 @@ async function revokeMadDb(root: string, args: string[]) {
   const revoked = missionId ? await revokeMadDbCapability(root, missionId, readOption(args, '--reason', 'operator_revoked')) : null;
   const restoration = missionId ? await closeMadDbRuntimeProfile({ root, missionId, reason: 'operator_revoke' }) : null;
   await setCurrent(root, { mad_db_active: false, phase: 'MADDB_REVOKED' });
-  const result = { schema: 'sks.mad-db-command.v2', ok: Boolean(revoked), action: 'revoke', mission_id: missionId, capability: revoked ? redactCapability(revoked) : null, read_only_restoration: restoration };
+  if (missionId) await writeMadDbCloseGate(root, missionId, revoked, restoration, 'operator_revoke');
+  const result = { schema: 'sks.mad-db-command.v2', ok: Boolean(revoked) && restoration?.ok === true, action: 'revoke', mission_id: missionId, closed: Boolean(revoked), closed_at: revoked?.closed_at || null, capability: revoked ? redactCapability(revoked) : null, read_back_verification: Boolean(revoked) && restoration?.ok === true && isMadDbCapabilityActive(revoked) === false, read_only_restoration: restoration };
   return printJsonOrText(result, args, revoked ? `MadDB capability revoked for ${missionId}.` : 'MadDB: no capability to revoke.');
+}
+
+async function cleanupExpiredMadDbCapability(root: string) {
+  const missionId = await resolveMadDbMissionId(root, {}, 'latest');
+  if (!missionId) return null;
+  const capability = await readMadDbCapability(root, missionId);
+  if (!capability || isMadDbCapabilityActive(capability)) return capability;
+  if (!['transport_ready', 'active'].includes(capability.status)) return capability;
+  const restoration = await closeMadDbRuntimeProfile({ root, missionId, reason: 'ttl_expired_lazy_cleanup' });
+  const closed = await closeMadDbCycle(root, missionId, capability.cycle_id, 'ttl_expired_lazy_cleanup');
+  await setCurrent(root, { mad_db_active: false, phase: 'MADDB_EXPIRED_CLOSED', mad_db_closed_at: closed?.closed_at || null });
+  await writeMadDbCloseGate(root, missionId, closed, restoration, 'ttl_expired_lazy_cleanup');
+  return closed;
+}
+
+async function writeMadDbCloseGate(root: string, missionId: string, capability: any, restoration: any, reason: string) {
+  const closed = Boolean(capability) && isMadDbCapabilityActive(capability) === false && ['closed', 'revoked', 'expired'].includes(String(capability.status));
+  await writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'mad-db-gate.json'), {
+    schema: 'sks.mad-db-gate.v1',
+    passed: closed && restoration?.ok === true,
+    closed,
+    closed_at: capability?.closed_at || null,
+    read_back_verification: closed && restoration?.ok === true,
+    read_only_restoration: restoration,
+    close_reason: reason,
+    mission_id: missionId,
+    cycle_id: capability?.cycle_id || null,
+    blockers: [
+      ...(closed ? [] : ['mad_db_capability_not_closed']),
+      ...(restoration?.ok === true ? [] : ['read_only_restoration_failed', ...(restoration?.blockers || [])])
+    ],
+    created_at: nowIso()
+  });
 }
 
 function printResult(result: any, args: string[]) {
@@ -178,6 +221,17 @@ function readOption(args: string[], name: string, fallback: string) {
   if (index >= 0 && args[index + 1] && !String(args[index + 1]).startsWith('--')) return String(args[index + 1]);
   const prefixed = args.find((arg) => String(arg).startsWith(`${name}=`));
   return prefixed ? prefixed.slice(name.length + 1) : fallback;
+}
+
+function readTtlMs(args: string[]) {
+  const raw = readOption(args, '--ttl', '');
+  if (!raw) return undefined;
+  const match = String(raw).trim().match(/^(\d+(?:\.\d+)?)(ms|s|m)?$/i);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  const unit = (match[2] || 'ms').toLowerCase();
+  const multiplier = unit === 'm' ? 60_000 : unit === 's' ? 1_000 : 1;
+  return Math.min(MAD_DB_MAX_TTL_MS, Math.max(1, Math.floor(value * multiplier)));
 }
 
 function positionalText(args: string[]) {

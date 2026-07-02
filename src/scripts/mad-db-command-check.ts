@@ -10,6 +10,8 @@ assertGate(DOLLAR_COMMAND_ALIASES.some((entry: any) => entry.canonical === '$MAD
 assertGate(routeByDollarCommand('MAD-DB')?.command === '$MAD-DB', '$MAD-DB must resolve to the first-class MadDB route')
 assertGate(routeByDollarCommand('mad-db')?.command === '$MAD-DB', '$mad-db must resolve to the first-class MadDB route')
 const initText = readText('src/core/init.ts')
-assertGate(initText.includes("'mad-db':") && initText.includes('madDbSkillText()') && initText.includes('dbSafetyGuardSkillText()'), 'mad-db generated picker skill template must come from typed SSOT')
+const skillInitText = readText('src/core/init/skills.ts')
+const typedSkillSource = `${initText}\n${skillInitText}`
+assertGate(typedSkillSource.includes("'mad-db':") && typedSkillSource.includes('madDbSkillText()') && typedSkillSource.includes('dbSafetyGuardSkillText()'), 'mad-db generated picker skill template must come from typed SSOT')
 assertGate(readText('src/core/commands/mad-db-command.ts').includes('run|exec|apply-migration'), 'mad-db command must expose execution subcommands')
 emitGate('mad-db:command', { command: 'sks mad-db', dollar_command: '$MAD-DB', app_skill_alias: '$mad-db' })

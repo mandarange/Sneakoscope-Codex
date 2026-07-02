@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { flag } from '../../cli/args.js'
 import { printJson } from '../../cli/output.js'
 import { projectRoot } from '../fsx.js'
+import { evaluateGateProcessOutput } from './gate-result-contract.js'
 
 const CHECK_SCHEMA = 'sks.check.v1'
 
@@ -24,7 +25,7 @@ export async function checkCommand(args: string[] = []): Promise<unknown> {
     return result
   }
 
-  const steps: Array<{ name: string; ok: boolean; status: number | null; stderr_tail: string }> = []
+  const steps: Array<{ name: string; ok: boolean; status: number | null; stderr_tail: string; reason?: string; contract?: string; gate_result?: any }> = []
   let proofBankSummary: any | null = null
   for (const step of plan.steps) {
     const result = spawnSync(step.command, step.args, {
@@ -34,9 +35,40 @@ export async function checkCommand(args: string[] = []): Promise<unknown> {
       shell: false,
       env: { ...process.env, CI: process.env.CI || 'true' }
     })
-    const ok = result.status === 0
-    if (step.name === 'proof-bank-summary') proofBankSummary = parseJsonObject(String(result.stdout || ''))
-    steps.push({ name: step.name, ok, status: result.status, stderr_tail: tail(String(result.stderr || '')) })
+    const stdout = String(result.stdout || '')
+    let ok = result.status === 0
+    let reason: string | undefined
+    let contract: string | undefined
+    let gateResult: any | null = null
+    if (step.name === 'proof-bank-summary') {
+      proofBankSummary = parseJsonObject(stdout)
+      if (!proofBankSummary) {
+        ok = false
+        reason = 'invalid_json_output'
+      }
+    }
+    if (step.output_contract === 'sks.gate-result.v1') {
+      const gateEval = evaluateGateProcessOutput({ status: result.status, stdout, requiresContract: true })
+      ok = gateEval.ok
+      reason = gateEval.reason
+      contract = gateEval.contract
+      gateResult = gateEval.gate_result
+    } else if (step.name.startsWith('release:')) {
+      const gateEval = evaluateGateProcessOutput({ status: result.status, stdout })
+      ok = gateEval.ok
+      reason = gateEval.reason
+      contract = gateEval.contract
+      gateResult = gateEval.gate_result
+    }
+    steps.push({
+      name: step.name,
+      ok,
+      status: result.status,
+      stderr_tail: tail(String(result.stderr || '')),
+      ...(reason ? { reason } : {}),
+      ...(contract ? { contract } : {}),
+      ...(gateResult ? { gate_result: gateResult } : {})
+    })
     if (!json) {
       if (result.stdout) process.stdout.write(result.stdout)
       if (result.stderr) process.stderr.write(result.stderr)
@@ -60,14 +92,14 @@ export async function checkCommand(args: string[] = []): Promise<unknown> {
 function buildCheckPlan(input: { tier: string; sla: string; changedSince: string; triwiki: boolean }) {
   const tier = normalizeTier(input.tier)
   const buildScript = tier === 'release' ? 'build:clean' : 'build:incremental'
-  const steps: Array<{ name: string; command: string; args: string[] }> = []
+  const steps: Array<{ name: string; command: string; args: string[]; output_contract?: string }> = []
   if (tier === 'instant') {
     steps.push({ name: 'proof-bank-summary', command: process.execPath, args: ['dist/scripts/release-speed-summary.js'] })
   } else if (tier === 'real-check') {
     steps.push({ name: 'real-check', command: process.execPath, args: ['dist/scripts/release-real-check.js'] })
   } else {
     steps.push({ name: buildScript, command: 'npm', args: ['run', buildScript, '--silent'] })
-    steps.push({ name: `release:${tier}`, command: process.execPath, args: dagArgs(tier, input.changedSince, input.sla) })
+    steps.push({ name: `release:${tier}`, command: process.execPath, args: dagArgs(tier, input.changedSince, input.sla), output_contract: 'sks.gate-result.v1' })
   }
   return {
     tier,

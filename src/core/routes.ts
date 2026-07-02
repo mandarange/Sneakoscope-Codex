@@ -157,7 +157,7 @@ export const ROUTES = [
     lifecycle: ['micro_task_list', 'targeted_inspection', 'listed_edits_only', 'cheap_verification'],
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
-    stopGate: 'none',
+    stopGate: 'dfix-gate.json',
     cliEntrypoint: 'sks dfix',
     examples: ['$DFix 글자 색 바꿔줘', '$DFix README 오타 고쳐줘']
   },
@@ -355,7 +355,7 @@ export const ROUTES = [
     lifecycle: ['fast_intake', 'focused_computer_use_steps', 'evidence_summary', 'final_triwiki_refresh_validate', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'low',
-    stopGate: 'none',
+    stopGate: 'computer-use-gate.json',
     cliEntrypoint: 'Codex App prompt route only: $Computer-Use <target/task>',
     examples: ['$Computer-Use inspect this native Mac settings dialog', '$CU set up the local desktop app permission prompt']
   },
@@ -369,7 +369,7 @@ export const ROUTES = [
     lifecycle: ['goal_bridge_artifact', 'native_goal_create_or_control', 'selected_sks_route_continuation', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'medium',
-    stopGate: 'none',
+    stopGate: 'loop-graph-proof.json',
     cliEntrypoint: 'sks goal create|pause|resume|clear|status',
     examples: ['$Goal persist this migration workflow with native /goal continuation']
   },
@@ -454,7 +454,7 @@ export const ROUTES = [
     lifecycle: ['experiment_ledger', 'metric', 'keep_or_discard', 'falsification', 'post_route_reflection', 'honest_conclusion'],
     context7Policy: 'required',
     reasoningPolicy: 'xhigh',
-    stopGate: 'autoresearch-gate.json',
+    stopGate: 'research-gate.json',
     cliEntrypoint: 'sks pipeline status',
     examples: ['$AutoResearch improve this workflow with experiments']
   },

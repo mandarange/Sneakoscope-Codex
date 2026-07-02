@@ -106,6 +106,7 @@ export const AGENT_CENTRAL_LEDGER_RUNTIME_SCHEMAS = {
       route: { type: 'string' },
       generated_at: { type: 'string' },
       backend: { type: 'string' },
+      execution_class: { enum: ['real', 'mock_fixture'] },
       real_parallel_claim: { type: 'boolean' },
       fake_backend_disclaimer: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       agent_count: { type: 'integer', minimum: 0 },

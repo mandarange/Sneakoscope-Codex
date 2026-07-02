@@ -11,7 +11,7 @@ for (const id of ['cli-seo-geo-optimizer', 'route-seo-geo-optimizer']) {
   assertGate(feature, `feature missing: ${id}`);
   assertGate(feature.fixture?.status === 'pass', `feature fixture must pass: ${id}`, feature);
   assertGate(feature.fixture?.quality !== 'static_contract', `SEO/GEO feature must not rely on static contract: ${id}`, feature.fixture);
-  assertGate(['runtime_verified', 'runtime_mock_verified'].includes(feature.fixture?.quality), `SEO/GEO fixture quality must be runtime-backed: ${id}`, feature.fixture);
+  assertGate(feature.fixture?.quality === 'runtime_verified', `SEO/GEO fixture quality must be runtime-backed by execution: ${id}`, feature.fixture);
 }
 
 const selftest = registryMod.buildAllFeaturesSelftest(registry, {});

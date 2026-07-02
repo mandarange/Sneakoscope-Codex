@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 5.1.1 is the dollar-command proof-truth hardening release after the current 5.1.0 line. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, gate manifests, mock/real proof schemas, stop-gate evaluation, and affected release DAG evidence to agree on 5.1.1 before `npm publish --ignore-scripts`.
+
+5.1.1 release readiness adds proof that route success reports are based on evaluated gate files, mock fixtures are explicitly labeled `execution_class: mock_fixture` and cannot pass as real success, `sks gates`/`sks check` honor the `sks.gate-result.v1` output contract, and route registry stop gates stay aligned with command-owned gate files.
+
 SKS 4.8.6 is the swarm gate honesty and release-manifest consolidation patch after the already-published 4.8.5 npm version. It requires package, lockfile, CLI constants, Rust helper metadata, README, changelog, version-gated release docs, built output, gate manifests, release DAG evidence, and publish readiness evidence to agree on 4.8.6 before `npm publish --ignore-scripts`.
 
 4.8.6 release readiness adds proof that native worker MCP isolation, auth retry behavior, zombie worker reaping, gate evidence honesty, and telemetry bounds remain enforced while the release manifest set is consolidated to the current release-gate, harness-gate, and script-backed check inventory.

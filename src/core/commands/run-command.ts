@@ -193,7 +193,15 @@ async function finalizeMockRun(
     mode,
   }: Pick<ExecuteRunContext, 'id' | 'route' | 'prompt' | 'args' | 'classification'> & { mode: RunMode }
 ): Promise<RunResult> {
-  const gate = { schema: 'sks.run-gate.v1', ok: true, passed: true, route: route.command, mock: true };
+  const gate = {
+    schema: 'sks.run-gate.v1',
+    ok: false,
+    passed: false,
+    route: route.command,
+    mock: true,
+    execution_class: 'mock_fixture',
+    blockers: ['run_mock_fixture_cannot_claim_real_completion']
+  };
   await writeJsonAtomic(path.join(missionDir(root, id), 'run-gate.json'), gate);
   const proof = await finalizeRoute(root, {
     missionId: id,
@@ -207,19 +215,20 @@ async function finalizeMockRun(
     command: { cmd: `sks run "${prompt}" --mock`, status: 0 },
   });
   const trust = await loadTrustReport(root, id);
+  const completionOk = proof.ok && proof.proof?.status !== 'mock_only' && gate.passed === true;
   await setCurrent(root, {
     mission_id: id,
     mode: 'RUN',
     route: route.id,
     route_command: route.command,
-    phase: proof.ok ? 'RUN_MOCK_FINALIZED' : 'RUN_MOCK_BLOCKED',
+    phase: completionOk ? 'RUN_MOCK_FINALIZED' : 'RUN_MOCK_BLOCKED',
     implementation_allowed: true,
     completion_proof: 'completion-proof.json',
     trust_report: 'trust-report.json',
   });
   const result: RunResult = {
     schema: 'sks.run.v2',
-    ok: proof.ok,
+    ok: completionOk,
     mission_id: id,
     route: route.command,
     mode,
@@ -229,6 +238,7 @@ async function finalizeMockRun(
     completion_proof: { ok: proof.ok, validation: proof.validation },
     trust_report: trust,
   };
+  if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) {
     console.log(JSON.stringify(result, null, 2));
     return result;
@@ -371,7 +381,7 @@ async function executeRouteCommand(
   return routeExecutionResult(route, ['sks', ...commandArgs].join(' '), result, {
     okStatus: 'completed',
     trustStatus: 'verified_partial',
-      executionKind: route.command === '$DB' || route.command === '$Wiki' || route.command === '$Fast-Mode' || route.command === '$with-local-llm-on' || route.command === '$Commit' || route.command === '$Commit-And-Push' || route.command === '$Ultra-Search' || route.command === '$SEO-GEO-OPTIMIZER' ? 'safe_deterministic' : 'mock_safe',
+    executionKind: 'live_route',
   });
 }
 
@@ -454,7 +464,7 @@ function routeExecutionResult(
     schema: 'sks.run-route-execution.v1',
     ok,
     status: ok ? (options.okStatus || 'completed') : 'blocked',
-    execution_kind: ok ? (options.executionKind || 'safe_deterministic') : 'blocked',
+    execution_kind: ok ? (options.executionKind || 'live_route') : 'blocked',
     route: route.command,
     command,
     exit_code: result.code,
@@ -464,7 +474,7 @@ function routeExecutionResult(
     trust_status: ok ? options.trustStatus || 'verified_partial' : 'blocked',
     blockers: ok ? [] : ['route_command_failed'],
     unverified: ok
-      ? options.unverified || ['sks run --execute used the deterministic safe route command path; real external dependencies remain route-specific.']
+      ? options.unverified || ['sks run --execute ran the selected route command; route-specific gates remain authoritative for final trust.']
       : [],
     next_action: ok ? 'review completion proof and trust report' : 'inspect run-route-execution.json stderr_tail',
   };
@@ -667,7 +677,7 @@ async function writeLightweightTrustReport(
   const report: TrustReportLike = {
     schema: TRUST_REPORT_SCHEMA,
     ...trustKernelMetadata(),
-    ok: proofOk && !['blocked', 'failed', 'not_verified'].includes(status),
+    ok: proofOk && !['blocked', 'failed', 'not_verified', 'mock_only'].includes(status),
     mission_id: missionId,
     route,
     status,
@@ -680,6 +690,7 @@ async function writeLightweightTrustReport(
       lightweight: true,
       reason: 'safe_deterministic_run_wrapper'
     },
+    trust_basis: 'lightweight',
     evidence: {
       completion_proof: `.sneakoscope/missions/${missionId}/completion-proof.json`,
       route_contract: null,
