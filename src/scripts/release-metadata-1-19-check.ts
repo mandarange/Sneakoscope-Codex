@@ -9,6 +9,17 @@ const RELEASE_VERSION = String(pkg.version || '');
 const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
 const distManifestPath = path.join(root, 'dist/build-manifest.json');
 const distManifest = fs.existsSync(distManifestPath) ? JSON.parse(fs.readFileSync(distManifestPath, 'utf8')) : null;
+const releaseManifest = readJsonIfExists('release-gates.v2.json');
+const harnessManifest = readJsonIfExists('infra-harness-gates.json');
+const releaseGates = Array.isArray(releaseManifest?.gates)
+  ? releaseManifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
+  : [];
+const harnessGates = Array.isArray(harnessManifest?.gates)
+  ? harnessManifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('harness'))
+  : [];
+const releaseGateIds = new Set(releaseGates.map((gate) => gate.id));
+const harnessGateIds = new Set(harnessGates.map((gate) => gate.id));
+const allManifestGates = [...releaseGates, ...harnessGates];
 const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
 const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
 const releaseCheckScriptSource = [
@@ -300,6 +311,47 @@ const requiredRealScripts = [
   'agent:real-codex-parallel-workers-10',
   'agent:real-codex-parallel-workers-20'
 ];
+const requiredPackageScripts = [
+  'build',
+  'build:incremental',
+  'typecheck',
+  'release:check',
+  'release:metadata',
+  'release:check:affected',
+  'release:check:fast',
+  'release:check:confidence',
+  'release:check:full',
+  'prepublishOnly',
+  'publish:prep-ignore-scripts',
+  'publish:ignore-scripts',
+  'gates:run',
+  'policy:gate-audit'
+];
+const requiredReleaseGates = [
+  'codex:app-handoff-comprehensive',
+  'qa-loop:comprehensive-verification',
+  'loop-integration-finalizer-check',
+  'naruto:canonical-stop-gate',
+  'agent:native-cli-session-swarm',
+  'agent:native-cli-session-proof',
+  'agent:fast-mode-worker-propagation',
+  'runtime:no-tmux',
+  'runtime:no-mjs-scripts',
+  'release:dag-full-coverage',
+  'release:gate-budget',
+  'release:gate-planner',
+  'policy:gate-audit',
+  'package:published-contract',
+  'typecheck'
+];
+const requiredHarnessGates = [
+  'zellij:layout-valid',
+  'zellij:compact-slot-renderer',
+  'zellij:slot-telemetry',
+  'zellij:slot-pane-telemetry-renderer',
+  'zellij:first-slot-down-stack',
+  'zellij:right-column-geometry-proof'
+];
 
 assertGate(/^\d+\.\d+\.\d+$/.test(RELEASE_VERSION), 'package.json version must be a stable semver', { version: pkg.version });
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
@@ -321,17 +373,23 @@ assertGate(
     || releaseCheckScript.includes('release:check:affected'),
   'release:check must use release:check:parallel, release:check:affected, or the release gate DAG runner'
 );
-for (const script of requiredScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
-for (const script of requiredRealScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package real script: ${script}`);
-for (const script of requiredScripts.filter((name) => name !== 'release:check:parallel')) {
-  assertGate(releaseCheckScriptSource.includes(`npm run ${script}`) || ['release:metadata', 'release:readiness'].includes(script), `release check coverage missing ${script}`);
-}
-for (const script of requiredRealScripts) {
-  assertGate(
-    String(pkg.scripts?.['release:real-check'] || '').includes(`npm run ${script}`) || releaseRealCheckSource.includes(`'${script}'`) || releaseRealCheckSource.includes(`"${script}"`),
-    `release:real-check missing ${script}`
-  );
-}
+assertGate(releaseManifest?.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest?.schema || null });
+assertGate(harnessManifest?.schema === 'sks.infra-harness-gates.v1', 'infra harness manifest schema mismatch', { schema: harnessManifest?.schema || null });
+assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { release_gates: releaseGates.length });
+assertGate(harnessGates.length > 0, 'infra harness manifest must include harness gates', { harness_gates: harnessGates.length });
+assertGate(Object.keys(pkg.scripts || {}).length <= 100, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length });
+for (const script of requiredPackageScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
+for (const id of requiredReleaseGates) assertGate(releaseGateIds.has(id), `critical release gate missing from release v2 manifest: ${id}`, { id });
+for (const id of requiredHarnessGates) assertGate(harnessGateIds.has(id), `critical harness gate missing from infra-harness-gates.json: ${id}`, { id });
+const duplicateAcrossManifests = [...releaseGateIds].filter((id) => harnessGateIds.has(id));
+assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicateAcrossManifests });
+const releaseZellij = [...releaseGateIds].filter((id) => id.startsWith('zellij:'));
+assertGate(releaseZellij.length === 0, 'zellij gates must not be in the release preset', { releaseZellij });
+const harnessNonZellij = [...harnessGateIds].filter((id) => !id.startsWith('zellij:'));
+assertGate(harnessNonZellij.length === 0, 'harness manifest must contain only zellij gates', { harnessNonZellij });
+const npmRunCommands = allManifestGates.filter((gate) => /\bnpm\s+run\b/.test(String(gate.command))).map((gate) => gate.id);
+assertGate(npmRunCommands.length === 0, 'gate manifest commands must not use npm run indirection', { npmRunCommands });
+for (const gate of allManifestGates) assertDistScriptTargetsExist(gate);
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
 assertGate(!pkg.files?.includes('src'), 'package files must not include src runtime shadows');
@@ -380,8 +438,14 @@ const report = {
     source_digest: distManifest?.source_digest || null,
     source_file_count: distManifest?.source_file_count || null
   },
-  scripts: requiredScripts,
-  real_scripts: requiredRealScripts,
+  package_scripts: requiredPackageScripts,
+  release_gates: releaseGates.length,
+  harness_gates: harnessGates.length,
+  legacy_script_contract: {
+    replaced_by_release_manifest: true,
+    legacy_scripts: requiredScripts.length,
+    legacy_real_scripts: requiredRealScripts.length
+  },
   docs: requiredDocs,
   generated_at: new Date().toISOString(),
   ok: true
@@ -390,11 +454,32 @@ const out = path.join(root, '.sneakoscope', 'reports', `version-metadata-${RELEA
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 
-emitGate('release:metadata', { version: pkg.version, scripts: requiredScripts.length, real_scripts: requiredRealScripts.length, docs: requiredDocs.length });
+emitGate('release:metadata', {
+  version: pkg.version,
+  package_scripts: requiredPackageScripts.length,
+  release_gates: releaseGates.length,
+  harness_gates: harnessGates.length,
+  docs: requiredDocs.length
+});
 
 function assertVersionSurface(relFile, needle) {
   const absolute = path.join(root, relFile);
   assertGate(fs.existsSync(absolute), `missing version surface: ${relFile}`);
   const text = fs.readFileSync(absolute, 'utf8');
   assertGate(text.includes(needle), `${relFile} must contain ${needle}`, { file: relFile, needle });
+}
+
+function readJsonIfExists(relFile) {
+  const absolute = path.join(root, relFile);
+  return fs.existsSync(absolute) ? JSON.parse(fs.readFileSync(absolute, 'utf8')) : null;
+}
+
+function assertDistScriptTargetsExist(gate) {
+  for (const match of String(gate.command || '').matchAll(/node\s+(\.\/dist\/scripts\/[^ &|;]+\.js)/g)) {
+    assertGate(fs.existsSync(path.join(root, match[1])), `gate command target missing: ${gate.id}`, {
+      id: gate.id,
+      command: gate.command,
+      target: match[1]
+    });
+  }
 }
