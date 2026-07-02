@@ -91,7 +91,7 @@ function runRefreshCommand() {
 }
 
 function releaseGateHash(pkg) {
-  const manifests = ['release-gates.v2.json', 'release-gates.json'].map((rel) => {
+  const manifests = ['release-gates.v2.json', 'infra-harness-gates.json'].map((rel) => {
     const file = path.join(root, rel);
     return fs.existsSync(file) ? `${rel}\0${fs.readFileSync(file, 'utf8')}` : `${rel}\0missing`;
   }).join('\0');
@@ -122,7 +122,7 @@ function releaseRelevant(file) {
   if (file.startsWith('crates/sks-core/target/')) return false;
   if (/\.tgz$|\.log$/i.test(file)) return false;
   if (/^(package|package-lock)\.json$/.test(file)) return true;
-  if (/^release-gates(?:\.v2)?\.json$/.test(file)) return true;
+  if (file === 'release-gates.v2.json' || file === 'infra-harness-gates.json') return true;
   if (/^tsconfig.*\.json$/.test(file)) return true;
   if (/^(README|CHANGELOG|LICENSE)(\.md)?$/i.test(file)) return true;
   return [

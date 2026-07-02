@@ -90,27 +90,54 @@ export function madSksCatastrophicDbReasons(cls: any = {}) {
   return [...new Set(blocked)];
 }
 
+export function evaluatePermission({ action, scope, profile, classification, active = false, env = process.env }: any = {}) {
+  const selectedProfile = normalizePermissionProfile(profile, env);
+  const actionId = String(action || scope || '').trim();
+  const blocked = new Set((selectedProfile.blocked || []).map(String));
+  const allowed = new Set((selectedProfile.allowed || []).map(String));
+  const catastrophic = madSksCatastrophicDbReasons(classification || {});
+  const blockedCategories = [
+    ...(actionId && blocked.has(actionId) ? [actionId] : []),
+    ...catastrophic
+  ];
+  if (!active) {
+    return { matched: false, active: false, allowed: false, action: 'ignore', reasons: ['permission_profile_inactive'], blocked_categories: [], profile: permissionGateSummary(selectedProfile) };
+  }
+  if (blockedCategories.length) {
+    return { matched: true, active: true, allowed: false, action: 'block', reasons: ['permission_profile_blocked_action'], blocked_categories: [...new Set(blockedCategories)], profile: permissionGateSummary(selectedProfile) };
+  }
+  if (actionId && allowed.size > 0 && !allowed.has(actionId)) {
+    return { matched: true, active: true, allowed: false, action: 'block', reasons: ['permission_profile_action_not_allowed'], blocked_categories: [actionId], profile: permissionGateSummary(selectedProfile) };
+  }
+  return { matched: true, active: true, allowed: true, action: 'allow', reasons: ['permission_profile_scoped_allow'], blocked_categories: [], profile: permissionGateSummary(selectedProfile) };
+}
+
 export function evaluateMadSksPermissionGate({ classification, active = false }: any = {}) {
   const cls = classification || { level: 'none', reasons: [] };
-  if (!active || !['write', 'destructive'].includes(cls.level)) return { matched: false, active: Boolean(active), profile: permissionGateSummary() };
-  const catastrophic = madSksCatastrophicDbReasons(cls);
-  if (catastrophic.length) {
-    return {
-      matched: true,
-      active: true,
-      allowed: false,
-      action: 'block',
-      reasons: ['mad_sks_catastrophic_db_operation_blocked'],
-      blocked_categories: catastrophic,
-      profile: permissionGateSummary()
-    };
+  if (!active || !['write', 'destructive'].includes(cls.level)) {
+    return { matched: false, active: Boolean(active), allowed: false, action: 'ignore', reasons: [], blocked_categories: [], profile: permissionGateSummary() };
   }
+  const decision = evaluatePermission({ action: null, profile: MAD_SKS_PERMISSION_PROFILE, classification: cls, active: true });
   return {
-    matched: true,
-    active: true,
-    allowed: true,
-    action: 'allow',
-    reasons: ['mad_sks_scoped_live_full_access_active'],
-    profile: permissionGateSummary()
+    ...decision,
+    reasons: decision.allowed ? ['mad_sks_scoped_live_full_access_active'] : ['mad_sks_catastrophic_db_operation_blocked']
   };
+}
+
+function normalizePermissionProfile(profile: any, env: any = process.env) {
+  if (profile?.allowed && profile?.blocked) return profile;
+  const configured = loadConfiguredPermissionProfiles(env);
+  const id = typeof profile === 'string' ? profile : profile?.id;
+  return configured.find((row: any) => row.id === id) || MAD_SKS_PERMISSION_PROFILE;
+}
+
+function loadConfiguredPermissionProfiles(env: any = process.env) {
+  const raw = String(env.SKS_PERMISSION_PROFILES_JSON || '').trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.profiles) ? parsed.profiles : Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }

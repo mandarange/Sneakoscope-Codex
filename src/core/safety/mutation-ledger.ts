@@ -93,6 +93,7 @@ export function evaluateMutation(
 
 export async function recordMutation(root: string, entry: MutationLedgerEntry): Promise<string> {
   const file = mutationLedgerPath(root)
+  if (entry.route === 'internal:file-lock') return file
   await ensureDir(path.dirname(file))
   await appendJsonl(file, entry)
   return file

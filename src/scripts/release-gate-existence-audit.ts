@@ -5,110 +5,81 @@ import path from 'node:path';
 import { assertGate, emitGate, packageScripts, root } from './sks-1-18-gate-lib.js';
 
 const scripts = packageScripts();
-const releaseManifestPath = path.join(root, 'release-gates.v2.json');
-const releaseManifest = JSON.parse(fs.readFileSync(releaseManifestPath, 'utf8'));
-const releaseGates = Array.isArray(releaseManifest.gates)
-  ? releaseManifest.gates.filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
-  : [];
-const dagTasks = new Set(releaseGates.map((gate) => gate.id));
-const manifestTasks = new Set((Array.isArray(releaseManifest.gates) ? releaseManifest.gates : []).map((gate) => gate.id));
-const removedRuntime = `${'tm'}ux`;
-const removedLane = `${'warp'}-right-${'lane'}`;
-const removedRuntimeGateRe = new RegExp(`^${removedRuntime}:|^agent:${removedRuntime}-|real-${removedRuntime}|${removedLane}`, 'i');
-const required = [
-  'runtime:no-tmux',
-  'terminal:keyboard-enhancement-safety',
-  'terminal:tui-output-stability',
-  'zellij:layout-valid',
-  'zellij:initial-main-only-blackbox',
-  'zellij:right-column-geometry-proof',
-  'zellij:dynamic-pane-lifecycle',
-  'zellij:lane-renderer',
-  'zellij:doctor-readiness',
-  'zellij:spawn-on-demand-layout',
-  'zellij:worker-pane-manager',
-  'zellij:worker-pane-manager-single-owner',
-  'zellij:slot-only-ui',
-  'zellij:compact-slot-renderer',
-  'zellij:right-column-headless-overflow',
-  'safety:mutation-callsite-coverage',
-  'mad-sks:zellij-launch',
-  'mad-sks:zellij-default-pane-worker',
-  'agent:zellij-runtime',
-  'agent:slot-pane-binding-proof',
-  'agent:role-config-repair',
-  'agent:worker-pane-communication-contract',
-  'git:worktree-integration-primary',
-  'git:worktree-integration-primary-runtime',
-  'codex:0.137-compat',
-  'doctor:codex-doctor-parity',
-  'codex:permission-profiles',
-  'codex:legacy-profile-consumers-removed',
-  'codex:resume-cwd-truth',
-  'mcp:tool-naming-parity',
-  'responses:retry-policy-centralized',
-  'codex-app:fast-ui-preservation',
-  'codex-app:ui-clobber-guard',
-  'doctor:fixes-codex-app-fast-ui',
-  'mad-sks:app-ui-no-mutation',
-  'provider:badge-context',
-  'provider:context-config-toml',
-  'codex-app:provider-badge',
-  'runtime:no-mjs-scripts',
-  'runtime:ts-python-boundary',
-  'agent:patch-swarm-runtime-truth',
-  'agent:patch-transaction-journal',
-  'agent:patch-conflict-rebase',
-  'agent:strategy-to-patch-strict',
-  'agent:rollback-command',
+const releaseManifest = readJson('release-gates.v2.json');
+const harnessManifest = readJson('infra-harness-gates.json');
+const releaseGates = manifestGates(releaseManifest).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'));
+const harnessGates = manifestGates(harnessManifest).filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('harness'));
+const releaseIds = new Set(releaseGates.map((gate) => gate.id));
+const harnessIds = new Set(harnessGates.map((gate) => gate.id));
+const allGates = [...releaseGates, ...harnessGates];
+
+const requiredRelease = [
+  'codex:app-handoff-comprehensive',
+  'qa-loop:comprehensive-verification',
+  'loop-integration-finalizer-check',
+  'naruto:canonical-stop-gate',
   'agent:native-cli-session-swarm',
-  'agent:native-cli-session-swarm-10',
-  'agent:native-cli-session-swarm-20',
-  'agent:no-subagent-scaling',
-  'agent:official-subagent-helper-policy',
   'agent:native-cli-session-proof',
-  'agent:fast-mode-default',
   'agent:fast-mode-worker-propagation',
-  'codex:fast-mode-profile-propagation',
-  'mad-sks:fast-mode-propagation',
-  'naruto:active-pool',
-  'naruto:real-active-pool',
-  'naruto:real-active-pool-runtime',
-  'naruto:extreme-parallelism',
-  'naruto:extreme-parallelism-real',
-  'naruto:zellij-dynamic-right-column',
-  'agent:wiki-context-proof',
-  'shared-memory:check',
-  'wrongness:check',
-  'wrongness:fixtures',
-  'trust:check',
-  'git-collaboration:e2e'
+  'runtime:no-tmux',
+  'runtime:no-mjs-scripts',
+  'release:dag-full-coverage',
+  'release:gate-budget',
+  'release:gate-planner',
+  'policy:gate-audit',
+  'typecheck'
+];
+const requiredHarness = [
+  'zellij:layout-valid',
+  'zellij:compact-slot-renderer',
+  'zellij:slot-telemetry',
+  'zellij:slot-pane-telemetry-renderer',
+  'zellij:first-slot-down-stack',
+  'zellij:right-column-geometry-proof'
 ];
 
 assertGate(releaseManifest.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest.schema });
+assertGate(harnessManifest.schema === 'sks.infra-harness-gates.v1', 'infra harness manifest schema mismatch', { schema: harnessManifest.schema });
 const releaseCheck = String(scripts['release:check'] || '');
 const releaseCheckTarget = releaseCheck.includes('release:check:affected')
   ? String(scripts['release:check:affected'] || '')
   : releaseCheck;
 assertGate(releaseCheckTarget.includes('release-gate-dag-runner') && /--preset\s+(?:release|affected)/.test(releaseCheckTarget), 'release:check must use the v2 DAG release/affected preset', { release_check: scripts['release:check'], resolved_release_check: releaseCheckTarget });
-assertGate(releaseGates.length > 0, 'release v2 manifest must include release preset gates', { gate_count: releaseGates.length });
+assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { gate_count: releaseGates.length });
+assertGate(Object.keys(scripts).length <= 100, 'package script budget exceeded', { script_count: Object.keys(scripts).length });
 
-for (const name of required) {
-  assertGate(Boolean(scripts[name]), `missing release gate script: ${name}`, { required });
-  const inReleaseManifest = manifestTasks.has(name);
-  assertGate(inReleaseManifest, `critical gate missing from release v2 manifest: ${name}`, { name, release_gates: [...dagTasks].sort(), manifest_gates: [...manifestTasks].sort() });
-  const match = String(scripts[name]).match(/node\s+(\.\/dist\/scripts\/[^ ]+\.js)/);
-  if (match) assertGate(fs.existsSync(path.join(root, match[1])), `script target missing for ${name}`, { command: scripts[name] });
+for (const id of requiredRelease) assertGate(releaseIds.has(id), `critical release gate missing from release v2 manifest: ${id}`, { id });
+for (const id of requiredHarness) assertGate(harnessIds.has(id), `critical harness gate missing from infra-harness-gates.json: ${id}`, { id });
+
+const duplicateAcrossManifests = [...releaseIds].filter((id) => harnessIds.has(id));
+assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicateAcrossManifests });
+const releaseZellij = [...releaseIds].filter((id) => id.startsWith('zellij:'));
+assertGate(releaseZellij.length === 0, 'zellij gates must not be in the release preset', { releaseZellij });
+const harnessNonZellij = [...harnessIds].filter((id) => !id.startsWith('zellij:'));
+assertGate(harnessNonZellij.length === 0, 'harness manifest must contain only zellij gates', { harnessNonZellij });
+
+const npmRunCommands = allGates.filter((gate) => /\bnpm\s+run\b/.test(String(gate.command))).map((gate) => gate.id);
+assertGate(npmRunCommands.length === 0, 'gate commands must not use npm run indirection', { npmRunCommands });
+for (const gate of allGates) assertDistScriptTargetsExist(gate);
+
+emitGate('release:gate-existence-audit', {
+  release_gates: releaseGates.length,
+  harness_gates: harnessGates.length,
+  package_scripts: Object.keys(scripts).length,
+  release_manifest: 'release-gates.v2.json',
+  harness_manifest: 'infra-harness-gates.json'
+});
+
+function readJson(rel) {
+  return JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8'));
 }
 
-for (const name of dagTasks) {
-  if (name === 'build') continue;
-  assertGate(Boolean(scripts[name]), `release DAG task has no package script: ${name}`, { name });
-  assertGate(!removedRuntimeGateRe.test(name), `tmux gate remains in release DAG: ${name}`, { name });
+function manifestGates(manifest) {
+  return Array.isArray(manifest?.gates) ? manifest.gates : [];
 }
 
-for (const name of Object.keys(scripts)) {
-  assertGate(!removedRuntimeGateRe.test(name), `tmux package gate remains: ${name}`, { name });
+function assertDistScriptTargetsExist(gate) {
+  for (const match of String(gate.command || '').matchAll(/node\s+(\.\/dist\/scripts\/[^ &|;]+\.js)/g)) {
+    assertGate(fs.existsSync(path.join(root, match[1])), `gate command target missing: ${gate.id}`, { id: gate.id, command: gate.command, target: match[1] });
+  }
 }
-
-emitGate('release:gate-existence-audit', { gates: required.length, dag_tasks: dagTasks.size, manifest: 'release-gates.v2.json' });

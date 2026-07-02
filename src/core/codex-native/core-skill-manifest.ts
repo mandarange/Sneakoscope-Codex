@@ -75,8 +75,9 @@ const CORE_SKILL_DEFINITIONS: Array<{
     canonical_name: 'qa-loop',
     display_name: 'qa-loop',
     route: '$QA-LOOP',
-    purpose: 'dogfood UI/API behavior with safety gates and QA reports.',
+    purpose: 'dogfood UI/API behavior with safety gates, Codex Chrome Extension-first web UI evidence, and QA reports.',
     when: 'Use when route completion needs human-proxy verification, rechecks, and QA ledgers.',
+    workflow: 'Infer the QA scope, dogfood real UI/API flows, and for web/browser/webapp UI evidence use the Codex Chrome Extension readiness gate first. If the extension is missing or disabled, rapidly halt and ask the user to set it up before resuming. Computer Use is reserved for native Mac/non-web surfaces and must not satisfy web UI evidence.',
     evidence: 'qa-ledger.json, dated QA report, qa-gate.json, and post-fix verification.',
     fallback: 'Mark unverified browser/native surfaces explicitly; never substitute fake visual evidence.'
   },

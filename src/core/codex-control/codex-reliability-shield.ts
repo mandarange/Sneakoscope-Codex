@@ -50,6 +50,7 @@ export interface CodexReliabilityAttemptReport {
   retry_reason: string | null
   idle_timeout: boolean
   fatal_error: boolean
+  mcp_auth_error: boolean
   model_capacity_error: boolean
   capacity_fallback_hint: string | null
   repaired_tool_result_count: number
@@ -70,15 +71,16 @@ export function normalizeCodexReliabilityPolicy(input: CodexTaskInput): CodexRel
 
 export async function runWithCodexReliabilityShield(
   input: CodexTaskInput,
-  runAttempt: (attempt: number) => Promise<CodexReliabilityAttemptResult>
+  runAttempt: (attempt: number, controls?: { noMcp?: boolean }) => Promise<CodexReliabilityAttemptResult>
 ): Promise<CodexReliabilityAttemptResult & { reliabilityShield: CodexReliabilityReport }> {
   const policy = normalizeCodexReliabilityPolicy(input)
   const attempts: CodexReliabilityAttemptReport[] = []
   let selected: CodexReliabilityAttemptResult | null = null
   let selectedAttempt = 0
+  const controls: { noMcp?: boolean } = {}
 
   for (let attempt = 1; attempt <= policy.maxEmptyResultRetries + 1; attempt += 1) {
-    const raw = await runAttempt(attempt)
+    const raw = await runAttempt(attempt, controls)
     const repaired = repairToolCallSequence(Array.isArray(raw.events) ? raw.events : [])
     const heartbeats = buildKeepaliveHeartbeats(repaired.events)
     const evaluation = evaluateCodexReliabilityAttempt(raw, repaired.events, policy, attempt)
@@ -92,9 +94,10 @@ export async function runWithCodexReliabilityShield(
       ...raw,
       events: repaired.events,
       reliabilityHeartbeats: heartbeats,
-      blockers: [...(raw.blockers || []), ...report.blockers]
+      blockers: report.mcp_auth_error ? report.blockers : [...(raw.blockers || []), ...report.blockers]
     }
     selectedAttempt = attempt
+    if (report.retryable && report.mcp_auth_error) controls.noMcp = true
     if (!report.retryable || attempt > policy.maxEmptyResultRetries) break
   }
 
@@ -133,7 +136,8 @@ export function evaluateCodexReliabilityAttempt(
 ): CodexReliabilityAttemptReport {
   const meaningful = events.filter(isMeaningfulEvent)
   const modelCapacity = isCodexModelCapacityError(result, events)
-  const fatal = !modelCapacity && hasFatalError(result, events)
+  const mcpAuth = isMcpAuthError(result, events)
+  const fatal = !modelCapacity && !mcpAuth && hasFatalError(result, events)
   const idle = hasIdleTimeout(events, policy.idleTimeoutMs)
   const empty = events.length === 0 || (!String(result.finalResponse || '').trim() && meaningful.length === 0)
   const partial = meaningful.length > 0 && !result.structuredOutput
@@ -142,11 +146,15 @@ export function evaluateCodexReliabilityAttempt(
   let retryReason: string | null = null
 
   if (modelCapacity) blockers.push('codex_model_capacity_unavailable')
+  if (mcpAuth) blockers.push('codex_reliability_mcp_auth_error')
   if (!modelCapacity && idle && partial) blockers.push('codex_reliability_idle_after_partial_output')
   if (!modelCapacity && partial && !idle) blockers.push('codex_reliability_partial_output_without_structured_result')
   if (fatal) blockers.push('codex_reliability_fatal_error_no_retry')
 
-  if (!modelCapacity && !fatal && idle && meaningful.length === 0) {
+  if (mcpAuth) {
+    retryable = true
+    retryReason = 'mcp_auth_error_retry_no_mcp'
+  } else if (!modelCapacity && !fatal && idle && meaningful.length === 0) {
     retryable = true
     retryReason = 'stream_idle_before_meaningful_event'
   } else if (!modelCapacity && !fatal && empty) {
@@ -164,6 +172,7 @@ export function evaluateCodexReliabilityAttempt(
     retry_reason: retryReason,
     idle_timeout: idle,
     fatal_error: fatal,
+    mcp_auth_error: mcpAuth,
     model_capacity_error: modelCapacity,
     capacity_fallback_hint: null,
     repaired_tool_result_count: 0,
@@ -173,16 +182,7 @@ export function evaluateCodexReliabilityAttempt(
 }
 
 export function isCodexModelCapacityError(result: CodexReliabilityAttemptResult, events: any[]) {
-  const text = [
-    String(result.finalResponse || ''),
-    ...(Array.isArray(result.blockers) ? result.blockers : []),
-    ...events.map((event) => [
-      event?.error?.message,
-      event?.message,
-      event?.item?.text,
-      event?.raw?.failed_event?.error?.message
-    ].filter(Boolean).join('\n'))
-  ].join('\n')
+  const text = collectText(result, events)
   return /selected model is at capacity|model(?:\s+[\w.-]+)?\s+is\s+at\s+capacity|try a different model|capacity(?:\s+is)?\s+exhausted|temporarily at capacity/i.test(text)
 }
 
@@ -234,11 +234,29 @@ function isMeaningfulEvent(event: any) {
 }
 
 function hasFatalError(result: CodexReliabilityAttemptResult, events: any[]) {
-  const text = [
-    ...(Array.isArray(result.blockers) ? result.blockers : []),
-    ...events.map((event) => event?.error?.message || event?.message || '')
-  ].join('\n')
+  if (isMcpAuthError(result, events)) return false
+  const text = collectText(result, events)
   return /\b(?:4\d\d|fatal|unauthorized|forbidden|authrequired|invalid oauth|side-effect applied|partial patch applied)\b/i.test(text)
+}
+
+function isMcpAuthError(result: CodexReliabilityAttemptResult, events: any[]) {
+  const text = collectText(result, events)
+  return /\b(?:authrequired|oauth)\b/i.test(text)
+    && /transport channel closed|rmcp/i.test(text)
+    && !/side-effect applied|partial patch applied/i.test(text)
+}
+
+function collectText(result: CodexReliabilityAttemptResult, events: any[]) {
+  return [
+    String(result.finalResponse || ''),
+    ...(Array.isArray(result.blockers) ? result.blockers : []),
+    ...events.map((event) => [
+      event?.error?.message,
+      event?.message,
+      event?.item?.text,
+      event?.raw?.failed_event?.error?.message
+    ].filter(Boolean).join('\n'))
+  ].join('\n')
 }
 
 function hasIdleTimeout(events: any[], idleTimeoutMs: number) {

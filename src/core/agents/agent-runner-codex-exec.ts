@@ -8,6 +8,7 @@ import { buildCodexExecArgs } from '../codex/codex-cli-syntax-builder.js'
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
   const resultFile = opts.resultFile || defaultCodexResultFile(agent, opts)
   const sandbox = opts.workspaceWrite ? 'workspace-write' : 'read-only'
+  const noMcp = workerNoMcpDefault(agent, opts, sandbox)
   const args = buildCodexExecArgs({
     json: true,
     outputSchema: opts.schemaFile || path.join(packageRoot(), 'schemas/codex/agent-result.schema.json'),
@@ -16,6 +17,7 @@ export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = 
     skipGitRepoCheck: opts.skipGitRepoCheck !== false,
     profile: opts.profile ? String(opts.profile) : null,
     ignoreUserConfig: !opts.profile,
+    noMcp,
     ignoreRules: true,
     sandbox,
     serviceTier: opts.serviceTier || (opts.fastMode === false ? 'standard' : 'fast'),
@@ -53,6 +55,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
       fast_mode: fastPolicy.fast_mode,
       service_tier_passed_to_codex: codexArgsIncludeServiceTier(command.args, fastPolicy.service_tier),
       service_tier_cli_override_present: codexArgsIncludeServiceTier(command.args, fastPolicy.service_tier),
+      no_mcp: command.args.includes('--no-mcp'),
       output_schema_used: command.args.includes('--output-schema'),
       output_last_message_path: command.resultFile,
       agent_worker_env_injected: false,
@@ -82,6 +85,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     fast_mode: fastPolicy.fast_mode,
     service_tier_passed_to_codex: codexArgsIncludeServiceTier(command.args, fastPolicy.service_tier),
     service_tier_cli_override_present: codexArgsIncludeServiceTier(command.args, fastPolicy.service_tier),
+    no_mcp: command.args.includes('--no-mcp'),
     output_schema_used: command.args.includes('--output-schema'),
     output_last_message_path: command.resultFile,
     agent_worker_env_injected: Object.keys(workerEnv).length > 0,
@@ -121,6 +125,24 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     }
   }
   return validateAgentWorkerResult({ mission_id: opts.missionId || opts.mission_id || '', agent_id: agent.id, session_id: agent.session_id, persona_id: agent.persona_id || agent.id, task_slice_id: slice?.id || '', status: result.code === 0 ? 'done' : 'failed', backend: 'codex-exec', summary: result.stdout.slice(-1000) || result.stderr.slice(-1000), artifacts: [command.resultFile, report], blockers: result.code === 0 ? ['codex_exec_output_last_message_missing_or_invalid'] : ['codex_exec_exit_' + result.code], confidence: 'verified_partial', unverified: result.code === 0 ? ['codex-exec stdout fallback; resultFile JSON missing or invalid'] : [], writes: [], source_intelligence_refs: agent.source_intelligence_refs || null, goal_mode_ref: agent.goal_mode_ref || null, verification: { status: result.code === 0 ? 'partial' : 'failed', checks: ['codex-exec-exit-code', 'codex-exec-process-report', 'codex-exec-output-last-message'] } })
+}
+
+function workerNoMcpDefault(agent: any, opts: any = {}, sandbox = 'read-only') {
+  if (opts.noMcp !== undefined) return opts.noMcp !== false
+  if (sandbox === 'read-only') return true
+  const roleText = [
+    agent?.role,
+    agent?.persona_id,
+    agent?.required_role,
+    agent?.kind,
+    opts.role,
+    opts.kind
+  ].map((value) => String(value || '')).join(' ')
+  if (/\b(?:verify|verifier|verification|review|reviewer|qa|audit|read[-_ ]?only)\b/i.test(roleText)) return true
+  const safeList = Array.isArray(opts.workerSafeMcpServers)
+    ? opts.workerSafeMcpServers
+    : String(process.env.SKS_WORKER_SAFE_MCP_SERVERS || '').split(',').map((item) => item.trim()).filter(Boolean)
+  return !(opts.allowWorkerMcp === true && safeList.length > 0)
 }
 
 async function writeCodexProcessReport(root: string, agent: any, report: any) {

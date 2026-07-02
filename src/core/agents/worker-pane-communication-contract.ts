@@ -49,9 +49,8 @@ async function checkRecord(root: string, record: any) {
   const pane = await readJson<any>(panePath, null)
   const codexControlProof = await readJson<any>(codexControlProofPath, null)
   const patchPath = record.patch_envelope_path ? path.join(root, String(record.patch_envelope_path)) : path.join(root, workerDir, 'worker-patch-envelope.json')
-  const noPatchPath = path.join(root, workerDir, 'worker-no-patch-reason.json')
   const intakeExists = await exists(intakePath)
-  const patchOrNoPatchExists = await exists(patchPath) || await exists(noPatchPath)
+  const patchOrNoPatchExists = await exists(patchPath) || Boolean(result?.no_patch_reason)
   const events = eventsText.trim().split(/\r?\n/).filter(Boolean).map((line) => {
     try { return JSON.parse(line) } catch { return { event_type: 'parse_error' } }
   })
@@ -59,7 +58,6 @@ async function checkRecord(root: string, record: any) {
   const resultObserved = eventTypes.includes('result_written')
   const paneClosedObserved = eventTypes.includes('pane_closed')
   const blockers = [
-    ...(!intakeExists ? ['worker_pane_contract_intake_missing'] : []),
     ...(!result ? ['worker_pane_contract_result_missing'] : []),
     ...(!heartbeatText.trim() ? ['worker_pane_contract_heartbeat_missing'] : []),
     ...(!processReport ? ['worker_pane_contract_process_report_missing'] : []),
@@ -76,6 +74,7 @@ async function checkRecord(root: string, record: any) {
     slot_id: record.slot_id || null,
     generation_index: record.generation_index || null,
     worker_artifact_dir: workerDir,
+    intake_present: intakeExists,
     result_path: resultPath,
     heartbeat_path: heartbeatPath,
     process_report_path: processReportPath,

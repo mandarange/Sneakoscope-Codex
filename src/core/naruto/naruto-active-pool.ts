@@ -44,6 +44,7 @@ export interface NarutoWorkerHandle {
   started_at: number
   pid?: number | null
   worker_artifact_dir?: string | null
+  force_timed_out?: boolean
 }
 
 export interface NarutoWorkerResult {
@@ -55,6 +56,7 @@ export interface NarutoWorkerResult {
   pid?: number | null
   worker_artifact_dir?: string | null
   blockers?: string[]
+  status?: 'completed' | 'failed' | 'timed_out'
 }
 
 export interface NarutoRuntimeEvent {
@@ -92,6 +94,7 @@ export async function runNarutoRealActivePool(input: {
   collectWorker: (handle: NarutoWorkerHandle) => Promise<NarutoWorkerResult>
   enqueueVerification: (result: NarutoWorkerResult) => Promise<void>
   updateDashboard: (event: NarutoRuntimeEvent) => Promise<void>
+  hardTimeoutMs?: number
 }): Promise<NarutoRealActivePoolReport> {
   const safeActiveWorkers = Math.max(1, input.governor.safe_active_workers)
   const visibleCap = Math.max(0, input.governor.safe_zellij_visible_panes)
@@ -131,12 +134,12 @@ export async function runNarutoRealActivePool(input: {
     }
     maxObserved = Math.max(maxObserved, active.size)
     timeline.push({ tick, active: active.size, pending: pending.length, completed: completed.size, event: launched ? 'refill' : 'wait' })
-    const done = await nextCollectableWorkers(active)
+    const done = await nextCollectableWorkers(active, input.hardTimeoutMs)
     if (!done.length) break
     for (const handle of done) {
       active.delete(handle.id)
       if (handle.placement.placement === 'zellij-pane') visibleRunning = Math.max(0, visibleRunning - 1)
-      const result = await input.collectWorker(handle)
+      const result = handle.force_timed_out ? await forceCollectTimedOutWorker(handle) : await input.collectWorker(handle)
       completed.set(result.item.id, result)
       const row = lifecycle.find((entry) => entry.work_item_id === result.item.id && entry.completed_at == null)
       if (row) {
@@ -203,15 +206,42 @@ export async function runNarutoRealActivePool(input: {
   }
 }
 
-async function nextCollectableWorkers(active: Map<string, NarutoWorkerHandle>): Promise<NarutoWorkerHandle[]> {
+async function nextCollectableWorkers(active: Map<string, NarutoWorkerHandle>, hardTimeoutMs = 10 * 60 * 1000): Promise<NarutoWorkerHandle[]> {
   const handles = [...active.values()]
+  const now = Date.now()
+  const timedOut = handles.filter((handle) => now - Number(handle.started_at || now) > hardTimeoutMs)
+  if (timedOut.length) return timedOut.map((handle) => ({ ...handle, force_timed_out: true }))
   const handlesWithExit = handles.filter((handle) => typeof (handle as any).exit?.then === 'function')
   if (!handlesWithExit.length) return handles.slice(0, Math.max(1, Math.ceil(active.size / 2)))
-  const completed = await Promise.race(handlesWithExit.map(async (handle) => {
-    await (handle as any).exit.catch(() => undefined)
-    return handle
-  }))
+  const completed = await Promise.race([
+    ...handlesWithExit.map(async (handle) => {
+      await (handle as any).exit.catch(() => undefined)
+      return handle
+    }),
+    delay(1000).then(() => null)
+  ])
   return completed ? [completed] : []
+}
+
+async function forceCollectTimedOutWorker(handle: NarutoWorkerHandle): Promise<NarutoWorkerResult> {
+  if (Number.isFinite(Number(handle.pid))) {
+    try { process.kill(Number(handle.pid), 'SIGTERM') } catch {}
+  }
+  return {
+    id: handle.id,
+    ok: false,
+    item: handle.item,
+    placement: handle.placement,
+    completed_at: Date.now(),
+    pid: handle.pid || null,
+    worker_artifact_dir: handle.worker_artifact_dir || null,
+    status: 'timed_out',
+    blockers: ['naruto_worker_hard_timeout']
+  }
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export async function runNarutoActivePool(input: {

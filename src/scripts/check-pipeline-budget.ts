@@ -22,12 +22,7 @@ for (const exportName of [
 
 const runtimeFacade = path.join(root, 'src', 'core', 'pipeline-runtime.ts');
 if (fs.existsSync(runtimeFacade)) {
-  const runtimeLines = lineCount(runtimeFacade);
-  if (runtimeLines > 300) failures.push(`src/core/pipeline-runtime.ts: line count ${runtimeLines} > 300`);
-  const text = fs.readFileSync(runtimeFacade, 'utf8');
-  if (/from ['"].*\\b(team|qa|research|ppt|image-ux-review|db|gx)\\b/i.test(text)) {
-    failures.push('src/core/pipeline-runtime.ts: compatibility facade imports route implementation modules directly');
-  }
+  failures.push('src/core/pipeline-runtime.ts: duplicate compatibility facade must be removed; use src/core/pipeline.ts');
 }
 
 const moduleDir = path.join(root, 'src', 'core', 'pipeline');

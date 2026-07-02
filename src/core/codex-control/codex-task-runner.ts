@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { appendJsonl, ensureDir, nowIso, packageRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, packageRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { validateJsonSchemaRecursive } from '../json-schema-validator.js'
 import type { CodexTaskInput, CodexTaskResult } from './codex-control-plane.js'
 import { resolveCodexOutputSchema } from './codex-output-schemas.js'
@@ -53,11 +53,14 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
       generationIndex: task.generationIndex ?? null,
       sessionId: task.sessionId || null,
       backend: 'codex-sdk'
-    }, () => runWithCodexReliabilityShield(task, async () => {
+    }, () => runWithCodexReliabilityShield(task, async (_attempt, controls) => {
       try {
+        const attemptTask = controls?.noMcp
+          ? { ...task, requestedScopeContract: { ...task.requestedScopeContract, no_mcp: true } }
+          : task
         return fakeAllowed
-          ? await runFakeCodexSdkTask(task)
-          : await runRealCodexSdkTask(task, { sandboxMode: sandbox.sandboxMode, env: runtime.env.env, config: runtime.config })
+          ? await runFakeCodexSdkTask(attemptTask)
+          : await runRealCodexSdkTask(attemptTask, { sandboxMode: sandbox.sandboxMode, env: runtime.env.env, config: { ...runtime.config, mcp_servers: {} } })
       } catch (err: any) {
         return {
           ok: false,
@@ -74,16 +77,25 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   const events = Array.isArray(adapterResult?.events) ? adapterResult.events : []
   const translatedEvents = translateCodexSdkEvents(events)
   if (adapterResult?.liveEventsWritten !== true) {
-    for (const event of translatedEvents) await appendJsonl(path.join(root, 'codex-sdk-events.jsonl'), event)
+    for (const event of translatedEvents) await appendJsonlBounded(path.join(root, 'codex-sdk-events.jsonl'), event, 5 * 1024 * 1024)
   }
   if (adapterResult?.reliabilityShield) await writeJsonAtomic(path.join(root, 'codex-reliability-shield.json'), adapterResult.reliabilityShield)
   const structuredOutput = adapterResult?.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
-  const finalBlockers = [
+  const primaryBlockers = [
     ...blockers,
-    ...(adapterResult?.blockers || []),
-    ...(events.length > 0 ? [] : ['codex_sdk_event_stream_missing']),
-    ...(validation.ok ? [] : ['codex_sdk_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)])
+    ...(adapterResult?.blockers || [])
+  ]
+  const runFailed = primaryBlockers.some((blocker) => {
+    const text = String(blocker || '')
+    return text.startsWith('codex_sdk_run_failed')
+      || text === 'codex_reliability_fatal_error_no_retry'
+      || text === 'codex_reliability_mcp_auth_error'
+  })
+  const finalBlockers = [
+    ...primaryBlockers,
+    ...(!runFailed && events.length === 0 ? ['codex_sdk_event_stream_missing'] : []),
+    ...(!runFailed && !validation.ok ? ['codex_sdk_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)] : [])
   ]
   const workerResult = normalizeWorkerResult(structuredOutput, task, finalBlockers, validation.ok)
   const workerResultPath = path.join(root, 'codex-sdk-worker-result.json')
@@ -175,7 +187,7 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
     : { ok: false, events: [], translatedEvents: [], finalResponse: '', threadId: '', turnId: '', blockers: capability.blockers, capability }
   const events = Array.isArray(adapterResult.events) ? adapterResult.events : []
   const translatedEvents = Array.isArray(adapterResult.translatedEvents) ? adapterResult.translatedEvents : []
-  for (const event of translatedEvents) await appendJsonl(path.join(root, 'python-codex-sdk-events.jsonl'), event)
+  for (const event of translatedEvents) await appendJsonlBounded(path.join(root, 'python-codex-sdk-events.jsonl'), event, 5 * 1024 * 1024)
   const structuredOutput = parseStructuredOutput(adapterResult.finalResponse || '')
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
   const finalBlockers = [
@@ -279,7 +291,7 @@ async function runLocalControlTask(root: string, task: CodexTaskInput, schema: R
     sessionId: task.sessionId || null,
     backend: 'local-llm'
   }, () => runLocalLlmTask(task, { config, outputSchema: schema }))
-  for (const event of adapterResult.events || []) await appendJsonl(path.join(root, 'local-llm-events.jsonl'), event)
+  for (const event of adapterResult.events || []) await appendJsonlBounded(path.join(root, 'local-llm-events.jsonl'), event, 5 * 1024 * 1024)
   const structuredOutput = adapterResult.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
   const finalBlockers = [

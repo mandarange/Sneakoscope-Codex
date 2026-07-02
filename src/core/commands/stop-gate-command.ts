@@ -49,7 +49,7 @@ export async function stopGateCommand(command: string, args: string[]): Promise<
       console.log(`Selected gate: ${result.diagnostics.selected_gate_path}`);
     }
   }
-  if (result.action === 'continue') process.exitCode = 1;
+  if (result.action !== 'allow_stop') process.exitCode = 1;
   return result;
 }
 

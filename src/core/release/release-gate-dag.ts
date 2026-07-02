@@ -120,12 +120,17 @@ export async function runReleaseGateDag(input: {
   triwiki?: boolean
   useTriWikiProofBank?: boolean
   useGatePacks?: boolean
+  onlyGateIds?: string[]
 }): Promise<ReleaseGateDagRunResult> {
   const root = path.resolve(input.root)
   const preset = input.preset || 'release'
   const manifest = loadReleaseGateManifest(root)
-  const presetGates = selectReleaseGatePreset(manifest, preset)
-  const affected = (preset === 'affected' || preset === 'fast' || preset === 'confidence') && input.full !== true
+  const onlyGateIds = new Set((input.onlyGateIds || []).map(String).filter(Boolean))
+  const presetGates = onlyGateIds.size
+    ? manifest.gates.filter((gate) => onlyGateIds.has(gate.id))
+    : selectReleaseGatePreset(manifest, preset)
+  const forceFullSelection = input.full === true || onlyGateIds.size > 0
+  const affected = (preset === 'affected' || preset === 'fast' || preset === 'confidence') && !forceFullSelection
     ? selectAffectedReleaseGates(root, manifest, presetGates, { changedSince: input.changedSince || 'auto', ...(input.changedFiles ? { changedFiles: input.changedFiles } : {}), preset })
     : selectAffectedReleaseGates(root, manifest, presetGates, { full: true, preset })
   const rootReleaseSurfaceChanged = affected.selection.changed_files.some((file) => file === 'package.json' || file === 'package-lock.json' || file === 'release-gates.v2.json')

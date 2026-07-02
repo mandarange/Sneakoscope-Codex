@@ -157,13 +157,12 @@ export function applyFastModeToRoster<T extends Record<string, any>>(roster: T, 
 }
 
 export async function writeFastModePropagationProof(root: string, input: { policy: FastModePolicy; backend?: string; results?: any[] } = { policy: resolveFastModePolicy() }) {
-  const workerFastReports = await collectNamedJson(root, 'worker-fast-mode.json')
   const workerProcessReports = await collectNamedJson(root, 'worker-process-report.json')
   const agentProcessReports = await collectNamedJson(root, 'agent-process-report.json')
   const zellijReports = await collectNamedJson(root, 'agent-zellij-report.json')
   const madReports = await collectNamedJson(root, 'mad-sks-worker-report.json')
   const defaultFastExpected = input.policy.fast_mode === true
-  const childReports = [...workerFastReports, ...workerProcessReports, ...agentProcessReports, ...zellijReports, ...madReports]
+  const childReports = [...workerProcessReports, ...agentProcessReports, ...zellijReports, ...madReports]
   const missingFast = defaultFastExpected
     ? childReports.filter((row) => row.json?.fast_mode !== true && row.json?.fast_mode !== 'true')
     : []
@@ -172,7 +171,7 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     return value && value !== input.policy.service_tier
   })
   const missingCliOverride: any[] = []
-  const workerMissing = defaultFastExpected && workerFastReports.length === 0 && workerProcessReports.length === 0
+  const workerMissing = defaultFastExpected && workerProcessReports.length === 0
     ? ['fast_mode_worker_reports_missing']
     : []
   const report = {
@@ -184,7 +183,7 @@ export async function writeFastModePropagationProof(root: string, input: { polic
     default_fast_mode: input.policy.default_fast_mode,
     service_tier: input.policy.service_tier,
     fast_mode: input.policy.fast_mode,
-    worker_fast_report_count: workerFastReports.length,
+    worker_fast_report_count: 0,
     worker_process_report_count: workerProcessReports.length,
     codex_sdk_process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'codex-sdk').length,
     process_report_count: agentProcessReports.filter((row) => row.json?.backend === 'process').length,

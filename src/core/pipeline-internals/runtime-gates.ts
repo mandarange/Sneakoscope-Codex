@@ -1,4 +1,3 @@
-import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
@@ -68,34 +67,8 @@ async function staleReflectionReasons(root: any, state: any = {}, gate: any = {}
   if (!Number.isFinite(created)) return ['reflection-gate:created_at'];
   const id = state?.mission_id;
   if (!id) return [];
-  const dir = missionDir(root, id);
-  const missing: any[] = [];
-  for (const file of gateFilesForState(state).filter((file: any) => file && !['none', 'honest_mode'].includes(file))) {
-    if (await fileUpdatedAfter(path.join(dir, file), created)) missing.push(`${file}:updated_after_reflection`);
-  }
-  const transcript = await readText(path.join(dir, 'team-transcript.jsonl'), '');
-  const newerWorkEvent = transcript
-    .split(/\n/)
-    .filter(Boolean)
-    .map((line: any) => {
-      try { return JSON.parse(line); } catch { return null; }
-    })
-    .find((event: any) => {
-      const ts = Date.parse(event?.ts || '');
-      if (!Number.isFinite(ts) || ts <= created) return false;
-      return !/^(REFLECTION|HONEST|TEAM_CLEANUP)$/i.test(String(event?.phase || ''));
-    });
-  if (newerWorkEvent) missing.push('team-transcript.jsonl:work_after_reflection');
-  return missing;
-}
-
-async function fileUpdatedAfter(file: any, timeMs: any) {
-  try {
-    const stat = await fsp.stat(file);
-    return stat.mtimeMs > timeMs + 1000;
-  } catch {
-    return false;
-  }
+  if (state.reflection_invalidation_required !== true) return [];
+  return ['reflection_invalidation_required'];
 }
 
 function reflectionStopReason(state: any = {}, status: any = {}) {
@@ -215,7 +188,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
     const gate: any = await passedActiveGate(root, state);
     if (gate.ok) {
       const reflection = await reflectionGateStatus(root, state);
-      if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
+      if (!reflection.ok) await appendHonestModeNote(root, state, `reflection stale: ${(reflection.missing || []).join(', ')}`);
       return { continue: true };
     }
     const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
@@ -236,7 +209,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
       if (stopCheck.action === 'allow_stop') {
         if (narutoFamily) return { continue: true, systemMessage: `SKS: canonical stop-gate passed at ${stopCheck.gate_path}` };
       } else if (stopCheck.action === 'hard_blocked') {
-        return { continue: true, systemMessage: `SKS: ${stopCheck.feedback}` };
+        return { decision: 'block', reason: stopCheck.feedback, action: 'hard_blocked', gate: stopCheck.gate_path };
       } else {
         const missing = stopCheck.diagnostics.missing_fields?.length ? ` Missing gate fields: ${stopCheck.diagnostics.missing_fields.join(', ')}.` : '';
         const checkedPaths = stopCheck.diagnostics.checked_paths?.length ? ` Checked: ${stopCheck.diagnostics.checked_paths.join(', ')}.` : '';
@@ -290,7 +263,7 @@ async function complianceBlock(root: any, state: any = {}, reason: any = '', det
   const normalized = normalizeComplianceReason(reason);
   const previous = await readJson(guardPath, {});
   const count = previous.normalized_reason === normalized ? Number(previous.repeat_count || 0) + 1 : 1;
-  const limit = complianceLoopLimit();
+  const limit = complianceLoopLimit(detail.gate || state.stop_gate || '');
   const record = {
     schema_version: 1,
     updated_at: nowIso(),
@@ -308,7 +281,9 @@ async function complianceBlock(root: any, state: any = {}, reason: any = '', det
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.compliance_loop_guard', gate: record.gate, repeat_count: count, limit, tripped: record.tripped, missing: record.missing });
   if (!record.tripped) return { decision: 'block', reason, gate: detail.gate || state.stop_gate || null, missing: Array.isArray(detail.missing) ? detail.missing : [] };
   await writeJsonAtomic(path.join(dir, HARD_BLOCKER_ARTIFACT), {
-    passed: true,
+    schema: 'sks.hard-blocker.v1',
+    passed: false,
+    status: 'hard_blocked',
     created_at: nowIso(),
     reason: 'compliance_loop_guard_tripped',
     route: record.route,
@@ -322,11 +297,12 @@ async function complianceBlock(root: any, state: any = {}, reason: any = '', det
     ]
   });
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.compliance_loop_guard.tripped', gate: record.gate, repeat_count: count, limit });
-  return null;
+  return { decision: 'escalate', reason, gate: detail.gate || state.stop_gate || null, repeat_count: count, message: '동일 사유가 반복됩니다. 사용자 개입이 필요합니다.' };
 }
 
-function complianceLoopLimit() {
-  const raw = Number.parseInt(process.env.SKS_COMPLIANCE_LOOP_LIMIT || '', 10);
+function complianceLoopLimit(gate: any = '') {
+  const gateKey = String(gate || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const raw = Number.parseInt(String((gateKey && process.env[`SKS_COMPLIANCE_LOOP_LIMIT_${gateKey}`]) || process.env.SKS_COMPLIANCE_LOOP_LIMIT || ''), 10);
   if (!Number.isFinite(raw)) return DEFAULT_COMPLIANCE_LOOP_LIMIT;
   return Math.max(1, Math.min(20, raw));
 }
@@ -335,7 +311,6 @@ function normalizeComplianceReason(reason: any = '') {
   return String(reason || '')
     .replace(/\bM-\d{8}-\d{6}-[a-z0-9]+\b/gi, 'M-*')
     .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, 'TIMESTAMP')
-    .replace(/\d+/g, 'N')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 1200);
@@ -368,7 +343,19 @@ async function passedHardBlocker(root: any, state: any) {
   const file = 'hard-blocker.json';
   const blocker = await readJson(path.join(missionDir(root, state.mission_id), file), null);
   if (!blocker) return { ok: false };
+  if (String(blocker.status || '') === 'hard_blocked') return { ok: false, file, missing: ['hard_blocked'] };
   return { ok: blocker.passed === true && String(blocker.reason || '').trim() && Array.isArray(blocker.evidence) && blocker.evidence.length > 0, file };
+}
+
+async function appendHonestModeNote(root: any, state: any = {}, message: string) {
+  if (!state?.mission_id) return;
+  const dir = missionDir(root, state.mission_id);
+  await appendJsonl(path.join(dir, 'honest-mode-notes.jsonl'), {
+    ts: nowIso(),
+    type: 'honest_mode_note',
+    route: state.route_command || state.route || state.mode || null,
+    message
+  });
 }
 
 function missingRequiredGateFields(file: any, state: any, gate: any = {}) {

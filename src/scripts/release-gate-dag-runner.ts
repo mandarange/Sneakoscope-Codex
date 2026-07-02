@@ -7,6 +7,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const args = process.argv.slice(2)
 const presetIndex = args.indexOf('--preset')
 const preset = presetIndex >= 0 ? args[presetIndex + 1] : 'release'
+const gateIndex = args.indexOf('--gate')
+const gate = gateIndex >= 0 ? args[gateIndex + 1] : null
 const changedSinceIndex = args.indexOf('--changed-since')
 const changedSince = changedSinceIndex >= 0 ? (args[changedSinceIndex + 1] || null) : null
 const slaIndex = args.indexOf('--sla')
@@ -14,7 +16,7 @@ const slaMs = slaIndex >= 0 ? parseDurationMs(args[slaIndex + 1] || '') : null
 
 const result = await runReleaseGateDag({
   root,
-  ...(preset === undefined ? {} : { preset }),
+  ...(gate ? { onlyGateIds: [gate] } : preset === undefined ? {} : { preset }),
   changedSince,
   slaMs,
   full: args.includes('--full'),

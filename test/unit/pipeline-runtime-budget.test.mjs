@@ -5,12 +5,9 @@ import path from 'node:path';
 
 const root = process.cwd();
 
-test('pipeline-runtime is a small compatibility facade', () => {
+test('pipeline-runtime compatibility facade is removed', () => {
   const file = path.join(root, 'src/core/pipeline-runtime.ts');
-  const text = fs.readFileSync(file, 'utf8');
-  assert.ok(text.split(/\r?\n/).length <= 300);
-  assert.match(text, /pipeline-internals\/runtime-core\.js/);
-  assert.doesNotMatch(text, /\bfrom ['"].*\b(team|qa|research|ppt|image-ux-review|db|gx)\b/i);
+  assert.equal(fs.existsSync(file), false);
 });
 
 test('pipeline budget required split modules exist', () => {

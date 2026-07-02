@@ -17,7 +17,7 @@ critical: only one tier can authorize a publish.
 - `release:check:dynamic:execute` — the **runner**. Default mode executes the selected hermetic gates; `--plan-only` reverts to planning; `--publish` selects every `required_for_publish` gate.
 
 Both are **standalone** scripts — they are intentionally NOT members of the
-`release:check` chain, the DAG, or the gate manifest (`release-gates.json`).
+`release:check` chain, the DAG, or the gate manifest (`release-gates.v2.json`).
 Adding them would recursively invoke the entire gate set.
 
 ## Execution model (`release:check:dynamic:execute`)

@@ -68,7 +68,8 @@ export async function runCodexInitDeep(input: { root?: string; apply?: boolean; 
           }
           if (existing.trim()) {
             const beforeHash = hashText(existing)
-            const backup = `${agentsPath}.sks-backup-${Date.now()}-${beforeHash.slice(0, 12)}`
+            const backup = initDeepBackupPath(root, agentsPath, beforeHash)
+            await ensureDir(path.dirname(backup))
             await fs.copyFile(agentsPath, backup)
             directoryLocalAgents.backup_paths.push(path.relative(root, backup))
             directoryLocalAgents.backups_created += 1
@@ -118,8 +119,8 @@ function mergeManagedBlockPreview(current: string, markerName: string, content: 
 
 async function pruneBackups(root: string, agentsPath: string, keep: number): Promise<string[]> {
   if (keep < 1) return []
-  const dir = path.dirname(agentsPath)
-  const base = path.basename(agentsPath)
+  const dir = path.join(root, '.sneakoscope', 'backups', 'agents')
+  const base = backupBaseName(root, agentsPath)
   const backupPattern = new RegExp(`^${escapeRegExp(base)}\\.sks-backup-\\d{13}-[0-9a-f]{8,12}$`)
   const rows = await fs.readdir(dir).catch(() => [])
   const backups = rows
@@ -135,6 +136,14 @@ async function pruneBackups(root: string, agentsPath: string, keep: number): Pro
   const guard = guardContextForRoute(root, contract, 'prune SKS init-deep backup retention')
   for (const file of remove) await guardedRm(guard, file, { force: true }).catch(() => undefined)
   return remove
+}
+
+function initDeepBackupPath(root: string, agentsPath: string, beforeHash: string): string {
+  return path.join(root, '.sneakoscope', 'backups', 'agents', `${backupBaseName(root, agentsPath)}.sks-backup-${Date.now()}-${beforeHash.slice(0, 12)}`)
+}
+
+function backupBaseName(root: string, agentsPath: string): string {
+  return path.relative(root, agentsPath).replace(/[\\/]+/g, '__')
 }
 
 function escapeRegExp(value: string): string {

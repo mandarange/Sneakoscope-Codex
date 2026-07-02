@@ -22,8 +22,8 @@ fs.writeFileSync(path.join(reportDir, 'agent-process-report.json'), `${JSON.stri
   service_tier: 'fast',
   sdk_config_service_tier: 'fast'
 })}\n`);
-fs.writeFileSync(path.join(reportDir, 'worker-fast-mode.json'), `${JSON.stringify({
-  schema: 'sks.native-cli-worker-fast-mode.v1',
+fs.writeFileSync(path.join(reportDir, 'worker-process-report.json'), `${JSON.stringify({
+  schema: 'sks.native-cli-worker-process-report.v1',
   fast_mode: true,
   service_tier: 'fast'
 })}\n`);

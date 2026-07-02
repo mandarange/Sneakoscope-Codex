@@ -1,6 +1,6 @@
 # Architecture
 
-The active 1.17.0 architecture keeps user-facing commands lazy-loaded through `src/cli/command-registry.ts` and keeps `src/core/pipeline-runtime.ts` as a compatibility facade.
+The active architecture keeps user-facing commands lazy-loaded through `src/cli/command-registry.ts` and keeps `src/core/pipeline.ts` as the single compatibility facade.
 
 Core trust modules added in 0.9.20:
 
