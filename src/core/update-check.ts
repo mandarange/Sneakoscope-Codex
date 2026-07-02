@@ -272,6 +272,34 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       error: check.error || 'latest version unavailable'
     });
   }
+  if (options.dryRun) {
+    stage('old_version_doctor_preflight', true, 'skipped_dry_run', { reason: 'dry_run_does_not_run_doctor_fix' });
+    stage('npm_install', true, 'dry_run', { command });
+    return buildUpdateNowResult({
+      packageName,
+      from: check.current,
+      latest: check.latest,
+      requestedVersion,
+      installVersion,
+      npmBin,
+      npmArgs,
+      command,
+      cwd,
+      registry,
+      globalRoot,
+      status: 'dry_run',
+      ok: true,
+      installCode: null,
+      oldVersionDoctor: null,
+      newBinary: null,
+      newVersion: null,
+      newVersionDoctor: null,
+      projectReceipt: null,
+      migrationCurrent: false,
+      stages,
+      error: null
+    });
+  }
   if (!requestedVersion && check.latest && !check.update_available) {
     const receipt = await writeProjectUpdateMigrationReceipt({
       root: projectReceiptRoot,
@@ -308,34 +336,6 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       projectReceipt: receipt,
       migrationCurrent,
       sksMenuBar,
-      stages,
-      error: null
-    });
-  }
-  if (options.dryRun) {
-    stage('old_version_doctor_preflight', true, 'skipped_dry_run', { reason: 'dry_run_does_not_run_doctor_fix' });
-    stage('npm_install', true, 'dry_run', { command });
-    return buildUpdateNowResult({
-      packageName,
-      from: check.current,
-      latest: check.latest,
-      requestedVersion,
-      installVersion,
-      npmBin,
-      npmArgs,
-      command,
-      cwd,
-      registry,
-      globalRoot,
-      status: 'dry_run',
-      ok: true,
-      installCode: null,
-      oldVersionDoctor: null,
-      newBinary: null,
-      newVersion: null,
-      newVersionDoctor: null,
-      projectReceipt: null,
-      migrationCurrent: false,
       stages,
       error: null
     });

@@ -183,18 +183,21 @@ export async function writeReceiptRotated<T>(p: string, data: T, opts: { keep?: 
   const rotated = prior
     .filter((entry) => entry.isFile() && entry.name.startsWith(`${base}.`) && entry.name.endsWith('.json'))
     .map((entry) => path.join(path.dirname(p), entry.name));
+  const rotatedFiles = new Set(rotated);
   const existing = await fsp.stat(p).catch(() => null);
   if (existing) {
     const stamp = new Date(existing.mtimeMs).toISOString().replace(/[:.]/g, '-');
-    await fsp.rename(p, path.join(path.dirname(p), `${base}.${stamp}.json`)).catch(() => undefined);
+    const rotatedPath = path.join(path.dirname(p), `${base}.${stamp}.json`);
+    await fsp.rename(p, rotatedPath).catch(() => undefined);
+    rotatedFiles.add(rotatedPath);
   }
   await writeJsonAtomic(p, data);
-  const rows = await Promise.all(rotated.map(async (file) => ({ file, stat: await fsp.stat(file).catch(() => null) })));
-  rows
+  const rows = await Promise.all([...rotatedFiles].map(async (file) => ({ file, stat: await fsp.stat(file).catch(() => null) })));
+  const removable = rows
     .filter((row): row is { file: string; stat: fs.Stats } => Boolean(row.stat))
     .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
-    .slice(keep)
-    .forEach((row) => void fsp.rm(row.file, { force: true }).catch(() => undefined));
+    .slice(keep);
+  await Promise.all(removable.map((row) => fsp.rm(row.file, { force: true }).catch(() => undefined)));
 }
 
 export async function writeBinaryAtomic(p: string, data: Buffer): Promise<void> {

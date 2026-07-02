@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PACKAGE_VERSION, packageRoot, readJson } from '../core/fsx.js';
+import { PACKAGE_VERSION, packageRoot, readJson, writeReceiptRotated } from '../core/fsx.js';
 import { runSksUpdateNow } from '../core/update-check.js';
-import { ensureCurrentMigrationBeforeCommand, projectUpdateMigrationReceiptPath } from '../core/update/update-migration-state.js';
+import { ensureCurrentMigrationBeforeCommand, projectUpdateMigrationReceiptPath, runPackageLocalDoctor } from '../core/update/update-migration-state.js';
 
 const REQUIRED_LEGACY_STAGES = [
   'legacy-team-artifacts',
@@ -98,6 +98,59 @@ try {
   assertGate(failed.ok === false && failed.blockers.includes('doctor_migration_failed'), 'non-timeout doctor failure must not be reported as timeout', failed);
   assertGate(!failed.warnings.some((warning) => warning.startsWith('doctor_migration_timeout_retry')), 'non-timeout failure must not retry', failed);
 
+  const currentDryRunProject = path.join(tempRoot, 'current-dry-run-project');
+  await fsp.mkdir(path.join(currentDryRunProject, '.sneakoscope'), { recursive: true });
+  const currentDryRun = await captureConsole(async () => runSksUpdateNow({
+    projectRoot: currentDryRunProject,
+    currentVersion: PACKAGE_VERSION,
+    dryRun: true,
+    json: false,
+    quiet: false,
+    timeoutMs: 5000,
+    env: {
+      ...process.env,
+      HOME: home,
+      SKS_GLOBAL_ROOT: path.join(home, '.sneakoscope-global'),
+      SKS_INSTALLED_SKS_VERSION: PACKAGE_VERSION,
+      SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION,
+      SKS_UPDATE_SKIP_SKS_MENUBAR: '1'
+    }
+  }));
+  assertGate(currentDryRun.value.status === 'dry_run', 'already-current update dry-run must stay dry_run', { result: currentDryRun.value });
+  assertGate(!currentDryRun.value.stages.some((stage) => ['project_receipt', 'sks_menubar', 'global_skills_reconcile'].includes(stage.id)), 'already-current dry-run must not run mutating current-version repair stages', { stages: currentDryRun.value.stages });
+  assertGate(!fs.existsSync(projectUpdateMigrationReceiptPath(currentDryRunProject)), 'already-current dry-run must not write a project receipt', { receipt: projectUpdateMigrationReceiptPath(currentDryRunProject) });
+
+  const timeoutEntrypoint = path.join(tempRoot, 'timeout-doctor.js');
+  await fsp.writeFile(timeoutEntrypoint, 'setInterval(() => {}, 1000)\n');
+  const actualTimeout = await runPackageLocalDoctor({
+    root: project,
+    entrypoint: timeoutEntrypoint,
+    args: [],
+    env: {
+      ...process.env,
+      HOME: home,
+      SKS_GLOBAL_ROOT: path.join(home, '.sneakoscope-global')
+    },
+    timeoutMs: 25,
+    maxOutputBytes: 1024
+  });
+  assertGate(actualTimeout.ok === false && actualTimeout.timedOut === true && actualTimeout.timed_out === true, 'package-local doctor timeout must come from real child process timeout path', actualTimeout);
+
+  const rotationProject = path.join(tempRoot, 'rotation-project');
+  const rotationReceipt = projectUpdateMigrationReceiptPath(rotationProject);
+  await fsp.mkdir(path.dirname(rotationReceipt), { recursive: true });
+  const base = path.basename(rotationReceipt);
+  const dir = path.dirname(rotationReceipt);
+  for (let index = 0; index < 5; index += 1) {
+    const rotated = path.join(dir, `${base}.2026-07-03T00-00-0${index}-000Z.json`);
+    await fsp.writeFile(rotated, JSON.stringify({ index }) + '\n');
+    await fsp.utimes(rotated, new Date(2026, 6, 3, 0, 0, index), new Date(2026, 6, 3, 0, 0, index));
+  }
+  await fsp.writeFile(rotationReceipt, JSON.stringify({ current: true }) + '\n');
+  await writeReceiptRotated(rotationReceipt, { next: true }, { keep: 5 });
+  const rotatedAfterWrite = (await fsp.readdir(dir)).filter((name) => name.startsWith(`${base}.`) && name.endsWith('.json'));
+  assertGate(rotatedAfterWrite.length <= 5, 'receipt rotation must include the just-rotated current receipt in keep=5 pruning', { rotatedAfterWrite });
+
   console.log(JSON.stringify({
     schema: 'sks.legacy-update-e2e-check.v1',
     ok: true,
@@ -107,7 +160,10 @@ try {
     legacy_stage_count: REQUIRED_LEGACY_STAGES.length,
     progress_lines: output.text.split(/\r?\n/).filter(Boolean).length,
     retry_status: retry.status,
-    failure_blockers: failed.blockers
+    failure_blockers: failed.blockers,
+    current_dry_run_status: currentDryRun.value.status,
+    actual_timeout_timed_out: actualTimeout.timedOut,
+    rotated_receipt_count: rotatedAfterWrite.length
   }, null, 2));
 } finally {
   process.chdir(savedCwd);

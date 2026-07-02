@@ -2838,6 +2838,7 @@
         "inputs": [
           "package.json",
           "release-gates.v2.json",
+          "src/core/fsx.ts",
           "src/core/update-check.ts",
           "src/core/update/update-migration-state.ts",
           "src/core/codex-hooks/**",
