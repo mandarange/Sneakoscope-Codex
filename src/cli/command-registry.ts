@@ -166,7 +166,13 @@ export const COMMANDS = {
   triwiki: skipMigrationGate(entry('stable', 'Inspect TriWiki index, affected graph, and proof bank', 'dist/core/commands/triwiki-command.js', argsCommand(() => import('../core/commands/triwiki-command.js'), 'triwikiCommand', 'dist/core/commands/triwiki-command.js'))),
   daemon: skipMigrationGate(entry('stable', 'Inspect or warm the local SKS daemon cache', 'dist/core/commands/daemon-command.js', argsCommand(() => import('../core/commands/daemon-command.js'), 'daemonCommand', 'dist/core/commands/daemon-command.js'))),
   run: entry('beta', 'Classify and execute a task through the SKS trust kernel', 'dist/core/commands/run-command.js', argsCommand(() => import('../core/commands/run-command.js'), 'runCommand', 'dist/core/commands/run-command.js')),
+  plan: entry('stable', 'Write a planning-only SKS plan artifact without code edits', 'dist/core/commands/plan-command.js', argsCommand(() => import('../core/commands/plan-command.js'), 'planCommand', 'dist/core/commands/plan-command.js')),
   status: readOnly(entry('stable', 'Show concise active mission and trust status', 'dist/core/commands/status-command.js', argsCommand(() => import('../core/commands/status-command.js'), 'statusCommand', 'dist/core/commands/status-command.js'))),
+  review: entry('stable', 'Review a git diff with machine evidence first', 'dist/core/commands/review-command.js', argsCommand(() => import('../core/commands/review-command.js'), 'reviewCommand', 'dist/core/commands/review-command.js'), {
+    allowedDuringActiveRoute: true,
+    activeRoutePolicy: 'always'
+  }),
+  ui: readOnly(entry('stable', 'Open the localhost SKS swarm dashboard', 'dist/core/commands/ui-command.js', argsCommand(() => import('../core/commands/ui-command.js'), 'uiCommand', 'dist/core/commands/ui-command.js'))),
   root: readOnly(entry('stable', 'Show active SKS root', 'dist/commands/root.js', directCommand(() => import('../commands/root.js'), 'dist/commands/root.js'))),
   update: skipMigrationGate(entry('stable', 'Update the global SKS npm package', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'updateCommand', 'dist/core/commands/basic-cli.js', 'now'))),
   uninstall: entry('stable', 'Uninstall SKS global skills, hooks, config, menu bar, and optional project residue', 'dist/core/commands/uninstall-command.js', argsCommand(() => import('../core/commands/uninstall-command.js'), 'uninstallCommand', 'dist/core/commands/uninstall-command.js'), {
@@ -254,6 +260,7 @@ export const COMMANDS = {
   eval: entry('labs', 'Run eval reports', 'dist/core/commands/eval-command.js', subcommand(() => import('../core/commands/eval-command.js'), 'evalCommand', 'dist/core/commands/eval-command.js', 'run')),
   harness: entry('labs', 'Run harness fixtures', 'dist/core/commands/harness-command.js', subcommand(() => import('../core/commands/harness-command.js'), 'harnessCommand', 'dist/core/commands/harness-command.js', 'fixture')),
   wiki: activeRouteDiagnostic(entry('beta', 'Manage TriWiki and image voxel ledgers', 'dist/commands/wiki.js', directCommand(() => import('../commands/wiki.js'), 'dist/commands/wiki.js'))),
+  memory: entry('beta', 'Project TriWiki memory into managed AGENTS.md blocks or run memory GC', 'dist/commands/memory.js', directCommand(() => import('../commands/memory.js'), 'dist/commands/memory.js')),
   gc: activeRouteDiagnostic(entry('labs', 'Compact/prune runtime state', 'dist/core/commands/gc-command.js', gcArgs('gcCommand'))),
   stats: readOnly(entry('labs', 'Show storage stats', 'dist/core/commands/gc-command.js', gcArgs('statsCommand'))),
   features: entry('beta', 'Validate feature registry', 'dist/commands/features.js', directCommand(() => import('../commands/features.js'), 'dist/commands/features.js')),
@@ -279,7 +286,8 @@ export const COMMAND_ALIASES = {
   '--MAD': 'mad-sks',
   '--mad-sks': 'mad-sks',
   '--agent': 'agent',
-  '--naruto': 'naruto'
+  '--naruto': 'naruto',
+  swarm: 'naruto'
 } as const satisfies Record<string, CommandName>;
 
 export function commandNames(): CommandName[] {

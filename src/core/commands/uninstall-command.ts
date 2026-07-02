@@ -4,10 +4,12 @@ import fsp from 'node:fs/promises';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { ensureDir, exists, readJson, readText, runProcess, writeJsonAtomic } from '../fsx.js';
+import { ui as cliUi } from '../../cli/cli-theme.js';
 import { uninstallSksMenuBar } from '../codex-app/sks-menubar.js';
 import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { sweepSksTempDirs } from '../retention.js';
 import { reconcileSkills } from '../init/skills.js';
+import { removeTriwikiAgentsMdBlocks } from '../triwiki/agents-md-projector.js';
 
 interface UninstallInventoryItem {
   id: string;
@@ -33,7 +35,11 @@ export async function uninstallCommand(args: string[] = []) {
   if (opts.dryRun) {
     const result = { schema: 'sks.uninstall.v1', ok: true, dry_run: true, inventory };
     if (opts.json) console.log(JSON.stringify(result, null, 2));
-    else printInventoryTable(inventory);
+    else {
+      cliUi.banner('uninstall');
+      cliUi.warn('dry run only');
+      printInventoryTable(inventory);
+    }
     return result;
   }
   if (!opts.yes && !(await confirmUninstall())) {
@@ -69,6 +75,8 @@ export async function uninstallCommand(args: string[] = []) {
   await writeJsonAtomic(path.join(os.tmpdir(), 'sks-uninstall-report.json'), report).catch(() => undefined);
   if (opts.json) console.log(JSON.stringify(report, null, 2));
   else {
+    cliUi.banner('uninstall');
+    report.ok ? cliUi.ok('removed configured SKS surfaces') : cliUi.fail('uninstall completed with errors');
     console.log('SKS uninstall complete.');
     console.log('Final package removal command: npm uninstall -g sneakoscope');
   }
@@ -87,6 +95,7 @@ async function collectSksInventory(opts: any): Promise<UninstallInventoryItem[]>
     ['hooks-json', path.join(home, '.codex', 'hooks.json'), 'strip SKS-managed hooks', '--keep-config'],
     ['sks-home', path.join(home, '.sneakoscope'), 'remove', '--keep-data'],
     ['sks-global-home', path.join(home, '.sneakoscope-global'), 'remove', '--keep-data'],
+    ['agents-md-memory-block', path.join(opts.root, 'AGENTS.md'), 'strip SKS Project Memory block', '--purge-projects'],
     ['tmp', os.tmpdir(), 'sweep sks temp dirs', 'default']
   ];
   const out: UninstallInventoryItem[] = [];
@@ -263,6 +272,11 @@ async function purgeProjectArtifacts(report: any, opts: any) {
       report.errors.push({ id: 'project-skills', root, error: err?.message || String(err) });
     });
     await fsp.rm(path.join(root, '.codex'), { recursive: true, force: true }).catch(() => null);
+    const removedBlocks = await removeTriwikiAgentsMdBlocks(root).catch((err: any) => {
+      report.errors.push({ id: 'agents-md-memory-block', root, error: err?.message || String(err) });
+      return [];
+    });
+    if (removedBlocks.length) report.removed.push({ id: 'agents-md-memory-block', root, result: { ok: true, files: removedBlocks.length } });
     await fsp.rm(path.join(root, 'SNEAKOSCOPE.md'), { force: true }).catch(() => null);
     if (!opts.keepData) await fsp.rm(path.join(root, '.sneakoscope'), { recursive: true, force: true }).catch(() => null);
   }

@@ -1744,6 +1744,7 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
       model: agent.model || null,
       reasoningEffort: agent.reasoning_effort || null,
       modelReasoningEffort: agent.model_reasoning_effort || agent.reasoning_effort || null,
+      serviceTier: agent.service_tier || opts.serviceTier || 'fast',
       inputFiles: Array.isArray(opts.inputFiles) ? opts.inputFiles.map(String) : [],
       inputImages: Array.isArray(opts.inputImages) ? opts.inputImages.map(String) : [],
       outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,

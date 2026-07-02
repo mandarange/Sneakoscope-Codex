@@ -56,6 +56,7 @@ export interface CodexTaskInput {
   model?: string | null
   reasoningEffort?: string | null
   modelReasoningEffort?: string | null
+  serviceTier?: 'fast' | 'standard' | string | null
 }
 
 export interface CodexTaskResult {

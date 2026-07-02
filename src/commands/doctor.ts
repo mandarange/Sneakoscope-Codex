@@ -3,6 +3,7 @@ import path from 'node:path';
 import { projectRoot, exists, formatBytes } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
+import { ui as cliUi } from '../cli/cli-theme.js';
 import { getCodexInfo } from '../core/codex-adapter.js';
 import { rustInfo } from '../core/rust-accelerator.js';
 import { codexAppIntegrationStatus } from '../core/codex-app.js';
@@ -48,6 +49,10 @@ import { reconcileSkills } from '../core/init/skills.js';
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
   const doctorFix = flag(args, '--fix');
+  if (!flag(args, '--json')) {
+    cliUi.banner('doctor');
+    cliUi.step(doctorFix ? 'repairing and validating' : 'validating');
+  }
   if (doctorFix) return withSecretPreservationGuard(root, 'doctor-fix', () => runDoctor(args, root, doctorFix));
   return runDoctor(args, root, doctorFix);
 }

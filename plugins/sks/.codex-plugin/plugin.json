@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "name": "sks",
+  "display_name": "Sneakoscope Codex",
+  "version": "5.0.0",
+  "description": "Proof-first Codex harness with dynamic swarms, machine gates, TriWiki memory, and a localhost dashboard.",
+  "publisher": "mandarange",
+  "repository": "https://github.com/mandarange/Sneakoscope-Codex",
+  "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
+  "license": "MIT",
+  "entrypoints": {
+    "postinstall": "sks postinstall"
+  },
+  "commands": [
+    {
+      "name": "sks",
+      "description": "Run the Sneakoscope Codex CLI."
+    },
+    {
+      "name": "sks-ui",
+      "description": "Open the local SKS dashboard with `sks ui`."
+    }
+  ],
+  "skills": [
+    "plan",
+    "work",
+    "swarm",
+    "review",
+    "naruto",
+    "honest-mode"
+  ]
+}

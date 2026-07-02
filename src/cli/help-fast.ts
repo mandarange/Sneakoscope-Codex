@@ -6,18 +6,28 @@ export function helpFast() {
   console.log(`SKS
 SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 
-Usage
+3-pillar frontdoor
 
-  sks
-  sks help [topic]
-  sks commands [--json]
-  sks dollar-commands [--json]
-  sks proof show --json
+  $Plan "task"              plan only; writes .sneakoscope/plans, no code edits
+  $Work                     execute the latest plan with evidence gates
+  $Swarm "task"             dynamic Naruto swarm with machine verification
+
+Local surfaces
+
+  sks ui                    localhost live dashboard
+  sks review --staged       machine-first diff review
+  sks doctor --fix          repair/validate the harness
+
+Discovery
+
+  sks commands [--json]     all commands
+  sks dollar-commands       all Codex App $ routes
+  sks help [topic]          focused help
 `);
-  for (const row of commandRows().filter((entry: any) => entry.maturity !== 'labs')) {
+  for (const row of commandRows().filter((entry: any) => entry.maturity !== 'labs').slice(0, 18)) {
     console.log(`  ${row.usage.padEnd(58)} ${row.description}`);
   }
-  console.log('\nThree core promises: Completion Proof for serious routes, Image Voxel TriWiki for visual routes, and release-gated Codex App/codex-lb/hooks/Rust evidence.');
+  console.log('\nRun `sks commands` for the full catalog. Core promise: machine-verified completion, not vibes.');
 }
 
 function commandRows() {

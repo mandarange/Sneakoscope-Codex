@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { ui as cliUi } from '../../cli/cli-theme.js';
 import { projectRoot } from '../fsx.js';
 import {
   inspectSksMenuBarStatus,
@@ -14,6 +15,9 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
   if (action === 'status') {
     const result = await inspectSksMenuBarStatus({ root, ...(home ? { home } : {}) });
     if (flag(args, '--json')) return printJson(result);
+    cliUi.banner('menubar status');
+    if (result.ok) cliUi.ok(result.running ? 'running' : 'installed status checked');
+    else cliUi.warn('needs attention');
     printStatus(result);
     if (!result.ok) process.exitCode = 1;
     return result;
@@ -21,6 +25,9 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
   if (action === 'install') {
     const result = await installSksMenuBar({ root, ...(home ? { home } : {}), apply: true, launch: !flag(args, '--no-launch') });
     if (flag(args, '--json')) return printJson(result);
+    cliUi.banner('menubar install');
+    if (result.ok) cliUi.ok(result.status);
+    else cliUi.fail(result.status);
     console.log(`SKS menu bar install: ${result.status}`);
     for (const actionLine of result.actions) console.log(`- ${actionLine}`);
     for (const warning of result.warnings) console.log(`warning: ${warning}`);
@@ -31,6 +38,9 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
   if (action === 'restart') {
     const result = await restartSksMenuBar({ root, ...(home ? { home } : {}) });
     if (flag(args, '--json')) return printJson(result);
+    cliUi.banner('menubar restart');
+    if (result.ok) cliUi.ok('restart requested');
+    else cliUi.fail('restart failed');
     console.log(`SKS menu bar restart: ${result.ok ? 'ok' : 'failed'}`);
     if ('error' in result && result.error) console.log(`error: ${result.error}`);
     if (!result.ok) process.exitCode = 1;
@@ -39,6 +49,9 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
   if (action === 'uninstall') {
     const result = await uninstallSksMenuBar({ root, ...(home ? { home } : {}) });
     if (flag(args, '--json')) return printJson(result);
+    cliUi.banner('menubar uninstall');
+    if (result.ok) cliUi.ok('uninstall complete');
+    else cliUi.fail('uninstall failed');
     console.log(`SKS menu bar uninstall: ${result.ok ? 'ok' : 'failed'}`);
     for (const actionLine of result.actions) console.log(`- ${actionLine}`);
     for (const warning of result.warnings) console.log(`warning: ${warning}`);

@@ -67,6 +67,8 @@ export async function run(command: any, args: any = []) {
       codex_lb: status,
       chain,
       evidence,
+      degraded_models: Array.isArray((chain as any).degraded_models) ? (chain as any).degraded_models : [],
+      quota_low: Boolean((chain as any).quota_low),
       blockers: [
         ...(providerReady ? [] : ['codex_lb_provider_contract_drift']),
         ...(chain.ok

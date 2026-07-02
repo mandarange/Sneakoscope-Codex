@@ -24,6 +24,7 @@ import {
   hasSubagentEvidence,
   subagentEvidence,
 } from './runtime-core.js';
+import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 
 const REFLECTION_ARTIFACT = 'reflection.md';
 const REFLECTION_GATE = 'reflection-gate.json';
@@ -278,7 +279,31 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   }
   const reflection = await reflectionGateStatus(root, state, jsonCache);
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
+  fireAndForgetProjectMemory(root, state);
   return null;
+}
+
+function fireAndForgetProjectMemory(root: any, state: any = {}) {
+  if (!state?.mission_id) return;
+  void projectTriwikiToAgentsMd(String(root)).then((report) => {
+    const id = state.mission_id;
+    if (!id) return null;
+    return appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'triwiki.agents_md_projected',
+      ok: report.ok,
+      reason: report.reason,
+      written: report.written
+    });
+  }).catch((err: any) => {
+    const id = state.mission_id;
+    if (!id) return null;
+    return appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'triwiki.agents_md_project_failed',
+      error: err?.message || String(err)
+    }).catch(() => undefined);
+  });
 }
 
 async function routeProofGateStatus(root: any, state: any = {}) {

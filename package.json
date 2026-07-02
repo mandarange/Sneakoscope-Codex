@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "4.8.7",
+  "version": "5.0.0",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -14,7 +14,8 @@
   },
   "bin": {
     "sks": "dist/bin/sks.js",
-    "sneakoscope": "dist/bin/sks.js"
+    "sneakoscope": "dist/bin/sks.js",
+    "sneakoscope-install": "dist/bin/install.js"
   },
   "publishConfig": {
     "access": "public",
@@ -41,6 +42,8 @@
     "crates/sks-core/Cargo.lock",
     "crates/sks-core/Cargo.toml",
     "crates/sks-core/src",
+    "docs/demo.tape",
+    "docs/assets/sneakoscope-architecture-pipeline.jpg",
     "README.md",
     "LICENSE"
   ],

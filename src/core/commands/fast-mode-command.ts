@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { flag } from '../../cli/args.js'
 import { printJson } from '../../cli/output.js'
+import { ui as cliUi } from '../../cli/cli-theme.js'
 import { projectRoot, readText } from '../fsx.js'
 import {
   clearFastModePreference,
@@ -84,6 +85,8 @@ export async function fastModeCommand(args: string[] = []) {
     }
   }
   if (flag(args, '--json')) return printJson(result)
+  cliUi.banner('fast-mode')
+  cliUi.ok(`project workers ${result.fast_mode ? 'fast' : 'standard'}`)
   console.log('SKS Fast Mode')
   console.log(`Root: ${root}`)
   console.log(`Global (desktop): ${globalStatus.on ? 'on' : 'off'} (default_profile=${globalStatus.default_profile || 'none'}, top-level ${globalStatus.top_level_default_profile ? 'OK' : 'none'})`)

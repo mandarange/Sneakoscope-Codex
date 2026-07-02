@@ -29,7 +29,7 @@ export function buildCodexSdkEnv(input: CodexTaskInput): { env: Record<string, s
   if (input.slotId) env.SKS_AGENT_SLOT_ID = input.slotId
   if (input.sessionId) env.SKS_AGENT_SESSION_ID = input.sessionId
   if (input.generationIndex !== undefined) env.SKS_AGENT_GENERATION_INDEX = String(input.generationIndex)
-  env.SKS_SERVICE_TIER = 'fast'
+  env.SKS_SERVICE_TIER = String(input.serviceTier || 'fast')
   const isolatedRoot = path.resolve(input.mutationLedgerRoot, 'codex-sdk-home')
   env.HOME = path.join(isolatedRoot, 'home')
   env.CODEX_HOME = path.join(isolatedRoot, 'codex')

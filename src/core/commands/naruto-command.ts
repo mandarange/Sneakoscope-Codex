@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { ui as cliUi } from '../../cli/cli-theme.js'
 import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js'
 import { nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
@@ -43,6 +44,8 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
     return glmNarutoCommand(args.filter((arg) => arg !== '--glm'))
   }
   const parsed = parseNarutoArgs(args)
+  if (!parsed.json) cliUi.banner(parsed.action === 'run' ? 'swarm' : `naruto ${parsed.action}`)
+  if (!parsed.json && parsed.action !== 'run') cliUi.ok('naruto command surface ready')
   if (parsed.action === 'help') return narutoHelp(parsed)
   if (parsed.action === 'status') return narutoStatus(parsed)
   if (parsed.action === 'dashboard') return narutoDashboard(parsed)

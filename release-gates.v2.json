@@ -3590,21 +3590,26 @@
     },
     {
       "id": "policy:gate-audit",
-      "command": "node ./dist/scripts/gate-policy-audit-check.js",
+      "command": "node ./dist/scripts/gate-policy-audit-check.js && node ./dist/scripts/cli-output-consistency-check.js && node ./dist/scripts/harness-benchmark-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
         "fs-read"
       ],
       "side_effect": "hermetic",
-      "timeout_ms": 120000,
+      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
           "package.json",
           "release-gates.v2.json",
           "infra-harness-gates.json",
-          "docs/gates-policy.md"
+          "docs/gates-policy.md",
+          "src/scripts/cli-output-consistency-check.ts",
+          "src/scripts/harness-benchmark-check.ts",
+          "src/cli/cli-theme.ts",
+          "src/core/commands/ui-command.ts",
+          "src/core/commands/review-command.ts"
         ]
       },
       "isolation": {

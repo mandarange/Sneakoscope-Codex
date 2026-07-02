@@ -5,6 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const bin = path.join(root, 'dist', 'bin', 'sks.js');
-await fsp.chmod(bin, 0o755);
-console.log(`bin executable: ${path.relative(root, bin)}`);
+const bins = [
+  path.join(root, 'dist', 'bin', 'sks.js'),
+  path.join(root, 'dist', 'bin', 'install.js')
+];
+for (const bin of bins) {
+  await fsp.chmod(bin, 0o755).catch((err: any) => {
+    if (err?.code !== 'ENOENT') throw err;
+  });
+  console.log(`bin executable: ${path.relative(root, bin)}`);
+}

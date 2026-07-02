@@ -1,6 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
-import { exists, readText, runProcess, which } from '../fsx.js';
+import { exists, readJson, readText, runProcess, which } from '../fsx.js';
 
 export type CodexLbEnvSource = 'process.env' | 'keychain' | 'env-file' | 'legacy-env-file' | 'project-local' | 'missing';
 
@@ -36,6 +36,26 @@ export function legacyCodexLbEnvPath(home: unknown = process.env.HOME || os.home
 
 export function codexLbMetadataPath(home: unknown = process.env.HOME || os.homedir()): string {
   return path.join(String(home || os.homedir()), '.codex', 'sks-codex-lb.json');
+}
+
+export function codexLbHealthPath(home: unknown = process.env.HOME || os.homedir()): string {
+  return path.join(String(home || os.homedir()), '.codex', 'sks-codex-lb-health.json');
+}
+
+export async function readLbHealth(home: unknown = process.env.HOME || os.homedir()) {
+  const file = codexLbHealthPath(home);
+  const raw = await readJson<any>(file, null);
+  if (!raw || typeof raw !== 'object') return null;
+  const degraded = Array.isArray(raw.degraded_models)
+    ? raw.degraded_models.map((model: unknown) => String(model)).filter(Boolean)
+    : [];
+  return {
+    ok: raw.ok !== false,
+    degraded_models: degraded,
+    quota_low: raw.quota_low === true,
+    source: file,
+    updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : null
+  };
 }
 
 export function normalizeCodexLbBaseUrl(input: unknown = ''): string {

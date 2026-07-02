@@ -145,6 +145,7 @@ const MENU_ITEMS = [
   'Fast Check',
   'SKS Version Check',
   'Update SKS Now',
+  'Open Dashboard',
   'Open Codex Settings',
   'Restart Codex',
   'Quit SKS Menu'
@@ -844,6 +845,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(menu, "SKS Version Check", #selector(sksVersionCheck))
         add(menu, "Update SKS Now", #selector(updateSksNow))
         menu.addItem(NSMenuItem.separator())
+        add(menu, "Open Dashboard", #selector(openDashboard))
         add(menu, "Open Codex Settings", #selector(openCodexSettings))
         add(menu, "Restart Codex", #selector(restartCodex))
         menu.addItem(NSMenuItem.separator())
@@ -962,6 +964,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func updateSksNow() {
         runSksInTerminal(["update"], tail: "echo; echo 'SKS update finished.'")
+    }
+
+    @objc func openDashboard() {
+        let command = "\\(shellQuote(actionScript)) ui; echo; echo 'SKS dashboard requested.'"
+        runInTerminal(command)
+        runProcess("/usr/bin/open", ["http://127.0.0.1:4477"])
     }
 
     @objc func openCodexSettings() {

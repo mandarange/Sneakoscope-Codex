@@ -190,6 +190,34 @@ export const ROUTES = [
     examples: ['$SKS show me available workflows']
   },
   {
+    id: 'Planner',
+    command: '$Plan',
+    mode: 'PLAN',
+    route: 'planning-only frontdoor',
+    description: 'Decision-complete planning only. Writes .sneakoscope/plans/<slug>.md and keeps implementation disallowed until $Work runs the plan.',
+    requiredSkills: ['plan', 'honest-mode'],
+    lifecycle: ['plan_intake', 'scope_and_acceptance', 'write_plan_artifact', 'implementation_allowed_false', 'honest_mode'],
+    context7Policy: 'if_external_docs',
+    reasoningPolicy: 'high',
+    stopGate: 'plan-only',
+    cliEntrypoint: 'Codex App prompt route only: $Plan "task"',
+    examples: ['$Plan "결제 모듈 리팩터"', '$Plan "dashboard polish without editing code"']
+  },
+  {
+    id: 'Review',
+    command: '$Review',
+    mode: 'REVIEW',
+    route: 'machine-first diff review',
+    description: 'Review staged or selected diffs with machine evidence sorted above LLM opinion.',
+    requiredSkills: ['review', 'honest-mode'],
+    lifecycle: ['diff_collection', 'machine_checks', 'read_only_review_lenses', 'dedupe_findings', 'optional_one_fix_attempt', 'review_report'],
+    context7Policy: 'optional',
+    reasoningPolicy: 'high',
+    stopGate: 'review-report.json',
+    cliEntrypoint: 'sks review [--staged|--diff <ref>] [--fix] [--json]',
+    examples: ['$Review', 'sks review --staged']
+  },
+  {
     id: 'FastMode',
     command: '$Fast-Mode',
     mode: 'FAST_MODE',
@@ -248,14 +276,14 @@ export const ROUTES = [
     route: 'hardware-safe massive parallel work swarm',
     description: '$Naruto mode launches a hardware-safe massive parallel work swarm. Clones may implement, modify, verify, test, research, document, and resolve conflicts according to role and lease policy; write-capable output is accepted only through patch envelopes, verification DAG, mutation guard, and GPT final arbiter.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
-    dollarAliases: ['$ShadowClone', '$Kagebunshin'],
-    appSkillAliases: ['shadow-clone', 'kage-bunshin'],
+    dollarAliases: ['$ShadowClone', '$Kagebunshin', '$Work', '$Swarm'],
+    appSkillAliases: ['shadow-clone', 'kage-bunshin', 'work', 'swarm'],
     lifecycle: ['clone_roster_build', 'massive_work_graph', 'hardware_safe_governor', 'dynamic_active_pool', 'lease_based_write_swarm', 'parallel_verification_dag', 'gpt_final_arbiter_pack', 'per_clone_proof', 'session_cleanup', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
     cliEntrypoint: 'sks naruto run "task" [--clones N] [--backend codex-sdk|fake|ollama] [--parallel-write] | sks naruto status',
-    examples: ['$Naruto run sweep the codebase for TODO comments with 50 clones', '$ShadowClone --clones 100 fan out and draft tests for every module']
+    examples: ['$Naruto run sweep the codebase for TODO comments with 50 clones', '$Work', '$Swarm "fix all lint errors"']
   },
   {
     id: 'ReleaseReview',
@@ -544,7 +572,10 @@ export const COMMAND_CATALOG = [
   { name: 'triwiki', usage: 'sks triwiki index|affected|proof-bank [--json]', description: 'Inspect TriWiki module cards, gate impact maps, affected graphs, and proof bank status.' },
   { name: 'daemon', usage: 'sks daemon status|warm|stop [--json]', description: 'Inspect or warm the local SKS daemon cache state for build/proof reuse.' },
   { name: 'run', usage: 'sks run "task" [--visual|--research|--db] [--json]', description: 'Classify a plain-language task, materialize a mission, and route it through the SKS trust kernel.' },
+  { name: 'plan', usage: 'sks plan "task" [--json]', description: 'Write a planning-only artifact under .sneakoscope/plans without editing code.' },
   { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, native agent, image voxel, DB safety, and next action.' },
+  { name: 'review', usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]', description: 'Review a diff with machine-evidence findings sorted above LLM review notes.' },
+  { name: 'ui', usage: 'sks ui [--port 4477] [--mission latest] [--once] [--json]', description: 'Open the localhost SKS dashboard with live swarm slots, events, and gate status.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
@@ -608,6 +639,7 @@ export const COMMAND_CATALOG = [
   { name: 'rust', usage: 'sks rust status|smoke [--json] [--require-native]', description: 'Inspect optional Rust accelerator availability and verify JS fallback parity for image hash, voxel validation, and secret scanning.' },
   { name: 'validate-artifacts', usage: 'sks validate-artifacts [mission-id|latest] [--json]', description: 'Validate schema-backed mission artifacts for work orders, effort decisions, visual maps, dogfood reports, skills, mistake memory, Team dashboard state, and Honest Mode.' },
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
+  { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or rollback native multi-session agent missions with agents as target active slots, work items as the route queue size, cleanup executor proof for stale runtime resources, and patch rollback proof for applied patch entries.' },
   { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; observation subcommands remain for old Team missions.' },
@@ -634,6 +666,8 @@ export function routeById(id: any): any {
 export function routeByDollarCommand(commandName: any): any {
   const key = String(commandName || '').replace(/^\$/, '').toLowerCase();
   if (key === 'team' || key === 'from-chat-img') return routeById('Naruto');
+  if (key === 'work' || key === 'swarm') return routeById('Naruto');
+  if (key === 'plan') return routeById('Planner');
   return ROUTES.find((route: any) => [
     dollarSkillName(route.command),
     ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
@@ -761,6 +795,9 @@ export function looksLikeUltraSearchRequest(prompt: any = '') {
 
 export function routePrompt(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
+  if (/^\$?plan\b/i.test(text)) return routeById('Planner');
+  if (/^\$?work\b/i.test(text)) return routeById('Naruto');
+  if (/^\$?swarm\b/i.test(text)) return routeById('Naruto');
   const command = dollarCommand(text);
   if (command) {
     if (command === 'MAD-SKS') {

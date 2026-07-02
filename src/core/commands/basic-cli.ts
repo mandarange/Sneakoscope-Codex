@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { COMMANDS, LEGACY_COMMAND_ALIASES, type CommandEntry } from '../../cli/command-registry.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
+import { ui as cliUi } from '../../cli/cli-theme.js';
 import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
@@ -119,6 +120,8 @@ For implementation work, use Codex App prompt routes such as $Naruto, $Goal, $QA
 export async function updateCheckCommand(args: any = []) {
   const result = await runSksUpdateCheck();
   if (flag(args, '--json')) return printJson(result);
+  cliUi.banner('update');
+  result.update_available ? cliUi.warn('update available') : cliUi.ok('already current or no update required');
   console.log(`${sksTextLogo()}\n\n${formatSksUpdateCheckText(result)}`);
 }
 
@@ -144,6 +147,8 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
     maxOutputBytes: 128 * 1024
   }));
   if (flag(effectiveArgs, '--json')) return printJson(result);
+  cliUi.banner('update');
+  result.ok ? cliUi.ok(result.status) : cliUi.fail(result.status || 'failed');
   console.log(`${sksTextLogo()}\n`);
   console.log(`SKS update ${result.status}`);
   if (result.command) console.log(`Command: ${result.command}`);

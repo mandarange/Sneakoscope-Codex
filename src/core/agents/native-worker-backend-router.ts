@@ -10,6 +10,8 @@ import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-pa
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { leanEngineeringCompactText, leanPolicyReference } from '../lean-engineering-policy.js'
+import { readLbHealth } from '../codex-lb/codex-lb-env.js'
+import { categoryForWorkerRole, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -38,6 +40,7 @@ export async function runNativeWorkerBackendRouter(input: {
   let patchEnvelopes: AgentPatchEnvelope[] = []
   let proofLevel = 'blocked'
   let outputLastMessagePath: string | null = null
+  let modelRouting: { category: TaskCategory; choice: ModelChoice; reason: string; explicit: boolean; lb_health: any } | null = null
 
   if (!input.guard?.ok) {
     result = validateAgentWorkerResult(blockedResult(input, ['native_cli_worker_recursion_guard_missing']))
@@ -101,6 +104,7 @@ export async function runNativeWorkerBackendRouter(input: {
     })
   } else if (backend === 'codex-sdk' || backend === 'zellij' || backend === 'local-llm') {
     const localPreferred = backend === 'local-llm'
+    modelRouting = await resolveWorkerModelRouting(input)
     const sdkTask = await runCodexTask({
       route: String(input.intake.route || '$Agent'),
       tier: 'worker',
@@ -111,6 +115,10 @@ export async function runNativeWorkerBackendRouter(input: {
       sessionId: String(input.agent.session_id || ''),
       cwd: String(input.intake.cwd || root),
       prompt: buildWorkerPrompt(input.slice),
+      model: modelRouting.choice.model,
+      reasoningEffort: modelRouting.choice.reasoning,
+      modelReasoningEffort: modelRouting.choice.reasoning,
+      serviceTier: modelRouting.choice.serviceTier,
       inputFiles: input.intake.input_files || [],
       inputImages: input.intake.input_images || [],
       outputSchemaId: CODEX_AGENT_WORKER_RESULT_SCHEMA_ID,
@@ -122,6 +130,8 @@ export async function runNativeWorkerBackendRouter(input: {
         read_only: !hasWriteLease(input.slice, input.intake),
         allowed_paths: writePaths(input.slice, input.intake),
         write_paths: writePaths(input.slice, input.intake),
+        model_route_reason: modelRouting.reason,
+        service_tier: modelRouting.choice.serviceTier,
         user_confirmed_full_access: false,
         mad_sks_authorized: input.intake.mad_sks_authorized === true || process.env.SKS_MAD_SKS_ACTIVE === '1'
       },
@@ -153,6 +163,10 @@ export async function runNativeWorkerBackendRouter(input: {
       structured_output_valid: sdkTask.structuredOutputValid,
       worker_result_path: sdkTask.workerResultPath,
       patch_envelope_path: sdkTask.patchEnvelopePath || null,
+      model: modelRouting.choice.model,
+      model_reasoning_effort: modelRouting.choice.reasoning,
+      service_tier: modelRouting.choice.serviceTier,
+      model_route_reason: modelRouting.reason,
       blockers: sdkTask.blockers
     }
     childReports = [sdkReport]
@@ -229,7 +243,11 @@ export async function runNativeWorkerBackendRouter(input: {
     proof_level: proofLevel,
     lean_engineering_policy: leanPolicyReference(),
     fast_mode: input.fastModePolicy.fast_mode,
-    service_tier: input.fastModePolicy.service_tier,
+    service_tier: modelRouting?.choice.serviceTier || input.fastModePolicy.service_tier,
+    model: modelRouting?.choice.model || input.agent.model || null,
+    model_reasoning_effort: modelRouting?.choice.reasoning || input.agent.model_reasoning_effort || null,
+    model_route_reason: modelRouting?.reason || null,
+    model_route_category: modelRouting?.category || null,
     sdk_thread_id: childReports.find((report) => report?.sdk_thread_id)?.sdk_thread_id || null,
     sdk_run_id: childReports.find((report) => report?.sdk_run_id)?.sdk_run_id || null,
     stream_event_count: Number(childReports.find((report) => report?.stream_event_count)?.stream_event_count || 0),
@@ -248,6 +266,47 @@ export async function runNativeWorkerBackendRouter(input: {
     reportRel,
     patchEnvelopes
   }
+}
+
+async function resolveWorkerModelRouting(input: {
+  agent: any
+  slice: any
+  intake: any
+  fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
+}) {
+  const category = categoryForWorkerRole(String(input.agent?.role || input.slice?.role || input.slice?.type || input.agent?.persona_id || 'executor'))
+  const lbHealth = await readLbHealth().catch(() => null)
+  const explicitModel = String(process.env.SKS_WORKER_MODEL || process.env.SKS_AGENT_MODEL || '').trim()
+  const explicitReasoning = normalizeModelReasoning(process.env.SKS_WORKER_REASONING || process.env.SKS_WORKER_MODEL_REASONING || '')
+  const explicitTier = normalizeServiceTier(process.env.SKS_WORKER_SERVICE_TIER || process.env.SKS_SERVICE_TIER || '')
+  const routed = explicitModel
+    ? {
+        model: explicitModel,
+        reasoning: explicitReasoning || normalizeModelReasoning(input.agent?.model_reasoning_effort) || 'medium',
+        serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
+      } satisfies ModelChoice
+    : await routeModel(category, { lbHealth })
+  return {
+    category,
+    choice: routed,
+    explicit: Boolean(explicitModel),
+    lb_health: lbHealth,
+    reason: modelRouteReason(category, routed, {
+      explicit: Boolean(explicitModel),
+      quotaLow: lbHealth?.quota_low === true,
+      degraded: lbHealth?.degraded_models || []
+    })
+  }
+}
+
+function normalizeModelReasoning(value: unknown): ModelChoice['reasoning'] | null {
+  const text = String(value || '').toLowerCase()
+  return text === 'low' || text === 'medium' || text === 'high' || text === 'xhigh' ? text : null
+}
+
+function normalizeServiceTier(value: unknown): ModelChoice['serviceTier'] | null {
+  const text = String(value || '').toLowerCase()
+  return text === 'standard' ? 'standard' : text === 'fast' || text === 'priority' ? 'fast' : null
 }
 
 async function maybeAutoSelectOllamaBackend(backend: ReturnType<typeof normalizeBackend>, input: {

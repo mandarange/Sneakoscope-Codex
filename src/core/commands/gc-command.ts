@@ -1,8 +1,19 @@
-import { dirSize, formatBytes, packageRoot, sksRoot } from '../fsx.js';
+import { dirSize, formatBytes, packageRoot, projectRoot, sksRoot } from '../fsx.js';
 import { enforceRetention, storageReport } from '../retention.js';
 import { flag } from './command-utils.js';
+import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 
-export async function memoryCommand(_sub: any, args: any = []) {
+export async function memoryCommand(sub: any, args: any = []) {
+  const action = String(sub || '').toLowerCase();
+  if (['build', 'project', 'agents', 'agents-md'].includes(action)) {
+    const root = await projectRoot();
+    const result = await projectTriwikiToAgentsMd(root, { maxLocalFiles: Number(readOption(args, '--max-local-files', 8)) });
+    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    console.log(`SKS memory build: ${result.ok ? 'ok' : result.reason}`);
+    for (const file of result.written) console.log(`- ${file}`);
+    if (!result.ok) process.exitCode = 1;
+    return result;
+  }
   return gcCommand(args || []);
 }
 
@@ -15,6 +26,13 @@ export async function gcCommand(args: any = []) {
   console.log(`Actions: ${res.actions.length}`);
   console.log(`Protected: ${res.cleanup.protected_durable_context.length} durable context classes`);
   for (const a of res.actions.slice(0, 20)) console.log(`- ${a.action} ${a.path || a.mission || ''} ${a.bytes ? formatBytes(a.bytes) : ''}`);
+}
+
+function readOption(args: any[] = [], name: string, fallback: unknown = null) {
+  const index = args.indexOf(name);
+  if (index >= 0 && args[index + 1] && !String(args[index + 1]).startsWith('--')) return args[index + 1];
+  const prefixed = args.find((arg) => String(arg).startsWith(`${name}=`));
+  return prefixed ? String(prefixed).slice(name.length + 1) : fallback;
 }
 
 export async function statsCommand(args: any = []) {
