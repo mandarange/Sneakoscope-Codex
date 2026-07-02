@@ -180,8 +180,18 @@ function buildNarutoWorkerPrompt(item: any, parentPrompt?: string) {
       ? 'If changes are needed, return model-authored patch_envelopes scoped to write paths.'
       : 'This is read-only work. Do not mutate files and return an empty patch_envelopes array.',
     writeAllowed
+      ? 'Before changing exported signatures, inspect references and include cochanged callers in the same patch; only set cochange_acknowledged with a concrete compatibility reason.'
+      : null,
+    /bug|fix|regression|broken|버그|수정/i.test(String(item?.kind || '') + ' ' + String(item?.title || ''))
+      ? 'Bugfix protocol: first add a regression test, record failed_before and passed_after in regression_proof, then patch the bug.'
+      : null,
+    /repair|conflict|fix/i.test(String(item?.kind || '') + ' ' + String(item?.title || ''))
+      ? 'Repair protocol: write repair_hypothesis before patching, including failure, hypotheses, chosen evidence, and minimal_probe.'
+      : null,
+    writeAllowed
       ? null
       : 'For read-only work, inspect requested files/artifacts only; do not run package scripts, build commands, tests, or temp-file-creating checks unless the parent objective explicitly requires them.',
+    'Impact scan, machine feedback, diff-quality, mistake-rule, TDD, and repair-hypothesis gates run before patch queue acceptance.',
     'Include verification checks, rollback notes, blockers, findings, and changed_files.'
   ].filter(Boolean).join('\n')
 }

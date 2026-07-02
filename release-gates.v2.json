@@ -5803,6 +5803,39 @@
       "preset": [
         "release"
       ]
+    },
+    {
+      "id": "coding-bench",
+      "command": "node ./dist/scripts/coding-bench-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-heavy",
+        "fs-read",
+        "git"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 900000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "config/bench-baseline.json",
+          "bench/tasks/**",
+          "src/scripts/coding-bench-check.ts",
+          "src/core/verification/**",
+          "src/core/naruto/**",
+          "src/core/agents/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "bench"
+      ]
     }
   ]
 }

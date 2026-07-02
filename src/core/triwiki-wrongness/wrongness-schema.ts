@@ -186,6 +186,8 @@ export interface WrongnessRecord {
   avoidance_rule: WrongnessAvoidanceRule;
   correction: WrongnessCorrection;
   links: WrongnessLinks;
+  rule_compiled?: boolean;
+  compiled_rule_id?: string | null;
 }
 
 export interface WrongnessLedger {
@@ -234,7 +236,9 @@ export function createWrongnessRecord(input: unknown = {}): WrongnessRecord {
     corrective_action: normalizeCorrectiveAction(row.corrective_action),
     avoidance_rule: normalizeAvoidanceRule(row.avoidance_rule, kind, avoidanceText, severity),
     correction: normalizeCorrection(row.correction ?? row.corrected_anchor),
-    links: normalizeLinks(row.links)
+    links: normalizeLinks(row.links),
+    ...(row.rule_compiled === undefined ? {} : { rule_compiled: Boolean(row.rule_compiled) }),
+    ...(row.compiled_rule_id === undefined ? {} : { compiled_rule_id: stringOrNull(row.compiled_rule_id) })
   };
 }
 

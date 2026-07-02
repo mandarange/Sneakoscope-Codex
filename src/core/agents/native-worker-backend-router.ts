@@ -361,6 +361,12 @@ function buildWorkerPrompt(slice: any) {
     write.length
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
       : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; do not report pre-existing repository dirtiness as changed_files.`,
+    write.length
+      ? 'Quality gates run before queue acceptance: impact-scan requires cochanged callers for exported signature changes, machine-feedback runs type/lint/related tests, diff-quality blocks dead exports, and compiled mistake rules block repeated mistakes.'
+      : '',
+    write.length
+      ? 'If this is a bugfix, create a regression test first and include regression_proof with failed_before true and passed_after true. For repair work, include repair_hypothesis before patching.'
+      : '',
     leanEngineeringCompactText(),
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')

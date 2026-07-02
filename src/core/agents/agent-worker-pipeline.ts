@@ -30,6 +30,7 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     session_id: String(result?.session_id || 'unknown'),
     persona_id: String(result?.persona_id || result?.agent_id || 'unknown'),
     task_slice_id: String(result?.task_slice_id || 'unknown'),
+    ...(result?.work_item_kind === undefined ? {} : { work_item_kind: String(result.work_item_kind) }),
     status: guard.ok ? (result?.status === undefined ? 'done' : String(result.status) as AgentRunnerResult['status']) : 'blocked',
     backend: result?.backend || 'fake',
     summary: String(result?.summary || ''),
@@ -55,6 +56,10 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     ...(result?.model_authored_patch_envelopes === undefined ? {} : { model_authored_patch_envelopes: Boolean(result.model_authored_patch_envelopes) }),
     ...(result?.fixture_patch_envelopes === undefined ? {} : { fixture_patch_envelopes: Boolean(result.fixture_patch_envelopes) }),
     ...(result?.no_patch_reason === undefined ? {} : { no_patch_reason: result.no_patch_reason }),
+    ...(result?.machine_feedback === undefined ? {} : { machine_feedback: result.machine_feedback }),
+    ...(result?.regression_proof === undefined ? {} : { regression_proof: result.regression_proof }),
+    ...(result?.repair_hypothesis === undefined ? {} : { repair_hypothesis: result.repair_hypothesis }),
+    ...(result?.tournament === undefined ? {} : { tournament: result.tournament }),
     ...(result?.source_intelligence_refs === undefined ? {} : { source_intelligence_refs: result.source_intelligence_refs }),
     ...(result?.goal_mode_ref === undefined ? {} : { goal_mode_ref: result.goal_mode_ref }),
     ...(result?.follow_up_work_items === undefined ? {} : { follow_up_work_items: followUps.accepted }),
@@ -72,6 +77,12 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     normalized.blockers.push(...patchEnvelopeValidation.blockers.map((issue) => 'patch_envelope_invalid:' + issue))
     normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-patch-envelope-schema'] }
   }
+  const protocolBlockers = qualityProtocolBlockers(normalized);
+  if (protocolBlockers.length) {
+    normalized.status = 'blocked';
+    normalized.blockers.push(...protocolBlockers);
+    normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-worker-quality-protocol'] };
+  }
   const readOnlyOrNoopWithoutPatch = acceptsNoPatchReadOnlyOrNoop(result?.no_patch_reason)
   if (patchEnvelopeValidation.envelopes.length === 0 && (normalized.writes.length > 0 || (!readOnlyOrNoopWithoutPatch && normalized.changed_files.length > 0))) {
     normalized.status = 'blocked'
@@ -85,6 +96,23 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     normalized.verification = { status: 'failed', checks: [...normalized.verification.checks, 'agent-result-schema'] }
   }
   return normalized
+}
+
+function qualityProtocolBlockers(result: AgentRunnerResult): string[] {
+  const writesPatch = result.writes.length > 0 || result.changed_files.length > 0 || Boolean(result.patch_envelopes?.length);
+  if (!writesPatch) return [];
+  const kind = String(result.work_item_kind || result.naruto_runtime?.work_item_kind || '').toLowerCase();
+  const text = [kind, result.task_slice_id].join(' ').toLowerCase();
+  const proof = result.regression_proof || result.patch_envelopes?.find((envelope) => envelope.regression_proof)?.regression_proof || null;
+  const repair = result.repair_hypothesis || result.patch_envelopes?.find((envelope) => envelope.repair_hypothesis)?.repair_hypothesis || null;
+  const blockers: string[] = [];
+  if ((kind === 'bugfix' || /\b(fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text)) && !validRegressionProof(proof)) blockers.push('tdd_evidence_missing');
+  if ((kind === 'conflict_resolution' || /\b(repair|conflict|rebase|rollback)\b|수리|충돌/.test(text)) && !repair) blockers.push('repair_without_hypothesis');
+  return blockers;
+}
+
+function validRegressionProof(proof: any): boolean {
+  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim());
 }
 
 export function agentWorkerPipelineContract() {
@@ -101,7 +129,7 @@ export function agentWorkerPipelineContract() {
       required_for_write_tasks: true,
       envelope_schema: 'sks.agent-patch-envelope.v1',
       metadata: ['agent_id', 'session_id', 'slot_id', 'generation_index', 'lease_id_or_lease_proof'],
-      optional_hints: ['rationale', 'verification_hint', 'rollback_hint']
+      optional_hints: ['rationale', 'verification_hint', 'rollback_hint', 'cochange_acknowledged_reason', 'regression_proof', 'repair_hypothesis']
     }
   }
 }
@@ -116,7 +144,12 @@ function normalizePatchEnvelopes(value: any) {
     ...(raw?.generation_index === undefined ? {} : { generation_index: Number(raw.generation_index) }),
     ...(raw?.task_slice_id === undefined ? {} : { task_slice_id: String(raw.task_slice_id) }),
     ...(raw?.verification_hint === undefined ? {} : { verification_hint: raw.verification_hint }),
-    ...(raw?.rollback_hint === undefined ? {} : { rollback_hint: raw.rollback_hint })
+    ...(raw?.rollback_hint === undefined ? {} : { rollback_hint: raw.rollback_hint }),
+    ...(raw?.cochange_acknowledged === undefined ? {} : { cochange_acknowledged: Boolean(raw.cochange_acknowledged) }),
+    ...(raw?.cochange_acknowledged_reason === undefined ? {} : { cochange_acknowledged_reason: String(raw.cochange_acknowledged_reason) }),
+    ...(raw?.regression_proof === undefined ? {} : { regression_proof: raw.regression_proof }),
+    ...(raw?.repair_hypothesis === undefined ? {} : { repair_hypothesis: raw.repair_hypothesis }),
+    ...(raw?.tournament === undefined ? {} : { tournament: raw.tournament })
   })) : []
   const blockers = envelopes.flatMap((envelope, index) => {
     const validation = validateAgentPatchEnvelope(envelope)

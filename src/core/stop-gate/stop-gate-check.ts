@@ -148,12 +148,16 @@ export async function checkStopGate(input: {
   if (normalizedGate.passed !== true) missingFields.push('passed');
   if (normalizedGate.blockers.length > 0) missingFields.push('blockers');
   if (normalizedGate.missing_fields.length > 0) missingFields.push(...normalizedGate.missing_fields.map((field) => `missing_fields:${field}`));
+  const bugfixMission = await missionHasBugfixWork(root, missionId, normalizedGate);
+  if (bugfixMission && normalizedGate.evidence.regression_test_added !== true) missingFields.push('regression_test_added');
+  if (bugfixMission && normalizedGate.evidence.regression_test_failed_before_fix !== true) missingFields.push('regression_test_failed_before_fix');
 
   if (
     normalizedGate.status === 'passed'
     && normalizedGate.passed === true
     && normalizedGate.blockers.length === 0
     && normalizedGate.missing_fields.length === 0
+    && missingFields.length === 0
   ) {
     const action: StopGateAction = 'allow_stop';
     const diagnostics: StopGateDiagnostics = {
@@ -216,6 +220,14 @@ export async function checkStopGate(input: {
     diagnostics,
     feedback: `Stop blocked: gate not passed. Selected: ${resolution.gate_path}. Missing fields: ${missingFields.join(', ') || 'none'}. Checked: ${resolution.checked_paths.join(', ')}`,
   };
+}
+
+async function missionHasBugfixWork(root: string, missionId: string | null, gate: SksStopGateV1): Promise<boolean> {
+  const evidence = gate.evidence as Record<string, unknown>;
+  if (evidence.regression_test_added !== undefined || evidence.regression_test_failed_before_fix !== undefined) return true;
+  if (!missionId) return false;
+  const graph = await readJson<any>(path.join(missionDir(root, missionId), 'agents', 'naruto-work-graph.json'), null);
+  return Array.isArray(graph?.work_items) && graph.work_items.some((item: any) => String(item?.kind || '') === 'bugfix');
 }
 
 async function writeDiagnostics(root: string, missionId: string | null, diagnostics: StopGateDiagnostics): Promise<void> {

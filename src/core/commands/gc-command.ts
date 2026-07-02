@@ -2,17 +2,23 @@ import { dirSize, formatBytes, packageRoot, projectRoot, sksRoot } from '../fsx.
 import { enforceRetention, storageReport } from '../retention.js';
 import { flag } from './command-utils.js';
 import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
+import { compileMistakeRules } from '../verification/mistake-rule-compiler.js';
 
 export async function memoryCommand(sub: any, args: any = []) {
   const action = String(sub || '').toLowerCase();
   if (['build', 'project', 'agents', 'agents-md'].includes(action)) {
     const root = await projectRoot();
-    const result = await projectTriwikiToAgentsMd(root, { maxLocalFiles: Number(readOption(args, '--max-local-files', 8)) });
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    const [result, rules] = await Promise.all([
+      projectTriwikiToAgentsMd(root, { maxLocalFiles: Number(readOption(args, '--max-local-files', 8)) }),
+      compileMistakeRules(root).catch((err) => ({ compiled: [], skipped: [`compile_failed:${err instanceof Error ? err.message : String(err)}`] }))
+    ]);
+    const output = { ...result, mistake_rules: rules };
+    if (flag(args, '--json')) return console.log(JSON.stringify(output, null, 2));
     console.log(`SKS memory build: ${result.ok ? 'ok' : result.reason}`);
     for (const file of result.written) console.log(`- ${file}`);
+    console.log(`- mistake rules compiled: ${rules.compiled.length}, skipped: ${rules.skipped.length}`);
     if (!result.ok) process.exitCode = 1;
-    return result;
+    return output;
   }
   return gcCommand(args || []);
 }

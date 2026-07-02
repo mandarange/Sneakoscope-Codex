@@ -1,0 +1,12 @@
+{
+  "schema": "sks.bench-task.v1",
+  "id": "t06-mistake-rule",
+  "kind": "bugfix",
+  "prompt": "빈 catch로 오류가 삼켜진다. 과거 실수 규칙에 걸리지 않도록 명시적 처리를 추가하라.",
+  "success": {
+    "command": "npm test --silent",
+    "must_pass": true,
+    "max_diff_lines": 50,
+    "forbidden_patterns": ["catch \\([^)]*\\) \\{\\s*\\}"]
+  }
+}

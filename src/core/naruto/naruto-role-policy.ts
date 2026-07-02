@@ -53,6 +53,8 @@ export function narutoRoleAllowsWrite(role: NarutoWorkerRole): boolean {
 
 export function mapWorkKindToNarutoRole(kind: NarutoWorkKind): NarutoWorkerRole {
   switch (kind) {
+    case 'bugfix':
+    case 'feature':
     case 'implementation':
       return 'implementer'
     case 'code_modification':
@@ -70,6 +72,7 @@ export function mapWorkKindToNarutoRole(kind: NarutoWorkKind): NarutoWorkerRole 
     case 'research':
       return 'researcher'
     case 'documentation':
+    case 'chore':
       return 'modifier'
     case 'conflict_resolution':
       return 'conflict_resolver'
@@ -142,4 +145,3 @@ export function buildNarutoRoleDistribution(workItems: NarutoWorkItem[], opts: {
     blockers
   }
 }
-

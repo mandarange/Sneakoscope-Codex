@@ -23,6 +23,10 @@ export async function runFakeAgent(agent: any, slice: any, opts: any = {}) {
     unverified: ['fake backend does not prove real parallel execution'],
     writes: [],
     ...(patchEnvelopes.length ? { patch_envelopes: patchEnvelopes } : {}),
+    ...(isBugfixSlice(slice) && patchEnvelopes.length ? { regression_proof: fixtureRegressionProof(slice) } : {}),
+    ...(isRepairSlice(slice) && patchEnvelopes.length ? { repair_hypothesis: fixtureRepairHypothesis(slice) } : {}),
+    ...(slice?.work_item_kind ? { work_item_kind: String(slice.work_item_kind) } : {}),
+    ...(slice?.tournament_group_id ? { tournament: fixtureTournament(slice) } : {}),
     source_intelligence_refs: agent.source_intelligence_refs || null,
     goal_mode_ref: agent.goal_mode_ref || null,
     ...(opts.emitFollowUpWorkItems ? { follow_up_work_items: [buildFixtureFollowUp(agent, slice)] } : {}),
@@ -96,9 +100,50 @@ export function buildFixturePatchEnvelopes(agent: any, slice: any, opts: any = {
         path: file,
         content: `patched by ${String(agent.id)} for ${String(slice?.id || 'fixture')}\n`
       }],
+      ...(isBugfixSlice(slice) ? { regression_proof: fixtureRegressionProof(slice) } : {}),
+      ...(isRepairSlice(slice) ? { repair_hypothesis: fixtureRepairHypothesis(slice) } : {}),
+      ...(slice?.tournament_group_id ? { tournament: fixtureTournament(slice) } : {}),
       rationale: 'Fixture patch envelope emitted by fake backend for a leased write task.',
       verification_hint: { node_id: verificationNodeId, expected_status: 'applied_hashes_recorded' },
       rollback_hint: { node_id: rollbackNodeId, strategy: 'restore content_before or delete newly created file' }
     }
   })
+}
+
+function isBugfixSlice(slice: any): boolean {
+  const text = `${String(slice?.work_item_kind || '')} ${String(slice?.title || '')}`.toLowerCase()
+  return /\b(bugfix|fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text)
+}
+
+function isRepairSlice(slice: any): boolean {
+  const text = `${String(slice?.work_item_kind || '')} ${String(slice?.title || '')}`.toLowerCase()
+  return /\b(conflict_resolution|repair|conflict|rebase|rollback)\b|수리|충돌/.test(text)
+}
+
+function fixtureRegressionProof(slice: any) {
+  return {
+    test_file: String(slice?.target_paths?.[0] || slice?.write_paths?.[0] || 'fixture.test.js'),
+    failed_before: true,
+    passed_after: true,
+    output_digest: 'fixture-regression-proof'
+  }
+}
+
+function fixtureRepairHypothesis(slice: any) {
+  return {
+    failure: 'fixture repair target',
+    hypotheses: [{ cause: 'fixture conflict', evidence_for: 'simulated failed worker', evidence_against: 'none' }],
+    chosen: 'fixture conflict',
+    minimal_probe: String(slice?.id || 'fixture')
+  }
+}
+
+function fixtureTournament(slice: any) {
+  return {
+    schema: 'sks.solution-tournament-candidate.v1',
+    group_id: String(slice.tournament_group_id),
+    candidate_index: Number(slice.tournament_candidate_index || 1),
+    candidate_count: Number(slice.tournament_candidate_count || 1),
+    approach: String(slice.approach_directive || '')
+  }
 }

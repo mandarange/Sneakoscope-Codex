@@ -1,0 +1,12 @@
+{
+  "schema": "sks.bench-task.v1",
+  "id": "t05-performance",
+  "kind": "bugfix",
+  "prompt": "countPairs가 큰 입력에서 시간 초과된다. 동작을 유지하면서 기준 시간 안에 들어오게 고쳐라.",
+  "success": {
+    "command": "npm test --silent",
+    "must_pass": true,
+    "max_diff_lines": 80,
+    "forbidden_patterns": ["setTimeout", "catch \\{\\s*\\}"]
+  }
+}

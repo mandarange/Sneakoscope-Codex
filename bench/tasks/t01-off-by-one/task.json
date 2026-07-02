@@ -1,0 +1,13 @@
+{
+  "schema": "sks.bench-task.v1",
+  "id": "t01-off-by-one",
+  "kind": "bugfix",
+  "prompt": "pagination이 마지막 페이지 항목 1개를 누락한다. 재현 테스트를 먼저 추가하고 고쳐라.",
+  "success": {
+    "command": "npm test --silent",
+    "must_pass": true,
+    "must_contain_new_test": true,
+    "max_diff_lines": 60,
+    "forbidden_patterns": ["catch \\{\\s*\\}"]
+  }
+}

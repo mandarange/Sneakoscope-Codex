@@ -1,0 +1,12 @@
+{
+  "schema": "sks.bench-task.v1",
+  "id": "t02-signature-cochange",
+  "kind": "feature",
+  "prompt": "formatUserLabel이 role을 받도록 시그니처를 바꾸고 참조 3곳을 함께 수정하라.",
+  "success": {
+    "command": "npm test --silent",
+    "must_pass": true,
+    "max_diff_lines": 90,
+    "forbidden_patterns": ["catch \\{\\s*\\}"]
+  }
+}

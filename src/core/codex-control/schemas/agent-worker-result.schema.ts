@@ -4,7 +4,7 @@ const patchOperationSchema = {
   type: 'object',
   required: ['op', 'path', 'search', 'replace', 'content', 'diff'],
   properties: {
-    op: { type: 'string', enum: ['replace', 'write', 'unified_diff'] },
+    op: { type: 'string', enum: ['replace', 'write', 'unified_diff', 'git_apply_patch'] },
     path: { type: 'string' },
     search: { type: 'string' },
     replace: { type: 'string' },
@@ -40,7 +40,12 @@ const patchEnvelopeSchema = {
     lease_id: { type: 'string' },
     allowed_paths: { type: 'array', items: { type: 'string' } },
     operations: { type: 'array', items: patchOperationSchema },
-    rationale: { type: 'string' }
+    rationale: { type: 'string' },
+    cochange_acknowledged: { type: 'boolean' },
+    cochange_acknowledged_reason: { type: 'string' },
+    regression_proof: { type: 'object', additionalProperties: true },
+    repair_hypothesis: { type: 'object', additionalProperties: true },
+    tournament: { type: 'object', additionalProperties: true }
   },
   additionalProperties: false
 } as const
@@ -73,7 +78,11 @@ export const codexAgentWorkerResultSchema = {
       additionalProperties: false
     },
     rollback_notes: { type: 'array', items: { type: 'string' } },
-    blockers: { type: 'array', items: { type: 'string' } }
+    blockers: { type: 'array', items: { type: 'string' } },
+    work_item_kind: { type: 'string' },
+    regression_proof: { type: 'object', additionalProperties: true },
+    repair_hypothesis: { type: 'object', additionalProperties: true },
+    tournament: { type: 'object', additionalProperties: true }
   },
   additionalProperties: false
 } as const

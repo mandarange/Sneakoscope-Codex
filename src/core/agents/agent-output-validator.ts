@@ -33,6 +33,7 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     session_id: { type: 'string', minLength: 1 },
     persona_id: { type: 'string' },
     task_slice_id: { type: 'string' },
+    work_item_kind: { type: 'string' },
     status: { enum: ['done', 'blocked', 'failed'] },
     backend: { enum: ['fake', 'process', 'codex-sdk', 'python-codex-sdk', 'zellij', 'ollama', 'local-llm'] },
     summary: { type: 'string' },
@@ -79,7 +80,7 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
         required: ['schema', 'agent_id', 'session_id', 'slot_id', 'generation_index', 'operations'],
         properties: {
           schema: { const: 'sks.agent-patch-envelope.v1' },
-          source: { enum: ['fixture', 'model_authored', 'process_generated', 'zellij_generated'] },
+          source: { enum: ['fixture', 'model_authored', 'process_generated', 'zellij_generated', 'git-worktree-diff'] },
           mission_id: { type: 'string' },
           route: { type: 'string' },
           agent_id: { type: 'string', minLength: 1 },
@@ -124,7 +125,7 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
               type: 'object',
               required: ['op', 'path'],
               properties: {
-                op: { enum: ['replace', 'write', 'unified_diff'] },
+                op: { enum: ['replace', 'write', 'unified_diff', 'git_apply_patch'] },
                 path: { type: 'string', minLength: 1 },
                 search: { type: 'string' },
                 replace: { type: 'string' },
@@ -136,7 +137,13 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
           },
           rationale: { type: 'string' },
           verification_hint: { type: 'object', additionalProperties: { type: 'string' } },
-          rollback_hint: { type: 'object', additionalProperties: { type: 'string' } }
+          rollback_hint: { type: 'object', additionalProperties: { type: 'string' } },
+          cochange_acknowledged: { type: 'boolean' },
+          cochange_acknowledged_reason: { type: 'string' },
+          regression_proof: { type: 'object', additionalProperties: true },
+          repair_hypothesis: { type: 'object', additionalProperties: true },
+          tournament: { type: 'object', additionalProperties: true },
+          git_worktree: { type: 'object', additionalProperties: true }
         },
         additionalProperties: false
       }
@@ -152,6 +159,10 @@ export const AGENT_RESULT_RUNTIME_SCHEMA = {
     model_authored_patch_envelopes: { type: 'boolean' },
     fixture_patch_envelopes: { type: 'boolean' },
     no_patch_reason: { type: 'object', additionalProperties: true },
+    machine_feedback: { type: 'object', additionalProperties: true },
+    regression_proof: { type: 'object', additionalProperties: true },
+    repair_hypothesis: { type: 'object', additionalProperties: true },
+    tournament: { type: 'object', additionalProperties: true },
     follow_up_work_items: {
       type: 'array',
       items: {

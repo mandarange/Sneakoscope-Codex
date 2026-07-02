@@ -17,6 +17,7 @@ export interface AgentPatchQueueEntry {
   envelope: AgentPatchEnvelope
   status: AgentPatchQueueStatus
   violations: string[]
+  quality_reports?: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -32,6 +33,11 @@ export interface AgentPatchQueueEvent {
 export interface AgentPatchQueueEnqueueContext {
   mission_id?: string
   route?: string
+  preflight_violations?: string[]
+  preflight_reports?: Record<string, unknown>
+  work_item_kind?: string
+  regression_proof?: Record<string, unknown>
+  repair_hypothesis?: Record<string, unknown>
 }
 
 export class InMemoryAgentPatchQueue {
@@ -41,6 +47,7 @@ export class InMemoryAgentPatchQueue {
   enqueue(input: any, context: AgentPatchQueueEnqueueContext = {}): AgentPatchQueueEntry {
     const envelope = normalizeAgentPatchEnvelope(input)
     const validation = validateAgentPatchEnvelope(envelope)
+    const preflightViolations = Array.isArray(context.preflight_violations) ? context.preflight_violations.map(String) : []
     const now = new Date().toISOString()
     const leaseId = envelope.lease_id || envelope.lease_proof?.lease_id
     const entry: AgentPatchQueueEntry = {
@@ -54,8 +61,9 @@ export class InMemoryAgentPatchQueue {
       ...(leaseId ? { lease_id: leaseId } : {}),
       write_paths: envelope.operations.map((operation) => operation.path),
       envelope,
-      status: validation.ok ? 'pending' : 'rejected',
-      violations: validation.violations,
+      status: validation.ok && preflightViolations.length === 0 ? 'pending' : 'rejected',
+      violations: [...validation.violations, ...preflightViolations],
+      ...(context.preflight_reports ? { quality_reports: context.preflight_reports } : {}),
       created_at: now,
       updated_at: now
     }
@@ -141,6 +149,7 @@ export function buildAgentPatchOwnershipLedger(entries: AgentPatchQueueEntry[]) 
     status: entry.status,
     created_at: entry.created_at,
     updated_at: entry.updated_at,
-    violations: [...entry.violations]
+    violations: [...entry.violations],
+    quality_reports: entry.quality_reports || null
   }))
 }

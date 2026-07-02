@@ -1,0 +1,13 @@
+{
+  "schema": "sks.bench-task.v1",
+  "id": "t03-type-puzzle",
+  "kind": "bugfix",
+  "prompt": "parsePort가 숫자 0을 유효한 값으로 처리하지 못한다. 회귀 테스트를 추가하고 고쳐라.",
+  "success": {
+    "command": "npm test --silent",
+    "must_pass": true,
+    "must_contain_new_test": true,
+    "max_diff_lines": 60,
+    "forbidden_patterns": ["Number\\([^)]*\\) \\|\\|"]
+  }
+}

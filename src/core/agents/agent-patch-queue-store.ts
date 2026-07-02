@@ -1,7 +1,11 @@
 import path from 'node:path'
-import { appendJsonl, appendJsonlMany, readJson, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, appendJsonlMany, ensureDir, readJson, writeJsonAtomic } from '../fsx.js'
 import { AGENT_PATCH_QUEUE_SCHEMA, InMemoryAgentPatchQueue, buildAgentPatchOwnershipLedger, type AgentPatchQueueEntry, type AgentPatchQueueEvent } from './agent-patch-queue.js'
 import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
+import { normalizeAgentPatchEnvelope } from './agent-patch-schema.js'
+import { scanImpact } from '../verification/impact-scan.js'
+import { runMachineFeedback } from '../verification/machine-feedback.js'
+import { analyzeDiffQuality } from '../verification/diff-quality.js'
 
 export const AGENT_PATCH_QUEUE_ARTIFACT = 'agent-patch-queue.json'
 export const AGENT_PATCH_QUEUE_EVENTS_ARTIFACT = 'agent-patch-queue-events.jsonl'
@@ -18,8 +22,14 @@ export class PersistentAgentPatchQueueStore {
     this.journal = new AgentPatchTransactionJournal(artifactDir)
   }
 
-  async enqueue(input: any, context: { mission_id?: string; route?: string } = {}): Promise<AgentPatchQueueEntry> {
-    const entry = this.queue.enqueue(input, context)
+  async enqueue(input: any, context: { mission_id?: string; route?: string; root?: string; work_item_kind?: string; regression_proof?: Record<string, unknown>; repair_hypothesis?: Record<string, unknown> } = {}): Promise<AgentPatchQueueEntry> {
+    const preflight = await this.runQualityPreflight(input, context)
+    const entry = this.queue.enqueue(input, {
+      ...(context.mission_id ? { mission_id: context.mission_id } : {}),
+      ...(context.route ? { route: context.route } : {}),
+      preflight_violations: preflight.violations,
+      preflight_reports: preflight.reports
+    })
     await this.persistSnapshot()
     await this.appendEvent(this.queue.events.at(-1))
     await this.journal.append({
@@ -32,6 +42,44 @@ export class PersistentAgentPatchQueueStore {
       violations: entry.violations
     })
     return entry
+  }
+
+  private async runQualityPreflight(input: any, context: { root?: string; work_item_kind?: string; regression_proof?: Record<string, unknown>; repair_hypothesis?: Record<string, unknown> } = {}): Promise<{ violations: string[]; reports: Record<string, unknown> }> {
+    const envelope = normalizeAgentPatchEnvelope(input)
+    const changedFiles = changedFilesForEnvelope(envelope)
+    const patchText = patchTextForEnvelope(envelope)
+    const root = envelope.git_worktree?.worktree_path || context.root || process.cwd()
+    const reportDir = path.join(this.artifactDir, 'patch-quality', safeName(`${envelope.agent_id}-${envelope.session_id}-${Date.now()}`))
+    await ensureDir(reportDir)
+    const [impact, diffQuality, feedback] = await Promise.all([
+      scanImpact(root, changedFiles, patchText).catch((err) => ({ schema: 'sks.impact-scan.v1', changed_symbols: [], references: [], cochange_required: [], tool: 'builtin', error: errorMessage(err) })),
+      analyzeDiffQuality({
+        root,
+        changedFiles,
+        patchText,
+        plannedFiles: envelope.allowed_paths || envelope.lease_proof?.allowed_paths || []
+      }).catch((err) => ({ schema: 'sks.diff-quality.v1', minimality: { plan_files: 0, touched_files: changedFiles.length, ratio: 1 }, dead_additions: [], comment_noise: 0, guard_bloat: 0, warnings: [], errors: [`diff_quality_failed:${errorMessage(err)}`] })),
+      runMachineFeedback(root, changedFiles, { timeoutMs: 60_000 }).catch((err) => ({ schema: 'sks.machine-feedback.v1', ok: false, typecheck: { ok: false, errors: [errorMessage(err)] }, lint: { ok: true, errors: [] }, tests: { ok: true, selected: [], failed: [], skipped_reason: 'machine_feedback_exception' }, duration_ms: 0 }))
+    ])
+    await writeJsonAtomic(path.join(reportDir, 'impact-scan.json'), impact)
+    await writeJsonAtomic(path.join(reportDir, 'diff-quality.json'), diffQuality)
+    await writeJsonAtomic(path.join(reportDir, 'machine-feedback.json'), feedback)
+    const cochangeAck = envelope.cochange_acknowledged === true && String(envelope.cochange_acknowledged_reason || '').trim().length > 0
+    const violations = [
+      ...((impact as any).cochange_required?.length && !cochangeAck ? [`impact_scan_cochange_missing:${(impact as any).cochange_required.slice(0, 5).join(',')}`] : []),
+      ...(((diffQuality as any).errors || []).map((issue: string) => `diff_quality:${issue}`)),
+      ...((feedback as any).ok === false ? ['machine_feedback_failed'] : []),
+      ...(isBugfixKind(context.work_item_kind, envelope.task_slice_id) && !validRegressionProof(envelope.regression_proof || context.regression_proof) ? ['tdd_evidence_missing'] : []),
+      ...(isRepairKind(context.work_item_kind, envelope.task_slice_id) && !(envelope.repair_hypothesis || context.repair_hypothesis) ? ['repair_without_hypothesis'] : [])
+    ]
+    return {
+      violations,
+      reports: {
+        impact_scan: path.relative(this.artifactDir, path.join(reportDir, 'impact-scan.json')),
+        diff_quality: path.relative(this.artifactDir, path.join(reportDir, 'diff-quality.json')),
+        machine_feedback: path.relative(this.artifactDir, path.join(reportDir, 'machine-feedback.json'))
+      }
+    }
   }
 
   async markApplying(id: string): Promise<void> {
@@ -108,4 +156,55 @@ export class PersistentAgentPatchQueueStore {
   private async appendEvents(events: readonly AgentPatchQueueEvent[]): Promise<void> {
     await appendJsonlMany(path.join(this.artifactDir, AGENT_PATCH_QUEUE_EVENTS_ARTIFACT), events.filter(Boolean))
   }
+}
+
+function isBugfixKind(kind: unknown, id: unknown): boolean {
+  const text = `${String(kind || '')} ${String(id || '')}`.toLowerCase();
+  return /\b(bugfix|fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text);
+}
+
+function isRepairKind(kind: unknown, id: unknown): boolean {
+  const text = `${String(kind || '')} ${String(id || '')}`.toLowerCase();
+  return /\b(conflict_resolution|repair|conflict|rebase|rollback)\b|수리|충돌/.test(text);
+}
+
+function validRegressionProof(proof: any): boolean {
+  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim());
+}
+
+function changedFilesForEnvelope(envelope: ReturnType<typeof normalizeAgentPatchEnvelope>): string[] {
+  const files = envelope.git_worktree?.changed_files?.length
+    ? envelope.git_worktree.changed_files
+    : envelope.operations.map((operation) => operation.path)
+  return [...new Set(files.map(normalizePath).filter(Boolean))]
+}
+
+function patchTextForEnvelope(envelope: ReturnType<typeof normalizeAgentPatchEnvelope>): string {
+  return envelope.operations.map((operation) => {
+    if (operation.diff) return operation.diff
+    if (operation.op === 'replace') return [
+      `--- a/${operation.path}`,
+      `+++ b/${operation.path}`,
+      `-${operation.search || ''}`,
+      `+${operation.replace || ''}`
+    ].join('\n')
+    if (operation.op === 'write') return [
+      `--- /dev/null`,
+      `+++ b/${operation.path}`,
+      ...String(operation.content || '').split(/\r?\n/).map((line) => `+${line}`)
+    ].join('\n')
+    return ''
+  }).join('\n')
+}
+
+function normalizePath(value: string): string {
+  return String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '')
+}
+
+function safeName(value: string): string {
+  return String(value || 'patch').replace(/[^A-Za-z0-9_.-]+/g, '-').slice(0, 160)
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }

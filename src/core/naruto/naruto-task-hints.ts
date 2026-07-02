@@ -1,4 +1,5 @@
 import { normalizeNarutoPath, type NarutoWorkItem } from './naruto-work-item.js'
+import type { NarutoWorkKind } from './naruto-work-item.js'
 
 export interface NarutoTaskHints {
   paths: string[]
@@ -46,6 +47,14 @@ export function pathPrefix(pathValue: string): string {
   if (parts.length <= 1) return parts[0] || ''
   if (parts[0] === 'src' && parts.length >= 3) return parts.slice(0, 3).join('/')
   return parts.slice(0, 2).join('/')
+}
+
+export function classifyNarutoDeliveryKind(text: string): Extract<NarutoWorkKind, 'bugfix' | 'feature' | 'refactor' | 'chore'> {
+  const hay = String(text || '').toLowerCase()
+  if (/(^|\b)(fix|bug|broken|regression|failure|failing|crash|error)(\b|$)|버그|고쳐|수정|회귀/.test(hay)) return 'bugfix'
+  if (/(^|\b)(refactor|cleanup|simplify|restructure)(\b|$)|리팩터|정리/.test(hay)) return 'refactor'
+  if (/(^|\b)(chore|docs?|config|metadata|version)(\b|$)|문서|설정/.test(hay)) return 'chore'
+  return 'feature'
 }
 
 function normalizePaths(paths: string[]): string[] {

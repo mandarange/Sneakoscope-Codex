@@ -35,6 +35,10 @@ export interface SksStopGateEvidence {
   readonly parallelism_summary_path?: string | null;
   readonly critical_path_path?: string | null;
   readonly stream_idle_timeout_ms?: number | null;
+  readonly regression_test_added?: boolean;
+  readonly regression_test_failed_before_fix?: boolean;
+  readonly regression_test_passed_after_fix?: boolean;
+  readonly regression_proof_path?: string | null;
 }
 
 export interface SksStopGateV1 {

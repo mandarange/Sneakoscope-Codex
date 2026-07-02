@@ -16,6 +16,7 @@ export interface NarutoActivePoolReport {
   duplicate_execution_count: number
   conflict_items_enqueued: number
   max_observed_write_lease_conflicts: number
+  repair_waves?: Array<{ failed_work_item_id: string; followup_work_item_id: string; attempt: number; requires_hypothesis: boolean; tournament_forced: boolean }>
   timeline: Array<{ tick: number; active: number; pending: number; completed: number; event: string }>
   blockers: string[]
 }
@@ -366,6 +367,7 @@ export function simulateNarutoActivePool(input: {
   let maxObserved = 0
   let maxObservedWriteLeaseConflicts = 0
   let conflictItemsEnqueued = 0
+  const repairWaves: NonNullable<NarutoActivePoolReport['repair_waves']> = []
 
   while (pending.length || active.size) {
     let launched = 0
@@ -392,7 +394,15 @@ export function simulateNarutoActivePool(input: {
       if (shouldFail) {
         failed.add(generation.work_item_id)
         conflictItemsEnqueued += 1
-        const followup = conflictResolutionFollowup(generation.work_item_id, input.graph.work_items.length + conflictItemsEnqueued)
+        const attempt = executed.get(generation.work_item_id) || 1
+        const followup = conflictResolutionFollowup(generation.work_item_id, input.graph.work_items.length + conflictItemsEnqueued, attempt)
+        repairWaves.push({
+          failed_work_item_id: generation.work_item_id,
+          followup_work_item_id: followup.id,
+          attempt,
+          requires_hypothesis: true,
+          tournament_forced: Boolean(followup.tournament && followup.tournament >= 2)
+        })
         pending.push(followup)
         byId.set(followup.id, followup)
       } else {
@@ -422,6 +432,7 @@ export function simulateNarutoActivePool(input: {
     duplicate_execution_count: duplicateExecutionCount,
     conflict_items_enqueued: conflictItemsEnqueued,
     max_observed_write_lease_conflicts: maxObservedWriteLeaseConflicts,
+    repair_waves: repairWaves,
     timeline,
     blockers
   }
@@ -454,12 +465,12 @@ function countActiveWriteLeaseConflicts(active: Map<string, NarutoGeneration>, b
   return [...counts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count - 1, 0)
 }
 
-function conflictResolutionFollowup(failedId: string, index: number): NarutoWorkItem {
+function conflictResolutionFollowup(failedId: string, index: number, attempt = 1): NarutoWorkItem {
   const id = `NW-CONFLICT-${String(index).padStart(4, '0')}`
   return {
     id,
     kind: 'conflict_resolution',
-    title: `Resolve failed work item ${failedId}`,
+    title: `Resolve failed work item ${failedId} with repair-hypothesis.json before patching`,
     target_paths: [],
     readonly_paths: [],
     write_paths: [`.sneakoscope/naruto/conflicts/${id}.json`],
@@ -471,6 +482,7 @@ function conflictResolutionFollowup(failedId: string, index: number): NarutoWork
     conflicts_with: [],
     estimated_cost: { tokens: 4000, latency_ms: 45000, cpu_weight: 1, memory_mb: 256, gpu_weight: 0 },
     lease_requirements: [{ path: `.sneakoscope/naruto/conflicts/${id}.json`, kind: 'write' }],
-    acceptance: { requires_patch_envelope: true, requires_verification: true, requires_gpt_final: true }
+    acceptance: { requires_patch_envelope: true, requires_verification: true, requires_gpt_final: true },
+    ...(attempt >= 3 ? { tournament: 3 } : {})
   }
 }

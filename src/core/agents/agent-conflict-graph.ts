@@ -8,6 +8,7 @@ export function buildAgentConflictGraph(leases: AgentLease[]) {
     for (let j = i + 1; j < writeLeases.length; j += 1) {
       const a = writeLeases[i]
       const b = writeLeases[j]
+      if (a && b && a.agent_id !== b.agent_id && sameTournamentGroup(a, b)) continue;
       if (a && b && a.agent_id !== b.agent_id && pathOverlaps(a.path, b.path)) {
         conflicts.push({ a: a.id, b: b.id, path_a: a.path, path_b: b.path, reason: 'overlapping_write_lease' })
       }
@@ -22,3 +23,6 @@ export function buildAgentConflictGraph(leases: AgentLease[]) {
   }
 }
 
+function sameTournamentGroup(a: AgentLease, b: AgentLease): boolean {
+  return Boolean(a.tournament_group_id && b.tournament_group_id && a.tournament_group_id === b.tournament_group_id);
+}

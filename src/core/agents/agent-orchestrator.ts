@@ -69,6 +69,7 @@ import { gitOutputLine, runGitCommand } from '../git/git-worktree-runner.js'
 import type { GitWorktreeDiff } from '../git/git-worktree-diff.js'
 import { writeParallelRuntimeProof } from './parallel-runtime-proof.js'
 import { enforceRetention } from '../retention.js'
+import { APPROACHES, rank, scoreCandidate, summarizeTournament, type TournamentCandidate, type TournamentResult } from '../naruto/solution-tournament.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
@@ -423,6 +424,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
         workerWorktree,
         runtime: gitWorktreeRuntime
       })
+      enforceWorkerQualityProtocolForSlice(result, runtimeSlice)
       const terminalClose = await closeAgentTerminalSession(ledgerRoot, agent, {
         exitCode: result.status === 'done' ? 0 : 1,
         status: result.status,
@@ -492,7 +494,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     proofMode: opts.mock === true ? 'mock-process' : 'production',
     requireWorkerPids: opts.nativeCliSwarm !== false && targetActiveSlots >= 16
   })
-  const results = scheduler.results
+  let results = scheduler.results
+  const tournamentSelection = await selectSolutionTournamentWinners(root, ledgerRoot, results)
+  results = tournamentSelection.results
   const nativeCliSessionProof = await writeNativeCliSessionProof(ledgerRoot, {
     requestedAgents: Number(opts.agents || roster.agent_count || targetActiveSlots),
     targetActiveSlots,
@@ -589,8 +593,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     route,
     routeCommand,
     routeBlackboxKind,
-    requestedWorkItems: desiredWorkItemCount,
-    minimumWorkItems,
+    requestedWorkItems: partition.task_graph?.desired_work_items || desiredWorkItemCount,
+    minimumWorkItems: partition.task_graph?.minimum_work_items || minimumWorkItems,
     targetActiveSlots,
     realParallel: backend === 'codex-sdk' && opts.mock !== true,
     visualLaneCount,
@@ -635,11 +639,11 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     roster,
     partition: { ok: partition.ok, slice_count: partition.slices.length, lease_count: partition.leases.length, blockers: partition.blockers },
     task_graph: partition.task_graph?.route_work_count_summary || null,
-    requested_work_items: desiredWorkItemCount,
+    requested_work_items: partition.task_graph?.desired_work_items || desiredWorkItemCount,
     actual_total_work_items: partition.task_graph?.total_work_items || partition.slices.length,
     target_active_slots: targetActiveSlots,
     visual_lane_count: visualLaneCount,
-    minimum_work_items: minimumWorkItems,
+    minimum_work_items: partition.task_graph?.minimum_work_items || minimumWorkItems,
     scheduler,
     source_intelligence: sourceIntelligenceRef,
     goal_mode: goalModeRef,
@@ -692,6 +696,110 @@ function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) 
   return next
 }
 
+async function selectSolutionTournamentWinners(root: string, ledgerRoot: string, results: any[]): Promise<{ results: any[]; report: any }> {
+  const groups = new Map<string, any[]>()
+  for (const result of results || []) {
+    const groupId = String(result?.tournament?.group_id || result?.naruto_runtime?.tournament?.group_id || '')
+    if (!groupId || !Array.isArray(result?.patch_envelopes) || result.patch_envelopes.length === 0) continue
+    groups.set(groupId, [...(groups.get(groupId) || []), result])
+  }
+  const tournamentReports: any[] = []
+  for (const [groupId, rows] of groups) {
+    if (rows.length < 2) continue
+    const candidates = await Promise.all(rows.map(async (result, index) => {
+      const candidate: TournamentCandidate & { result: any } = {
+        id: String(result?.task_slice_id || result?.naruto_runtime?.work_item_id || `${groupId}-cand${index + 1}`),
+        approach: String(result?.tournament?.approach || result?.naruto_runtime?.tournament?.approach || APPROACHES[index] || ''),
+        worktree: String(firstEnvelopeField(result, 'git_worktree')?.worktree_path || ''),
+        patch: { patch_envelopes: result.patch_envelopes || [] },
+        score: null,
+        result
+      }
+      candidate.score = await scoreCandidate(root, candidate).catch((err) => ({
+        machine_ok: false,
+        tests_passed: 0,
+        tests_failed: 1,
+        diff_lines: 999999,
+        new_symbols: 999,
+        impact_breaks: 999,
+        total: 999999,
+        error: err instanceof Error ? err.message : String(err)
+      } as any))
+      return candidate
+    }))
+    const alive = candidates
+      .filter((candidate) => candidate.score?.machine_ok && candidate.score.impact_breaks === 0)
+      .sort((a, b) => rank(a.score!) - rank(b.score!))
+    const winner = alive[0] || null
+    const tournamentResult: TournamentResult = {
+      schema: 'sks.solution-tournament.v1',
+      winner,
+      reason: winner ? (alive.length === 1 ? 'single_survivor' : 'judge:deterministic-maintainer-score') : 'all_candidates_failed_machine_checks',
+      candidates
+    }
+    const summary = summarizeTournament(tournamentResult)
+    const reportRow = {
+      ...summary,
+      group_id: groupId,
+      judge_worker: alive.length > 1 ? 'deterministic-maintainer-score' : null,
+      loser_cleanup: [] as unknown[]
+    }
+    tournamentReports.push(reportRow)
+    if (!winner) {
+      for (const candidate of candidates) {
+        candidate.result.status = 'blocked'
+        candidate.result.blockers = [...new Set([...(candidate.result.blockers || []), 'solution_tournament_all_candidates_failed'])]
+      }
+      continue
+    }
+    for (const candidate of candidates) {
+      if (candidate === winner) {
+        candidate.result.tournament = { ...candidate.result.tournament, selection: summary, selected: true }
+        candidate.result.patch_envelopes = (candidate.result.patch_envelopes || []).map((envelope: any) => ({ ...envelope, tournament: summary }))
+        continue
+      }
+      const cleanup = await cleanupTournamentLoserCandidate(root, candidate).catch((err) => ({ ok: false, blockers: ['tournament_loser_cleanup_failed:' + (err instanceof Error ? err.message : String(err))] }))
+      reportRow.loser_cleanup.push(cleanup)
+      candidate.result.patch_envelopes = []
+      candidate.result.changed_files = []
+      candidate.result.no_patch_reason = {
+        schema: 'sks.solution-tournament-loser.v1',
+        ok: true,
+        reason: 'solution_tournament_loser',
+        group_id: groupId,
+        winner_id: winner.id
+      }
+      candidate.result.tournament = { ...candidate.result.tournament, selection: summary, selected: false }
+    }
+  }
+  const report = {
+    schema: 'sks.solution-tournament-report.v1',
+    generated_at: nowIso(),
+    ok: tournamentReports.every((row) => row.winner_id),
+    tournament_count: tournamentReports.length,
+    tournaments: tournamentReports
+  }
+  await writeJsonAtomic(path.join(ledgerRoot, 'solution-tournament-report.json'), report)
+  return { results, report }
+}
+
+async function cleanupTournamentLoserCandidate(root: string, candidate: TournamentCandidate): Promise<Record<string, unknown>> {
+  const envelope = ((candidate.patch as any)?.patch_envelopes || []).find((row: any) => row?.git_worktree?.worktree_path)
+  const meta = envelope?.git_worktree
+  if (!meta?.worktree_path || !meta?.main_repo_root) return { ok: true, action: 'no_worktree', candidate_id: candidate.id }
+  const remove = await runGitCommand(String(meta.main_repo_root || root), ['worktree', 'remove', '--force', String(meta.worktree_path)])
+  if (remove.ok && meta.branch) await runGitCommand(String(meta.main_repo_root || root), ['branch', '-D', String(meta.branch)])
+  return {
+    schema: 'sks.solution-tournament-loser-cleanup.v1',
+    ok: remove.ok,
+    action: remove.ok ? 'removed' : 'remove_failed',
+    candidate_id: candidate.id,
+    worktree_path: meta.worktree_path,
+    branch: meta.branch || null,
+    blockers: remove.ok ? [] : ['git_worktree_remove_failed']
+  }
+}
+
 function uniqueWritableSlicesForWorktrees(slices: any[] = [], limit: number) {
   const selected: any[] = []
   const seenOwners = new Set<string>()
@@ -714,26 +822,35 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
   const sourceIntelligenceRefs = referenceWorkItem?.source_intelligence_refs || partition?.source_intelligence_refs || null
   const goalModeRef = referenceWorkItem?.goal_mode_ref || partition?.goal_mode_ref || null
   const strategyRefs = referenceWorkItem?.strategy_refs || partition?.strategy_refs || null
-  const slices = (graph.work_items || []).map((item: any, index: number) => {
+  const slices = (graph.work_items || []).flatMap((item: any, index: number) => {
+    const candidateCount = item?.write_allowed && Number(item?.tournament || 0) >= 2
+      ? Math.min(4, Math.max(2, Math.floor(Number(item.tournament))))
+      : 1
     const requestedOwner = item.owner ? String(item.owner) : ''
-    const owner = requestedOwner && activeAgentIds.has(requestedOwner)
-      ? requestedOwner
-      : String(fallbackOwners[index % fallbackOwners.length]?.id || requestedOwner || `naruto_clone_${String(index + 1).padStart(3, '0')}`)
     const sliceId = String(item.id || `NW-${String(index + 1).padStart(6, '0')}`)
     const writePaths = normalizePathList(item.write_paths)
     const readonlyPaths = normalizePathList(item.readonly_paths)
     const targetPaths = normalizePathList(item.target_paths)
-    const verificationNodeId = writePaths.length ? `verify:${sliceId}` : null
-    const rollbackNodeId = writePaths.length ? `rollback:${sliceId}` : null
     const parentObjective = normalizeWorkerPromptText(parentPrompt)
-    return {
-      id: sliceId,
+    return Array.from({ length: candidateCount }, (_unused, candidateOffset) => {
+      const candidateIndex = candidateOffset + 1
+      const candidateSliceId = candidateCount > 1 ? `${sliceId}-cand${candidateIndex}` : sliceId
+      const owner = requestedOwner && activeAgentIds.has(requestedOwner) && candidateCount === 1
+        ? requestedOwner
+        : String(fallbackOwners[(index + candidateOffset) % fallbackOwners.length]?.id || requestedOwner || `naruto_clone_${String(index + candidateIndex).padStart(3, '0')}`)
+      const verificationNodeId = writePaths.length ? `verify:${candidateSliceId}` : null
+      const rollbackNodeId = writePaths.length ? `rollback:${candidateSliceId}` : null
+      const approachDirective = candidateCount > 1 ? APPROACHES[candidateOffset] || APPROACHES[APPROACHES.length - 1] || '' : null
+      return {
+      id: candidateSliceId,
       owner_agent_id: owner,
       owner,
       lane: owner,
       role: String(item.required_role || 'verifier'),
       domain: String(item.allocation_hints?.domains?.[0] || item.kind || 'naruto'),
-      title: String(item.title || item.id || `Naruto work ${index + 1}`),
+      title: candidateCount > 1
+        ? `${String(item.title || item.id || `Naruto work ${index + 1}`)} (candidate ${candidateIndex}/${candidateCount})`
+        : String(item.title || item.id || `Naruto work ${index + 1}`),
       dependencies: Array.isArray(item.dependencies) ? item.dependencies.map(String) : [],
       priority: index + 1,
       required_persona_category: String(item.required_role || 'verifier'),
@@ -741,6 +858,10 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       generated_by: 'sks.naruto-work-graph.v1',
       route_domain: String(item.kind || 'naruto'),
       work_item_kind: String(item.kind || 'verification'),
+      tournament_group_id: candidateCount > 1 ? sliceId : null,
+      tournament_candidate_index: candidateCount > 1 ? candidateIndex : null,
+      tournament_candidate_count: candidateCount > 1 ? candidateCount : null,
+      approach_directive: approachDirective,
       target_paths: targetPaths,
       readonly_paths: readonlyPaths,
       write_paths: writePaths,
@@ -761,18 +882,30 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       description: [
         parentObjective ? `Parent Naruto objective:\n${parentObjective}` : null,
         String(item.title || item.id || 'Naruto work item'),
+        approachDirective ? `Solution tournament approach: ${approachDirective}` : null,
         `Naruto owner: ${owner}`,
         item.allocation_reason ? `Allocation: ${item.allocation_reason}` : null,
         writePaths.length ? `Write paths: ${writePaths.join(', ')}` : 'Read-only or no-write work item.',
         writePaths.length ? null : 'Read-only instruction: inspect the requested files/artifacts and do not run package scripts, build commands, tests, or temp-file-creating checks unless the parent objective explicitly requires them.'
       ].filter(Boolean).join('\n')
-    }
+      }
+    })
   })
-  const workItems = (graph.work_items || []).map((item: any) => ({
-    ...item,
-    source_intelligence_refs: item.source_intelligence_refs || sourceIntelligenceRefs,
-    goal_mode_ref: item.goal_mode_ref || goalModeRef,
-    strategy_refs: item.strategy_refs || strategyRefs
+  const workItems = slices.map((slice: any) => ({
+    id: slice.id,
+    kind: slice.work_item_kind || slice.route_domain || 'verification',
+    title: slice.title,
+    target_paths: slice.target_paths || [],
+    readonly_paths: slice.readonly_paths || [],
+    write_paths: slice.write_paths || [],
+    owner: slice.owner_agent_id,
+    tournament_group_id: slice.tournament_group_id || null,
+    tournament_candidate_index: slice.tournament_candidate_index || null,
+    tournament_candidate_count: slice.tournament_candidate_count || null,
+    approach_directive: slice.approach_directive || null,
+    source_intelligence_refs: sourceIntelligenceRefs,
+    goal_mode_ref: goalModeRef,
+    strategy_refs: strategyRefs
   }))
   const leases = slices.flatMap((slice: any) => [
     ...slice.write_paths.map((file: string, index: number) => ({
@@ -784,6 +917,7 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       status: 'active' as const,
       owner_agent: slice.owner_agent_id,
       write_paths: slice.write_paths,
+      tournament_group_id: slice.tournament_group_id || null,
       strategy_task_id: slice.id,
       micro_win_id: slice.micro_win_id || slice.id,
       verification_node_id: slice.verification_node_id || null,
@@ -799,6 +933,7 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       status: 'active' as const,
       owner_agent: slice.owner_agent_id,
       write_paths: slice.write_paths,
+      tournament_group_id: slice.tournament_group_id || null,
       strategy_task_id: slice.id,
       micro_win_id: slice.micro_win_id || slice.id,
       verification_node_id: slice.verification_node_id || null,
@@ -812,6 +947,8 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
     ? {
       ...partition.task_graph,
       total_work_items: slices.length,
+      desired_work_items: slices.length,
+      minimum_work_items: Math.max(Number(partition.task_graph.minimum_work_items || 0), slices.length),
       work_items: workItems,
       route_work_count_summary: {
         ...(partition.task_graph.route_work_count_summary || {}),
@@ -882,12 +1019,15 @@ function augmentVerificationRollbackDagForNaruto(dag: any, slices: any[]) {
 function buildNarutoRuntimeWiringProof(partition: any, graph: any, roster: any, targetActiveSlots: number) {
   const activeAgentIds = new Set((Array.isArray(roster?.roster) ? roster.roster : []).slice(0, Math.max(1, targetActiveSlots)).map((row: any) => String(row.id || '')).filter(Boolean))
   const slices = Array.isArray(partition?.slices) ? partition.slices : []
-  const activeWriteConflicts = slices.flatMap((slice: any) => normalizePathList(slice.write_paths))
-  const duplicateActiveWrites = activeWriteConflicts.filter((file: string, index: number, all: string[]) => all.indexOf(file) !== index)
+  const activeWriteConflicts = slices.flatMap((slice: any) => normalizePathList(slice.write_paths).map((file: string) => ({ file, tournament_group_id: slice.tournament_group_id || null })))
+  const duplicateActiveWrites = activeWriteConflicts.filter((entry: any, index: number, all: any[]) =>
+    all.some((other: any, otherIndex: number) => otherIndex !== index && other.file === entry.file && !sameTournamentGroupEntry(entry, other))
+  )
   const ownerPreserved = slices.every((slice: any) => !slice.allocation_original_owner || slice.allocation_owner_rebalanced || slice.owner_agent_id === slice.allocation_original_owner)
   const inactiveOwnersRebalanced = slices.every((slice: any) => !slice.allocation_original_owner || activeAgentIds.has(slice.allocation_original_owner) || slice.allocation_owner_rebalanced)
+  const expectedSliceCount = (graph?.work_items || []).reduce((sum: number, item: any) => sum + (item?.write_allowed && Number(item?.tournament || 0) >= 2 ? Math.min(4, Math.max(2, Math.floor(Number(item.tournament)))) : 1), 0)
   const blockers = [
-    ...(slices.length === Number(graph?.work_items?.length || 0) ? [] : ['naruto_runtime_slice_count_mismatch']),
+    ...(slices.length === expectedSliceCount ? [] : ['naruto_runtime_slice_count_mismatch']),
     ...(ownerPreserved ? [] : ['naruto_runtime_owner_not_preserved']),
     ...(inactiveOwnersRebalanced ? [] : ['naruto_runtime_inactive_owner_not_rebalanced']),
     ...(duplicateActiveWrites.length ? ['naruto_runtime_duplicate_write_paths_in_partition'] : [])
@@ -914,6 +1054,10 @@ function buildNarutoRuntimeWiringProof(partition: any, graph: any, roster: any, 
   }
 }
 
+function sameTournamentGroupEntry(a: any, b: any): boolean {
+  return Boolean(a?.tournament_group_id && b?.tournament_group_id && a.tournament_group_id === b.tournament_group_id)
+}
+
 function attachNarutoRuntimeProof(result: any, agent: any, slice: any) {
   const controlPlane = result?.codex_child_report || result?.codex_sdk_thread || result?.backend_router_report || null
   const selectedBackend = String(result?.backend_router_report?.selected_backend || result?.backend || '')
@@ -925,6 +1069,13 @@ function attachNarutoRuntimeProof(result: any, agent: any, slice: any) {
     source_of_truth: 'agent-orchestrator-scheduler',
     actual_worker_control_plane: actualWorkerControlPlane,
     work_item_id: String(slice?.id || result?.task_slice_id || ''),
+    work_item_kind: String(slice?.work_item_kind || result?.work_item_kind || ''),
+    tournament: slice?.tournament_group_id ? {
+      group_id: String(slice.tournament_group_id),
+      candidate_index: Number(slice.tournament_candidate_index || 1),
+      candidate_count: Number(slice.tournament_candidate_count || 1),
+      approach: String(slice.approach_directive || '')
+    } : null,
     owner: String(slice?.owner_agent_id || slice?.owner || agent?.id || ''),
     allocation_reason: slice?.allocation_reason || null,
     rebalance_generation: Number(slice?.allocation_owner_rebalanced === true ? 1 : 0),
@@ -940,11 +1091,50 @@ function attachNarutoRuntimeProof(result: any, agent: any, slice: any) {
       }
       : null
   }
+  if (slice?.work_item_kind) result.work_item_kind = String(slice.work_item_kind)
+  if (slice?.tournament_group_id) {
+    result.tournament = {
+      schema: 'sks.solution-tournament-candidate.v1',
+      group_id: String(slice.tournament_group_id),
+      candidate_index: Number(slice.tournament_candidate_index || 1),
+      candidate_count: Number(slice.tournament_candidate_count || 1),
+      approach: String(slice.approach_directive || '')
+    }
+  }
   if (result.naruto_runtime.control_plane_result) result.control_plane_result = result.naruto_runtime.control_plane_result
   result.verification = {
     status: result.verification?.status || 'not_run',
     checks: [...(result.verification?.checks || []), 'naruto-agent-orchestrator-scheduler-source-of-truth']
   }
+}
+
+function enforceWorkerQualityProtocolForSlice(result: any, slice: any) {
+  const writesPatch = Boolean((result.patch_envelopes || []).length || (result.changed_files || []).length || (result.writes || []).length)
+  if (!writesPatch) return
+  const kind = String(slice?.work_item_kind || result?.work_item_kind || '').toLowerCase()
+  const text = [kind, slice?.id, slice?.title].join(' ').toLowerCase()
+  const blockers: string[] = []
+  if ((kind === 'bugfix' || /\b(fix|bug|regression|broken|failure|crash|error)\b|버그|회귀/.test(text)) && !validRegressionProof(result.regression_proof || firstEnvelopeField(result, 'regression_proof'))) {
+    blockers.push('tdd_evidence_missing')
+  }
+  if ((kind === 'conflict_resolution' || /\b(repair|conflict|rebase|rollback)\b|수리|충돌/.test(text)) && !(result.repair_hypothesis || firstEnvelopeField(result, 'repair_hypothesis'))) {
+    blockers.push('repair_without_hypothesis')
+  }
+  if (!blockers.length) return
+  result.status = 'blocked'
+  result.blockers = [...new Set([...(result.blockers || []), ...blockers])]
+  result.verification = {
+    status: 'failed',
+    checks: [...(result.verification?.checks || []), 'naruto-worker-quality-protocol']
+  }
+}
+
+function firstEnvelopeField(result: any, field: string) {
+  return (Array.isArray(result?.patch_envelopes) ? result.patch_envelopes : []).find((envelope: any) => envelope?.[field])?.[field] || null
+}
+
+function validRegressionProof(proof: any): boolean {
+  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim())
 }
 
 function normalizePathList(values: unknown) {
@@ -1052,6 +1242,10 @@ async function finalizeWorkerGitWorktree(input: {
       generationIndex: Math.max(1, Math.floor(Number(input.agent.generation_index || 1))),
       checkpoint
     })
+    envelope.task_slice_id = String(input.slice.id || '')
+    if (input.result.regression_proof) envelope.regression_proof = input.result.regression_proof
+    if (input.result.repair_hypothesis) envelope.repair_hypothesis = input.result.repair_hypothesis
+    if (input.result.tournament) envelope.tournament = input.result.tournament
     input.result.patch_envelopes = [...(Array.isArray(input.result.patch_envelopes) ? input.result.patch_envelopes : []), envelope]
     input.result.changed_files = [...new Set([...(input.result.changed_files || []), ...diff.changed_files])]
     input.result.artifacts = [...new Set([...(input.result.artifacts || []), path.relative(input.ledgerRoot, path.join(input.workerWorktree.artifactDir, 'git-worktree-diff.json')), path.relative(input.ledgerRoot, path.join(input.workerWorktree.artifactDir, 'git-worktree-checkpoint.json'))])]
@@ -1141,7 +1335,14 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
         ...envelope,
         agent_id: envelope.agent_id || result.agent_id,
         session_id: envelope.session_id || result.session_id
-      }, { mission_id: input.missionId, route: input.route })
+      }, {
+        mission_id: input.missionId,
+        route: input.route,
+        root,
+        work_item_kind: result.work_item_kind || result.naruto_runtime?.work_item_kind,
+        regression_proof: result.regression_proof,
+        repair_hypothesis: result.repair_hypothesis
+      })
       result.patch_queue_refs = [...(result.patch_queue_refs || []), entry.id]
     }
   }
@@ -1835,9 +2036,11 @@ function buildDirectSdkWorkerPrompt(slice: any) {
   const write = sdkWritePaths(slice, {})
   return [
     String(slice?.description || slice?.title || 'Complete the assigned worker task.'),
+    slice?.work_item_kind ? `Work item kind: ${String(slice.work_item_kind)}.` : '',
+    slice?.approach_directive ? `Solution tournament candidate directive: ${String(slice.approach_directive)}.` : '',
     '',
     write.length
-      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply.`
+      ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply. Impact-scan, machine-feedback, diff-quality, and mistake-rule gates run before queue acceptance; exported signature changes require cochanged callers or cochange_acknowledged_reason. Bugfixes require regression_proof failed_before true and passed_after true; repair patches require repair_hypothesis.`
       : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; inspect relevant files/artifacts, do not mutate files, do not create temporary/build outputs, do not run package scripts/build/test commands unless explicitly required, and do not report pre-existing repository dirtiness as changed_files.`,
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')

@@ -130,6 +130,11 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     narutoWorkGraph
   })
   const changedFileLeaseBlockers = readOnlyNoWriteLeaseMode ? [] : agentChangedFileLeaseViolations(input.results || [], input.partition?.leases || [])
+  const schedulerBackfillSatisfied = !scheduler
+    || Number(scheduler.expected_backfill_count || 0) <= Number(scheduler.backfill_count || 0)
+    || (scheduler.pending_queue_drained === true
+      && Number(scheduler.active_slot_count || 0) === 0
+      && Number(scheduler.max_observed_active_slots || 0) >= Number(scheduler.target_active_slots || 0))
   const blockers = [
     ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
@@ -145,7 +150,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(scheduler && scheduler.pending_count > 0 && scheduler.active_slot_count === 0 ? ['scheduler_pending_queue_without_active_sessions'] : []),
     ...(scheduler && scheduler.pending_queue_drained !== true ? ['scheduler_pending_queue_not_drained'] : []),
     ...(scheduler && Number(scheduler.active_slot_count || 0) !== 0 ? ['scheduler_active_slots_not_zero_at_finalization'] : []),
-    ...(scheduler && Number(scheduler.expected_backfill_count || 0) > Number(scheduler.backfill_count || 0) ? ['scheduler_backfill_count_below_expected'] : []),
+    ...(schedulerBackfillSatisfied ? [] : ['scheduler_backfill_count_below_expected']),
     ...(scheduler && Number(scheduler.total_work_items || 0) >= Number(scheduler.target_active_slots || 0) && Number(scheduler.max_observed_active_slots || 0) !== Number(scheduler.target_active_slots || 0) ? ['scheduler_max_observed_active_slots_mismatch'] : []),
     ...(taskGraph && !taskGraphMatchesCliOptions ? ['task_graph_cli_options_mismatch'] : []),
     ...(workQueue && taskGraph && !workQueueMatchesTaskGraph ? ['work_queue_task_graph_mismatch'] : []),

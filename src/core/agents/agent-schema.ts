@@ -168,6 +168,10 @@ export interface AgentTaskSlice {
   readonly_paths: string[]
   write_paths: string[]
   description: string
+  tournament_group_id?: string | null
+  tournament_candidate_index?: number | null
+  tournament_candidate_count?: number | null
+  approach_directive?: string | null
   strategy_refs?: Record<string, unknown> | null
   micro_win_id?: string | null
   verification_node_id?: string | null
@@ -193,6 +197,7 @@ export interface AgentLease {
   conflict_prediction_id?: string | null
   verification_node_id?: string | null
   rollback_node_id?: string | null
+  tournament_group_id?: string | null
   strategy_artifact?: string
 }
 
@@ -203,6 +208,7 @@ export interface AgentRunnerResult {
   session_id: string
   persona_id: string
   task_slice_id: string
+  work_item_kind?: string
   status: 'done' | 'blocked' | 'failed'
   backend: AgentBackend
   summary: string
@@ -228,6 +234,10 @@ export interface AgentRunnerResult {
   model_authored_patch_envelopes?: boolean
   fixture_patch_envelopes?: boolean
   no_patch_reason?: Record<string, unknown>
+  machine_feedback?: Record<string, unknown>
+  regression_proof?: Record<string, unknown>
+  repair_hypothesis?: Record<string, unknown>
+  tournament?: Record<string, unknown>
   source_intelligence_refs?: Record<string, unknown> | null
   goal_mode_ref?: Record<string, unknown> | null
   follow_up_work_items?: import('./agent-follow-up-work-items.js').AgentFollowUpWorkItem[]

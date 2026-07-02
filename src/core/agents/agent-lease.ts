@@ -22,10 +22,15 @@ export function validateAgentLeases(leases: AgentLease[]) {
     for (let j = i + 1; j < writeLeases.length; j += 1) {
       const a = writeLeases[i]
       const b = writeLeases[j]
+      if (a && b && a.agent_id !== b.agent_id && sameTournamentGroup(a, b)) continue;
       if (a && b && a.agent_id !== b.agent_id && pathOverlaps(a.path, b.path)) blockers.push('write_overlap:' + a.agent_id + ':' + a.path + ':' + b.agent_id + ':' + b.path)
     }
   }
   return { ok: blockers.length === 0, blockers }
+}
+
+function sameTournamentGroup(a: AgentLease, b: AgentLease): boolean {
+  return Boolean(a.tournament_group_id && b.tournament_group_id && a.tournament_group_id === b.tournament_group_id);
 }
 
 export function createAgentLease(input: Omit<AgentLease, 'id' | 'status'> & { status?: AgentLease['status'] }): AgentLease {
@@ -41,4 +46,3 @@ export function createAgentLease(input: Omit<AgentLease, 'id' | 'status'> & { st
   if (input.domain !== undefined) lease.domain = input.domain
   return lease
 }
-

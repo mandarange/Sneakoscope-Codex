@@ -67,6 +67,16 @@ export interface AgentPatchEnvelope {
   rationale?: string
   verification_hint?: AgentPatchHint
   rollback_hint?: AgentPatchHint
+  cochange_acknowledged?: boolean
+  cochange_acknowledged_reason?: string
+  regression_proof?: {
+    test_file?: string
+    failed_before?: boolean
+    passed_after?: boolean
+    output_digest?: string
+  }
+  repair_hypothesis?: Record<string, unknown>
+  tournament?: Record<string, unknown>
 }
 
 type AgentPatchLeaseProof = NonNullable<AgentPatchEnvelope['lease_proof']>
@@ -110,6 +120,11 @@ export function normalizeAgentPatchEnvelope(input: any): AgentPatchEnvelope {
     ...(input?.rationale ? { rationale: String(input.rationale) } : {}),
     ...(input?.verification_hint ? { verification_hint: normalizeHint(input.verification_hint) } : {}),
     ...(input?.rollback_hint ? { rollback_hint: normalizeHint(input.rollback_hint) } : {}),
+    ...(input?.cochange_acknowledged === undefined ? {} : { cochange_acknowledged: Boolean(input.cochange_acknowledged) }),
+    ...(input?.cochange_acknowledged_reason === undefined ? {} : { cochange_acknowledged_reason: String(input.cochange_acknowledged_reason) }),
+    ...(input?.regression_proof ? { regression_proof: normalizeRegressionProof(input.regression_proof) } : {}),
+    ...(input?.repair_hypothesis && typeof input.repair_hypothesis === 'object' ? { repair_hypothesis: input.repair_hypothesis } : {}),
+    ...(input?.tournament && typeof input.tournament === 'object' ? { tournament: input.tournament } : {}),
     operations: Array.isArray(input?.operations) ? input.operations.map(normalizeOperation) : []
   }
 }
@@ -204,6 +219,15 @@ function normalizeHint(input: any): AgentPatchHint {
     ...(input?.node_id === undefined ? {} : { node_id: String(input.node_id) }),
     ...(input?.artifact === undefined ? {} : { artifact: String(input.artifact) }),
     ...(input?.notes === undefined ? {} : { notes: String(input.notes) })
+  }
+}
+
+function normalizeRegressionProof(input: any): NonNullable<AgentPatchEnvelope['regression_proof']> {
+  return {
+    ...(input?.test_file === undefined ? {} : { test_file: String(input.test_file) }),
+    ...(input?.failed_before === undefined ? {} : { failed_before: Boolean(input.failed_before) }),
+    ...(input?.passed_after === undefined ? {} : { passed_after: Boolean(input.passed_after) }),
+    ...(input?.output_digest === undefined ? {} : { output_digest: String(input.output_digest) })
   }
 }
 

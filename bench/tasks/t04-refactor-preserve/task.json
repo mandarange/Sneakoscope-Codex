@@ -1,0 +1,12 @@
+{
+  "schema": "sks.bench-task.v1",
+  "id": "t04-refactor-preserve",
+  "kind": "refactor",
+  "prompt": "cart total 계산을 더 읽기 쉽게 리팩터하되 동작은 보존하라.",
+  "success": {
+    "command": "npm test --silent",
+    "must_pass": true,
+    "max_diff_lines": 80,
+    "forbidden_patterns": ["TODO", "console\\.log"]
+  }
+}

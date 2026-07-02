@@ -3,9 +3,12 @@ import type { CodexAppExecutionProfile } from '../codex-app/codex-app-types.js'
 import type { CodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js'
 
 export type NarutoWorkKind =
+  | 'bugfix'
+  | 'feature'
   | 'implementation'
   | 'code_modification'
   | 'refactor'
+  | 'chore'
   | 'test_generation'
   | 'test_execution'
   | 'verification'
@@ -77,6 +80,7 @@ export interface NarutoWorkItem {
   }
   codex_app_execution_profile?: Pick<CodexAppExecutionProfile, 'mode' | 'agent_role_strategy' | 'artifact_path' | 'agent_type_probe_artifact_path'>
   codex_native_invocation_plan?: Pick<CodexNativeInvocationPlan, 'route' | 'desired_capability' | 'selected_strategy' | 'required_artifacts' | 'proof_policy' | 'env' | 'blockers' | 'warnings'>
+  tournament?: number
 }
 
 export interface NarutoWorkGraph {
@@ -105,9 +109,12 @@ export interface NarutoWorkWave {
 }
 
 export const NARUTO_WORK_KINDS: NarutoWorkKind[] = [
+  'bugfix',
+  'feature',
   'implementation',
   'code_modification',
   'refactor',
+  'chore',
   'test_generation',
   'test_execution',
   'verification',
@@ -124,9 +131,12 @@ export const NARUTO_WORK_KINDS: NarutoWorkKind[] = [
 ]
 
 export const NARUTO_WRITE_WORK_KINDS = new Set<NarutoWorkKind>([
+  'bugfix',
+  'feature',
   'implementation',
   'code_modification',
   'refactor',
+  'chore',
   'test_generation',
   'documentation',
   'conflict_resolution',

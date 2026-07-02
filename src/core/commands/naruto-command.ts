@@ -125,7 +125,8 @@ async function narutoRun(parsed: NarutoArgs) {
     writeCapable,
     leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap,
-    worktreePolicy
+    worktreePolicy,
+    tournament: parsed.tournament
   })
   const baseRoleDistribution = buildNarutoRoleDistribution(baseWorkGraph.work_items, { readonly: parsed.readonly })
   const allocationWorkers = buildNarutoAllocationWorkers(baseWorkGraph, baseRoleDistribution, roster)
@@ -140,7 +141,8 @@ async function narutoRun(parsed: NarutoArgs) {
     leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap,
     worktreePolicy,
-    allocationAssignments
+    allocationAssignments,
+    tournament: parsed.tournament
   })
   const roleDistribution = buildNarutoRoleDistribution(workGraph.work_items, { readonly: parsed.readonly })
   const allocationPolicy = {
@@ -403,9 +405,12 @@ async function narutoRun(parsed: NarutoArgs) {
     parallelRuntime?.passed === true
     && Number(parallelRuntime.max_observed_active_workers || 0) >= Math.min(16, activeSlots)
   )
+  const regressionProof = summarizeRegressionProof(workGraph, result)
+  await writeJsonAtomic(path.join(mission.dir, 'regression-proof-summary.json'), regressionProof)
+  const tddOk = !regressionProof.required || (regressionProof.regression_test_added && regressionProof.regression_test_failed_before_fix && regressionProof.regression_test_passed_after_fix)
   await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
     schema: 'sks.naruto-gate.v1',
-    passed: result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk,
+    passed: result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk && tddOk,
     mission_id: mission.id,
     clone_roster_built: true,
     clone_count: roster.agent_count,
@@ -420,9 +425,13 @@ async function narutoRun(parsed: NarutoArgs) {
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: nativeProofOk,
     parallel_runtime_proof: parallelRuntimeOk,
+    regression_test_added: regressionProof.regression_test_added,
+    regression_test_failed_before_fix: regressionProof.regression_test_failed_before_fix,
+    regression_test_passed_after_fix: regressionProof.regression_test_passed_after_fix,
+    regression_proof: 'regression-proof-summary.json',
     final_arbiter_accepted: finalAccepted,
     session_cleanup: result.proof?.all_sessions_closed === true || nativeProofOk,
-    blockers: [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate'])],
+    blockers: [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing'])],
     updated_at: nowIso()
   })
   const clones = result.roster?.agent_count ?? roster.agent_count
@@ -439,7 +448,7 @@ async function narutoRun(parsed: NarutoArgs) {
     generated_at: nowIso(),
     mission_id: mission.id
   })
-  const summaryOk = result.ok === true && (parsed.applyPatches === true ? finalizer.ok === true : finalizer.run_ok === true)
+  const summaryOk = result.ok === true && tddOk && (parsed.applyPatches === true ? finalizer.ok === true : finalizer.run_ok === true)
   await setCurrent(root, {
     mission_id: mission.id,
     route: 'Naruto',
@@ -453,7 +462,7 @@ async function narutoRun(parsed: NarutoArgs) {
     prompt: parsed.prompt
   })
   // 4.0.9: Write canonical stop-gate artifacts for hook resolution.
-  const narutoGatePassed = result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk
+  const narutoGatePassed = result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk && tddOk
   await writeFinalStopGate({
     root,
     missionId: mission.id,
@@ -467,8 +476,14 @@ async function narutoRun(parsed: NarutoArgs) {
       tests_passed: summaryOk,
       route_evidence_passed: nativeProofOk && finalAccepted,
       native_session_split_evidence: nativeProofOk ? 'native_agent_proof' : null,
+      ...(regressionProof.required ? {
+        regression_test_added: regressionProof.regression_test_added,
+        regression_test_failed_before_fix: regressionProof.regression_test_failed_before_fix,
+        regression_test_passed_after_fix: regressionProof.regression_test_passed_after_fix,
+        regression_proof_path: 'regression-proof-summary.json'
+      } : { regression_proof_path: null }),
     },
-    blockers: summaryOk ? [] : [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate'])],
+    blockers: summaryOk ? [] : [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing'])],
     nativeGateFile: 'naruto-gate.json',
   }).catch(() => null)
   const summary = {
@@ -540,6 +555,7 @@ async function narutoRun(parsed: NarutoArgs) {
       blockers: result.fast_mode_propagation.blockers || []
     } : null,
     finalizer,
+    regression_proof: regressionProof,
     proof: result.proof?.status || 'missing',
     run: compactNarutoRunResult(result),
     zellij: null as any
@@ -697,6 +713,35 @@ function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {
   }
 }
 
+function summarizeRegressionProof(workGraph: any, result: any) {
+  const bugfixItems = (Array.isArray(workGraph?.work_items) ? workGraph.work_items : []).filter((item: any) => String(item?.kind || '') === 'bugfix')
+  const proofs = collectRegressionProofs(result).filter(validRegressionProof)
+  return {
+    schema: 'sks.regression-proof-summary.v1',
+    generated_at: nowIso(),
+    required: bugfixItems.length > 0,
+    bugfix_work_item_count: bugfixItems.length,
+    proof_count: proofs.length,
+    regression_test_added: bugfixItems.length === 0 ? true : proofs.some((proof: any) => String(proof.test_file || '').trim().length > 0),
+    regression_test_failed_before_fix: bugfixItems.length === 0 ? true : proofs.some((proof: any) => proof.failed_before === true),
+    regression_test_passed_after_fix: bugfixItems.length === 0 ? true : proofs.some((proof: any) => proof.passed_after === true),
+    test_files: [...new Set(proofs.map((proof: any) => String(proof.test_file || '')).filter(Boolean))],
+    blockers: bugfixItems.length === 0 || proofs.length > 0 ? [] : ['tdd_evidence_missing']
+  }
+}
+
+function collectRegressionProofs(result: any): any[] {
+  const rows = Array.isArray(result?.results) ? result.results : []
+  return rows.flatMap((row: any) => [
+    row?.regression_proof,
+    ...(Array.isArray(row?.patch_envelopes) ? row.patch_envelopes.map((envelope: any) => envelope?.regression_proof) : [])
+  ]).filter(Boolean)
+}
+
+function validRegressionProof(proof: any): boolean {
+  return Boolean(proof && proof.failed_before === true && proof.passed_after === true && String(proof.test_file || '').trim())
+}
+
 async function narutoStatus(parsed: NarutoArgs) {
   const root = await sksRoot()
   const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
@@ -802,7 +847,7 @@ async function narutoHelp(parsed: NarutoArgs) {
     mode: 'NARUTO',
     description: 'Shadow Clone Swarm: fan out up to ' + MAX_NARUTO_AGENT_COUNT + ' parallel clone sessions.',
     usage: [
-      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama|local-llm] [--local-model|--ollama|--no-ollama] [--work-items N] [--write-mode parallel|serial|off] [--apply-patches] [--dry-run-patches] [--real] [--readonly] [--json]',
+      'sks naruto run "<task>" [--clones N] [--backend codex-sdk|fake|ollama|local-llm] [--local-model|--ollama|--no-ollama] [--work-items N] [--tournament 2-4] [--write-mode parallel|serial|off] [--apply-patches] [--dry-run-patches] [--real] [--readonly] [--json]',
       'sks naruto status [--mission <id>] [--json]',
       'sks naruto proof latest [--messages 20] [--json]'
     ],
@@ -845,6 +890,7 @@ interface NarutoArgs {
   smoke: boolean
   parallelism: 'extreme' | 'balanced' | 'safe'
   messages: number
+  tournament: number
 }
 
 function parseNarutoArgs(args: string[] = []): NarutoArgs {
@@ -904,9 +950,10 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const smoke = hasFlag(args, '--smoke')
   const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
   const messages = normalizeMessages(readOption(args, '--messages', '8'))
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages'])
+  const tournament = normalizeTournament(readOption(args, '--tournament', '0'))
+  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages', '--tournament'])
   const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
-  return { action, prompt, clones, workItems, workItemsExplicit, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, json, missionId, noOpenZellij, attach, smoke, parallelism, messages }
+  return { action, prompt, clones, workItems, workItemsExplicit, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, json, missionId, noOpenZellij, attach, smoke, parallelism, messages, tournament }
 }
 
 function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {
@@ -918,6 +965,12 @@ function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {
 function normalizeMessages(value: unknown): number {
   const parsed = Number(value)
   return Math.max(0, Math.min(100, Math.floor(Number.isFinite(parsed) ? parsed : 8)))
+}
+
+function normalizeTournament(value: unknown): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 2) return 0
+  return Math.max(2, Math.min(4, Math.floor(parsed)))
 }
 
 async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {

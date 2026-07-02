@@ -3,6 +3,7 @@ import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { projectRoot, readText, runProcess, writeJsonAtomic, nowIso } from '../fsx.js';
 import { ui } from '../../cli/cli-theme.js';
+import { runCompiledRules } from '../verification/mistake-rule-compiler.js';
 
 type Evidence = 'machine' | 'llm';
 type Severity = 'blocker' | 'high' | 'medium' | 'low';
@@ -70,6 +71,23 @@ async function runMachineChecks(root: string, diff: Awaited<ReturnType<typeof co
   const checks: Array<{ command: string; ok: boolean; code?: number | null }> = [];
   findings.push(...await conflictMarkerFindings(root, diff.files));
   findings.push(...secretPatternFindings(diff.text));
+  const mistakeRules = await runCompiledRules(root, diff.files).catch((err) => ({
+    ok: false,
+    violations: [{ rule_id: 'mistake-rule-runner', severity: 'error' as const, file: '', line: 0, description: err instanceof Error ? err.message : String(err), good_example: '' }],
+    rule_count: 0
+  }));
+  checks.push({ command: 'sks mistake rules', ok: mistakeRules.ok });
+  for (const violation of mistakeRules.violations || []) {
+    findings.push({
+      id: `machine:mistake-rule:${violation.rule_id}:${violation.file}:${violation.line}`,
+      severity: violation.severity === 'error' ? 'blocker' : 'medium',
+      evidence: 'machine',
+      source: 'mistake-rule',
+      ...(violation.file ? { file: violation.file } : {}),
+      ...(violation.line ? { line: violation.line } : {}),
+      message: `${violation.description}${violation.good_example ? ` | good: ${singleLine(violation.good_example)}` : ''}`
+    });
+  }
   if (diff.files.some((file) => /\.(ts|tsx|mts|cts)$/.test(file))) {
     const command = 'tsc -p tsconfig.json --noEmit';
     const result = await runProcess('npx', ['tsc', '-p', 'tsconfig.json', '--noEmit'], {
@@ -202,6 +220,10 @@ function printReviewReport(report: any) {
 
 function summarizeProcessOutput(text: string): string {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 8).join(' | ').slice(0, 900);
+}
+
+function singleLine(value: string): string {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 240);
 }
 
 function readOption(args: string[] = [], name: string, fallback: unknown = null) {

@@ -10,6 +10,7 @@ import {
   type NarutoWorkWave
 } from './naruto-work-item.js'
 import type { NarutoTaskHints } from './naruto-task-hints.js'
+import { classifyNarutoDeliveryKind } from './naruto-task-hints.js'
 
 export interface NarutoAllocationAssignmentInput {
   task_id?: string
@@ -34,6 +35,7 @@ export interface BuildNarutoWorkGraphInput {
   maxActiveWorkers?: number
   worktreePolicy?: NarutoWorktreePolicy
   allocationAssignments?: NarutoAllocationAssignmentInput[]
+  tournament?: number
 }
 
 const WRITE_CAPABLE_KIND_CYCLE: NarutoWorkKind[] = [
@@ -91,7 +93,11 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
 
   for (let index = 0; index < totalWorkItems; index += 1) {
     const id = `NW-${String(index + 1).padStart(6, '0')}`
-    const kind = kindCycle[index % kindCycle.length] || 'verification'
+    const baseKind = kindCycle[index % kindCycle.length] || 'verification'
+    const deliveryKind = classifyNarutoDeliveryKind(input.prompt || '')
+    const kind = writeCapable && index === 0 && ['implementation', 'code_modification', 'refactor'].includes(baseKind)
+      ? deliveryKind
+      : baseKind
     const kindWrites = writeCapable && isNarutoWriteKind(kind)
     const selectedTarget = targetPaths.length ? targetPaths[index % targetPaths.length] || targetPaths[0] || '' : `${basePath}/${id}.json`
     const writePaths = kindWrites ? [selectedTarget].filter(Boolean) : []
@@ -133,7 +139,8 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
           required: worktreePolicy.required,
           allocation_required: worktreePolicy.mode === 'git-worktree'
         }
-      } : {})
+      } : {}),
+      ...(writePaths.length > 0 && input.tournament && input.tournament >= 2 ? { tournament: Math.min(4, Math.max(2, Math.floor(input.tournament))) } : {})
     })
   }
 

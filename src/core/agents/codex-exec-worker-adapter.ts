@@ -125,6 +125,8 @@ function buildWorkerPrompt(slice: any) {
         `Write-capable slice. write_paths=${JSON.stringify(writePaths)}.`,
         'Return at least one patch_envelopes item with source "model_authored".',
         `Use a write operation for ${JSON.stringify(writePaths[0])}, allowed_paths equal to write_paths, lease_proof.protected_path_check "passed", and non-empty verification_hint and rollback_hint.`,
+        'Impact-scan, machine-feedback, diff-quality, and compiled mistake rules run before queue acceptance; exported signature changes must include cochanged callers or a concrete cochange_acknowledged_reason.',
+        'For bugfix work, add a regression test first and include regression_proof with failed_before true and passed_after true. For repair work, include repair_hypothesis before patching.',
         'For patch envelope runtime ids you cannot know yet, use numeric 0 or empty strings; SKS will bind actual worker and Codex child process ids from the process report.',
         'Set changed_files and writes consistently with the patch envelope operation.'
       ].join('\n')

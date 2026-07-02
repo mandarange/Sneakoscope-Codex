@@ -1,0 +1,9 @@
+{
+  "name": "bench-t04-refactor-preserve",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test.js"
+  }
+}
