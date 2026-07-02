@@ -1,8 +1,8 @@
 // @ts-nocheck
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from '../../core/fsx.js';
 import { emitGate, importDist, root } from '../sks-1-18-gate-lib.js';
 
 export async function runRealCodexParallelGate({ workers, gate }) {
@@ -23,7 +23,7 @@ export async function runRealCodexParallelGate({ workers, gate }) {
     emitGate(gate, { status: report.status, requested_workers: workers });
     process.exit(required ? 1 : 0);
   }
-  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-real-codex-parallel-'));
+  const fixture = tmpdir('sks-real-codex-parallel-');
   const targetFiles = Array.from({ length: workers }, (_, index) => `target-${String(index + 1).padStart(3, '0')}.txt`);
   for (const file of targetFiles) fs.writeFileSync(path.join(fixture, file), `before ${file}\n`);
   const prompt = [

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from '../core/fsx.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 export { assertGate, emitGate, root };
 
 export function makeSearchVisibilityFixture(name = 'search-visibility', options = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `sks-${name}-`));
+  const dir = tmpdir(`sks-${name}-`);
   fs.mkdirSync(path.join(dir, 'public'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'bin'), { recursive: true });
   const packageJson = {

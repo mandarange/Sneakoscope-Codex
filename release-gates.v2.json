@@ -2,6 +2,35 @@
   "schema": "sks.release-gates.v2",
   "gates": [
     {
+      "id": "hook:latency-budget",
+      "command": "node ./dist/scripts/hook-latency-budget-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read",
+        "timing-sensitive"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/pipeline-internals/runtime-gates.ts",
+          "src/scripts/hook-latency-budget-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "agent:codex-child-overlap",
       "command": "node ./dist/scripts/agent-codex-child-overlap-check.js",
       "deps": [],
@@ -666,6 +695,96 @@
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-lb:fast-ui-preservation",
+      "command": "node ./dist/scripts/codex-lb-fast-ui-preservation-check.js",
+      "deps": [
+        "codex-app:fast-ui-preservation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "codex-lb:gpt55-fast-profile",
+      "command": "node ./dist/scripts/codex-lb-gpt55-fast-profile-check.js",
+      "deps": [
+        "codex-lb:fast-ui-preservation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "hooks:concurrent-session-collision",
+      "command": "node ./dist/scripts/concurrent-session-collision-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/hooks-runtime.ts",
+          "src/core/mission.ts",
+          "src/core/pipeline-internals/**",
+          "src/scripts/concurrent-session-collision-check.ts"
         ]
       },
       "isolation": {
@@ -1652,6 +1771,34 @@
       ]
     },
     {
+      "id": "core-skill:route-runtime-integration",
+      "command": "node ./dist/scripts/core-skill-route-runtime-integration-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/skills/**",
+          "src/scripts/core-skill-route-runtime-integration-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "core-skill:deployment-snapshot",
       "command": "node ./dist/scripts/core-skill-deployment-snapshot-check.js",
       "deps": [],
@@ -1765,7 +1912,7 @@
     },
     {
       "id": "core-skill:patch",
-      "command": "node ./dist/scripts/core-skill-patch-check.js",
+      "command": "node ./dist/scripts/core-skill-patch-check.js && node ./dist/scripts/skills-manifest-continuity-check.js && node ./dist/scripts/uninstall-inventory-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -1779,6 +1926,7 @@
           "package.json",
           "release-gates.v2.json",
           "src/**",
+          "dist/config/skills-manifest.json",
           "schemas/**"
         ]
       },
@@ -1886,7 +2034,8 @@
       "deps": [],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,
@@ -2342,7 +2491,8 @@
       "command": "node ./dist/scripts/git-worktree-diff-envelope-check.js",
       "deps": [],
       "resource": [
-        "cpu-light"
+        "cpu-light",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,
@@ -2364,12 +2514,178 @@
       ]
     },
     {
+      "id": "git:worktree-manifest-append",
+      "command": "node ./dist/scripts/git-worktree-manifest-append-check.js",
+      "deps": [],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/git-worktree-manager.ts",
+          "src/scripts/git-worktree-manifest-append-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-dirty-main-detection",
+      "command": "node ./dist/scripts/git-worktree-dirty-main-detection-check.js",
+      "deps": [],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/git-worktree-manager.ts",
+          "src/scripts/git-worktree-dirty-main-detection-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-untracked-diff",
+      "command": "node ./dist/scripts/git-worktree-untracked-diff-check.js",
+      "deps": [
+        "git:worktree-diff-envelope"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/git-worktree-diff.ts",
+          "src/scripts/git-worktree-untracked-diff-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-integration-primary",
+      "command": "node ./dist/scripts/git-worktree-integration-primary-check.js",
+      "deps": [
+        "git:worktree-diff-envelope"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/git-worktree-diff.ts",
+          "src/core/git/git-worktree-merge-queue.ts",
+          "src/scripts/git-worktree-integration-primary-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "git:worktree-dirty-lock",
+      "command": "node ./dist/scripts/git-worktree-dirty-lock-check.js",
+      "deps": [],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/git-worktree-cleanup.ts",
+          "src/scripts/git-worktree-dirty-lock-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
+      "id": "naruto:worktree-coding:blackbox",
+      "command": "node ./dist/scripts/naruto-worktree-coding-blackbox.js",
+      "deps": [
+        "git:worktree-diff-envelope",
+        "git:worktree-integration-primary"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/**",
+          "src/core/naruto/**",
+          "src/scripts/naruto-worktree-coding-blackbox.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "goal:artifact-compat",
       "command": "node ./dist/scripts/goal-artifact-compat-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 300000,
@@ -3888,7 +4204,8 @@
       ],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 300000,
@@ -4080,7 +4397,8 @@
         "wrongness:check"
       ],
       "resource": [
-        "cpu-light"
+        "cpu-light",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,
@@ -4635,7 +4953,8 @@
       ],
       "resource": [
         "cpu-light",
-        "fs-read"
+        "fs-read",
+        "timing-sensitive"
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,

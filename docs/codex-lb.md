@@ -37,10 +37,11 @@ Persistence modes:
 
 - `durable_env_file`: `~/.codex/sks-codex-lb.env` was written with `0600`.
 - `durable_keychain`: macOS Keychain storage succeeded.
-- `durable_launchctl`: `launchctl setenv` synced the GUI launch environment.
 - `shell_profile`: a managed shell profile snippet was installed.
 - `process_only_ephemeral`: all durable persistence choices were disabled, so the supplied credentials live only in the current process.
 - `none`: no credential source is effective.
+
+`--launchctl` is no longer a credential persistence mode. It may sync the non-secret base URL only and removes `CODEX_LB_API_KEY` / `OPENROUTER_API_KEY` from the user launchd environment.
 
 The combination `--no-env-file --no-keychain --no-launchctl --shell-profile skip` is process-only. Non-interactive process-only setup requires `--yes`; interactive setup asks for a separate `process-only` confirmation. JSON output includes:
 

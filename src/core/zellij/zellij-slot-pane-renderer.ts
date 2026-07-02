@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { readZellijSlotTelemetrySnapshot, type ZellijSlotTelemetrySnapshot } from './zellij-slot-telemetry.js'
+import { resolveZellijTheme, paint, statusBadge, progressBar, elapsed, ANSI_CODES, type ZellijTheme } from './zellij-theme.js'
 
 export interface ZellijSlotPaneRenderInput {
   slotId: string
@@ -33,42 +34,59 @@ export interface ZellijSlotPaneRenderInput {
   loopId?: string | null
   loopRole?: string | null
   loopGate?: string | null
+  progress?: { done: number; total: number; label?: string | null } | null
+  blockers?: string[] | null
+  telemetryTs?: string | null
   mode?: 'compact-slots' | 'dashboard-plus-slots' | 'full-debug'
 }
 
 export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
+  const theme = resolveZellijTheme()
+  const W = Math.max(20, theme.width - 4)
+  const t = (s: unknown, w: number = W) => trimInline(String(s ?? ''), w)
   const mode = input.mode || 'compact-slots'
-  const maxLines = mode === 'compact-slots' ? 17 : mode === 'dashboard-plus-slots' ? 20 : 32
-  const task = trimInline(input.currentTask || input.currentFile || 'waiting for worker intake', 78)
-  const heartbeat = input.heartbeatAgeMs == null
-    ? 'unknown'
-    : input.heartbeatAgeMs < 1000
-      ? 'now'
-      : `${Math.max(1, Math.round(input.heartbeatAgeMs / 1000))}s ago`
-  const files = firstNonEmptyList(input.changedFiles, input.patchFiles, input.plannedFiles, input.currentFile ? [input.currentFile] : [])
+  const maxLines = mode === 'compact-slots' ? 14 : mode === 'dashboard-plus-slots' ? 18 : 30
   const events = (input.eventLines || []).filter(Boolean).slice(-10)
   const stdout = (input.stdoutTail || []).filter(Boolean).slice(-6)
   const stderr = (input.stderrTail || []).filter(Boolean).slice(-1)
+  const fullDebug = mode === 'full-debug'
   const fixtureLoopProof = String(input.backend || '').includes('fixture') || String(input.patchStatus || '').includes('fixture')
+  const meta = [input.model || input.provider || '?', input.serviceTier || '?'].filter(Boolean).join('·')
+  const head = `${statusBadge(theme, input.status || 'queued')}  ${paint(theme, ANSI_CODES.bold, input.slotId)}` +
+    `  ${t(input.role || 'worker', 12)}  ${paint(theme, ANSI_CODES.dim, t(meta, 28))}`
+  const prog = input.progress && input.progress.total > 0
+    ? progressBar(theme, input.progress.done, input.progress.total)
+    : paint(theme, ANSI_CODES.dim, `elapsed ${elapsed(input.telemetryTs) || '-'}  heartbeat ${formatHeartbeat(input.heartbeatAgeMs)}`)
+  const doing = `${paint(theme, ANSI_CODES.bold, '▸ ')}${t(input.currentTask || 'waiting for work item')}`
+  const file = input.currentFile ? paint(theme, ANSI_CODES.dim, `file ${t(input.currentFile)}`) : null
+  const worktree = input.worktreeId ? paint(theme, ANSI_CODES.dim, `worktree ${t(input.worktreeId, 32)}`) : null
+  const patch = ((input.patchStatus && input.patchStatus !== 'queued') || (input.verifyStatus && input.verifyStatus !== 'queued'))
+    ? `patch ${t(input.patchStatus || '-', 18)} · verify ${t(input.verifyStatus || '-', 18)}`
+    : null
+  const blockers = (input.blockers || []).slice(0, 2).map((b) => paint(theme, ANSI_CODES.red, `! ${t(b)}`))
+  const tail = [
+    ...stderr.slice(-1).map((line) => paint(theme, ANSI_CODES.red, `err ${t(line)}`)),
+    ...stdout.slice(-3).map((line) => paint(theme, ANSI_CODES.dim, `    ${t(line)}`))
+  ]
   const rows = [
-    input.loopId ? `${trimInline(input.loopId, 28)} · ${trimInline(input.loopRole || input.role || 'worker', 14)} · ${input.slotId}` : null,
-    `slot: ${input.slotId} / gen-${Math.max(1, Math.floor(Number(input.generationIndex) || 1))} / ${trimInline(input.status || 'running', 18)}`,
-    `role: ${trimInline(input.role || 'worker', 18)}  backend: ${trimInline(input.backend || 'codex-sdk', 20)}  worktree: ${trimInline(input.worktreeId || '-', 18)}`,
-    `runtime: fast ${formatFastMode(input.fastMode, input.serviceTier)}  tier: ${trimInline(input.serviceTier || 'unknown', 12)}  provider: ${trimInline(input.provider || 'unknown', 18)}`,
-    `model: ${trimInline(input.model || 'unknown', 28)}  reasoning: ${trimInline(input.reasoningEffort || 'unknown', 16)}${input.authMode ? `  auth: ${trimInline(input.authMode, 14)}` : ''}`,
-    input.sessionId ? `session: ${trimInline(input.sessionId, 62)}` : null,
-    `heartbeat: ${heartbeat}${input.heartbeatEvent ? `  event: ${trimInline(input.heartbeatEvent, 40)}` : ''}`,
-    `doing: ${task}`,
-    input.loopGate ? `gate: ${trimInline(input.loopGate, 68)}${input.verifyStatus ? ` · ${trimInline(input.verifyStatus, 18)}` : ''}` : null,
-    fixtureLoopProof ? 'fixture loop proof · not production execution' : null,
-    `files: ${trimInline(files.length ? files.join(', ') : 'no changed file yet', 78)}`,
-    `patch: ${trimInline(input.patchStatus || 'queued', 24)}  verify: ${trimInline(input.verifyStatus || 'queued', 24)}`,
-    input.qaAppHandoffPending ? `QA app handoff pending: ${trimInline(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json', 55)}` : null,
-    ...events.map((event) => `event: ${trimInline(event, 78)}`),
-    ...stdout.map((line) => `out: ${trimInline(line, 79)}`),
-    ...stderr.map((line) => `err: ${trimInline(line, 79)}`)
+    head,
+    prog,
+    doing,
+    file,
+    worktree,
+    patch,
+    input.qaAppHandoffPending ? `QA app handoff pending: ${t(input.qaAppHandoffArtifact || 'qa-loop/app-handoff.json')}` : null,
+    ...blockers,
+    ...tail,
+    ...(fullDebug ? [
+      input.sessionId ? `session ${t(input.sessionId, 62)}` : null,
+      input.loopId ? `loop ${t(input.loopId, 28)} · ${t(input.loopRole || input.role || 'worker', 14)}` : null,
+      input.loopGate ? `gate ${t(input.loopGate)}` : null,
+      fixtureLoopProof ? 'fixture loop proof · not production execution' : null,
+      ...events.map((event) => `event ${t(event)}`)
+    ] : [])
   ].filter((row): row is string => Boolean(row))
-  return frameSlotPane(`LIVE SLOT ${input.slotId}`, rows.slice(0, Math.max(1, maxLines - 2)))
+  return frameSlotPane(input.slotId, rows.slice(0, Math.max(1, maxLines - 2)), theme)
 }
 
 export async function renderZellijSlotPaneFromArtifacts(input: {
@@ -79,36 +97,66 @@ export async function renderZellijSlotPaneFromArtifacts(input: {
   generationIndex: number
   role?: string | null
   backend?: string | null
+  provider?: string | null
+  model?: string | null
+  serviceTier?: string | null
+  reasoningEffort?: string | null
+  currentTask?: string | null
   mode?: ZellijSlotPaneRenderInput['mode']
 }): Promise<string> {
-  const artifactRender = await renderZellijSlotPaneFromArtifactDir(input).catch(() => null)
+  const detail = await renderInputFromArtifactDir(input).catch(() => null)
   if (input.missionId && input.missionId !== 'latest') {
-    const telemetry = await tryRenderTelemetrySlotPane({
-      artifactRoot: input.artifactRoot || input.artifactDir,
-      missionId: input.missionId,
+    const telemetry = await readZellijSlotTelemetrySnapshot(path.resolve(input.artifactRoot || input.artifactDir), input.missionId).catch(() => null)
+    const live = findTelemetrySlot(telemetry, input.slotId, input.generationIndex)
+    const merged = mergeRenderInputWithLiveTelemetry({
       slotId: input.slotId,
       generationIndex: input.generationIndex,
-      artifactRender
-    })
-    if (telemetry) return telemetry
-    if (artifactRender) return artifactRender
-    return [
-      `${input.slotId} gen-${Math.max(1, Math.floor(Number(input.generationIndex) || 1))}`,
-      'waiting for telemetry...',
-      `mission ${input.missionId}`
-    ].join('\n')
+      role: input.role ?? null,
+      backend: input.backend ?? null,
+      provider: input.provider ?? null,
+      model: input.model ?? null,
+      serviceTier: input.serviceTier ?? null,
+      reasoningEffort: input.reasoningEffort ?? null,
+      currentTask: input.currentTask ?? null,
+      status: 'launching',
+      mode: input.mode || 'compact-slots',
+      ...(detail || {})
+    }, live)
+    return renderZellijSlotPane(merged)
   }
-  if (artifactRender) return artifactRender
   const fallbackInput: ZellijSlotPaneRenderInput = {
     slotId: input.slotId,
     generationIndex: input.generationIndex,
     status: 'launching',
-    currentTask: 'waiting for worker intake',
+    currentTask: input.currentTask || 'waiting for worker intake',
     mode: input.mode || 'compact-slots'
   }
   if (input.role !== undefined) fallbackInput.role = input.role
   if (input.backend !== undefined) fallbackInput.backend = input.backend
-  return renderZellijSlotPane(fallbackInput)
+  if (input.provider !== undefined) fallbackInput.provider = input.provider
+  if (input.model !== undefined) fallbackInput.model = input.model
+  if (input.serviceTier !== undefined) fallbackInput.serviceTier = input.serviceTier
+  if (input.reasoningEffort !== undefined) fallbackInput.reasoningEffort = input.reasoningEffort
+  return renderZellijSlotPane(detail || fallbackInput)
+}
+
+function mergeRenderInputWithLiveTelemetry(detail: ZellijSlotPaneRenderInput, live: ZellijSlotTelemetrySnapshot['slots'][string] | null): ZellijSlotPaneRenderInput {
+  if (!live) return detail
+  return {
+    ...detail,
+    status: live.status ?? detail.status,
+    currentTask: live.task_title || detail.currentTask || null,
+    currentFile: live.current_file || detail.currentFile || null,
+    role: live.role || detail.role || null,
+    backend: live.backend || detail.backend || null,
+    provider: live.provider || detail.provider || null,
+    serviceTier: live.service_tier || detail.serviceTier || null,
+    progress: live.progress ?? null,
+    blockers: live.blockers || [],
+    telemetryTs: live.latest_ts || null,
+    heartbeatAgeMs: live.latest_ts ? Math.max(0, Date.now() - Date.parse(live.latest_ts)) : detail.heartbeatAgeMs ?? null,
+    worktreeId: live.worktree_id || detail.worktreeId || null
+  }
 }
 
 async function renderZellijSlotPaneFromArtifactDir(input: {
@@ -119,6 +167,67 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
   backend?: string | null
   mode?: ZellijSlotPaneRenderInput['mode']
 }): Promise<string | null> {
+  const detail = await renderInputFromArtifactDir(input)
+  if (!detail) return null
+  return renderZellijSlotPane(detail)
+}
+
+async function renderInputFromArtifactDir(input: {
+  artifactDir: string
+  slotId: string
+  generationIndex: number
+  role?: string | null
+  backend?: string | null
+  provider?: string | null
+  model?: string | null
+  serviceTier?: string | null
+  reasoningEffort?: string | null
+  currentTask?: string | null
+  mode?: ZellijSlotPaneRenderInput['mode']
+}): Promise<ZellijSlotPaneRenderInput | null> {
+  const envDefaults = {
+    provider: (input.provider ?? process.env.SKS_SLOT_PROVIDER) || null,
+    model: (input.model ?? process.env.SKS_SLOT_MODEL) || null,
+    serviceTier: (input.serviceTier ?? process.env.SKS_SLOT_TIER) || null,
+    reasoningEffort: (input.reasoningEffort ?? process.env.SKS_SLOT_REASONING) || null,
+    currentTask: (input.currentTask ?? process.env.SKS_SLOT_TASK) || null,
+    role: (input.role ?? process.env.SKS_SLOT_ROLE) || null
+  }
+  const detail = await renderInputFromArtifactDirRaw(input)
+  if (!detail) {
+    return {
+      slotId: input.slotId,
+      generationIndex: input.generationIndex,
+      role: envDefaults.role,
+      backend: input.backend || null,
+      provider: envDefaults.provider,
+      model: envDefaults.model,
+      serviceTier: envDefaults.serviceTier,
+      reasoningEffort: envDefaults.reasoningEffort,
+      currentTask: envDefaults.currentTask || 'waiting for worker intake',
+      status: 'launching',
+      mode: input.mode || 'compact-slots'
+    }
+  }
+  return {
+    ...detail,
+    role: detail.role || envDefaults.role,
+    provider: detail.provider || envDefaults.provider,
+    model: detail.model || envDefaults.model,
+    serviceTier: detail.serviceTier || envDefaults.serviceTier,
+    reasoningEffort: detail.reasoningEffort || envDefaults.reasoningEffort,
+    currentTask: detail.currentTask || envDefaults.currentTask
+  }
+}
+
+async function renderInputFromArtifactDirRaw(input: {
+  artifactDir: string
+  slotId: string
+  generationIndex: number
+  role?: string | null
+  backend?: string | null
+  mode?: ZellijSlotPaneRenderInput['mode']
+}): Promise<ZellijSlotPaneRenderInput | null> {
   const artifactDir = path.resolve(input.artifactDir)
   const result = await readJson(path.join(artifactDir, 'worker-result.json'))
   const intake = await readJson(path.join(artifactDir, 'worker-intake.json'))
@@ -152,7 +261,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
   const now = Date.now()
   const qaAppHandoff = await readQaAppHandoffNearArtifactDir(artifactDir)
   if (!result && !intake && !backendReport && !processReport && !paneReport && !codexProof && !localProof && !heartbeatMtime && !eventRows.length) return null
-  return renderZellijSlotPane({
+  return {
     slotId: input.slotId,
     generationIndex: input.generationIndex,
     sessionId: result?.session_id || intake?.agent?.session_id || backendReport?.session_id || null,
@@ -211,7 +320,7 @@ async function renderZellijSlotPaneFromArtifactDir(input: {
     qaAppHandoffPending: ['pending', 'blocked_for_desktop_review'].includes(String(qaAppHandoff?.status || '')),
     qaAppHandoffArtifact: qaAppHandoff?.artifact_path || null,
     mode: input.mode || 'compact-slots'
-  })
+  }
 }
 
 async function readQaAppHandoffNearArtifactDir(artifactDir: string) {
@@ -279,6 +388,11 @@ export function buildZellijSlotPaneCommand(input: {
   artifactRoot?: string
   backend?: string | null
   role?: string | null
+  provider?: string | null
+  model?: string | null
+  serviceTier?: string | null
+  reasoningEffort?: string | null
+  currentTask?: string | null
   mode?: ZellijSlotPaneRenderInput['mode']
   watch?: boolean
 }) {
@@ -295,84 +409,24 @@ export function buildZellijSlotPaneCommand(input: {
     ...(input.role ? ['--role', input.role] : []),
     ...(input.watch ? ['--watch'] : [])
   ]
-  return [input.nodePath || process.execPath, ...args].map(shellQuote).join(' ')
-}
-
-async function tryRenderTelemetrySlotPane(input: {
-  artifactRoot: string
-  missionId: string
-  slotId: string
-  generationIndex: number
-  artifactRender?: string | null
-}): Promise<string | null> {
-  const snapshot = await readZellijSlotTelemetrySnapshot(path.resolve(input.artifactRoot), input.missionId).catch(() => null)
-  if (!snapshot || !Object.keys(snapshot.slots || {}).length) return null
-  const slot = findTelemetrySlot(snapshot, input.slotId, input.generationIndex)
-  if (!slot) return null
-  const staleRows = staleTelemetryRows(telemetryStatus(snapshot).telemetry_age_ms)
-  const fallbackRows = artifactFallbackRows(input.artifactRender)
-  // Always surface the live artifact rows (current file, tool events, stdout
-  // tail). Telemetry freshness only tells us the worker is alive — the user
-  // still needs to see WHAT the worker is doing right now.
-  const liveRows = fallbackRows
-  if (slot.status === 'failed') {
-    return [
-      `${slot.slot_id} gen-${slot.generation_index} · FAILED`,
-      ...staleRows,
-      ...liveRows,
-      `blocker: ${trimInline(slot.blockers[0] || 'worker_failed', 78)}`,
-      `artifact: ${trimInline(slot.artifact_paths[slot.artifact_paths.length - 1] || '-', 78)}`
-    ].join('\n')
+  const env = {
+    SKS_SLOT_PROVIDER: String(input.provider || ''),
+    SKS_SLOT_MODEL: String(input.model || ''),
+    SKS_SLOT_TIER: String(input.serviceTier || ''),
+    SKS_SLOT_REASONING: String(input.reasoningEffort || ''),
+    SKS_SLOT_TASK: String(input.currentTask || '').slice(0, 200),
+    SKS_SLOT_ROLE: String(input.role || '')
   }
-  if (slot.status === 'completed' || slot.status === 'drained') {
-    return [
-      `${slot.slot_id} gen-${slot.generation_index} · done`,
-      ...staleRows,
-      ...liveRows,
-      `artifacts ${slot.artifact_paths.length} · ${slot.latest_event_type === 'verification_passed' ? 'verify passed' : 'verify queued'}`,
-      'closing in 3s'
-    ].join('\n')
-  }
-  const backend = [slot.backend, slot.service_tier, slot.worktree_id].filter((value) => value && value !== 'unknown').join(' · ') || 'worker'
-  const heartbeat = slot.latest_ts ? `${Math.max(0, Math.round((Date.now() - Date.parse(slot.latest_ts)) / 1000))}s` : '?'
-  return [
-    `${slot.slot_id} gen-${slot.generation_index} · ${trimInline(slot.role || 'worker', 28)}`,
-    ...staleRows,
-    ...liveRows,
-    trimInline(backend, 78),
-    `${slot.status}: ${trimInline(slot.task_title || 'worker task', 68)}`,
-    `${formatTelemetryProgress(slot.progress, slot.started_at || slot.latest_ts)} · latest ${slot.latest_event_type} ${heartbeat}`,
-    `${slot.latest_event_type === 'patch_candidate' ? 'patch candidate' : 'patch'}: ${slot.latest_event_type === 'patch_candidate' ? 'queued' : trimInline(slot.current_file || '-', 42)}`
-  ].join('\n')
+  const envPrefix = Object.entries(env)
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}=${shellQuote(value)}`)
+  return [...envPrefix, input.nodePath || process.execPath, ...args].map((part, index) => index < envPrefix.length ? part : shellQuote(part)).join(' ')
 }
 
-function artifactFallbackRows(text: string | null | undefined): string[] {
-  if (!text) return []
-  return String(text)
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^\|\s?/, '').replace(/\s?\|$/, '').trim())
-    .filter((line) => /^(heartbeat|doing|files|event|out|err):\s+/i.test(line))
-    .filter((line) => !/unknown|waiting for worker intake|no changed file yet/i.test(line))
-    .slice(-12)
-    .map((line) => `live: ${trimInline(line, 72)}`)
-}
-
-function findTelemetrySlot(snapshot: ZellijSlotTelemetrySnapshot, slotId: string, generationIndex: number) {
+function findTelemetrySlot(snapshot: ZellijSlotTelemetrySnapshot | null | undefined, slotId: string, generationIndex: number) {
+  if (!snapshot) return null
   const generation = Math.max(1, Math.floor(Number(generationIndex) || 1))
   return Object.values(snapshot.slots || {}).find((row) => row.slot_id === slotId && Number(row.generation_index) === generation) || null
-}
-
-function formatTelemetryProgress(progress: { done: number; total: number; label: string } | null, startedAt?: string | null) {
-  if (!progress || (progress.total === 0 && progress.done > 0)) return `elapsed ${formatElapsedSince(startedAt)}`
-  return `progress ${progress.done}/${progress.total}${progress.label ? ` ${trimInline(progress.label, 24)}` : ''}`
-}
-
-function formatElapsedSince(startedAt?: string | null) {
-  const start = Date.parse(String(startedAt || ''))
-  const seconds = Number.isFinite(start) ? Math.max(0, Math.floor((Date.now() - start) / 1000)) : 0
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
 function telemetryStatus(snapshot: ZellijSlotTelemetrySnapshot | null) {
@@ -385,13 +439,6 @@ function telemetryStatus(snapshot: ZellijSlotTelemetrySnapshot | null) {
     telemetry_stale: telemetryAgeMs > 15000,
     telemetry_age_ms: telemetryAgeMs
   }
-}
-
-function staleTelemetryRows(ageMs: number): string[] {
-  if (!Number.isFinite(ageMs)) return ['telemetry stale; worker may still be running']
-  if (ageMs > 60000) return ['telemetry stale; worker may still be running']
-  if (ageMs > 15000) return [`telemetry stale ${(ageMs / 1000).toFixed(1)}s`]
-  return []
 }
 
 async function readJson(file: string): Promise<any | null> {
@@ -534,14 +581,6 @@ function firstDefined(...values: unknown[]): string | boolean | null {
   return null
 }
 
-function firstNonEmptyList(...values: Array<string[] | null | undefined>): string[] {
-  for (const value of values) {
-    const normalized = normalizeList(value || [])
-    if (normalized.length) return normalized
-  }
-  return []
-}
-
 function normalizeList(values: unknown): string[] {
   return [...new Set((Array.isArray(values) ? values : [values]).map((value) => String(value || '').trim()).filter(Boolean))]
 }
@@ -549,29 +588,28 @@ function normalizeList(values: unknown): string[] {
 function trimInline(value: string, max: number): string {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
   if (text.length <= max) return text
-  return text.slice(0, Math.max(1, max - 3)) + '...'
+  return text.slice(0, Math.max(1, max - 1)) + '…'
 }
 
-function formatFastMode(value: unknown, serviceTier?: string | null): string {
-  const text = String(value ?? '').trim().toLowerCase()
-  if (value === true || text === 'true' || text === '1' || text === 'on' || text === 'fast') return 'on'
-  if (value === false || text === 'false' || text === '0' || text === 'off' || text === 'standard') return 'off'
-  const tier = String(serviceTier || '').trim().toLowerCase()
-  if (tier === 'fast' || tier === 'priority') return 'on'
-  if (tier === 'standard' || tier === 'default') return 'off'
-  return 'unknown'
+function formatHeartbeat(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return 'unknown'
+  if (value < 1000) return 'now'
+  return `${Math.max(1, Math.round(value / 1000))}s`
 }
 
-function frameSlotPane(title: string, rows: string[]): string {
-  const width = Math.min(96, Math.max(44, title.length + 6, ...rows.map((row) => row.length + 4)))
-  const line = '+' + '-'.repeat(width - 2) + '+'
-  const label = ` ${trimInline(title, width - 4)} `
-  const titleLine = '|' + label.padEnd(width - 2, ' ') + '|'
+function frameSlotPane(title: string, rows: string[], theme: ZellijTheme): string {
+  const width = theme.width
+  const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '')
+  const inner = width - 2
+  const visibleTitle = strip(title)
+  const top = `┌─ ${title} ${'─'.repeat(Math.max(0, inner - visibleTitle.length - 4))}┐`
   const body = rows.map((row) => {
-    const text = ` ${trimInline(row, width - 4)} `
-    return '|' + text.padEnd(width - 2, ' ') + '|'
+    const visible = strip(row)
+    const clipped = visible.length > inner - 2 ? trimInline(row, inner - 2) : row
+    const pad = Math.max(0, inner - strip(clipped).length - 1)
+    return `│ ${clipped}${' '.repeat(pad)}│`
   })
-  return [line, titleLine, line, ...body, line].join('\n')
+  return [paint(theme, ANSI_CODES.gray, top), ...body, paint(theme, ANSI_CODES.gray, `└${'─'.repeat(inner)}┘`)].join('\n')
 }
 
 function shellQuote(value: string) {

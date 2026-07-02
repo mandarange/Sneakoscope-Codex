@@ -45,3 +45,13 @@ export function createReleaseGateHermeticEnv(input: {
     }
   }
 }
+
+export function cleanupReleaseGateHermeticEnv(env: ReleaseGateHermeticEnv): void {
+  if (process.env.SKS_KEEP_GATE_ENV === '1') return
+  fs.rmSync(env.tmp_dir, { recursive: true, force: true })
+}
+
+export function cleanupReleaseGateRunTemp(runId: string): void {
+  if (process.env.SKS_KEEP_GATE_ENV === '1') return
+  fs.rmSync(path.join(os.tmpdir(), 'sks-gate', runId), { recursive: true, force: true })
+}

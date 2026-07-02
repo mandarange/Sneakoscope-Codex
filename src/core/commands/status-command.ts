@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { projectRoot, readJson } from '../fsx.js';
-import { stateFile } from '../mission.js';
+import { listSessionStates, stateFile } from '../mission.js';
 import { readRouteProof } from '../proof/proof-reader.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
 import { flag } from './command-utils.js';
@@ -8,6 +8,7 @@ import { flag } from './command-utils.js';
 export async function statusCommand(args: any = []) {
   const root = await projectRoot();
   const state = await readJson(stateFile(root), {});
+  const sessions = await listSessionStates(root);
   const missionId = state.mission_id || null;
   const proof: any = missionId ? await readRouteProof(root, missionId) : null;
   const trust = missionId ? await latestTrustReport(root, missionId) : null;
@@ -24,6 +25,7 @@ export async function statusCommand(args: any = []) {
     image_voxel_status: proof?.evidence?.image_voxels?.status || 'not_recorded',
     db_safety_status: proof?.evidence?.db || proof?.evidence?.db_safety ? 'recorded' : 'not_recorded',
     next_action: nextAction(state, trust, proof),
+    sessions: sessions.map(sessionStatusRow),
     files: missionId ? {
       mission: path.join(root, '.sneakoscope', 'missions', missionId),
       completion_proof: path.join(root, '.sneakoscope', 'missions', missionId, 'completion-proof.json'),
@@ -40,6 +42,25 @@ export async function statusCommand(args: any = []) {
   console.log(`Image:   ${result.image_voxel_status}`);
   console.log(`DB:      ${result.db_safety_status}`);
   console.log(`Next:    ${result.next_action}`);
+  printSessionTable(sessions);
+}
+
+function sessionStatusRow(row: any) {
+  return {
+    session_key: row.session_key,
+    mission_id: row.mission_id,
+    route: row.state?.route_command || row.state?.route || row.state?.mode || null,
+    phase: row.phase,
+    updated_at: row.updated_at
+  };
+}
+
+function printSessionTable(sessions: any[] = []) {
+  if (!sessions.length) return;
+  console.log('Sessions:');
+  for (const row of sessions.slice(0, 12).map(sessionStatusRow)) {
+    console.log(`  ${row.session_key}  ${row.mission_id || 'none'}  ${row.route || '-'}  ${row.phase || '-'}`);
+  }
 }
 
 function nextAction(state: any = {}, trust: any = {}, proof: any = {}) {

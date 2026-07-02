@@ -1,4 +1,4 @@
-import { findLatestMission } from '../mission.js';
+import { findLatestMission, listSessionStates } from '../mission.js';
 import { DOLLAR_SKILL_NAMES, RECOMMENDED_SKILLS } from '../routes.js';
 
 export const flag = (args: any = [], name: any) => args.includes(name);
@@ -8,7 +8,26 @@ export function promptOf(args: any = []) {
 }
 
 export async function resolveMissionId(root: any, arg: any) {
-  return (!arg || arg === 'latest') ? findLatestMission(root) : arg;
+  if (arg && arg !== 'latest') return arg;
+  await warnOnMultipleActiveSessions(root);
+  return findLatestMission(root);
+}
+
+export async function warnOnMultipleActiveSessions(root: any) {
+  const active = (await listSessionStates(root)).filter((row) => isActiveSessionState(row.state));
+  if (active.length < 2) return;
+  const lines = active.slice(0, 8).map((row) => `  - ${row.session_key}: ${row.mission_id || 'none'} ${row.phase || ''}`.trimEnd());
+  console.error([
+    `Warning: ${active.length} active SKS sessions are present; resolving "latest" to the newest mission.`,
+    ...lines,
+    'Use --mission <id> (or a positional mission id where supported) to target a specific session explicitly.'
+  ].join('\n'));
+}
+
+export function isActiveSessionState(state: any = {}) {
+  if (!state?.mission_id) return false;
+  const phase = String(state.phase || '').toUpperCase();
+  return !/(?:DONE|COMPLETE|CLOSED|HARD_BLOCKED|REVOKED)$/.test(phase);
 }
 
 export function readOption(args: any = [], name: any, fallback: any = null) {

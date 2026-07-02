@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import type { ReleaseGateNode } from './release-gate-node.js'
-import { createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
+import { cleanupReleaseGateHermeticEnv, createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
 import { writeReleaseGateJson } from './release-gate-report.js'
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
@@ -78,7 +78,9 @@ function runOne(root: string, runId: string, reportRoot: string, gate: ReleaseGa
         clearTimeout(timer)
         if (timeoutCleanup) await timeoutCleanup
         const exitCode = timedOut ? 124 : code
-        resolve({ id: gate.id, ok: exitCode === 0, exit_code: exitCode, signal, timed_out: timedOut, duration_ms: Date.now() - started, report_dir: hermetic.report_dir })
+        const result = { id: gate.id, ok: exitCode === 0, exit_code: exitCode, signal, timed_out: timedOut, duration_ms: Date.now() - started, report_dir: hermetic.report_dir }
+        cleanupReleaseGateHermeticEnv(hermetic)
+        resolve(result)
       })()
     })
   })

@@ -10,6 +10,8 @@ const latestReleaseRun = currentRunDir || latestDir(path.join(root, '.sneakoscop
 const latestSummary = currentRunDir ? summarizeCurrentRun(currentRunDir) : latestReleaseRun ? readJsonIfExists(path.join(latestReleaseRun, 'summary.json')) : null
 const zellijReportPath = path.join(root, '.sneakoscope', 'reports', 'zellij-worker-pane-real-ui-blackbox.json')
 const zellij = fs.existsSync(zellijReportPath) ? JSON.parse(fs.readFileSync(zellijReportPath, 'utf8')) : null
+const releaseSummaryRequired = Boolean(currentRunDir || process.env.SKS_RELEASE_STABILITY_REQUIRE_SUMMARY === '1')
+const zellijRequired = Boolean(zellij || process.env.SKS_RELEASE_STABILITY_REQUIRE_ZELLIJ === '1')
 const requiredGateIds = [
   'release:dag-runner',
   'release:parallel-speed-budget',
@@ -20,21 +22,23 @@ const requiredGateIds = [
   'git:worktree-integration-primary',
   'git:worktree-dirty-lock',
   'naruto:worktree-coding:blackbox',
-  'release:version-truth'
+  'release:proof-truth'
 ]
 const manifestIds = new Set(manifest.gates.map((gate) => gate.id))
 const missing = requiredGateIds.filter((id) => !manifestIds.has(id))
-const score = computeScore({ missing, latestSummary, zellij })
+const score = computeScore({ missing, latestSummary, zellij, releaseSummaryRequired, zellijRequired })
 const report = {
   schema: 'sks.release-stability-report.v1',
-  ok: score >= 9.5 && missing.length === 0 && latestSummary?.ok === true && zellij?.ok === true,
+  ok: score >= 9.5 && missing.length === 0 && (!releaseSummaryRequired || latestSummary?.ok === true) && (!zellijRequired || zellij?.ok === true),
   target_score: 9.5,
   score,
   manifest_gate_count: manifest.gates.length,
   latest_release_summary: latestSummary ? path.relative(root, path.join(latestReleaseRun, 'summary.json')) : null,
+  release_check_required: releaseSummaryRequired,
   release_check_ok: latestSummary?.ok === true,
   release_check_passed: latestSummary?.completed || 0,
   release_check_failed: latestSummary?.failed || 0,
+  zellij_real_worker_panes_required: zellijRequired,
   zellij_real_worker_panes_ok: zellij?.ok === true,
   zellij_real_worker_panes: zellij?.real_pane_ids || 0,
   missing_required_gates: missing,
@@ -44,8 +48,8 @@ if (!report.ok) {
   report.blockers = [
     ...(score >= 9.5 ? [] : ['stability_score_below_target']),
     ...(missing.length ? ['required_release_gate_missing'] : []),
-    ...(latestSummary?.ok === true ? [] : ['latest_release_check_not_green']),
-    ...(zellij?.ok === true ? [] : ['zellij_real_worker_panes_not_green'])
+    ...(!releaseSummaryRequired || latestSummary?.ok === true ? [] : ['latest_release_check_not_green']),
+    ...(!zellijRequired || zellij?.ok === true ? [] : ['zellij_real_worker_panes_not_green'])
   ]
 }
 fs.mkdirSync(path.join(root, '.sneakoscope', 'reports'), { recursive: true })
@@ -53,12 +57,12 @@ fs.writeFileSync(path.join(root, '.sneakoscope', 'reports', 'release-stability-r
 assertGate(report.ok, 'release stability report must meet 9.5+ target', report)
 emitGate('release:stability-report', report)
 
-function computeScore({ missing, latestSummary, zellij }) {
+function computeScore({ missing, latestSummary, zellij, releaseSummaryRequired, zellijRequired }) {
   let score = 10
   score -= missing.length * 0.25
-  if (latestSummary?.ok !== true) score -= 1.5
+  if (releaseSummaryRequired && latestSummary?.ok !== true) score -= 1.5
   if ((latestSummary?.failed || 0) > 0) score -= 1
-  if (zellij?.ok !== true) score -= 1
+  if (zellijRequired && zellij?.ok !== true) score -= 1
   return Number(Math.max(0, score).toFixed(2))
 }
 

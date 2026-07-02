@@ -14,8 +14,8 @@ import { codexCommandHookCurrentHash } from './codex-hooks/codex-hook-hash.js';
 import { buildSksCoreSkillManifest, isCoreSkillName } from './codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from './codex-native/core-skill-integrity.js';
 import { dbSafetyGuardSkillText, madDbSkillText } from './mad-db/mad-db-policy.js';
-import { currentGeneratedFileInventory, installCodexAgents, installSkills, pruneStaleGeneratedFiles } from './init/skills.js';
-export { installSkills } from './init/skills.js';
+import { currentGeneratedFileInventory, installCodexAgents, installGlobalSkills, installProjectSkills, installSkills, pruneStaleGeneratedFiles } from './init/skills.js';
+export { installGlobalSkills, installProjectSkills, installSkills } from './init/skills.js';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
 const SKS_GENERATED_GIT_PATTERNS = [
@@ -933,11 +933,14 @@ function upsertTomlTable(text: any, table: any, block: any) {
   );
   created.push('.codex/config.toml hook trust state');
 
-  const skillInstall = await installSkills(root);
-  created.push('.agents/skills/*');
-  if (skillInstall.removed_stale_generated_skills.length) created.push(`stale generated skills removed (${skillInstall.removed_stale_generated_skills.length})`);
-  if (skillInstall.removed_agent_skill_aliases.length) created.push(`deprecated generated skill aliases removed (${skillInstall.removed_agent_skill_aliases.length})`);
-  if (skillInstall.removed_codex_skill_mirrors.length) created.push(`.codex/skills generated mirrors removed (${skillInstall.removed_codex_skill_mirrors.length})`);
+  const skillInstall = installScope === 'project' ? await installProjectSkills(root) : await installGlobalSkills(root);
+  created.push(installScope === 'project' ? '.agents/skills official residue reconciled' : '.agents/skills/*');
+  const removedStaleGeneratedSkills = (skillInstall as any).removed_stale_generated_skills || (skillInstall as any).removed || [];
+  const removedAgentSkillAliases = (skillInstall as any).removed_agent_skill_aliases || [];
+  const removedCodexSkillMirrors = (skillInstall as any).removed_codex_skill_mirrors || [];
+  if (removedStaleGeneratedSkills.length) created.push(`stale generated skills removed (${removedStaleGeneratedSkills.length})`);
+  if (removedAgentSkillAliases.length) created.push(`deprecated generated skill aliases removed (${removedAgentSkillAliases.length})`);
+  if (removedCodexSkillMirrors.length) created.push(`.codex/skills generated mirrors removed (${removedCodexSkillMirrors.length})`);
   const agentInstall = await installCodexAgents(root);
   created.push('.codex/agents/*');
   const generatedFiles = currentGeneratedFileInventory(skillInstall, agentInstall);

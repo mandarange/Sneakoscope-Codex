@@ -6,9 +6,9 @@
 //     trailing table (the `invalid type: sequence, expected a string` corruption).
 //  2. Splitting the global CODEX_HOME config against itself must be a no-op.
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { tmpdir } from '../core/fsx.js';
 import { ensureDistFresh, root as repoRoot } from './lib/ensure-dist-fresh.js';
 
 const freshness = ensureDistFresh({ rebuild: true });
@@ -22,7 +22,7 @@ const results = [];
 
 // --- Case 1: trailing table in user config must not capture moved top-level keys ---
 {
-  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-config-merge-'));
+  const fixture = tmpdir('sks-config-merge-');
   const codexHome = path.join(fixture, 'home', '.codex');
   await fs.mkdir(codexHome, { recursive: true });
   // Pre-existing user config whose last block is an env table requiring string values.
@@ -64,7 +64,7 @@ const results = [];
 
 // --- Case 2: splitting CODEX_HOME config against itself is a no-op ---
 {
-  const fixture = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-config-home-'));
+  const fixture = tmpdir('sks-config-home-');
   const codexHome = path.join(fixture, '.codex');
   await fs.mkdir(codexHome, { recursive: true });
   const homeConfig = path.join(codexHome, 'config.toml');

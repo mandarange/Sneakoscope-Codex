@@ -4,6 +4,7 @@ import { ensureDir, nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { guardContextForRoute, guardedPackageInstall } from '../safety/mutation-guard.js'
 import { mutationLedgerPath } from '../safety/mutation-ledger.js'
+import { confirmRepair } from '../doctor/confirm-repair.js'
 import { checkZellijCapability, ZELLIJ_MIN_VERSION, type ZellijCapabilityReport } from './zellij-capability.js'
 import { compareVersionLike } from './zellij-command.js'
 import { askHomebrewInstallAllowed, HOMEBREW_INSTALL_COMMAND, resolveHomebrewInstallPolicy } from './homebrew-policy.js'
@@ -86,17 +87,20 @@ export async function repairZellijForSks(input: ZellijSelfHealInput): Promise<Ze
     return dryRunResult(root, input, env, before, latest, brew, mutationArtifact)
   }
 
-  if (!autoApproved && input.interactive !== true) {
-    return input.allowHeadlessFallback === true
-      ? headlessResult(root, input, before, latest, brew, 'noninteractive_without_auto_approval')
-      : manualResult(root, input, env, before, latest, brew, 'noninteractive_without_auto_approval')
-  }
-
-  if (!autoApproved && input.interactive === true) {
-    const accepted = await askZellijRepairAllowed(before.status === 'missing'
+  if (!autoApproved) {
+    const approval = await confirmRepair({
+      autoApprove: autoApproved,
+      interactive: input.interactive === true,
+      question: before.status === 'missing'
       ? 'Zellij is missing. Install it with Homebrew now? [Y/n] '
-      : `Zellij ${before.version || 'unknown'} needs repair. Upgrade with Homebrew now? [Y/n] `)
-    if (!accepted) return manualResult(root, input, env, before, latest, brew, 'operator_declined_zellij_repair')
+      : `Zellij ${before.version || 'unknown'} needs repair. Upgrade with Homebrew now? [Y/n] `
+    })
+    if (!approval.approved) {
+      const reason = approval.reason === 'non_interactive_requires_yes' ? approval.reason : 'operator_declined_zellij_repair'
+      return input.allowHeadlessFallback === true
+        ? headlessResult(root, input, before, latest, brew, reason)
+        : manualResult(root, input, env, before, latest, brew, reason, approval.next_actions)
+    }
   }
 
   let brewBin = brew.bin
@@ -399,7 +403,7 @@ async function dryRunResult(
   })
 }
 
-async function manualResult(root: string, input: ZellijSelfHealInput, env: NodeJS.ProcessEnv, before: ZellijCompactCapability, latest: string | null, brew: BrewDiscovery, reason: string): Promise<ZellijSelfHealResult> {
+async function manualResult(root: string, input: ZellijSelfHealInput, env: NodeJS.ProcessEnv, before: ZellijCompactCapability, latest: string | null, brew: BrewDiscovery, reason: string, nextActions: string[] = []): Promise<ZellijSelfHealResult> {
   const command = brew.present ? 'sks doctor --fix --yes' : 'sks doctor --fix --install-homebrew --yes'
   return persistSelfHeal(root, input.missionDir, {
     schema: 'sks.zellij-self-heal.v1',
@@ -416,7 +420,8 @@ async function manualResult(root: string, input: ZellijSelfHealInput, env: NodeJ
     mutation_guard_artifact: null,
     homebrew: { present: brew.present, bin: brew.bin, install_attempted: false, install_allowed: false },
     blockers: [reason],
-    warnings: []
+    warnings: [],
+    next_actions: nextActions.length ? nextActions : [`Run: ${command}`]
   })
 }
 
@@ -449,18 +454,6 @@ async function persistSelfHeal(root: string, missionDir: string | null | undefin
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'zellij-self-heal.json'), normalized).catch(() => undefined)
   if (missionDir) await writeJsonAtomic(path.join(missionDir, 'zellij-self-heal.json'), normalized).catch(() => undefined)
   return normalized
-}
-
-async function askZellijRepairAllowed(question: string): Promise<boolean> {
-  if (!(process.stdin.isTTY && process.stdout.isTTY)) return false
-  const rl = (await import('node:readline')).createInterface({ input: process.stdin, output: process.stdout })
-  try {
-    const answer = await new Promise<string>((resolve) => rl.question(question, resolve))
-    const trimmed = String(answer || '').trim()
-    return trimmed === '' || /^(y|yes|예|네|응)$/i.test(trimmed)
-  } finally {
-    rl.close()
-  }
 }
 
 function errorMessage(err: unknown): string {

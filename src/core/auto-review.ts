@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
+import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
 
 export const AUTO_REVIEW_REVIEWER = 'auto_review';
 export const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
@@ -89,7 +90,12 @@ export async function enableAutoReview(opts: any = {}) {
   next = removeLegacyProfileConfig(next, AUTO_REVIEW_HIGH_PROFILE);
   next = upsertAutoReviewPolicy(next);
   if (!next.endsWith('\n')) next += '\n';
-  await writeTextAtomic(configPath, next);
+  await writeCodexConfigGuarded({
+    configPath,
+    before: current,
+    cause: 'auto-review-enable',
+    mutate: () => next
+  });
   await writeProfileConfig(configPath, AUTO_REVIEW_PROFILE, profileConfigBlock({ effort: 'medium' }));
   await writeProfileConfig(configPath, AUTO_REVIEW_HIGH_PROFILE, profileConfigBlock({ effort: 'high' }));
   return {
@@ -143,7 +149,12 @@ export async function migrateSksProfilesToPerFile(opts: any = {}) {
     if (profile.stripTable) next = removeLegacyProfileConfig(next, profile.name);
   }
   if (next && !next.endsWith('\n')) next += '\n';
-  if (next !== String(current || '')) await writeTextAtomic(configPath, next);
+  if (next !== String(current || '')) await writeCodexConfigGuarded({
+    configPath,
+    before: current,
+    cause: 'sks-profile-migration',
+    mutate: () => next
+  });
   for (const profile of SKS_CONFIG_PROFILES) await writeProfileConfig(configPath, profile.name, profile.block);
   return {
     config_path: configPath,
@@ -186,7 +197,12 @@ export async function ensureMadHighProfileForSetupOrRepair(opts: any = {}) {
   let next = removeLegacyProfileConfig(current, MAD_HIGH_PROFILE);
   next = upsertAutoReviewPolicy(next);
   if (!next.endsWith('\n')) next += '\n';
-  await writeTextAtomic(configPath, next);
+  await writeCodexConfigGuarded({
+    configPath,
+    before: current,
+    cause: 'mad-high-profile-setup',
+    mutate: () => next
+  });
   // Convert all SKS profiles to per-file overlays and strip the deprecated tables /
   // selectors so Codex stops warning about the legacy config profile on launch.
   await migrateSksProfilesToPerFile({ configPath, env });
@@ -228,7 +244,12 @@ export async function disableAutoReview(opts: any = {}) {
   next = removeLegacyProfileConfig(next, AUTO_REVIEW_PROFILE);
   next = removeLegacyProfileConfig(next, AUTO_REVIEW_HIGH_PROFILE);
   if (!next.endsWith('\n')) next += '\n';
-  await writeTextAtomic(configPath, next);
+  await writeCodexConfigGuarded({
+    configPath,
+    before: current,
+    cause: 'auto-review-disable',
+    mutate: () => next
+  });
   await writeProfileConfig(configPath, AUTO_REVIEW_PROFILE, profileConfigBlock({ effort: 'medium', reviewer: 'user' }));
   await writeProfileConfig(configPath, AUTO_REVIEW_HIGH_PROFILE, profileConfigBlock({ effort: 'high', reviewer: 'user' }));
   return autoReviewStatus({ configPath });

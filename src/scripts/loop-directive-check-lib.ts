@@ -173,7 +173,7 @@ export async function runLoopDirectiveCheck(id) {
   } else if (id === 'loop:status-ux') {
     assert(await exists(loopGraphProofPath(root, missionId)), 'status has graph proof source');
   } else if (id === 'loop:zellij-real-runtime-ui') {
-    assert(renderZellijSlotPane({ slotId: 'slot-003', generationIndex: 1, loopId: 'loop-zellij', loopRole: 'maker', loopGate: 'loop:test', backend: 'fixture', patchStatus: 'fixture', verifyStatus: 'pass' }).includes('fixture loop proof'), 'zellij marks fixture proof');
+    assert(renderZellijSlotPane({ slotId: 'slot-003', generationIndex: 1, loopId: 'loop-zellij', loopRole: 'maker', loopGate: 'loop:test', backend: 'fixture', patchStatus: 'fixture', verifyStatus: 'pass', mode: 'full-debug' }).includes('fixture loop proof'), 'zellij marks fixture proof in full-debug');
   } else if (id === 'loop:proof') {
     assert(await exists(loopProofPath(root, missionId, 'loop-zellij')), 'loop proof exists');
   } else if (id === 'loop:integration-finalizer') {

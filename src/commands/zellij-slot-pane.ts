@@ -8,6 +8,14 @@ export async function run(_command: string = 'zellij-slot-pane', args: string[] 
   const generationIndex = Number(readOption(args, '--generation', '1') || 1)
   const backend = readOption(args, '--backend', null)
   const role = readOption(args, '--role', null)
+  const envDefaults = {
+    provider: process.env.SKS_SLOT_PROVIDER || null,
+    model: process.env.SKS_SLOT_MODEL || null,
+    serviceTier: process.env.SKS_SLOT_TIER || null,
+    reasoningEffort: process.env.SKS_SLOT_REASONING || null,
+    currentTask: process.env.SKS_SLOT_TASK || null,
+    role: process.env.SKS_SLOT_ROLE || role
+  }
   const mode = readOption(args, '--mode', 'compact-slots') as any
   const watch = hasFlag(args, '--watch')
   const json = hasFlag(args, '--json')
@@ -17,8 +25,31 @@ export async function run(_command: string = 'zellij-slot-pane', args: string[] 
     console.log(JSON.stringify(status, null, 2))
     return
   }
+  let staleTicks = 0
   for (;;) {
-    const text = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex, backend, role, mode })
+    let text = ''
+    let heartbeatAgeMs: number | null = null
+    try {
+      text = await renderZellijSlotPaneFromArtifacts({
+        artifactDir,
+        artifactRoot,
+        missionId,
+        slotId,
+        generationIndex,
+        backend,
+        role: envDefaults.role,
+        provider: envDefaults.provider,
+        model: envDefaults.model,
+        serviceTier: envDefaults.serviceTier,
+        reasoningEffort: envDefaults.reasoningEffort,
+        currentTask: envDefaults.currentTask,
+        mode
+      })
+      const status = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex }).catch(() => null)
+      heartbeatAgeMs = Number.isFinite(Number(status?.telemetry_age_ms)) ? Number(status?.telemetry_age_ms) : null
+    } catch (err: any) {
+      text = `render error: ${err?.message || String(err)}`
+    }
     process.stdout.write(redrawFrame(text))
     if (!watch) break
     // Root-cause-3 fix: exit the pane once the worker has reached a terminal state and written its
@@ -27,8 +58,13 @@ export async function run(_command: string = 'zellij-slot-pane', args: string[] 
     const shouldExit = await resolveZellijSlotPaneExit({ artifactDir, artifactRoot, missionId, slotId, generationIndex }).catch(() => false)
     if (shouldExit) {
       await new Promise((resolve) => setTimeout(resolve, 5000))
-      const finalText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex, backend, role, mode })
+      const finalText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot, missionId, slotId, generationIndex, backend, role: envDefaults.role, provider: envDefaults.provider, model: envDefaults.model, serviceTier: envDefaults.serviceTier, reasoningEffort: envDefaults.reasoningEffort, currentTask: envDefaults.currentTask, mode })
       process.stdout.write(redrawFrame(finalText))
+      return
+    }
+    staleTicks = heartbeatAgeMs != null && heartbeatAgeMs > 5 * 60 * 1000 ? staleTicks + 1 : 0
+    if (staleTicks >= 5) {
+      process.stdout.write(redrawFrame(`${text}\n⏱ worker heartbeat lost >5m - pane closing (sks pipeline status 로 확인)`))
       return
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs))

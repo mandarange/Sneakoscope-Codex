@@ -6,6 +6,8 @@ import path from 'node:path'
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
 import { expandGlob, releaseGateCacheKey } from '../core/release/release-gate-cache-v2.js'
 
+delete process.env.SKS_RELEASE_GATE_CACHE_MEMOIZE
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-cache-glob-'))
 fs.mkdirSync(path.join(tmp, 'src/core/release'), { recursive: true })
 fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ version: '0.0.0' }))

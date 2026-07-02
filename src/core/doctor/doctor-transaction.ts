@@ -57,6 +57,7 @@ export interface DoctorFixTransaction {
   proof_ids_used: string[];
   saved_ms_estimate: number;
   semantic_dirty_plan_path: string | null;
+  report_write_failed?: boolean;
 }
 
 export async function runDoctorFixTransaction(input: {
@@ -124,9 +125,9 @@ export async function runDoctorFixTransaction(input: {
     phase.completed_at = phase.completed_at || nowIso();
     phase.duration_ms = phase.duration_ms ?? Math.max(0, Date.now() - startedMs);
     phase.rollback_evidence = phase.rollback_evidence || (definition.rollback ? 'phase_rollback_function' : phase.repaired ? null : 'no_mutation');
-    if (phase.ok) {
+    if (phase.ok || phase.repaired === true) {
       const proofId = `doctor-${definition.id}-${Date.now()}`;
-      markDoctorPhaseClean(input.root, definition.id, proofId, true);
+      markDoctorPhaseClean(input.root, definition.id, proofId, phase.ok === true);
       proofIdsUsed.push(proofId);
     }
     phases.push(phase);
@@ -178,7 +179,7 @@ export async function writeDoctorFixTransaction(input: {
   }));
   const postcheckOk = phases.every((phase) => phase.ok || phase.required_for_ready === false);
   const mutationsWithoutRollback = phases.filter((phase) => phase.required_for_ready && phase.repaired && !phase.rollback_evidence).length;
-  const report: DoctorFixTransaction = {
+  let report: DoctorFixTransaction = {
     schema: 'sks.doctor-fix-transaction.v2',
     ok: postcheckOk && mutationsWithoutRollback === 0,
     root,
@@ -195,7 +196,15 @@ export async function writeDoctorFixTransaction(input: {
     saved_ms_estimate: phases.filter((phase) => phase.warnings.some((warning) => warning.startsWith('dirty_plan_skipped_clean_phase'))).length * 1000,
     semantic_dirty_plan_path: input.dirtyPlan?.semantic_dirty_plan_path || null
   };
-  if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-fix-transaction.json'), report).catch(() => undefined);
+  if (input.reportPath !== null) {
+    const reportPath = input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-fix-transaction.json');
+    try {
+      await writeJsonAtomic(reportPath, report);
+    } catch (err: unknown) {
+      report = { ...report, report_write_failed: true };
+      process.stderr.write(`SKS doctor warning: failed to write transaction report ${reportPath}: ${messageOf(err)}\n`);
+    }
+  }
   return report;
 }
 

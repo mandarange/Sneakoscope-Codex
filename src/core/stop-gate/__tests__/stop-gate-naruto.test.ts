@@ -71,12 +71,12 @@ test('checkStopGate returns hard_blocked when hard-blocker.json exists with evid
   const root = await makeTempRoot();
   const missionId = 'M-test-004';
   const dir = await setupMission(root, missionId);
-  await fsp.writeFile(path.join(dir, 'hard-blocker.json'), JSON.stringify({ passed: true, reason: 'native sessions unavailable', evidence: ['no codex native'] }));
+  await fsp.writeFile(path.join(dir, 'hard-blocker.json'), JSON.stringify({ passed: false, status: 'hard_blocked', reason: 'native sessions unavailable', evidence: ['no codex native'] }));
   await writeCurrent(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO' });
 
   const result = await checkStopGate({ root, route: 'Naruto' });
   assert.equal(result.action, 'hard_blocked');
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
 });
 
 test('writeFinalStopGate writes canonical stop-gate.json and updates current state', async () => {
@@ -162,6 +162,26 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
   const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: true }, { message: 'done' });
   assert.equal(decision?.continue, true);
   assert.match(decision?.systemMessage, /canonical stop-gate passed/);
+});
+
+test('generic route stop hook accepts recorded hard blocker before completion proof gate', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-007b';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'hard-blocker.json'), JSON.stringify({
+    schema: 'sks.hard-blocker.v1',
+    passed: false,
+    status: 'hard_blocked',
+    reason: 'managed_config_requires_human_remedy',
+    evidence: ['db-safety-scan.json: critical finding']
+  }));
+  await writeCurrent(root, { mission_id: missionId, stop_gate: 'db-review.json', mode: 'DB', route: 'DB', route_command: '$DB' });
+
+  const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'db-review.json', mode: 'DB', route: 'DB', route_command: '$DB' }, { message: 'done' });
+  assert.equal(decision?.continue, true);
+  assert.equal(decision?.action, 'hard_blocked');
+  assert.equal(decision?.gate, 'hard-blocker.json');
+  assert.match(decision?.systemMessage, /managed_config_requires_human_remedy/);
 });
 
 test('strict pass rule rejects status blocked or blockers', async () => {

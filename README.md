@@ -328,8 +328,8 @@ sks update
 ```sh
 sks
 sks --mad
-sks team open-zellij latest
-sks team attach-zellij latest
+sks zellij status
+sks naruto dashboard latest
 ```
 
 Interactive SKS sessions use Zellij layouts. By default SKS launches Codex in Fast service tier with `--model gpt-5.5`, `-c service_tier="fast"`, the selected `model_reasoning_effort`, and `--no-alt-screen` for Zellij-backed interactive panes so terminal scrollback captures the conversation transcript. Non-GLM SKS sessions force the model to `gpt-5.5`, while the model guard also recognizes `gpt-5.4-mini` as a supported GPT-5.4 mini model; `sks --mad --glm` is the OpenRouter GLM 5.2 exception. `SKS_CODEX_MODEL` and `SKS_CODEX_FAST_HIGH=0` cannot downgrade or remove the non-GLM model pin. You can still set `SKS_CODEX_REASONING` to change reasoning effort, and `SKS_ZELLIJ_CODEX_ALT_SCREEN=1` restores Codex's alternate-screen UI for the next launch. Use `sks --mad --workspace <name>` for an explicit MAD session and `sks help` for CLI help.
@@ -406,12 +406,12 @@ This syncs existing codex-lb provider auth, creates/uses the `sks-mad-high` xhig
 
 Before launching, SKS checks npm for a newer `sneakoscope` and prints a non-blocking update notice when one is available; use `sks update` when you want SKS to update itself from npm. Use `--yes` to approve missing dependency installs automatically. Tune MAD swarm startup with `--mad-agents <n>`, `--mad-swarm-work-items <n>`, and `--mad-swarm-backend <backend>`; `--no-mad-swarm` keeps only the cockpit UI if you need a temporary fallback.
 
-### Team Missions
+### Naruto Missions
 
 ```sh
-sks team "implement this feature"
-sks team "wide refactor" executor:5 reviewer:6
-sks team "max native fan-out" --agents 12
+sks naruto run "implement this feature"
+sks naruto run "wide refactor" --clones 12
+sks naruto run "max native fan-out" --clones 50 --work-items 50
 sks team watch latest
 sks team lane latest --agent native_agent_1 --follow
 sks team message latest --from native_agent_1 --to executor_1 --message "handoff note"
@@ -421,7 +421,7 @@ sks team dashboard latest
 sks team log latest
 ```
 
-Team missions keep at least five QA/reviewer lanes active, record live events, compile runtime tasks and worker inboxes, write schema-backed effort/work-order/dashboard artifacts, and reconcile split live lanes in Zellij when available. Native analysis lanes use the agent kernel exclusively. Use `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-zellij` to inspect or close the live view.
+Naruto is the execution SSOT for new wide work. `sks team "<task>"` remains a deprecated compatibility alias that redirects to Naruto and writes `team-alias-to-naruto.json`; `sks team watch`, `sks team lane`, `sks team message`, and `sks team cleanup-zellij` remain read-only/cleanup observation helpers for old Team missions.
 
 ### Native Multi-Session Agents
 
@@ -438,8 +438,8 @@ Native worker sessions write independent artifact directories under `agents/sess
 Manual fan-out syntax:
 
 - Direct agent route: `sks agent run "<task>" --agents 8 --concurrency 4 --mock --json`
-- Team prompt role counts: `$Team <task> executor:8 reviewer:5`
-- Team CLI flag: `sks team "<task>" --agents 8`
+- Naruto prompt fan-out: `$Naruto <task> --clones 8`
+- Deprecated Team alias: `sks team "<task>" --clones 8`
 
 Effort and model tier are assigned per agent. Managed native agents use bounded workspace-write TOML profiles, but every write still needs an assigned lease, non-overlap proof, and parent-owned integration. When the main model is GPT, simple bounded code/docs slices can downshift to `gpt-5.4-mini`, ordinary tool/lease work uses `gpt-5.5` with low model reasoning, and safety/DB/schema/release lanes use `gpt-5.5` with high model reasoning. When the main model is GLM, native workers stay locked to `z-ai/glm-5.2` and receive GLM effort tiers (`minimal`, `low`, `high`, or `xhigh`) instead of falling back to GPT. If a lease conflict, schema failure, proof blocker, DB risk, or release risk appears, the parent can escalate that lane while keeping unrelated lanes cheaper and faster.
 
@@ -519,8 +519,8 @@ $PPT create a customer proposal deck as HTML/PDF
 
 Sneakoscope has two surfaces:
 
-- Terminal commands such as `sks deps check`, `sks team "task"`, and `sks --mad`
-- Codex App prompt commands such as `$Team`, `$DFix`, `$QA-LOOP`, and `$Wiki`
+- Terminal commands such as `sks deps check`, `sks naruto run "task"`, and `sks --mad`
+- Codex App prompt commands such as `$Naruto`, `$DFix`, `$QA-LOOP`, and `$Wiki`
 
 After installing, run:
 
@@ -698,7 +698,7 @@ Install Zellij from [zellij.dev](https://zellij.dev/documentation/installation.h
 ### Zellij copy or right lanes feel wrong
 
 ```sh
-sks team open-zellij latest
+sks naruto dashboard latest
 sks zellij status
 ```
 
@@ -739,12 +739,12 @@ If another agent tool's managed config conflicts with setup, SKS blocks setup/do
 
 ```sh
 sks pipeline status --json
+sks naruto status latest --json
 sks team watch latest
-sks team lane latest --agent parent_orchestrator --follow
 sks wiki validate .sneakoscope/wiki/context-pack.json
 ```
 
-Finalization requires evidence, valid Team cleanup artifacts, reflection when required, and Honest Mode.
+Finalization requires evidence, valid Naruto gate artifacts, reflection when required, and Honest Mode. `sks team watch` remains available only for legacy Team missions.
 
 ## 🏗️ Development And Release
 

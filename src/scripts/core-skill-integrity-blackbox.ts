@@ -20,14 +20,13 @@ const user = await syncCoreSkillsIntegrity({ root, apply: true, skillsRoot: user
 const setupRoot = await makeTempRoot('sks-core-setup-blackbox-');
 const setup = await initProject(setupRoot, { force: true, installScope: 'project', localOnly: true, globalCommand: 'sks' });
 const setupIntegrity = await syncCoreSkillsIntegrity({ root: setupRoot, apply: false, skillsRoot: path.join(setupRoot, '.agents', 'skills') });
-await writeText(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md'), `${renderCoreSkillTemplate('loop')}\nmutated by setup blackbox\n`);
 const setupRestore = await initProject(setupRoot, { force: true, installScope: 'project', localOnly: true, globalCommand: 'sks' });
-const restoredSetupText = await fs.readFile(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md'), 'utf8');
+const setupLoopExists = await fs.stat(path.join(setupRoot, '.agents', 'skills', 'loop', 'SKILL.md')).then(() => true, () => false);
 assertGate(first.installed.length === expectedSkillCount, 'blackbox A: first sync installs missing core skills', first);
 assertGate(second.installed.length === 0 && second.restored.length === 0, 'blackbox B: second sync changes nothing', second);
 assertGate(third.restored.length === 1 && restoredText === renderCoreSkillTemplate('research'), 'blackbox C: managed drift restored exactly', third);
 assertGate(user.skipped_user_authored.length === 1, 'blackbox D: user skill is not overwritten', user);
-assertGate(setup.skill_install?.core_skill_integrity?.installed_count > 0, 'blackbox E: setup installs core skills through integrity sync', setup.skill_install);
+assertGate((setup.skill_install?.installed_skills || []).length === 0, 'blackbox E: project setup must not install official/core skills locally', setup.skill_install);
 assertGate(setupIntegrity.restored.length === 0 && setupIntegrity.skipped_user_authored.length === 0, 'blackbox F: setup-produced core skills are current', setupIntegrity);
-assertGate(setupRestore.skill_install?.core_skill_integrity?.restored_count > 0 && restoredSetupText === renderCoreSkillTemplate('loop'), 'blackbox G: setup restores managed core drift through integrity sync', setupRestore.skill_install);
+assertGate((setupRestore.skill_install?.installed_skills || []).length === 0 && !setupLoopExists, 'blackbox G: project setup remains official-skill-free on repeat init', setupRestore.skill_install);
 emitGate('core-skill:integrity-blackbox');

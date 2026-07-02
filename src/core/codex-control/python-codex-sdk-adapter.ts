@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { packageRoot, runProcess, which } from '../fsx.js'
+import { packageRoot, randomId, runProcess, which } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
 import { translatePythonCodexSdkEvents } from './python-codex-sdk-event-translator.js'
 
@@ -59,8 +59,10 @@ export async function runPythonCodexSdkTask(input: CodexTaskInput, opts: {
     return { ok: false, events: [], translatedEvents: [], finalResponse: '', blockers: cap.blockers, capability: cap }
   }
   const python = opts.pythonBin || cap.python_bin || await which('python3') || 'python3'
+  const sessionId = input.sessionId || `sks-${randomId(12)}`
   const request = {
     schema: 'sks.python-codex-sdk-request.v1',
+    session_id: sessionId,
     route: input.route,
     thread_policy: input.requestedScopeContract?.resume_thread_id ? 'resume' : 'new',
     sandbox: mapSandbox(input.sandboxPolicy),
@@ -80,6 +82,7 @@ export async function runPythonCodexSdkTask(input: CodexTaskInput, opts: {
     translatedEvents,
     finalResponse: String(last?.final_response || ''),
     threadId: String(events.find((event: any) => event?.thread_id)?.thread_id || ''),
+    sessionId,
     turnId: String(last?.turn_id || ''),
     blockers: errors,
     capability: cap

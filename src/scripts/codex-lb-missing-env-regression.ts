@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { runProcess } from '../core/fsx.js';
+import { runProcess, tmpdir } from '../core/fsx.js';
 
 const rawPattern = new RegExp(['Missing environment variable:', '\\s*`?CODEX_LB_API_KEY`?'].join(''), 'i');
-const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-missing-env-'));
+const home = tmpdir('sks-codex-lb-missing-env-');
 const entry = path.resolve('dist/bin/sks.js');
 const scenarios = [
   ['status', ['codex-lb', 'status', '--json']],

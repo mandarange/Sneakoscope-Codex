@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { createNarutoGeneration, completeNarutoGeneration, type NarutoGeneration } from './naruto-generation-scheduler.js'
 import type { NarutoConcurrencyGovernorDecision } from './naruto-concurrency-governor.js'
 import type { NarutoWorkGraph, NarutoWorkItem } from './naruto-work-item.js'
@@ -44,6 +46,8 @@ export interface NarutoWorkerHandle {
   started_at: number
   pid?: number | null
   worker_artifact_dir?: string | null
+  heartbeat_path?: string | null
+  exit?: Promise<unknown>
   force_timed_out?: boolean
 }
 
@@ -57,6 +61,7 @@ export interface NarutoWorkerResult {
   worker_artifact_dir?: string | null
   blockers?: string[]
   status?: 'completed' | 'failed' | 'timed_out'
+  heartbeat_artifact_present_after_timeout?: boolean
 }
 
 export interface NarutoRuntimeEvent {
@@ -112,23 +117,31 @@ export async function runNarutoRealActivePool(input: {
 
   while (pending.length || active.size) {
     const beforeLaunch = Date.now()
-    let launched = 0
-    for (;;) {
-      if (active.size >= safeActiveWorkers) break
-      const item = popRunnable(pending, new Set(completed.keys()), activeToGenerationMap(active), byId)
+    const completedIds = new Set(completed.keys())
+    const launchActiveMap = activeToGenerationMap(active)
+    const batch: Array<{ item: NarutoWorkItem; placement: NarutoWorkerPlacementDecision }> = []
+    let batchVisibleRunning = visibleRunning
+    while (active.size + batch.length < safeActiveWorkers) {
+      const item = popRunnable(pending, completedIds, launchActiveMap, byId)
       if (!item) break
-      const placement: NarutoWorkerPlacementDecision = visibleRunning < visibleCap
-        ? { placement: 'zellij-pane', visible_index: visibleRunning + 1, reason: 'within_visible_cap' }
+      const placement: NarutoWorkerPlacementDecision = batchVisibleRunning < visibleCap
+        ? { placement: 'zellij-pane', visible_index: batchVisibleRunning + 1, reason: 'within_visible_cap' }
         : { placement: 'headless', visible_index: null, reason: `visible_pane_cap:${visibleCap}` }
-      if (placement.placement === 'zellij-pane') visibleRunning += 1
-      const handle = await input.spawnWorker(item, placement)
+      if (placement.placement === 'zellij-pane') batchVisibleRunning += 1
+      batch.push({ item, placement })
+      launchActiveMap.set(`batch:${item.id}`, createNarutoGeneration(item, launchActiveMap.size + 1, tick))
+    }
+    const launched = batch.length > 0
+    if (launched) {
+      const handles = await Promise.all(batch.map((entry) => input.spawnWorker(entry.item, entry.placement)))
+      for (const handle of handles) {
+        const item = handle.item
+        const placement = handle.placement
+        if (placement.placement === 'zellij-pane') visibleRunning += 1
       active.set(handle.id, handle)
       lifecycle.push({ work_item_id: item.id, placement: placement.placement, pid: handle.pid || null, worker_artifact_dir: handle.worker_artifact_dir || null, started_at: handle.started_at, completed_at: null, ok: null })
-      launched += 1
-      await input.updateDashboard({ event_type: 'worker_spawned', work_item_id: item.id, active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size, placement })
-    }
-    if (launched) {
-      refillEvents += launched
+      }
+      refillEvents += handles.length
       refillLatencies.push(Date.now() - beforeLaunch)
       await input.updateDashboard({ event_type: 'refill', active_workers: active.size, pending_workers: pending.length, completed_workers: completed.size })
     }
@@ -213,20 +226,32 @@ async function nextCollectableWorkers(active: Map<string, NarutoWorkerHandle>, h
   if (timedOut.length) return timedOut.map((handle) => ({ ...handle, force_timed_out: true }))
   const handlesWithExit = handles.filter((handle) => typeof (handle as any).exit?.then === 'function')
   if (!handlesWithExit.length) return handles.slice(0, Math.max(1, Math.ceil(active.size / 2)))
-  const completed = await Promise.race([
-    ...handlesWithExit.map(async (handle) => {
-      await (handle as any).exit.catch(() => undefined)
-      return handle
-    }),
-    delay(1000).then(() => null)
+  const settled = new Set<NarutoWorkerHandle>()
+  for (const handle of handlesWithExit) {
+    ;(handle as any).exit.then(() => settled.add(handle), () => settled.add(handle))
+  }
+  await Promise.race([
+    ...handlesWithExit.map((handle) => (handle as any).exit.catch(() => undefined)),
+    delay(1000)
   ])
-  return completed ? [completed] : []
+  await delay(25)
+  return handlesWithExit.filter((handle) => settled.has(handle))
 }
 
 async function forceCollectTimedOutWorker(handle: NarutoWorkerHandle): Promise<NarutoWorkerResult> {
-  if (Number.isFinite(Number(handle.pid))) {
-    try { process.kill(Number(handle.pid), 'SIGTERM') } catch {}
+  const blockers = ['naruto_worker_hard_timeout']
+  const pid = Number(handle.pid)
+  if (Number.isFinite(pid) && pid > 0) {
+    sendSignal(pid, 'SIGTERM')
+    await delay(5000)
+    if (pidAlive(pid)) {
+      sendSignal(pid, 'SIGKILL')
+      await delay(100)
+    }
+    if (pidAlive(pid)) blockers.push('naruto_worker_sigkill_failed')
   }
+  const heartbeatPath = handle.heartbeat_path || (handle.worker_artifact_dir ? path.join(handle.worker_artifact_dir, 'worker-heartbeat.jsonl') : null)
+  const heartbeatArtifactPresent = heartbeatPath ? fs.existsSync(heartbeatPath) : false
   return {
     id: handle.id,
     ok: false,
@@ -236,7 +261,24 @@ async function forceCollectTimedOutWorker(handle: NarutoWorkerHandle): Promise<N
     pid: handle.pid || null,
     worker_artifact_dir: handle.worker_artifact_dir || null,
     status: 'timed_out',
-    blockers: ['naruto_worker_hard_timeout']
+    blockers,
+    ...(heartbeatArtifactPresent ? { heartbeat_artifact_present_after_timeout: true } : {})
+  }
+}
+
+function sendSignal(pid: number, signal: NodeJS.Signals) {
+  if (process.platform !== 'win32') {
+    try { process.kill(-pid, signal) } catch {}
+  }
+  try { process.kill(pid, signal) } catch {}
+}
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err: any) {
+    return err?.code === 'EPERM'
   }
 }
 

@@ -8,11 +8,12 @@ import { createRequestedScopeContract } from '../core/safety/requested-scope-con
 import { guardedPackageInstall, guardContextForRoute } from '../core/safety/mutation-guard.js';
 import { EMPTY_CODEX_INFO, getCodexInfo } from '../core/codex-adapter.js';
 import { formatHarnessConflictReport, llmHarnessCleanupPrompt, scanHarnessConflicts } from '../core/harness-conflicts.js';
-import { initProject, installSkills } from '../core/init.js';
+import { initProject, installGlobalSkills } from '../core/init.js';
 import { context7ConfigToml, DOLLAR_SKILL_NAMES, GETDESIGN_REFERENCE, hasContext7ConfigText, RECOMMENDED_SKILLS } from '../core/routes.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
 import { reconcileCodexAppUpgradeProcesses } from '../core/codex-app.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
+import { cleanupMacLaunchSecretEnvironment } from '../core/codex-app/sks-menubar.js';
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
 import {
@@ -29,6 +30,8 @@ import {
   type CodexLbPersistenceSummary,
   type CodexLbPersistenceMode
 } from '../core/codex-lb/codex-lb-setup.js';
+import { extractTomlTable, writeCodexConfigGuarded } from '../core/codex/codex-config-guard.js';
+import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js';
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
@@ -445,7 +448,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const useDefaultProvider = opts.useDefaultProvider !== false;
   const writeEnvFile = opts.writeEnvFile !== false;
   const storeKeychain = opts.storeKeychain === true || opts.keychain === true;
-  const syncLaunchctl = opts.syncLaunchctl !== false && opts.syncLaunchEnv !== false;
+  const syncLaunchctl = opts.syncLaunchctl === true || opts.syncLaunchEnv === true;
   const shellProfile = opts.shellProfile || 'skip';
   const setupAnswers = {
     host_or_base_url: rawHost,
@@ -504,7 +507,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const keychain = storeKeychain ? await writeCodexLbKeychain(apiKey, opts).catch((err: any) => ({ ok: false, status: 'keychain_store_failed', error: err.message })) : { ok: false, status: 'skipped' };
   if (storeKeychain) appliedActions.push({ type: 'store_keychain', target: 'macOS Keychain service sks-codex-lb', ok: keychain.ok === true, status: keychain.status });
   const codexEnvironment = await syncCodexLbProviderEnvironment({ env_path: envPath, base_url: baseUrl }, { ...opts, home, apiKey, baseUrl, syncLaunchEnv: syncLaunchctl });
-  if (syncLaunchctl) appliedActions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment', ok: codexEnvironment.ok === true, status: codexEnvironment.status });
+  if (syncLaunchctl) appliedActions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment (base URL only; API-key env removed)', ok: codexEnvironment.ok === true, status: codexEnvironment.status });
   const shellProfileResult = await installCodexLbShellProfileSnippet({ home, envPath, shellProfile }).catch((err: any) => ({ ok: false, status: 'failed', files: [], error: err.message }));
   if (shellProfile !== 'skip') appliedActions.push({ type: 'install_shell_profile_snippet', target: shellProfileResult.files?.join(', ') || shellProfile, ok: shellProfileResult.ok === true, status: shellProfileResult.status });
   const codexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
@@ -994,6 +997,11 @@ function topLevelTomlString(text: any = '', key: string) {
   return topLevel.match(new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]+)"\\s*(?:#.*)?(?=\\n|$)`))?.[2] || '';
 }
 
+function tomlTableString(text: any = '', table: string, key: string) {
+  const block = String(text || '').match(new RegExp(`(^|\\n)\\[${escapeRegExp(table)}\\]([\\s\\S]*?)(?=\\n\\[[^\\]]+\\]|\\s*$)`))?.[2] || '';
+  return block.match(new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]+)"\\s*(?:#.*)?(?=\\n|$)`))?.[2] || '';
+}
+
 export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInstallResult> {
   let status = await codexLbStatus(opts);
   let configRepaired = false;
@@ -1010,7 +1018,10 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
   }
   if (status.env_key_configured && status.base_url && (!status.provider_contract_ok || !status.selected || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig) || (opts.forceCodexLbApiKeyAuth === true && !status.ok))) {
     await ensureDir(path.dirname(status.config_path));
-    const next = normalizeCodexFastModeUiConfig(upsertCodexLbConfig(currentConfig, status.base_url), {
+    const preservedUserFastMode = extractTomlTable(currentConfig, 'user.fast_mode');
+    let next = upsertCodexLbConfig(currentConfig, status.base_url);
+    if (preservedUserFastMode) next = upsertTomlTable(next, 'user.fast_mode', preservedUserFastMode);
+    next = normalizeCodexFastModeUiConfig(next, {
       forceFastMode: opts.forceFastMode === true || opts.forceCodexLbApiKeyAuth === true
     });
     const safeWrite = await safeWriteCodexConfigToml(status.config_path, currentConfig, next, 'codex-lb-repair');
@@ -1332,8 +1343,8 @@ export async function unselectCodexLbProvider(opts: any = {}) {
   if (!hasTopLevelCodexLbSelected(current)) return { status: 'not_selected', config_path: configPath };
   try {
     const next = ensureTrailingNewline(removeTopLevelTomlString(current, 'model_provider'));
-    await writeTextAtomic(configPath, next);
-    return { status: 'unselected', config_path: configPath };
+    const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'codex-lb-unselect');
+    return { status: safeWrite.ok ? 'unselected' : safeWrite.status, config_path: configPath, backup_path: safeWrite.backup_path };
   } catch (err: any) {
     return { status: 'failed', reason: 'write_failed', config_path: configPath, error: err.message };
   }
@@ -1537,11 +1548,11 @@ async function syncCodexLbProviderEnvironment(status: any = {}, opts: any = {}):
   const baseUrl = status.base_url || opts.baseUrl || parseCodexLbEnvBaseUrl(envText);
   process.env.CODEX_LB_API_KEY = apiKey;
   if (baseUrl) process.env.CODEX_LB_BASE_URL = baseUrl;
-  const launchEnv = await syncCodexLbMacLaunchEnvironment({ CODEX_LB_API_KEY: apiKey, ...(baseUrl ? { CODEX_LB_BASE_URL: baseUrl } : {}) }, opts);
+  const launchEnv = await syncCodexLbMacLaunchEnvironment(baseUrl ? { CODEX_LB_BASE_URL: baseUrl } : {}, opts);
   const ok = launchEnv.ok || launchEnv.skipped || launchEnv.status === 'not_macos';
   return {
     ok,
-    status: launchEnv.status === 'synced' ? 'synced' : ok ? 'process_env' : launchEnv.status,
+    status: launchEnv.status === 'synced' ? 'launch_base_url_synced_secret_env_removed' : ok ? 'process_env' : launchEnv.status,
     env_path: envPath,
     base_url: baseUrl || null,
     launch_environment: launchEnv,
@@ -1554,7 +1565,15 @@ async function syncCodexLbMacLaunchEnvironment(values: any = {}, opts: any = {})
   if (process.platform !== 'darwin' && !opts.forceLaunchEnv) return { ok: true, status: 'not_macos', skipped: true };
   const launchctl = opts.launchctlBin || await which('launchctl').catch(() => null) || await exists('/bin/launchctl').then((ok: any) => ok ? '/bin/launchctl' : null).catch(() => null);
   if (!launchctl) return { ok: false, status: 'launchctl_missing', error: 'launchctl not found on PATH' };
-  const variables = Object.entries(values).filter(([, value]: any) => value);
+  const secretCleanup = await cleanupMacLaunchSecretEnvironment({ force: opts.forceLaunchEnv === true }).catch((err: any) => ({
+    ok: false,
+    status: 'partial',
+    variables: ['CODEX_LB_API_KEY', 'OPENROUTER_API_KEY'],
+    cleaned: [],
+    failed: [{ key: 'CODEX_LB_API_KEY', error: err?.message || String(err) }, { key: 'OPENROUTER_API_KEY', error: err?.message || String(err) }],
+    next_actions: ['Run launchctl unsetenv for CODEX_LB_API_KEY and OPENROUTER_API_KEY']
+  }));
+  const variables = Object.entries(values).filter(([key, value]: any) => value && !['CODEX_LB_API_KEY', 'OPENROUTER_API_KEY'].includes(String(key)));
   const results: any[] = [];
   for (const [key, value] of variables) {
     const result = await runProcess(launchctl, ['setenv', key, String(value)], { timeoutMs: 5000, maxOutputBytes: 8192 });
@@ -1565,8 +1584,14 @@ async function syncCodexLbMacLaunchEnvironment(values: any = {}, opts: any = {})
     });
   }
   const failed = results.filter((result: any) => !result.ok);
-  if (failed.length) return { ok: false, status: 'launch_env_failed', variables: results.map((result: any) => result.key), failed, error: failed.map((result: any) => `${result.key}: ${result.error}`).join('; ') };
-  return { ok: true, status: 'synced', variables: results.map((result: any) => result.key) };
+  if (failed.length) return { ok: false, status: 'launch_env_failed', variables: results.map((result: any) => result.key), failed, secret_env_cleanup: secretCleanup, error: failed.map((result: any) => `${result.key}: ${result.error}`).join('; ') };
+  return {
+    ok: secretCleanup.ok !== false,
+    status: variables.length ? 'synced' : 'secret_env_removed',
+    variables: results.map((result: any) => result.key),
+    skipped_secret_variables: ['CODEX_LB_API_KEY', 'OPENROUTER_API_KEY'],
+    secret_env_cleanup: secretCleanup
+  };
 }
 
 async function inspectCodexLbMacLaunchEnvironment(baseUrl: any = '', opts: any = {}) {
@@ -1579,20 +1604,33 @@ async function inspectCodexLbMacLaunchEnvironment(baseUrl: any = '', opts: any =
   };
   const currentBaseUrl = await readVar('CODEX_LB_BASE_URL');
   const currentApiKey = await readVar('CODEX_LB_API_KEY');
+  const currentOpenRouterKey = await readVar('OPENROUTER_API_KEY');
   const baseMatches = !baseUrl || currentBaseUrl === String(baseUrl || '').trim();
   const basePresent = Boolean(currentBaseUrl);
   const keyPresent = Boolean(currentApiKey);
+  const openRouterKeyPresent = Boolean(currentOpenRouterKey);
   return {
     checked: true,
     available: true,
-    status: basePresent && keyPresent && baseMatches ? 'synced' : basePresent || keyPresent ? 'partial' : 'missing',
+    status: keyPresent || openRouterKeyPresent
+      ? 'secret_env_present'
+      : basePresent && baseMatches
+        ? 'base_url_only'
+        : basePresent
+          ? 'partial'
+          : 'missing',
     variables: [
       ...(keyPresent ? ['CODEX_LB_API_KEY'] : []),
+      ...(openRouterKeyPresent ? ['OPENROUTER_API_KEY'] : []),
       ...(basePresent ? ['CODEX_LB_BASE_URL'] : [])
     ],
     base_url_present: basePresent,
     base_url_matches: baseMatches,
-    api_key_present: keyPresent
+    api_key_present: keyPresent,
+    openrouter_api_key_present: openRouterKeyPresent,
+    next_actions: keyPresent || openRouterKeyPresent
+      ? ['Run: sks doctor --fix', 'Rotate CODEX_LB_API_KEY and OPENROUTER_API_KEY if they were exposed in launchd.']
+      : []
   };
 }
 
@@ -1707,7 +1745,8 @@ function detectCodexLbSetupDrift(state: any = {}): string[] {
   if (!state.writeEnvFile && state.beforeState && state.afterState && state.beforeState.envHash !== state.afterState.envHash) drift.push('env_file_changed_despite_no_env_file');
   if (!state.writeEnvFile && !state.beforeState && state.envFile === true) drift.push('env_file_written_despite_no_env_file');
   if (!state.storeKeychain && state.keychain?.status && state.keychain.status !== 'skipped') drift.push('keychain_touched_despite_no_keychain');
-  if (!state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') drift.push('launchctl_synced_despite_no_launchctl');
+  if (!state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') drift.push('launchctl_base_url_synced_despite_no_launchctl');
+  if (state.codexEnvironment?.launch_environment?.secret_env_cleanup?.status === 'partial') drift.push('launchctl_secret_env_cleanup_incomplete');
   if (state.shellProfile === 'skip' && state.shellProfileResult?.status === 'installed') drift.push('shell_profile_written_despite_skip');
   if (state.shellProfile === 'skip' && state.beforeState && state.afterState && state.beforeState.profileHash !== state.afterState.profileHash) drift.push('shell_profile_changed_despite_skip');
   return drift;
@@ -1744,7 +1783,7 @@ function appliedCodexLbPersistenceModes(state: any = {}): CodexLbPersistenceMode
   const modes: CodexLbPersistenceMode[] = [];
   if (state.writeEnvFile && state.envFile === true) modes.push('durable_env_file');
   if (state.storeKeychain && state.keychain?.ok === true) modes.push('durable_keychain');
-  if (state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') modes.push('durable_launchctl');
+  if (state.syncLaunchctl && state.codexEnvironment?.launch_environment?.status === 'synced') modes.push('process_only_ephemeral');
   if (state.shellProfile !== 'skip' && state.shellProfileResult?.status === 'installed') modes.push('shell_profile');
   if (!modes.length && state.apiKeySource === 'process.env') modes.push('process_only_ephemeral');
   if (!modes.length) modes.push('none');
@@ -1772,13 +1811,13 @@ export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
       forceFastModeOff: opts.forceFastModeOff === true
     });
     if (next === ensureTrailingNewline(current)) return { status: 'present', config_path: configPath };
-    // Safety gate 2: never WRITE a config that would not parse.
-    const nextSmoke = codexConfigParseSmoke(next);
-    if (!nextSmoke.ok) return { status: 'skipped_unsafe_rewrite', config_path: configPath, parse_smoke: nextSmoke };
-    // Safety gate 3: back up the user's good config before mutating it.
-    const backupPath = current.trim() ? await backupCodexConfig(configPath, current, 'pre-update') : null;
-    await writeTextAtomic(configPath, next);
-    return { status: 'updated', config_path: configPath, backup_path: backupPath };
+    const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'codex-fast-mode-install');
+    return {
+      status: safeWrite.status === 'written' ? 'updated' : safeWrite.status,
+      config_path: configPath,
+      backup_path: safeWrite.backup_path,
+      parse_smoke: safeWrite.ok ? undefined : safeWrite
+    };
   } catch (err: any) {
     return { status: 'failed', config_path: configPath, error: err.message };
   }
@@ -1794,7 +1833,9 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   // Keep model and reasoning selection out of top-level config so Codex Desktop can
   // expose its native model/speed selectors. SKS-owned defaults live in profiles below.
   let next = String(text || '');
+  const misplacedDefaultProfile = tomlTableString(next, 'user.fast_mode', 'default_profile');
   next = removeLegacyTopLevelCodexModeLocks(next);
+  next = removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
   if (opts.forceFastMode === true) {
@@ -1812,17 +1853,24 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
     'fast_mode_ui = true', 'codex_git_commit = true', 'computer_use = true', 'browser_use = true',
     'browser_use_external = true', 'image_generation = true', 'in_app_browser = true',
     'guardian_approval = true', 'tool_suggest = true', 'apps = true', 'plugins = true'
-  ]) next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
+  ]) {
+    const featureKey = featureLine.split('=')[0]?.trim();
+    next = opts.forceFastMode === true && ['fast_mode', 'fast_mode_ui'].includes(String(featureKey || ''))
+      ? upsertTomlTableKey(next, 'features', featureLine)
+      : upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
+  }
   if (opts.forceFastMode === true || opts.forceFastModeOff === true) {
     next = upsertTomlTableKey(next, 'user.fast_mode', 'visible = true');
     next = upsertTomlTableKey(next, 'user.fast_mode', 'enabled = true');
     next = opts.forceFastMode === true
-      ? upsertTomlTableKey(next, 'user.fast_mode', 'default_profile = "sks-fast-high"')
-      : removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
+      ? upsertTopLevelTomlString(next, 'default_profile', 'sks-fast-high')
+      : removeTopLevelTomlKeyIfValue(next, 'default_profile', 'sks-fast-high');
   } else {
     next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
     next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
-    next = removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
+    if (misplacedDefaultProfile === 'sks-fast-high') {
+      next = upsertTopLevelTomlString(next, 'default_profile', 'sks-fast-high');
+    }
   }
   // Keep ONLY the sks-fast-high config-profile table for explicit fast-mode opt-in
   // and CLI `--profile` use. The other SKS config profiles are
@@ -1914,6 +1962,7 @@ function upsertTomlTableKey(text: any, table: any, line: any) {
       return lines.join('\n').replace(/\n{3,}/g, '\n\n');
     }
   }
+  if (hasTomlTableKey(lines.join('\n'), table, key)) return lines.join('\n').replace(/\n{3,}/g, '\n\n');
   lines.splice(end, 0, line);
   return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -2001,6 +2050,7 @@ async function backupCodexConfig(configPath: string, text: string, tag: string) 
     const stamp = `${PACKAGE_VERSION}-${Date.now().toString(36)}`;
     const backupPath = `${configPath}.sks-${tag}-${stamp}.bak`;
     await writeTextAtomic(backupPath, text);
+    await cleanupCodexConfigBackups(configPath, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined);
     return backupPath;
   } catch {
     return null;
@@ -2014,20 +2064,33 @@ async function backupCodexConfig(configPath: string, text: string, tag: string) 
 //     string), leaving the existing config untouched,
 //   - otherwise back up the prior config before mutating.
 export async function safeWriteCodexConfigToml(configPath: string, current: string, next: string, tag = 'codex-lb') {
-  const cur = String(current || '');
-  if (cur.trim() && !codexConfigParseSmoke(cur).ok) {
-    const backupPath = await backupCodexConfig(configPath, cur, `${tag}-unparseable`);
-    return { ok: false, status: 'unparseable_config_preserved', config_path: configPath, backup_path: backupPath };
-  }
-  if (!codexConfigParseSmoke(next).ok) {
-    return { ok: false, status: 'skipped_unsafe_rewrite', config_path: configPath, backup_path: null };
-  }
-  if (next === ensureTrailingNewline(cur)) {
-    return { ok: true, status: 'present', config_path: configPath, backup_path: null, changed: false };
-  }
-  const backupPath = cur.trim() ? await backupCodexConfig(configPath, cur, tag) : null;
-  await writeTextAtomic(configPath, next);
-  return { ok: true, status: 'written', config_path: configPath, backup_path: backupPath, changed: true };
+  return writeCodexConfigGuarded({
+    configPath,
+    before: String(current || ''),
+    cause: tag,
+    removeTopLevelModeLocks: true,
+    mutate: () => String(next || '')
+  });
+}
+
+export function codexFastModeDesktopStatus(text: any = '') {
+  const validation = validateCodexConfigRoundTrip(String(text || ''));
+  const profile = validation.parsed?.profiles?.['sks-fast-high'];
+  const globalOn = validation.ok
+    && validation.default_profile === 'sks-fast-high'
+    && profile?.model === 'gpt-5.5'
+    && profile?.service_tier === 'fast';
+  return {
+    schema: 'sks.codex-fast-mode-desktop-status.v1',
+    ok: validation.ok,
+    on: Boolean(globalOn),
+    default_profile: validation.default_profile || null,
+    top_level_default_profile: validation.top_level_default_profile === true,
+    user_fast_mode_default_profile: validation.user_fast_mode_default_profile,
+    profile_model: profile?.model || null,
+    profile_service_tier: profile?.service_tier || null,
+    validation
+  };
 }
 
 function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {
@@ -2313,14 +2376,14 @@ export async function ensureGlobalCodexSkillsDuringInstall(opts: any = {}) {
   if (!home) return { status: 'skipped', reason: 'home directory unavailable' };
   const root = globalCodexSkillsRoot(home);
   try {
-    const install = await installSkills(home);
+    const install = await installGlobalSkills(home);
     const skills = await checkRequiredSkills(home, root);
     return {
       status: skills.ok ? 'installed' : 'partial',
       root,
-      installed_count: install.installed_skills.length,
-      removed_aliases: install.removed_agent_skill_aliases,
-      removed_stale_generated_skills: install.removed_stale_generated_skills,
+      installed_count: install.installed.length,
+      removed_aliases: [],
+      removed_stale_generated_skills: install.removed,
       missing_skills: skills.missing
     };
   } catch (err: any) {
@@ -2623,7 +2686,13 @@ export async function ensureProjectContext7Config(root: any, transport: any = 'l
     return false;
   }
   if (hasContext7ConfigText(current)) return false;
-  await writeTextAtomic(configPath, `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}\n`);
+  await writeCodexConfigGuarded({
+    root,
+    configPath,
+    before: current,
+    cause: 'context7-project-config',
+    mutate: () => `${current.trimEnd()}${current.trim() ? '\n\n' : ''}${block}\n`
+  });
   return true;
 }
 

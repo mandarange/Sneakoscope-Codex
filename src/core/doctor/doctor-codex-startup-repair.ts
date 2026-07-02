@@ -3,6 +3,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 import { ensureDir, exists, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 
 export const DOCTOR_CODEX_STARTUP_REPAIR_SCHEMA = 'sks.doctor-codex-startup-repair.v1'
 
@@ -75,7 +76,7 @@ export async function runDoctorCodexStartupRepair(input: {
     { scope: 'project' as const, path: path.join(root, '.codex', 'config.toml'), agentDir: path.join(root, '.codex', 'agents') },
     { scope: 'global' as const, path: path.join(codexHome, 'config.toml'), agentDir: path.join(codexHome, 'agents') }
   ]) {
-    configs.push(await inspectOrRepairConfig(candidate, input.fix, input.nodeReplCommandCandidates || [], input.includeDefaultNodeReplCandidates !== false))
+    configs.push(await inspectOrRepairConfig(root, candidate, input.fix, input.nodeReplCommandCandidates || [], input.includeDefaultNodeReplCandidates !== false))
   }
   const blockers = [...roleFiles.blockers, ...configs.flatMap((entry) => entry.blockers.map((item) => `${entry.scope}:${item}`))]
   const warnings = configs.flatMap((entry) => entry.warnings.map((item) => `${entry.scope}:${item}`))
@@ -115,7 +116,7 @@ export async function runDoctorCodexStartupRepair(input: {
   return report
 }
 
-async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; agentDir: string }, fix: boolean, nodeReplCommandCandidates: string[], includeDefaultNodeReplCandidates: boolean): Promise<DoctorCodexStartupRepairResult['configs'][number]> {
+async function inspectOrRepairConfig(root: string, candidate: { scope: Scope; path: string; agentDir: string }, fix: boolean, nodeReplCommandCandidates: string[], includeDefaultNodeReplCandidates: boolean): Promise<DoctorCodexStartupRepairResult['configs'][number]> {
   const text = await readText(candidate.path, null)
   if (text == null) {
     return {
@@ -195,7 +196,13 @@ async function inspectOrRepairConfig(candidate: { scope: Scope; path: string; ag
 
   const changed = next !== text
   const backupPath = changed && fix ? await backupConfig(candidate.path, text, 'startup') : null
-  if (changed && fix) await writeTextAtomic(candidate.path, next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n'))
+  if (changed && fix) await writeCodexConfigGuarded({
+    root,
+    configPath: candidate.path,
+    before: text,
+    cause: 'doctor-codex-startup-repair',
+    mutate: () => next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
+  })
   return {
     scope: candidate.scope,
     path: candidate.path,

@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export const PACKAGE_VERSION = '4.8.6';
+export const PACKAGE_VERSION = '4.8.7';
 export const DEFAULT_PROCESS_TAIL_BYTES = 256 * 1024;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -147,6 +147,28 @@ export async function writeJsonAtomic<T>(p: string, data: T): Promise<void> {
   await writeTextAtomic(p, `${JSON.stringify(data, null, 2)}\n`);
 }
 
+export async function writeReceiptRotated<T>(p: string, data: T, opts: { keep?: number } = {}): Promise<void> {
+  await ensureDir(path.dirname(p));
+  const keep = Math.max(1, opts.keep ?? 5);
+  const prior = await fsp.readdir(path.dirname(p), { withFileTypes: true }).catch(() => []);
+  const base = path.basename(p);
+  const rotated = prior
+    .filter((entry) => entry.isFile() && entry.name.startsWith(`${base}.`) && entry.name.endsWith('.json'))
+    .map((entry) => path.join(path.dirname(p), entry.name));
+  const existing = await fsp.stat(p).catch(() => null);
+  if (existing) {
+    const stamp = new Date(existing.mtimeMs).toISOString().replace(/[:.]/g, '-');
+    await fsp.rename(p, path.join(path.dirname(p), `${base}.${stamp}.json`)).catch(() => undefined);
+  }
+  await writeJsonAtomic(p, data);
+  const rows = await Promise.all(rotated.map(async (file) => ({ file, stat: await fsp.stat(file).catch(() => null) })));
+  rows
+    .filter((row): row is { file: string; stat: fs.Stats } => Boolean(row.stat))
+    .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+    .slice(keep)
+    .forEach((row) => void fsp.rm(row.file, { force: true }).catch(() => undefined));
+}
+
 export async function writeBinaryAtomic(p: string, data: Buffer): Promise<void> {
   await ensureDir(path.dirname(p));
   try {
@@ -171,6 +193,12 @@ export async function writeBinaryAtomic(p: string, data: Buffer): Promise<void> 
 export async function appendJsonl(p: string, obj: unknown): Promise<void> {
   await ensureDir(path.dirname(p));
   await fsp.appendFile(p, `${JSON.stringify(obj)}\n`, 'utf8');
+}
+
+export async function appendJsonlMany(p: string, rows: readonly unknown[]): Promise<void> {
+  if (!rows.length) return;
+  await ensureDir(path.dirname(p));
+  await fsp.appendFile(p, rows.map((row) => JSON.stringify(row)).join('\n') + '\n', 'utf8');
 }
 
 export async function appendJsonlBounded(
@@ -498,8 +526,36 @@ export async function readStdin(): Promise<string> {
   });
 }
 
+export function managedSksTmpRoot(baseDir = os.tmpdir()): string {
+  return path.join(baseDir, 'sks');
+}
+
 export function tmpdir(prefix = 'sks-'): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const base = managedSksTmpRoot();
+  fs.mkdirSync(base, { recursive: true });
+  return fs.mkdtempSync(path.join(base, prefix));
+}
+
+export async function withScratchDir<T>(prefix = 'sks-', fn: (dir: string) => Promise<T>, opts: { baseDir?: string; keep?: boolean } = {}): Promise<T> {
+  const base = opts.baseDir || managedSksTmpRoot();
+  await fsp.mkdir(base, { recursive: true });
+  const dir = await fsp.mkdtemp(path.join(base, prefix));
+  try {
+    return await fn(dir);
+  } finally {
+    if (!opts.keep) await fsp.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+export function withScratchDirSync<T>(prefix = 'sks-', fn: (dir: string) => T, opts: { baseDir?: string; keep?: boolean } = {}): T {
+  const base = opts.baseDir || managedSksTmpRoot();
+  fs.mkdirSync(base, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(base, prefix));
+  try {
+    return fn(dir);
+  } finally {
+    if (!opts.keep) fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 export async function fileSize(p: string): Promise<number> {

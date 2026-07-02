@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
+import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { CONTEXT7_REMOTE_MCP_URL, mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock } from '../mcp/mcp-config-preservation.js';
 import { guardedWriteFile, guardContextForRoute } from '../safety/mutation-guard.js';
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js';
@@ -18,6 +19,7 @@ export interface Context7McpRepairReport {
   manual_required: boolean;
   blockers: string[];
   warnings: string[];
+  report_write_failed?: boolean;
 }
 
 export async function repairContext7Mcp(input: { root: string; apply?: boolean; reportPath?: string | null }): Promise<Context7McpRepairReport> {
@@ -27,6 +29,7 @@ export async function repairContext7Mcp(input: { root: string; apply?: boolean; 
   const disabledPreserved = beforeTransport === 'disabled';
   let afterText = config.text;
   let repaired = false;
+  let backupWriteFailed = false;
   if (beforeTransport === 'stdio') {
     afterText = replaceOrAppendMcpServerBlock(config.text, 'context7', [
       '[mcp_servers.context7]',
@@ -43,15 +46,26 @@ export async function repairContext7Mcp(input: { root: string; apply?: boolean; 
       userRequest: 'Write a scoped project backup before doctor Context7 MCP repair.',
       projectRoot: root
     });
-    await guardedWriteFile(guardContextForRoute(root, contract, 'doctor Context7 MCP repair backup'), backupPath, config.text).catch(() => undefined);
-    await writeTextAtomic(config.path, afterText);
+    try {
+      await guardedWriteFile(guardContextForRoute(root, contract, 'doctor Context7 MCP repair backup'), backupPath, config.text);
+    } catch (err: unknown) {
+      backupWriteFailed = true;
+      process.stderr.write(`SKS doctor warning: failed to write Context7 MCP repair backup ${backupPath}: ${messageOf(err)}\n`);
+    }
+    await writeCodexConfigGuarded({
+      root,
+      configPath: config.path,
+      before: config.text,
+      cause: 'context7-mcp-repair',
+      mutate: () => afterText
+    });
   }
   const after = input.apply && repaired ? await readProjectCodexConfig(root) : { text: afterText };
   const afterTransport = classifyContext7Transport(after.text);
   const remoteProbeStatus = afterTransport === 'remote' && process.env.SKS_CONTEXT7_REMOTE_PROBE === '1'
     ? await probeRemoteContext7()
     : 'skipped';
-  const report: Context7McpRepairReport = {
+  let report: Context7McpRepairReport = {
     schema: 'sks.doctor-context7-mcp-repair.v1',
     generated_at: nowIso(),
     ok: afterTransport === 'remote' || afterTransport === 'disabled' || beforeTransport === 'missing',
@@ -64,10 +78,25 @@ export async function repairContext7Mcp(input: { root: string; apply?: boolean; 
     repaired: input.apply === true && repaired,
     manual_required: false,
     blockers: afterTransport === 'stdio' ? ['context7_mcp_still_stdio'] : [],
-    warnings: beforeTransport === 'missing' ? ['context7_mcp_not_configured'] : []
+    warnings: [
+      ...(beforeTransport === 'missing' ? ['context7_mcp_not_configured'] : []),
+      ...(backupWriteFailed ? ['context7_mcp_backup_write_failed'] : [])
+    ]
   };
-  if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-context7-mcp-repair.json'), report).catch(() => undefined);
+  if (input.reportPath !== null) {
+    const reportPath = input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-context7-mcp-repair.json');
+    try {
+      await writeJsonAtomic(reportPath, report);
+    } catch (err: unknown) {
+      report = { ...report, report_write_failed: true };
+      process.stderr.write(`SKS doctor warning: failed to write Context7 MCP repair report ${reportPath}: ${messageOf(err)}\n`);
+    }
+  }
   return report;
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 async function probeRemoteContext7(): Promise<Context7McpRepairReport['remote_probe_status']> {

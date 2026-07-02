@@ -18,7 +18,7 @@ npm run qa:backfill-route-blackbox
 npm run qa:actual-route-backfill
 ```
 
-Each gate runs the native orchestrator through the actual route command surface with `--agents 5 --work-items 8 --target-active-slots 5 --minimum-work-items 5 --mock --json`. Agent uses `sks agent run`, Team uses `sks team`, Research uses `sks research prepare` plus `sks research run`, and QA uses `sks qa-loop prepare` plus `sks qa-loop run`. The fixture delays the first two work items so they finish early, keeps three first-wave items slower, and verifies that replacement generations launch from the pending queue before drain. A non-Agent route fails if proof shows a generic `sks agent run --route` stand-in.
+Each gate runs the native orchestrator through the actual route command surface with `--agents 5 --work-items 8 --target-active-slots 5 --minimum-work-items 5 --mock --json`. Agent uses `sks agent run`, the deprecated Team compatibility surface uses `sks team` only to prove Naruto redirection, Research uses `sks research prepare` plus `sks research run`, and QA uses `sks qa-loop prepare` plus `sks qa-loop run`. The fixture delays the first two work items so they finish early, keeps three first-wave items slower, and verifies that replacement generations launch from the pending queue before drain. A non-Agent route fails if proof shows a generic `sks agent run --route` stand-in.
 
 The blackboxes assert:
 

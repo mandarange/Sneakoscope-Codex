@@ -58,19 +58,18 @@ await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
 const freshStatus = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
 assertGate(freshStatus.telemetry_stale === false, 'slot pane status JSON must treat 3.5s-old telemetry as fresh under new 15s threshold', freshStatus)
 
-// Between 15s and 60s the pane shows the numeric "telemetry stale Ns" warning row.
+// Between 15s and 60s the status JSON marks staleness; the pane keeps showing live telemetry
+// merged with fresh artifact/log detail instead of replacing it with stale-only prose.
 snapshot.updated_at = new Date(Date.now() - 16000).toISOString()
 await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
 const staleText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
 const staleStatus = await renderZellijSlotPaneStatusFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
-assertGate(/telemetry stale 1[0-9]\.\d+s/.test(staleText), 'slot pane must show numeric stale telemetry warning above 15s', { staleText, staleStatus })
 assertGate(staleStatus.telemetry_stale === true && staleStatus.telemetry_age_ms >= 15000, 'slot pane status JSON must expose stale telemetry above 15s', staleStatus)
 assertGate(staleText.includes('fresh worker stdout fallback') || staleText.includes('apply_patch'), 'stale slot pane must show fresh artifact/log fallback', { staleText })
 
-// Past 60s the pane shows the "worker may still be running" blocker line.
+// Past 60s the status JSON remains stale and the watch loop owns zombie closure.
 snapshot.updated_at = new Date(Date.now() - 61000).toISOString()
 await fs.writeFile(file, `${JSON.stringify(snapshot)}\n`, 'utf8')
 const blockedText = await renderZellijSlotPaneFromArtifacts({ artifactDir, artifactRoot: root, missionId, slotId: 'slot-001', generationIndex: 1 })
-assertGate(blockedText.includes('telemetry stale; worker may still be running'), 'slot pane must show >60s stale blocker line', { blockedText })
 assertGate(blockedText.includes('fresh worker stdout fallback') || blockedText.includes('apply_patch'), 'blocked stale slot pane must keep artifact/log fallback', { blockedText })
 emitGate('zellij:slot-pane-stale-detection', { stale_age_ms: staleStatus.telemetry_age_ms, artifact_fallback: true })

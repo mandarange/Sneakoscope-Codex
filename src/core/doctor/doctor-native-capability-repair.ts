@@ -21,6 +21,7 @@ export interface DoctorNativeCapabilityRepairReport {
   optional_manual_required: string[];
   optional_warnings: string[];
   blockers: string[];
+  report_write_failed?: boolean;
 }
 
 export async function runDoctorNativeCapabilityRepair(input: {
@@ -58,7 +59,7 @@ export async function runDoctorNativeCapabilityRepair(input: {
       ...((nativeCapabilities as { warnings?: string[] }).warnings || []),
       ...optionalManualRequired.map((id) => `${id}_manual_required`)
     ];
-    const report: DoctorNativeCapabilityRepairReport = {
+    let report: DoctorNativeCapabilityRepairReport = {
       schema: 'sks.doctor-native-capability-repair.v1',
       generated_at: nowIso(),
       ok: blockers.length === 0,
@@ -75,11 +76,21 @@ export async function runDoctorNativeCapabilityRepair(input: {
       optional_warnings: [...new Set(optionalWarnings)],
       blockers
     };
-    await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'doctor-native-capability-repair.json'), report).catch(() => undefined);
+    const reportPath = path.join(root, '.sneakoscope', 'reports', 'doctor-native-capability-repair.json');
+    try {
+      await writeJsonAtomic(reportPath, report);
+    } catch (err: unknown) {
+      report = { ...report, report_write_failed: true };
+      process.stderr.write(`SKS doctor warning: failed to write native capability repair report ${reportPath}: ${messageOf(err)}\n`);
+    }
     return report;
   };
   if (!input.fix) return operation();
   return withSecretPreservationGuard(root, 'doctor-native-capability-repair', operation);
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function skippedNativeCapabilityDiagnostics(root: string) {

@@ -54,6 +54,7 @@ export interface ZellijSlotTelemetryEvent {
   task_id?: string
   task_title?: string
   current_file?: string | null
+  spawned_at?: string
   progress?: {
     done: number
     total: number
@@ -85,6 +86,7 @@ export interface ZellijSlotTelemetrySnapshot {
     latest_event_type: string
     latest_ts: string
     started_at: string
+    spawned_at: string
     progress: { done: number; total: number; label: string } | null
     artifact_paths: string[]
     blockers: string[]
@@ -280,6 +282,7 @@ function normalizeTelemetryEvent(event: ZellijSlotTelemetryEvent): ZellijSlotTel
     ...(event.task_id ? { task_id: String(event.task_id) } : {}),
     ...(event.task_title ? { task_title: String(event.task_title) } : {}),
     current_file: event.current_file == null ? null : String(event.current_file),
+    ...(event.spawned_at ? { spawned_at: String(event.spawned_at) } : {}),
     ...(event.progress ? (() => {
       const progress = normalizeProgress(event.progress)
       return progress ? { progress } : {}
@@ -317,6 +320,7 @@ function mergeSlotTelemetry(previous: ZellijSlotTelemetrySnapshot['slots'][strin
     latest_event_type: stale ? previous!.latest_event_type : event.event_type,
     latest_ts: stale ? previous!.latest_ts : event.ts,
     started_at: previous?.started_at || event.ts,
+    spawned_at: event.spawned_at || previous?.spawned_at || event.ts,
     progress: stale ? previous!.progress || (terminalRegression ? null : event.progress || null) : event.progress || previous?.progress || null,
     artifact_paths: unique([...(previous?.artifact_paths || []), ...(event.artifact_paths || [])]),
     blockers: unique([...(previous?.blockers || []), ...(event.blockers || [])]),

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
+import { tmpdir } from '../../core/fsx.js';
 import { assertGate, emitGate, importDist, readJson, readText, root } from '../sks-1-18-gate-lib.js';
 
 export { assertGate, emitGate, importDist, readJson, readText, root };
@@ -17,7 +17,7 @@ export async function readTextFile(file) {
 export async function runFakeCodexSdkTaskFixture(label = 'fixture', extra = {}) {
   const mod = await importDist('core/codex-control/codex-control-plane.js');
   const schema = await importDist('core/codex-control/schemas/agent-worker-result.schema.js');
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), `sks-codex-sdk-${label}-`));
+  const tmp = tmpdir(`sks-codex-sdk-${label}-`);
   const old = snapshotEnv();
   process.env.NODE_ENV = 'test';
   process.env.SKS_CODEX_SDK_FAKE = '1';

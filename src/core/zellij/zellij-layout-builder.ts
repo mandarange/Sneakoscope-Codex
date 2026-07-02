@@ -10,6 +10,7 @@ export interface ZellijLayoutInput {
   ledgerRoot: string
   cwd?: string
   kind?: 'mad' | 'agent' | 'team' | 'naruto'
+  /** Deprecated for dynamic swarm UI. Viewport count is controlled by SKS_ZELLIJ_VIEWPORTS. */
   slotCount?: number
   title?: string
   codexBin?: string
@@ -25,7 +26,6 @@ export interface ZellijLayoutBuild {
   kind: string
   ledger_root: string
   cwd: string
-  slot_count: number
   layout_kdl: string
   launch_command: string[]
   attach_command: string
@@ -34,13 +34,17 @@ export interface ZellijLayoutBuild {
   launch_env_keys: string[]
   lane_runtime_manifest: string
   lane_runtime_policies: ZellijLaneRuntimePolicy[]
+  viewport_count: number
+  ui_architecture: 'monitor_plus_viewports'
+  /** Deprecated compatibility field; dynamic swarm layouts do not precreate worker panes. */
+  slot_count: number
   initial_worker_panes: number
   monitor_pane_enabled: boolean
   monitor_pane_count: number
   lane_dispatch_policy: {
     mode: 'jsonl_nonblocking'
     fifo_policy: 'disabled_to_avoid_writer_blocking'
-    pane_transport: 'zellij_action_optional'
+    pane_transport: 'monitor_plus_viewports' | 'zellij_action_optional'
     throttle_ms: number
   }
   lane_resource_policy: {
@@ -50,22 +54,32 @@ export interface ZellijLayoutBuild {
 }
 
 export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuild {
-  const slotCount = Math.max(0, Number(input.slotCount ?? 1))
+  const viewportCount = boundedInt(process.env.SKS_ZELLIJ_VIEWPORTS, 4, 0, 6)
   const sessionName = input.sessionName || `sks-${input.missionId}`
   const cwd = path.resolve(input.cwd || process.cwd())
   const ledgerRoot = path.resolve(input.ledgerRoot)
   const title = input.title || `SKS ${input.kind || 'agent'} ${input.missionId}`
   const sksCommand = `${shellQuote(process.execPath)} ${shellQuote(path.join(packageRoot(), 'dist', 'bin', 'sks.js'))}`
+  const sksEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js')
   const mainPane = buildMainPaneCommand(input, sksCommand)
   const laneRuntimes: ZellijLaneRuntimePolicy[] = []
-  const monitorPaneEnabled = process.env.SKS_ZELLIJ_MONITOR_PANE === '1'
-  const monitorPane = monitorPaneEnabled
-    ? [
-        '        pane name="monitor" size="30%" command="sh" {',
-        `            args "-lc" ${kdlString(`${sksCommand} status --json || true; exec ${shellQuote(String(process.env.SHELL || '/bin/zsh'))}`)}`,
-        '        }'
-      ].join('\n')
-    : ''
+  const monitorPaneEnabled = process.env.SKS_ZELLIJ_MONITOR_PANE !== '0'
+    && (input.kind === 'mad' || input.kind === 'naruto' || process.env.SKS_ZELLIJ_MONITOR_PANE === '1')
+  const monitorBlock = monitorPaneEnabled ? [
+    '            pane size="35%" name="sks-monitor" {',
+    `                command ${kdlString(process.execPath)}`,
+    `                args ${kdlArgs([sksEntry, 'zellij-monitor-pane', '--mission', input.missionId, '--watch'])}`,
+    '            }'
+  ].join('\n') : ''
+  const viewportBlocks = Array.from({ length: viewportCount }, (_, i) => {
+    const viewportIndex = String(i + 1)
+    return [
+      `            pane name=${kdlString(`sks-viewport-${viewportIndex}`)} {`,
+      `                    command ${kdlString(process.execPath)}`,
+      `                    args ${kdlArgs([sksEntry, 'zellij-viewport-pane', '--mission', input.missionId, '--index', viewportIndex, '--of', String(viewportCount), '--watch'])}`,
+      '            }'
+    ].join('\n')
+  }).join('\n')
   const layout = [
     'layout {',
     '    default_tab_template {',
@@ -77,11 +91,16 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     '            plugin location="zellij:status-bar"',
     '        }',
     '    }',
-    `    tab name=${kdlString(title)} cwd=${kdlString(cwd)} split_direction="vertical" {`,
-    '        pane name="orchestrator" command="sh" {',
-    `            args "-lc" ${kdlString(mainPane.command)}`,
+    `    tab name=${kdlString(title)} cwd=${kdlString(cwd)} {`,
+    '        pane split_direction="vertical" {',
+    '            pane name="orchestrator" size="55%" command="sh" {',
+    `                args "-lc" ${kdlString(mainPane.command)}`,
+    '            }',
+    '            pane split_direction="horizontal" size="45%" {',
+    ...(monitorBlock ? [monitorBlock] : []),
+    ...(viewportBlocks ? [viewportBlocks] : []),
+    '            }',
     '        }',
-    ...(monitorPane ? [monitorPane] : []),
     '    }',
     '}',
     ''
@@ -94,7 +113,9 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     kind: input.kind || 'agent',
     ledger_root: ledgerRoot,
     cwd,
-    slot_count: slotCount,
+    viewport_count: viewportCount,
+    ui_architecture: 'monitor_plus_viewports',
+    slot_count: 0,
     layout_kdl: layout,
     launch_command: ['zellij', 'attach', '--create-background', sessionName, 'options', '--default-layout', '<layout-path>'],
     attach_command: `zellij attach ${shellQuote(sessionName)}`,
@@ -109,7 +130,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     lane_dispatch_policy: {
       mode: 'jsonl_nonblocking',
       fifo_policy: 'disabled_to_avoid_writer_blocking',
-      pane_transport: 'zellij_action_optional',
+      pane_transport: 'monitor_plus_viewports',
       throttle_ms: 0
     },
     lane_resource_policy: {
@@ -124,7 +145,6 @@ export function validateZellijLayoutKdl(text: string) {
     ...(!/\blayout\s*\{/.test(text) ? ['zellij_layout_root_missing'] : []),
     ...(!/\bpane\s+name="orchestrator"/.test(text) ? ['zellij_layout_orchestrator_pane_missing'] : []),
     ...(/\bzellij-lane\b/.test(text) ? ['zellij_layout_precreated_lane_command_present'] : []),
-    ...(/\bpane\s+name="slot-\d+"/.test(text) ? ['zellij_layout_precreated_worker_pane_present'] : []),
     ...(/\bSKS_ZELLIJ_COMMAND_INBOX=/.test(text) ? ['zellij_layout_lane_inbox_env_present'] : []),
     ...(/\btmux\b/i.test(text) ? ['zellij_layout_references_removed_tmux'] : []),
     ...(braceBalance(text) !== 0 ? ['zellij_layout_unbalanced_braces'] : [])
@@ -150,6 +170,21 @@ export async function writeZellijLayout(root: string, input: ZellijLayoutInput):
 
 function kdlString(value: unknown): string {
   return JSON.stringify(String(value || ''))
+}
+
+function kdlArgs(args: string[]): string {
+  return args.map((arg) => kdlString(arg)).join(' ')
+}
+
+function nonNegativeInt(value: unknown, fallback: number): number {
+  const n = Math.floor(Number(value))
+  return Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
+function boundedInt(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Math.floor(Number(value ?? fallback))
+  const n = Number.isFinite(parsed) ? parsed : fallback
+  return Math.max(min, Math.min(n, max))
 }
 
 function shellQuote(value: string): string {

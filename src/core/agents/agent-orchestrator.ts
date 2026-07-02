@@ -72,6 +72,7 @@ import { enforceRetention } from '../retention.js'
 
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
+  const sessionKey = opts.sessionKey || null
   const prompt = String(opts.prompt || 'Native agent run')
   const route = opts.route || '$Agent'
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
@@ -85,11 +86,11 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   const realZellijProofRequired = realZellij && process.env.SKS_REQUIRE_ZELLIJ === '1'
   const created = opts.missionId
     ? { id: opts.missionId, dir: missionDir(root, opts.missionId), mission: { id: opts.missionId, mode: 'agent', prompt } }
-    : await createMission(root, { mode: 'agent', prompt })
+    : await createMission(root, { mode: 'agent', prompt, sessionKey })
   const missionId = created.id
   const dir = created.dir
   if (legacyCodexExecRequested) {
-    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_LEGACY_CODEX_EXEC_BLOCKED', route_command: routeCommand, native_agent_backend: 'codex-sdk', updated_at: nowIso() })
+    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_LEGACY_CODEX_EXEC_BLOCKED', route_command: routeCommand, native_agent_backend: 'codex-sdk', updated_at: nowIso() }, { sessionKey })
     return legacyCodexExecBlockedRun({ root, missionId, dir, route, routeCommand, routeBlackboxKind, backend: 'codex-sdk' })
   }
   // Route start: consult this route's deployed Core Skill snapshot (read-only).
@@ -158,7 +159,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     appshots_operator_action_required: strategyGate.appshots_operator_action_required
   }
   if (!strategyGate.scheduler_allowed) {
-    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_STRATEGY_GATE_BLOCKED', route_command: routeCommand, native_agent_backend: backend, updated_at: nowIso() })
+    await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_STRATEGY_GATE_BLOCKED', route_command: routeCommand, native_agent_backend: backend, updated_at: nowIso() }, { sessionKey })
     const blockedLedgerRoot = path.join(dir, 'agents')
     return {
       schema: 'sks.agent-run.v1',
@@ -354,7 +355,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     return killTimedOutAgentSessions(ledgerRoot, now, { hardTimeoutMs: schedulerHardTimeoutMs })
   }
   await nativeCliSwarm.initialize()
-  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend })
+  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: 'AGENT_NATIVE_KERNEL_RUNNING', route_command: routeCommand, native_agent_backend: backend }, { sessionKey })
   const scheduler = await runAgentScheduler({
     root: ledgerRoot,
     missionId,
@@ -539,6 +540,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     : results
   const patchSwarm = await runAgentPatchSwarmRuntime(root, ledgerRoot, {
     missionId,
+    sessionKey,
     route,
     routeCommand,
     writeCapable,
@@ -620,7 +622,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
   })
   await writeAgentCodexCockpitArtifacts(dir, { missionId, projectHash: namespace.root_hash })
   await enforceRetention(root, { afterRoute: true, completedMissionId: missionId, rotateLargeJsonl: true, lightweight: true }).catch(() => null)
-  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() })
+  await setCurrent(root, { mission_id: missionId, mode: 'AGENT', phase: proof.ok ? 'AGENT_NATIVE_KERNEL_DONE' : 'AGENT_NATIVE_KERNEL_BLOCKED', native_agent_backend: backend, updated_at: nowIso() }, { sessionKey })
   return {
     schema: 'sks.agent-run.v1',
     ok: proof.ok,
@@ -1130,8 +1132,8 @@ async function legacyCodexExecBlockedRun(input: { root: string; missionId: strin
   }
 }
 
-async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input: { missionId: string; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
-  await setCurrent(root, { mission_id: input.missionId, mode: 'AGENT', phase: 'AGENT_PATCH_SWARM_RUNNING', route_command: input.routeCommand, updated_at: nowIso() })
+async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input: { missionId: string; sessionKey?: string | null; route: string; routeCommand: string; writeCapable: boolean; results: any[]; parallelWritePolicy: any; verificationRollbackDag?: any; dryRun: boolean; gptFinalArbiter?: any; finalGptPatchStage?: any }) {
+  await setCurrent(root, { mission_id: input.missionId, mode: 'AGENT', phase: 'AGENT_PATCH_SWARM_RUNNING', route_command: input.routeCommand, updated_at: nowIso() }, { sessionKey: input.sessionKey })
   const queueStore = new PersistentAgentPatchQueueStore(ledgerRoot)
   for (const result of input.results || []) {
     for (const envelope of result.patch_envelopes || []) {
@@ -1169,14 +1171,14 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
   }
   const disjointEntries = normalEntries.filter((entry) => !conflictedEntryIds.has(entry.id))
   const startedAt = nowIso()
+  await queueStore.markApplyingBatch([...rebaseSucceededEntryIds])
   for (const entryId of rebaseSucceededEntryIds) {
-    await queueStore.markApplying(entryId)
     await queueStore.markApplied(entryId)
   }
   const rebaseApplyEntryIds = new Set((conflictRebase.apply_results || []).map((row: any) => String(row.entry_id || '')))
   const parallelEntries = disjointEntries.filter((entry) => !rebaseApplyEntryIds.has(entry.id))
+  await queueStore.markApplyingBatch(parallelEntries.map((entry) => entry.id))
   const parallelApplyResults = await Promise.all(parallelEntries.map(async (entry) => {
-    await queueStore.markApplying(entry.id)
     const started_at = nowIso()
     const applyResult = await applyAgentPatchQueueEntry(root, entry, { dryRun: input.dryRun, artifactsDir: ledgerRoot })
     const finished_at = nowIso()
@@ -1192,11 +1194,19 @@ async function runAgentPatchSwarmRuntime(root: string, ledgerRoot: string, input
     }
     return { entry_id: entry.id, started_at, finished_at, ...applyResult }
   }))
-  const applyResults = [
-    ...worktreeApplyResults,
-    ...parallelApplyResults,
-    ...(conflictRebase.apply_results || []).map((row: any) => ({ entry_id: row.entry_id, started_at: row.apply_started_at || nowIso(), finished_at: row.apply_ended_at || nowIso(), ...row }))
-  ]
+	  const applyResults = [
+	    ...worktreeApplyResults,
+	    ...parallelApplyResults,
+	    ...(conflictRebase.apply_results || []).map((row: any) => ({ entry_id: row.entry_id, started_at: row.apply_started_at || nowIso(), finished_at: row.apply_ended_at || nowIso(), ...row }))
+	  ]
+	  if (input.dryRun !== true && applyResults.some((result) => result.ok === true && Array.isArray(result.changed_files) && result.changed_files.length > 0)) {
+	    await setCurrent(root, {
+	      mission_id: input.missionId,
+	      reflection_invalidation_required: true,
+	      reflection_invalidated_at: nowIso(),
+	      reflection_invalidation_reason: 'agent_patch_applied'
+	    }, { sessionKey: input.sessionKey })
+	  }
   const finishedAt = nowIso()
   const entryById = new Map(queueStore.queue.entries.map((entry) => [entry.id, entry]))
   const verificationResults = {
@@ -1421,7 +1431,7 @@ async function runGitWorktreeIntegrationPrimary(root: string, ledgerRoot: string
     return blockedReport
   }
   const startedAt = nowIso()
-  for (const entry of entries) await queueStore.markApplying(entry.id)
+  await queueStore.markApplyingBatch(entries.map((entry) => entry.id))
   const queueReport = await applyGitWorktreeMergeQueue({
     integrationWorktreePath: integration.worktree_path,
     diffs,

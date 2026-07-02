@@ -10,8 +10,13 @@ export interface NarutoResourcePressure {
   fd_pressure: number
   zellij_pressure: number
   disk_io_pressure: number
+  dominant_metric: string
+  dominant_pressure: number
   reasons: string[]
 }
+
+const PRESSURE_HISTORY_LIMIT = 5
+const PRESSURE_HISTORY: Array<Record<string, number>> = []
 
 export function monitorNarutoResourcePressure(probe: HardwareCapacityProbe, input: {
   activeWorkers?: number
@@ -23,29 +28,44 @@ export function monitorNarutoResourcePressure(probe: HardwareCapacityProbe, inpu
   const cpuPressure = Math.min(1, (probe.current_load_average[0] || 0) / Math.max(1, probe.cpu_core_count))
   const fdPressure = Math.min(1, (activeWorkers * 6 + probe.process_count) / Math.max(1, probe.file_descriptor_limit))
   const zellijPressure = Math.min(1, probe.zellij_pane_count / zellijCap)
-  const diskIoPressure = probe.disk_io_pressure
-  const reasons = [
-    ...(memoryPressure > 0.8 ? ['memory_cap'] : []),
-    ...(cpuPressure > 0.9 ? ['cpu_load_cap'] : []),
-    ...(fdPressure > 0.75 ? ['file_descriptor_budget'] : []),
-    ...(zellijPressure > 0.9 ? ['zellij_ui_pane_budget'] : []),
-    ...(diskIoPressure > 0.75 ? ['disk_io_pressure'] : [])
-  ]
-  const maxPressure = Math.max(memoryPressure, cpuPressure, fdPressure, zellijPressure, diskIoPressure)
-  const state: NarutoBackpressureState = maxPressure >= 0.92 ? 'saturated' : maxPressure >= 0.72 ? 'throttled' : 'normal'
+  const diskIoPressure = Number(probe.disk_io_pressure || 0)
+  const sample = movingAveragePressure({
+    memory: memoryPressure,
+    cpu: cpuPressure,
+    fd: fdPressure,
+    zellij: zellijPressure,
+    disk: diskIoPressure
+  })
+  const entries = Object.entries(sample).sort((a, b) => b[1] - a[1])
+  const [dominantMetric = 'unknown', dominantPressure = 0] = entries[0] || []
+  const reasons = entries
+    .filter(([, value]) => value >= 0.85)
+    .map(([metric, value]) => `${metric}:${round(value).toFixed(2)}`)
+  const state: NarutoBackpressureState = dominantPressure >= 0.95 ? 'saturated' : dominantPressure >= 0.85 ? 'throttled' : 'normal'
   return {
     schema: 'sks.naruto-resource-pressure.v1',
     state,
-    memory_pressure: round(memoryPressure),
-    cpu_pressure: round(cpuPressure),
-    fd_pressure: round(fdPressure),
-    zellij_pressure: round(zellijPressure),
-    disk_io_pressure: round(diskIoPressure),
+    memory_pressure: round(sample.memory),
+    cpu_pressure: round(sample.cpu),
+    fd_pressure: round(sample.fd),
+    zellij_pressure: round(sample.zellij),
+    disk_io_pressure: round(sample.disk),
+    dominant_metric: dominantMetric,
+    dominant_pressure: round(dominantPressure),
     reasons
   }
+}
+
+function movingAveragePressure(sample: Record<string, number>) {
+  PRESSURE_HISTORY.push(sample)
+  while (PRESSURE_HISTORY.length > PRESSURE_HISTORY_LIMIT) PRESSURE_HISTORY.shift()
+  const averaged: Record<string, number> = {}
+  for (const key of Object.keys(sample)) {
+    averaged[key] = PRESSURE_HISTORY.reduce((sum, row) => sum + Number(row[key] || 0), 0) / PRESSURE_HISTORY.length
+  }
+  return averaged as { memory: number; cpu: number; fd: number; zellij: number; disk: number }
 }
 
 function round(value: number) {
   return Math.round(Math.max(0, Math.min(1, value)) * 1000) / 1000
 }
-

@@ -22,8 +22,9 @@ const checks = {
   zellij_default_backend: /return 'zellij'/.test(mad) && mad.includes("list.includes('--json')") && mad.includes("list.includes('--no-attach')"),
   worker_command_real_zellij: mad.includes("command.push('--real')") && mad.includes("command.push('--zellij-session-name'") && mad.includes("command.push('--zellij-pane-worker')") && mad.includes("command.push('--worker-placement'"),
   parser_accepts_worker_flags: parser.includes('--zellij-session-name') && parser.includes('--zellij-pane-worker') && parser.includes('--no-zellij-pane-worker'),
-  native_worker_pane_path: swarm.includes("this.input.backend === 'zellij'") && swarm.includes('ctx.opts.zellijPaneWorker !== false') && swarm.includes('openWorkerPane({'),
-  right_pane_requested: manager.includes("'--direction', directionRequested") && manager.includes("'--near-current-pane'")
+  native_viewport_headless_path: swarm.includes('SKS_ZELLIJ_LEGACY_WORKER_PANES') && swarm.includes('openHeadlessByDesignViewportWorker(paneInput)'),
+  legacy_worker_pane_escape_hatch: swarm.includes('openWorkerPane(paneInput)') && swarm.includes("process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1'"),
+  viewport_headless_source: manager.includes("'headless_by_design_viewport_ui'")
 }
 const ok = Object.values(checks).every(Boolean)
 

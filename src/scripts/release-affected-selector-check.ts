@@ -7,7 +7,7 @@ const manifest = dag.loadReleaseGateManifest(root)
 const gates = manifest.gates.filter((gate: any) => gate.preset.includes('release'))
 const selected = selectorMod.selectAffectedReleaseGates(root, manifest, gates, { changedSince: 'HEAD', preset: 'affected' })
 const ids = new Set(selected.selection.selected_gate_ids)
-for (const id of ['release:version-truth', 'release:dag-full-coverage', 'runtime:ts-source-of-truth', 'typecheck', 'schema:check']) {
+for (const id of ['release:proof-truth', 'release:dag-full-coverage', 'release:runtime-truth-matrix', 'typecheck', 'schema:check']) {
   assertGate(ids.has(id), `affected selector must always keep ${id}`, selected.selection)
 }
 
@@ -16,7 +16,7 @@ const codexCurrentOnly = selectorMod.selectAffectedReleaseGates(root, manifest, 
   preset: 'affected'
 })
 const codexCurrentIds = new Set<string>(codexCurrentOnly.selection.selected_gate_ids.map(String))
-for (const id of ['release:codex-current', 'codex:0142:manifest', 'codex:0142:binary-identity', 'codex:0142:policy', 'codex:0142:app-server-v2', 'codex:0142:thread-store', 'codex:0142:capability']) {
+for (const id of ['codex-control:all-pipelines', 'codex-control:event-stream-ledger', 'codex-sdk:all-pipelines', 'codex-sdk:backend-router', 'codex-sdk:capability', 'codex-sdk:core-skill-pipeline', 'codex-sdk:dfix-pipeline', 'codex-sdk:event-stream-ledger']) {
   assertGate(codexCurrentIds.has(id), `codex current surface change must select ${id}`, codexCurrentOnly.selection)
 }
 

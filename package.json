@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "4.8.6",
+  "version": "4.8.7",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -61,6 +61,8 @@
     "release:check": "npm run release:check:affected --silent",
     "release:metadata": "node ./dist/scripts/release-metadata-check.js",
     "release:check:parallel": "npm run build --silent && node ./dist/scripts/release-parallel-check.js && node ./dist/scripts/release-check-stamp.js write",
+    "release:check:legacy": "npm run release:check:parallel --silent",
+    "core-skill:route-runtime-integration": "node ./dist/scripts/core-skill-route-runtime-integration-check.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "schema:check": "node ./dist/scripts/check-runtime-schemas.js",
     "repo-audit": "node ./dist/scripts/repo-audit.js",
@@ -179,6 +181,7 @@
     "@modelcontextprotocol/sdk": "1.29.0",
     "@openai/codex-sdk": "0.142.0",
     "figlet": "^1.11.0",
+    "smol-toml": "^1.7.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {

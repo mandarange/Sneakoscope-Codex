@@ -4,7 +4,7 @@ import path from 'node:path'
 import { appendJsonl, ensureDir, exists, nowIso, packageRoot, readJson, writeJsonAtomic } from '../fsx.js'
 import { fastModeEnv, type FastModePolicy } from './fast-mode-policy.js'
 import { validateAgentWorkerResult } from './agent-worker-pipeline.js'
-import { closeWorkerPane, openWorkerPane } from '../zellij/zellij-worker-pane-manager.js'
+import { closeWorkerPane, openHeadlessByDesignViewportWorker, openWorkerPane, type ZellijWorkerPaneOpenInput } from '../zellij/zellij-worker-pane-manager.js'
 import { closeWorkerInRightColumn, recordHeadlessWorkerInRightColumn } from '../zellij/zellij-right-column-manager.js'
 import { resolveProviderContext } from '../provider/provider-context.js'
 import { buildZellijSlotPaneCommand } from '../zellij/zellij-slot-pane-renderer.js'
@@ -123,17 +123,19 @@ class NativeCliSessionSwarmRecorder {
     const stdout = fs.createWriteStream(path.join(this.root, stdoutRel), { flags: 'a' })
     const stderr = fs.createWriteStream(path.join(this.root, stderrRel), { flags: 'a' })
 	    const placement = String(ctx.opts.workerPlacement || this.input.workerPlacement || (this.input.backend === 'zellij' ? 'zellij-pane' : 'process'))
-    const zellijReservation = placement === 'zellij-pane'
+    const legacyWorkerPanes = process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1'
+    const wantsZellijUi = placement === 'zellij-pane'
       && ctx.opts.zellijPaneWorker !== false
       && (ctx.opts.zellijSessionName || this.input.missionId)
+    const zellijReservation = wantsZellijUi && legacyWorkerPanes
       ? this.reserveVisibleZellijPane(ctx.opts, String(ctx.agent.session_id || ctx.agent.id || `${Date.now()}:${Math.random()}`))
       : null
-	    const useZellijPane = Boolean(zellijReservation)
+	    const useZellijPane = Boolean(zellijReservation) || (wantsZellijUi && !legacyWorkerPanes)
 	    await this.telemetry(ctx, {
 	      eventType: 'slot_reserved',
 	      status: placement === 'zellij-pane' && !useZellijPane ? 'headless' : 'queued',
 	      artifacts: [intakeRel, heartbeatRel, resultRel],
-	      logTail: `placement=${placement}`
+	      logTail: `placement=${placement}${wantsZellijUi && !legacyWorkerPanes ? ';viewport-ui=headless-by-design' : ''}`
 	    })
 	    if (useZellijPane) {
       stdout.end()
@@ -369,6 +371,11 @@ class NativeCliSessionSwarmRecorder {
         artifactDir: path.join(this.root, input.workerDirRel),
         backend: this.input.backend,
         role,
+        provider: providerContext.provider,
+        model: String(process.env.SKS_MODEL || process.env.OPENAI_MODEL || process.env.CODEX_MODEL || ''),
+        serviceTier: this.input.fastModePolicy.service_tier,
+        reasoningEffort: String(input.ctx.agent.model_reasoning_effort || input.ctx.agent.reasoning_effort || process.env.SKS_REASONING_EFFORT || ''),
+        currentTask: String(input.ctx.slice?.title || input.ctx.slice?.description || input.ctx.slice?.id || ''),
         mode: uiMode,
         watch: true
     })
@@ -398,60 +405,66 @@ class NativeCliSessionSwarmRecorder {
         session_id: input.ctx.agent.session_id || null,
         pid: processRun.pid,
         backend: this.input.backend,
-        placement: 'zellij-pane',
+        placement: process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1' ? 'zellij-pane' : 'headless_by_design_viewport_ui',
         worktree_id: worktree?.id || null
       }).catch(() => undefined)
       await this.record(input.record)
     }
     let paneRecord: any
     try {
-      paneRecord = await openWorkerPane({
-      root: this.root,
-      missionId: this.input.missionId,
-      sessionName,
-      slotId,
-      generationIndex: Number(input.ctx.agent.generation_index || 1),
-      sessionId: String(input.ctx.agent.session_id || ''),
-      workerArtifactDir: input.workerDirRel,
-      workerCommand,
-      resultPath: input.resultRel,
-      heartbeatPath: input.heartbeatRel,
-      patchEnvelopePath: input.record.patch_envelope_path,
-      stdoutLog: input.stdoutRel,
-      stderrLog: input.stderrRel,
-      cwd: workerCwd,
-      providerContext,
-      serviceTier: this.input.fastModePolicy.service_tier,
-      worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null,
-      backend: this.input.backend,
-      taskTitle: String(input.ctx.slice?.title || input.ctx.slice?.description || input.ctx.slice?.id || '') || null,
-      uiMode,
-      projectRoot: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd,
-      rightColumnMode: 'spawn-on-first-worker',
-      visiblePaneCap: this.zellijVisiblePaneCap(input.ctx.opts),
-      dashboardSnapshot: {
-        mode: this.input.route || '$Agent',
-        backend_counts: { [this.input.backend]: this.input.targetActiveSlots },
-        placement_counts: {
-          'zellij-pane': this.zellijVisiblePaneCap(input.ctx.opts),
-          headless: Math.max(0, this.input.targetActiveSlots - this.zellijVisiblePaneCap(input.ctx.opts))
-        },
-        active_workers: this.input.targetActiveSlots,
-        visible_panes: this.zellijVisiblePaneCap(input.ctx.opts),
-        headless_workers: Math.max(0, this.input.targetActiveSlots - this.zellijVisiblePaneCap(input.ctx.opts)),
-        queue_depth: Math.max(0, this.input.requestedAgents - this.input.targetActiveSlots),
-        local_llm: { tps: 0, queue: 0 },
-        gpt_final_status: 'pending',
-        gate_progress: 'worker-spawn'
+      const paneInput: ZellijWorkerPaneOpenInput = {
+        root: this.root,
+        missionId: this.input.missionId,
+        sessionName,
+        slotId,
+        generationIndex: Number(input.ctx.agent.generation_index || 1),
+        sessionId: String(input.ctx.agent.session_id || ''),
+        workerArtifactDir: input.workerDirRel,
+        workerCommand,
+        resultPath: input.resultRel,
+        heartbeatPath: input.heartbeatRel,
+        patchEnvelopePath: input.record.patch_envelope_path,
+        stdoutLog: input.stdoutRel,
+        stderrLog: input.stderrRel,
+        cwd: workerCwd,
+        providerContext,
+        serviceTier: this.input.fastModePolicy.service_tier,
+        worktree: worktree ? { id: worktree.id, path: worktree.path, branch: worktree.branch } : null,
+        backend: this.input.backend,
+        taskTitle: String(input.ctx.slice?.title || input.ctx.slice?.description || input.ctx.slice?.id || '') || null,
+        uiMode,
+        projectRoot: input.ctx.opts.projectRoot || this.input.projectRoot || input.ctx.opts.cwd,
+        rightColumnMode: 'spawn-on-first-worker',
+        visiblePaneCap: this.zellijVisiblePaneCap(input.ctx.opts),
+        plannedAgentCount: this.input.targetActiveSlots,
+        dashboardSnapshot: {
+          mode: this.input.route || '$Agent',
+          backend_counts: { [this.input.backend]: this.input.targetActiveSlots },
+          placement_counts: {
+            'zellij-pane': process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1' ? this.zellijVisiblePaneCap(input.ctx.opts) : 0,
+            headless_by_design_viewport_ui: process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1' ? 0 : this.input.targetActiveSlots
+          },
+          active_workers: this.input.targetActiveSlots,
+          visible_panes: Number(process.env.SKS_ZELLIJ_VIEWPORTS || 4),
+          headless_workers: process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1' ? Math.max(0, this.input.targetActiveSlots - this.zellijVisiblePaneCap(input.ctx.opts)) : this.input.targetActiveSlots,
+          queue_depth: Math.max(0, this.input.requestedAgents - this.input.targetActiveSlots),
+          local_llm: { tps: 0, queue: 0 },
+          gpt_final_status: 'pending',
+          gate_progress: 'worker-spawn'
+        }
       }
-      })
+      paneRecord = process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1'
+        ? await openWorkerPane(paneInput)
+        : await openHeadlessByDesignViewportWorker(paneInput)
     } finally {
       if (input.zellijReservation) this.releaseVisibleZellijReservation(input.zellijReservation)
     }
     const zellijRequired = process.env.SKS_REQUIRE_ZELLIJ === '1'
     const launchBlockers = zellijRequired ? paneRecord.blockers || [] : []
     const launchWarnings = zellijRequired ? [] : paneRecord.blockers || []
-    input.record.command_line = ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', liveWorkerPane ? '<native-cli-worker-command>' : '<zellij-slot-pane-renderer-command>']
+    input.record.command_line = paneRecord.pane_id_source === 'headless_by_design_viewport_ui'
+      ? ['node', '<native-cli-worker-command>', '# headless-by-design viewport UI']
+      : ['zellij', '--session', sessionName, 'action', 'new-pane', '--direction', paneRecord.direction_applied, '--name', paneRecord.pane_name, '--', 'sh', '-lc', liveWorkerPane ? '<native-cli-worker-command>' : '<zellij-slot-pane-renderer-command>']
     input.record.zellij_session_name = sessionName
     input.record.zellij_pane_id = paneRecord.pane_id || null
     input.record.zellij_pane_id_source = paneRecord.pane_id_source
@@ -466,6 +479,10 @@ class NativeCliSessionSwarmRecorder {
     input.record.worktree = worktree
     input.record.zellij_ui_mode = uiMode
     input.record.slot_visualization = liveWorkerPane ? 'worker-command-pane' : 'zellij-slot-pane-renderer'
+    if (paneRecord.pane_id_source === 'headless_by_design_viewport_ui') {
+      input.record.worker_placement = 'headless_by_design_viewport_ui'
+      input.record.slot_visualization = 'monitor-plus-viewport'
+    }
 	    input.record.status = launchBlockers.length ? 'failed' : 'running'
 	    input.record.blockers = launchBlockers
 	    input.record.warnings = [...(input.record.warnings || []), ...launchWarnings]

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { projectRoot, readJson } from '../core/fsx.js';
+import { nowIso, projectRoot, readJson, writeJsonAtomic } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
@@ -8,6 +8,7 @@ import { checkZellijUpdateNotice, upgradeZellijToLatest } from '../core/zellij/z
 import { runZellij } from '../core/zellij/zellij-command.js';
 import { appendZellijLaneCommand, normalizeZellijSlot } from '../core/zellij/zellij-lane-runtime.js';
 import { buildZellijDashboardSnapshot, renderZellijDashboardText } from '../core/zellij/zellij-dashboard-renderer.js';
+import { readZellijSlotTelemetrySnapshot } from '../core/zellij/zellij-slot-telemetry.js';
 
 export const ZELLIJ_COMMAND_SCHEMA = 'sks.zellij-command.v1';
 export const ZELLIJ_REPAIR_SCHEMA = 'sks.zellij-repair.v1';
@@ -30,6 +31,7 @@ export async function run(_command: string = 'zellij', args: string[] = []) {
   if (sub === 'worker-logs') return zellijWorkerLogs(root, args, json);
   if (sub === 'dashboard') return zellijDashboard(root, args, json);
   if (sub === 'close-drained') return zellijCloseDrained(root, args, json);
+  if (sub === 'pin' || sub === 'unpin') return zellijViewportPin(root, sub, args, json);
   return zellijStatus(root, args, json);
 }
 
@@ -205,6 +207,37 @@ async function zellijCloseDrained(root: string, args: string[], json: boolean) {
   if (!out.ok) process.exitCode = 1;
 }
 
+async function zellijViewportPin(root: string, action: 'pin' | 'unpin', args: string[], json: boolean) {
+  const missionId = resolveMissionId(root, readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest');
+  const slotArg = positionalAfter(args, action) || readOption(args, '--slot', '');
+  const viewport = Math.max(1, Number(readOption(args, '--viewport', '1')) || 1);
+  const file = path.join(root, '.sneakoscope', 'missions', missionId, 'zellij', 'viewport-pins.json');
+  const cur = await readJson<{ pins: Array<{ viewport: number; slot_key: string }> }>(file, { pins: [] });
+  const slotKey = slotArg ? await resolveLatestGenKey(root, missionId, slotArg) : '';
+  const pins = (cur.pins || []).filter((pin) => pin.viewport !== viewport && (!slotKey || pin.slot_key !== slotKey));
+  const blockers = slotArg ? [] : ['slot_required'];
+  if (action === 'pin' && slotKey && blockers.length === 0) pins.push({ viewport, slot_key: slotKey });
+  await writeJsonAtomic(file, {
+    schema: 'sks.zellij-viewport-pins.v1',
+    updated_at: nowIso(),
+    pins
+  });
+  const out = {
+    schema: 'sks.zellij-viewport-pin-command.v1',
+    ok: blockers.length === 0,
+    action,
+    mission_id: missionId,
+    viewport,
+    slot_key: slotKey || null,
+    pins,
+    blockers
+  };
+  if (json) printJson(out);
+  else if (out.ok) console.log(action === 'pin' ? `pinned ${slotKey} -> viewport ${viewport}` : `unpinned ${slotKey}`);
+  else console.log('Usage: sks zellij pin <slot> [--viewport N] [--mission M]');
+  if (!out.ok) process.exitCode = 1;
+}
+
 async function zellijDispatch(root: string, args: string[], json: boolean) {
   const missionId = readOption(args, '--mission', readOption(args, '--mission-id', 'latest') || 'latest') || 'latest';
   const slotId = normalizeZellijSlot(readOption(args, '--slot', 'slot-001'));
@@ -291,7 +324,7 @@ function printHelp(json: boolean) {
     schema: ZELLIJ_COMMAND_SCHEMA,
     subcommand: 'help',
     ok: true,
-    usage: 'sks zellij status|update|repair|dispatch|send|focus-worker|worker-logs|dashboard|close-drained [--json]',
+    usage: 'sks zellij status|update|repair|dispatch|send|focus-worker|worker-logs|dashboard|pin|unpin|close-drained [--json]',
     subcommands: {
       status: 'Report Zellij runtime capability and interactive-route readiness.',
       update: 'Check the latest stable Zellij release; apply the upgrade with --yes (Homebrew).',
@@ -301,6 +334,8 @@ function printHelp(json: boolean) {
       'focus-worker': 'Focus a visible right-column worker pane by slot.',
       'worker-logs': 'Print stdout/stderr log paths for worker slots.',
       dashboard: 'Render the latest dashboard snapshot; --watch prints watch metadata.',
+      pin: 'Pin a dynamic worker slot to a viewport.',
+      unpin: 'Remove a worker slot pin from a viewport.',
       'close-drained': 'Close drained right-column panes.',
       capability: 'Alias for status.'
     }
@@ -315,6 +350,8 @@ function printHelp(json: boolean) {
     console.log('  sks zellij focus-worker slot-001 [--mission M] [--json]');
     console.log('  sks zellij worker-logs [slot-001] [--mission M] [--json]');
     console.log('  sks zellij dashboard [--mission M] [--watch] [--json]');
+    console.log('  sks zellij pin slot-001 [--viewport 2] [--mission M] [--json]');
+    console.log('  sks zellij unpin slot-001 [--viewport 2] [--mission M] [--json]');
     console.log('  sks zellij close-drained [--mission M] [--json]');
   }
 }
@@ -351,4 +388,15 @@ function resolveMissionId(root: string, requested: string): string {
   } catch {
     return 'latest';
   }
+}
+
+async function resolveLatestGenKey(root: string, missionId: string, rawSlot: string): Promise<string> {
+  const raw = String(rawSlot || '').trim()
+  if (raw.includes(':g')) return raw
+  const slotId = normalizeZellijSlot(raw)
+  const snapshot = await readZellijSlotTelemetrySnapshot(root, missionId).catch(() => null)
+  const candidates = Object.entries(snapshot?.slots || {})
+    .filter(([, row]) => normalizeZellijSlot(row.slot_id) === slotId)
+    .sort(([, a], [, b]) => Number(b.generation_index || 1) - Number(a.generation_index || 1))
+  return candidates[0]?.[0] || `${slotId}:g1`
 }

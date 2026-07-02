@@ -1,7 +1,9 @@
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { ensureDir, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { ensureDir, nowIso, readText, writeJsonAtomic } from '../fsx.js'
+import { writeCodexConfigGuarded } from './codex-config-guard.js'
+import { cleanupCodexConfigBackups } from './codex-config-toml.js'
 
 export const CODEX_PROJECT_CONFIG_POLICY_SCHEMA = 'sks.codex-project-config-policy.v1'
 
@@ -36,9 +38,15 @@ const MACHINE_LOCAL_TABLE_PREFIXES = [
 // migrateSksProfilesToPerFile (src/core/auto-review.ts), which runs on `sks --mad`.
 const DEPRECATED_LEGACY_PROFILE_TOP_LEVEL_KEYS = new Set(['profile', 'profiles'])
 const DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES = ['profiles']
+const FAST_MODE_GLOBAL_TOP_LEVEL_KEYS = new Set(['default_profile', 'service_tier'])
+const FAST_MODE_GLOBAL_TABLES = new Set(['user.fast_mode', 'profiles.sks-fast-high'])
 
 function isDeprecatedLegacyProfileTable(table: string) {
   return DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES.some((prefix) => table === prefix || table.startsWith(`${prefix}.`))
+}
+
+function isFastModeGlobalTable(table: string) {
+  return FAST_MODE_GLOBAL_TABLES.has(table)
 }
 
 export async function splitCodexProjectConfigPolicy(rootInput: string = process.cwd(), opts: any = {}) {
@@ -103,7 +111,14 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     backupPath = `${configPath}.bak-${Date.now().toString(36)}`
     await ensureDir(path.dirname(configPath))
     await fsp.copyFile(configPath, backupPath)
-    await writeTextAtomic(configPath, projectText)
+    await cleanupCodexConfigBackups(configPath, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined)
+    await writeCodexConfigGuarded({
+      root,
+      configPath,
+      before: String(original || ''),
+      cause: 'codex-project-config-policy',
+      mutate: () => projectText
+    })
     actions.push('project_config_rewritten_with_backup')
   }
 
@@ -111,10 +126,17 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     await ensureDir(codexHome)
     userConfigPath = codexHomeConfigPath
     const currentUser = await readText(userConfigPath, '')
-    const dedupedUser = removeConfigIds(String(currentUser || ''), configIds(split.machine_text))
+    const machineText = preserveExistingGlobalFastModeConfig(String(currentUser || ''), split.machine_text)
+    const dedupedUser = removeConfigIds(String(currentUser || ''), configIds(machineText))
     const commentLine = `# SKS moved machine-local Codex config from ${path.relative(root, configPath) || configPath} at ${nowIso()}`
-    const mergedUser = mergeMachineLocalIntoUserConfig(dedupedUser, split.machine_text.trim(), commentLine)
-    await writeTextAtomic(userConfigPath, mergedUser)
+    const mergedUser = mergeMachineLocalIntoUserConfig(dedupedUser, machineText.trim(), commentLine)
+    await writeCodexConfigGuarded({
+      root,
+      configPath: userConfigPath,
+      before: String(currentUser || ''),
+      cause: 'codex-project-config-policy-machine-local',
+      mutate: () => mergedUser
+    })
     actions.push('machine_local_keys_moved_to_codex_home_config')
   }
 
@@ -169,7 +191,13 @@ export async function repairCodexConfigStructure(configPathInput: string, opts: 
     backupPath = `${configPath}.struct-bak-${Date.now().toString(36)}`
     await ensureDir(path.dirname(configPath))
     await fsp.copyFile(configPath, backupPath)
-    await writeTextAtomic(configPath, hoist.text)
+    await cleanupCodexConfigBackups(configPath, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined)
+    await writeCodexConfigGuarded({
+      configPath,
+      before: String(original || ''),
+      cause: 'codex-config-structure-repair',
+      mutate: () => hoist.text
+    })
   }
   const parseSmoke = tomlRewriteSmoke(hoist.text)
   return {
@@ -275,6 +303,12 @@ function splitProjectToml(text: string) {
   for (const block of blocks) {
     // Deprecated legacy config profiles are DROPPED, not moved to the home config
     // (Codex 0.134+ warns about `[profiles.*]` tables and the `profile=` selector).
+    if (block.table && isFastModeGlobalTable(block.table)) {
+      moved.push(block.text)
+      machineBlocks.push(block)
+      movedTables.push(block.table)
+      continue
+    }
     if (block.table && isDeprecatedLegacyProfileTable(block.table)) {
       removedLegacyProfiles.push(block.table)
       continue
@@ -300,7 +334,7 @@ function splitProjectToml(text: string) {
           removedLegacyProfiles.push(`top_level:${key}`)
           continue
         }
-        if (key && MACHINE_LOCAL_TOP_LEVEL_KEYS.has(key)) {
+        if (key && (MACHINE_LOCAL_TOP_LEVEL_KEYS.has(key) || FAST_MODE_GLOBAL_TOP_LEVEL_KEYS.has(key))) {
           moveLines.push(line)
           movedKeys.push(key)
           continue
@@ -490,6 +524,24 @@ function removeConfigIds(text: string, ids: { keys: Set<string>; tables: Set<str
       continue
     }
     kept.push(block.text)
+  }
+  return normalizeProjectText(kept.join('\n\n'))
+}
+
+function preserveExistingGlobalFastModeConfig(userText: string, machineText: string) {
+  const existing = configIds(userText)
+  const kept: string[] = []
+  for (const block of tomlBlocks(machineText)) {
+    if (block.table) {
+      if (isFastModeGlobalTable(block.table) && existing.tables.has(block.table)) continue
+      kept.push(block.text)
+      continue
+    }
+    const lines = block.text.split('\n').filter((line: string) => {
+      const key = topLevelKey(line)
+      return !(key && FAST_MODE_GLOBAL_TOP_LEVEL_KEYS.has(key) && existing.keys.has(key))
+    })
+    if (lines.some((line: string) => line.trim())) kept.push(lines.join('\n'))
   }
   return normalizeProjectText(kept.join('\n\n'))
 }

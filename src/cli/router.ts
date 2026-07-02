@@ -5,6 +5,8 @@ import {
 } from './command-registry.js';
 import { detectGlobalMode, glmWithoutMadResult } from './global-mode-router.js';
 import { ensureCurrentMigrationBeforeCommand } from '../core/update/update-migration-state.js';
+import { projectRoot, readJson } from '../core/fsx.js';
+import { stateFile } from '../core/mission.js';
 
 export interface NormalizedCommand {
   command: CommandName | null;
@@ -70,17 +72,66 @@ export async function dispatch(args?: readonly string[]): Promise<unknown> {
     return result;
   }
   const entry = COMMANDS[command];
-  const migrationGate = await ensureCurrentMigrationBeforeCommand({ command, args: rest });
+  const commandGate = await ensureActiveRouteCommandGate(command, rest);
+  if (!commandGate.ok) {
+    console.error(commandGate.message);
+    process.exitCode = 1;
+    return commandGate;
+  }
+  const migrationGate = await ensureCurrentMigrationBeforeCommand({
+    command,
+    args: rest,
+    skipMigrationGate: entry.skipMigrationGate === true || entry.readonly === true
+  });
   if (!migrationGate.ok) {
     console.error('SKS project migration blocked.');
+    console.error(`Scope: ${migrationGate.scope || 'project'}`);
+    console.error(`Stage: ${migrationGate.failed_stage_id || migrationGate.status}`);
+    if (migrationGate.failed_stage_id) console.error(`Failed stage: ${migrationGate.failed_stage_id}`);
     for (const blocker of migrationGate.blockers) console.error(`Required blocker: ${blocker}`);
     for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
     console.error(`Receipt: ${migrationGate.receipt_path}`);
-    console.error('Run: sks doctor --fix --yes');
+    console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command registry.');
     process.exitCode = 1;
     return migrationGate;
   }
   const mod = await entry.lazy();
   if (typeof mod.run !== 'function') throw new Error(`Command ${command} must export run(command, args)`);
   return mod.run(rawCommand || command, rest);
+}
+
+async function ensureActiveRouteCommandGate(command: CommandName, args: readonly string[]) {
+  const entry = COMMANDS[command];
+  if (command === 'route' || entry.readonly === true || entry.allowedDuringActiveRoute === true && entry.mutatesRouteState !== true) {
+    return { ok: true, status: 'allowed' };
+  }
+  if (entry.mutatesRouteState !== true) return { ok: true, status: 'allowed' };
+  if (safeReadOnlySubcommand(args)) return { ok: true, status: 'allowed_status_subcommand' };
+  const root = await projectRoot(process.cwd()).catch(() => process.cwd());
+  const state = await readJson(stateFile(root), {}).catch(() => ({}));
+  if (!activeRouteStateBlocksCommand(state)) return { ok: true, status: 'allowed' };
+  return {
+    schema: 'sks.command-gate-active-route.v1',
+    ok: false,
+    status: 'blocked',
+    command,
+    active_mission_id: state.mission_id || null,
+    active_route: state.route || state.route_command || state.mode || null,
+    active_phase: state.phase || null,
+    message: `SKS command gate blocked '${command}' because active route mission ${state.mission_id} is not closed. Run: sks route close --mission ${state.mission_id}`
+  };
+}
+
+function safeReadOnlySubcommand(args: readonly string[]) {
+  const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
+  if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;
+  return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+}
+
+function activeRouteStateBlocksCommand(state: any = {}) {
+  if (!state?.mission_id || state.route_closed === true) return false;
+  const mode = String(state.mode || '').toUpperCase();
+  if (!mode || ['WIKI', 'STATUS', 'HELP'].includes(mode)) return false;
+  if (/(?:DONE|COMPLETE|CLOSED|BLOCKED|FAILED)$/i.test(String(state.phase || ''))) return false;
+  return Boolean(state.route || state.route_command || ['NARUTO', 'AGENT', 'QALOOP', 'RESEARCH', 'LOOP', 'MADSKS', 'MADDB', 'GOAL'].includes(mode));
 }

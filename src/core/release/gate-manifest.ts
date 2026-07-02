@@ -48,7 +48,7 @@ export const ALWAYS_ON_GATES = new Set<string>([
   'postinstall:safe-side-effects',
   'publish:packlist-performance',
   'legacy:upgrade-zero-break',
-  'release:version-truth',
+  'release:proof-truth',
   'release:dynamic-performance',
   'release:provenance',
   'changelog:check'
@@ -63,7 +63,7 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'safety:side-effect-zero',
   'safety:mutation-callsite-coverage:repo-wide',
   'side-effect:runtime-report',
-  'release:version-truth',
+  'release:proof-truth',
   'release:provenance',
   'release:codex-current',
   'codex:0142:manifest',

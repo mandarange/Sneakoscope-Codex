@@ -460,10 +460,10 @@ Computer Use truthfulness remains bounded: `probe_only` is a capability probe, `
 
 UX-Review truthfulness is bounded the same way: a real verified UX claim requires a source screenshot, a generated gpt-image-2 annotated callout image, schema-bound issue extraction from generated image pixels, bounded safe fixes when requested, and recapture/re-review evidence for changed screens. Attached generated images start with `callout_extraction_status: pending`; mock fixtures remain `verified_partial`, and prose-only screenshot critique or generic fake callouts cannot pass the gate.
 
-codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, `durable_launchctl`, and `shell_profile` are durable setup modes, while `process_only_ephemeral` means the supplied key is only effective in the current process. Recovery command:
+codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, and `shell_profile` are durable setup modes, while `process_only_ephemeral` means the supplied key is only effective in the current process. `--launchctl` is base URL only and removes API-key launchd env values. Recovery command:
 
 ```bash
-sks codex-lb setup --write-env-file --keychain --launchctl
+sks codex-lb setup --write-env-file --keychain
 ```
 
 Privacy statement: secrets are redacted, Codex Chrome Extension screenshots, native Computer Use screenshots, UltraSearch raw/source artifacts, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.

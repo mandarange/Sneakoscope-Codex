@@ -22,7 +22,7 @@ export type ParallelRuntimeEventType =
   | 'worker_failed'
   | 'batch_dispatch_completed'
 
-export type ParallelRuntimePlacement = 'zellij-pane' | 'process' | 'headless' | 'unknown'
+export type ParallelRuntimePlacement = 'zellij-pane' | 'process' | 'headless' | 'headless_by_design_viewport_ui' | 'unknown'
 
 export interface ParallelRuntimeEvent {
   schema: typeof PARALLEL_RUNTIME_EVENT_SCHEMA

@@ -119,7 +119,7 @@ export function triwikiStagePolicyText(commandPrefix: any = 'sks') {
 }
 
 export function chatCaptureIntakeText() {
-  return `From-Chat-IMG intake: explicit signal only. Select forensic visual effort. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets, use the Codex Chrome Extension path first; for native Mac/non-web app surfaces, use Codex Computer Use visual inspection when available. List requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT}, ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Team completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, QA unresolved findings are zero, and schema validation passes. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
+  return `From-Chat-IMG intake: explicit signal only. Select forensic visual effort. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets, use the Codex Chrome Extension path first; for native Mac/non-web app surfaces, use Codex Computer Use visual inspection when available. List requirements first in source order, match regions to attachments with confidence, and write ${FROM_CHAT_IMG_WORK_ORDER_ARTIFACT}, ${FROM_CHAT_IMG_SOURCE_INVENTORY_ARTIFACT}, ${FROM_CHAT_IMG_VISUAL_MAP_ARTIFACT}, ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} Preserve each visible customer request as source-bound text, account for every screenshot image region and separate attachment, map each item to work-order actions, perform the customer-request work, then run a scoped QA-LOOP over that exact work-order range before Naruto completion. Update checklist checkboxes as work proceeds until all boxes are checked, unresolved_items is empty, scoped_qa_loop_completed=true, QA unresolved findings are zero, and schema validation passes. ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} is temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}, so it can be forgotten by retention after enough later sessions. Do not assume ordinary image prompts are chat captures.`;
 }
 
 export function noUnrequestedFallbackCodePolicyText() {
@@ -234,10 +234,10 @@ export const ROUTES = [
     hidden: true,
     aliasTo: '$Naruto',
     deprecationMessage: '$Team is deprecated and redirects new execution missions to $Naruto. Existing Team observation commands remain available for old missions.',
-    lifecycle: ['native_agent_intake', 'triwiki_refresh', 'planning_debate', 'live_transcript', 'consensus_artifact', 'fresh_implementation_team', 'review_artifact', 'integration_evidence', 'session_cleanup', 'post_route_reflection', 'honest_mode'],
+    lifecycle: ['deprecated_alias_redirect', 'naruto_gate', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
-    stopGate: 'team-gate.json',
+    stopGate: 'naruto-gate.json',
     cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|open-zellij|attach-zellij|cleanup-zellij',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
@@ -550,6 +550,7 @@ export const COMMAND_CATALOG = [
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
   { name: 'root', usage: 'sks root [--json]', description: 'Show whether SKS is using a project root or the per-user global SKS runtime root.' },
   { name: 'update', usage: 'sks update [check|now] [--version <version>] [--json] [--dry-run]', description: 'Check npm for the latest SKS release and update the global package by default; use `check` for status-only.' },
+  { name: 'uninstall', usage: 'sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json]', description: 'Remove SKS global skills, hooks, menu bar, state, temp files, and optional project residue while preserving user-owned content by default.' },
   { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm, Codex CLI, and Zellij readiness; pass --yes to repair missing Codex CLI/Zellij tooling when supported.' },
   { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema|0.142 [--json]', description: 'Check Codex CLI rust-v0.142.0 compatibility, installed version, 0.142 manifest/capability evidence, inherited legacy baselines, and vendored hook schema snapshot freshness.' },
   { name: 'codex-app', usage: 'sks codex-app [check|glm-profile install|set-openrouter-key --api-key-stdin|product-design|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, GLM/OpenRouter model profile visibility, codex-lb key-entry guidance, Product Design plugin readiness, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
@@ -561,7 +562,7 @@ export const COMMAND_CATALOG = [
   { name: 'mad-sks', usage: 'sks mad-sks plan|run|status|proof ... | sks --mad [--high]', description: 'Open or inspect MAD-SKS scoped permission workflows and the Zellij permission launcher.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
   { name: 'dollar-commands', usage: 'sks dollar-commands [--json]', description: 'List Codex App $ commands such as $DFix and $Naruto.' },
-  { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--json]', description: 'Toggle the project-local Fast mode default used by $Fast-On, $Fast-Off, and native-agent routes.' },
+  { name: 'fast-mode', usage: 'sks fast-mode on|off|status|clear [--project] [--json]', description: 'Toggle the global Codex Desktop GPT 5.5 Fast default used by $Fast-On/$Fast-Off and keep project worker preference in sync; pass --project for project-local only.' },
   { name: 'with-local-llm', usage: 'sks with-local-llm on|off|status|set-model [--json]', description: 'Toggle the optional local Ollama worker backend used by $with-local-llm-on/$with-local-llm-off and eligible simple worker slices.' },
   { name: 'commit', usage: 'sks commit [--message "msg"] [--json]', description: 'Stage current changes, summarize them, and create a simple git commit without the full SKS pipeline.' },
   { name: 'commit-and-push', usage: 'sks commit-and-push [--message "msg"] [--json]', description: 'Stage current changes, create a simple git commit, and push without the full SKS pipeline.' },
@@ -632,6 +633,7 @@ export function routeById(id: any): any {
 
 export function routeByDollarCommand(commandName: any): any {
   const key = String(commandName || '').replace(/^\$/, '').toLowerCase();
+  if (key === 'team' || key === 'from-chat-img') return routeById('Naruto');
   return ROUTES.find((route: any) => [
     dollarSkillName(route.command),
     ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
@@ -771,10 +773,10 @@ export function routePrompt(prompt: any): any {
     }
     const route = routeByDollarCommand(command) || routeById('SKS');
     if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return routeById('Naruto');
-    if (route?.id === 'Team' && command === 'TEAM') return routeById('Naruto');
+    if (route?.id === 'Team') return routeById('Naruto');
     return route;
   }
-  if (hasFromChatImgSignal(text)) return routeById('Team');
+  if (hasFromChatImgSignal(text)) return routeById('Naruto');
   const simpleGitRoute = simpleGitOnlyRouteId(text);
   if (simpleGitRoute) return routeById(simpleGitRoute);
   if (looksLikePresentationArtifactRequest(text)) return routeById('PPT');
@@ -785,7 +787,7 @@ export function routePrompt(prompt: any): any {
   if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
   if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return routeById('DB');
   if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Naruto');
-  if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Team');
+  if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Naruto');
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
   if (looksLikeUltraSearchRequest(text) && !looksLikeCodeChangingWork(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('InsaneSearch');
   if (looksLikeGenerativeEngineOptimizationRequest(text)) return routeById('SEOGEOOptimizer');
@@ -941,7 +943,7 @@ export function routeReasoning(route: any, prompt: any = '') {
   const base = ALLOWED_REASONING_EFFORTS.has(route?.reasoningPolicy) ? route.reasoningPolicy : 'medium';
   if (hasFromChatImgSignal(text)) return reasoning('xhigh', 'from_chat_img_image_work_order_analysis');
   if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\$MAD-DB\b|\bmad-sks\b|\bmadsks\b|\bmad-db\b|\bmaddb\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
-  if (route?.id === 'Team' || route?.id === 'Naruto') return teamRouteReasoning(text);
+  if (route?.id === 'Team' || route?.id === 'Naruto') return narutoRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
   if (route?.id === 'InsaneSearch') return reasoning('high', 'source_intelligence_route');
   if (route?.id === 'SEOGEOOptimizer') return reasoning('high', 'search_visibility_route');
@@ -953,12 +955,12 @@ export function routeReasoning(route: any, prompt: any = '') {
   return reasoning('medium', 'simple_fulfillment');
 }
 
-function teamRouteReasoning(text: any = '') {
-  if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|가설|포렌식)/i.test(text)) return reasoning('xhigh', 'team_research_or_forensic_signal');
-  if (/(research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬)/i.test(text)) return reasoning('high', 'team_knowledge_safety_or_release_signal');
-  if (/(tmux|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|pipeline|multi[-\s]?pane|pane|process|config|터미널|라우팅|파이프라인|훅|도구|툴)/i.test(text)) return reasoning('medium', 'team_tooling_or_runtime_signal');
-  if (/(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|text|readme|docs?|간단|단순|오타|문구|라벨|간격|색상)/i.test(text)) return reasoning('low', 'team_simple_bounded_work_signal');
-  return reasoning('medium', 'team_default_balanced_reasoning');
+function narutoRouteReasoning(text: any = '') {
+  if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|가설|포렌식)/i.test(text)) return reasoning('xhigh', 'naruto_research_or_forensic_signal');
+  if (/(research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬)/i.test(text)) return reasoning('high', 'naruto_knowledge_safety_or_release_signal');
+  if (/(tmux|zellij|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|pipeline|multi[-\s]?pane|pane|process|config|터미널|라우팅|파이프라인|훅|도구|툴)/i.test(text)) return reasoning('medium', 'naruto_tooling_or_runtime_signal');
+  if (/(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|text|readme|docs?|간단|단순|오타|문구|라벨|간격|색상)/i.test(text)) return reasoning('low', 'naruto_simple_bounded_work_signal');
+  return reasoning('medium', 'naruto_default_balanced_reasoning');
 }
 
 export function reasoningProfileName(effort: any) {

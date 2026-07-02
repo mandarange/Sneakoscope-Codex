@@ -300,6 +300,10 @@ async function madSksOverrideState(root: any, state: any = {}) {
   if (!isMadSksRouteState(state) || !state.mission_id || state.mad_sks_active === false) return { active: false };
   const gateFile = state.mad_sks_gate_file || state.stop_gate || MAD_SKS_GATE_FILE;
   const gate = await readJson(path.join(missionDir(root, state.mission_id), gateFile), null);
+  const owner = gate?.gate_owner?.mission_id || gate?.mission_id || state.gate_owner_mission_id;
+  if (owner && String(owner) !== String(state.mission_id)) {
+    return { active: false, reason: 'mad_sks_gate_owner_mismatch', gate_file: gateFile, gate_owner_mission_id: owner };
+  }
   if (gate?.passed === true || gate?.permissions_deactivated === true) return { active: false, reason: 'mad_sks_gate_already_closed', gate_file: gateFile };
   const confirmedUntil = Date.parse(state.mad_sks_table_delete_confirmed_until || '');
   return {
@@ -430,7 +434,7 @@ export async function handleMadSksUserConfirmation(root: any, state: any = {}, p
     ...state,
     mad_sks_active: true,
     mad_sks_table_delete_confirmed_until: confirmedUntil
-  });
+  }, { sessionKey: state._session_key });
   return {
     handled: true,
     additionalContext: `MAD-SKS table deletion confirmation accepted until ${confirmedUntil}. Retry the exact table deletion only if it is still required; otherwise continue without using the confirmation.`

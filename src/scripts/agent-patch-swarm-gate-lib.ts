@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { tmpdir } from '../core/fsx.js';
 import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js';
 
 export function writeReport(name, report) {
@@ -17,7 +17,7 @@ export function readJson(file) {
 }
 
 export function makeTempPatchProject(prefix = 'sks-patch-swarm-') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dir = tmpdir(prefix);
   for (let index = 1; index <= 10; index += 1) {
     fs.writeFileSync(path.join(dir, `file-${index}.txt`), `before-${index}\n`);
   }

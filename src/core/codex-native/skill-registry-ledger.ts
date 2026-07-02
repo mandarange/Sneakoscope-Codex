@@ -4,6 +4,7 @@ import os from 'node:os';
 import { nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js';
 import { buildSksCoreSkillManifest, isSksManagedCoreSkillContent } from './core-skill-manifest.js';
 import { canonicalSkillName, skillDisplayNameFromMarkdown } from './skill-name-canonicalizer.js';
+import { loadSkillsManifest } from '../init/skills.js';
 
 export interface SkillRegistryEntry {
   schema: 'sks.skill-registry-entry.v1';
@@ -15,7 +16,7 @@ export interface SkillRegistryEntry {
   managed_by_sks: boolean;
   content_sha256: string;
   active_priority: number;
-  status: 'active' | 'duplicate' | 'quarantined' | 'user-owned' | 'managed-current' | 'managed-drift';
+  status: 'active' | 'duplicate' | 'quarantined' | 'user-owned' | 'managed-current' | 'managed-drift' | 'shadowed-official';
   blockers: string[];
 }
 
@@ -42,10 +43,17 @@ export async function buildSkillRegistryLedger(input: {
   const scanRoots = [
     { root: path.join(root, '.agents', 'skills'), scope: 'project' as const, priority: 100 },
     { root: path.join(root, '.codex', 'skills'), scope: 'project' as const, priority: 80 },
+    { root: path.join(os.homedir(), '.agents', 'skills'), scope: 'global' as const, priority: 60 },
     { root: path.join(codexHome, 'skills'), scope: 'codex-home' as const, priority: 60 },
     ...(input.extraRoots || [])
   ];
-  const manifestByName = new Map(buildSksCoreSkillManifest().skills.map((skill) => [skill.canonical_name, skill.content_sha256]));
+  const manifest = await loadSkillsManifest().catch(() => null);
+  const officialNames = new Set<string>((manifest?.skills || []).map((skill: any) => canonicalSkillName(skill.canonical_name)));
+  const aliasNames = new Set<string>((manifest?.skills || []).flatMap((skill: any) => (skill.deprecated_aliases || []).map((name: any) => canonicalSkillName(name))));
+  const manifestByName = new Map([
+    ...buildSksCoreSkillManifest().skills.map((skill) => [skill.canonical_name, skill.content_sha256] as const),
+    ...(manifest?.skills || []).map((skill: any) => [canonicalSkillName(skill.canonical_name), String(skill.content_sha256 || '')] as const)
+  ]);
   const entries: SkillRegistryEntry[] = [];
   for (const scanRoot of scanRoots) {
     const rows = await fs.readdir(scanRoot.root, { withFileTypes: true }).catch(() => []);
@@ -57,7 +65,8 @@ export async function buildSkillRegistryLedger(input: {
       const displayName = skillDisplayNameFromMarkdown(text, row.name);
       const canonical = canonicalSkillName(displayName || row.name);
       const hash = sha256(text);
-      const managed = isSksManagedCoreSkillContent(text) || text.includes('BEGIN SKS MANAGED SKILL');
+      const officialName = officialNames.has(canonical) || aliasNames.has(canonical);
+      const managed = isSksManagedCoreSkillContent(text) || text.includes('BEGIN SKS MANAGED SKILL') || officialName;
       const expected = manifestByName.get(canonical);
       const status: SkillRegistryEntry['status'] = managed
         ? expected && expected === hash ? 'managed-current' : 'managed-drift'
@@ -80,12 +89,13 @@ export async function buildSkillRegistryLedger(input: {
   const grouped = groupByCanonical(entries);
   const duplicates = [...grouped.entries()].filter(([, group]) => group.length > 1).map(([name]) => name).sort();
   for (const group of grouped.values()) {
-    group.sort((a, b) => b.active_priority - a.active_priority || a.path.localeCompare(b.path));
+    const official = group.some((entry) => officialNames.has(entry.canonical_name) || aliasNames.has(entry.canonical_name));
+    group.sort((a, b) => compareRegistryPriority(a, b, official));
     group.forEach((entry, index) => {
-      if (group.length > 1 && index > 0) entry.status = entry.status === 'user-owned' ? 'duplicate' : 'duplicate';
+      if (group.length > 1 && index > 0) entry.status = official && entry.scope === 'project' ? 'shadowed-official' : 'duplicate';
     });
   }
-  const activeEntries = entries.filter((entry) => entry.status !== 'quarantined');
+  const activeEntries = entries.filter((entry) => entry.status !== 'quarantined' && entry.status !== 'shadowed-official');
   const activeGrouped = groupByCanonical(activeEntries);
   const duplicateActiveNames = [...activeGrouped.entries()].filter(([, group]) => group.length > 1).map(([name]) => name).sort();
   const activeUnique = duplicateActiveNames.length === 0;
@@ -107,6 +117,15 @@ export async function buildSkillRegistryLedger(input: {
     : input.reportPath || path.join(root, '.sneakoscope', 'reports', 'skill-registry-ledger.json');
   if (reportPath) await writeJsonAtomic(reportPath, ledger).catch(() => undefined);
   return ledger;
+}
+
+function compareRegistryPriority(a: SkillRegistryEntry, b: SkillRegistryEntry, official: boolean): number {
+  if (official) {
+    const globalA = a.scope === 'global' || a.scope === 'codex-home' ? 1 : 0;
+    const globalB = b.scope === 'global' || b.scope === 'codex-home' ? 1 : 0;
+    if (globalA !== globalB) return globalB - globalA;
+  }
+  return b.active_priority - a.active_priority || a.path.localeCompare(b.path);
 }
 
 export function groupByCanonical(entries: SkillRegistryEntry[]): Map<string, SkillRegistryEntry[]> {

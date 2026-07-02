@@ -11,24 +11,24 @@ const worker = fs.readFileSync(path.join(root, 'src/core/zellij/zellij-worker-pa
 const swarm = fs.readFileSync(path.join(root, 'src/core/agents/native-cli-session-swarm.ts'), 'utf8')
 const realGeometryProof = requireReal ? runRealGeometryProof() : null
 const report = {
-  schema: 'sks.naruto-zellij-dynamic-right-column-check.v1',
+  schema: 'sks.naruto-zellij-monitor-plus-viewports-check.v1',
   ok: true,
   require_real: requireReal,
   initial_main_only: /slotCount:\s*0/.test(naruto),
   passes_session_name: naruto.includes('zellijSessionName: liveZellij?.session_name'),
   passes_worker_placement: naruto.includes("workerPlacement: parsed.json || parsed.noOpenZellij ? 'process' : 'zellij-pane'"),
-  passes_visible_cap: naruto.includes('zellijVisiblePaneCap: zellijVisiblePanes'),
-  worker_uses_right_column: worker.includes("rightColumnMode: 'spawn-on-first-worker'") || swarm.includes("rightColumnMode: 'spawn-on-first-worker'"),
+  passes_viewport_ui: worker.includes("'headless_by_design_viewport_ui'") && swarm.includes('openHeadlessByDesignViewportWorker(paneInput)'),
+  legacy_escape_hatch: swarm.includes("SKS_ZELLIJ_LEGACY_WORKER_PANES === '1'") && swarm.includes('openWorkerPane(paneInput)'),
   real_geometry_proof: realGeometryProof
 }
 report.ok = report.initial_main_only
   && report.passes_session_name
   && report.passes_worker_placement
-  && report.passes_visible_cap
-  && report.worker_uses_right_column
+  && report.passes_viewport_ui
+  && report.legacy_escape_hatch
   && (!requireReal || realGeometryProof?.ok === true)
-assertGate(report.ok, 'Naruto must use dynamic right-column worker panes in interactive mode', report)
-emitGate('naruto:zellij-dynamic-right-column', report)
+assertGate(report.ok, 'Naruto must use monitor plus fixed viewports with headless workers by default', report)
+emitGate('naruto:zellij-monitor-plus-viewports', report)
 
 function runRealGeometryProof() {
   const res = spawnSync('npm', ['run', 'zellij:right-column-real-geometry', '--silent', '--', '--require-real'], {

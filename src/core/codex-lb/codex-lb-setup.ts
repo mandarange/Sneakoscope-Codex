@@ -8,7 +8,6 @@ export type CodexLbShellProfileChoice = 'zsh' | 'bash' | 'fish' | 'all' | 'skip'
 export type CodexLbPersistenceMode =
   | 'durable_env_file'
   | 'durable_keychain'
-  | 'durable_launchctl'
   | 'shell_profile'
   | 'process_only_ephemeral'
   | 'none';
@@ -89,7 +88,7 @@ export function buildCodexLbSetupPlan(answers: CodexLbSetupAnswers, opts: {
     actions.push({ type: 'store_keychain', target: 'macOS Keychain service sks-codex-lb', effect: 'store redacted codex-lb API key when Keychain is available', command: 'security add-generic-password -U ...' });
   }
   if (answers.sync_launchctl) {
-    actions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment', effect: 'sync CODEX_LB_API_KEY and CODEX_LB_BASE_URL for GUI-launched Codex sessions', command: 'launchctl setenv CODEX_LB_* [redacted]' });
+    actions.push({ type: 'sync_launchctl', target: 'macOS launchctl user environment', effect: 'sync non-secret CODEX_LB_BASE_URL only and remove API-key launchd env', command: 'launchctl setenv CODEX_LB_BASE_URL ...; launchctl unsetenv CODEX_LB_API_KEY OPENROUTER_API_KEY' });
   }
   if (answers.install_shell_profile !== 'skip') {
     actions.push({ type: 'install_shell_profile_snippet', target: profileTargets(home, answers.install_shell_profile).join(', '), effect: `install managed shell snippet for ${answers.install_shell_profile}` });
@@ -156,7 +155,6 @@ export function selectedCodexLbPersistenceModes(answers: Pick<CodexLbSetupAnswer
   const modes: CodexLbPersistenceMode[] = [];
   if (answers.write_env_file) modes.push('durable_env_file');
   if (answers.store_keychain) modes.push('durable_keychain');
-  if (answers.sync_launchctl) modes.push('durable_launchctl');
   if (answers.install_shell_profile !== 'skip') modes.push('shell_profile');
   return modes;
 }
@@ -175,7 +173,7 @@ export function codexLbPersistenceSummary({
   const effective = applied.find((mode) => mode !== 'process_only_ephemeral' && mode !== 'none')
     || selected.find((mode) => mode !== 'process_only_ephemeral' && mode !== 'none')
     || (processOnly || applied.includes('process_only_ephemeral') || selected.length === 0 ? 'process_only_ephemeral' : 'none');
-  const durable = ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile'].some((mode) => applied.includes(mode as CodexLbPersistenceMode) || selected.includes(mode as CodexLbPersistenceMode));
+  const durable = ['durable_env_file', 'durable_keychain', 'shell_profile'].some((mode) => applied.includes(mode as CodexLbPersistenceMode) || selected.includes(mode as CodexLbPersistenceMode));
   const warnings = effective === 'process_only_ephemeral'
     ? [
       'process_only_ephemeral',
@@ -197,7 +195,6 @@ function normalizePersistenceModes(modes: CodexLbPersistenceMode[] = []) {
   const allowed = new Set<CodexLbPersistenceMode>([
     'durable_env_file',
     'durable_keychain',
-    'durable_launchctl',
     'shell_profile',
     'process_only_ephemeral',
     'none'

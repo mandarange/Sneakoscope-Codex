@@ -395,7 +395,7 @@ function shapeCodexLbStatus(status: any = {}) {
   const modes: any[] = [];
   if (status.env_file && status.env_key_configured) modes.push('durable_env_file');
   if (status.env_loader?.api_key?.source === 'keychain' || status.env_loader?.keychain?.status === 'present') modes.push('durable_keychain');
-  if (status.launch_environment?.status === 'synced') modes.push('durable_launchctl');
+  if (status.launch_environment?.status === 'secret_env_present') modes.push('process_only_ephemeral');
   if (!modes.length && status.env_loader?.api_key?.source === 'process.env') modes.push('process_only_ephemeral');
   const mode = modes[0] || 'none';
   const persistence = codexLbPersistenceSummary({
@@ -439,7 +439,7 @@ async function codexLbSetupOptions(args: any = []) {
   let writeEnvFile = flag(args, '--no-env-file') ? false : true;
   if (flag(args, '--write-env-file')) writeEnvFile = true;
   if (flag(args, '--no-keychain')) keychain = false;
-  let syncLaunchctl = flag(args, '--no-launchctl') ? false : true;
+  let syncLaunchctl = false;
   if (flag(args, '--launchctl')) syncLaunchctl = true;
   const shellProfile = normalizeShellProfile(readOption(args, '--shell-profile', 'skip'));
   const allowInsecureLocalhost = flag(args, '--allow-insecure-localhost') || flag(args, '--allow-insecure-http');
@@ -453,7 +453,7 @@ async function codexLbSetupOptions(args: any = []) {
     writeEnvFile = parseYesNo(await ask('4. Write shell env loader to ~/.codex/sks-codex-lb.env? [Y/n] '), true);
     const storeKeychain = (await ask('5. Store the key in macOS Keychain when available? [Y/n] ')).trim();
     keychain = !/^(n|no|아니|아니요|ㄴ)$/i.test(storeKeychain || 'y');
-    syncLaunchctl = parseYesNo(await ask('6. Sync macOS launchctl environment when available? [Y/n] '), true);
+    syncLaunchctl = parseYesNo(await ask('6. Sync non-secret macOS launchctl base URL only? API keys are never stored in launchd. [y/N] '), false);
     const profile = (await ask('7. Install shell profile snippet? [zsh/bash/fish/all/skip] ')).trim();
     const interactiveShellProfile = normalizeShellProfile(profile || 'skip');
     const runHealth = (await ask('8. Run health check now? [Y/n] ')).trim();

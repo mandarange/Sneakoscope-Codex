@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // @ts-nocheck
-import os from 'node:os'
 import path from 'node:path'
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js'
-import { writeTextAtomic } from '../core/fsx.js'
+import { tmpdir, writeTextAtomic } from '../core/fsx.js'
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js'
 import { runZellij } from '../core/zellij/zellij-command.js'
 
@@ -156,8 +155,7 @@ function buildRealGeometryLayout(cwd: string) {
 }
 
 async function fsTempDir() {
-  const fs = await import('node:fs/promises')
-  return fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-geometry-'))
+  return tmpdir('sks-zellij-geometry-')
 }
 
 function sleep(ms: number) {

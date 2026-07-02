@@ -12,6 +12,7 @@ import {
   writeProjectUpdateMigrationReceipt
 } from './update/update-migration-state.js';
 import { installSksMenuBar, type SksMenuBarInstallResult } from './codex-app/sks-menubar.js';
+import { reconcileSkills } from './init/skills.js';
 
 export interface SksUpdateCheckOptions {
   packageName?: string;
@@ -264,6 +265,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     const sksMenuBar = migrationCurrent
       ? await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage })
       : null;
+    await runUpdateGlobalSkillsReconcile(stage);
     return buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -325,7 +327,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     : 60_000;
   const oldVersionDoctor = await runPackageLocalDoctor({
     root: projectReceiptRoot,
-    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', `old-version-doctor-${Date.now()}.json`)],
+    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'old-version-doctor.json')],
     env,
     timeoutMs: oldDoctorTimeoutMs,
     maxOutputBytes: 32 * 1024
@@ -404,7 +406,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       newVersionDoctor = await runPackageLocalDoctor({
         root: globalSksRootPath(),
         entrypoint: newBinary,
-        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(), 'update', `new-version-doctor-${Date.now()}.json`)],
+        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(), 'update', 'new-version-doctor.json')],
         env,
         timeoutMs: 15_000,
         maxOutputBytes: 32 * 1024
@@ -423,6 +425,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt);
       stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
       if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage });
+      await runUpdateGlobalSkillsReconcile(stage);
     }
   }
   const ok = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && migrationCurrent;
@@ -451,6 +454,22 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     stages,
     error: ok ? null : updateNowError(install, newBinary, newVersionDoctor, migrationCurrent)
   });
+}
+
+async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void) {
+  const result = await reconcileSkills({
+    targetDir: path.join(os.homedir(), '.agents', 'skills'),
+    scope: 'global',
+    fix: true
+  }).catch((err: any) => ({ schema: 'sks.skill-reconcile.v1', ok: false, error: err?.message || String(err) }));
+  const ok = (result as any).ok !== false && !(result as any).error;
+  stage('global_skills_reconcile', ok, ok ? 'reconciled' : 'failed', {
+    installed: Array.isArray((result as any).installed) ? (result as any).installed.length : null,
+    updated: Array.isArray((result as any).updated) ? (result as any).updated.length : null,
+    removed: Array.isArray((result as any).removed) ? (result as any).removed.length : null,
+    error: (result as any).error || null
+  });
+  return result;
 }
 
 export function sksGlobalInstallArgs(packageName: string, version: string, registry = DEFAULT_REGISTRY): string[] {
@@ -677,10 +696,18 @@ async function installUpdateSksMenuBar(input: {
     executable_path: null,
     launch_agent_path: null,
     action_script_path: null,
+    build_stamp_path: null,
     report_path: path.join(input.root, '.sneakoscope', 'reports', 'sks-menubar.json'),
     menu_items: [],
     actions: [],
     launch: { requested: true, method: 'none', ok: false, error: err?.message || String(err) },
+    tcc_automation_status: 'unknown',
+    next_actions: [
+      'Run: sks menubar status',
+      'Run: sks menubar install',
+      'Run: sks menubar restart',
+      'Rotate CODEX_LB_API_KEY and OPENROUTER_API_KEY if they were previously exposed in launchd.'
+    ],
     blockers: [err?.message || String(err)],
     warnings: []
   } as SksMenuBarInstallResult));

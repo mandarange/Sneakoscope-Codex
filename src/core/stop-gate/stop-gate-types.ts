@@ -51,6 +51,13 @@ export interface SksStopGateV1 {
   readonly evidence: SksStopGateEvidence;
   readonly blockers: readonly string[];
   readonly missing_fields: readonly string[];
+  readonly gate_owner?: {
+    readonly mission_id: string;
+    readonly route: string;
+    readonly route_command: string;
+    readonly writer_pid: number;
+    readonly written_at: string;
+  };
   readonly created_at: string;
 }
 

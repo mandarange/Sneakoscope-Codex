@@ -6,6 +6,8 @@ export interface NarutoBackpressureDecision {
   adjusted_active_workers: number
   backpressure: 'normal' | 'throttled' | 'saturated'
   reasons: string[]
+  cause: string | null
+  dashboard_label: string
 }
 
 export function applyNarutoBackpressure(requestedActiveWorkers: number, pressure: NarutoResourcePressure): NarutoBackpressureDecision {
@@ -17,7 +19,10 @@ export function applyNarutoBackpressure(requestedActiveWorkers: number, pressure
     requested_active_workers: requested,
     adjusted_active_workers: adjusted,
     backpressure: pressure.state,
-    reasons: pressure.reasons
+    reasons: pressure.reasons,
+    cause: pressure.state === 'normal' ? null : `${pressure.dominant_metric} ${Number(pressure.dominant_pressure || 0).toFixed(2)}`,
+    dashboard_label: pressure.state === 'normal'
+      ? 'normal'
+      : `${pressure.state}: ${pressure.dominant_metric} ${Number(pressure.dominant_pressure || 0).toFixed(2)}`
   }
 }
-

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { appendJsonl, exists, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js';
 import { containsUserQuestion, noQuestionContinuationReason } from '../no-question-guard.js';
-import { missionDir } from '../mission.js';
+import { missionDir, setCurrent } from '../mission.js';
 import { evaluateResearchGate } from '../research.js';
 import { evaluateQaGate } from '../qa-loop.js';
 import { PPT_REQUIRED_GATE_FIELDS } from '../ppt.js';
@@ -39,12 +39,12 @@ function reflectionRequiredForState(state: any = {}) {
   return reflectionRequiredForRoute(state.route || state.mode || state.route_command);
 }
 
-async function reflectionGateStatus(root: any, state: any = {}) {
+async function reflectionGateStatus(root: any, state: any = {}, jsonCache?: Map<string, Promise<any>>) {
   if (!reflectionRequiredForState(state)) return { ok: true, missing: [] };
   const id = state?.mission_id;
   if (!id) return { ok: false, missing: ['mission_id'] };
   const dir = missionDir(root, id);
-  const gate = await readJson(path.join(dir, REFLECTION_GATE), null);
+  const gate = await readJsonCached(jsonCache, path.join(dir, REFLECTION_GATE), null);
   if (!gate) return { ok: false, missing: [REFLECTION_GATE] };
   const hasArtifact = gate.reflection_artifact === true && await exists(path.join(dir, REFLECTION_ARTIFACT));
   const hasLesson = gate.lessons_recorded === true || (Array.isArray(gate.lessons) && gate.lessons.length > 0);
@@ -59,7 +59,16 @@ async function reflectionGateStatus(root: any, state: any = {}) {
   if (gate.wiki_refreshed_or_packed !== true && gate.triwiki_refreshed !== true) missing.push('wiki_refreshed_or_packed');
   if (gate.wiki_validated !== true) missing.push('wiki_validated');
   missing.push(...await staleReflectionReasons(root, state, gate));
-  return { ok: missing.length === 0, missing };
+  const ok = missing.length === 0;
+  if (ok && state.reflection_invalidation_required === true) {
+    await setCurrent(root, {
+      reflection_invalidation_required: false,
+      reflection_invalidated_at: null,
+      reflection_invalidation_reason: null,
+      reflection_revalidated_at: nowIso()
+    }, { sessionKey: state._session_key });
+  }
+  return { ok, missing };
 }
 
 async function staleReflectionReasons(root: any, state: any = {}, gate: any = {}) {
@@ -68,6 +77,8 @@ async function staleReflectionReasons(root: any, state: any = {}, gate: any = {}
   const id = state?.mission_id;
   if (!id) return [];
   if (state.reflection_invalidation_required !== true) return [];
+  const invalidatedAt = Date.parse(String(state.reflection_invalidated_at || ''));
+  if (Number.isFinite(invalidatedAt) && created >= invalidatedAt) return [];
   return ['reflection_invalidation_required'];
 }
 
@@ -158,6 +169,7 @@ export async function projectGateStatus(root: any, state: any = {}) {
 
 export async function evaluateStop(root: any, state: any, payload: any, opts: any = {}) {
   const last = extractLastMessage(payload);
+  const jsonCache = new Map<string, Promise<any>>();
   if (clarificationGatePending(state)) {
     if (await hasVisibleClarificationQuestionBlock(root, state, last)) return { continue: true };
     return {
@@ -167,27 +179,55 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
       missing: ['explicit_user_answers', 'pipeline_answer']
     };
   }
-  if (state?.context7_required && !(await hasContext7DocsEvidence(root, state))) {
+  const route = routeFromState(state);
+  const stopGate = String(state?.stop_gate || '');
+  const completionProofRequired = state.proof_required === true || routeRequiresCompletionProof(route);
+  const reflectionRequired = reflectionRequiredForState(state);
+  if (!opts.noQuestion && (stopGate === 'none' || stopGate === 'honest_mode') && !state?.context7_required && !state?.subagents_required && !completionProofRequired && !reflectionRequired) {
+    return null;
+  }
+  const agentIntakeRequired = state?.mission_id && routeRequiresAgentIntake(route, { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false });
+  const context7Promise = state?.context7_required ? hasContext7DocsEvidence(root, state) : Promise.resolve(true);
+  const subagentPromise = state?.subagents_required ? hasSubagentEvidence(root, state) : Promise.resolve(true);
+  const completionProofPromise = agentIntakeRequired
+    ? exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))
+    : Promise.resolve(true);
+  const agentGatePromise = agentIntakeRequired ? readAgentGateStatus(root, state.mission_id) : Promise.resolve({ ok: true, missing: [] });
+  const mistakeRecallPromise = mistakeRecallGateStatus(root, state);
+  const [context7Ok, subagentOk, completionProofExists, agentGate, mistakeRecall] = await Promise.all([
+    context7Promise,
+    subagentPromise,
+    completionProofPromise,
+    agentGatePromise,
+    mistakeRecallPromise
+  ]);
+  if (state?.context7_required && !context7Ok) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
   }
-  if (state?.subagents_required && !(await hasSubagentEvidence(root, state))) {
+  if (state?.subagents_required && !subagentOk) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires native multi-session evidence before completion. Run worker/reviewer native sessions for disjoint code-changing work, or record explicit evidence that native sessions were unavailable or unsafe to split.`, { gate: 'native-session-evidence' });
   }
-  if (state?.mission_id && !(await exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))) && routeRequiresAgentIntake(routeFromState(state), { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false })) {
-    const agentGate = await readAgentGateStatus(root, state.mission_id);
+  if (agentIntakeRequired && !completionProofExists) {
     if (!agentGate.ok) {
       return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot continue to implementation/finalization: native agent intake gate is missing or blocked. Run: sks agent run latest --mock --json`, { gate: AGENT_INTAKE_STAGE_ID, missing: agentGate.missing || ['agents/agent-proof-evidence.json'] });
     }
   }
-  const mistakeRecall = await mistakeRecallGateStatus(root, state);
   if (!mistakeRecall.ok) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} found relevant TriWiki mistake memory that is not bound to the decision contract. Re-run pipeline answer or seal the contract so ${MISTAKE_RECALL_ARTIFACT} is consumed before finishing.`, { gate: MISTAKE_RECALL_ARTIFACT, missing: mistakeRecall.missing });
   }
   if (opts.noQuestion) {
     if (containsUserQuestion(last)) return complianceBlock(root, state, noQuestionContinuationReason(), { gate: 'no-question' });
-    const gate: any = await passedActiveGate(root, state);
+    const gate: any = await passedActiveGate(root, state, jsonCache);
+    if (gate.hard_blocked) {
+      return {
+        continue: true,
+        action: 'hard_blocked',
+        gate: gate.file || HARD_BLOCKER_ARTIFACT,
+        systemMessage: `SKS ${state.route_command || state.mode || 'route'} route hard-blocked: ${gate.reason || 'hard blocker recorded'}`
+      };
+    }
     if (gate.ok) {
-      const reflection = await reflectionGateStatus(root, state);
+      const reflection = await reflectionGateStatus(root, state, jsonCache);
       if (!reflection.ok) await appendHonestModeNote(root, state, `reflection stale: ${(reflection.missing || []).join(', ')}`);
       return { continue: true };
     }
@@ -205,18 +245,27 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
         route: state.route || state.mode,
         missionId: state.mission_id,
         explicitGatePath: typeof state.stop_gate_abs_path === 'string' && state.stop_gate_abs_path ? state.stop_gate_abs_path : undefined,
+        allowLatestFallback: opts.allowLatestFallback !== true ? false : true,
       });
       if (stopCheck.action === 'allow_stop') {
         if (narutoFamily) return { continue: true, systemMessage: `SKS: canonical stop-gate passed at ${stopCheck.gate_path}` };
       } else if (stopCheck.action === 'hard_blocked') {
-        return { decision: 'block', reason: stopCheck.feedback, action: 'hard_blocked', gate: stopCheck.gate_path };
+        return { continue: true, systemMessage: stopCheck.feedback, action: 'hard_blocked', gate: stopCheck.gate_path };
       } else {
         const missing = stopCheck.diagnostics.missing_fields?.length ? ` Missing gate fields: ${stopCheck.diagnostics.missing_fields.join(', ')}.` : '';
         const checkedPaths = stopCheck.diagnostics.checked_paths?.length ? ` Checked: ${stopCheck.diagnostics.checked_paths.join(', ')}.` : '';
         return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${stopCheck.gate_path || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}${checkedPaths}`, { gate: stopCheck.gate_path || state.stop_gate, missing: stopCheck.diagnostics.missing_fields });
       }
     } else {
-      const gate: any = await passedActiveGate(root, state);
+      const gate: any = await passedActiveGate(root, state, jsonCache);
+      if (gate.hard_blocked) {
+        return {
+          continue: true,
+          action: 'hard_blocked',
+          gate: gate.file || HARD_BLOCKER_ARTIFACT,
+          systemMessage: `SKS ${state.route_command || state.mode || 'route'} route hard-blocked: ${gate.reason || 'hard blocker recorded'}`
+        };
+      }
       if (!gate.ok) {
         const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
         return complianceBlock(root, state, `SKS ${state.route_command || state.mode} route cannot stop yet. Pass ${gate.file || state.stop_gate} or record a hard blocker with evidence before finishing.${missing}`, { gate: gate.file || state.stop_gate, missing: gate.missing });
@@ -227,7 +276,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (!proofGate.ok) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot finalize without a valid Completion Proof. Missing or invalid proof issues: ${proofGate.issues.join(', ')}.`, { gate: 'completion-proof', missing: proofGate.issues });
   }
-  const reflection = await reflectionGateStatus(root, state);
+  const reflection = await reflectionGateStatus(root, state, jsonCache);
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
   return null;
 }
@@ -259,6 +308,7 @@ function clarificationGatePending(state: any = {}) {
 async function complianceBlock(root: any, state: any = {}, reason: any = '', detail: any = {}) {
   if (!state?.mission_id) return { decision: 'block', reason };
   const dir = missionDir(root, state.mission_id);
+  await markReflectionInvalidatedForGateFailure(root, state, detail);
   const guardPath = path.join(dir, COMPLIANCE_LOOP_GUARD_ARTIFACT);
   const normalized = normalizeComplianceReason(reason);
   const previous = await readJson(guardPath, {});
@@ -297,7 +347,19 @@ async function complianceBlock(root: any, state: any = {}, reason: any = '', det
     ]
   });
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'pipeline.compliance_loop_guard.tripped', gate: record.gate, repeat_count: count, limit });
-  return { decision: 'escalate', reason, gate: detail.gate || state.stop_gate || null, repeat_count: count, message: '동일 사유가 반복됩니다. 사용자 개입이 필요합니다.' };
+  return { decision: 'escalate', reason, gate: detail.gate || state.stop_gate || null, repeat_count: count, message: '동일 사유가 반복됩니다. 사용자 개입이 필요합니다.', systemMessage: '동일 사유가 반복됩니다. 사용자 개입이 필요합니다.' };
+}
+
+async function markReflectionInvalidatedForGateFailure(root: any, state: any = {}, detail: any = {}) {
+  const gate = String(detail.gate || state.stop_gate || '');
+  if (!reflectionRequiredForState(state)) return;
+  if (!gate || /^(reflection|context7-evidence|native-session-evidence|no-question|clarification)$/i.test(gate)) return;
+  await setCurrent(root, {
+    mission_id: state.mission_id,
+    reflection_invalidation_required: true,
+    reflection_invalidated_at: nowIso(),
+    reflection_invalidation_reason: `gate_failed:${gate}`
+  }, { sessionKey: state._session_key });
 }
 
 function complianceLoopLimit(gate: any = '') {
@@ -316,16 +378,23 @@ function normalizeComplianceReason(reason: any = '') {
     .slice(0, 1200);
 }
 
-async function passedActiveGate(root: any, state: any) {
+function readJsonCached<T>(cache: Map<string, Promise<T>> | undefined, file: string, fallback: T): Promise<T> {
+  if (!cache) return readJson(file, fallback) as Promise<T>;
+  const key = path.resolve(file);
+  if (!cache.has(key)) cache.set(key, readJson(file, fallback) as Promise<T>);
+  return cache.get(key) as Promise<T>;
+}
+
+async function passedActiveGate(root: any, state: any, jsonCache?: Map<string, Promise<any>>) {
   const id = state?.mission_id;
   if (!id) return { ok: false, file: null };
-  const hardBlocker = await passedHardBlocker(root, state);
+  const hardBlocker = await passedHardBlocker(root, state, jsonCache);
   if (hardBlocker.ok) return hardBlocker;
   const files = gateFilesForState(state);
   for (const file of files) {
     const p = path.join(missionDir(root, id), file);
-    if (await exists(p)) {
-      const gate = await readJson(p, {});
+    const gate = await readJsonCached(jsonCache, p, null);
+    if (gate) {
       const missing = [
         ...missingRequiredGateFields(file, state, gate),
         ...await missingRequiredGateArtifacts(root, file, state, gate)
@@ -338,13 +407,23 @@ async function passedActiveGate(root: any, state: any) {
   return { ok: false, file: files[0] || null };
 }
 
-async function passedHardBlocker(root: any, state: any) {
+async function passedHardBlocker(root: any, state: any, jsonCache?: Map<string, Promise<any>>) {
   if (!state?.mission_id) return { ok: false };
   const file = 'hard-blocker.json';
-  const blocker = await readJson(path.join(missionDir(root, state.mission_id), file), null);
+  const blocker = await readJsonCached(jsonCache, path.join(missionDir(root, state.mission_id), file), null);
   if (!blocker) return { ok: false };
-  if (String(blocker.status || '') === 'hard_blocked') return { ok: false, file, missing: ['hard_blocked'] };
-  return { ok: blocker.passed === true && String(blocker.reason || '').trim() && Array.isArray(blocker.evidence) && blocker.evidence.length > 0, file };
+  const hasReason = String(blocker.reason || '').trim().length > 0;
+  const hasEvidence = Array.isArray(blocker.evidence) && blocker.evidence.length > 0;
+  if (String(blocker.status || '') === 'hard_blocked') {
+    const missing = [];
+    if (blocker.passed === true) missing.push('passed_false');
+    if (!hasReason) missing.push('reason');
+    if (!hasEvidence) missing.push('evidence');
+    return missing.length
+      ? { ok: false, file, missing }
+      : { ok: true, file, hard_blocked: true, reason: String(blocker.reason || '').trim() };
+  }
+  return { ok: blocker.passed === true && hasReason && hasEvidence, file };
 }
 
 async function appendHonestModeNote(root: any, state: any = {}, message: string) {
@@ -381,10 +460,11 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
       'zellij_dashboard_ready',
       'native_agent_proof',
       'final_arbiter_accepted',
-      'session_cleanup'
-    ];
-    return required.filter((key: any) => gate[key] !== true);
-  }
+	      'session_cleanup'
+	    ];
+	    if (fromChatImgCoverageRequired(state, gate)) required.push('from_chat_img_request_coverage');
+	    return required.filter((key: any) => gate[key] !== true);
+	  }
   if (file === 'qa-gate.json' || mode === 'QALOOP') {
     const required = ['clarification_contract_sealed', 'qa_report_written', 'qa_ledger_complete', 'checklist_completed', 'safety_reviewed', 'deployed_destructive_tests_blocked', 'credentials_not_persisted', 'honest_mode_complete'];
     if (gate.ui_e2e_required === true) required.push('chrome_extension_preflight_passed', 'ui_chrome_extension_evidence', 'ui_chrome_extension_screenshot_captured');
@@ -605,6 +685,9 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
     if (!(await exists(path.join(dir, file)))) missing.push(file);
   }
   if (gate.native_agent_proof === true && !(await exists(path.join(dir, 'agents', 'agent-proof-evidence.json')))) missing.push('agents/agent-proof-evidence.json');
+  if (fromChatImgCoverageRequired(state, gate) && gate.from_chat_img_request_coverage === true) {
+    missing.push(...await missingFromChatImgCoverageArtifacts(root, state));
+  }
   return missing;
 }
 

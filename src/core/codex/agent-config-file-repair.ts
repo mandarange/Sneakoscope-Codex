@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { managedAgentRoleConfigForFile, managedAgentRoleConfigForRole } from '../agents/agent-role-config.js';
+import { writeCodexConfigGuarded } from './codex-config-guard.js';
 
 export interface AgentConfigFileRepairReport {
   schema: 'sks.agent-config-file-repair.v1';
@@ -54,10 +55,22 @@ export async function repairAgentConfigFileReferences(input: { root: string; app
   if (edits.length) text = applyEdits(original, edits);
   if (input.apply && !configExists) {
     await ensureDir(path.dirname(configPath));
-    await writeTextAtomic(configPath, text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n'));
+    await writeCodexConfigGuarded({
+      root,
+      configPath,
+      before: '',
+      cause: 'agent-config-file-repair',
+      mutate: () => text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
+    });
     createdFiles.push(configPath);
   } else if (input.apply && text !== original) {
-    await writeTextAtomic(configPath, text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n'));
+    await writeCodexConfigGuarded({
+      root,
+      configPath,
+      before: original,
+      cause: 'agent-config-file-repair',
+      mutate: () => text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
+    });
   }
   const effectiveText = input.apply ? await fs.readFile(configPath, 'utf8').catch(() => text) : text;
   const missing = await missingAgentConfigFiles(effectiveText);

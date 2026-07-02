@@ -199,12 +199,14 @@ export async function recordSkillDreamEvent(root: any, event: any = {}, opts: an
     route,
     command,
     skill_names: skillNames,
-    prompt_signature: promptSignature
+    prompt_signature: promptSignature,
+    observed_count: Math.max(1, Math.floor(Number(opts.event_count || 1)))
   };
 
+  const eventCount = Math.max(1, Math.floor(Number(opts.event_count || 1)));
   state.last_event_at = ts;
-  state.counters.total_events += 1;
-  state.counters.events_since_last_run += 1;
+  state.counters.total_events += eventCount;
+  state.counters.events_since_last_run += eventCount;
   state.routes[route] = bumpRouteCounter(state.routes[route], ts, skillNames, command);
   for (const skillName of skillNames) state.skills[skillName] = bumpSkillCounter(state.skills[skillName], ts, route);
   state.events_tail.push(record);
@@ -499,6 +501,10 @@ function metadataLooksGenerated(text: any, name: any) {
 async function writeFixtureSkill(skillRoot: any, name: any, body: any) {
   const dir = path.join(skillRoot, name);
   await ensureDir(path.join(dir, 'agents'));
-  await writeTextAtomic(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: Fixture skill.\n---\n\n${body}`);
+  await writeTextAtomic(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: Fixture skill.\n---\n\n${forgeSkillMarker(skillRoot)}\n\n${body}`);
   await writeTextAtomic(path.join(dir, 'agents', 'openai.yaml'), `name: ${name}\nmodel_reasoning_effort: high\nrouting: temporary\nreturn_to_default_after_route: true\n`);
+}
+
+function forgeSkillMarker(root: any) {
+  return `<!-- BEGIN SKS FORGE SKILL project=${sha256(String(root || '')).slice(0, 12)} generator=sks@runtime created=${nowIso()} -->`;
 }

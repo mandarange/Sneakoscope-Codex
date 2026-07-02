@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
+import { cleanupReleaseGateHermeticEnv, cleanupReleaseGateRunTemp, createReleaseGateHermeticEnv } from './release-gate-hermetic-env.js'
 import { appendReleaseGateJsonl, writeReleaseGateJson } from './release-gate-report.js'
 import { findReadyReleaseGateNodes, findReleaseGatesBlockedByFailedDeps, pickReadyLaunchableReleaseGates } from './release-gate-scheduler.js'
 import { readReleaseGateCacheRecord, releaseGateProofBankFile, writeReleaseGateCacheHit } from './release-gate-cache-v2.js'
@@ -14,6 +14,7 @@ import { computeResourceClassBudget } from './resource-class-budget.js'
 import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { rmrf } from '../fsx.js'
+import { sweepSksTempDirs } from '../retention.js'
 
 export interface ReleaseGateDagRunResult {
   schema: 'sks.release-gate-dag-run.v1'
@@ -156,6 +157,7 @@ export async function runReleaseGateDag(input: {
     : new Set<string>()
   const runId = `rg-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
   const retentionBefore = await pruneOldReleaseGateRunDirs(root)
+  await sweepSksTempDirs(root, { maxAgeHours: 24 }).catch(() => null)
   const reportDir = path.join(root, '.sneakoscope', 'reports', 'release-gates', runId)
   fs.mkdirSync(reportDir, { recursive: true })
   const timeline = path.join(reportDir, 'timeline.jsonl')
@@ -264,6 +266,7 @@ export async function runReleaseGateDag(input: {
       sumGateMs += report.critical_path_ms || 0
     }
     const packed = writeSummarySnapshot(true)
+    cleanupReleaseGateRunTemp(runId)
     return {
       ...packed,
       ok: packed.ok && packRun.ok,
@@ -354,6 +357,7 @@ export async function runReleaseGateDag(input: {
   const finalResult = { ...result, retention: mergeReleaseGateRetention(retentionBefore, retentionAfter) }
   appendReleaseGateJsonl(timeline, { event: 'retention', phase: 'after_run', ...retentionAfter, at: new Date().toISOString() })
   writeReleaseGateJson(path.join(reportDir, 'summary.json'), finalResult)
+  cleanupReleaseGateRunTemp(runId)
   return finalResult
 }
 
@@ -470,6 +474,7 @@ function runGate(root: string, runId: string, reportRoot: string, gate: ReleaseG
         const exitCode = timedOut ? 124 : code
         const result = { id: gate.id, ok: exitCode === 0, exit_code: exitCode, signal, timed_out: timedOut, duration_ms: durationMs, cached: false, stderr_tail: stderrTail }
         writeReleaseGateJson(path.join(hermetic.report_dir, 'result.json'), { schema: 'sks.release-gate-result.v1', ...result, stdout_log: stdoutFile, stderr_log: stderrFile })
+        cleanupReleaseGateHermeticEnv(hermetic)
         resolve(result)
       })()
     })

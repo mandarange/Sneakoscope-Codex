@@ -45,9 +45,10 @@ export async function prepareMadDbMission(input: {
   args?: string[];
   verifyTools?: boolean;
   runtimeSessionId?: string;
+  sessionKey?: string;
 }): Promise<MadDbPreparedMission> {
   const target = await resolveMadDbTarget(input.root, { args: input.args || [] });
-  const { id, dir } = await createMission(input.root, { mode: 'mad-db', prompt: input.task || 'MadDB SQL-plane execution' });
+  const { id, dir } = await createMission(input.root, { mode: 'mad-db', prompt: input.task || 'MadDB SQL-plane execution', sessionKey: input.sessionKey });
   const cycleId = `mad-db-${Date.now().toString(36)}`;
   const runtimeSessionId = input.runtimeSessionId || `mad-db-session-${Date.now().toString(36)}`;
   const blockers = [...target.blockers];
@@ -119,7 +120,7 @@ export async function prepareMadDbMission(input: {
     mad_db_capability_file: 'mad-db-capability.json',
     stop_gate: 'mad-db-gate.json',
     prompt: input.task
-  });
+  }, { sessionKey: input.sessionKey });
   return {
     schema: 'sks.mad-db-prepared-mission.v1',
     ok: blockers.length === 0,
@@ -262,7 +263,7 @@ async function clearMadDbCurrentState(root: string, missionId: string, ok: boole
     mad_db_read_only_restored: restoration.ok,
     mad_db_closed_at: nowIso(),
     mad_db_last_result_file: 'mad-db-result.json'
-  });
+  }, { sessionKey: current._session_key });
 }
 
 function redactCycleResult(result: MadDbCycleResult): MadDbCycleResult {

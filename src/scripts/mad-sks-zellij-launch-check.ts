@@ -58,7 +58,7 @@ const codexPaneChecks = {
   report_provider_arg: report.codex_pane.args.some((arg) => /model_provider=.*codex-lb/.test(arg)),
   report_target_env: report.codex_pane.launch_env_keys.includes('SKS_MAD_SKS_TARGET_ROOT'),
   report_policy_env: report.codex_pane.launch_env_keys.includes('SKS_PROTECTED_CORE_POLICY'),
-  layout_orchestrator_pane: layoutText.includes('pane name="orchestrator" command="sh"'),
+  layout_orchestrator_pane: /pane\s+name="orchestrator"[\s\S]*?command="sh"/.test(layoutText),
   layout_codex_exec: /exec\s+'?codex'?/.test(layoutText),
   layout_no_alt_screen_arg: layoutText.includes('--no-alt-screen'),
   layout_profile_arg: layoutText.includes('--profile') && layoutText.includes('sks-mad-high'),

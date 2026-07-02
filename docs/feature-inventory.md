@@ -98,7 +98,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `cli-wiki` | visual-memory | beta | sks wiki coords\|pack\|refresh\|publish\|rebuild-index\|validate\|validate-shared\|wrongness ... | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `cli-hproof` | proof-route | labs | sks hproof check [mission-id\|latest] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-agent` | core-cli | labs | sks agent run\|status\|close\|cleanup <mission-id\|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply\|--dry-run] [--drain] [--stale-ms N] [--json] \| sks agent rollback-patches [mission-id\|latest] [--patch-entry-id id] [--dry-run\|--apply] [--json] | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `cli-team` | proof-route | beta | sks team "task" \| sks team log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-zellij\|attach-zellij\|cleanup-zellij ... | mock:pass | runtime_mock_verified | none recorded |
+| `cli-team` | proof-route | beta | Deprecated alias: `sks team "task"` redirects to Naruto; legacy `sks team log\|tail\|watch\|lane\|status\|dashboard\|event\|message\|open-zellij\|attach-zellij\|cleanup-zellij` observe old Team missions | mock:pass | runtime_mock_verified | none recorded |
 | `cli-reasoning` | core-cli | labs | sks reasoning ["prompt"] [--json] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-gx` | visual-memory | labs | sks gx init\|render\|validate\|drift\|snapshot [name] | mock:pass | runtime_mock_verified | none recorded |
 | `cli-profile` | core-cli | labs | sks profile show\|set <model> | mock:pass | runtime_mock_verified | none recorded |
@@ -138,8 +138,8 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `route-gx` | route | labs | $GX<br>$gx | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-wiki` | route | stable | $Wiki<br>$wiki | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-help` | route | stable | $Help<br>$help | mock:pass | runtime_mock_verified | none recorded |
-| `route-team` | route | beta | $Team<br>$team<br>$from-chat-img | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-native-agent-intake` | proof-route | stable | sks agent run "task" --route "$Team" --agents 5 --concurrency 5 --mock --json<br>sks team "task" [executor:5 reviewer:6 user:1] | mock:pass | runtime_mock_verified | real speedup claims require runtime timing/eval evidence; mock/static timing is not enough |
+| `route-team` | route | beta | Deprecated alias: `$Team`, `$team`, and `$From-Chat-IMG` route new execution to Naruto and validate `team-alias-to-naruto.json` | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
+| `route-native-agent-intake` | proof-route | stable | sks agent run "task" --route "$Team" --agents 5 --concurrency 5 --mock --json<br>sks naruto run "task" --clones 5 --work-items 8 --mock --json | mock:pass | runtime_mock_verified | real speedup claims require runtime timing/eval evidence; mock/static timing is not enough |
 | `proof-agent-evidence` | proof-route | stable | completion-proof.json evidence.agents | mock:pass | runtime_mock_verified | disabled native agents must be recorded as not_verified_for_parallel_speed |
 | `skill-autoresearch-loop` | skill | labs | $autoresearch-loop | static:pass | static_contract | runtime fixtures owned by route |
 | `skill-computer-use` | skill | labs | $computer-use | static:pass | static_contract | runtime fixtures owned by route |

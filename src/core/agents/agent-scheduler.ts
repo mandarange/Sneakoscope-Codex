@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonl, nowIso, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, appendJsonlMany, nowIso, writeJsonAtomic } from '../fsx.js'
 import { MAX_AGENT_COUNT } from './agent-schema.js'
 import {
   appendAgentWorkQueueEvent,
@@ -385,7 +385,7 @@ export async function runAgentScheduler(input: {
     } finally {
       batchDispatchInProgress = false
     }
-    for (const event of launchEvents) await appendJsonl(path.join(input.root, 'agent-scheduler-events.jsonl'), { schema: AGENT_SCHEDULER_EVENT_SCHEMA, ts: nowIso(), ...event })
+    await appendJsonlMany(path.join(input.root, 'agent-scheduler-events.jsonl'), launchEvents.map((event) => ({ schema: AGENT_SCHEDULER_EVENT_SCHEMA, ts: nowIso(), ...event })))
   }
 
   function collectLaunchBatch(): PendingLaunch[] {

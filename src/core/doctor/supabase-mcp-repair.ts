@@ -1,5 +1,6 @@
 import path from 'node:path';
-import { nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { nowIso, writeJsonAtomic } from '../fsx.js';
+import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock } from '../mcp/mcp-config-preservation.js';
 
 export interface SupabaseMcpRepairReport {
@@ -20,6 +21,7 @@ export interface SupabaseMcpRepairReport {
   blockers: string[];
   warnings: string[];
   raw_secret_values_recorded: false;
+  report_write_failed?: boolean;
 }
 
 export async function repairSupabaseMcp(input: { root: string; apply?: boolean; reportPath?: string | null }): Promise<SupabaseMcpRepairReport> {
@@ -36,7 +38,13 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
   if (configured && !disabled && !readOnlyBefore && input.apply) {
     afterText = replaceOrAppendMcpServerBlock(config.text, 'supabase', setReadOnly(block));
     readOnlyMigrated = afterText !== config.text;
-    if (readOnlyMigrated) await writeTextAtomic(config.path, afterText);
+    if (readOnlyMigrated) await writeCodexConfigGuarded({
+      root,
+      configPath: config.path,
+      before: config.text,
+      cause: 'supabase-mcp-repair',
+      mutate: () => afterText
+    });
   }
   const afterBlock = readOnlyMigrated ? mcpServerBlock(afterText, 'supabase') || '' : block;
   const readOnlyAfter = /read[_-]?only\s*=\s*true|access_mode\s*=\s*"read-only"|--read-only/.test(afterBlock);
@@ -44,7 +52,7 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
   const writeScopeRequiresConfirmation = configured && !disabled && (unsafeWriteAccessBefore || !readOnlyAfter);
   const readyBlocking = unsafeWriteAccess;
   const manualRequired = configured && !disabled && (!tokenEnvPresent || writeScopeRequiresConfirmation);
-  const report: SupabaseMcpRepairReport = {
+  let report: SupabaseMcpRepairReport = {
     schema: 'sks.doctor-supabase-mcp-repair.v1',
     generated_at: nowIso(),
     ok: !configured || disabled || !unsafeWriteAccess,
@@ -70,8 +78,20 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
     ],
     raw_secret_values_recorded: false
   };
-  if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-supabase-mcp-repair.json'), report).catch(() => undefined);
+  if (input.reportPath !== null) {
+    const reportPath = input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-supabase-mcp-repair.json');
+    try {
+      await writeJsonAtomic(reportPath, report);
+    } catch (err: unknown) {
+      report = { ...report, report_write_failed: true };
+      process.stderr.write(`SKS doctor warning: failed to write Supabase MCP repair report ${reportPath}: ${messageOf(err)}\n`);
+    }
+  }
   return report;
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 function setReadOnly(block: string): string {

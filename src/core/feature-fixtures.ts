@@ -81,11 +81,16 @@ const FIXTURES = Object.freeze({
   'cli-insane-search': fixture('execute', 'sks insane-search doctor --json', [], 'pass'),
   'cli-ultra-search': fixture('execute', 'sks ultra-search doctor --json', [], 'pass'),
   'cli-xai': fixture('real_optional', 'sks xai check --json', [], 'pass'),
+  'cli-task': fixture('execute', 'sks task instant --plan --json', [], 'pass'),
+  'cli-release': fixture('mock', 'sks release affected --json', [], 'pass'),
+  'cli-triwiki': fixture('execute', 'sks triwiki index --json', [], 'pass'),
+  'cli-daemon': fixture('execute', 'sks daemon status --json', [], 'pass'),
   'cli-all-features': fixture('mock', 'sks all-features complete --json', [`.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`], 'pass'),
   'cli-init': fixture('mock', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-eval': fixture('mock', 'sks eval run --mock --json', [], 'pass'),
   'cli-harness': fixture('mock', 'sks harness fixture --mock --json', [], 'pass'),
-  'cli-team': fixture('mock', 'sks team "fixture" --mock --json', ['completion-proof.json', 'team-gate.json'], 'pass'),
+  'cli-naruto': fixture('mock', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['completion-proof.json', 'naruto-gate.json'], 'pass'),
+  'cli-team': fixture('mock', 'sks team "fixture" --mock --clones 4 --backend fake --work-items 4 --json', ['naruto-gate.json', 'team-alias-to-naruto.json'], 'pass'),
   'cli-reasoning': fixture('mock', 'sks reasoning status --json', [], 'pass'),
   'cli-profile': fixture('mock', 'sks profile status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('mock', 'sks db check --sql "SELECT 1" --json', ['db-operation-report.json', 'completion-proof.json'], 'pass'),
@@ -97,7 +102,8 @@ const FIXTURES = Object.freeze({
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
   'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
   'cli-wrongness': fixture('execute_and_validate_artifacts', 'sks wrongness add --kind missing_evidence --claim "fixture wrongness" --json', ['.sneakoscope/wiki/wrongness-ledger.json'], 'pass'),
-  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --json', ['completion-proof.json', 'team-gate.json', 'team-session-cleanup.json'], 'pass'),
+  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --clones 4 --backend fake --work-items 4 --json', ['naruto-gate.json', 'team-alias-to-naruto.json'], 'pass'),
+  'route-team-alias': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --clones 4 --backend fake --work-items 4 --json', ['naruto-gate.json', 'team-alias-to-naruto.json'], 'pass'),
   'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --clones 4 --backend fake --work-items 4 --json', ['agents/agent-proof-evidence.json', 'agents/agent-scheduler-state.json'], 'pass'),
   'route-shadowclone': fixture('mock', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass'),
   'route-kagebunshin': fixture('mock', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass'),
@@ -135,7 +141,7 @@ const FIXTURES = Object.freeze({
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass'),
   'route-release-review': fixture('mock', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
   'route-native-agent-intake': fixture('mock', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 5 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
-  'proof-agent-evidence': fixture('mock', 'sks team "fixture" --mock --json', ['completion-proof.json', 'agents/agent-proof-evidence.json'], 'pass')
+  'proof-agent-evidence': fixture('mock', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'agents/agent-proof-evidence.json'], 'pass')
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([
@@ -154,6 +160,7 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-all-features',
   'cli-eval',
   'cli-harness',
+  'cli-naruto',
   'cli-team',
   'cli-reasoning',
   'cli-profile',

@@ -18,6 +18,10 @@ export function doctorRepairPostcheck(transaction: DoctorFixTransaction | null |
     required_ready: requiredBlockers.length === 0,
     mutations_without_rollback: Number(transaction?.mutations_without_rollback || 0),
     manual_required: phases.filter((phase) => phase.manual_required).map((phase) => phase.id),
+    pending_manual: [
+      ...phases.filter((phase) => phase.manual_required).map((phase) => phase.id),
+      ...requiredBlockers.map((blocker) => `postcheck:${blocker}`)
+    ],
     optional_manual_required: phases.filter((phase) => phase.manual_required && phase.required_for_ready === false).map((phase) => phase.id),
     required_blockers: [...new Set(requiredBlockers)],
     optional_warnings: [...new Set(optionalWarnings)],

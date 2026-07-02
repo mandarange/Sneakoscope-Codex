@@ -239,10 +239,16 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. MAD-DB SQL-plane execution is not active in MAD-SKS; use the first-class MadDB route for DROP/TRUNCATE/all-row SQL-plane work.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
+  const zellijVisiblePaneSetting = readOption(cleanArgs, '--zellij-visible-panes', process.env.SKS_ZELLIJ_VISIBLE_PANES || process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || '8');
+  const zellijViewportSetting = readOption(cleanArgs, '--zellij-viewports', process.env.SKS_ZELLIJ_VIEWPORTS || '4');
+  const zellijRefreshMsSetting = readOption(cleanArgs, '--zellij-refresh-ms', process.env.SKS_ZELLIJ_REFRESH_MS || '1000');
   const madSksEnv = {
     SKS_PROTECTED_CORE_POLICY: madLaunch.gate.protected_core_policy,
     SKS_MAD_SKS_TARGET_ROOT: madLaunch.gate.cwd,
-    SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest
+    SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest,
+    SKS_ZELLIJ_VISIBLE_PANES: String(zellijVisiblePaneSetting),
+    SKS_ZELLIJ_VIEWPORTS: String(Math.max(0, Math.min(Number(zellijViewportSetting || 4), 6))),
+    SKS_ZELLIJ_REFRESH_MS: String(zellijRefreshMsSetting),
   };
   const explicitWorkspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', null));
   const launchProfile = glmRuntime?.profile || profile;
@@ -284,10 +290,12 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     mission_id: madLaunch.mission_id,
     session_name: launch.session_name || null,
     live_panes: !headlessZellij,
-    initial_panes: 'main-only',
-    dashboard_created: false,
+    initial_panes: 'orchestrator-monitor-viewports',
+    dashboard_created: true,
     worker_panes_created: 0,
-    right_column_mode: 'spawn-on-first-worker'
+    viewport_panes_created: Number(madSksEnv.SKS_ZELLIJ_VIEWPORTS),
+    ui_architecture: 'monitor_plus_viewports',
+    right_column_mode: 'monitor-plus-viewports'
   });
   const madNativeSwarmPromise = startMadNativeSwarm(madLaunch.root, madLaunch, args, launchProfile, {
     env: {
@@ -297,7 +305,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     glmLaunch: glmRuntime ? { provider: glmRuntime.profile.provider, model: glmRuntime.profile.model } : null,
     zellijSessionName: launch.session_name || null,
     workerPlacement: headlessZellij ? 'process' : shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
-    zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || 8)
+    zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || zellijVisiblePaneSetting || 8)
   }).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_swarm_background_failed', error: err?.message || String(err) }));
   void madNativeSwarmPromise;
   // The launcher only creates a detached background session. In an interactive
@@ -763,6 +771,9 @@ function baseMadLaunchOnlyFlags() {
     '--skip-zellij-repair',
     '--install-homebrew',
     '--headless',
+    '--zellij-compact-slots',
+    '--zellij-dashboard',
+    '--zellij-full-debug',
     '--allow-system',
     '--allow-db-write',
     '--allow-package-install',
@@ -824,6 +835,8 @@ function madLaunchValueFlags(includeGlmFlags = false) {
     '--mad-swarm-work-items',
     '--mad-swarm-backend',
 	    '--mad-swarm-prompt',
+    '--zellij-visible-panes',
+    '--zellij-refresh-ms',
 	    '--ack'
   ]);
   if (includeGlmFlags) flags.add('--exact-provider');

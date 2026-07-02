@@ -1,3 +1,5 @@
+import os from 'node:os';
+import path from 'node:path';
 import { projectRoot, exists, formatBytes } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
@@ -40,6 +42,8 @@ import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 import { writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
 import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
+import { sweepSksTempDirs } from '../core/retention.js';
+import { reconcileSkills } from '../core/init/skills.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -50,9 +54,15 @@ export async function run(_command: any, args: any = []) {
 
 async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const startedAtMs = Date.now();
+  const sksTempSweep = doctorFix ? await sweepSksTempDirs(root, { maxAgeHours: 24 }).catch((err: any) => ({
+    ok: false,
+    error: err?.message || String(err),
+    actions: []
+  })) : { ok: true, skipped: true, reason: 'doctor_without_fix', actions: [] };
   const doctorProfile = doctorProfileFromArgs(args, doctorFix);
   const machineOnly = flag(args, '--machine-only');
   const reportFile = readOption(args, '--report-file', null);
+  const argWarnings = doctorArgWarnings(args);
   const deepDiagnostics = doctorProfile === 'full' || doctorProfile === 'capabilities';
   const codexBin = readOption(args, '--codex-bin', process.env.SKS_DOCTOR_CODEX_BIN || '');
   const actualCodexProbeRequested = flag(args, '--actual-codex') || flag(args, '--require-actual-codex') || Boolean(codexBin);
@@ -100,6 +110,20 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         : deepDiagnostics ? await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) })) : { status: 'skipped', reason: 'default_doctor_no_global_fast_mode_regeneration' }
     };
   }
+  const skillsReconcile = doctorFix
+    ? {
+        global: await reconcileSkills({
+          targetDir: path.join(os.homedir(), '.agents', 'skills'),
+          scope: 'global',
+          fix: true
+        }).catch((err: any) => ({ ok: false, error: err?.message || String(err) })),
+        project: await reconcileSkills({
+          targetDir: path.join(root, '.agents', 'skills'),
+          scope: 'project',
+          fix: true
+        }).catch((err: any) => ({ ok: false, error: err?.message || String(err) }))
+      }
+    : { skipped: true, reason: 'doctor_without_fix' };
   const commandAliasCleanup = await runDoctorCommandAliasCleanup({
     root,
     fix: doctorFix
@@ -292,10 +316,18 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     executable_path: null,
     launch_agent_path: null,
     action_script_path: null,
+    build_stamp_path: null,
     report_path: `${root}/.sneakoscope/reports/sks-menubar.json`,
     menu_items: [],
     actions: [],
     launch: { requested: doctorFix, method: 'none', ok: false, error: err?.message || String(err) },
+    tcc_automation_status: 'unknown',
+    next_actions: [
+      'Run: sks menubar status',
+      'Run: sks menubar install',
+      'Run: sks menubar restart',
+      'Rotate CODEX_LB_API_KEY and OPENROUTER_API_KEY if they were previously exposed in launchd.'
+    ],
     blockers: [err?.message || String(err)],
     warnings: []
   }));
@@ -689,8 +721,9 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const result = {
     schema: 'sks.doctor-status.v2',
     elapsed_ms: Date.now() - startedAtMs,
-    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false && (!doctorFixPostcheck || (doctorFixPostcheck as any).ok !== false),
+    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false,
     root,
+    arg_warnings: argWarnings,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },
     codex,
     codex_config: codexConfig,
@@ -714,11 +747,24 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     supabase_mcp_repair: supabaseMcpRepair,
     doctor_fix_transaction: doctorFixTransaction,
     doctor_fix_postcheck: doctorFixPostcheck,
+    postcheck: doctorFixPostcheck ? {
+      ok: (doctorFixPostcheck as any).ok === true,
+      pending_manual: (doctorFixPostcheck as any).pending_manual || [],
+      required_blockers: (doctorFixPostcheck as any).required_blockers || [],
+      optional_warnings: (doctorFixPostcheck as any).optional_warnings || []
+    } : null,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
     zellij_readiness: zellijReadiness,
     codex_permission_profiles: permissionProfiles,
     command_aliases: commandAliasCleanup,
+    sks_temp_sweep: {
+      ok: (sksTempSweep as any).ok !== false,
+      skipped: (sksTempSweep as any).skipped === true,
+      action_count: Array.isArray((sksTempSweep as any).actions) ? (sksTempSweep as any).actions.length : 0,
+      reason: (sksTempSweep as any).reason || null,
+      error: (sksTempSweep as any).error || null
+    },
     imagegen: {
       ok: (imagegen as any).auth_readiness?.available_paths?.length > 0,
       auth_readiness: (imagegen as any).auth_readiness || null,
@@ -737,7 +783,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     ready,
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup }
+    skills: skillsReconcile,
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
   };
   if (reportFile) await writeJsonReportFile(reportFile, result);
   if (machineOnly && !flag(args, '--json')) {
@@ -750,6 +797,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     return;
   }
   console.log('SKS Doctor');
+  for (const warning of argWarnings) console.log(`Argument warning: ${warning}`);
   console.log(`Root:      ${root}`);
   console.log(`Node:      ${result.node.ok ? 'ok' : 'fail'} ${result.node.version}`);
   console.log(`Codex:     ${codex.bin ? 'ok' : 'missing'} ${codex.version || ''}`);
@@ -995,12 +1043,44 @@ function fallbackCodexNativeFeatureMatrix(codex: any, blockers: string[] = [], w
 
 type DoctorProfile = 'fast' | 'fix' | 'migration' | 'full' | 'capabilities';
 
-function doctorProfileFromArgs(args: any[] = [], doctorFix = false): DoctorProfile {
+export function doctorProfileFromArgs(args: any[] = [], doctorFix = false): DoctorProfile {
   const explicit = readOption(args, '--profile', null);
   if (explicit === 'migration' || explicit === 'full' || explicit === 'capabilities' || explicit === 'fast' || explicit === 'fix') return explicit;
   if (flag(args, '--full')) return 'full';
   if (flag(args, '--capabilities')) return 'capabilities';
   return doctorFix ? 'fix' : 'fast';
+}
+
+export function doctorArgWarnings(args: any[] = []): string[] {
+  const warnings: string[] = [];
+  const explicit = readOption(args, '--profile', null);
+  if (explicit && !['migration', 'full', 'capabilities', 'fast', 'fix'].includes(String(explicit))) {
+    warnings.push(`unknown_profile:${explicit}; supported profiles: migration, full, capabilities, fast, fix`);
+  }
+  for (const flag of unknownDoctorFlags(args)) warnings.push(`unknown_flag:${flag}`);
+  return warnings;
+}
+
+function unknownDoctorFlags(args: any[] = []): string[] {
+  const knownBoolean = new Set([
+    '--fix', '--yes', '-y', '--machine-only', '--actual-codex', '--require-actual-codex',
+    '--full', '--capabilities', '--repair-codex-app-ui', '--repair-zellij', '--install-homebrew',
+    '--repair-native-capabilities', '--repair-codex-native', '--local-only', '--project', '--global',
+    '--dry-run', '--json'
+  ]);
+  const knownValue = new Set(['--profile', '--report-file', '--codex-bin', '--install-scope']);
+  const unknown: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] || '');
+    if (!arg.startsWith('-')) continue;
+    if (knownValue.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (knownBoolean.has(arg)) continue;
+    unknown.push(arg);
+  }
+  return unknown;
 }
 
 function doctorPhaseIdsForProfile(profile: DoctorProfile): string[] {

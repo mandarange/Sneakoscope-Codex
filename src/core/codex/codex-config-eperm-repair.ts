@@ -1,9 +1,10 @@
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { nowIso, readText, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { nowIso, readText, runProcess, writeJsonAtomic } from '../fsx.js'
 import { inspectCodexConfigReadability } from './codex-config-readability.js'
 import { repairCodexConfigStructure, splitCodexProjectConfigPolicy } from './codex-project-config-policy.js'
+import { writeCodexConfigGuarded } from './codex-config-guard.js'
 
 export const CODEX_CONFIG_EPERM_REPAIR_SCHEMA = 'sks.codex-config-eperm-repair.v1'
 
@@ -84,7 +85,12 @@ async function replaceUnsafeSymlink(configPath: string) {
     const target = await fsp.readlink(configPath)
     const text = await readText(configPath, 'sandbox_mode = "workspace-write"\n')
     await fsp.rename(configPath, backup)
-    await writeTextAtomic(configPath, text || 'sandbox_mode = "workspace-write"\n')
+    await writeCodexConfigGuarded({
+      configPath,
+      before: text,
+      cause: 'codex-config-eperm-symlink-repair',
+      mutate: () => text || 'sandbox_mode = "workspace-write"\n'
+    })
     return { name: 'replace_unsafe_config_symlink', ok: true, backup_path: backup, symlink_target: target }
   } catch (err: any) {
     return { name: 'replace_unsafe_config_symlink', ok: false, error: err?.message || String(err), backup_path: backup }

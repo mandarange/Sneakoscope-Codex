@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { appendJsonl, readJson, writeJsonAtomic } from '../fsx.js'
+import { appendJsonl, appendJsonlMany, readJson, writeJsonAtomic } from '../fsx.js'
 import { AGENT_PATCH_QUEUE_SCHEMA, InMemoryAgentPatchQueue, buildAgentPatchOwnershipLedger, type AgentPatchQueueEntry, type AgentPatchQueueEvent } from './agent-patch-queue.js'
 import { AgentPatchTransactionJournal } from './agent-patch-transaction-journal.js'
 
@@ -36,6 +36,15 @@ export class PersistentAgentPatchQueueStore {
 
   async markApplying(id: string): Promise<void> {
     await this.transition(id, () => this.queue.markApplying(id))
+  }
+
+  async markApplyingBatch(ids: readonly string[]): Promise<void> {
+    const uniqueIds = [...new Set(ids.map(String).filter(Boolean))]
+    if (!uniqueIds.length) return
+    const beforeEventCount = this.queue.events.length
+    this.queue.markApplyingBatch(uniqueIds)
+    await this.persistSnapshot()
+    await this.appendEvents(this.queue.events.slice(beforeEventCount))
   }
 
   async markApplied(id: string): Promise<void> {
@@ -76,7 +85,7 @@ export class PersistentAgentPatchQueueStore {
     const beforeEventCount = this.queue.events.length
     mutate()
     await this.persistSnapshot()
-    for (const event of this.queue.events.slice(beforeEventCount)) await this.appendEvent(event)
+    await this.appendEvents(this.queue.events.slice(beforeEventCount))
     const entry = this.queue.entries.find((item) => item.id === id)
     if (entry && ['verified', 'conflicted', 'rolled_back', 'rejected'].includes(entry.status)) {
       await this.journal.append({
@@ -94,5 +103,9 @@ export class PersistentAgentPatchQueueStore {
   private async appendEvent(event: AgentPatchQueueEvent | undefined): Promise<void> {
     if (!event) return
     await appendJsonl(path.join(this.artifactDir, AGENT_PATCH_QUEUE_EVENTS_ARTIFACT), event)
+  }
+
+  private async appendEvents(events: readonly AgentPatchQueueEvent[]): Promise<void> {
+    await appendJsonlMany(path.join(this.artifactDir, AGENT_PATCH_QUEUE_EVENTS_ARTIFACT), events.filter(Boolean))
   }
 }

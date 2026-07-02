@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { projectRoot, readJson, readText, writeJsonAtomic, appendJsonl, readStdin, nowIso, runProcess, sha256, packageRoot, tmpdir, type JsonData } from './fsx.js';
 import { looksInteractiveCommand, interactiveCommandReason } from './no-question-guard.js';
-import { missionDir, setCurrent, stateFile } from './mission.js';
+import { loadStateForSession, missionDir, setCurrent } from './mission.js';
 import { checkDbOperation, dbBlockReason, handleMadSksUserConfirmation } from './db-safety.js';
 import { maybeRecordMadDbToolResultFromToolUse } from './mad-db/mad-db-result-lifecycle.js';
 import { checkHarnessModification, harnessGuardBlockReason, isHarnessSourceProject } from './harness-guard.js';
@@ -16,6 +16,8 @@ import { leanEngineeringCompactText } from './lean-engineering-policy.js';
 import { appendMissionStatus } from './recallpulse.js';
 import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
+import { diagnosticPromptAllowedDuringNoQuestions } from './routes/diagnostic-allowlist.js';
+import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reconcile-preflight.js';
 import {
   buildCompactContinue,
   buildPermissionRequestAllow,
@@ -54,8 +56,8 @@ async function loadHookPayload() {
   try { return raw.trim() ? JSON.parse(raw) : {}; } catch { return { raw }; }
 }
 
-async function loadState(root: any) {
-  return readJson(stateFile(root), {});
+async function loadState(root: any, payload: any = {}) {
+  return loadStateForSession(root, conversationId(payload));
 }
 
 function isNoQuestionRunning(state: any) {
@@ -80,6 +82,10 @@ function extractUserPrompt(payload: any) {
 
 function conversationId(payload: any) {
   return String(payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || payload.cwd || 'default');
+}
+
+function explicitConversationId(payload: any = {}) {
+  return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
 }
 
 function extractCommand(payload: any) {
@@ -190,22 +196,34 @@ export async function hookMain(name: any): Promise<JsonData> {
 
 export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
   const root = opts.root || await projectRoot(payload.cwd || process.cwd());
-  const state = opts.state || payload.state || await loadState(root);
+  const sessionKey = conversationId(payload);
+  if (!explicitConversationId(payload)) {
+    await appendJsonl(path.join(root, '.sneakoscope', 'state', 'session-id-fallback-warning.jsonl'), {
+      ts: nowIso(),
+      warning: 'hook_payload_missing_explicit_session_id',
+      conversation_id: sessionKey,
+      cwd_hash: sha256(String(payload.cwd || root)).slice(0, 12),
+      hook: name
+    }).catch(() => null);
+  }
+  const loadedState = opts.state || payload.state || await loadState(root, payload);
+  const state = { ...loadedState, _session_key: loadedState?._session_key || sessionKey };
   const noQuestion = isNoQuestionRunning(state);
   if (name === 'user-prompt-submit') {
     const modelBlock = blockForbiddenClientModel(payload);
     if (modelBlock) return modelBlock;
-    return hookUserPrompt(root, state, payload, noQuestion);
+    return hookUserPrompt(root, state, payload, noQuestion, sessionKey);
   }
-  if (name === 'pre-tool') return hookPreTool(root, state, payload, noQuestion);
-  if (name === 'post-tool') return hookPostTool(root, state, payload, noQuestion);
-  if (name === 'permission-request') return hookPermission(root, state, payload, noQuestion);
-  if (name === 'stop') return hookStop(root, state, payload, noQuestion);
-  if (name === 'subagent-start') return hookSubagentStart(root, state);
+  if (name === 'pre-tool') return hookPreTool(root, state, payload, noQuestion, sessionKey);
+  if (name === 'post-tool') return hookPostTool(root, state, payload, noQuestion, sessionKey);
+  if (name === 'permission-request') return hookPermission(root, state, payload, noQuestion, sessionKey);
+  if (name === 'stop') return hookStop(root, state, payload, noQuestion, sessionKey);
+  if (name === 'subagent-start') return hookSubagentStart(root, state, sessionKey);
   return { continue: true };
 }
 
-async function hookSubagentStart(root: any, state: any) {
+async function hookSubagentStart(root: any, state: any, sessionKey: any = null) {
+  void sessionKey;
   const active = await activeRouteContext(root, state).catch(() => '');
   const additionalContext = [leanEngineeringCompactText(), active].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext };
@@ -275,7 +293,7 @@ function clientModelCandidates(value: any, depth: any = 0) {
   return out;
 }
 
-async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any) {
+async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   if (looksLikeCodexGitAction(payload)) {
     await armCodexGitActionStopBypass(root, payload).catch(() => null);
     return {
@@ -289,6 +307,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       systemMessage: 'SKS: Codex App settings/profile event ignored; route gates unchanged.'
     };
   }
+  await maybeReconcileProjectSkillsPreflight(root).catch(() => null);
   if (!noQuestion) {
     const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
     const madSksConfirmation = await handleMadSksUserConfirmation(root, state, prompt);
@@ -321,14 +340,22 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
     }
     const teamDigest = (bypassActiveRoute || command || prepareFreshRoute) ? null : await teamLiveDigest(root, state);
-    const activeContext = await activeRouteContext(root, state);
+    const shouldLoadActiveContext = !command && !bypassActiveRoute && !goalOverlay && !prepareFreshRoute;
+    const activeContext = shouldLoadActiveContext ? await activeRouteContext(root, state) : '';
     const contexts = [updateContext];
-    if (activeContext && !command && !bypassActiveRoute && !goalOverlay && !prepareFreshRoute) contexts.push(routePipelineContext(prompt), activeContext);
-    else contexts.push((await prepareRoute(root, prompt, state)).additionalContext);
+    if (activeContext && shouldLoadActiveContext) contexts.push(routePipelineContext(prompt), activeContext);
+    else contexts.push((await prepareRoute(root, prompt, state, { sessionKey })).additionalContext);
     if (goalOverlay) contexts.push(goalOverlay);
     if (teamDigest?.context) contexts.push(teamDigest.context);
     const additionalContext = contexts.filter(Boolean).join('\n\n');
     return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+  }
+  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  if (diagnosticPromptAllowedDuringNoQuestions(prompt)) {
+    return {
+      continue: true,
+      systemMessage: 'SKS: diagnostic command allowed during no-question mode by command registry contract.'
+    };
   }
   const id = state.mission_id;
   if (id) await appendJsonl(path.join(missionDir(root, id), 'user_queue.jsonl'), { ts: nowIso(), payload });
@@ -386,18 +413,21 @@ function activeGoalOverlayContext(state: any = {}, route: any = null) {
   ].join('\n');
 }
 
-async function hookPreTool(root: any, state: any, payload: any, noQuestion: any) {
-  const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
-  if (madSksImmutableDecision.action === 'block') {
-    return { decision: 'block', permissionDecision: 'deny', reason: madSksImmutableBlockReason(madSksImmutableDecision) };
-  }
-  const harnessDecision = await checkHarnessModification(root, payload, { phase: 'pre-tool' });
-  if (harnessDecision.action === 'block') {
-    return { decision: 'block', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
-  }
-  const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
-  if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
-    return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
+async function hookPreTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+  void sessionKey;
+  if (needsMutationSafetyCheck(payload)) {
+    const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
+    if (madSksImmutableDecision.action === 'block') {
+      return { decision: 'block', permissionDecision: 'deny', reason: madSksImmutableBlockReason(madSksImmutableDecision) };
+    }
+    const harnessDecision = await checkHarnessModification(root, payload, { phase: 'pre-tool' });
+    if (harnessDecision.action === 'block') {
+      return { decision: 'block', permissionDecision: 'deny', reason: harnessGuardBlockReason(harnessDecision) };
+    }
+    const dbDecision = await checkDbOperation(root, state, payload, { duringNoQuestion: noQuestion });
+    if (dbDecision.action === 'block' || dbDecision.action === 'confirm') {
+      return { decision: 'block', permissionDecision: 'deny', reason: dbBlockReason(dbDecision) };
+    }
   }
   if (clarificationGateLocked(state) && !clarificationAnswerToolAllowed(payload)) {
     return { decision: 'block', permissionDecision: 'deny', reason: clarificationPauseBlockReason(state) };
@@ -435,11 +465,14 @@ function agentWorkerHookContext(state: any = {}, payload: any = {}) {
     || payload.agentWorker === true);
 }
 
-async function hookPostTool(root: any, state: any, payload: any, noQuestion: any) {
-  await recordMadDbPostToolLifecycle(root, state, payload).catch(() => null);
-  await recordContext7Evidence(root, state, payload).catch(() => null);
-  await recordSubagentEvidence(root, state, payload).catch(() => null);
-  if (toolFailed(payload)) await recordToolErrorTaxonomy(root, state, payload).catch(() => null);
+async function hookPostTool(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+  state = { ...state, _session_key: state?._session_key || sessionKey };
+  await Promise.all([
+    recordMadDbPostToolLifecycle(root, state, payload).catch(() => null),
+    recordContext7Evidence(root, state, payload).catch(() => null),
+    recordSubagentEvidence(root, state, payload).catch(() => null),
+    toolFailed(payload) ? recordToolErrorTaxonomy(root, state, payload).catch(() => null) : Promise.resolve(null)
+  ]);
   const teamDigest = await teamLiveDigest(root, state);
   if (!noQuestion) {
     return teamDigest?.context
@@ -458,6 +491,15 @@ async function hookPostTool(root: any, state: any, payload: any, noQuestion: any
   return teamDigest?.context
     ? { continue: true, additionalContext: teamDigest.context, systemMessage: joinSystemMessages(visibleHookMessage('post-tool'), teamDigest.system) }
     : { continue: true };
+}
+
+function needsMutationSafetyCheck(payload: any = {}) {
+  const toolName = String(payload.tool_name || payload.toolName || payload.name || payload.tool?.name || '');
+  const knownReadOnly = /^(Read|Grep|Glob|LS|TodoRead|WebFetch|WebSearch|BashOutput|NotebookRead|ListMcpResources|ReadMcpResource)$/i;
+  if (knownReadOnly.test(toolName)) return /\b(sql|supabase|db|migration)\b/i.test(JSON.stringify(payload || {}));
+  if (/^(Edit|Write|MultiEdit|NotebookEdit|Bash|Shell|ApplyPatch)$/i.test(toolName)) return true;
+  if (/\b(sql|supabase|db|migration)\b/i.test(toolName)) return true;
+  return true;
 }
 
 async function recordMadDbPostToolLifecycle(root: any, state: any = {}, payload: any = {}) {
@@ -513,7 +555,8 @@ async function recordToolErrorTaxonomy(root: any, state: any = {}, payload: any 
   return record;
 }
 
-async function hookPermission(root: any, state: any, payload: any, noQuestion: any) {
+async function hookPermission(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
+  void sessionKey;
   const madSksImmutableDecision = await checkMadSksImmutableModification(root, state, payload);
   if (madSksImmutableDecision.action === 'block') {
     return { decision: 'deny', permissionDecision: 'deny', reason: madSksImmutableBlockReason(madSksImmutableDecision) };
@@ -612,7 +655,7 @@ function clarificationPauseBlockReason(state: any = {}) {
   return `SKS ${route} ambiguity gate is paused and waiting for explicit user answers. Do not run implementation, tests, route materialization, or unrelated tools yet. The only allowed action is sealing the user's reply with "sks pipeline answer ${id} --stdin"; elapsed time or repeated hook resumes never count as answers.`;
 }
 
-async function hookStop(root: any, state: any, payload: any, noQuestion: any) {
+async function hookStop(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   const last = extractLastMessage(payload);
   if (state?.mode === 'LOOP' || state?.route === 'Loop' || state?.route_command === '$Loop') {
     const missionId = state?.mission_id;
@@ -665,13 +708,13 @@ async function hookStop(root: any, state: any, payload: any, noQuestion: any) {
       };
     }
     if (shouldLoopBackAfterHonestMode(state) && hasHonestModeUnresolvedGap(last)) {
-      const loopback = await recordHonestModeLoopback(root, state, last);
+      const loopback = await recordHonestModeLoopback(root, state, last, sessionKey);
       return {
         decision: 'block',
         reason: `${localizedFinalizationReason('honest_loopback', languageBasis)} Loopback: ${loopback.relative_file}`
       };
     }
-    if (state?.honest_loop_required) await resolveHonestModeLoopback(root, state);
+    if (state?.honest_loop_required) await resolveHonestModeLoopback(root, state, sessionKey);
     return { continue: true };
   }
   return {
@@ -689,7 +732,7 @@ async function consumeLightRouteStop(root: any, payload: any = {}) {
   const expiresMs = Date.parse(record.expires_at || '');
   if (!Number.isFinite(expiresMs) || expiresMs < nowMs) return false;
   const currentConversation = conversationId(payload);
-  if (record.conversation_id && explicitConversationId(payload) && record.conversation_id !== currentConversation) return false;
+  if (record.conversation_id && record.conversation_id !== currentConversation) return false;
   await writeJsonAtomic(file, {
     ...record,
     pending_stop_bypass: false,
@@ -707,10 +750,6 @@ function hasDfixLightCompletion(text: any) {
   const verification = /(검증|확인|통과|verified|verification|checked|evidence|근거)/i.test(s);
   const gap = /(미검증|남은|문제|gap|remaining|not verified|not run|blocker|차단|불가|없음|none)/i.test(s);
   return verification && gap;
-}
-
-function explicitConversationId(payload: any = {}) {
-  return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
 }
 
 function looksLikeCodexGitAction(payload: any = {}) {
@@ -817,7 +856,7 @@ async function consumeCodexGitActionStopBypass(root: any, payload: any = {}) {
   const expiresMs = Date.parse(record.expires_at || '');
   if (!Number.isFinite(expiresMs) || expiresMs < Date.now()) return false;
   const currentConversation = conversationId(payload);
-  if (record.conversation_id && explicitConversationId(payload) && record.conversation_id !== currentConversation) return false;
+  if (record.conversation_id && record.conversation_id !== currentConversation) return false;
   await writeJsonAtomic(file, {
     ...record,
     pending_stop_bypass: false,
@@ -958,7 +997,7 @@ function shouldLoopBackAfterHonestMode(state: any = {}) {
   return Boolean(state.ambiguity_gate_passed || state.clarification_passed || /CONTRACT_SEALED|HONEST_LOOPBACK/i.test(String(state.phase || '')));
 }
 
-async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage: any = '') {
+async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage: any = '', sessionKey: any = null) {
   const id = state.mission_id;
   const dir = missionDir(root, id);
   const previousPhase = state.phase || null;
@@ -986,11 +1025,11 @@ async function recordHonestModeLoopback(root: any, state: any = {}, lastMessage:
     questions_allowed: false,
     ambiguity_gate_required: true,
     ambiguity_gate_passed: true
-  });
+  }, { sessionKey: sessionKey || state._session_key });
   return { file, relative_file: path.relative(root, file).split(path.sep).join('/') };
 }
 
-async function resolveHonestModeLoopback(root: any, state: any = {}) {
+async function resolveHonestModeLoopback(root: any, state: any = {}, sessionKey: any = null) {
   const id = state.mission_id;
   const mode = String(state.mode || state.route || 'SKS').toUpperCase();
   if (id) await appendJsonl(path.join(missionDir(root, id), 'events.jsonl'), { ts: nowIso(), type: 'pipeline.honest_mode.loopback_resolved', previous_phase: state.phase || null });
@@ -999,7 +1038,7 @@ async function resolveHonestModeLoopback(root: any, state: any = {}) {
     honest_loop_required: false,
     honest_loop_resolved_at: nowIso(),
     questions_allowed: true
-  });
+  }, { sessionKey: sessionKey || state._session_key });
 }
 
 export async function emitHook(name: any) {

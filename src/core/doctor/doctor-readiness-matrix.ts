@@ -3,6 +3,7 @@ import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { resolveLocalCollaborationPolicy } from '../local-llm/local-collaboration-policy.js'
 
 export const DOCTOR_READINESS_MATRIX_SCHEMA = 'sks.doctor-readiness-matrix.v2'
+const OPTIONAL_ROUTE_SCOPES = new Set(['route-computer-use', 'route-chrome-web-review', 'route-app-handoff', 'route-app-screenshot'])
 
 export async function writeDoctorReadinessMatrix(root: string, input: any = {}) {
   const matrix = buildDoctorReadinessMatrix(input)
@@ -78,12 +79,23 @@ export function buildDoctorReadinessMatrix(input: any = {}) {
     ? codexBinOk
     : input.local_collaboration.gpt_final_arbiter_available === true
   if (localCollaborationPolicy.gpt_final_required && !gptFinalAvailable) blockers.add('gpt_final_arbiter_unavailable')
+  const routeBlockers = input.doctor_native_capability?.route_blockers || input.doctor_native_capability?.native_capabilities?.route_blockers || {}
+  for (const [scope, list] of Object.entries(routeBlockers)) {
+    for (const blocker of Array.isArray(list) ? list : []) {
+      const value = `route:${scope}:${String(blocker)}`
+      if (OPTIONAL_ROUTE_SCOPES.has(String(scope))) warnings.add(value)
+      else blockers.add(value)
+    }
+  }
 
   const codexConfigNode = nodeRead.ok !== false && codexConfig.ok !== false
   const codexConfigChild = childRead.ok !== false && codexConfig.ok !== false
   const cliReady = codexBinOk && codexConfigNode && codexConfigChild && cliConfigOk
   const madReady = cliReady && zellijReadyForInteractive
   const nextActions = normalizeList(input.operator_actions || codexConfig.operator_actions)
+  for (const [scope, list] of Object.entries(routeBlockers)) {
+    for (const blocker of Array.isArray(list) ? list : []) nextActions.push(nextActionForRouteBlocker(String(scope), String(blocker)))
+  }
   if (!nextActions.length && blockers.size) nextActions.push(...nextActionsForBlockers([...blockers]))
   if (input.codex_app_ui?.requires_confirmation === true) nextActions.push(input.codex_app_ui.next_action || 'Run `sks doctor --fix --repair-codex-app-ui` after reviewing the repair plan.')
   if (!zellijReadyForInteractive) nextActions.push('Install Zellij for `sks --mad` and interactive lane UI. On macOS: `brew install zellij`.')
@@ -205,10 +217,11 @@ function buildRepairReadiness(input: any = {}) {
     phases.push({
       id: 'doctor_fix_postcheck',
       ok: input.doctor_fix_postcheck.ok === true,
-      required_for_core_ready: true,
-      manual_required: false,
+      required_for_core_ready: false,
+      manual_required: input.doctor_fix_postcheck.manual_required === true || normalizeList(input.doctor_fix_postcheck.pending_manual).length > 0,
       blockers: normalizeList(input.doctor_fix_postcheck.required_blockers || input.doctor_fix_postcheck.blockers),
       warnings: [
+        ...normalizeList(input.doctor_fix_postcheck.required_blockers || input.doctor_fix_postcheck.blockers).map((blocker) => `postcheck_pending:${blocker}`),
         ...normalizeList(input.doctor_fix_postcheck.optional_warnings),
         ...normalizeList(input.doctor_fix_postcheck.warnings)
       ]
@@ -258,4 +271,11 @@ function nextActionsForBlockers(blockers: string[]) {
     if (blocker.includes('agent_role')) return 'Run `sks doctor --fix --yes` to refresh SKS-managed agent roles.'
     return `Resolve blocker: ${blocker}`
   })
+}
+
+function nextActionForRouteBlocker(scope: string, blocker: string) {
+  if (scope === 'route-image') return `Repair image route capability (${blocker}): run \`sks doctor --fix --full --yes\`, then verify Codex App/image auth.`
+  if (scope === 'route-computer-use') return `Computer Use route needs manual readiness (${blocker}); verify OS/App permissions before using that route.`
+  if (scope === 'route-chrome-web-review') return `Chrome/web review route needs manual readiness (${blocker}); enable the Codex Chrome Extension before using signed-in browser review.`
+  return `Resolve ${scope} route blocker: ${blocker}`
 }

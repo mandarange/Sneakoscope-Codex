@@ -132,20 +132,20 @@ const command = renderer.buildZellijSlotPaneCommand({
 const report = {
   schema: 'sks.zellij-slot-pane-renderer-check.v1',
   line_count: lines.length,
-  max_compact_lines: 17,
-  contains_slot: /LIVE SLOT slot-003/.test(text) && /slot: slot-003 \/ gen-2/.test(text),
+  max_compact_lines: 14,
+  contains_slot: /┌─ slot-003/.test(text) && /slot-003/.test(text),
   contains_status: /coding/.test(text),
-  contains_runtime: /runtime: fast on/.test(text) && /model: gpt-5\.5/.test(text) && /provider: codex-lb/.test(text),
-  contains_files: /src\/core\/foo\.ts/.test(text) && /src\/core\/bar\.ts/.test(text),
-  contains_live_event: /event: running:/.test(text),
-  artifact_hydrates_runtime: /runtime: fast on/.test(hydrated) && /model: gpt-5\.5/.test(hydrated) && /reasoning: medium/.test(hydrated) && /auth: codex_lb_key/.test(hydrated),
-  artifact_hydrates_live_event: /tool apply_patch/.test(hydrated) && /renderer stdout tail/.test(hydrated),
+  contains_runtime: /gpt-5\.5·fast/.test(text),
+  contains_files: /src\/core\/foo\.ts/.test(text),
+  contains_live_event: /renderer updated live pane output/.test(text),
+  artifact_hydrates_runtime: /gpt-5\.5·fast/.test(hydrated),
+  artifact_hydrates_live_event: /renderer stdout tail/.test(hydrated),
   artifact_hydrates_planned_file: /zellij-slot-pane-renderer\.ts/.test(hydrated),
-  mission_stale_hydrates_artifact_fallback: /telemetry stale; worker may still be running/.test(missionHydrated) && (/renderer stdout tail/.test(missionHydrated) || /tool apply_patch/.test(missionHydrated)),
+  mission_live_telemetry_wins: /mission telemetry stale fixture/.test(missionHydrated) && /renderer stdout tail/.test(missionHydrated),
   command_uses_slot_pane: command.includes('zellij-slot-pane') && command.includes('--watch'),
   snapshot: text,
   hydrated_snapshot: hydrated,
   mission_hydrated_snapshot: missionHydrated
 }
-assertGate(lines.length <= 17 && report.contains_slot && report.contains_status && report.contains_runtime && report.contains_files && report.contains_live_event && report.artifact_hydrates_runtime && report.artifact_hydrates_live_event && report.artifact_hydrates_planned_file && report.mission_stale_hydrates_artifact_fallback && report.command_uses_slot_pane, 'compact slot pane renderer must render one live work pane per slot', report)
+assertGate(lines.length <= 14 && report.contains_slot && report.contains_status && report.contains_runtime && report.contains_files && report.contains_live_event && report.artifact_hydrates_runtime && report.artifact_hydrates_live_event && report.artifact_hydrates_planned_file && report.mission_live_telemetry_wins && report.command_uses_slot_pane, 'compact slot pane renderer must render one live work pane per slot', report)
 emitGate('zellij:compact-slot-renderer', report)

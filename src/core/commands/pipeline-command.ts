@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { projectRoot, readJson } from '../fsx.js';
-import { missionDir, stateFile } from '../mission.js';
+import { listSessionStates, missionDir, stateFile } from '../mission.js';
 import { PIPELINE_PLAN_ARTIFACT, projectGateStatus, writePipelinePlan } from '../pipeline.js';
 import { routePrompt } from '../routes.js';
 import { flag, positionalArgs, readFlagValue, resolveMissionId } from './command-utils.js';
@@ -9,10 +9,12 @@ export async function pipelineCommand(args: any = []) {
   const root = await projectRoot();
   const action = args[0] || 'status';
   const state = await readJson(stateFile(root), {});
+  const sessions = await listSessionStates(root);
   if (action === 'status') {
-    const result = { schema: 'sks.pipeline-status.v1', ok: true, state };
+    const result = { schema: 'sks.pipeline-status.v1', ok: true, state, sessions: sessions.map(sessionStatusRow) };
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log(`Pipeline: ${state.mission_id || 'none'} ${state.route_command || state.mode || ''}`.trim());
+    printSessionTable(sessions);
     return;
   }
   if (action === 'plan') {
@@ -50,6 +52,24 @@ export async function pipelineCommand(args: any = []) {
   }
   console.error('Usage: sks pipeline status|plan [--json]');
   process.exitCode = 1;
+}
+
+function sessionStatusRow(row: any) {
+  return {
+    session_key: row.session_key,
+    mission_id: row.mission_id,
+    route: row.state?.route_command || row.state?.route || row.state?.mode || null,
+    phase: row.phase,
+    updated_at: row.updated_at
+  };
+}
+
+function printSessionTable(sessions: any[] = []) {
+  if (!sessions.length) return;
+  console.log('Sessions:');
+  for (const row of sessions.slice(0, 12).map(sessionStatusRow)) {
+    console.log(`  ${row.session_key}  ${row.mission_id || 'none'}  ${row.route || '-'}  ${row.phase || '-'}`);
+  }
 }
 
 function hasAgentPlanFlags(args: any = []) {

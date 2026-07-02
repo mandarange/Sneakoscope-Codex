@@ -18,9 +18,14 @@ export interface FinalStopGateInput {
   readonly nativeGateFile?: string;
   readonly preserveNativeGate?: boolean;
   readonly nativeGatePatch?: Record<string, unknown>;
+  readonly sessionKey?: string | null;
 }
 
 export async function writeFinalStopGate(input: FinalStopGateInput): Promise<SksStopGateV1> {
+  return writeGateOwned(input);
+}
+
+export async function writeGateOwned(input: FinalStopGateInput): Promise<SksStopGateV1> {
   const dir = missionDir(input.root, input.missionId);
   await ensureDir(dir);
 
@@ -34,6 +39,13 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
   const canonicalGatePath = path.join(dir, 'stop-gate.json');
   const latestGatePath = path.join(dir, 'stop-gate.latest.json');
   const verifyPath = path.join(dir, 'stop-gate-write-verify.json');
+  const gateOwner = {
+    mission_id: input.missionId,
+    route: input.route,
+    route_command: input.routeCommand,
+    writer_pid: process.pid,
+    written_at: nowIso()
+  };
 
   const gate: SksStopGateV1 = {
     schema: 'sks.stop-gate.v1',
@@ -49,6 +61,7 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
     evidence: input.evidence,
     blockers,
     missing_fields: missingFields,
+    gate_owner: gateOwner,
     created_at: nowIso(),
   };
 
@@ -72,6 +85,7 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
       },
       blockers,
       missing_fields: missingFields,
+      gate_owner: gateOwner,
       updated_at: nowIso()
     });
   } else {
@@ -87,6 +101,7 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
       evidence: input.evidence,
       blockers,
       missing_fields: missingFields,
+      gate_owner: gateOwner,
       updated_at: nowIso(),
       ...(input.nativeGatePatch ?? {})
     });
@@ -106,10 +121,12 @@ export async function writeFinalStopGate(input: FinalStopGateInput): Promise<Sks
     stop_gate_abs_path: canonicalGatePath,
     stop_gate_status: status,
     stop_gate_passed: passed,
+    gate_owner_mission_id: input.missionId,
+    gate_owner_route: input.route,
     route_evidence_passed: input.evidence.route_evidence_passed ?? passed,
     terminal: gate.terminal,
     terminal_state: gate.terminal_state,
-  });
+  }, { sessionKey: input.sessionKey || undefined });
 
   // 5. Re-read and verify
   const verifyResult: Record<string, unknown> = {

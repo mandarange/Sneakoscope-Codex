@@ -328,10 +328,11 @@ function startWorkerProgressTelemetry(input: {
       progress: null
     }, 2 * 1024 * 1024).catch(() => undefined)
     workerTelemetry(input.agentRoot, input.intake, input.agent, input.slice, {
-      eventType: 'heartbeat',
+      eventType: 'task_progress',
       status: 'running',
       backend: input.backend,
       serviceTier: input.serviceTier,
+      progress: { done: tick, total: 0, label: 'heartbeat' },
       artifacts: [input.heartbeatRel],
       logTail: `backend running ${tick}`
     }).catch(() => undefined)

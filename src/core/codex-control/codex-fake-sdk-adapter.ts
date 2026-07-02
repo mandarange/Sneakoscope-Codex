@@ -11,16 +11,18 @@ export function fakeCodexSdkAllowed() {
 export async function runFakeCodexSdkTask(input: CodexTaskInput) {
   const threadId = `sdk_fake_thread_${randomId(10)}`
   const runId = `sdk_fake_run_${randomId(10)}`
+  const sessionId = input.sessionId || `sks-${randomId(12)}`
   const events = [
-    { type: 'thread.started', thread_id: threadId },
-    { type: 'turn.started' },
-    { type: 'item.completed', item: { id: 'item_fake_1', type: 'agent_message', text: JSON.stringify(fakeStructuredOutput(input)) } },
-    { type: 'turn.completed', usage: { input_tokens: 0, cached_input_tokens: 0, output_tokens: 0, reasoning_output_tokens: 0 } }
+    { type: 'thread.started', thread_id: threadId, session_id: sessionId },
+    { type: 'turn.started', session_id: sessionId },
+    { type: 'item.completed', session_id: sessionId, item: { id: 'item_fake_1', type: 'agent_message', text: JSON.stringify(fakeStructuredOutput(input)) } },
+    { type: 'turn.completed', session_id: sessionId, usage: { input_tokens: 0, cached_input_tokens: 0, output_tokens: 0, reasoning_output_tokens: 0 } }
   ]
   return {
     ok: true,
     sdkThreadId: threadId,
     sdkRunId: runId,
+    sessionId,
     events,
     finalResponse: JSON.stringify(fakeStructuredOutput(input)),
     structuredOutput: fakeStructuredOutput(input),

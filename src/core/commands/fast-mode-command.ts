@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { flag } from '../../cli/args.js'
 import { printJson } from '../../cli/output.js'
-import { projectRoot } from '../fsx.js'
+import { projectRoot, readText } from '../fsx.js'
 import {
   clearFastModePreference,
   fastModePreferencePath,
@@ -10,7 +10,7 @@ import {
   writeFastModePreference,
   type FastModePreferenceMode
 } from '../agents/fast-mode-policy.js'
-import { ensureGlobalCodexFastModeDuringInstall } from '../../cli/install-helpers.js'
+import { codexFastModeDesktopStatus, codexLbConfigPath, ensureGlobalCodexFastModeDuringInstall } from '../../cli/install-helpers.js'
 
 export const FAST_MODE_COMMAND_SCHEMA = 'sks.fast-mode-command.v1'
 
@@ -18,12 +18,20 @@ export async function fastModeCommand(args: string[] = []) {
   const action = normalizeFastModeAction(args[0])
   const root = path.resolve(String(readOption(args, '--root', '') || await projectRoot()))
   const statePath = fastModePreferencePath(root)
+  const projectOnly = flag(args, '--project')
   let preference = await readFastModePreference(root)
   let removed: boolean | null = null
+  let codexFastModeRepair: any = null
 
   if (action === 'on' || action === 'off') {
     const mode: FastModePreferenceMode = action === 'on' ? 'fast' : 'standard'
     preference = await writeFastModePreference(root, mode, `sks fast-mode ${action}`)
+    if (!projectOnly) {
+      codexFastModeRepair = await ensureGlobalCodexFastModeDuringInstall({
+        forceFastMode: action === 'on',
+        forceFastModeOff: action === 'off'
+      })
+    }
   } else if (action === 'clear') {
     const result = await clearFastModePreference(root)
     removed = result.removed
@@ -31,20 +39,33 @@ export async function fastModeCommand(args: string[] = []) {
   }
 
   const policy = resolveFastModePolicy({ root })
-  const codexFastModeRepair = action === 'on' || action === 'off'
-    ? await ensureGlobalCodexFastModeDuringInstall({
-      forceFastMode: action === 'on',
-      forceFastModeOff: action === 'off'
-    })
-    : null
+  const globalConfigPath = codexLbConfigPath()
+  const globalText = await readText(globalConfigPath, '')
+  const globalStatus = codexFastModeDesktopStatus(globalText)
+  const globalRequired = (action === 'on' || action === 'off') && !projectOnly
+  const globalApplied = !globalRequired
+    ? false
+    : Boolean(codexFastModeRepair?.ok !== false && globalStatus.ok && (action === 'on' ? globalStatus.on : !globalStatus.on))
+  const ok = globalRequired ? globalApplied : true
+  if (!ok) process.exitCode = 1
   const result = {
     schema: FAST_MODE_COMMAND_SCHEMA,
-    ok: true,
+    ok,
     action,
     root,
     state_path: statePath,
     preference,
     removed,
+    scope: projectOnly ? 'project' : 'global_plus_project',
+    global_applied: globalApplied,
+    global_config_path: globalConfigPath,
+    global: globalStatus,
+    project: {
+      state_path: statePath,
+      preference,
+      fast_mode: policy.fast_mode,
+      service_tier: policy.service_tier
+    },
     fast_mode: policy.fast_mode,
     service_tier: policy.service_tier,
     disabled_by: policy.disabled_by,
@@ -65,12 +86,14 @@ export async function fastModeCommand(args: string[] = []) {
   if (flag(args, '--json')) return printJson(result)
   console.log('SKS Fast Mode')
   console.log(`Root: ${root}`)
-  console.log(`Status: ${result.fast_mode ? 'on' : 'off'} (service_tier=${result.service_tier})`)
-  console.log(`State: ${path.relative(root, statePath)}`)
+  console.log(`Global (desktop): ${globalStatus.on ? 'on' : 'off'} (default_profile=${globalStatus.default_profile || 'none'}, top-level ${globalStatus.top_level_default_profile ? 'OK' : 'none'})`)
+  console.log(`Project (sks workers): ${result.fast_mode ? 'fast' : 'standard'} (service_tier=${result.service_tier})`)
+  console.log(`Project state: ${path.relative(root, statePath)}`)
   if (action === 'on') console.log('Saved: fast mode on')
   else if (action === 'off') console.log('Saved: fast mode off')
   else if (action === 'clear') console.log(`Cleared: ${removed ? 'yes' : 'already default'}`)
   else if (!preference) console.log('Preference: implicit standard')
+  if (globalRequired && !globalApplied) console.log(`Global apply failed: ${codexFastModeRepair?.status || 'unknown'}`)
   console.log('Dollar: $Fast-On | $Fast-Off | $Fast-Mode')
   return result
 }

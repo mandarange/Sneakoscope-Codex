@@ -50,6 +50,7 @@ export interface ZellijSelfHealResult {
   }
   blockers: string[]
   warnings: string[]
+  next_actions?: string[]
 }
 
 export function isZellijSelfHealResult(value: unknown): value is ZellijSelfHealResult {
@@ -95,4 +96,3 @@ export function normalizeZellijSelfHealResult(value: unknown): ZellijSelfHealRes
     warnings: [`normalized_at:${nowIso()}`]
   }
 }
-

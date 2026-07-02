@@ -72,6 +72,10 @@ export class InMemoryAgentPatchQueue {
     this.transition(id, 'applying')
   }
 
+  markApplyingBatch(ids: readonly string[]): void {
+    for (const id of ids) this.transition(id, 'applying')
+  }
+
   markApplied(id: string): void {
     this.transition(id, 'applied')
   }

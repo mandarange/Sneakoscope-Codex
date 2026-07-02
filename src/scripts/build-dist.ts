@@ -12,6 +12,7 @@ const distRoot = path.join(root, 'dist');
 await fsp.mkdir(distRoot, { recursive: true });
 await removeDistMjs(distRoot);
 await copyRuntimeConfigFiles();
+await writeSkillsManifest();
 await removeDistNonRuntimeArtifacts(distRoot);
 await import('./write-build-manifest.js');
 
@@ -48,6 +49,14 @@ async function copyRuntimeConfigFiles() {
     path.join(srcRoot, 'vendor', 'openai-codex'),
     path.join(distRoot, 'vendor', 'openai-codex')
   );
+}
+
+async function writeSkillsManifest() {
+  const { generatePackagedSkillsManifest } = await import('../core/init/skills.js');
+  const manifest = await generatePackagedSkillsManifest();
+  const out = path.join(distRoot, 'config', 'skills-manifest.json');
+  await fsp.mkdir(path.dirname(out), { recursive: true });
+  await fsp.writeFile(out, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
 async function copyDirIfPresent(from, to) {

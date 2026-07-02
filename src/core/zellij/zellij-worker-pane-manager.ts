@@ -20,6 +20,8 @@ export type ZellijWorkerPaneIdSource =
   | 'zellij_worker_pane_stdout_missing'
   | 'zellij_worker_pane_launch_failed'
   | 'zellij_worker_headless_overflow'
+  | 'headless_by_design_viewport_ui'
+  | 'preallocated_layout_pane'
 
 export interface ZellijPaneCreationLockMetrics {
   schema: typeof ZELLIJ_PANE_CREATION_LOCK_METRICS_SCHEMA
@@ -62,6 +64,8 @@ export interface ZellijWorkerPaneOpenInput {
   projectRoot?: string
   rightColumnMode?: 'spawn-on-first-worker' | 'off'
   visiblePaneCap?: number
+  plannedAgentCount?: number
+  preallocatedSlotCount?: number
   dashboardSnapshot?: Record<string, unknown>
   uiMode?: SksZellijUiMode
 }
@@ -227,7 +231,7 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
     schema: ZELLIJ_WORKER_PANE_SCHEMA,
     generated_at: now,
     updated_at: now,
-    ok: blockers.length === 0 && (paneIdSource === 'zellij_worker_headless_overflow' || (isRealZellijWorkerPaneIdSource(paneIdSource) && Boolean(input.paneId))),
+    ok: blockers.length === 0 && (paneIdSource === 'zellij_worker_headless_overflow' || paneIdSource === 'headless_by_design_viewport_ui' || paneIdSource === 'preallocated_layout_pane' || (isRealZellijWorkerPaneIdSource(paneIdSource) && Boolean(input.paneId))),
     status: input.status || 'launching',
     mission_id: input.missionId,
     session_name: input.sessionName,
@@ -279,6 +283,43 @@ export function buildWorkerPaneArtifact(input: Omit<ZellijWorkerPaneOpenInput, '
   }
 }
 
+export async function openHeadlessByDesignViewportWorker(input: ZellijWorkerPaneOpenInput): Promise<ZellijWorkerPaneRecord> {
+  const root = path.resolve(input.root)
+  const providerInput: Parameters<typeof resolveProviderContext>[0] = { root, route: '$Agent' }
+  const serviceTier = input.serviceTier || process.env.SKS_SERVICE_TIER
+  if (serviceTier != null) providerInput.serviceTier = serviceTier
+  const providerContext = input.providerContext || await resolveProviderContext(providerInput)
+  await ensureDir(path.join(root, input.workerArtifactDir))
+  const record = buildWorkerPaneArtifact({
+    ...input,
+    paneId: null,
+    paneIdSource: 'headless_by_design_viewport_ui',
+    createSession: null,
+    launch: null,
+    paneReconciliation: null,
+    directionRequested: 'down',
+    directionApplied: 'not_applied',
+    columnCreationDirectionRequested: null,
+    columnCreationDirectionApplied: 'not_applied',
+    workerDirectionRequested: 'down',
+    workerDirectionApplied: 'not_applied',
+    status: 'running',
+    providerContext,
+    serviceTier: input.serviceTier || providerContext.service_tier,
+    paneKind: 'slot_status_renderer',
+    scalingPrimitive: 'native_cli_process_headless_with_slot_dashboard',
+    workerCommand: '<headless-by-design-viewport-ui>',
+    blockers: []
+  })
+  await writeWorkerPaneArtifact(root, record)
+  await appendWorkerPaneEvent(root, 'worker_headless_by_design_viewport_ui', input, {
+    slot_id: input.slotId,
+    generation_index: input.generationIndex,
+    reason: 'monitor_plus_viewports'
+  })
+  return record
+}
+
 export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<ZellijWorkerPaneRecord> {
   const root = path.resolve(input.root)
   const cwd = input.cwd || packageRoot()
@@ -295,6 +336,9 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     optional: false
   })
   const createSession = normalizeExistingZellijSession(input.sessionName, createSessionRaw)
+  const requestedCap = nonNegativeInt(input.visiblePaneCap, 0)
+  const envCap = nonNegativeInt(Number(process.env.SKS_ZELLIJ_VISIBLE_PANES || 0), 0)
+  const visiblePaneCap = Math.max(1, requestedCap || envCap || 1)
   const rightColumn = input.rightColumnMode === 'spawn-on-first-worker'
     ? await prepareWorkerInRightColumn({
         root,
@@ -303,13 +347,13 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
         sessionName: input.sessionName,
         cwd,
         worker: { slotId: input.slotId, generationIndex: input.generationIndex },
-        visiblePaneCap: input.visiblePaneCap || 1,
+        visiblePaneCap,
         uiMode: input.uiMode || 'compact-slots',
         dashboardSnapshot: {
           ...(input.dashboardSnapshot || {}),
           mode: String(input.dashboardSnapshot?.mode || 'naruto'),
-          active_workers: Number(input.dashboardSnapshot?.active_workers || input.visiblePaneCap || 1),
-          visible_panes: Number(input.dashboardSnapshot?.visible_panes || input.visiblePaneCap || 1)
+          active_workers: Number(input.dashboardSnapshot?.active_workers || visiblePaneCap),
+          visible_panes: Number(input.dashboardSnapshot?.visible_panes || visiblePaneCap)
         }
       })
     : null
@@ -344,7 +388,7 @@ export async function openWorkerPane(input: ZellijWorkerPaneOpenInput): Promise<
     await appendWorkerPaneEvent(root, 'worker_headless_overflow', input, {
       slot_id: input.slotId,
       generation_index: input.generationIndex,
-      reason: `visible_pane_cap:${input.visiblePaneCap || 1}`
+      reason: `visible_pane_cap:${visiblePaneCap}`
     })
     return record
   }
@@ -1038,4 +1082,14 @@ function normalizeExistingZellijSession(sessionName: string, result: ZellijComma
     }
   }
   return result
+}
+
+function nonNegativeInt(value: unknown, fallback: number): number {
+  const n = Math.floor(Number(value))
+  return Number.isFinite(n) && n >= 0 ? n : fallback
+}
+
+function slotIndexNumber(slotId: string): number {
+  const match = /(\d+)$/.exec(String(slotId || ''))
+  return match ? Math.max(1, Number(match[1])) : 1
 }

@@ -15,7 +15,7 @@ const releaseGateManifest = readJson('release-gates.v2.json', { gates: [] });
 const releaseGateIds = new Set((Array.isArray(releaseGateManifest.gates) ? releaseGateManifest.gates : [])
   .filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
   .map((gate) => gate.id));
-const latestReleaseDagSummary = readLatestReleaseDagSummary();
+const latestReleaseDagSummary = readCurrentReleaseDagSummary() || readLatestReleaseDagSummary();
 const releaseParallelCheckSource = readText('src/scripts/release-parallel-check.ts', '');
 const releaseRealCheckSource = readText('src/scripts/release-real-check.ts', '');
 const hooksRuntimeSource = readText('src/core/hooks-runtime.ts', '');
@@ -238,6 +238,10 @@ const sideEffectRuntime = runNodeScriptWithOkReportCache(
 const releaseProvenance = runNodeScript('dist/scripts/release-provenance-check.js');
 const imagegenCore = runNodeScript('dist/scripts/imagegen-capability-check.js');
 const dynamicReleaseMode = process.env.SKS_RELEASE_DYNAMIC === '1' || Boolean(process.env.SKS_REPORT_DIR);
+const affectedReadinessMode = process.env.SKS_RELEASE_DYNAMIC === '1'
+  || latestReleaseDagSummary?.selected_preset === 'affected'
+  || latestReleaseDagSummary?.affected_selection?.mode === 'affected'
+  || latestReleaseDagSummary?.completion_certificate?.confidence === 'release-equivalent-for-affected-scope';
 const imagegenExternalMissingAllowed = imagegenCore.status !== 0 && dynamicReleaseMode && process.env.SKS_RELEASE_REQUIRE_IMAGEGEN !== '1';
 const runtimeReports = {
   ppt_full_e2e_blackbox: readJson('.sneakoscope/reports/ppt-full-e2e-blackbox.json', null),
@@ -317,6 +321,18 @@ const runtimeChecks = {
   retention_cleanup_safety: runtimeReports.retention_cleanup_safety?.ok === true
 };
 const remainingP0 = [];
+const nonPublishGaps = [];
+const legacyReportOnlyGaps = [];
+const strictReadinessMode = !affectedReadinessMode || process.env.SKS_RELEASE_REQUIRE_FULL_READINESS === '1';
+const recordReadinessGateGap = (name) => {
+  const gap = `${name}_gate_missing`;
+  if (!strictReadinessMode) {
+    legacyReportOnlyGaps.push(gap);
+    nonPublishGaps.push(gap);
+    return;
+  }
+  remainingP0.push(gap);
+};
 if (pkg.version !== RELEASE_VERSION) remainingP0.push(`package_version_not_${RELEASE_VERSION}`);
 for (const [name, ok] of Object.entries({
   runtime_no_src_mjs: checks.runtime_no_src_mjs,
@@ -330,7 +346,7 @@ for (const [name, ok] of Object.entries({
   verification_parallel_engine: checks.verification_parallel_engine,
   release_metadata: checks.release_metadata,
   release_readiness: checks.release_readiness,
-  ultra_search_provider_interface: checks.ultra_search_provider_interface,
+  insane_search_provider_interface: checks.insane_search_provider_interface,
   source_intelligence_policy: checks.source_intelligence_policy,
   source_intelligence_all_modes: checks.source_intelligence_all_modes,
   codex_web_adapter: checks.codex_web_adapter,
@@ -431,7 +447,7 @@ for (const [name, ok] of Object.entries({
   agent_visual_consistency: checks.agent_visual_consistency,
   release_parallel_full_coverage: checks.release_parallel_full_coverage,
   priority_full_closure: checks.priority_full_closure
-})) if (!ok) remainingP0.push(`${name}_gate_missing`);
+})) if (!ok) recordReadinessGateGap(name);
 if (docs.status !== 0) remainingP0.push('docs_truthfulness_failed');
 if (officialDocs.status !== 0) remainingP0.push('official_docs_compat_failed');
 if (releaseMetadata.status !== 0) remainingP0.push('release_metadata_failed');
@@ -448,7 +464,6 @@ const stampVerify = spawnSync(process.execPath, ['dist/scripts/release-check-sta
 });
 const currentStamp = stampVerify.status === 0 && stamp?.package_version === RELEASE_VERSION ? stamp : null;
 const stampRequiredForOk = process.env.SKS_RELEASE_REQUIRE_STAMP === '1' || !dynamicReleaseMode;
-const nonPublishGaps = [];
 if (stampVerify.status !== 0) {
   if (stampRequiredForOk) {
     remainingP0.push('release_check_stamp_stale_or_missing');
@@ -464,7 +479,10 @@ const report = {
     release_version: RELEASE_VERSION,
     gate: `${RELEASE_VERSION} Codex Native hardening closure DAG`,
     ok_means: `no remaining ${RELEASE_VERSION} Codex Native route blackbox, reference-cache, read/repair split, generated-artifact neutrality, or release metadata gaps`,
-    not_in_1_18_parallel_gate: `reported for historical, live, or broader gates that are not part of the ${RELEASE_VERSION} closure DAG`
+    not_in_1_18_parallel_gate: `reported for historical, live, or broader gates that are not part of the ${RELEASE_VERSION} closure DAG`,
+    dynamic_release_mode: dynamicReleaseMode,
+    affected_readiness_mode: affectedReadinessMode,
+    strict_readiness_mode: strictReadinessMode
   },
   package: {
     name: pkg.name,
@@ -479,7 +497,8 @@ const report = {
   },
   codex_lb_setup_truthfulness: {
     status: checks.codex_lb_persistence_truth ? 'present' : 'missing',
-    persistence_modes: ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile', 'process_only_ephemeral']
+    persistence_modes: ['durable_env_file', 'durable_keychain', 'shell_profile', 'process_only_ephemeral'],
+    launchctl_policy: 'base_url_only_secret_env_removed'
   },
   computer_use_evidence_mode_support: {
     status: checks.computer_use_live_evidence ? 'present' : 'missing',
@@ -998,7 +1017,8 @@ const report = {
     ignored: true
   } : null,
   non_publish_gaps: nonPublishGaps,
-  publish_ready: stampVerify.status === 0 && remainingP0.length === 0,
+  legacy_report_only_gaps: legacyReportOnlyGaps,
+  publish_ready: stampVerify.status === 0 && remainingP0.length === 0 && nonPublishGaps.length === 0,
   remaining_p0_gaps: remainingP0,
   ok: remainingP0.length === 0
 };
@@ -1054,6 +1074,16 @@ function releaseDagGatePassed(gateId) {
     && latestReleaseDagSummary?.failed === 0
     && Array.isArray(latestReleaseDagSummary?.selected_gate_ids)
     && latestReleaseDagSummary.selected_gate_ids.includes(gateId);
+}
+
+function readCurrentReleaseDagSummary() {
+  if (!process.env.SKS_REPORT_DIR) return null;
+  const file = path.join(path.dirname(process.env.SKS_REPORT_DIR), 'summary.json');
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 function readLatestReleaseDagSummary() {

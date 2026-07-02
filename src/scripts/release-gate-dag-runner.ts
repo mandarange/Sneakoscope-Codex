@@ -2,8 +2,16 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runReleaseGateDag } from '../core/release/release-gate-dag.js'
+import { ensureDistFresh } from './lib/ensure-dist-fresh.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
+process.env.SKS_RELEASE_GATE_CACHE_MEMOIZE ||= '1'
+const freshness = ensureDistFresh({ rebuild: false })
+if (!freshness.ok) {
+  console.error(`SKS release gate DAG blocked: dist is stale (${freshness.issues.join(', ')}).`)
+  console.error('Run npm run build:incremental first.')
+  process.exit(1)
+}
 const args = process.argv.slice(2)
 const presetIndex = args.indexOf('--preset')
 const preset = presetIndex >= 0 ? args[presetIndex + 1] : 'release'

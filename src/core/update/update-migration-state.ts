@@ -1,8 +1,9 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, runProcess, sha256, which, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, runProcess, sha256, which, writeJsonAtomic, writeReceiptRotated } from '../fsx.js';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { enforceRetention } from '../retention.js';
+import { COMMANDS } from '../../cli/command-registry.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -79,26 +80,11 @@ export interface UpdateMigrationGateResult {
   installation_epoch_path: string;
   receipt: UpdateMigrationReceipt | null;
   doctor: PackageLocalDoctorRun | null;
+  scope: 'global' | 'project';
+  failed_stage_id: string | null;
   blockers: string[];
   warnings: string[];
 }
-
-const ALLOWLIST_COMMANDS = new Set([
-  'doctor',
-  'postinstall',
-  'update',
-  'update-check',
-  'version',
-  'help',
-  'commands',
-  'usage',
-  'root',
-  'rollback',
-  'status',
-  'paths',
-  'codex',
-  'zellij'
-]);
 
 export function installationEpochPath(): string {
   return path.join(globalSksRoot(), 'update', 'installation-epoch.json');
@@ -222,7 +208,7 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     blockers: requiredBlockers,
     warnings: optionalWarnings
   };
-  await writeJsonAtomic(receiptPath, receipt);
+  await writeReceiptRotated(receiptPath, receipt, { keep: 5 });
   return receipt;
 }
 
@@ -296,25 +282,27 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
   args?: readonly string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
+  skipMigrationGate?: boolean;
 }): Promise<UpdateMigrationGateResult> {
   const env = input.env || process.env;
   const command = input.command;
   const root = await projectRoot(input.cwd || process.cwd()).catch(() => path.resolve(input.cwd || process.cwd()));
   const receiptPath = projectUpdateMigrationReceiptPath(root);
   const pendingPath = installationEpochPath();
-  const empty: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings'> = {
+  const empty: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings' | 'failed_stage_id'> = {
     schema: 'sks.update-migration-gate.v1',
     root,
     command,
+    scope: 'project',
     receipt_path: receiptPath,
     pending_marker_path: pendingPath,
     installation_epoch_path: pendingPath
   };
   if (env.SKS_UPDATE_MIGRATION_GATE_DISABLED === '1') {
-    return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, blockers: [], warnings: ['gate_disabled_by_env'] };
+    return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, failed_stage_id: null, blockers: [], warnings: ['gate_disabled_by_env'] };
   }
-  if (ALLOWLIST_COMMANDS.has(command)) {
-    return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, blockers: [], warnings: [`allowlisted_command:${command}`] };
+  if (input.skipMigrationGate === true || commandSkipsMigrationGate(command)) {
+    return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, failed_stage_id: null, blockers: [], warnings: [`skip_migration_gate_command:${command}`] };
   }
 
   const [epoch, receipt] = await Promise.all([
@@ -323,7 +311,7 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
   ]);
   const requireReceipt = env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT === '1';
   if (isProjectReceiptCurrentForEpoch(receipt, epoch) && !requireReceipt) {
-    return { ...empty, ok: true, status: 'current', receipt, doctor: null, blockers: [], warnings: [] };
+    return { ...empty, ok: true, status: 'current', receipt, doctor: null, failed_stage_id: null, blockers: [], warnings: [] };
   }
 
   const recheck = requireReceipt
@@ -331,13 +319,13 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
     : async (): Promise<UpdateMigrationGateResult | null> => {
         const fresh = await readProjectUpdateMigrationReceipt(root);
         if (isProjectReceiptCurrentForEpoch(fresh, epoch)) {
-          return { ...empty, ok: true, status: 'current', receipt: fresh, doctor: null, blockers: [], warnings: [] };
+          return { ...empty, ok: true, status: 'current', receipt: fresh, doctor: null, failed_stage_id: null, blockers: [], warnings: [] };
         }
         return null;
       };
 
   return withUpdateMigrationLock(root, empty, async () => {
-    const reportFile = path.join(root, '.sneakoscope', 'update', `doctor-migration-${Date.now()}.json`);
+    const reportFile = path.join(root, '.sneakoscope', 'update', 'doctor-migration.json');
     const doctor = await runPackageLocalDoctor({
       root,
       args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', reportFile],
@@ -359,7 +347,7 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
         blockers: requiredBlockers,
         warnings: doctor.optional_warnings
       });
-      return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, blockers: requiredBlockers, warnings: doctor.optional_warnings };
+      return { ...empty, ok: false, status: 'blocked', receipt: blocked, doctor, failed_stage_id: 'doctor:migration-profile', blockers: requiredBlockers, warnings: doctor.optional_warnings };
     }
     const current = await writeProjectUpdateMigrationReceipt({
       root,
@@ -368,7 +356,7 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
       blockers: [],
       warnings: doctor.optional_warnings
     });
-    return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, blockers: [], warnings: [] };
+    return { ...empty, ok: true, status: 'repaired', receipt: current, doctor, failed_stage_id: null, blockers: [], warnings: [] };
   }, recheck ? { recheck } : {});
 }
 
@@ -386,7 +374,7 @@ export async function runPostinstallGlobalDoctorAndMarkPending(input: {
   }
   const doctor = await runPackageLocalDoctor({
     root: globalSksRoot(),
-    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRoot(), 'update', `postinstall-doctor-${Date.now()}.json`)],
+    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRoot(), 'update', 'postinstall-doctor.json')],
     env: {
       ...env,
       SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
@@ -409,6 +397,11 @@ export async function runPostinstallGlobalDoctorAndMarkPending(input: {
     blockers: doctor.ok ? [] : ['postinstall_global_doctor_failed'],
     warnings: []
   };
+}
+
+function commandSkipsMigrationGate(command: string): boolean {
+  const entry = (COMMANDS as Record<string, { skipMigrationGate?: boolean; readonly?: boolean } | undefined>)[command];
+  return entry?.skipMigrationGate === true || entry?.readonly === true;
 }
 
 export async function runPackageLocalDoctor(input: {
@@ -504,7 +497,7 @@ function delay(ms: number): Promise<void> {
 
 async function withUpdateMigrationLock(
   root: string,
-  base: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings'>,
+  base: Omit<UpdateMigrationGateResult, 'ok' | 'status' | 'receipt' | 'doctor' | 'blockers' | 'warnings' | 'failed_stage_id'>,
   fn: () => Promise<UpdateMigrationGateResult>,
   options: { recheck?: () => Promise<UpdateMigrationGateResult | null>; maxWaitMs?: number } = {}
 ): Promise<UpdateMigrationGateResult> {
@@ -519,7 +512,7 @@ async function withUpdateMigrationLock(
       handle = await fsp.open(lockPath, 'wx');
     } catch (err: any) {
       if (err?.code !== 'EEXIST') {
-        return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
+        return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, failed_stage_id: 'migration-lock', blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
       }
       // The lock is held by a concurrent process. Cooperate instead of failing fast:
       // 1) a sibling may have already completed the migration we need.
@@ -538,13 +531,13 @@ async function withUpdateMigrationLock(
         continue;
       }
       // 4) gave up waiting on a live holder.
-      return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: ['update_migration_lock_held'], warnings: [] };
+      return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, failed_stage_id: 'migration-lock', blockers: ['update_migration_lock_held'], warnings: [] };
     }
     try {
       await handle.writeFile(JSON.stringify({ pid: process.pid, created_at: nowIso(), version: PACKAGE_VERSION }) + '\n', 'utf8');
       return await fn();
     } catch (err: any) {
-      return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
+      return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, failed_stage_id: 'migration-lock', blockers: [`update_migration_lock_error:${err?.message || String(err)}`], warnings: [] };
     } finally {
       await handle.close().catch(() => undefined);
       await fsp.rm(lockPath, { force: true }).catch(() => undefined);

@@ -6,7 +6,7 @@ The relevant flags are:
 
 ```bash
 sks agent run "task" --agents 5 --work-items 10 --write-mode parallel --apply-patches
-sks team "task" --agents 5 --work-items 10 --write-mode parallel --apply-patches
+sks naruto run "task" --clones 5 --work-items 10 --write-mode parallel --apply-patches
 sks dfix "task" --agents 5 --work-items 10 --write-mode parallel --apply-patches
 ```
 

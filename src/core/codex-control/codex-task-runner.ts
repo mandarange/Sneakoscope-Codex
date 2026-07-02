@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { appendJsonlBounded, ensureDir, nowIso, packageRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonlBounded, ensureDir, nowIso, packageRoot, writeJsonAtomic } from '../fsx.js'
+import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 import { validateJsonSchemaRecursive } from '../json-schema-validator.js'
 import type { CodexTaskInput, CodexTaskResult } from './codex-control-plane.js'
 import { resolveCodexOutputSchema } from './codex-output-schemas.js'
@@ -86,12 +87,7 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     ...blockers,
     ...(adapterResult?.blockers || [])
   ]
-  const runFailed = primaryBlockers.some((blocker) => {
-    const text = String(blocker || '')
-    return text.startsWith('codex_sdk_run_failed')
-      || text === 'codex_reliability_fatal_error_no_retry'
-      || text === 'codex_reliability_mcp_auth_error'
-  })
+  const runFailed = isRunFailureBlocker(primaryBlockers)
   const finalBlockers = [
     ...primaryBlockers,
     ...(!runFailed && events.length === 0 ? ['codex_sdk_event_stream_missing'] : []),
@@ -190,10 +186,12 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
   for (const event of translatedEvents) await appendJsonlBounded(path.join(root, 'python-codex-sdk-events.jsonl'), event, 5 * 1024 * 1024)
   const structuredOutput = parseStructuredOutput(adapterResult.finalResponse || '')
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
+  const primaryBlockers = adapterResult.blockers || []
+  const runFailed = isRunFailureBlocker(primaryBlockers)
   const finalBlockers = [
-    ...(adapterResult.blockers || []),
-    ...(events.length > 0 ? [] : ['python_codex_sdk_event_stream_missing']),
-    ...(validation.ok ? [] : ['python_codex_sdk_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)])
+    ...primaryBlockers,
+    ...(runFailed || events.length > 0 ? [] : ['python_codex_sdk_event_stream_missing']),
+    ...(runFailed || validation.ok ? [] : ['python_codex_sdk_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)])
   ]
   const workerResult = normalizeWorkerResult(structuredOutput, task, finalBlockers, validation.ok, 'python-codex-sdk')
   const workerResultPath = path.join(root, 'python-codex-sdk-worker-result.json')
@@ -294,10 +292,12 @@ async function runLocalControlTask(root: string, task: CodexTaskInput, schema: R
   for (const event of adapterResult.events || []) await appendJsonlBounded(path.join(root, 'local-llm-events.jsonl'), event, 5 * 1024 * 1024)
   const structuredOutput = adapterResult.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
+  const primaryBlockers = adapterResult.blockers || []
+  const runFailed = isRunFailureBlocker(primaryBlockers)
   const finalBlockers = [
-    ...(adapterResult.blockers || []),
-    ...(Array.isArray(adapterResult.events) && adapterResult.events.length > 0 ? [] : ['local_llm_event_stream_missing']),
-    ...(validation.ok ? [] : ['local_llm_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)])
+    ...primaryBlockers,
+    ...(runFailed || (Array.isArray(adapterResult.events) && adapterResult.events.length > 0) ? [] : ['local_llm_event_stream_missing']),
+    ...(runFailed || validation.ok ? [] : ['local_llm_structured_output_invalid', ...validation.issues.map((issue) => `schema:${issue}`)])
   ]
   const workerResult = normalizeWorkerResult(structuredOutput, task, finalBlockers, validation.ok, 'local-llm')
   // Stamp the local-llm request id as backend proof on model-authored patch
@@ -425,6 +425,20 @@ function normalizeStatus(value: unknown): 'done' | 'failed' | 'blocked' {
   return value === 'failed' || value === 'blocked' || value === 'done' ? value : 'done'
 }
 
+function isRunFailureBlocker(blockers: readonly unknown[]): boolean {
+  return blockers.some((blocker) => {
+    const text = String(blocker || '')
+    return text.startsWith('codex_sdk_run_failed')
+      || text.startsWith('python_codex_sdk_run_failed')
+      || text.startsWith('python_codex_sdk_timeout')
+      || text.startsWith('python_codex_sdk_error')
+      || text.startsWith('local_llm_generate_failed')
+      || text.startsWith('local_llm_eligibility_blocked')
+      || text === 'codex_reliability_fatal_error_no_retry'
+      || text === 'codex_reliability_mcp_auth_error'
+  })
+}
+
 function mapPythonSandbox(value: string) {
   if (value === 'workspace-write') return 'workspace_write'
   if (value === 'full-access') return 'full_access'
@@ -469,7 +483,12 @@ async function ensurePythonCodexLbConfig(env: Record<string, string>, config: Re
     'requires_openai_auth = true',
     ''
   ].join('\n')
-  await writeTextAtomic(path.join(codexHome, 'config.toml'), text)
+  const configPath = path.join(codexHome, 'config.toml')
+  await writeCodexConfigGuarded({
+    configPath,
+    cause: 'python-codex-lb-config',
+    mutate: () => text
+  })
 }
 
 function normalizeCodexLbBaseUrl(value: unknown) {

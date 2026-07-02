@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive } from './fsx.js';
+import os from 'node:os';
+import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive, managedSksTmpRoot } from './fsx.js';
 import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS } from './routes.js';
 
 export const DEFAULT_RETENTION_POLICY = Object.freeze({
@@ -10,7 +11,7 @@ export const DEFAULT_RETENTION_POLICY = Object.freeze({
   max_sneakoscope_bytes: 256 * 1024 * 1024,
   max_mission_bytes: 64 * 1024 * 1024,
   max_event_log_bytes: 5 * 1024 * 1024,
-  max_tmp_age_hours: 0,
+  max_tmp_age_hours: 24,
   keep_last_cycles_per_mission: 3,
   run_gc_after_each_cycle: true,
   compact_oversize_missions: false,
@@ -24,6 +25,8 @@ export const DEFAULT_RETENTION_POLICY = Object.freeze({
   max_wiki_artifact_read_bytes: 256 * 1024,
   min_wiki_trust_score: 0.3,
   prune_wiki_artifacts: false,
+  max_session_state_age_days: 7,
+  max_session_state_files: 200,
   max_from_chat_img_temp_sessions: FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS
 });
 
@@ -72,7 +75,7 @@ const DISPOSABLE_RUNTIME_HOME_DIR_NAMES = Object.freeze([
 ]);
 
 const MISSION_CLOSE_GATES = Object.freeze([
-  'team-gate.json',
+  'naruto-gate.json',
   'reflection-gate.json',
   'research-gate.json',
   'qa-gate.json',
@@ -82,7 +85,8 @@ const MISSION_CLOSE_GATES = Object.freeze([
   'gx-gate.json',
   'db-safety-gate.json',
   'goal-gate.json',
-  'dfix-gate.json'
+  'dfix-gate.json',
+  'team-gate.json' // legacy Team missions only; new execution closes through naruto-gate.json.
 ]);
 
 const DISPOSABLE_LOG_RE = /\.(?:stdout|stderr)\.log$/;
@@ -386,6 +390,77 @@ async function pruneDisposableReportLogs(root: any, policy: any, dryRun: boolean
   }
 }
 
+async function pruneSessionStateFiles(root: any, policy: any, dryRun: boolean, actions: any[]) {
+  const dir = path.join(root, '.sneakoscope', 'state', 'sessions');
+  if (!(await exists(dir))) return;
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const rows = await Promise.all(entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map(async (entry) => {
+      const file = path.join(dir, entry.name);
+      const stat = await fs.stat(file).catch(() => null);
+      const state = await readJson(file, {}).catch(() => ({}));
+      const updatedMs = Date.parse(String(state.updated_at || ''));
+      return {
+        file,
+        stat,
+        state,
+        mtimeMs: stat?.mtimeMs || 0,
+        updatedMs: Number.isFinite(updatedMs) ? updatedMs : (stat?.mtimeMs || 0),
+        mission_id: state.mission_id || null
+      };
+    }));
+  const now = Date.now();
+  const maxAgeMs = Math.max(1, Number(policy.max_session_state_age_days) || 7) * 24 * 60 * 60 * 1000;
+  const removed = new Set<string>();
+  for (const row of rows) {
+    if (!row.stat || !row.mission_id || now - row.updatedMs <= maxAgeMs) continue;
+    const mission = await missionDirById(root, row.mission_id);
+    if (!mission || !(await missionClosed(mission))) continue;
+    actions.push({ action: 'remove_closed_session_state', path: row.file, mission: row.mission_id, bytes: row.stat.size, reason: 'closed_session_state_ttl' });
+    removed.add(row.file);
+    if (!dryRun) await rmrf(row.file);
+  }
+  const cap = Math.max(1, Number(policy.max_session_state_files) || 200);
+  const remaining = rows.filter((row) => !removed.has(row.file)).sort((a, b) => b.updatedMs - a.updatedMs);
+  for (const row of remaining.slice(cap)) {
+    if (!row.stat) continue;
+    actions.push({ action: 'remove_old_session_state', path: row.file, mission: row.mission_id, bytes: row.stat.size, reason: 'session_state_file_cap', cap });
+    if (!dryRun) await rmrf(row.file);
+  }
+}
+
+export async function sweepSksTempDirs(root: any, opts: any = {}) {
+  const dryRun = Boolean(opts.dryRun);
+  const actions = opts.actions || [];
+  const now = Date.now();
+  const maxAgeMs = Math.max(0, Number(opts.maxAgeHours ?? 6)) * 60 * 60 * 1000;
+  const roots = [
+    path.join(os.tmpdir(), 'sks-gate'),
+    managedSksTmpRoot(),
+    path.join(root, '.sneakoscope', 'tmp')
+  ];
+  for (const base of roots) {
+    if (!(await exists(base))) continue;
+    const entries = await fs.readdir(base, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const target = path.join(base, entry.name);
+      const stat = await fs.stat(target).catch(() => null);
+      if (!stat) continue;
+      if (maxAgeMs > 0 && now - stat.mtimeMs <= maxAgeMs) continue;
+      const bytes = stat.isDirectory() ? await dirSize(target).catch(() => 0) : stat.size;
+      actions.push({
+        action: 'remove_sks_temp',
+        path: target,
+        bytes,
+        reason: base.endsWith(`${path.sep}sks-gate`) ? 'stale_release_gate_temp' : 'stale_project_temp'
+      });
+      if (!dryRun) await rmrf(target);
+    }
+  }
+  return { ok: true, dryRun, actions };
+}
+
 async function pruneOldMissions(root: any, policy: any, dryRun: any, actions: any) {
   if (policy.prune_old_missions === false) return;
   const missions = await listMissionDirs(root);
@@ -581,6 +656,8 @@ export async function enforceRetention(root: any, opts: any = {}) {
   if (fullMissionSweep || opts.compactTerminalSessionRuntimeHomes === true || Boolean(opts.afterRoute && opts.completedMissionId)) await pruneTerminalSessionRuntimeHomes(root, policy, dryRun, actions, opts);
   if (fullMissionSweep || opts.rotateLargeJsonl === true) await rotateLargeJsonl(root, policy, dryRun, actions);
   await pruneDisposableReportLogs(root, policy, dryRun, actions, opts);
+  await pruneSessionStateFiles(root, policy, dryRun, actions);
+  await sweepSksTempDirs(root, { dryRun, actions, maxAgeHours: opts.sksTempMaxAgeHours ?? policy.max_tmp_age_hours ?? 0 });
   if (opts.pruneWikiArtifacts || policy.prune_wiki_artifacts) await pruneWikiArtifacts(root, { policy, dryRun, actions, lowTrust: opts.pruneWikiLowTrust });
   const report = boundedMode || opts.skipStorageReport === true ? await lightweightStorageReport(root) : await storageReport(root);
   const cleanup = {

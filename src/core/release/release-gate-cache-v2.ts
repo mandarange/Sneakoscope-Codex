@@ -34,7 +34,7 @@ export function releaseGateProofBankFile(root: string): string {
 // sources, which are inputs of ~280 gates (via `package.json` and `src/**`).
 // Before this normalization every publish re-ran the entire DAG from zero
 // (test:blackbox alone is ~11 minutes) even when no behavior changed.
-// Version-CORRECTNESS gates (release:version-truth, release:metadata, ...)
+// Version/proof-correctness gates (release:proof-truth, release:metadata, ...)
 // are declared with `cache.enabled: false`, so they always re-run and still
 // catch version drift. Set SKS_RELEASE_CACHE_VERSION_SENSITIVE=1 to restore
 // the old fully version-sensitive hashing.
@@ -46,6 +46,7 @@ const VERSION_NEUTRAL_CACHE_FILES = new Set([
   'src/bin/sks.ts',
   'dist/build-manifest.json'
 ])
+const INPUT_DIGEST_MEMO = new Map<string, string>()
 
 export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
@@ -67,20 +68,30 @@ export function releaseGateCacheKey(root: string, gate: ReleaseGateNode): string
     hashFileIfPresent(hash, path.join(root, 'dist', 'build-manifest.json'))
   }
   for (const input of gate.cache.inputs) {
-    const expanded = expandGlob(root, input)
     hash.update(`input:${input}`)
-    if (!expanded.length) {
-      hash.update(`missing_or_empty:${input}`)
-      continue
-    }
-    for (const file of expanded) {
-      const rel = path.relative(root, file)
-      hash.update(rel)
-      if (!versionSensitive && VERSION_NEUTRAL_CACHE_FILES.has(rel)) hashVersionNeutralFile(hash, rel, file, releaseVersion)
-      else hashFileIfPresent(hash, file)
-    }
+    hash.update(releaseGateInputDigest(root, input, { versionSensitive, releaseVersion }))
   }
   return hash.digest('hex')
+}
+
+function releaseGateInputDigest(root: string, input: string, opts: { versionSensitive: boolean; releaseVersion: string }): string {
+  const memoKey = `${path.resolve(root)}\0${input}\0${opts.versionSensitive ? 'sensitive' : 'neutral'}\0${opts.releaseVersion}`
+  if (process.env.SKS_RELEASE_GATE_CACHE_MEMOIZE === '1') {
+    const cached = INPUT_DIGEST_MEMO.get(memoKey)
+    if (cached) return cached
+  }
+  const hash = crypto.createHash('sha256')
+  const expanded = expandGlob(root, input)
+  if (!expanded.length) hash.update(`missing_or_empty:${input}`)
+  for (const file of expanded) {
+    const rel = path.relative(root, file)
+    hash.update(rel)
+    if (!opts.versionSensitive && VERSION_NEUTRAL_CACHE_FILES.has(rel)) hashVersionNeutralFile(hash, rel, file, opts.releaseVersion)
+    else hashFileIfPresent(hash, file)
+  }
+  const digest = hash.digest('hex')
+  if (process.env.SKS_RELEASE_GATE_CACHE_MEMOIZE === '1') INPUT_DIGEST_MEMO.set(memoKey, digest)
+  return digest
 }
 
 function hashVersionNeutralFile(hash: crypto.Hash, rel: string, file: string, releaseVersion: string): void {

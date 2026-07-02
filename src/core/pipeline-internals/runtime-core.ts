@@ -11,7 +11,7 @@ import { writeCodeStructureReport } from '../code-structure.js';
 import { writeMemorySweepReport } from '../memory-governor.js';
 import { writeMistakeMemoryReport } from '../mistake-memory.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
-import { recordSkillDreamEvent, skillDreamPolicyText, writeSkillForgeReport } from '../skill-forge.js';
+import { recordSkillDreamEvent, SKILL_DREAM_POLICY, skillDreamPolicyText, writeSkillForgeReport } from '../skill-forge.js';
 import { evaluateResearchGate, writeResearchPlan } from '../research.js';
 import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from '../ppt.js';
 import { writeQaLoopArtifacts } from '../qa-loop.js';
@@ -28,15 +28,14 @@ import { normalizeAgentPolicy, routeRequiresAgentIntake, agentPipelineStage } fr
 import { readAgentGateStatus } from '../agents/agent-gate.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, looksLikeProblemSolvingRequest, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
 import { normalizeLeanDecision, validateLeanDecision } from '../lean-engineering-policy.js';
-import { TEAM_DECOMPOSITION_ARTIFACT, TEAM_GRAPH_ARTIFACT, TEAM_INBOX_DIR, TEAM_RUNTIME_TASKS_ARTIFACT, teamRuntimePlanMetadata, teamRuntimeRequiredArtifacts, validateTeamRuntimeArtifacts, writeTeamRuntimeArtifacts } from '../team-dag.js';
-import { formatAgentReasoning, formatRoleCounts, initTeamLive, parseTeamSpecText, teamReasoningPolicy } from '../team-live.js';
-import { evaluateTeamReviewPolicyGate, MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT, teamReviewPolicy } from '../team-review-policy.js';
+import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT } from '../team-review-policy.js';
 import { normalizeCodexMultiAgentEventName } from '../codex-control/codex-multi-agent-event-normalizer.js';
 
 export { routePrompt };
 
 export const PIPELINE_PLAN_ARTIFACT = 'pipeline-plan.json';
 export const PIPELINE_PLAN_SCHEMA_VERSION = 1;
+const SKILL_DREAM_HOT_PATH_COUNTERS = new Map<string, number>();
 
 function ambientGoalContinuation() {
   return {
@@ -471,9 +470,10 @@ export function answerOnlyContext(prompt: any, route: any = routePrompt(prompt))
   ].join('\n');
 }
 
-export async function prepareRoute(root: any, prompt: any, state: any = {}): Promise<any> {
+export async function prepareRoute(root: any, prompt: any, state: any = {}, opts: any = {}): Promise<any> {
   const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
   const route = routePrompt(cleanPrompt);
+  const sessionKey = opts.sessionKey || state?._session_key || null;
   const madSksAuthorization = hasMadSksSignal(cleanPrompt);
   const task = stripDollarCommand(stripMadSksSignal(cleanPrompt)) || stripMadSksSignal(stripDollarCommand(cleanPrompt)) || String(cleanPrompt || '').trim();
   const explicit = Boolean(dollarCommand(cleanPrompt));
@@ -483,20 +483,20 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}): Pro
   if (route.id === 'Answer') return withSkillDreamContext(await prepareAnswerOnlyRoute(route, task), dreamContext);
   if (route.id === 'ComputerUse') return withSkillDreamContext(await prepareComputerUseFastRoute(route, task), dreamContext);
   if (route.id === 'Wiki') return withSkillDreamContext(await prepareWikiQuickRoute(route, task), dreamContext);
-  if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
-  if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
-  if (route.id === 'MadDB') return withSkillDreamContext(await prepareMadDb(root, route, task, routeNeedsContext7(route, cleanPrompt)), dreamContext);
+  if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, cleanPrompt), { sessionKey }), dreamContext);
+  if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, cleanPrompt), { sessionKey }), dreamContext);
+  if (route.id === 'MadDB') return withSkillDreamContext(await prepareMadDb(root, route, task, routeNeedsContext7(route, cleanPrompt), { sessionKey }), dreamContext);
   const required = routeNeedsContext7(route, cleanPrompt);
   const reasoning = routeReasoning(route, cleanPrompt);
   const nativeSessionsRequired = routeRequiresSubagents(route, cleanPrompt);
-  if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization }), dreamContext);
-  if (route.id === 'Naruto') return withSkillDreamContext(await prepareNaruto(root, route, task, required, { madSksAuthorization }), dreamContext);
-  if (route.id === 'Team') return withSkillDreamContext(await prepareNaruto(root, { ...route, id: 'Naruto', command: '$Naruto', mode: 'NARUTO', stopGate: 'naruto-gate.json', requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'] }, task, required, { madSksAuthorization, teamAlias: true }), dreamContext);
-  if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required), dreamContext);
-  if (route.id === 'AutoResearch') return withSkillDreamContext(await prepareAutoResearch(root, route, task, required), dreamContext);
-  if (route.id === 'DB') return withSkillDreamContext(await prepareDb(root, route, task, required), dreamContext);
-  if (route.id === 'GX') return withSkillDreamContext(await prepareGx(root, route, task, required), dreamContext);
-  if (explicit || required) return withSkillDreamContext(await prepareLightRoute(root, route, task, required), dreamContext);
+  if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }), dreamContext);
+  if (route.id === 'Naruto') return withSkillDreamContext(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey }), dreamContext);
+  if (route.id === 'Team') return withSkillDreamContext(await prepareNaruto(root, { ...route, id: 'Naruto', command: '$Naruto', mode: 'NARUTO', stopGate: 'naruto-gate.json', requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'] }, task, required, { madSksAuthorization, teamAlias: true, sessionKey }), dreamContext);
+  if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required, { sessionKey }), dreamContext);
+  if (route.id === 'AutoResearch') return withSkillDreamContext(await prepareAutoResearch(root, route, task, required, { sessionKey }), dreamContext);
+  if (route.id === 'DB') return withSkillDreamContext(await prepareDb(root, route, task, required, { sessionKey }), dreamContext);
+  if (route.id === 'GX') return withSkillDreamContext(await prepareGx(root, route, task, required, { sessionKey }), dreamContext);
+  if (explicit || required) return withSkillDreamContext(await prepareLightRoute(root, route, task, required, { sessionKey }), dreamContext);
   return withSkillDreamContext({
     route,
     additionalContext: `${promptPipelineContext(prompt, route)}\n\nReasoning: ${reasoning.effort} (${reasoning.reason}); temporary profile ${reasoning.profile}.\nRequired skills: ${route.requiredSkills.join(', ')}.\nNative sessions required: ${nativeSessionsRequired ? 'yes' : 'no'}.`
@@ -505,12 +505,16 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}): Pro
 
 async function routeSkillDreamContext(root: any, route: any, task: any) {
   try {
+    const counterKey = path.resolve(root);
+    const observed = (SKILL_DREAM_HOT_PATH_COUNTERS.get(counterKey) || 0) + 1;
+    SKILL_DREAM_HOT_PATH_COUNTERS.set(counterKey, observed);
+    if (observed % SKILL_DREAM_POLICY.min_events_between_runs !== 0) return '';
     const result = await recordSkillDreamEvent(root, {
       route: route.id,
       command: route.command,
       required_skills: route.requiredSkills || [],
       prompt: task
-    });
+    }, { event_count: SKILL_DREAM_POLICY.min_events_between_runs });
     if (!result.report) return '';
     return [
       'Skill dreaming threshold reached.',
@@ -583,8 +587,8 @@ async function prepareWikiQuickRoute(route: any, task: any) {
   };
 }
 
-async function prepareImageUxReview(root: any, route: any, task: any, required: any) {
-  const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: task });
+async function prepareImageUxReview(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: task, sessionKey: opts.sessionKey });
   const contract = {
     prompt: task,
     answers: {
@@ -618,7 +622,7 @@ async function prepareImageUxReview(root: any, route: any, task: any, required: 
     image_ux_review_policy_ready: true,
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
-  }));
+  }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, `Capture or attach source UI screenshots, run Codex App $imagegen/gpt-image-2 to generate annotated review images, extract those generated images into ${IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT}, then update ${IMAGE_UX_REVIEW_GATE_ARTIFACT}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Initial gate blockers: ${(artifacts.gate.blockers || []).join(', ') || 'none'}.`);
 }
 
@@ -640,7 +644,7 @@ export async function activeRouteContext(root: any, state: any) {
     const context7 = state.context7_required && !(await hasContext7DocsEvidence(root, state))
       ? ' Context7 evidence is still required before completion: use resolve-library-id, then query-docs (or legacy get-library-docs).'
       : '';
-    const roles = state.role_counts ? ` Role counts: ${formatRoleCounts(state.role_counts)}.` : '';
+    const roles = state.role_counts ? ` Role counts: ${formatLegacyRoleCounts(state.role_counts)}.` : '';
     return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Native session budget: ${state.agent_sessions || MIN_TEAM_REVIEWER_LANES}.${roles} Run native sessions, TriWiki refresh, debate, consensus, fresh development, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close or account for every Team native session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} After each native-session status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
   }
   if (state.mode === 'NARUTO') {
@@ -669,8 +673,8 @@ async function activePipelinePlanNote(root: any, state: any = {}) {
   return ` Pipeline plan: .sneakoscope/missions/${state.mission_id}/${PIPELINE_PLAN_ARTIFACT} (${lane}; kept=${kept}, skipped=${skipped}).${intake}${next}`;
 }
 
-async function prepareGoal(root: any, route: any, task: any, required: any): Promise<any> {
-  const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task });
+async function prepareGoal(root: any, route: any, task: any, required: any, opts: any = {}): Promise<any> {
+  const { id, dir, mission } = await createMission(root, { mode: 'goal', prompt: task, sessionKey: opts.sessionKey });
   const workflow = await writeGoalWorkflow(dir, mission, { action: 'create', prompt: task });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, mode: route.mode, task, required_skills: route.requiredSkills, context7_required: required, native_goal: workflow.native_goal, stop_gate: route.stopGate });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'not_required' } });
@@ -680,7 +684,7 @@ async function prepareGoal(root: any, route: any, task: any, required: any): Pro
     && !['Answer', 'DFix', 'Goal', 'Help'].includes(executionRoute.id);
   if (shouldDelegateExecution) {
     await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'goal.delegated_execution_route', route: executionRoute.id, command: executionRoute.command });
-    const delegated: any = await prepareRoute(root, task, {});
+    const delegated: any = await prepareRoute(root, task, {}, { sessionKey: opts.sessionKey });
     return {
       route,
       additionalContext: [
@@ -693,12 +697,12 @@ Delegated execution route: ${executionRoute.command}. The delegated route missio
       ].filter(Boolean).join('\n\n')
     };
   }
-  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: route.stopGate, implementation_allowed: true, questions_allowed: true, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
+  await setCurrent(root, routeState(id, route, 'GOAL_READY', required, { prompt: task, native_goal: workflow.native_goal, stop_gate: route.stopGate, implementation_allowed: true, questions_allowed: true, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, `Use Codex native ${workflow.native_goal.slash_command} control for persisted continuation, then continue the relevant SKS route gates for any implementation work.`);
 }
 
 async function prepareClarificationGate(root: any, route: any, task: any, required: any, opts: any = {}) {
-  const { id, dir, mission } = await createMission(root, { mode: String(route.mode || route.id || 'route').toLowerCase(), prompt: task });
+  const { id, dir, mission } = await createMission(root, { mode: String(route.mode || route.id || 'route').toLowerCase(), prompt: task, sessionKey: opts.sessionKey });
   const schema = buildQuestionSchemaForRoute(route, task);
   if (opts.madSksAuthorization) applyMadSksAuthorizationToSchema(schema);
   await writeQuestions(dir, schema);
@@ -708,13 +712,7 @@ async function prepareClarificationGate(root: any, route: any, task: any, requir
     await writeJsonAtomic(path.join(dir, 'answers.json'), autoAnswersForSchema(schema));
     const result = await sealContract(dir, mission);
     let materialized: any = {};
-    if (result.ok && route?.id === 'Team') {
-      materialized = await materializeAutoSealedTeam(root, id, dir, route, task, result.contract?.sealed_hash || null);
-      if (opts.madSksAuthorization) {
-        const madSksState = await materializeMadSksAuthorization(dir, id, route, routeContext, result.contract || {});
-        materialized = { ...materialized, state: { ...(materialized.state || {}), ...madSksState } };
-      }
-    } else if (result.ok && route?.id === 'MadSKS') {
+    if (result.ok && route?.id === 'MadSKS') {
       materialized = await materializeAutoSealedMadSks(dir, id, route, routeContext, result.contract || {});
     } else if (result.ok && route?.id === 'QALoop') {
       const artifactResult = await writeQaLoopArtifacts(dir, mission, result.contract);
@@ -756,7 +754,7 @@ async function prepareClarificationGate(root: any, route: any, task: any, requir
       original_stop_gate: route.stopGate,
       stop_gate: route.stopGate,
       ...(materialized.state || {})
-    }));
+    }), { sessionKey: opts.sessionKey });
     const materializedLine = materialized.phase ? `\nRoute artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
     return {
       route,
@@ -885,201 +883,36 @@ async function materializeMadSksAuthorization(dir: any, id: any, route: any, rou
   };
 }
 
-async function materializeAutoSealedTeam(root: any, id: any, dir: any, route: any, task: any, contractHash: any = null) {
-  const spec = parseTeamSpecText(task);
-  const cleanTask = spec.prompt || task;
-  const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
-  const { agentSessions, roleCounts, roster } = spec;
-  const plan = {
-    schema_version: 1,
-    mission_id: id,
-    task: cleanTask,
-    agent_session_count: agentSessions,
-    default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
-    role_counts: roleCounts,
-    session_policy: `Use at most ${agentSessions} native multi-session lanes at a time; the parent orchestrator is not counted.`,
-    review_policy: teamReviewPolicy(),
-    review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
-    bundle_size: roster.bundle_size,
-    roster,
-    goal_continuation: ambientGoalContinuation(),
-    reasoning: teamReasoningPolicy(cleanTask, roster),
-    contract_hash: contractHash,
-    ssot_guard: buildSsotGuard({ route: route?.id || 'Team', mode: route?.mode || 'TEAM', task: cleanTask, contractHash }),
-    team_model: {
-      phases: ['native_agent_intake', 'triwiki_stage_refresh', 'debate_team', 'runtime_task_graph', 'development_team', 'review'],
-      analysis_team: `Native multi-session agent intake with exactly ${roster.bundle_size} native_agent_N agents.`,
-      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants.`,
-      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices.`,
-      review_team: `Validation runs at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA lanes before integration or final.`
-    },
-    context_tracking: triwikiContextTracking(),
-    team_runtime: teamRuntimePlanMetadata(),
-    phases: [
-      { id: 'team_roster_confirmation', goal: `Materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'native_agent_intake', goal: `Read TriWiki context, then run exactly ${roster.bundle_size} bounded workspace-write native_agent_N sessions in parallel. ${fromChatImgRequired ? `From-Chat-IMG active: ${CODEX_COMPUTER_USE_ONLY_POLICY}` : 'From-Chat-IMG inactive: do not assume ordinary images are chat captures.'} Native agents may edit only parent-assigned lease paths and parent integration owns final changes.`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: agentSessions, write_policy: 'bounded workspace-write leases; parent-owned integration' },
-      { id: 'triwiki_refresh', goal: `Refresh or pack TriWiki and run ${triwikiContextTracking().validate_command}.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'ssot_guard', goal: ssotGuardPolicyText(), agents: ['parent_orchestrator'], output: SSOT_GUARD_ARTIFACT },
-      { id: 'planning_debate', goal: 'Run read-only planning debate, map constraints and implementation slices, then seal one objective.', agents: roster.debate_team.map((agent: any) => agent.id) },
-      { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR}.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
-      { id: 'parallel_implementation', goal: `Close debate agents, then run a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership.`, agents: roster.development_team.map((agent: any) => agent.id) },
-      { id: 'review_integration', goal: `${MIN_TEAM_REVIEW_POLICY_TEXT} Integrate, verify, and record evidence before final.`, agents: roster.validation_team.map((agent: any) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
-      { id: 'session_cleanup', goal: `Close or account for Team native sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT}.`, agents: ['parent_orchestrator'] }
-    ],
-    live_visibility: {
-      markdown: 'team-live.md',
-      transcript: 'team-transcript.jsonl',
-      dashboard: 'team-dashboard.json',
-      zellij: 'CLI Team entrypoints open Zellij live lanes for the visible Team agent budget when Zellij is available.',
-      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-zellij latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow']
-    },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), SSOT_GUARD_ARTIFACT, 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
-  };
-  await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
-  await writeJsonAtomic(path.join(dir, SSOT_GUARD_ARTIFACT), plan.ssot_guard);
-  await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'auto_sealed_team_spec' });
-  const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}.\n\nAuto-sealed ambiguity gate: no user question was required. Continue directly with Team agenting, debate, runtime task graph, implementation, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review, cleanup, reflection, and Honest Mode.\n`);
-  await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
-  const runtime = await writeTeamRuntimeArtifacts(dir, plan, { contractHash });
-  await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
-  await writeSkillForgeReport(dir, { mission_id: id, route: 'team', task_signature: cleanTask }).catch(() => null);
-  await writeMistakeMemoryReport(dir, { mission_id: id, route: 'team', task: cleanTask }).catch(() => null);
-  await writeCodeStructureReport(root, dir, { missionId: id, exception: 'Team auto-seal records split-review risk; extraction happens only when the mission scope includes the touched file.' }).catch(() => null);
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), {
-    passed: false,
-    team_roster_confirmed: true,
-    analysis_artifact: false,
-    triwiki_refreshed: false,
-    triwiki_validated: false,
-    consensus_artifact: false,
-    ...runtime.gate_fields,
-    implementation_team_fresh: false,
-    review_artifact: false,
-    integration_evidence: false,
-    session_cleanup: false,
-    context7_evidence: false,
-    ssot_guard: false,
-    ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
-    contract_hash: contractHash
-  });
-  await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'team.materialized_after_auto_sealed_ambiguity_gate', route: route.id, bundle_size: roster.bundle_size, agent_sessions: agentSessions });
-  return {
-    phase: 'TEAM_NATIVE_AGENT_INTAKE',
-    prompt: cleanTask,
-    state: {
-      agent_sessions: agentSessions,
-      role_counts: roleCounts,
-      team_roster_confirmed: true,
-      team_plan_ready: true,
-      team_graph_ready: runtime.ok,
-      team_live_ready: true,
-      from_chat_img_required: fromChatImgRequired
-    }
-  };
-}
-
-async function prepareTeam(root: any, route: any, task: any, required: any, opts: any = {}) {
-  const spec = parseTeamSpecText(task);
-  const cleanTask = spec.prompt || task;
-  const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
-  const { agentSessions, roleCounts, roster } = spec;
-  const { id, dir } = await createMission(root, { mode: 'team', prompt: cleanTask });
-  const plan = {
-    schema_version: 1,
-    mission_id: id,
-    task: cleanTask,
-    agent_session_count: agentSessions,
-    default_agent_session_count: MIN_TEAM_REVIEWER_LANES,
-    role_counts: roleCounts,
-    session_policy: `Use at most ${agentSessions} native multi-session lanes at a time; the parent orchestrator is not counted.`,
-    review_policy: teamReviewPolicy(),
-    review_gate: evaluateTeamReviewPolicyGate({ roleCounts, agentSessions, roster }),
-    bundle_size: roster.bundle_size,
-    roster,
-    goal_continuation: ambientGoalContinuation(),
-    reasoning: teamReasoningPolicy(cleanTask, roster),
-    ssot_guard: buildSsotGuard({ route: route?.id || 'Team', mode: route?.mode || 'TEAM', task: cleanTask }),
-    team_model: {
-      phases: ['native_agent_intake', 'triwiki_stage_refresh', 'debate_team', 'triwiki_stage_refresh', 'runtime_task_graph', 'development_team', 'triwiki_stage_refresh', 'review'],
-      analysis_team: `Native multi-session agent intake with exactly ${roster.bundle_size} native_agent_N agents. Each native agent owns one investigation slice and returns TriWiki-ready findings with source paths, risks, and suggested implementation slices.`,
-      debate_team: `Read-only role debate with exactly ${roster.bundle_size} participants composed from user, planner, reviewer, and executor voices applying compact Hyperplan-derived adversarial lenses.`,
-      development_team: `Fresh parallel development bundle with exactly ${roster.bundle_size} executor_N developers implementing disjoint slices; validation_team reviews afterward.`,
-      review_team: `Validation runs at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA lanes before integration or final.`
-    },
-    context_tracking: triwikiContextTracking(),
-    team_runtime: teamRuntimePlanMetadata(),
-    phases: [
-      { id: 'team_roster_confirmation', goal: `Before any implementation, materialize the Team roster from default SKS counts or explicit user counts, write team-roster.json, and surface role counts ${formatRoleCounts(roleCounts)}. Implementation cannot be considered complete unless team-gate.json has team_roster_confirmed=true.`, agents: ['parent_orchestrator'], output: 'team-roster.json' },
-      { id: 'native_agent_intake', goal: `Before native agent intake, read TriWiki context. ${fromChatImgRequired ? `From-Chat-IMG active: for web/browser/webapp targets require Codex Chrome Extension readiness first; for native Mac/non-web surfaces use Codex Computer Use visual inspection when available. List every visible customer request, match every screenshot image region to attachments, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, and ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, then require scoped QA-LOOP evidence in ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} after the customer-request work is done. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}` : `From-Chat-IMG inactive: do not assume ordinary images are chat captures. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY}`} Run exactly ${roster.bundle_size} bounded workspace-write native_agent_N sessions in parallel, using the full available session budget without exceeding ${agentSessions}. Split repo/docs/tests/API/user-flow/risk investigation into independent slices, hydrate relevant low-trust claims from source, record source-backed findings, and edit only parent-assigned lease paths.`, agents: roster.analysis_team.map((agent: any) => agent.id), max_parallel_native_sessions: agentSessions, write_policy: 'bounded workspace-write leases; parent-owned integration' },
-      { id: 'triwiki_refresh', goal: `Parent orchestrator updates Team analysis artifacts, then runs ${triwikiContextTracking().refresh_command} or ${triwikiContextTracking().pack_command}, prunes with ${triwikiContextTracking().prune_command} when stale/oversized wiki state would pollute handoffs, and runs ${triwikiContextTracking().validate_command} so the next stage uses current TriWiki context.`, agents: ['parent_orchestrator'], output: '.sneakoscope/wiki/context-pack.json' },
-      { id: 'ssot_guard', goal: ssotGuardPolicyText(), agents: ['parent_orchestrator'], output: SSOT_GUARD_ARTIFACT },
-      { id: 'planning_debate', goal: `Before debate, read the refreshed TriWiki pack. Debate team of exactly ${roster.bundle_size} participants maps user inconvenience, options, constraints, affected files, DB/test risk, and tradeoffs while applying compact Hyperplan-derived lenses: challenge framing, subtract surface, demand evidence, test integration risk, and consider one simpler alternative. Hydrate low-trust claims from source.`, agents: roster.debate_team.map((agent: any) => agent.id) },
-      { id: 'consensus', goal: `Seal one objective with acceptance criteria and disjoint implementation slices, then refresh/validate TriWiki so implementation receives current consensus context.` },
-      { id: 'runtime_task_graph_compile', goal: `Compile the agreed Team plan into ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, and ${TEAM_DECOMPOSITION_ARTIFACT}; remap symbolic plan nodes to concrete task ids, allocate role/path/domain worker lanes, and write ${TEAM_INBOX_DIR} before executor work starts.`, agents: ['parent_orchestrator'], output: [TEAM_GRAPH_ARTIFACT, TEAM_RUNTIME_TASKS_ARTIFACT, TEAM_DECOMPOSITION_ARTIFACT, TEAM_INBOX_DIR] },
-      { id: 'parallel_implementation', goal: `Before implementation, read relevant TriWiki context and current source. Close debate agents, then run a fresh ${roster.bundle_size}-person executor development team with non-overlapping write ownership. Refresh TriWiki after implementation changes or blockers.`, agents: roster.development_team.map((agent: any) => agent.id) },
-      { id: 'review_integration', goal: `Before review and final output, read/validate current TriWiki context, integrate executor output, run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes for correctness/DB safety/tests/evidence, validate user friction with validation_team, refresh after review findings, and record evidence.`, agents: roster.validation_team.map((agent: any) => agent.id), min_reviewer_lanes: MIN_TEAM_REVIEWER_LANES },
-      { id: 'session_cleanup', goal: `Close or account for all Team native sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection or final.`, agents: ['parent_orchestrator'] }
-    ],
-    live_visibility: {
-      markdown: 'team-live.md',
-      transcript: 'team-transcript.jsonl',
-      dashboard: 'team-dashboard.json',
-      zellij: 'CLI Team entrypoints open Zellij live lanes for the visible Team agent budget when Zellij is available.',
-      commands: ['sks team status latest', 'sks team log latest', 'sks team tail latest', 'sks team open-zellij latest', 'sks team watch latest', 'sks team lane latest --agent <name> --follow', 'sks team event latest --agent <name> --phase <phase> --message "..."']
-    },
-    required_artifacts: ['team-roster.json', 'team-analysis.md', ...(fromChatImgRequired ? [FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT] : []), SSOT_GUARD_ARTIFACT, 'team-consensus.md', ...teamRuntimeRequiredArtifacts(), 'team-review.md', 'team-gate.json', TEAM_SESSION_CLEANUP_ARTIFACT, 'reflection.md', 'reflection-gate.json', 'team-live.md', 'team-transcript.jsonl', 'team-dashboard.json', '.sneakoscope/wiki/context-pack.json', 'context7-evidence.jsonl']
-  };
-  await writeJsonAtomic(path.join(dir, 'team-plan.json'), plan);
-  await writeJsonAtomic(path.join(dir, SSOT_GUARD_ARTIFACT), plan.ssot_guard);
-  await writeJsonAtomic(path.join(dir, 'team-roster.json'), { schema_version: 1, mission_id: id, role_counts: roleCounts, agent_sessions: agentSessions, bundle_size: roster.bundle_size, roster, confirmed: true, source: 'default_or_prompt_team_spec' });
-  const contextTracking = triwikiContextTracking();
-  await writeTextAtomic(path.join(dir, 'team-workflow.md'), `# SKS Team Workflow\n\nTask: ${cleanTask}\n\nAgent session budget: ${agentSessions}\nBundle size: ${roster.bundle_size}\nRole counts: ${formatRoleCounts(roleCounts)}\nReview policy: ${MIN_TEAM_REVIEW_POLICY_TEXT}\nReasoning: dynamic per-agent Fast reasoning; simple bounded lanes can use low, tool-heavy runtime lanes medium, and knowledge/safety/release lanes high or xhigh.\nGoal continuation: ambient Codex native /goal overlay is available when useful, without replacing Team route gates.\nContext tracking: ${contextTracking.ssot} SSOT, ${contextTracking.default_pack}; use relevant TriWiki context before every work stage, refresh/validate after findings, and preserve hydratable source anchors.\n\nNative agent intake reasoning:\n${roster.analysis_team.map((agent: any) => `- ${agent.id}: ${formatAgentReasoning(agent)}`).join('\n')}\n\n1. Run exactly ${roster.bundle_size} native agent intake agents and write team-analysis.md.\n2. Refresh/validate TriWiki before debate.\n3. Run exactly ${roster.bundle_size} debate participants through the compact Hyperplan-derived adversarial lens pass, then write consensus and implementation slices.\n4. Compile ${TEAM_GRAPH_ARTIFACT}, ${TEAM_RUNTIME_TASKS_ARTIFACT}, ${TEAM_DECOMPOSITION_ARTIFACT}, and ${TEAM_INBOX_DIR} so worker handoff uses concrete runtime task ids.\n5. Close debate agents before starting a fresh ${roster.bundle_size}-person executor team.\n6. Run at least ${MIN_TEAM_REVIEWER_LANES} independent reviewer/QA validation lanes, integrate, verify, and record evidence.\n7. Close/clean remaining Team sessions, finalize live transcript state, and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final.\n\nNo unrequested fallback implementation code is allowed in any stage, executor lane, review lane, MAD route, or MAD-SKS route. If the requested path cannot be implemented inside the sealed contract, block with evidence instead of adding substitute behavior.\n\nLive visibility:\n- sks team log ${id}\n- sks team tail ${id}\n- sks team watch ${id}\n- sks team lane ${id} --agent native_agent_1 --follow\n- sks team event ${id} --agent <name> --phase <phase> --message \"...\"\n`);
-  await initTeamLive(id, dir, cleanTask, { agentSessions, roleCounts, roster });
-  const runtime = await writeTeamRuntimeArtifacts(dir, plan, {});
-  await writeMemorySweepReport(root, dir, { missionId: id }).catch(() => null);
-  await writeSkillForgeReport(dir, { mission_id: id, route: 'team', task_signature: cleanTask }).catch(() => null);
-  await writeMistakeMemoryReport(dir, { mission_id: id, route: 'team', task: cleanTask }).catch(() => null);
-  await writeCodeStructureReport(root, dir, { missionId: id, exception: 'Team prepare records split-review risk; extraction happens only when the mission scope includes the touched file.' }).catch(() => null);
-  await writeJsonAtomic(path.join(dir, 'team-gate.json'), { passed: false, team_roster_confirmed: true, analysis_artifact: false, triwiki_refreshed: false, triwiki_validated: false, consensus_artifact: false, ...runtime.gate_fields, implementation_team_fresh: false, review_artifact: false, integration_evidence: false, session_cleanup: false, context7_evidence: false, ssot_guard: false, ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}) });
-  const madSksState = opts.madSksAuthorization
-    ? await materializeMadSksAuthorization(dir, id, route, { mad_sks_authorization: true }, {})
-    : {};
-  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, required, ambiguity: { required: false, status: 'direct_team_cli' } });
-  await setCurrent(root, routeState(id, route, 'TEAM_NATIVE_AGENT_INTAKE', required, { prompt: cleanTask, implementation_allowed: true, ambiguity_gate_required: false, ambiguity_gate_passed: true, agent_sessions: agentSessions, role_counts: roleCounts, team_roster_confirmed: true, team_plan_ready: true, team_graph_ready: runtime.ok, context_tracking: 'triwiki', from_chat_img_required: fromChatImgRequired, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT, ...madSksState }));
-  return routeContext(route, id, cleanTask, required, `Run agents, refresh/validate TriWiki, debate, close debate agents, form a fresh ${roster.bundle_size}-person executor team, run minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close/clean Team sessions and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection.`);
-}
-
-async function prepareResearch(root: any, route: any, task: any, required: any) {
-  const { id, dir } = await createMission(root, { mode: 'research', prompt: task });
+async function prepareResearch(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const { id, dir } = await createMission(root, { mode: 'research', prompt: task, sessionKey: opts.sessionKey });
   await writeResearchPlan(dir, task, {});
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
-  await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
+  await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, 'Run sks research run latest as a real long-running source-gathering pass, never an automatic mock fallback; do not modify repository source code; create research-source-skill.md, maximize layered public source search, require every agent effort=xhigh plus one Eureka! idea, repeat agent/debate/falsification cycles until unanimous_consensus=true for every agent or the explicit safety cap pauses the run, fill source-ledger.json, agent-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and pass research-gate.json.');
 }
 
-async function prepareAutoResearch(root: any, route: any, task: any, required: any) {
-  const { id, dir } = await createMission(root, { mode: 'autoresearch', prompt: task });
+async function prepareAutoResearch(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const { id, dir } = await createMission(root, { mode: 'autoresearch', prompt: task, sessionKey: opts.sessionKey });
   await writeJsonAtomic(path.join(dir, 'autoresearch-plan.json'), { schema_version: 1, task, loop: ['program', 'hypothesis', 'experiment', 'measure', 'keep_or_discard', 'falsify', 'honest_conclusion'] });
   await writeJsonAtomic(path.join(dir, 'experiment-ledger.json'), { schema_version: 1, entries: [] });
   await writeJsonAtomic(path.join(dir, 'autoresearch-gate.json'), { passed: false, experiment_ledger_present: true, metric_present: false, keep_or_discard_decision: false, falsification_present: false, honest_conclusion: false, context7_evidence: false });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
-  await setCurrent(root, routeState(id, route, 'AUTORESEARCH_EXPERIMENT_LOOP', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
+  await setCurrent(root, routeState(id, route, 'AUTORESEARCH_EXPERIMENT_LOOP', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, 'Run the smallest useful experiment loop, update experiment-ledger.json, falsify the result, and pass autoresearch-gate.json.');
 }
 
-async function prepareDb(root: any, route: any, task: any, required: any) {
-  const { id, dir } = await createMission(root, { mode: 'db', prompt: task });
+async function prepareDb(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const { id, dir } = await createMission(root, { mode: 'db', prompt: task, sessionKey: opts.sessionKey });
   const scan = await scanDbSafety(root).catch((err: any) => ({ ok: false, findings: [{ id: 'db_scan_failed', severity: 'high', reason: err.message }] }));
   await writeJsonAtomic(path.join(dir, 'db-safety-scan.json'), scan);
   await writeJsonAtomic(path.join(dir, 'db-review.json'), { passed: false, scan_ok: scan.ok, destructive_operation_zero: true, safe_mcp_policy: false, context7_evidence: false, notes: [] });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
-  await setCurrent(root, routeState(id, route, 'DB_REVIEW_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
+  await setCurrent(root, routeState(id, route, 'DB_REVIEW_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, 'Run sks db policy/scan/check as needed, keep DB operations read-only, record safe MCP policy, and pass db-review.json.');
 }
 
-async function prepareMadDb(root: any, route: any, task: any, required: any) {
-  const prepared = await prepareMadDbMission({ root, task, verifyTools: false });
+async function prepareMadDb(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const prepared = await prepareMadDbMission({ root, task, verifyTools: false, sessionKey: opts.sessionKey });
   const dir = missionDir(root, prepared.mission_id);
   const pipelinePlan = await writePipelinePlan(dir, {
     missionId: prepared.mission_id,
@@ -1110,29 +943,30 @@ async function prepareMadDb(root: any, route: any, task: any, required: any) {
     stop_gate: 'mad-db-gate.json',
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
-  }));
+  }), { sessionKey: opts.sessionKey });
   return routeContext(route, prepared.mission_id, task, required, `MadDB mission/capability/profile were created atomically for cycle ${prepared.cycle_id}. Verify Supabase MCP tool inventory exposes execute_sql and apply_migration before claiming ready; after execution require read-back proof, finally close the profile/capability and prove read-only restoration.`);
 }
 
-async function prepareGx(root: any, route: any, task: any, required: any) {
-  const { id, dir } = await createMission(root, { mode: 'gx', prompt: task });
+async function prepareGx(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const { id, dir } = await createMission(root, { mode: 'gx', prompt: task, sessionKey: opts.sessionKey });
   await writeJsonAtomic(path.join(dir, 'gx-gate.json'), { passed: false, vgraph_beta_render: false, validation: false, drift_snapshot: false, context7_evidence: false });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
-  await setCurrent(root, routeState(id, route, 'GX_VALIDATE_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
+  await setCurrent(root, routeState(id, route, 'GX_VALIDATE_REQUIRED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, 'Run sks gx init/render/validate/drift/snapshot, then pass gx-gate.json.');
 }
 
-async function prepareLightRoute(root: any, route: any, task: any, required: any) {
-  const { id, dir } = await createMission(root, { mode: route.id.toLowerCase(), prompt: task });
+async function prepareLightRoute(root: any, route: any, task: any, required: any, opts: any = {}) {
+  const { id, dir } = await createMission(root, { mode: route.id.toLowerCase(), prompt: task, sessionKey: opts.sessionKey });
   await writeJsonAtomic(path.join(dir, 'route-context.json'), { route: route.id, command: route.command, task, required_skills: route.requiredSkills, context7_required: required, context_tracking: triwikiContextTracking(), stop_gate: 'honest_mode' });
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'light_route' } });
-  await setCurrent(root, routeState(id, route, 'ROUTE_CONTEXT_READY', required, { prompt: task, stop_gate: 'none', pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }));
+  await setCurrent(root, routeState(id, route, 'ROUTE_CONTEXT_READY', required, { prompt: task, stop_gate: 'none', pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, task, required, 'Load the route skill context, execute the smallest matching action, and finish with Honest Mode.');
 }
 
 async function prepareNaruto(root: any, route: any, task: any, required: any, opts: any = {}) {
   const cleanTask = stripDollarCommand(task) || String(task || '').trim();
-  const { id, dir } = await createMission(root, { mode: 'naruto', prompt: cleanTask });
+  const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
+  const { id, dir } = await createMission(root, { mode: 'naruto', prompt: cleanTask, sessionKey: opts.sessionKey });
   const routeContextPayload = {
     route: 'Naruto',
     command: '$Naruto',
@@ -1143,6 +977,7 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     context_tracking: triwikiContextTracking(),
     stop_gate: 'naruto-gate.json',
     team_alias: opts.teamAlias === true,
+    from_chat_img_required: fromChatImgRequired,
     mad_sks_authorization: Boolean(opts.madSksAuthorization)
   };
   await writeJsonAtomic(path.join(dir, 'route-context.json'), routeContextPayload);
@@ -1163,6 +998,7 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     native_agent_proof: false,
     final_arbiter_accepted: false,
     session_cleanup: false,
+    ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
     blockers: ['naruto_run_not_started'],
     updated_at: nowIso()
   });
@@ -1179,10 +1015,11 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     required_skills: routeContextPayload.required_skills,
     subagents_required: true,
     native_sessions_required: true,
+    from_chat_img_required: fromChatImgRequired,
     naruto_gate_file: 'naruto-gate.json',
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
-  }));
+  }), { sessionKey: opts.sessionKey });
   return routeContext(route, id, cleanTask, required, `Run sks naruto run ${JSON.stringify(cleanTask)} --json (or continue with Codex native workers for the same mission), then update naruto-gate.json from the worker proof and verification DAG.`);
 }
 
@@ -1282,7 +1119,7 @@ export async function recordContext7Evidence(root: any, state: any, payload: any
   await appendJsonl(file, record);
   if (id) {
     const evidence = await context7Evidence(root, state);
-    await setCurrent(root, { context7_resolved: evidence.resolve, context7_docs: evidence.docs, context7_verified: evidence.ok });
+    await setCurrent(root, { context7_resolved: evidence.resolve, context7_docs: evidence.docs, context7_verified: evidence.ok }, { sessionKey: state._session_key });
   }
   return record;
 }
@@ -1297,7 +1134,7 @@ export async function recordSubagentEvidence(root: any, state: any, payload: any
   await appendJsonl(file, record);
   if (id) {
     const evidence = await subagentEvidence(root, state);
-    await setCurrent(root, { subagents_spawned: evidence.spawn, subagents_reported: evidence.result, subagents_verified: evidence.ok });
+    await setCurrent(root, { subagents_spawned: evidence.spawn, subagents_reported: evidence.result, subagents_verified: evidence.ok }, { sessionKey: state._session_key });
   }
   return record;
 }
@@ -1392,6 +1229,10 @@ function context7DirectSignal(payload: any = {}) {
     });
   }
   return '';
+}
+
+function formatLegacyRoleCounts(roleCounts: any = {}) {
+  return Object.entries(roleCounts || {}).map(([role, count]) => `${role}:${count}`).join(' ');
 }
 
 function context7SafeInput(input: any) {

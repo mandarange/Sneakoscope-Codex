@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
+import { tmpdir } from '../core/fsx.js'
 import { createMission } from '../core/mission.js'
 import { MAD_DB_ACK, closeMadDbCycle, createMadDbCapability } from '../core/mad-db/mad-db-capability.js'
 import { MadDbMcpExecutor } from '../core/mad-db/mad-db-executor.js'
@@ -23,7 +23,7 @@ if (!projectRef || !hasAuth) {
   process.exit(requireReal ? 2 : 0)
 }
 
-const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-mad-db-real-e2e-'))
+const root = tmpdir('sks-mad-db-real-e2e-')
 await fs.mkdir(path.join(root, '.codex'), { recursive: true })
 await fs.writeFile(path.join(root, '.codex', 'config.toml'), `[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=${projectRef}&read_only=true"\n`)
 const mission = await createMission(root, { mode: 'mad-db', prompt: 'real disposable Supabase MadDB E2E' })

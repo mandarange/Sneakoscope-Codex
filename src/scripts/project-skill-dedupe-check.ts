@@ -2,15 +2,32 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { assertGate, emitGate, makeTempRoot, writeManagedCoreSkill } from './sks-3-1-8-check-lib.js';
-import { dedupeProjectSkills } from '../core/codex-native/project-skill-dedupe.js';
+import { reconcileSkills } from '../core/init/skills.js';
 
 const root = await makeTempRoot('sks-skill-dedupe-');
 process.env.CODEX_HOME = path.join(root, 'codex-home');
 await writeManagedCoreSkill(root, '.agents/skills', 'loop');
 await writeManagedCoreSkill(root, '.codex/skills', 'loop');
-const report = await dedupeProjectSkills({ root, fix: true, yes: true });
+await fs.mkdir(path.join(root, '.agents', 'skills', 'quarantine', 'answer'), { recursive: true });
+await fs.mkdir(path.join(root, '.agents', 'skills', 'answer'), { recursive: true });
+await fs.writeFile(path.join(root, '.agents', 'skills', 'answer', 'SKILL.md'), '---\nname: answer\ndescription: user collision\n---\n\nuser-owned answer.\n');
+const report = await reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true });
 const agentsSkill = await fs.stat(path.join(root, '.agents', 'skills', 'loop', 'SKILL.md')).then(() => true, () => false);
 const codexSkill = await fs.stat(path.join(root, '.codex', 'skills', 'loop', 'SKILL.md')).then(() => true, () => false);
-assertGate(report.actions.some((action) => action.action === 'quarantined'), 'managed duplicate skill must be quarantined under --fix', report);
-assertGate([agentsSkill, codexSkill].filter(Boolean).length === 1, 'exactly one managed duplicate should remain active', { agentsSkill, codexSkill });
-emitGate('skill:dedupe', { actions: report.actions.length });
+const answerOriginal = await fs.stat(path.join(root, '.agents', 'skills', 'answer', 'SKILL.md')).then(() => true, () => false);
+const quarantinedAnswers = await findFiles(path.join(root, '.sneakoscope', 'quarantine', 'skills', 'answer'), 'SKILL.md');
+assertGate(report.removed.some((item) => item.endsWith('/loop')), 'project official skill residue must be removed under reconcile --fix', report);
+assertGate(!agentsSkill && !codexSkill, 'project official residue must be removed from .agents/skills and .codex/skills', { agentsSkill, codexSkill });
+assertGate(!answerOriginal && quarantinedAnswers.length === 1, 'official-name user collision must move to unique quarantine outside skill root without data loss', { answerOriginal, quarantinedAnswers });
+emitGate('skill:dedupe', { removed: report.removed.length });
+
+async function findFiles(dir: string, name: string): Promise<string[]> {
+  const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const out: string[] = [];
+  for (const row of rows) {
+    const file = path.join(dir, row.name);
+    if (row.isDirectory()) out.push(...await findFiles(file, name));
+    else if (row.name === name) out.push(file);
+  }
+  return out;
+}

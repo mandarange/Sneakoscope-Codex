@@ -30,6 +30,7 @@ export async function spawnActualNarutoWorker(input: {
   backend: string
   parentPrompt?: string | null
   worktreePolicy?: any
+  preparedAllocation?: any
   zellijSessionName?: string | null
   visiblePaneCap: number
 }): Promise<NarutoActualWorkerHandle> {
@@ -37,13 +38,15 @@ export async function spawnActualNarutoWorker(input: {
   await ensureDir(workerDir)
   let worktree: any = null
   if (input.worktreePolicy?.mode === 'git-worktree' && input.item.write_allowed === true) {
-    const allocation = await allocateWorkerWorktree({
-      repoRoot: input.worktreePolicy.main_repo_root || input.root,
-      missionId: input.missionId,
-      workerId: input.item.id,
-      slotId: input.item.id.replace(/[^A-Za-z0-9_-]/g, '-'),
-      generationIndex: 1
-    }).catch((err: any) => ({ ok: false, blockers: [`git_worktree_allocate_exception:${err?.message || String(err)}`] }))
+    const allocation = input.preparedAllocation?.ok === true
+      ? { ...input.preparedAllocation, source: 'prewarmed_pool' }
+      : await allocateWorkerWorktree({
+        repoRoot: input.worktreePolicy.main_repo_root || input.root,
+        missionId: input.missionId,
+        workerId: input.item.id,
+        slotId: input.item.id.replace(/[^A-Za-z0-9_-]/g, '-'),
+        generationIndex: 1
+      }).catch((err: any) => ({ ok: false, blockers: [`git_worktree_allocate_exception:${err?.message || String(err)}`] }))
     await writeJsonAtomic(path.join(workerDir, 'git-worktree-allocation.json'), allocation)
     if ((allocation as any).ok) worktree = allocation
   }

@@ -90,6 +90,7 @@ export interface AgentRosterEntry {
 export interface AgentRunOptions {
   root?: string
   missionId?: string | null
+  sessionKey?: string | null
   prompt?: string
   route?: string
   agents?: number

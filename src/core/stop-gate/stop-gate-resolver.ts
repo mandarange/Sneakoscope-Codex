@@ -22,6 +22,7 @@ export async function resolveStopGate(input: {
   readonly route?: string | undefined;
   readonly missionId?: string | undefined;
   readonly explicitGatePath?: string | undefined;
+  readonly allowLatestFallback?: boolean | undefined;
 }): Promise<StopGateResolution> {
   const root = path.resolve(input.root);
   const checkedPaths: string[] = [];
@@ -83,8 +84,9 @@ export async function resolveStopGate(input: {
     }
   }
 
-  // 4. latest mission fallback
-  const latest = await findLatestMission(root);
+  // 4. latest mission fallback. Interactive hooks disable this path so a stale
+  // mission cannot satisfy the current session's stop gate by accident.
+  const latest = input.allowLatestFallback === false ? null : await findLatestMission(root);
   if (latest) {
     const dir = missionDir(root, latest);
     for (const file of GATE_FILE_CANDIDATES) {
@@ -92,12 +94,27 @@ export async function resolveStopGate(input: {
       checkedPaths.push(p);
       if (await exists(p)) {
         const raw = await readJson(p, null) as Record<string, unknown> | null;
-        return makeResolution(root, route, latest, p, raw, checkedPaths, statePath, stateMissionId, 'latest_mission');
+        if (!gateMatchesRoute(raw, route)) continue;
+        if (stateMissionId && stateMissionId !== latest) {
+          console.error(`SKS stop-gate warning: latest mission fallback selected ${latest}, current state mission is ${stateMissionId}. Pass --mission or --gate to avoid fallback.`);
+        }
+        return makeResolution(root, route, latest, p, raw, checkedPaths, statePath, stateMissionId, 'latest_mission_fallback_warn');
       }
     }
   }
 
   return makeResolution(root, route, missionId, null, null, checkedPaths, statePath, stateMissionId, 'no_gate_found');
+}
+
+function gateMatchesRoute(raw: Record<string, unknown> | null, route: string | null): boolean {
+  if (!route || !raw) return true;
+  const expected = normalizeRoute(route);
+  const actual = normalizeRoute(String(raw.route || raw.route_command || ''));
+  return !actual || actual === expected;
+}
+
+function normalizeRoute(value: string): string {
+  return String(value || '').replace(/^\$/, '').replace(/_/g, '-').toLowerCase();
 }
 
 function makeResolution(

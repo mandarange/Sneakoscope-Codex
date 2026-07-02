@@ -23,7 +23,7 @@ const required = {
   'README.md': ['CHANGELOG.md', 'docs/release-readiness.md', 'gpt-image-2'],
   'CHANGELOG.md': ['1.14.0', 'DFix Extreme Speed Kernel', 'hook trust doctor', 'warning-zero'],
   'docs/computer-use-evidence.md': ['sks.computer-use-live-evidence.v1', 'probe_only', 'live_capture_blocked', 'local-only', 'Codex Chrome Extension'],
-  'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'durable_launchctl', 'shell_profile', 'process_only_ephemeral'],
+  'docs/codex-lb.md': ['durable_env_file', 'durable_keychain', 'shell_profile', 'process_only_ephemeral', 'base URL only'],
   'docs/codex-0.136-compat.md': ['rust-v0.136.0', 'codex:0.136-compat', 'codex archive', 'codex app-server --stdio', 'CODEX_API_KEY', 'server tokens'],
   'docs/codex-0.135-compat.md': ['rust-v0.135.0', 'codex:0.135-compat', 'named permission profiles'],
   'docs/codex-cli-compat.md': ['rust-v0.136.0', 'session_archive_restore', 'profile_primary_selector', 'managed_network_proxy_env', 'goals_default_enabled', 'permission_profiles_requirements', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],

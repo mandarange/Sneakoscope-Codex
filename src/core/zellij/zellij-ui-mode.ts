@@ -3,6 +3,28 @@ export type SksZellijUiMode =
   | 'dashboard-plus-slots'
   | 'full-debug'
 
+export interface ZellijUiConfig {
+  mode: SksZellijUiMode
+  color: boolean
+  visiblePanes: number | null
+  viewports: number
+  monitorRows: number
+  monitor: boolean
+  intervalMs: number
+}
+
+export function resolveZellijUiConfig(args: string[] = [], env: NodeJS.ProcessEnv = process.env): ZellijUiConfig {
+  return {
+    mode: resolveZellijUiMode(args, env),
+    color: env.SKS_ZELLIJ_COLOR !== '0' && env.NO_COLOR !== '1',
+    visiblePanes: Number(env.SKS_ZELLIJ_VISIBLE_PANES) || null,
+    viewports: boundedInt(env.SKS_ZELLIJ_VIEWPORTS, 4, 0, 6),
+    monitorRows: Math.max(4, Number(env.SKS_ZELLIJ_MONITOR_ROWS || 12)),
+    monitor: env.SKS_ZELLIJ_MONITOR_PANE !== '0',
+    intervalMs: Math.max(500, Number(env.SKS_ZELLIJ_REFRESH_MS) || 1000)
+  }
+}
+
 export function resolveZellijUiMode(args: string[] = [], env: NodeJS.ProcessEnv = process.env): SksZellijUiMode {
   return resolveExplicitZellijUiMode(args, env) || 'compact-slots'
 }
@@ -31,4 +53,10 @@ function resolveExplicitZellijUiMode(args: string[] = [], env: NodeJS.ProcessEnv
 
 export function zellijUiModeCreatesDashboard(mode: SksZellijUiMode): boolean {
   return mode === 'dashboard-plus-slots'
+}
+
+function boundedInt(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Math.floor(Number(value ?? fallback))
+  const n = Number.isFinite(parsed) ? parsed : fallback
+  return Math.max(min, Math.min(n, max))
 }

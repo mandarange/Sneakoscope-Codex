@@ -33,8 +33,8 @@ Bounded 1.0.7 claims:
 - Computer Use live evidence is opt-in. `probe_only` is the default and `live_capture_success` requires official Codex App/macOS capture capability; unavailable capture records `live_capture_blocked` with a structured reason instead of fabricated evidence.
 - Computer Use screenshots are local-only by default. Shared TriWiki can record metadata/anchors, but screenshot binaries are not published automatically.
 - Browser Use evidence and manual screenshots are separate evidence sources, not substitutes for Codex Chrome Extension web evidence or native Computer Use live evidence.
-- codex-lb setup reports `durable_env_file`, `durable_keychain`, `durable_launchctl`, `shell_profile`, `process_only_ephemeral`, or `none` according to actual setup choices and effects. If all durable choices are off, the next shell may require setup or explicit environment variables again.
-- Recovery commands: `sks computer-use smoke --json`, `sks computer-use smoke --real --capture-screenshot --json`, and `sks codex-lb setup --write-env-file --keychain --launchctl`.
+- codex-lb setup reports `durable_env_file`, `durable_keychain`, `shell_profile`, `process_only_ephemeral`, or `none` according to actual setup choices and effects. `--launchctl` is base URL only and removes API-key launchd env values. If all durable choices are off, the next shell may require setup or explicit environment variables again.
+- Recovery commands: `sks computer-use smoke --json`, `sks computer-use smoke --real --capture-screenshot --json`, and `sks codex-lb setup --write-env-file --keychain`.
 
 P1 future enhancements:
 

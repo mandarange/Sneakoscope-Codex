@@ -1,6 +1,7 @@
 import path from 'node:path'
 import os from 'node:os'
 import { ensureDir, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 
 export const DOCTOR_CONTEXT7_REPAIR_SCHEMA = 'sks.doctor-context7-repair.v1'
 const CONTEXT7_REMOTE_URL = 'https://mcp.context7.com/mcp'
@@ -39,7 +40,7 @@ export async function runDoctorContext7Repair(input: {
     { scope: 'global' as const, path: path.join(codexHome, 'config.toml') }
   ]
   const configs = []
-  for (const candidate of candidates) configs.push(await inspectOrRepairContext7Config(candidate, input.fix))
+  for (const candidate of candidates) configs.push(await inspectOrRepairContext7Config(root, candidate, input.fix))
   const blockers = configs.flatMap((entry) => entry.blockers.map((blocker) => `${entry.scope}:${blocker}`))
   const warnings = configs.flatMap((entry) => entry.warnings.map((warning) => `${entry.scope}:${warning}`))
   const actions = configs
@@ -64,7 +65,7 @@ export async function runDoctorContext7Repair(input: {
   return result
 }
 
-async function inspectOrRepairContext7Config(candidate: { scope: 'project' | 'global'; path: string }, fix: boolean): Promise<DoctorContext7RepairResult['configs'][number]> {
+async function inspectOrRepairContext7Config(root: string, candidate: { scope: 'project' | 'global'; path: string }, fix: boolean): Promise<DoctorContext7RepairResult['configs'][number]> {
   const text = await readText(candidate.path, null)
   if (text == null) {
     return baseConfig(candidate, {
@@ -87,7 +88,13 @@ async function inspectOrRepairContext7Config(candidate: { scope: 'project' | 'gl
       }
       const next = removeBlocks(text, childBlocks).replace(/\s*$/, '\n')
       const backupPath = await backupConfig(candidate.path, text)
-      await writeTextAtomic(candidate.path, next)
+      await writeCodexConfigGuarded({
+        root,
+        configPath: candidate.path,
+        before: text,
+        cause: 'doctor-context7-repair',
+        mutate: () => next
+      })
       return baseConfig(candidate, {
         present: true,
         status: 'repaired_to_remote',
@@ -118,7 +125,13 @@ async function inspectOrRepairContext7Config(candidate: { scope: 'project' | 'gl
   const withRemote = `${text.slice(0, block.start).trimEnd()}${block.start > 0 ? '\n\n' : ''}${remoteBlock}${text.slice(block.end).replace(/^\n+/, '\n')}`.replace(/\s*$/, '\n')
   const next = removeBlocks(withRemote, context7ChildBlocks(withRemote)).replace(/\s*$/, '\n')
   const backupPath = await backupConfig(candidate.path, text)
-  await writeTextAtomic(candidate.path, next)
+  await writeCodexConfigGuarded({
+    root,
+    configPath: candidate.path,
+    before: text,
+    cause: 'doctor-context7-repair',
+    mutate: () => next
+  })
   return baseConfig(candidate, {
     present: true,
     status: 'repaired_to_remote',

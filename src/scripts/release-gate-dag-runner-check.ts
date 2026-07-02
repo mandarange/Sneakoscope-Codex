@@ -12,7 +12,7 @@ const scheduler = readText('src/core/release/release-gate-scheduler.ts')
 const cache = readText('src/core/release/release-gate-cache-v2.ts')
 
 const releaseCheck = String(pkg.scripts['release:check'] || '')
-const delegatedReleaseCheck = releaseCheck.match(/^npm run ([^\s&]+)$/)?.[1]
+const delegatedReleaseCheck = releaseCheck.match(/^npm run ([^\s&]+)(?:\s+--silent)?$/)?.[1]
 const effectiveReleaseCheck = delegatedReleaseCheck ? String(pkg.scripts[delegatedReleaseCheck] || '') : releaseCheck
 
 assertGate(
@@ -24,7 +24,15 @@ assertGate(!/&&\s*npm run\s+\w/.test(releaseCheck.replace('npm run build --silen
 assertGate(!/&&\s*npm run\s+\w/.test(effectiveReleaseCheck.replace('npm run build:incremental --silent &&', '').replace('npm run build --silent &&', '')), 'effective release:check must not be a giant npm-run chain', effectiveReleaseCheck)
 assertGate(pkg.scripts['release:check:legacy'], 'release:check:legacy must exist for explicit debugging')
 assertGate(manifest.schema === 'sks.release-gates.v2' && manifest.gates.length >= 10, 'release-gates.v2 manifest must exist with nodes', manifest)
-for (const gateId of ['scheduler:utilization-integral', 'parallel:runtime-real-blackbox', 'agent:native-cli-session-swarm-20', 'doctor:fix-proves-codex-read', 'codex:0139-real-probes', 'zellij:slot-telemetry-performance', 'naruto:real-parallelism-blackbox']) {
+for (const gateId of [
+  'scheduler:utilization-integral',
+  'agent:native-cli-session-swarm-20',
+  'doctor:fix-proves-codex-read',
+  'doctor:codex-0139-real-probes',
+  'release:full-parallelism-blackbox',
+  'release:parallel-speed-budget',
+  'scheduler:parallel-proof-consistency'
+]) {
   const gate = manifest.gates.find((row: any) => row.id === gateId)
   assertGate(gate?.resource?.includes('timing-sensitive'), `${gateId} must run in timing-sensitive isolation`, gate)
 }

@@ -2,16 +2,9 @@ import { spawnSync } from 'node:child_process'
 import type { ReleaseGateManifestV2, ReleaseGateNode } from './release-gate-node.js'
 
 const ALWAYS_KEEP = new Set([
-  'release:version-truth',
+  'release:proof-truth',
   'release:dag-full-coverage',
-  'release:codex-current',
-  'codex:0142:manifest',
-  'codex:0142:binary-identity',
-  'codex:0142:policy',
-  'codex:0142:app-server-v2',
-  'codex:0142:thread-store',
-  'codex:0142:capability',
-  'runtime:ts-source-of-truth',
+  'release:runtime-truth-matrix',
   'typecheck',
   'schema:check'
 ])
@@ -91,7 +84,7 @@ function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], pres
   const matchingReleaseScript = changedFiles.some((file) => releaseScriptGateCandidates(file).includes(gate.id))
   if (matchingReleaseScript) return 'release_script_changed'
   if (changedFiles.some((file) => file.startsWith('src/scripts/prepublish-') || file.startsWith('src/scripts/publish-'))) {
-    if (releaseGate && gate.id === 'release:version-truth') return 'publish_or_prepublish_script_changed'
+    if (releaseGate && gate.id === 'release:proof-truth') return 'publish_or_prepublish_script_changed'
   }
   if (changedFiles.some((file) => file.startsWith('src/scripts/scheduler-') || file.startsWith('src/core/scheduler/'))) {
     return gate.id.startsWith('scheduler:') ? 'scheduler_source_changed' : null

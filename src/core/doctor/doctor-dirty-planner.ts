@@ -22,6 +22,7 @@ export interface DoctorDirtyPhase {
   input_hash: string;
   last_clean_proof_id: string | null;
   postcheck_required: boolean;
+  postcheck_pending: boolean;
 }
 
 export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorDirtyPlan {
@@ -30,17 +31,25 @@ export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorD
     const inputHash = phaseInputHash(root, id);
     const postcheckRequired = phaseRequiresPostcheck(id);
     const markerState = readMarker(marker);
-    if (!markerState) return { id, status: 'dirty' as const, reason: 'no_clean_marker', input_hash: inputHash, last_clean_proof_id: null, postcheck_required: postcheckRequired };
+    if (!markerState) return { id, status: 'dirty' as const, reason: 'no_clean_marker', input_hash: inputHash, last_clean_proof_id: null, postcheck_required: postcheckRequired, postcheck_pending: false };
     if (markerState.input_hash !== inputHash) {
-      return { id, status: 'dirty' as const, reason: 'input_hash_changed', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired };
+      return { id, status: 'dirty' as const, reason: 'input_hash_changed', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false };
     }
     if (markerState.proof_id && !proofExists(root, markerState.proof_id)) {
-      return { id, status: 'dirty' as const, reason: 'clean_proof_missing', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired };
+      return { id, status: 'dirty' as const, reason: 'clean_proof_missing', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false };
     }
-    if (postcheckRequired && !markerState.postcheck_passed) {
-      return { id, status: 'dirty' as const, reason: 'postcheck_required', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: true };
+    if (!markerState.repair_applied) {
+      return { id, status: 'dirty' as const, reason: 'repair_not_applied', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false };
     }
-    return { id, status: 'clean' as const, reason: 'matching_clean_proof', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired };
+    return {
+      id,
+      status: 'clean' as const,
+      reason: postcheckRequired && markerState.postcheck_pending ? 'matching_repair_marker_postcheck_pending' : 'matching_clean_proof',
+      input_hash: inputHash,
+      last_clean_proof_id: markerState.proof_id,
+      postcheck_required: postcheckRequired,
+      postcheck_pending: postcheckRequired && markerState.postcheck_pending
+    };
   });
   const plan: DoctorDirtyPlan = {
     schema: DOCTOR_DIRTY_PLAN_SCHEMA,
@@ -67,7 +76,9 @@ export function markDoctorPhaseClean(root: string, id: string, proofId = `doctor
     input_hash: phaseInputHash(root, id),
     target_semantic_hash: phaseInputHash(root, id),
     postcheck_id: `${id}:postcheck`,
-    postcheck_passed: postcheckPassed
+    repair_applied: true,
+    postcheck_passed: postcheckPassed,
+    postcheck_pending: postcheckPassed !== true
   }, null, 2)}\n`);
   return proofId;
 }
@@ -80,13 +91,21 @@ function markerPath(root: string, id: string): string {
   return path.join(root, '.sneakoscope', 'cache', 'doctor-dirty', `${id.replace(/[^a-zA-Z0-9._-]+/g, '_')}.clean`);
 }
 
-function readMarker(file: string): { proof_id: string | null; input_hash: string | null; postcheck_passed: boolean } | null {
+function readMarker(file: string): { proof_id: string | null; input_hash: string | null; repair_applied: boolean; postcheck_passed: boolean; postcheck_pending: boolean } | null {
   try {
     if (!fs.existsSync(file)) return null;
     const raw = fs.readFileSync(file, 'utf8');
-    if (!raw.trim().startsWith('{')) return { proof_id: null, input_hash: null, postcheck_passed: false };
-    const json = JSON.parse(raw) as { proof_id?: string; input_hash?: string; postcheck_passed?: boolean };
-    return { proof_id: json.proof_id || null, input_hash: json.input_hash || null, postcheck_passed: json.postcheck_passed === true };
+    if (!raw.trim().startsWith('{')) return { proof_id: null, input_hash: null, repair_applied: false, postcheck_passed: false, postcheck_pending: false };
+    const json = JSON.parse(raw) as { proof_id?: string; input_hash?: string; repair_applied?: boolean; postcheck_passed?: boolean; postcheck_pending?: boolean };
+    const proofId = json.proof_id || null;
+    const postcheckPassed = json.postcheck_passed === true;
+    return {
+      proof_id: proofId,
+      input_hash: json.input_hash || null,
+      repair_applied: json.repair_applied !== false && Boolean(proofId),
+      postcheck_passed: postcheckPassed,
+      postcheck_pending: json.postcheck_pending === true || !postcheckPassed
+    };
   } catch {
     return null;
   }

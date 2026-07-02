@@ -597,7 +597,7 @@ async function buildL2(root: any, dir: any) {
   const pipelinePlan = await readJson(path.join(dir, 'pipeline-plan.json'), null);
   const contract = await readJson(path.join(dir, 'decision-contract.json'), null);
   const statusLedger = await readJson(path.join(dir, MISSION_STATUS_LEDGER_ARTIFACT), null);
-  const gateFiles = ['team-gate.json', 'research-gate.evaluated.json', 'research-gate.json', 'db-review.json', 'qa-gate.json', 'ppt-gate.json', 'image-ux-review-gate.json', 'gx-gate.json', 'hard-blocker.json'];
+  const gateFiles = ['naruto-gate.json', 'research-gate.evaluated.json', 'research-gate.json', 'db-review.json', 'qa-gate.json', 'ppt-gate.json', 'image-ux-review-gate.json', 'gx-gate.json', 'hard-blocker.json', 'team-gate.json']; // team-gate is legacy read-only recall for old missions.
   const gates: any[] = [];
   for (const file of gateFiles) {
     const gate = await readJson(path.join(dir, file), null);

@@ -48,10 +48,13 @@ async function checkHardBlocker(root: string, missionId: string | null): Promise
   if (!(await exists(file))) return { hardBlocked: false, file: null, reason: null, evidence: [] };
   const blocker = await readJson(file, null) as Record<string, unknown> | null;
   if (!blocker) return { hardBlocked: false, file, reason: null, evidence: [] };
+  const evidence = (blocker.evidence as unknown[]) || [];
   const hardBlocked = String(blocker.status || '') === 'hard_blocked'
     && blocker.passed !== true
-    && String(blocker.reason || '').trim().length > 0;
-  return { hardBlocked, file, reason: String(blocker.reason || ''), evidence: (blocker.evidence as unknown[]) || [] };
+    && String(blocker.reason || '').trim().length > 0
+    && Array.isArray(evidence)
+    && evidence.length > 0;
+  return { hardBlocked, file, reason: String(blocker.reason || ''), evidence };
 }
 
 export async function checkStopGate(input: {
@@ -59,6 +62,7 @@ export async function checkStopGate(input: {
   readonly route?: string;
   readonly missionId?: string;
   readonly explicitGatePath?: string;
+  readonly allowLatestFallback?: boolean;
 }): Promise<StopGateCheckResult> {
   const root = path.resolve(input.root);
   const resolution = await resolveStopGate({
@@ -66,6 +70,7 @@ export async function checkStopGate(input: {
     ...(input.route ? { route: input.route } : {}),
     ...(input.missionId ? { missionId: input.missionId } : {}),
     ...(input.explicitGatePath ? { explicitGatePath: input.explicitGatePath } : {}),
+    ...(input.allowLatestFallback === false ? { allowLatestFallback: false } : {}),
   });
 
   const route = normalizeRoute(resolution.route) ?? normalizeRoute(input.route ?? null) ?? 'Naruto';
@@ -139,12 +144,14 @@ export async function checkStopGate(input: {
   }
 
   const missingFields: string[] = [];
+  if (normalizedGate.status !== 'passed') missingFields.push('status');
   if (normalizedGate.passed !== true) missingFields.push('passed');
   if (normalizedGate.blockers.length > 0) missingFields.push('blockers');
   if (normalizedGate.missing_fields.length > 0) missingFields.push(...normalizedGate.missing_fields.map((field) => `missing_fields:${field}`));
 
   if (
-    normalizedGate.passed === true
+    normalizedGate.status === 'passed'
+    && normalizedGate.passed === true
     && normalizedGate.blockers.length === 0
     && normalizedGate.missing_fields.length === 0
   ) {

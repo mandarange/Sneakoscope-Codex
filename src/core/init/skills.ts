@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { ensureDir, exists, PACKAGE_VERSION, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
+import { ensureDir, exists, nowIso, PACKAGE_VERSION, readJson, readText, sha256, withScratchDir, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT } from '../team-review-policy.js';
 import { buildSksCoreSkillManifest, isCoreSkillName } from '../codex-native/core-skill-manifest.js';
 import { syncCoreSkillsIntegrity } from '../codex-native/core-skill-integrity.js';
@@ -9,28 +9,39 @@ import { SKILL_DREAM_POLICY, skillDreamPolicyText } from '../skill-forge.js';
 import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_EVIDENCE_SOURCE, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, productDesignPluginPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
 
 const SKS_SKILL_MANIFEST_FILE = '.sks-generated.json';
+const PACKAGED_SKILLS_MANIFEST_SCHEMA = 'sks.skills-manifest.v1';
 const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_current_manifest';
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
+const MANAGED_SKILL_MARKER_RE = /BEGIN SKS (?:IMMUTABLE CORE|MANAGED) SKILL/;
+const FORGE_SKILL_MARKER_RE = /BEGIN SKS FORGE SKILL/;
+const REMOVED_OFFICIAL_SKILLS = ['old-workflow', 'team-legacy'];
+const DEPRECATED_SKILL_ALIASES: Record<string, string[]> = {
+  naruto: ['shadow-clone-legacy'],
+  team: ['agent-team'],
+  'qa-loop': ['qaloop'],
+  wiki: ['wiki-refresh', 'wikirefresh'],
+  sks: ['ralph', 'Ralph', 'ralph-supervisor', 'ralph-resolver']
+};
 
 function reflectionInstructionText(commandPrefix: any = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write reflection.md; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass reflection-gate.json.`;
 }
 
-export async function installSkills(root: any) {
+async function installOfficialSkills(root: any) {
   const imageUxReviewSkill = (name: any) => `---\nname: ${name}\ndescription: $Image-UX-Review/$UX-Review imagegen/gpt-image-2 annotated UI/UX review loop.\n---\n\nUse only for $Image-UX-Review, $UX-Review, $visual-review, or $ui-ux-review UI/UX review requests. ${imageUxReviewPipelinePolicyText()} Core loop: capture or attach source UI screenshots, then invoke Codex App $imagegen with gpt-image-2 to create a new generated annotated review image from each source screenshot, then analyze the generated review image with vision/OCR into image-ux-issue-ledger.json, then apply only requested safe fixes and recheck changed screens. Text-only screenshot critique cannot satisfy full verification; missing generated annotated review images keep full image-ux-review-gate.json verification blocked, but may close verified_partial/reference-only when source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence exist. For live web/browser/webapp capture use Codex Chrome Extension first and halt if it is not installed/enabled; use Codex Computer Use only for native Mac/non-web app screens. Required artifacts: image-ux-review-policy.json, image-ux-screen-inventory.json, image-ux-generated-review-ledger.json, image-ux-issue-ledger.json, image-ux-iteration-report.json, image-ux-review-gate.json. Finish with reflection and Honest Mode.\n`;
   const skills = {
     'dfix': `---\nname: dfix\ndescription: Direct Fix mode for $DFix or $dfix requests and inferred tiny copy/config/docs/labels/spacing/translation/simple mechanical edits.\n---\n\nUse for tiny copy/config/docs/labels/spacing/translation/simple mechanical edits. List exact micro-edits, inspect only needed files, apply only those edits, and run cheap verification. Keep broad implementation routed to Team; for UI/UX micro-edits read \`design.md\` when present and use imagegen for image/logo/raster assets. Bypass broad SKS routing, mission state, TriWiki/TriFix/reflection/state recording, Goal, Research, eval, redesign, and repeated full-route Honest Mode loops. Start the final answer with \`DFix 완료 요약:\` and include one \`DFix 솔직모드:\` line covering verified, not verified, and remaining issues. ${CODEX_IMAGEGEN_REQUIRED_POLICY}\n`,
     'answer': `---\nname: answer\ndescription: Answer-only research route for ordinary questions that should not start implementation.\n---\n\nUse for explanations, comparisons, status, facts, source-backed research, or docs guidance. Use repo/TriWiki first for project-local facts; hydrate low-trust claims from source. Browse or use Context7 for current external package/API/framework/MCP docs. End with a concise answer summary plus Honest Mode; do not create missions, subagents, or file edits.\n`,
     'sks': `---\nname: sks\ndescription: General Sneakoscope Codex command route for $SKS or $sks usage, setup, status, and workflow help.\n---\n\nUse local SKS commands: bootstrap, deps, commands, quickstart, codex-app, context7, guard, conflicts, reasoning, wiki, pipeline status, pipeline plan, skill-dream. Promote code-changing work to Team unless Answer/DFix/Help/Wiki/safety route fits. Surface route/guard/scope, use TriWiki, do not edit installed harness files outside this engine repo, and require human-approved conflict cleanup. ${skillDreamPolicyText()}\n`,
-    'fast-mode': `---\nname: fast-mode\ndescription: Dollar-command route for $Fast-Mode, $Fast-On, and $Fast-Off project-local Fast mode toggles.\n---\n\nUse when the user invokes $Fast-Mode, $Fast-On, $Fast-Off, or asks to turn SKS Fast mode on/off for dollar commands. Prefer \`sks fast-mode on|off|status|clear --json\`. The command writes only .sneakoscope/state/fast-mode.json in the active project. Explicit runtime flags still win: \`--fast\`, \`--no-fast\`, and \`--service-tier standard|fast\` override the saved preference for that run. Finish with a short status and Honest Mode; do not start Team or broad implementation for a toggle-only request.\n`,
-    'fast-on': `---\nname: fast-on\ndescription: Alias for $Fast-On project-local SKS Fast mode enablement.\n---\n\nUse the same rules as fast-mode. Run or instruct \`sks fast-mode on --json\`, then report the active state, state file, and the fact that explicit per-run flags still override the saved preference.\n`,
-    'fast-off': `---\nname: fast-off\ndescription: Alias for $Fast-Off project-local SKS Fast mode disablement.\n---\n\nUse the same rules as fast-mode. Run or instruct \`sks fast-mode off --json\`, then report the active state, state file, and the fact that explicit per-run flags still override the saved preference.\n`,
+    'fast-mode': `---\nname: fast-mode\ndescription: Dollar-command route for $Fast-Mode, $Fast-On, and $Fast-Off global Codex Desktop Fast mode toggles.\n---\n\nUse when the user invokes $Fast-Mode, $Fast-On, $Fast-Off, or asks to turn SKS Fast mode on/off. Prefer \`sks fast-mode on|off|status|clear --json\`. By default on/off updates the global Codex Desktop config so GPT 5.5 Fast persists and also keeps .sneakoscope/state/fast-mode.json in sync for SKS workers. Use \`--project\` only when the user explicitly wants project-local worker preference without touching global Codex config. Explicit runtime flags still win: \`--fast\`, \`--no-fast\`, and \`--service-tier standard|fast\` override the saved preference for that run. Finish with a short status and Honest Mode; do not start Team or broad implementation for a toggle-only request.\n`,
+    'fast-on': `---\nname: fast-on\ndescription: Alias for $Fast-On global Codex Desktop GPT 5.5 Fast enablement.\n---\n\nUse the same rules as fast-mode. Run or instruct \`sks fast-mode on --json\`, then report Global (desktop), Project (sks workers), state file, and the fact that explicit per-run flags still override the saved preference.\n`,
+    'fast-off': `---\nname: fast-off\ndescription: Alias for $Fast-Off global Codex Desktop Fast mode disablement.\n---\n\nUse the same rules as fast-mode. Run or instruct \`sks fast-mode off --json\`, then report Global (desktop), Project (sks workers), state file, and the fact that explicit per-run flags still override the saved preference.\n`,
     'with-local-llm-on': `---\nname: with-local-llm-on\ndescription: Dollar-command route for $with-local-llm-on local Ollama worker enablement.\n---\n\nUse when the user invokes $with-local-llm-on or asks to enable the optional local Ollama worker backend. Prefer \`sks with-local-llm on --json\`. The command writes the machine-local config at \`~/.sneakoscope/local-model.json\`. Default off means SKS stays GPT-only until this command enables local workers. Enabled mode only lets policy-eligible simple code patch-envelope or read-only collection worker slices use Ollama; GPT/Codex still owns strategy, planning, design, review, verification, safety, and integration. \`--no-ollama\` and \`SKS_OLLAMA_WORKERS=0\` still force local workers off for a run. Finish with a short status and Honest Mode; do not start Team for a toggle-only request.\n`,
     'with-local-llm-off': `---\nname: with-local-llm-off\ndescription: Dollar-command route for $with-local-llm-off local Ollama worker disablement.\n---\n\nUse when the user invokes $with-local-llm-off or asks to disable the optional local Ollama worker backend. Prefer \`sks with-local-llm off --json\`. The command writes the machine-local config at \`~/.sneakoscope/local-model.json\`. Disabled mode keeps SKS GPT-only by default. Strategy, planning, design, review, verification, safety, and integration remain GPT/Codex-owned regardless of this toggle. Finish with a short status and Honest Mode; do not start Team for a toggle-only request.\n`,
     'wiki': `---\nname: wiki\ndescription: Dollar-command route for $Wiki TriWiki refresh, pack, validate, and prune commands.\n---\n\nUse for $Wiki or Korean wiki-refresh requests. Refresh/update/갱신: run sks wiki refresh, then validate .sneakoscope/wiki/context-pack.json. Pack: run sks wiki pack, then validate. Prune/clean/정리: use sks wiki refresh --prune, or sks wiki prune --dry-run for inspection. Report claims, anchors, trust, attention.use_first/hydrate_first, validation, and blockers. Do not start ambiguity-gated implementation, subagents, or unrelated work.\n`,
-    'team': `---\nname: team\ndescription: SKS Team orchestration for $Team/code work; $From-Chat-IMG is the explicit chat-image alias.\n---\n\nUse for $Team/code work. Auto-seal the route contract from prompt, TriWiki/current-code defaults, and conservative policy; do not surface a prequestion sheet. Read pipeline-plan.json or run sks pipeline plan to see the runtime lane, kept/skipped stages, and verification before implementation. Write team-roster.json; team-gate.json needs team_roster_confirmed=true. executor:N means N native analysis agents, N debate voices, then fresh N executors. ${MIN_TEAM_REVIEW_POLICY_TEXT} After consensus, compile team-graph.json, team-runtime-tasks.json, team-decomposition-report.json, and team-inbox/ so worker handoff uses concrete runtime task ids with role/path/domain/lane hints. Refresh/validate TriWiki before debate, implementation, review, and final; consume attention.use_first and hydrate attention.hydrate_first before risky decisions. ${leanEngineeringCompactText()} ${outcomeRubricPolicyText()} ${speedLanePolicyText()} ${solutionScoutPolicyText('fix this broken behavior')} ${skillDreamPolicyText()} Log events and use sks team message for bounded inter-agent communication in transcript/lane panes. Color-coded Zellij lanes distinguish overview/native-analysis/planning/execution/review/safety sessions in one Zellij window using split panes when Zellij is available. $Team/$team plus sks --mad uses the MAD-SKS permission gate module: user-authorized target-project scopes such as files, shell, packages, services, network, browser/Computer Use, generated assets, file permissions, migrations, normal DB writes, Supabase MCP writes, direct SQL, and schema cleanup are open only for the active invocation; catastrophic wipe/all-row/project-management, credential exfiltration, persistent security weakening, and unrequested fallback guards remain. End with cleanup-zellij or a cleanup event so follow panes show cleanup and stop; pass team-session-cleanup.json, then reflection and Honest Mode. Parent integrates/verifies.\n\n${chatCaptureIntakeText()}\n`,
-    'from-chat-img': `---\nname: from-chat-img\ndescription: Explicit $From-Chat-IMG Team alias for chat screenshot plus attachment analysis.\n---\n\nUse only for From-Chat-IMG/$From-Chat-IMG. It enters the normal Team pipeline. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets use Codex Chrome Extension first; for native Mac/non-web app surfaces use Codex Computer Use visual inspection when available. List requirements first, match regions to attachments with confidence, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}, then continue Team gates, review, reflection, and Honest Mode. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} The ledger must account for every visible customer request, screenshot image region, and separate attachment; ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must have a checked item for each request, image-region/attachment match, work item, scoped QA-LOOP, and verification step; ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}. ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} must prove QA-LOOP ran over the exact customer-request work-order range after implementation, with every work item covered, post-fix verification complete, and zero unresolved findings. team-gate.json cannot pass From-Chat-IMG completion until unresolved_items is empty, every checklist box is checked, and scoped_qa_loop_completed=true.\n`,
-    'naruto': `---\nname: naruto\ndescription: $Naruto Shadow Clone Swarm (影分身 / Kage Bunshin no Jutsu) fans out up to 100 parallel clone sessions on the native agent kernel for high-throughput work.\n---\n\nUse when the user invokes $Naruto, $ShadowClone, or $Kagebunshin, or asks to fan out many parallel agent clones for high-throughput sweeps. Naruto runs on the native agent kernel and layers on the Team route: it loads the team, pipeline-runner, prompt-pipeline, and honest-mode skills. Prefer \`sks naruto run "<task>" [--clones N] [--backend codex-exec|fake] [--work-items N] [--real] [--readonly] [--json]\` and \`sks naruto status [--mission <id>] [--json]\`. Clones default to the native kernel and are throttled to host capacity (cores/free memory); the requested clone count is the ceiling, not a guarantee, and the scheduler backfills slots as clones complete. Shadow clones always run in fast service tier; \`--no-fast\`/standard requests are not honored for clones. Writes are lease-based and non-overlapping: each clone takes a path lease before writing so parallel clones never edit the same file, and every clone emits its own proof. Keep agent-central-ledger.json, agent-task-board.json, agent-effort-policy.json, agent-scheduler-state.json, agent-proof-evidence.json, and agent-session-cleanup.json; the parent session owns integration, verification, and final claims. Use \`--backend fake\` only for fixtures/selftests; remove it when real clone evidence is intended. Lifecycle: clone roster build, work partition, parallel clone scheduling, lease-based write swarm, per-clone proof, session cleanup, then reflection and Honest Mode. Refresh/validate TriWiki before risky decisions and consume attention.use_first/hydrate_first. Catastrophic safeguards remain active for every clone. Finish with a concise completion summary and Honest Mode covering verified clones, unverified work, and any blockers.\n`,
+    'team': `---\nname: team\ndescription: Deprecated $Team compatibility alias; new execution missions route to $Naruto.\n---\n\nUse only to explain or follow legacy $Team prompts. $Team and \`sks team "<task>"\` are deprecated for new execution and redirect to the Naruto native shadow-clone swarm; legacy \`sks team log|tail|watch|lane|status|event|message|open-zellij|attach-zellij|cleanup-zellij\` remains read-only/observability support for old Team missions. For implementation, load the naruto skill, read pipeline-plan.json, run lease-safe Naruto workers, pass naruto-gate.json, then reflection and Honest Mode. ${leanEngineeringCompactText()} ${outcomeRubricPolicyText()} ${speedLanePolicyText()} ${solutionScoutPolicyText('fix this broken behavior')} ${skillDreamPolicyText()}\n`,
+    'from-chat-img': `---\nname: from-chat-img\ndescription: Explicit $From-Chat-IMG Naruto add-on gate for chat screenshot plus attachment analysis.\n---\n\nUse only for From-Chat-IMG/$From-Chat-IMG. It enters the Naruto pipeline with from_chat_img_required=true and an add-on coverage gate, not the legacy Team pipeline. Treat uploads as chat screenshot plus originals. For web/browser/webapp targets use Codex Chrome Extension first; for native Mac/non-web app surfaces use Codex Computer Use visual inspection when available. List requirements first, match regions to attachments with confidence, write ${FROM_CHAT_IMG_COVERAGE_ARTIFACT}, ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT}, ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT}, and ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT}, then continue Naruto worker proof, review, reflection, and Honest Mode. ${CODEX_WEB_VERIFICATION_POLICY} ${CODEX_COMPUTER_USE_ONLY_POLICY} The ledger must account for every visible customer request, screenshot image region, and separate attachment; ${FROM_CHAT_IMG_CHECKLIST_ARTIFACT} must have a checked item for each request, image-region/attachment match, work item, scoped QA-LOOP, and verification step; ${FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT} stores temporary TriWiki-backed session context with expires_after_sessions=${FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS}. ${FROM_CHAT_IMG_QA_LOOP_ARTIFACT} must prove QA-LOOP ran over the exact customer-request work-order range after implementation, with every work item covered, post-fix verification complete, and zero unresolved findings. naruto-gate.json cannot pass From-Chat-IMG completion until from_chat_img_request_coverage=true, unresolved_items is empty, every checklist box is checked, and scoped_qa_loop_completed=true.\n`,
+    'naruto': `---\nname: naruto\ndescription: $Naruto Shadow Clone Swarm (影分身 / Kage Bunshin no Jutsu) fans out up to 100 parallel clone sessions on the native agent kernel for high-throughput work.\n---\n\nUse when the user invokes $Naruto, $ShadowClone, $Kagebunshin, $Team, $From-Chat-IMG, or asks to fan out many parallel agent clones for high-throughput sweeps. Naruto is the new execution SSOT: Team is only a deprecated compatibility alias. Prefer \`sks naruto run "<task>" [--clones N] [--backend codex-exec|fake] [--work-items N] [--real] [--readonly] [--json]\` and \`sks naruto status [--mission <id>] [--json]\`. Clones default to the native kernel and are throttled to host capacity (cores/free memory); the requested clone count is the ceiling, not a guarantee, and the scheduler backfills slots as clones complete. Shadow clones always run in fast service tier; \`--no-fast\`/standard requests are not honored for clones. Writes are lease-based and non-overlapping: each clone takes a path lease before writing so parallel clones never edit the same file, and every clone emits its own proof. Keep agent-central-ledger.json, agent-task-board.json, agent-effort-policy.json, agent-scheduler-state.json, agent-proof-evidence.json, naruto-gate.json, and agent-session-cleanup.json; the parent session owns integration, verification, and final claims. Use \`--backend fake\` only for fixtures/selftests; remove it when real clone evidence is intended. Lifecycle: clone roster build, work partition, parallel clone scheduling, lease-based write swarm, per-clone proof, session cleanup, then reflection and Honest Mode. Refresh/validate TriWiki before risky decisions and consume attention.use_first/hydrate_first. Catastrophic safeguards remain active for every clone. Finish with a concise completion summary and Honest Mode covering verified clones, unverified work, and any blockers.\n`,
     'shadow-clone': `---\nname: shadow-clone\ndescription: $ShadowClone alias for the $Naruto Shadow Clone Swarm high-scale parallel agent route.\n---\n\nUse the same rules as the naruto skill: this is the English alias for $Naruto / Kage Bunshin no Jutsu. Fan out up to 100 lease-safe parallel clone sessions on the native agent kernel via \`sks naruto run "<task>" [--clones N] [--backend codex-exec|fake] [--work-items N] [--json]\`. Clones run in fast service tier, are throttled to host capacity, take path leases for non-overlapping writes, and each emit per-clone proof; the parent integrates and verifies. Keep the same agent ledgers and finish with reflection and Honest Mode.\n`,
     'kage-bunshin': `---\nname: kage-bunshin\ndescription: $Kagebunshin alias for the $Naruto Shadow Clone Swarm (影分身) high-scale parallel agent route.\n---\n\nUse the same rules as the naruto skill: this is the 影分身 / Kage Bunshin no Jutsu alias for $Naruto. Fan out up to 100 lease-safe parallel clone sessions on the native agent kernel via \`sks naruto run "<task>" [--clones N] [--backend codex-exec|fake] [--work-items N] [--json]\`. Clones run in fast service tier, are throttled to host capacity, take path leases for non-overlapping writes, and each emit per-clone proof; the parent integrates and verifies. Keep the same agent ledgers and finish with reflection and Honest Mode.\n`,
     'qa-loop': `---\nname: qa-loop\ndescription: $QA-LOOP dogfoods UI/API as human proxy with safety gates, Codex Chrome Extension-first web UI evidence, safe fixes, rechecks, and a QA report.\n---\n\nUse only $QA-LOOP. Infer scope, target, mutation policy, and login boundary from the prompt plus TriWiki/current-code defaults; do not surface a prequestion sheet. Credentials are runtime-only; never save secrets. Web/browser/webapp UI-level E2E must run the Codex Chrome Extension readiness gate first; if the extension is missing or disabled, rapidly halt and ask the user to set it up, then resume only after the user confirms installation is complete. Codex Computer Use is reserved for native Mac/non-web surfaces and must not satisfy web UI evidence. Playwright, Selenium, Puppeteer, Browser Use, Chrome MCP, screenshots fabricated from code, and prose-only checks do not satisfy web UI/browser verification. ${CODEX_WEB_VERIFICATION_POLICY} Deployed targets are read-only; destructive removal is forbidden. After answer/run, dogfood real flows, apply safe contract-allowed code/test/docs fixes, recheck, and do not pass qa-gate.json with unresolved findings or without post_fix_verification_complete. Finish qa-ledger, date/version report, gate, completion summary, and Honest Mode.\n`,
@@ -84,7 +95,11 @@ export async function installSkills(root: any) {
   for (const [name, content] of Object.entries(skills)) {
     if (isCoreSkillName(name)) continue;
     const dir = path.join(root, '.agents', 'skills', name);
-    const skillContent = enrichSkillContent(name, content);
+    const skillContent = markManagedSkill(name, enrichSkillContent(name, content));
+    const existingText = await readText(path.join(dir, 'SKILL.md'), null);
+    if (typeof existingText === 'string' && !isSksManagedOrGeneratedOfficialSkill(existingText)) {
+      await quarantineSkillDir(root, dir, name, 'global-official-name-user-collision');
+    }
     await ensureDir(dir);
     await writeTextAtomic(path.join(dir, 'SKILL.md'), `${skillContent.trim()}\n`);
     await writeSkillMetadata(dir, name);
@@ -124,11 +139,296 @@ export async function installSkills(root: any) {
   };
 }
 
+export interface SkillReconcileReport {
+  schema: 'sks.skill-reconcile.v1';
+  scope: 'global' | 'project';
+  target_dir: string;
+  fix: boolean;
+  installed: string[];
+  updated: string[];
+  removed: string[];
+  preserved_forge: string[];
+  preserved_user: string[];
+  quarantined_user_collisions: string[];
+  warnings: string[];
+  installed_skills?: string[];
+  generated_files?: string[];
+  core_skill_integrity: {
+    ok: boolean;
+    template_version?: string;
+    installed_count: number;
+    restored_count: number;
+    user_collision_count?: number;
+    report?: string;
+  };
+  removed_stale_generated_skills?: string[];
+  removed_agent_skill_aliases?: string[];
+  removed_codex_skill_mirrors?: string[];
+}
+
+export async function installGlobalSkills(home: string): Promise<SkillReconcileReport> {
+  return reconcileSkills({ targetDir: path.join(home, '.agents', 'skills'), scope: 'global', fix: true });
+}
+
+export async function installProjectSkills(root: string): Promise<SkillReconcileReport> {
+  return reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true });
+}
+
+export async function installSkills(root: any) {
+  return installGlobalSkills(root);
+}
+
+export async function reconcileSkills(opts: {
+  targetDir: string;
+  scope: 'global' | 'project';
+  fix: boolean;
+}): Promise<SkillReconcileReport> {
+  const targetDir = path.resolve(opts.targetDir);
+  const root = rootFromSkillsDir(targetDir);
+  const manifest = await loadSkillsManifest();
+  const officialNames = new Set<string>(manifest.skills.map((skill: any) => canonicalSkillNameFromValue(skill.canonical_name)));
+  const aliasNames = new Set<string>(manifest.skills.flatMap((skill: any) => (skill.deprecated_aliases || []).map((name: any) => canonicalSkillNameFromValue(name))));
+  const removedNames = new Set<string>((manifest.removed_skills || []).map((name: any) => canonicalSkillNameFromValue(name)));
+  const report: SkillReconcileReport = {
+    schema: 'sks.skill-reconcile.v1',
+    scope: opts.scope,
+    target_dir: targetDir,
+    fix: opts.fix === true,
+    installed: [],
+    updated: [],
+    removed: [],
+    preserved_forge: [],
+    preserved_user: [],
+    quarantined_user_collisions: [],
+    warnings: [],
+    core_skill_integrity: { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 }
+  };
+  await ensureDir(targetDir);
+  const existing = await listSkillDirs(targetDir);
+
+  if (opts.scope === 'project') {
+    await reconcileProjectSkillEntries(root, targetDir, existing, officialNames, aliasNames, removedNames, report, opts.fix);
+    const legacyCodexSkillsDir = path.join(root, '.codex', 'skills');
+    if (path.resolve(legacyCodexSkillsDir) !== targetDir) {
+      const legacyEntries = await listSkillDirs(legacyCodexSkillsDir);
+      if (legacyEntries.length) await reconcileProjectSkillEntries(root, legacyCodexSkillsDir, legacyEntries, officialNames, aliasNames, removedNames, report, opts.fix);
+      await removeDirIfEmpty(legacyCodexSkillsDir);
+    }
+    if (opts.fix) await pruneProjectGeneratedManifest(targetDir);
+    report.installed_skills = [];
+    report.generated_files = [];
+    report.removed_stale_generated_skills = [...report.removed];
+    report.removed_agent_skill_aliases = [];
+    report.removed_codex_skill_mirrors = [];
+    report.core_skill_integrity = { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 };
+    await removeDirIfEmpty(targetDir);
+    await removeDirIfEmpty(path.dirname(targetDir));
+    return report;
+  }
+
+  const before = new Map(existing.map((entry) => [entry.canonical, entry.hash]));
+  let install: any = null;
+  if (opts.fix) {
+    install = await installOfficialSkills(root);
+    report.installed.push(...(install.installed_skills || []));
+    report.removed.push(...(install.removed_stale_generated_skills || []));
+  } else {
+    for (const skill of manifest.skills) {
+      if (!before.has(canonicalSkillNameFromValue(skill.canonical_name))) report.installed.push(skill.canonical_name);
+    }
+  }
+  const after = await listSkillDirs(targetDir);
+  for (const entry of after) {
+    const oldHash = before.get(entry.canonical);
+    if (oldHash && oldHash !== entry.hash) report.updated.push(entry.name);
+  }
+  if (opts.fix) await writePackagedSkillManifest(targetDir, await generatePackagedSkillsManifest());
+  report.installed_skills = install?.installed_skills || [...report.installed];
+  report.generated_files = install?.generated_files || generatedSkillFiles(report.installed_skills);
+  report.core_skill_integrity = install?.core_skill_integrity || { ok: true, installed_count: 0, restored_count: 0, user_collision_count: 0 };
+  report.removed_stale_generated_skills = install?.removed_stale_generated_skills || [...report.removed];
+  report.removed_agent_skill_aliases = install?.removed_agent_skill_aliases || [];
+  report.removed_codex_skill_mirrors = install?.removed_codex_skill_mirrors || [];
+  return report;
+}
+
+function looksGeneratedOfficialSkill(text: string) {
+  return /Sneakoscope|SKS|Codex App pipeline activation|Dollar-command route|Context tracking|Honest Mode|Route:/i.test(String(text || ''));
+}
+
+function isSksManagedOrGeneratedOfficialSkill(text: string) {
+  return MANAGED_SKILL_MARKER_RE.test(String(text || '')) || looksGeneratedOfficialSkill(text);
+}
+
+async function reconcileProjectSkillEntries(
+  root: string,
+  targetDir: string,
+  entries: any[],
+  officialNames: Set<string>,
+  aliasNames: Set<string>,
+  removedNames: Set<string>,
+  report: SkillReconcileReport,
+  fix: boolean
+) {
+  for (const entry of entries) {
+    const official = officialNames.has(entry.canonical) || aliasNames.has(entry.canonical) || removedNames.has(entry.canonical);
+    const forge = FORGE_SKILL_MARKER_RE.test(entry.text);
+    const managed = MANAGED_SKILL_MARKER_RE.test(entry.text) || official;
+    if (forge) {
+      report.preserved_forge.push(entry.name);
+      continue;
+    }
+    if (official && !MANAGED_SKILL_MARKER_RE.test(entry.text) && !looksGeneratedOfficialSkill(entry.text)) {
+      if (fix) await quarantineSkillDir(root, entry.dir, entry.name, 'project-official-name-user-collision');
+      report.quarantined_user_collisions.push(entry.name);
+      report.warnings.push(`official_name_user_collision_quarantined:${entry.name}`);
+      continue;
+    }
+    if (managed) {
+      if (fix) await fsp.rm(entry.dir, { recursive: true, force: true });
+      report.removed.push(path.relative(root, entry.dir).split(path.sep).join('/'));
+      continue;
+    }
+    report.preserved_user.push(entry.name);
+  }
+  await removeDirIfEmpty(targetDir);
+}
+
+async function quarantineSkillDir(root: string, sourceDir: string, name: string, reason: string) {
+  const stamp = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const target = path.join(root, '.sneakoscope', 'quarantine', 'skills', canonicalSkillNameFromValue(name), stamp, path.basename(sourceDir));
+  await ensureDir(path.dirname(target));
+  await fsp.rename(sourceDir, target).catch(async () => {
+    await fsp.cp(sourceDir, target, { recursive: true, force: false });
+    await fsp.rm(sourceDir, { recursive: true, force: true });
+  });
+  await writeJsonAtomic(path.join(target, 'quarantine-record.json'), {
+    schema: 'sks.skill-quarantine-record.v1',
+    generated_at: nowIso(),
+    source_path: sourceDir,
+    quarantine_path: target,
+    canonical_name: canonicalSkillNameFromValue(name),
+    reason
+  });
+  return target;
+}
+
+export async function loadSkillsManifest(): Promise<any> {
+  const candidates = [
+    path.join(packageRootDir(), 'dist', 'config', 'skills-manifest.json'),
+    path.join(packageRootDir(), 'config', 'skills-manifest.json')
+  ];
+  for (const file of candidates) {
+    const data = await readJson(file, null);
+    if (data?.schema === PACKAGED_SKILLS_MANIFEST_SCHEMA && Array.isArray(data.skills)) return data;
+  }
+  return buildFallbackSkillsManifest();
+}
+
+export async function generatePackagedSkillsManifest(): Promise<any> {
+  return withScratchDir('skills-manifest-', async (dir) => {
+    await installOfficialSkills(dir);
+    const skillRoot = path.join(dir, '.agents', 'skills');
+    const entries = await listSkillDirs(skillRoot);
+    const skills = entries
+      .filter((entry) => entry.name !== 'quarantine')
+      .map((entry) => ({
+        canonical_name: entry.canonical,
+        type: isCoreSkillName(entry.canonical) ? 'core' : 'official',
+        content_sha256: entry.hash,
+        hash_history: [],
+        deprecated_aliases: DEPRECATED_SKILL_ALIASES[entry.canonical] || []
+      }))
+      .sort((a, b) => a.canonical_name.localeCompare(b.canonical_name));
+    return {
+      schema: PACKAGED_SKILLS_MANIFEST_SCHEMA,
+      package_version: PACKAGE_VERSION,
+      skills,
+      removed_skills: REMOVED_OFFICIAL_SKILLS
+    };
+  });
+}
+
+export async function writePackagedSkillManifest(targetDir: string, manifest: any): Promise<string> {
+  const file = path.join(targetDir, 'skills-manifest.json');
+  await writeJsonAtomic(file, manifest);
+  return file;
+}
+
+function buildFallbackSkillsManifest() {
+  const names = new Set<string>([
+    ...DOLLAR_SKILL_NAMES.map((name: any) => canonicalSkillNameFromValue(name)),
+    ...RECOMMENDED_SKILLS.map((name: any) => canonicalSkillNameFromValue(name)),
+    ...DOLLAR_COMMANDS.map((command: any) => canonicalSkillNameFromValue(String(command.command || '').replace(/^\$/, ''))),
+    ...buildSksCoreSkillManifest().skills.map((skill) => skill.canonical_name)
+  ].filter(Boolean));
+  return {
+    schema: PACKAGED_SKILLS_MANIFEST_SCHEMA,
+    package_version: PACKAGE_VERSION,
+    skills: [...names].sort().map((name) => ({
+      canonical_name: name,
+      type: isCoreSkillName(name) ? 'core' : 'official',
+      content_sha256: '',
+      hash_history: [],
+      deprecated_aliases: DEPRECATED_SKILL_ALIASES[name] || []
+    })),
+    removed_skills: REMOVED_OFFICIAL_SKILLS
+  };
+}
+
+async function listSkillDirs(targetDir: string) {
+  const rows = await fsp.readdir(targetDir, { withFileTypes: true }).catch(() => []);
+  const out: any[] = [];
+  for (const row of rows) {
+    if (!row.isDirectory()) continue;
+    const dir = path.join(targetDir, row.name);
+    const skillMdPath = path.join(dir, 'SKILL.md');
+    const text = await readText(skillMdPath, null);
+    if (typeof text !== 'string') continue;
+    const displayName = /^name:\s*(.+)\s*$/m.exec(text)?.[1] || row.name;
+    out.push({
+      name: row.name,
+      dir,
+      skillMdPath,
+      text,
+      canonical: canonicalSkillNameFromValue(displayName),
+      hash: sha256(text)
+    });
+  }
+  return out;
+}
+
+function rootFromSkillsDir(targetDir: string) {
+  const normalized = path.resolve(targetDir);
+  if (path.basename(normalized) === 'skills' && path.basename(path.dirname(normalized)) === '.agents') {
+    return path.dirname(path.dirname(normalized));
+  }
+  return path.dirname(path.dirname(normalized));
+}
+
+function canonicalSkillNameFromValue(value: any) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function packageRootDir() {
+  return path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
+}
+
+async function pruneProjectGeneratedManifest(targetDir: string) {
+  await fsp.rm(path.join(targetDir, SKS_SKILL_MANIFEST_FILE), { force: true }).catch(() => undefined);
+}
+
 function generatedSkillFiles(skillNames: any) {
   return skillNames.flatMap((name: any) => [
     `.agents/skills/${name}/SKILL.md`,
     `.agents/skills/${name}/agents/openai.yaml`
   ]).sort();
+}
+
+function markManagedSkill(name: any, content: any) {
+  const text = String(content || '').trim();
+  if (MANAGED_SKILL_MARKER_RE.test(text)) return `${text}\n`;
+  return `${text}\n\n<!-- BEGIN SKS MANAGED SKILL v${PACKAGE_VERSION} name=${name} -->\n`;
 }
 
 function generatedSkillManifestPath(root: any) {

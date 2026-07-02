@@ -1,25 +1,13 @@
 import path from 'node:path'
 import { ARTIFACT_FILES } from '../artifact-schemas.js'
-import { readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
+import { appendJsonlBounded, nowIso, readJson, readText, sksRoot, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { loadMission } from '../mission.js'
 import { MIN_TEAM_REVIEWER_LANES } from '../team-review-policy.js'
-import { renderTeamDashboardState, writeTeamDashboardState } from '../team-dashboard-renderer.js'
-import {
-  appendTeamEvent,
-  formatRoleCounts,
-  isTerminalTeamAgentStatus,
-  readTeamControl,
-  readTeamDashboard,
-  readTeamLive,
-  readTeamTranscriptTail,
-  renderTeamAgentLane,
-  renderTeamCleanupSummary,
-  renderTeamWatch,
-  requestTeamSessionCleanup,
-  teamCleanupRequested
-} from '../team-live.js'
 import { attachZellijSessionInteractive, launchTeamZellijView } from '../zellij/zellij-launcher.js'
 import { flag, readFlagValue } from './command-utils.js'
+
+const TEAM_SESSION_CLEANUP_ARTIFACT = 'team-session-cleanup.json'
+const TEAM_RUNTIME_TASKS_ARTIFACT = 'team-runtime-tasks.json'
 
 export const teamLegacySubcommands = new Set([
   'log',
@@ -175,4 +163,236 @@ function shouldAutoAttachTeamZellij(args: any[] = []) {
   if (process.env.ZELLIJ) return false
   if (list.includes('--attach')) return true
   return Boolean(process.stdout.isTTY && process.stdin.isTTY)
+}
+
+function teamLogPaths(dir: string) {
+  return {
+    live: path.join(dir, 'team-live.md'),
+    transcript: path.join(dir, 'team-transcript.jsonl'),
+    dashboard: path.join(dir, 'team-dashboard.json'),
+    control: path.join(dir, 'team-control.json')
+  }
+}
+
+function defaultTeamControl(id: string) {
+  return {
+    schema_version: 1,
+    mission_id: id,
+    status: 'running',
+    cleanup_requested: false,
+    cleanup_requested_at: null,
+    cleanup_requested_by: null,
+    cleanup_reason: null,
+    final_message: null
+  }
+}
+
+function formatRoleCounts(roleCounts: any = {}) {
+  return Object.entries(roleCounts || {}).map(([role, count]) => `${role}:${count}`).join(' ')
+}
+
+async function readTeamDashboard(dir: string) {
+  return readJson<any>(teamLogPaths(dir).dashboard, null)
+}
+
+async function readTeamLive(dir: string) {
+  return readText(teamLogPaths(dir).live, '')
+}
+
+async function readTeamTranscriptTail(dir: string, count: any = 20) {
+  const text = await readText(teamLogPaths(dir).transcript, '')
+  return text.split(/\n/).filter(Boolean).slice(-Math.max(1, Number(count) || 20))
+}
+
+async function readTeamControl(dir: string) {
+  const control = await readJson<any>(teamLogPaths(dir).control, defaultTeamControl(path.basename(dir)))
+  const cleanup = await readJson<any>(path.join(dir, TEAM_SESSION_CLEANUP_ARTIFACT), null).catch(() => null)
+  if (!cleanup || (cleanup.passed !== true && cleanup.live_transcript_finalized !== true && cleanup.all_sessions_closed !== true)) return control
+  return {
+    ...defaultTeamControl(path.basename(dir)),
+    ...control,
+    status: 'ended',
+    cleanup_requested: true,
+    cleanup_requested_at: cleanup.updated_at || cleanup.completed_at || cleanup.closed_at || control.cleanup_requested_at || 'artifact',
+    cleanup_requested_by: cleanup.agent || control.cleanup_requested_by || 'parent_orchestrator',
+    cleanup_reason: cleanup.reason || control.cleanup_reason || `${TEAM_SESSION_CLEANUP_ARTIFACT} passed.`,
+    final_message: cleanup.final_message || control.final_message || 'Team session ended. Legacy observation lanes can stop.'
+  }
+}
+
+async function appendTeamEvent(dir: string, event: any) {
+  const files = teamLogPaths(dir)
+  const record = {
+    ts: event.ts || nowIso(),
+    agent: String(event.agent || 'parent_orchestrator'),
+    phase: String(event.phase || 'general'),
+    type: String(event.type || 'status'),
+    to: event.to ? String(event.to).slice(0, 200) : undefined,
+    message: String(event.message || '').slice(0, 4000),
+    artifact: event.artifact ? String(event.artifact) : undefined
+  }
+  await appendJsonlBounded(files.transcript, record, 1024 * 1024)
+  const dashboard = await readJson<any>(files.dashboard, null)
+  if (dashboard) {
+    dashboard.updated_at = record.ts
+    dashboard.latest_messages = [...(dashboard.latest_messages || []), record].slice(-20)
+    dashboard.agents ||= {}
+    dashboard.agents[record.agent] ||= {}
+    dashboard.agents[record.agent].status = isTerminalTeamAgentStatus(record.type) ? record.type : record.type || 'active'
+    dashboard.agents[record.agent].phase = record.phase
+    dashboard.agents[record.agent].last_seen = record.ts
+    await writeJsonAtomic(files.dashboard, dashboard)
+  }
+  const target = record.to ? ` -> ${record.to}` : ''
+  const current = await readText(files.live, '# SKS Team Live Transcript\n\n## Live Events\n')
+  const line = `\n- ${record.ts} [${record.phase}] ${record.agent}${target}: ${record.message}${record.artifact ? ` (${record.artifact})` : ''}\n`
+  await writeTextAtomic(files.live, `${current.trimEnd()}${line}`)
+  return record
+}
+
+async function requestTeamSessionCleanup(dir: string, opts: any = {}) {
+  const current = await readTeamControl(dir)
+  const next = {
+    ...defaultTeamControl(current?.mission_id || opts.missionId || path.basename(dir)),
+    ...current,
+    status: 'cleanup_requested',
+    cleanup_requested: true,
+    cleanup_requested_at: opts.ts || nowIso(),
+    cleanup_requested_by: opts.agent || 'parent_orchestrator',
+    cleanup_reason: opts.reason || 'Team session cleanup requested.',
+    final_message: opts.finalMessage || 'Team session ended.'
+  }
+  await writeJsonAtomic(teamLogPaths(dir).control, next)
+  return next
+}
+
+function teamCleanupRequested(control: any = {}) {
+  return Boolean(control?.cleanup_requested || control?.status === 'cleanup_requested' || control?.status === 'ended')
+}
+
+function isTerminalTeamAgentStatus(status: any = '') {
+  return /(?:^|_)(?:done|complete|completed|closed|cleanup|cancelled|canceled|failed|ended|stopped)(?:_|$)/i.test(String(status || ''))
+}
+
+function renderTeamCleanupSummary(control: any = {}) {
+  if (!teamCleanupRequested(control)) return ''
+  return [
+    '# SKS Team Session Cleanup',
+    '',
+    `Status: ${control.status || 'cleanup_requested'}`,
+    `Requested at: ${control.cleanup_requested_at || 'unknown'}`,
+    `Requested by: ${control.cleanup_requested_by || 'unknown'}`,
+    `Reason: ${control.cleanup_reason || 'Team session cleanup requested.'}`,
+    '',
+    control.final_message || 'Team session ended.'
+  ].join('\n')
+}
+
+async function renderTeamAgentLane(dir: string, opts: any = {}) {
+  const agent = String(opts.agent || opts.agentId || 'parent_orchestrator')
+  const lines = Math.max(1, Number(opts.lines) || 12)
+  const dashboard = await readTeamDashboard(dir)
+  const control = await readTeamControl(dir)
+  const runtime = await readJson<any>(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null)
+  const status = dashboard?.agents?.[agent] || {}
+  const tasks = (Array.isArray(runtime?.tasks) ? runtime.tasks : []).filter((task: any) => task?.worker === agent || task?.agent_hint === agent)
+  const events = (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine).filter((event: any) => event.raw || event.agent === agent || event.to === agent || event.to === 'all')
+  return [
+    '# SKS Team Agent Lane',
+    '',
+    `Mission: ${opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir)}`,
+    `Agent: ${agent}`,
+    teamCleanupRequested(control) ? `Cleanup: requested at ${control.cleanup_requested_at || 'unknown'}` : null,
+    '',
+    '## Agent Status',
+    `- status: ${status.status || 'pending'}`,
+    `- phase: ${status.phase || 'unknown'}`,
+    `- last_seen: ${status.last_seen || 'never'}`,
+    '',
+    '## Assigned Runtime Tasks',
+    ...formatRuntimeTasks(tasks),
+    '',
+    '## Recent Events',
+    ...(events.length ? events.map(formatTranscriptEvent) : ['- No matching events yet.']),
+    teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
+  ].filter((line) => line !== null).join('\n')
+}
+
+async function renderTeamWatch(dir: string, opts: any = {}) {
+  const lines = Math.max(1, Number(opts.lines) || 20)
+  const dashboard = await readTeamDashboard(dir)
+  const control = await readTeamControl(dir)
+  const runtime = await readJson<any>(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), null)
+  const events = (await readTeamTranscriptTail(dir, lines)).map(parseTranscriptLine)
+  const agents = Object.entries(dashboard?.agents || {}).slice(0, Math.max(3, Number(dashboard?.agent_session_count) || 3))
+  return [
+    '# SKS Team Legacy Observation',
+    '',
+    `Mission: ${opts.missionId || dashboard?.mission_id || runtime?.mission_id || path.basename(dir)}`,
+    `Updated: ${dashboard?.updated_at || 'unknown'}`,
+    `Agent session budget: ${dashboard?.agent_session_count || 'unknown'}`,
+    dashboard?.role_counts ? `Role counts: ${formatRoleCounts(dashboard.role_counts)}` : null,
+    teamCleanupRequested(control) ? `Cleanup: requested at ${control.cleanup_requested_at || 'unknown'}` : null,
+    '',
+    '## Visible Agent Lanes',
+    ...(agents.length ? agents.map(([name, status]: any) => `- ${name}: ${status.status || 'pending'} | ${status.phase || 'unknown'} | last_seen:${status.last_seen || 'never'}`) : ['- No agent lanes registered yet.']),
+    '',
+    '## Runtime Task Snapshot',
+    ...formatRuntimeTasks((Array.isArray(runtime?.tasks) ? runtime.tasks : []).slice(0, 8)),
+    '',
+    '## Recent Mission Events',
+    ...(events.length ? events.map(formatTranscriptEvent) : ['- No transcript events yet.']),
+    teamCleanupRequested(control) ? ['', renderTeamCleanupSummary(control)].join('\n') : null
+  ].filter((line) => line !== null).join('\n')
+}
+
+async function writeTeamDashboardState(dir: string, opts: any = {}) {
+  const mission = await readJson<any>(path.join(dir, 'mission.json'), {})
+  const dashboard = await readTeamDashboard(dir) || {}
+  const runtime = await readJson<any>(path.join(dir, TEAM_RUNTIME_TASKS_ARTIFACT), {})
+  const gate = await readJson<any>(path.join(dir, 'team-gate.json'), {})
+  const state = {
+    schema_version: 1,
+    updated_at: nowIso(),
+    mission: { id: mission.id || dashboard.mission_id || opts.missionId || 'unknown', route: mission.mode || 'team', phase: opts.phase || 'legacy_observe' },
+    gates: Object.entries(gate || {}).filter(([, value]) => typeof value === 'boolean').map(([name, value]) => ({ name, status: value ? 'pass' : 'fail', evidence: [] })),
+    agents: Object.entries(dashboard.agents || {}).map(([id, value]: any) => ({ id, role: value.role || null, status: value.status || 'pending', current_task: value.phase || null })),
+    tasks: (runtime.tasks || []).map((task: any) => ({ id: task.task_id, deps: task.depends_on || [], status: task.status || 'pending' })),
+    artifacts: ['team-plan.json', 'team-gate.json', 'team-live.md', 'team-dashboard.json', TEAM_RUNTIME_TASKS_ARTIFACT]
+  }
+  await writeJsonAtomic(path.join(dir, ARTIFACT_FILES.team_dashboard_state), state)
+  return { ok: true, state }
+}
+
+function renderTeamDashboardState(state: any = {}) {
+  return [
+    `Mission: ${state.mission?.id || 'unknown'} (${state.mission?.route || 'team'})`,
+    `Phase: ${state.mission?.phase || 'unknown'}`,
+    '',
+    ...(state.gates || []).map((gate: any) => `[${gate.name}] ${gate.status}`),
+    ...(state.agents?.length ? [`Agents: ${state.agents.length}`] : []),
+    ...(state.tasks?.length ? [`Tasks: ${state.tasks.length}`] : [])
+  ].join('\n')
+}
+
+function parseTranscriptLine(line: any) {
+  try {
+    return JSON.parse(line)
+  } catch {
+    return { raw: String(line || '').slice(0, 1000) }
+  }
+}
+
+function formatTranscriptEvent(event: any = {}) {
+  if (event.raw) return `- ${event.raw}`
+  const parts = [event.ts || 'no-ts', `[${event.phase || 'general'}]`, event.agent || 'unknown', event.to ? `-> ${event.to}` : null, event.type ? `(${event.type})` : null].filter(Boolean)
+  return `- ${parts.join(' ')}: ${String(event.message || '').slice(0, 500)}${event.artifact ? ` (${event.artifact})` : ''}`
+}
+
+function formatRuntimeTasks(tasks: any[] = []) {
+  if (!tasks.length) return ['- No assigned runtime tasks found.']
+  return tasks.slice(0, 12).map((task: any) => {
+    const details = [task.status || 'pending', task.phase || task.role || 'team', task.depends_on?.length ? `deps:${task.depends_on.join(',')}` : null, task.file_paths?.length ? `files:${task.file_paths.slice(0, 3).join(',')}` : null].filter(Boolean).join(' | ')
+    return `- ${task.task_id || 'task'} ${task.subject || task.symbolic_id || 'untitled'} (${details})`
+  })
 }
