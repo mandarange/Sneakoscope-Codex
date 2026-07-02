@@ -561,6 +561,7 @@ export function codexAppGuidance({ appInstalled, codex, mcpList, featureList, re
     lines.push('Image generation is enabled; required raster assets and generated image-review evidence must invoke $imagegen/gpt-image-2 and record real output.');
   } else if (appInstalled || codex?.bin) {
     lines.push('Codex image_generation was not visible from `codex features list`. Required imagegen/gpt-image-2 evidence must stay blocked or unverified until $imagegen is available in Codex App.');
+    lines.push('Run: sks doctor --fix to attempt Codex CLI/App image_generation repair, then rerun the blocked visual route.');
   }
   if (computerUseReady && !computerUseMcpListed) {
     lines.push('Computer Use plugin files are installed, but this check cannot prove the current thread exposes the live Computer Use tools. Start a new Codex App thread and invoke @Computer or @AppName only for native Mac/non-web target apps or screens; web/browser/webapp verification must use the Chrome Extension gate.');

@@ -58,6 +58,8 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   }
   features.push(nativeAgentIntakeFeature());
   features.push(agentProofEvidenceFeature());
+  features.push(doctorImagegenRepairFeature());
+  features.push(...imagegenWiringFeatures());
   for (const skillName of skillNames) {
     if (!skillCoveredByRoute(skillName)) features.push(skillFeature(skillName));
   }
@@ -728,6 +730,68 @@ function agentProofEvidenceFeature() {
       skills: []
     }
   });
+}
+
+function doctorImagegenRepairFeature() {
+  return baseFeature({
+    id: 'doctor:imagegen-repair',
+    commands: ['sks doctor --json', 'sks doctor --fix --json'],
+    aliases: ['repair.imagegen', 'imagegen_repair'],
+    category: 'safety',
+    maturity: 'beta',
+    intent: 'Doctor repair path that detects Codex App imagegen, attempts repair when requested, and reports imagegen_repair evidence without claiming success unless re-detection passes.',
+    voxel_triwiki_integration: 'policy voxel required for visual/image routes that depend on Codex App imagegen',
+    completion_proof_integration: 'doctor report imagegen_repair is consumed by imagegen route blockers before visual route proof',
+    known_gaps: ['live Codex App feature enablement remains environment-dependent and reports manual actions when unavailable'],
+    source_refs: {
+      cli_command_names: ['doctor'],
+      handler_keys: ['doctor'],
+      dollar_commands: [],
+      app_skill_aliases: [],
+      skills: ['imagegen']
+    }
+  });
+}
+
+function imagegenWiringFeatures() {
+  return [
+    baseFeature({
+      id: 'ux-review:run-wires-imagegen',
+      commands: ['npm run ux-review:run-wires-imagegen', 'sks ux-review run --image <screenshot> --generate-callouts --json'],
+      aliases: ['$Image-UX-Review', '$UX-Review'],
+      category: 'visual-memory',
+      maturity: 'beta',
+      intent: 'Image UX route start gate, shared gpt-image-2 adapter, callout extraction, and Codex App evidence validation wiring.',
+      voxel_triwiki_integration: 'image/source/bbox voxel required',
+      completion_proof_integration: 'image-ux-review-gate and Completion Proof must separate real Codex image evidence from mock/API fallback evidence',
+      known_gaps: ['live Codex App image generation remains environment-dependent'],
+      source_refs: {
+        cli_command_names: ['image-ux-review'],
+        handler_keys: ['image-ux-review', 'ux-review'],
+        dollar_commands: ['$Image-UX-Review', '$UX-Review'],
+        app_skill_aliases: ['$image-ux-review', '$ux-review'],
+        skills: ['image-ux-review', 'ux-review', 'imagegen']
+      }
+    }),
+    baseFeature({
+      id: 'ppt:real-imagegen-wiring',
+      commands: ['npm run ppt:real-imagegen-wiring', 'sks ppt review --deck <pptx> --json'],
+      aliases: ['$PPT'],
+      category: 'visual-memory',
+      maturity: 'beta',
+      intent: 'PPT slide callout review path reuses the shared gpt-image-2 adapter and records imagegen_evidence in PPT gates.',
+      voxel_triwiki_integration: 'image/source/bbox voxel required',
+      completion_proof_integration: 'ppt-imagegen-review-gate and ppt-gate must include Codex App imagegen evidence classes and hashes',
+      known_gaps: ['live deck export and live Codex App image generation remain environment-dependent'],
+      source_refs: {
+        cli_command_names: ['ppt'],
+        handler_keys: ['ppt'],
+        dollar_commands: ['$PPT'],
+        app_skill_aliases: ['$ppt'],
+        skills: ['ppt', 'imagegen']
+      }
+    })
+  ];
 }
 
 function skillFeature(skillName: any) {

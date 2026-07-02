@@ -4,7 +4,11 @@ import { emitGate, requireContains } from './sks-1-12-real-execution-check-lib.j
 
 requireContains('ux-review:run-wires-imagegen', 'src/core/commands/image-ux-review-command.ts', [
   'const shouldGenerateCallouts = flag(args, \'--generate-callouts\') || flag(args, \'--fix\')',
+  'requireCodexImagegen',
   'generateGptImage2CalloutReview',
+  'evidence_class',
+  'output_sha256',
+  'imagegen_response_non_codex_api_fallback_not_full_evidence',
   'extractRealCallouts',
   'buildImageUxCalloutExtractionReport'
 ]);

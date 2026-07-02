@@ -285,6 +285,9 @@ export const COMMAND_ALIASES = {
   '--mad': 'mad-sks',
   '--MAD': 'mad-sks',
   '--mad-sks': 'mad-sks',
+  'ux-review': 'image-ux-review',
+  'visual-review': 'image-ux-review',
+  'ui-ux-review': 'image-ux-review',
   '--agent': 'agent',
   '--naruto': 'naruto',
   swarm: 'naruto'

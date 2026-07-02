@@ -21,10 +21,12 @@ const envelope = {
 const applied = await applyMod.applyAgentPatchEnvelope(tmp, envelope);
 const dfixFile = path.join(tmp, 'dfix-route.txt');
 fs.writeFileSync(dfixFile, 'old label\n');
-const diagnose = spawnSync(process.execPath, ['dist/bin/sks.js', 'dfix', 'diagnose', 'dfix parallel write route fixture', '--file', dfixFile, '--json'], { cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024 });
+const sksBin = path.join(root, 'dist', 'bin', 'sks.js');
+const routeEnv = { ...process.env, SKS_UPDATE_MIGRATION_GATE_DISABLED: '1', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' };
+const diagnose = spawnSync(process.execPath, [sksBin, 'dfix', 'diagnose', 'dfix parallel write route fixture', '--file', dfixFile, '--json'], { cwd: tmp, env: routeEnv, encoding: 'utf8', maxBuffer: 1024 * 1024 });
 const diagnoseJson = parseJson(diagnose.stdout);
 const plan = diagnoseJson?.mission_id
-  ? spawnSync(process.execPath, ['dist/bin/sks.js', 'dfix', 'plan', diagnoseJson.mission_id, '--file', dfixFile, '--write-mode', 'parallel', '--apply-patches', '--dry-run-patches', '--max-write-agents', '1', '--json'], { cwd: root, encoding: 'utf8', maxBuffer: 1024 * 1024 })
+  ? spawnSync(process.execPath, [sksBin, 'dfix', 'plan', diagnoseJson.mission_id, '--file', dfixFile, '--write-mode', 'parallel', '--apply-patches', '--dry-run-patches', '--max-write-agents', '1', '--json'], { cwd: tmp, env: routeEnv, encoding: 'utf8', maxBuffer: 1024 * 1024 })
   : { status: 1, stdout: '', stderr: 'diagnose mission missing' };
 const planJson = parseJson(plan.stdout);
 const routePolicy = planJson?.patch_plan?.route_parallel_write || null;

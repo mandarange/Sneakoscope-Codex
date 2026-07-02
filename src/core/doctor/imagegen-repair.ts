@@ -1,0 +1,183 @@
+import path from 'node:path';
+import { CODEX_APP_IMAGE_GENERATION_DOC_URL } from '../routes.js';
+import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
+import { ensureDir, nowIso, runProcess, which, writeJsonAtomic } from '../fsx.js';
+
+export const DOCTOR_IMAGEGEN_REPAIR_SCHEMA = 'sks.doctor-imagegen-repair.v1';
+
+export interface DoctorImagegenRepairStep {
+  id: string;
+  ok: boolean;
+  attempted: boolean;
+  command?: string | null;
+  status?: string | null;
+  exit_code?: number | null;
+  blocker?: string | null;
+  stdout_tail?: string | null;
+  stderr_tail?: string | null;
+}
+
+export async function repairCodexImagegen(input: {
+  root: string;
+  apply?: boolean;
+  codexBin?: string | null;
+  reportPath?: string | null;
+  timeoutMs?: number;
+  autoInstallCodex?: boolean;
+}): Promise<any> {
+  const root = path.resolve(input.root || process.cwd());
+  const apply = input.apply === true;
+  const steps: DoctorImagegenRepairStep[] = [];
+  const before = await detectImagegenCapability({
+    codexBin: input.codexBin || undefined,
+    timeoutMs: input.timeoutMs || 5000
+  }).catch((err: unknown) => ({ ok: false, core_ready: false, blockers: [messageOf(err)], codex_app: { available: false, blocker: messageOf(err) } }));
+
+  let codexBin = input.codexBin || await which('codex').catch(() => null);
+  let versionStep: DoctorImagegenRepairStep;
+  if (codexBin) {
+    const version = await runProcess(codexBin, ['--version'], { timeoutMs: input.timeoutMs || 5000, maxOutputBytes: 16 * 1024 })
+      .catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
+    versionStep = {
+      id: 'codex_cli_version',
+      ok: version.code === 0,
+      attempted: true,
+      command: `${codexBin} --version`,
+      exit_code: version.code,
+      stdout_tail: tail(version.stdout),
+      stderr_tail: tail(version.stderr),
+      blocker: version.code === 0 ? null : 'codex_cli_version_failed'
+    };
+  } else {
+    versionStep = {
+      id: 'codex_cli_version',
+      ok: false,
+      attempted: false,
+      command: 'codex --version',
+      blocker: 'codex_binary_missing'
+    };
+  }
+  steps.push(versionStep);
+
+  if (!codexBin && apply && (input.autoInstallCodex === true || process.env.SKS_IMAGEGEN_AUTO_INSTALL_CODEX === '1')) {
+    const npmBin = await which('npm').catch(() => null);
+    if (npmBin) {
+      const install = await runProcess(npmBin, ['i', '-g', '@openai/codex@latest'], {
+        timeoutMs: 180000,
+        maxOutputBytes: 128 * 1024
+      }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
+      steps.push({
+        id: 'codex_cli_install',
+        ok: install.code === 0,
+        attempted: true,
+        command: `${npmBin} i -g @openai/codex@latest`,
+        exit_code: install.code,
+        stdout_tail: tail(install.stdout),
+        stderr_tail: tail(install.stderr),
+        blocker: install.code === 0 ? null : 'codex_cli_install_failed'
+      });
+      codexBin = await which('codex').catch(() => null);
+    } else {
+      steps.push({
+        id: 'codex_cli_install',
+        ok: false,
+        attempted: false,
+        command: 'npm i -g @openai/codex@latest',
+        blocker: 'npm_missing'
+      });
+    }
+  } else if (!codexBin) {
+    steps.push({
+      id: 'codex_cli_install',
+      ok: false,
+      attempted: false,
+      command: 'npm i -g @openai/codex@latest',
+      blocker: apply ? 'auto_install_requires_SKS_IMAGEGEN_AUTO_INSTALL_CODEX_1' : 'doctor_fix_not_requested'
+    });
+  }
+
+  if (codexBin && before?.core_ready !== true && apply) {
+    const enable = await runProcess(codexBin, ['features', 'enable', 'image_generation'], {
+      timeoutMs: input.timeoutMs || 10000,
+      maxOutputBytes: 32 * 1024
+    }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
+    steps.push({
+      id: 'image_generation_feature_enable',
+      ok: enable.code === 0,
+      attempted: true,
+      command: `${codexBin} features enable image_generation`,
+      exit_code: enable.code,
+      stdout_tail: tail(enable.stdout),
+      stderr_tail: tail(enable.stderr),
+      blocker: enable.code === 0 ? null : 'codex_feature_enable_unsupported_or_failed'
+    });
+  } else {
+    steps.push({
+      id: 'image_generation_feature_enable',
+      ok: before?.core_ready === true,
+      attempted: false,
+      command: codexBin ? `${codexBin} features enable image_generation` : 'codex features enable image_generation',
+      blocker: before?.core_ready === true ? null : apply ? 'codex_cli_missing' : 'doctor_fix_not_requested'
+    });
+  }
+
+  const after = await detectImagegenCapability({
+    codexBin: codexBin || undefined,
+    timeoutMs: input.timeoutMs || 5000
+  }).catch((err: unknown) => ({ ok: false, core_ready: false, blockers: [messageOf(err)], codex_app: { available: false, blocker: messageOf(err) } }));
+  steps.push({
+    id: 'imagegen_capability_redetect',
+    ok: after?.core_ready === true,
+    attempted: true,
+    command: 'codex features list --json',
+    blocker: after?.core_ready === true ? null : 'codex_app_builtin_imagegen_capability_missing'
+  });
+
+  const recovered = after?.core_ready === true;
+  const blockers = recovered ? [] : [
+    ...new Set([
+      ...((after as any)?.core_blockers || []),
+      ...((after as any)?.blockers || []),
+      'codex_imagegen_unavailable'
+    ].map(String))
+  ];
+  let report: any = {
+    schema: DOCTOR_IMAGEGEN_REPAIR_SCHEMA,
+    generated_at: nowIso(),
+    ok: recovered,
+    attempted: before?.core_ready !== true,
+    apply,
+    recovered,
+    before,
+    after,
+    steps,
+    blockers,
+    manual_actions: recovered ? [] : [
+      `Install/update Codex CLI if missing: npm i -g @openai/codex@latest`,
+      `Open Codex App settings and enable image_generation / $imagegen.`,
+      `Verify with: codex features list --json`,
+      `Docs: ${CODEX_APP_IMAGE_GENERATION_DOC_URL}`
+    ],
+    docs_url: CODEX_APP_IMAGE_GENERATION_DOC_URL
+  };
+  if (input.reportPath !== null) {
+    const reportPath = input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-imagegen-repair.json');
+    try {
+      await ensureDir(path.dirname(reportPath));
+      await writeJsonAtomic(reportPath, report);
+      report = { ...report, report_path: reportPath };
+    } catch (err: unknown) {
+      report = { ...report, report_write_failed: true, report_write_error: messageOf(err) };
+    }
+  }
+  return report;
+}
+
+function tail(value: unknown, max = 2000) {
+  const text = String(value || '');
+  return text.length > max ? text.slice(-max) : text;
+}
+
+function messageOf(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
+}

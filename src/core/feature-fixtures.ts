@@ -14,6 +14,10 @@ const FIXTURES = Object.freeze({
   'cli-version': fixture('execute', 'sks --version', [], 'pass'),
   'cli-root': fixture('execute', 'sks root --json', [], 'pass'),
   'cli-doctor': fixture('real_optional', 'sks doctor --json', [], 'pass'),
+  'doctor:imagegen-repair': fixture('execute_and_validate_artifacts', 'sks doctor --json', [{ path: '.sneakoscope/reports/feature-fixtures/doctor-imagegen-repair.json', schema: 'sks.doctor-imagegen-repair.v1', optional: true }], 'pass', {
+    quality: 'runtime_verified',
+    validates_json_fields: ['imagegen_repair', 'repair.imagegen']
+  }),
   'cli-paths': fixture('execute_and_validate_artifacts', 'sks paths managed --json', ['.sneakoscope/managed-paths.json'], 'pass'),
   'cli-rollback': fixture('execute', 'sks rollback list --json', [], 'pass'),
   'cli-setup': fixture('real_optional', 'sks setup --json --local-only', [], 'pass'),
@@ -103,6 +107,12 @@ const FIXTURES = Object.freeze({
   'skill-db-safety-guard': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['db-operation-report.json', 'completion-proof.json'], 'pass'),
   'skill-honest-mode': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['completion-proof.json', 'trust-report.json'], 'pass'),
   'skill-imagegen': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
+  'ux-review:run-wires-imagegen': fixture('execute_and_validate_artifacts', 'npm run ux-review:run-wires-imagegen --silent', [{ path: 'image-ux-review-gate.json', schema: 'sks.image-ux-review-gate.v2', optional: true }], 'pass', {
+    validates_source_contracts: ['requireCodexImagegen', 'generateGptImage2CalloutReview', 'evidence_class', 'output_sha256']
+  }),
+  'ppt:real-imagegen-wiring': fixture('execute_and_validate_artifacts', 'npm run ppt:real-imagegen-wiring --silent', [{ path: 'ppt-imagegen-review-gate.json', schema: 'sks.ppt-imagegen-review-gate.v1', optional: true }], 'pass', {
+    validates_source_contracts: ['generateGptImage2CalloutReview', 'buildSlideImagegenEvidence', 'imagegen_evidence']
+  }),
   'skill-gx-visual-validate': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['gx-validation.json'], 'pass'),
   'skill-context7-docs': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'skill-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),

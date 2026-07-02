@@ -20,8 +20,13 @@ interface ReleaseGateManifest {
   gates: ReleaseGate[]
 }
 
-const releaseManifest = readGateManifest(path.join(root, 'release-gates.v2.json'), 'sks.release-gates.v2')
-const harnessManifest = readGateManifest(path.join(root, 'infra-harness-gates.json'), 'sks.infra-harness-gates.v1')
+interface PackageJsonShape {
+  scripts?: Record<string, string>
+}
+
+const packageJson = readPackageJson(path.join(root, 'package.json'))
+const releaseManifest = readReleaseGateManifest(path.join(root, 'release-gates.v2.json'), 'sks.release-gates.v2')
+const harnessManifest = readReleaseGateManifest(path.join(root, 'infra-harness-gates.json'), 'sks.infra-harness-gates.v1')
 const releasePreset = releaseManifest.gates.filter((gate) => gate.preset.includes('release'))
 const harnessPreset = harnessManifest.gates.filter((gate) => gate.preset.includes('harness'))
 const releaseIds = new Set(releasePreset.map((gate) => gate.id))
@@ -77,13 +82,24 @@ const report = {
   release_zellij: releaseZellij,
   harness_non_zellij: harnessNonZellij,
   npm_run_commands: npmRunCommands,
-  schema_complete: schemaComplete
+  schema_complete: schemaComplete,
+  package_script_count: Object.keys(packageJson.scripts || {}).length
 }
 
 assertGate(report.ok, 'release/harness gate manifests must satisfy consolidated v2 coverage policy', report)
 emitGate('release:dag-full-coverage', report)
 
-function readGateManifest(file: string, expectedSchema: string): ReleaseGateManifest {
+function readPackageJson(file: string): PackageJsonShape {
+  const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
+  assertGate(isRecord(parsed), 'package.json must be an object', { file })
+  const record = parsed as Record<string, unknown>
+  const scripts = isRecord(record.scripts) ? Object.fromEntries(
+    Object.entries(record.scripts).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+  ) : {}
+  return { scripts }
+}
+
+function readReleaseGateManifest(file: string, expectedSchema: string): ReleaseGateManifest {
   const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'))
   assertGate(isRecord(parsed), 'gate manifest must be an object', { file })
   assertGate((parsed as any).schema === expectedSchema, 'gate manifest schema mismatch', { file, schema: (parsed as any).schema, expected_schema: expectedSchema })

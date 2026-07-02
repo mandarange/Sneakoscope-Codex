@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { exists, readJson } from '../fsx.js';
+import { imageDimensions, sha256File } from '../wiki-image/image-hash.js';
 
 export type GateVerdictKind = 'pass' | 'fail' | 'mock_only' | 'missing' | 'invalid';
 
@@ -45,9 +46,53 @@ export async function evaluateGate(root: string, missionId: string, gateFile: st
       if (sqlPlane.profile_closed !== true) reasons.push('mad_sks_sql_plane_profile_not_closed');
     }
   }
+  if (gateFile === 'image-ux-review-gate.json' || /image-ux-review-gate\.json$/.test(gatePath)) {
+    const needsFullImagegenEvidence = (gate as any).full_review_passed === true
+      || (gate as any).gpt_image_2_callout_generated === true
+      || ((gate as any).passed === true && (gate as any).reference_only !== true);
+    if (needsFullImagegenEvidence) {
+      reasons.push(...await imagegenResponseGateReasons(root, path.dirname(gatePath)));
+    }
+  }
+  if (gateFile === 'ppt-gate.json' || /ppt-gate\.json$/.test(gatePath)) {
+    const imagegenEvidence = (gate as any).imagegen_evidence;
+    if (imagegenEvidence?.required === true && imagegenEvidence.passed !== true) {
+      reasons.push('ppt_imagegen_evidence_not_passed');
+    }
+  }
 
   if (reasons.length > 0) {
     return { pass: false, verdict: 'fail', reasons, gate_path: gatePath, gate };
   }
   return { pass: true, verdict: 'pass', reasons: [], gate_path: gatePath, gate };
+}
+
+async function imagegenResponseGateReasons(root: string, missionDir: string) {
+  const reasons: string[] = [];
+  const response = await readJson(path.join(missionDir, 'image-ux-gpt-image-2-response.json'), null) as any;
+  if (!response || typeof response !== 'object') return ['imagegen_response_artifact_missing'];
+  if (response.schema !== 'sks.image-ux-gpt-image-2-response.v1') reasons.push('imagegen_response_schema_invalid');
+  if (response.ok !== true || response.status !== 'generated') reasons.push(response.blocker || 'imagegen_response_not_generated');
+  const evidenceClass = String(response.evidence_class || '');
+  if (evidenceClass !== 'codex_app_imagegen') reasons.push(evidenceClass ? `imagegen_response_evidence_class_not_codex_app:${evidenceClass}` : 'imagegen_response_evidence_class_missing');
+  const outputSource = String(response.output_source || '');
+  if (!['manual_attach', 'auto_discovered_generated_images'].includes(outputSource)) reasons.push('imagegen_response_output_source_invalid');
+  const outputPath = String(response.output_image_path || '');
+  const expectedSha = String(response.output_sha256 || response.output_image_sha256 || '');
+  if (!outputPath) reasons.push('imagegen_response_output_path_missing');
+  if (!expectedSha) reasons.push('imagegen_response_output_sha256_missing');
+  if (outputPath) {
+    const absolute = path.isAbsolute(outputPath) ? outputPath : path.resolve(root, outputPath);
+    try {
+      const actualSha = await sha256File(absolute);
+      if (expectedSha && actualSha !== expectedSha) reasons.push('imagegen_response_output_sha256_mismatch');
+      const dims = await imageDimensions(absolute);
+      if (!Number.isFinite(Number(dims.width)) || !Number.isFinite(Number(dims.height)) || Number(dims.width) <= 0 || Number(dims.height) <= 0) {
+        reasons.push('imagegen_response_output_dimensions_invalid');
+      }
+    } catch {
+      reasons.push('imagegen_response_output_file_unreadable');
+    }
+  }
+  return [...new Set(reasons)];
 }

@@ -140,14 +140,44 @@ test('gpt-image-2 retries a rate-limited OpenAI images call then succeeds', asyn
       privacy: 'local-only'
     }, {
       capability: { codexBin: path.join(root, 'missing-codex'), timeoutMs: 100, env: { HOME: root }, configText: '', codexLbEnvText: '' },
-      // Direct OpenAI key path: API fallback auto-enables, codex-lb stays off.
-      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} }
+      // Direct OpenAI key path is non-Codex evidence and must be explicit.
+      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} },
+      allowApiFallback: true
     }));
 
     assert.equal(calls.length, 3, 'should retry the two 429s before the 200');
     assert.equal(result.ok, true);
     assert.equal(result.provider, 'openai_images_api');
     assert.ok(result.generated_image_path);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('gpt-image-2 does not auto-enable OpenAI API fallback from OPENAI_API_KEY alone', async () => {
+  const { root, imagePath } = await tempImageRoot('sks-imagegen-no-auto-openai-');
+  const outputDir = path.join(root, 'out');
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error('unexpected OpenAI fallback fetch');
+  };
+  try {
+    const result = await withoutImagegenOutputEnv(() => generateGptImage2CalloutReview({
+      mission_id: null,
+      source_screen_id: 'screen-1',
+      source_image_path: imagePath,
+      output_dir: outputDir,
+      prompt: buildCalloutPrompt('screen-1'),
+      requested_fidelity: 'original',
+      privacy: 'local-only'
+    }, {
+      capability: { codexBin: path.join(root, 'missing-codex'), timeoutMs: 100, env: { HOME: root }, configText: '', codexLbEnvText: '' },
+      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} }
+    }));
+
+    assert.equal(result.ok, false);
+    assert.equal(result.provider, 'codex_app_imagegen');
+    assert.equal(result.blocker, 'imagegen_capability_missing');
   } finally {
     globalThis.fetch = previousFetch;
   }
@@ -173,7 +203,8 @@ test('gpt-image-2 gives up after exhausting retries on persistent 503', async ()
       privacy: 'local-only'
     }, {
       capability: { codexBin: path.join(root, 'missing-codex'), timeoutMs: 100, env: { HOME: root }, configText: '', codexLbEnvText: '' },
-      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} }
+      openai: { apiKey: 'sk-test-openai-key', retrySleep: async () => {} },
+      allowApiFallback: true
     }));
 
     assert.equal(calls, 4, 'should attempt the policy max (4) before giving up');
@@ -194,7 +225,7 @@ base_url = "https://lb.example.test/backend-api/codex"
 wire_api = "responses"
 env_key = "CODEX_LB_API_KEY"
 supports_websockets = true
-requires_openai_auth = false
+requires_openai_auth = true
 `;
 }
 

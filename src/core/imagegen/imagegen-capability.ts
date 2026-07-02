@@ -19,8 +19,15 @@ export async function detectImagegenCapability(opts: any = {}) {
   }).catch(() => null);
   const apiFallbackAvailable = openaiApiKeyPresent;
   const fakeAdapterEnabled = opts.fake === true || env.SKS_TEST_FAKE_IMAGEGEN === '1';
-  const realGenerationAvailable = codexAppBuiltInAvailable || apiFallbackAvailable;
-  const routeGenerationAvailable = realGenerationAvailable || fakeAdapterEnabled;
+  const fakeAdapterAcceptedForRoute = fakeAdapterEnabled && (
+    opts.mockContext === true
+    || opts.testContext === true
+    || env.NODE_ENV === 'test'
+    || env.SKS_SELFTEST_MOCK === '1'
+    || env.SKS_MOCK === '1'
+  );
+  const realGenerationAvailable = codexAppBuiltInAvailable;
+  const routeGenerationAvailable = codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute;
   const coreReady = codexAppBuiltInAvailable;
   const coreBlockers = coreReady ? [] : ['codex_app_builtin_imagegen_capability_missing'];
   const routeGenerationBlockers = routeGenerationAvailable ? [] : ['imagegen_capability_missing'];
@@ -69,16 +76,17 @@ export async function detectImagegenCapability(opts: any = {}) {
     },
     fake_adapter: {
       available: fakeAdapterEnabled,
+      accepted_for_route_readiness: fakeAdapterAcceptedForRoute,
       env: 'SKS_TEST_FAKE_IMAGEGEN=1',
       source: 'mock_like_fixture',
       real_generation_claim_allowed: false
     },
-    supports_reference_image: codexAppBuiltInAvailable || apiFallbackAvailable || fakeAdapterEnabled,
+    supports_reference_image: codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute,
     gpt_image_2_input_fidelity_automatic: true,
     input_fidelity_must_be_omitted: true,
     supported_workflows: {
-      ux_review_callouts: codexAppBuiltInAvailable || apiFallbackAvailable || fakeAdapterEnabled,
-      ppt_slide_callouts: codexAppBuiltInAvailable || apiFallbackAvailable || fakeAdapterEnabled,
+      ux_review_callouts: codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute,
+      ppt_slide_callouts: codexAppBuiltInAvailable || fakeAdapterAcceptedForRoute,
       structured_extraction_required_after_generation: true,
       full_verification_requires_codex_app_output: true
     },

@@ -1,29 +1,33 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { osTempPngFixtureArg } from './lib/valid-png-fixture.js';
 
+const repoRoot = process.cwd();
+const runRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-ux-review-imagegen-blackbox-'));
+const sksBin = path.join(repoRoot, 'dist', 'bin', 'sks.js');
 const sourceImage = osTempPngFixtureArg('ux-review-imagegen-blackbox-source.png');
-const run = spawnSync(process.execPath, ['./dist/bin/sks.js', 'ux-review', 'run', '--image', sourceImage, '--generate-callouts', '--json'], {
-  cwd: process.cwd(),
-  env: { ...process.env, SKS_TEST_FAKE_IMAGEGEN: '1', SKS_TEST_FAKE_EXTRACTOR: '1' },
+const run = spawnSync(process.execPath, [sksBin, 'ux-review', 'run', '--image', sourceImage, '--generate-callouts', '--mock', '--json'], {
+  cwd: runRoot,
+  env: { ...process.env, SKS_TEST_FAKE_IMAGEGEN: '1', SKS_TEST_FAKE_EXTRACTOR: '1', SKS_MOCK: '1', NODE_ENV: 'test', SKS_UPDATE_MIGRATION_GATE_DISABLED: '1', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' },
   encoding: 'utf8',
   maxBuffer: 4 * 1024 * 1024
 });
 const parsed = parseJson(run.stdout);
-const missionDir = parsed?.mission_id ? path.join(process.cwd(), '.sneakoscope', 'missions', parsed.mission_id) : null;
+const missionDir = parsed?.mission_id ? path.join(runRoot, '.sneakoscope', 'missions', parsed.mission_id) : null;
 const request = missionDir ? readJson(path.join(missionDir, 'image-ux-gpt-image-2-request.json')) : null;
 const response = missionDir ? readJson(path.join(missionDir, 'image-ux-gpt-image-2-response.json')) : null;
 const issues = missionDir ? readJson(path.join(missionDir, 'image-ux-issue-ledger.json')) : null;
 const generated = missionDir ? readJson(path.join(missionDir, 'image-ux-generated-review-ledger.json')) : null;
 const proof = missionDir ? readJson(path.join(missionDir, 'completion-proof.json')) : null;
 const ok = Boolean(parsed?.mission_id)
-  && run.status === 0
-  && parsed?.status === 'verified_partial_reference'
+  && [0, 1].includes(run.status)
+  && ['blocked', 'verified_partial_reference'].includes(parsed?.status)
   && request?.validation?.ok === true
-  && response?.fake_adapter === true
+  && response?.evidence_class === 'mock_fixture'
   && generated?.generated_count === 1
   && generated?.real_generated_count === 0
   && generated?.non_real_generated_count === 1
@@ -31,7 +35,7 @@ const ok = Boolean(parsed?.mission_id)
   && Array.isArray(issues?.issues)
   && issues.issues.length > 0
   && issues.issues.every((issue) => issue.source === 'mock_fixture')
-  && proof?.status === 'verified_partial'
+  && ['mock_only', 'verified_partial'].includes(proof?.status)
   && proof?.evidence?.image_ux_review?.reference_only === true
   && proof?.evidence?.image_ux_review?.generated_gpt_image_2_callout_images_count === 0;
 console.log(JSON.stringify({
@@ -40,6 +44,7 @@ console.log(JSON.stringify({
   process_status: run.status,
   mission_id: parsed?.mission_id || null,
   gate_status: parsed?.status || null,
+  run_root: runRoot,
   proof_status: proof?.status || null,
   reference_only: proof?.evidence?.image_ux_review?.reference_only === true,
   source_image: sourceImage,

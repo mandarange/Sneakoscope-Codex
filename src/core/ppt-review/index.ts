@@ -5,6 +5,7 @@ import { exportSlidesToImages, PPT_DECK_INVENTORY_ARTIFACT, PPT_SLIDE_EXPORT_LED
 import {
   buildSlideImagegenRequestArtifact,
   buildSlideImagegenResponseArtifact,
+  buildSlideImagegenEvidence,
   generateSlideCalloutReviews,
   PPT_SLIDE_CALLOUT_LEDGER_ARTIFACT,
   PPT_SLIDE_IMAGEGEN_REQUEST_ARTIFACT,
@@ -129,6 +130,8 @@ function buildPptImagegenReviewGate(parts: any = {}) {
   const p0p1 = Number(parts.deckIssueLedger.p0_p1_count || parts.deckIssueLedger.p0_p1_open_count || 0);
   const patchRequested = parts.fixRequested || p0p1 > 0 || parts.patchHandoff.result?.re_export_required === true;
   const changedSlidesRechecked = !patchRequested || parts.recheckReport.status === 'complete' || parts.mock === true;
+  const imagegenEvidence = buildSlideImagegenEvidence(parts.calloutLedger);
+  if (imagegenEvidence.required && imagegenEvidence.passed !== true) blockers.push(...imagegenEvidence.blockers);
   const gate = {
     schema: 'sks.ppt-imagegen-review-gate.v1',
     created_at: nowIso(),
@@ -141,6 +144,7 @@ function buildPptImagegenReviewGate(parts: any = {}) {
     patch_requested: patchRequested,
     changed_slides_rechecked: changedSlidesRechecked,
     image_voxel_relations_created: parts.imageVoxelRelationsCreated === true,
+    imagegen_evidence: imagegenEvidence,
     wrongness_checked: true,
     honest_mode_complete: true,
     mock_fixture: parts.mock === true,
@@ -156,6 +160,7 @@ function buildPptImagegenReviewGate(parts: any = {}) {
     && gate.p0_p1_zero_after_fix
     && gate.changed_slides_rechecked
     && gate.image_voxel_relations_created
+    && gate.imagegen_evidence.passed === true
     && gate.blockers.length === 0;
   return gate;
 }

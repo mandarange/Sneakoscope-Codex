@@ -33,6 +33,7 @@ import {
 import { extractTomlTable, writeCodexConfigGuarded } from '../core/codex/codex-config-guard.js';
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js';
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
+import { repairCodexImagegen } from '../core/doctor/imagegen-repair.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -170,6 +171,11 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   else if (fastModeRepair.status === 'skipped_unsafe_rewrite') console.log(`Codex App Fast mode: skipped (managed rewrite would not parse; ${fastModeRepair.config_path} left untouched).`);
   else if (fastModeRepair.status === 'skipped') console.log(`Codex App Fast mode: skipped (${fastModeRepair.reason}).`);
   else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
+  const imagegenRepair = await ensureCodexImagegenDuringInstall();
+  if (imagegenRepair.status === 'ready') console.log('Codex App Image Gen: ready ($imagegen/gpt-image-2 detected).');
+  else if (imagegenRepair.status === 'recovered') console.log('Codex App Image Gen: recovered and re-detected.');
+  else if (imagegenRepair.status === 'blocked') console.log(`Codex App Image Gen: blocked; run \`sks doctor --fix\`. ${(imagegenRepair.blockers || []).join(', ')}`.trim());
+  else if (imagegenRepair.status === 'skipped') console.log(`Codex App Image Gen: skipped (${imagegenRepair.reason}).`);
   const postinstallDoctor = await runPostinstallGlobalDoctorAndMarkPending().catch((err: any) => ({
     ok: false,
     doctor: null,
@@ -2404,6 +2410,28 @@ async function ensureGlobalGetdesignSkillDuringInstall() {
   if (add.code === 0) return { status: /already|exists|present/i.test(out) ? 'present' : 'installed', command: skillsBin };
   if (/already|exists|present/i.test(out)) return { status: 'present', command: skillsBin };
   return { status: 'failed', command: skillsBin, error: out.trim() || 'skills add failed' };
+}
+
+export async function ensureCodexImagegenDuringInstall(opts: any = {}) {
+  if (process.env.SKS_POSTINSTALL_SKIP_IMAGEGEN_REPAIR === '1' || opts.skip === true) {
+    return { status: 'skipped', reason: 'SKS_POSTINSTALL_SKIP_IMAGEGEN_REPAIR' };
+  }
+  const report = await repairCodexImagegen({
+    root: opts.root || process.cwd(),
+    apply: opts.apply !== false,
+    codexBin: opts.codexBin || null,
+    autoInstallCodex: opts.autoInstallCodex === true || process.env.SKS_IMAGEGEN_AUTO_INSTALL_CODEX === '1'
+  }).catch((err: any) => ({
+    recovered: false,
+    blockers: [err?.message || String(err)],
+    before: null,
+    after: null
+  }));
+  if ((report as any).before?.core_ready === true || ((report as any).after?.core_ready === true && (report as any).attempted === false)) {
+    return { status: 'ready', report };
+  }
+  if ((report as any).recovered === true) return { status: 'recovered', report };
+  return { status: 'blocked', blockers: (report as any).blockers || ['codex_imagegen_unavailable'], report };
 }
 
 export async function ensureRelatedCliTools(args: any = []) {

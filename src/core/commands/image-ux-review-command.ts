@@ -30,6 +30,7 @@ import { addImageRelation, ingestImage } from '../wiki-image/image-voxel-ledger.
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 import { codexChromeExtensionStatus } from '../codex-app.js';
+import { requireCodexImagegen } from '../imagegen/require-imagegen.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any>> = {
@@ -114,6 +115,30 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     console.error('UX Review blocked: screenshot_required');
     return result;
   }
+  if (!flag(args, '--mock') && !generatedImage) {
+    const imagegenRequired = await requireCodexImagegen(root, { autoRepair: true, applyRepair: true });
+    if (!imagegenRequired.ok) {
+      const result = {
+        schema: 'sks.image-ux-review-run.v1',
+        ok: false,
+        status: 'blocked',
+        blocker: 'codex_imagegen_unavailable',
+        imagegen_required: imagegenRequired,
+        gate: {
+          schema: 'sks.image-ux-review-gate.v2',
+          passed: false,
+          status: 'blocked',
+          blockers: ['codex_imagegen_unavailable'],
+          generated_image_evidence: false
+        }
+      };
+      process.exitCode = 1;
+      if (flag(args, '--json')) return printJson(result);
+      console.error('UX Review blocked: Codex App imagegen/gpt-image-2 is unavailable.');
+      for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
+      return result;
+    }
+  }
   const { id, dir, mission } = await createMission(root, { mode: 'image-ux-review', prompt: promptForRun(command, args) });
   const sourceRel = imagePath ? await stageSourceImage(root, dir, imagePath) : null;
   const contract = {
@@ -154,10 +179,21 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
       }
     });
     if (result.generated_image_path) {
-      const fakeGenerated = result.provider === 'fake_imagegen_adapter';
       if (result.request_artifact) await fsp.copyFile(result.request_artifact, path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_REQUEST_ARTIFACT)).catch(() => {});
       if (result.response_artifact) await fsp.copyFile(result.response_artifact, path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT)).catch(() => {});
-      await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, { realGenerated: !fakeGenerated, mock: fakeGenerated, providerSurface: result.provider });
+      const response = await readImagegenResponse(dir);
+      const evidenceClass = String(response?.evidence_class || '');
+      const fakeGenerated = evidenceClass === 'mock_fixture' || result.provider === 'fake_imagegen_adapter';
+      const realGenerated = evidenceClass === 'codex_app_imagegen';
+      await attachGeneratedReviewImage(root, dir, contract, result.generated_image_path, {
+        realGenerated,
+        mock: fakeGenerated,
+        providerSurface: result.provider,
+        evidenceClass,
+        outputSource: response?.output_source || null,
+        outputSha256: response?.output_sha256 || response?.output_image_sha256 || null,
+        responseArtifact: result.response_artifact || null
+      });
       const extraction = await extractRealCallouts({
         root,
         generatedImagePath: result.generated_image_path,
@@ -173,8 +209,6 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
     }
   }
   const artifacts = await writeImageUxReviewRouteArtifacts(dir, contract, { root, wrongnessChecked: true, honestModeComplete: true });
-  artifacts.gate = await enforceImageUxRuntimeGate(dir, artifacts.gate, { mock: flag(args, '--mock') });
-  await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), artifacts.gate);
   artifacts.gate = await enforceImageUxRuntimeGate(dir, artifacts.gate, { mock: flag(args, '--mock') });
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), artifacts.gate);
   const proof = await finalizeImageUx(root, id, command, artifacts, { mock: flag(args, '--mock'), cmd: `sks ${command} run` });
@@ -431,13 +465,38 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
   const inventory = await readJson(path.join(dir, 'image-ux-screen-inventory.json'), null).catch(() => null);
   const sourceScreen = inventory?.source_screens?.[0] || { id: 'screen-1' };
   const staged = await stageGeneratedImage(root, dir, imagePath, opts.mock ? 'generated-review-fixture.png' : null);
+  const response = await readImagegenResponse(dir);
+  const evidenceClass = opts.evidenceClass || response?.evidence_class || (opts.mock ? 'mock_fixture' : opts.realGenerated ? 'codex_app_imagegen' : null);
+  const outputSource = opts.outputSource || response?.output_source || (opts.mock ? 'mock_fixture' : opts.realGenerated ? 'manual_attach' : null);
+  const outputSha256 = opts.outputSha256 || response?.output_sha256 || response?.output_image_sha256 || null;
   const metadata = await generatedImageMetadata(root, staged, {
     id: opts.mock ? 'generated-review-fixture-1' : undefined,
     source_screen_id: sourceScreen.id || 'screen-1',
     provider_surface: opts.providerSurface || 'Codex App $imagegen',
-    real_generated: opts.realGenerated === true,
+    evidence_class: evidenceClass,
+    output_source: outputSource,
+    output_sha256: outputSha256 || undefined,
+    real_generated: opts.realGenerated === true && evidenceClass === 'codex_app_imagegen',
     mock: opts.mock === true
   });
+  if (!response && opts.realGenerated === true) {
+    await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), {
+      schema: 'sks.image-ux-gpt-image-2-response.v1',
+      created_at: nowIso(),
+      provider: 'codex_app_imagegen',
+      evidence_class: 'codex_app_imagegen',
+      model: 'gpt-image-2',
+      ok: true,
+      status: 'generated',
+      output_image_path: path.resolve(root, metadata.path),
+      output_image_sha256: metadata.sha256,
+      output_sha256: metadata.sha256,
+      output_id: metadata.output_id || null,
+      output_source: 'manual_attach',
+      dimensions: { width: metadata.width, height: metadata.height, format: metadata.format },
+      local_only: true
+    });
+  }
   const ledger = {
     schema: 'sks.image-ux-generated-review-ledger.v2',
     schema_version: 2,
@@ -448,6 +507,7 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
       ...metadata,
       source_screen_id: 'screen-1',
       status: 'generated',
+      imagegen_response_artifact: opts.responseArtifact || (response || opts.realGenerated === true ? IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT : null),
       image_voxel_relation: 'generated_callout_review_of',
       callout_extraction_status: opts.mock ? 'succeeded' : 'pending',
       callouts: opts.mock ? [{
@@ -477,16 +537,21 @@ async function attachGeneratedReviewImage(root: string, dir: string, contract: a
     generated_count: 1,
     required_count: 1,
     blockers: [],
-    passed: opts.realGenerated === true && opts.mock !== true,
+    passed: metadata.real_generated === true && opts.mock !== true,
     contract_hash: contract.sealed_hash || null
   };
   await writeJsonAtomic(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), ledger);
   return ledger;
 }
 
+async function readImagegenResponse(dir: string) {
+  return readJson(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), null).catch(() => null);
+}
+
 async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any = {}) {
   const inventory = await readJson(path.join(dir, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT), null);
   const issueLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), null);
+  const response = await readJson(path.join(dir, IMAGE_UX_REVIEW_GPT_IMAGE_2_RESPONSE_ARTIFACT), null);
   const blockers = new Set<string>(Array.isArray(gate?.blockers) ? gate.blockers.map(String) : []);
   const sourceScreens = Array.isArray(inventory?.source_screens) ? inventory.source_screens : [];
   if (!opts.mock) {
@@ -501,17 +566,72 @@ async function enforceImageUxRuntimeGate(dir: string, gate: any = {}, opts: any 
   const issues = Array.isArray(issueLedger?.issues) ? issueLedger.issues : [];
   if (issues.some((issue: any) => issue?.extraction_provider === 'mock_fixture' || issue?.source === 'mock_fixture')) blockers.add('mock_issue_extraction_cannot_pass_gate');
   if (opts.mock) blockers.add('image_ux_mock_mode_cannot_claim_real');
+  const responseEvidence = await validateImagegenResponseEvidence(response, dir);
+  for (const blocker of responseEvidence.blockers) blockers.add(blocker);
   const nextBlockers = [...blockers];
-  const passed = gate?.passed === true && nextBlockers.length === 0;
+  const codexGenerated = responseEvidence.ok === true && gate?.gpt_image_2_callout_generated === true;
+  const passed = gate?.passed === true && codexGenerated && nextBlockers.length === 0;
   return {
     ...gate,
     passed,
     ok: passed,
     status: passed ? 'passed' : 'blocked',
+    gpt_image_2_callout_generated: codexGenerated,
+    generated_image_evidence: responseEvidence.ok === true,
+    imagegen_response_evidence: responseEvidence,
     source_screenshot_min_resolution_passed: sourceScreens.length > 0 && sourceScreens.every((screen: any) => Number(screen?.width || 0) >= 64 && Number(screen?.height || 0) >= 64),
     issue_ledger_real_extraction: issues.length > 0 && issues.every((issue: any) => issue?.extraction_provider !== 'mock_fixture' && issue?.source !== 'mock_fixture'),
     blockers: nextBlockers
   };
+}
+
+async function validateImagegenResponseEvidence(response: any = null, dir: string = process.cwd()) {
+  const blockers: string[] = [];
+  if (!response || typeof response !== 'object') {
+    return { ok: false, blockers: ['imagegen_response_artifact_missing'] };
+  }
+  if (response.schema !== 'sks.image-ux-gpt-image-2-response.v1') blockers.push('imagegen_response_schema_invalid');
+  if (response.ok !== true || response.status !== 'generated') blockers.push(response.blocker || 'imagegen_response_not_generated');
+  const evidenceClass = String(response.evidence_class || '');
+  if (!evidenceClass) blockers.push('imagegen_response_evidence_class_missing');
+  if (evidenceClass === 'mock_fixture') blockers.push('imagegen_response_mock_fixture_not_full_evidence');
+  if (evidenceClass === 'non_codex_api_fallback') blockers.push('imagegen_response_non_codex_api_fallback_not_full_evidence');
+  if (evidenceClass && evidenceClass !== 'codex_app_imagegen') blockers.push(`imagegen_response_evidence_class_not_codex_app:${evidenceClass}`);
+  const source = String(response.output_source || '');
+  if (!['manual_attach', 'auto_discovered_generated_images'].includes(source)) blockers.push('imagegen_response_output_source_invalid');
+  const outputPath = String(response.output_image_path || '');
+  const expectedSha = String(response.output_sha256 || response.output_image_sha256 || '');
+  if (!outputPath) blockers.push('imagegen_response_output_path_missing');
+  if (!expectedSha) blockers.push('imagegen_response_output_sha256_missing');
+  if (outputPath) {
+    try {
+      const root = rootFromMissionDir(dir);
+      const absolute = path.isAbsolute(outputPath) ? outputPath : path.resolve(root, outputPath);
+      const actualSha = await sha256File(absolute);
+      if (expectedSha && actualSha !== expectedSha) blockers.push('imagegen_response_output_sha256_mismatch');
+      const dims = await imageDimensions(absolute);
+      if (!Number.isFinite(Number(dims.width)) || !Number.isFinite(Number(dims.height)) || Number(dims.width) <= 0 || Number(dims.height) <= 0) {
+        blockers.push('imagegen_response_output_dimensions_invalid');
+      }
+    } catch {
+      blockers.push('imagegen_response_output_file_unreadable');
+    }
+  }
+  return {
+    ok: blockers.length === 0,
+    provider: response.provider || null,
+    evidence_class: evidenceClass || null,
+    output_source: source || null,
+    output_image_path: outputPath || null,
+    output_sha256: expectedSha || null,
+    blockers: [...new Set(blockers)]
+  };
+}
+
+function rootFromMissionDir(dir: string) {
+  const marker = `${path.sep}.sneakoscope${path.sep}missions${path.sep}`;
+  const idx = String(dir).indexOf(marker);
+  return idx >= 0 ? String(dir).slice(0, idx) : process.cwd();
 }
 
 function nextActionForGate(gate: any = {}) {

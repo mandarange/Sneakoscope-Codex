@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 5.1.2 is the MAD-SKS SQL-plane merge and Codex App imagegen evidence hardening release after 5.1.1. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, MAD-SKS SQL-plane gates, imagegen repair/wiring gates, mock/API fallback evidence caps, and affected release DAG evidence to agree on 5.1.2 before `npm publish --ignore-scripts`.
+
+5.1.2 release readiness adds proof that `$MAD-DB` remains only as a deprecated alias for MAD-SKS SQL-plane execution, image-based routes require Codex App imagegen/gpt-image-2 for full verification, mock and API fallback outputs cannot pass as real Codex evidence, and imagegen doctor repair is visible in doctor/install readiness.
+
 SKS 5.1.1 is the dollar-command proof-truth hardening release after the current 5.1.0 line. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, gate manifests, mock/real proof schemas, stop-gate evaluation, and affected release DAG evidence to agree on 5.1.1 before `npm publish --ignore-scripts`.
 
 5.1.1 release readiness adds proof that route success reports are based on evaluated gate files, mock fixtures are explicitly labeled `execution_class: mock_fixture` and cannot pass as real success, `sks gates`/`sks check` honor the `sks.gate-result.v1` output contract, and route registry stop gates stay aligned with command-owned gate files.

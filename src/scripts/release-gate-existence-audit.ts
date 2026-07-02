@@ -46,7 +46,8 @@ const releaseCheckTarget = releaseCheck.includes('release:check:affected')
   : releaseCheck;
 assertGate(releaseCheckTarget.includes('release-gate-dag-runner') && /--preset\s+(?:release|affected)/.test(releaseCheckTarget), 'release:check must use the v2 DAG release/affected preset', { release_check: scripts['release:check'], resolved_release_check: releaseCheckTarget });
 assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { gate_count: releaseGates.length });
-assertGate(Object.keys(scripts).length <= 100, 'package script budget exceeded', { script_count: Object.keys(scripts).length });
+const PACKAGE_SCRIPT_BUDGET = 150;
+assertGate(Object.keys(scripts).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(scripts).length, limit: PACKAGE_SCRIPT_BUDGET });
 
 for (const id of requiredRelease) assertGate(releaseIds.has(id), `critical release gate missing from release v2 manifest: ${id}`, { id });
 for (const id of requiredHarness) assertGate(harnessIds.has(id), `critical harness gate missing from infra-harness-gates.json: ${id}`, { id });

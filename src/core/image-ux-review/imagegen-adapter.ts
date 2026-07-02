@@ -142,6 +142,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
           provider: 'codex_app_imagegen',
+          evidence_class: 'codex_app_imagegen',
           model: 'gpt-image-2',
           ok: false,
           status: 'blocked',
@@ -166,11 +167,13 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
           provider: 'codex_app_imagegen',
+          evidence_class: 'codex_app_imagegen',
           model: 'gpt-image-2',
           ok: true,
           status: 'generated',
           output_image_path: dest,
           output_image_sha256: meta.sha256,
+          output_sha256: meta.sha256,
           output_id: meta.output_id,
           output_source: outputSource,
           image_artifact_path_contract: imageContract?.artifact_path || null,
@@ -196,6 +199,7 @@ export function createCodexAppImagegenAdapter(opts: any = {}): ImageUxReviewImag
         schema: 'sks.image-ux-gpt-image-2-response.v1',
         created_at: nowIso(),
         provider: 'codex_app_imagegen',
+        evidence_class: 'codex_app_imagegen',
         model: 'gpt-image-2',
         ok: false,
         status: 'blocked',
@@ -232,6 +236,22 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
       await ensureDir(input.output_dir);
       const requestArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-request.json');
       const responseArtifact = path.join(input.output_dir, 'image-ux-gpt-image-2-response.json');
+      if (!imagegenMockContext(opts)) {
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-gpt-image-2-response.v1',
+          created_at: nowIso(),
+          provider: 'fake_imagegen_adapter',
+          fake_adapter: true,
+          execution_class: 'mock_fixture',
+          evidence_class: 'mock_fixture',
+          model: 'gpt-image-2',
+          ok: false,
+          status: 'blocked',
+          blocker: 'fake_imagegen_requires_test_or_mock_context',
+          local_only: true
+        });
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: 'fake_imagegen_requires_test_or_mock_context', provider: 'fake_imagegen_adapter', request_artifact: null, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+      }
       const validation = await validateGptImage2Request({
         provider: 'fake_imagegen_adapter',
         endpoint: 'local hermetic fixture',
@@ -263,6 +283,9 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
           provider: 'fake_imagegen_adapter',
+          fake_adapter: true,
+          execution_class: 'mock_fixture',
+          evidence_class: 'mock_fixture',
           model: 'gpt-image-2',
           ok: false,
           status: 'blocked',
@@ -287,16 +310,20 @@ export function createFakeImagegenAdapter(opts: any = {}): ImageUxReviewImagegen
         schema: 'sks.image-ux-gpt-image-2-response.v1',
         created_at: nowIso(),
         provider: 'fake_imagegen_adapter',
+        fake_adapter: true,
+        execution_class: 'mock_fixture',
+        evidence_class: 'mock_fixture',
         model: 'gpt-image-2',
         ok: true,
         status: 'generated',
         output_image_path: out,
         output_image_sha256: meta.sha256,
+        output_sha256: meta.sha256,
         output_id: meta.output_id,
+        output_source: 'mock_fixture',
         image_artifact_path_contract: imageContract?.artifact_path || null,
         dimensions: { width: meta.width, height: meta.height, format: meta.format },
         latency_ms: Date.now() - started,
-        fake_adapter: true,
         source: 'mock_like_fixture',
         real_generated: false,
         mock: true,
@@ -357,6 +384,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
           provider: 'openai_images_api',
+          evidence_class: 'non_codex_api_fallback',
           model: 'gpt-image-2',
           ok: false,
           status: 'blocked',
@@ -371,6 +399,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
           provider: 'openai_images_api',
+          evidence_class: 'non_codex_api_fallback',
           model: 'gpt-image-2',
           ok: false,
           status: 'blocked',
@@ -434,6 +463,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
             schema: 'sks.image-ux-gpt-image-2-response.v1',
             created_at: nowIso(),
             provider: 'openai_responses_image_generation',
+            evidence_class: 'non_codex_api_fallback',
             model: 'gpt-image-2',
             responses_model: responsesImagegenModel(opts),
             auth_source: auth.auth_source,
@@ -441,6 +471,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
             status: 'generated',
             output_image_path: out,
             output_image_sha256: meta.sha256,
+            output_sha256: meta.sha256,
             output_id: meta.output_id,
             image_artifact_path_contract: imageContract?.artifact_path || null,
             dimensions: { width: meta.width, height: meta.height, format: meta.format },
@@ -490,12 +521,14 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
           schema: 'sks.image-ux-gpt-image-2-response.v1',
           created_at: nowIso(),
           provider: 'openai_images_api',
+          evidence_class: 'non_codex_api_fallback',
           model: 'gpt-image-2',
           auth_source: auth.auth_source,
           ok: true,
           status: 'generated',
           output_image_path: out,
           output_image_sha256: meta.sha256,
+          output_sha256: meta.sha256,
           output_id: meta.output_id,
           image_artifact_path_contract: imageContract?.artifact_path || null,
           dimensions: { width: meta.width, height: meta.height, format: meta.format },
@@ -548,16 +581,10 @@ async function resolveImageArtifactRoot(input: ImageUxReviewImagegenRequest): Pr
 }
 
 export async function generateGptImage2CalloutReview(input: ImageUxReviewImagegenRequest, opts: any = {}) {
-  if (opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1') {
-    return createFakeImagegenAdapter(opts.fakeAdapter || {}).generateCalloutReview(input);
+  if ((opts.fake === true || process.env.SKS_TEST_FAKE_IMAGEGEN === '1') && imagegenMockContext(opts)) {
+    return createFakeImagegenAdapter({ ...(opts.fakeAdapter || {}), mockContext: true }).generateCalloutReview(input);
   }
   const capability = await detectImagegenCapability(opts.capability || {}).catch(() => null);
-  // Auto-enable the OpenAI direct-key API fallback whenever an OPENAI_API_KEY is
-  // available, so a missing/failed Codex App $imagegen surface still produces a
-  // real image instead of a hard block. Explicit opt-out wins: pass
-  // allowApiFallback:false or SKS_IMAGEGEN_ALLOW_API_FALLBACK=0.
-  const openAiKeyPresent = Boolean(opts.openai?.apiKey || process.env.OPENAI_API_KEY);
-  const explicitDisableApiFallback = opts.allowApiFallback === false || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '0';
   // codex-lb imagegen is a direct API fallback, not Codex App imagegen evidence.
   // It must be explicitly enabled by the caller or environment.
   const explicitDisableCodexLbFallback = opts.allowCodexLbApiFallback === false || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '0';
@@ -565,10 +592,9 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
     opts.allowCodexLbApiFallback === true
     || process.env.SKS_IMAGEGEN_ALLOW_CODEX_LB_API_FALLBACK === '1'
   );
-  const allowApiFallback = !explicitDisableApiFallback && (
+  const allowApiFallback = (
     opts.allowApiFallback === true
     || process.env.SKS_IMAGEGEN_ALLOW_API_FALLBACK === '1'
-    || openAiKeyPresent
     || allowCodexLbApiFallback
   );
   const openaiOptions = {
@@ -583,6 +609,14 @@ export async function generateGptImage2CalloutReview(input: ImageUxReviewImagege
   const codexResult = await codexAdapter.generateCalloutReview(input);
   if (codexResult.ok || !allowApiFallback) return codexResult;
   return createOpenAIImagesApiAdapter(openaiOptions).generateCalloutReview(input);
+}
+
+function imagegenMockContext(opts: any = {}) {
+  return opts.mockContext === true
+    || opts.testContext === true
+    || process.env.NODE_ENV === 'test'
+    || process.env.SKS_SELFTEST_MOCK === '1'
+    || process.env.SKS_MOCK === '1';
 }
 
 export function imagegenCapabilityBlocker(surface = 'Codex App $imagegen') {
@@ -746,6 +780,9 @@ export async function generatedImageMetadata(root: string, imagePath: string, op
     source_screen_id: opts.source_screen_id || null,
     provider_model: 'gpt-image-2',
     provider_surface: opts.provider_surface || 'codex_app_imagegen',
+    evidence_class: opts.evidence_class || (opts.mock ? 'mock_fixture' : 'codex_app_imagegen'),
+    output_source: opts.output_source || (opts.mock ? 'mock_fixture' : 'manual_attach'),
+    output_sha256: opts.output_sha256 || await sha256File(absolute),
     requested_fidelity: 'high_fidelity_automatic',
     image_input_fidelity_note: 'high_fidelity_automatic',
     privacy: 'local-only',
@@ -770,6 +807,7 @@ function redactedImagegenResponse(payload: any, ok: boolean, latencyMs: number, 
     schema: 'sks.image-ux-gpt-image-2-response.v1',
     created_at: nowIso(),
     provider,
+    evidence_class: provider === 'codex_app_imagegen' ? 'codex_app_imagegen' : 'non_codex_api_fallback',
     model: 'gpt-image-2',
     ok,
     status: ok ? 'generated' : 'blocked',

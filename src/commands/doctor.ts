@@ -46,6 +46,8 @@ import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { reconcileSkills } from '../core/init/skills.js';
 import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
+import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
+import { repairCodexImagegen } from '../core/doctor/imagegen-repair.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -605,10 +607,29 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
     ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
     : null;
-  const { detectImagegenCapability } = await import('../core/imagegen/imagegen-capability.js');
-  const imagegen = deepDiagnostics
-    ? await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null }))
-    : { ok: false, skipped: true, auth_readiness: null, warnings: ['imagegen_optional_diagnostic_skipped'] };
+  const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null, core_ready: false, blockers: ['imagegen_detection_exception'] }));
+  const imagegenRepair = (imagegen as any).core_ready === true
+    ? {
+        schema: 'sks.doctor-imagegen-repair.v1',
+        ok: true,
+        attempted: false,
+        apply: doctorFix,
+        recovered: true,
+        before: imagegen,
+        after: imagegen,
+        steps: [],
+        blockers: [],
+        manual_actions: []
+      }
+    : await repairCodexImagegen({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+        schema: 'sks.doctor-imagegen-repair.v1',
+        ok: false,
+        attempted: true,
+        apply: doctorFix,
+        recovered: false,
+        blockers: [err?.message || String(err)],
+        manual_actions: ['Run `sks doctor --fix --json` after enabling Codex App image_generation.']
+      }));
   const codex0138Capability = deepDiagnostics
     ? await writeCodex0138CapabilityArtifacts(root, { codexBin: codexBin || null }).catch((err: any) => ({ error: err?.message || String(err), report: null }))
     : { skipped: true, report: null };
@@ -800,6 +821,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       auth_readiness: (imagegen as any).auth_readiness || null,
       codex_app_builtin_available: (imagegen as any).codex_app?.available === true
     },
+    imagegen_repair: imagegenRepair,
     codex_0138: {
       capability: (codex0138Capability as any).report || null,
       doctor: codex0138Doctor,
@@ -814,7 +836,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
     skills: skillsReconcile,
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, imagegen: imagegenRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
   };
   if (reportFile) await writeJsonReportFile(reportFile, result);
   if (machineOnly && !flag(args, '--json')) {
@@ -938,6 +960,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       for (const action of imagegenReady.next_actions || []) console.log(`  - ${action}`);
     }
   }
+  console.log(`Image Gen repair: ${(imagegenRepair as any).recovered ? 'ok' : (imagegenRepair as any).attempted ? 'blocked' : 'not-needed'}`);
+  for (const action of (imagegenRepair as any).manual_actions || []) console.log(`  - ${action}`);
   const codex0138 = (codex0138Capability as any).report || {};
   console.log('Codex current compatibility:');
   console.log(`  target: rust-v0.142.0`);

@@ -36,7 +36,7 @@ const deckIssues = missionDir ? readJson(path.join(missionDir, 'ppt-deck-issue-l
 const proof = missionDir ? readJson(path.join(missionDir, 'completion-proof.json')) : null;
 const trust = missionDir ? readJson(path.join(missionDir, 'trust-report.json')) : null;
 const fakeNotReal = !JSON.stringify(callouts || {}).includes('"real_generated":true');
-const proofStatusOk = proof?.schema === 'sks.completion-proof.v1' && ['verified', 'verified_partial'].includes(String(proof?.status || ''));
+const proofStatusOk = proof?.schema === 'sks.completion-proof.v1' && ['verified', 'verified_partial', 'mock_only'].includes(String(proof?.status || ''));
 const trustStatusOk = trust?.schema === 'sks.trust-report.v1' && trust?.ok === true && !['blocked', 'failed', 'not_verified'].includes(String(trust?.status || ''));
 const ok = Boolean(parsed?.mission_id)
   && inventory?.deck_present === true

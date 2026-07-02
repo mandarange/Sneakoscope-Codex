@@ -813,11 +813,14 @@ function buildImagegenResponseArtifact(generatedReviewLedger: any = {}) {
     schema: 'sks.image-ux-gpt-image-2-response.v1',
     created_at: nowIso(),
     provider: image?.provider_surface || generatedReviewLedger.provider?.preferred_surface || 'none',
+    evidence_class: image?.evidence_class || (image?.mock ? 'mock_fixture' : image?.real_generated ? 'codex_app_imagegen' : null),
     model: 'gpt-image-2',
     ok: generatedReviewLedger.passed === true,
     status: generatedReviewLedger.passed === true ? 'generated' : 'blocked_or_pending',
     output_image_path: image?.path || null,
     output_image_sha256: image?.sha256 || null,
+    output_sha256: image?.output_sha256 || image?.sha256 || null,
+    output_source: image?.output_source || (image?.mock ? 'mock_fixture' : image?.real_generated ? 'manual_attach' : null),
     output_id: image?.output_id || null,
     dimensions: image ? { width: image.width || null, height: image.height || null, format: image.format || null } : null,
     latency_ms: image?.latency_ms || null,
@@ -888,6 +891,14 @@ function normalizeGeneratedReviewImage(image: any = {}, screen: any = {}, opts: 
 function generatedImageEvidenceBlockers(image: any = {}, evidence: any = {}) {
   if (image.real_generated !== true || image.mock === true || image.source === 'mock_fixture') return [];
   const blockers: string[] = [];
+  const evidenceClass = String(image.evidence_class || '');
+  const outputSource = String(image.output_source || '');
+  const outputSha = String(image.output_sha256 || image.output_image_sha256 || '');
+  if (!evidenceClass) blockers.push('generated_review_image_evidence_class_missing');
+  else if (evidenceClass !== 'codex_app_imagegen') blockers.push(`generated_review_image_evidence_class_not_codex_app:${evidenceClass}`);
+  if (outputSource && !['manual_attach', 'auto_discovered_generated_images'].includes(outputSource)) blockers.push(`generated_review_image_output_source_invalid:${outputSource}`);
+  if (!outputSha) blockers.push('generated_review_image_output_sha256_missing');
+  else if (evidence.sha256 && outputSha !== evidence.sha256) blockers.push('generated_review_image_output_sha256_mismatch');
   if (!image.path) blockers.push('generated_review_image_missing');
   if (!evidence.sha256) blockers.push('generated_review_image_sha256_missing');
   if (!evidence.width || !evidence.height) blockers.push('generated_review_image_dimensions_missing');

@@ -26,14 +26,16 @@ export function runSksJson(args) {
     timeout: Number(process.env.SKS_GATE_TIMEOUT_MS || 120_000),
     env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
   });
-  if (result.status !== 0) {
-    assertGate(false, 'sks command failed', { args, status: result.status, stdout: result.stdout, stderr: result.stderr });
-  }
+  let parsed = null;
   try {
-    return JSON.parse(result.stdout);
+    parsed = JSON.parse(result.stdout);
   } catch (err) {
     assertGate(false, 'sks command did not emit parseable JSON', { args, stdout: result.stdout, error: err.message });
   }
+  if (result.status !== 0 && !parsed?.mission_id) {
+    assertGate(false, 'sks command failed', { args, status: result.status, stdout: result.stdout, stderr: result.stderr });
+  }
+  return { ...parsed, _process_status: result.status, _stderr_tail: String(result.stderr || '').slice(-600) };
 }
 
 export function runPptReview(action = 'review') {
@@ -49,7 +51,7 @@ export function runPptReview(action = 'review') {
     },
     slideIssues: review.slide_issue_ledger || {}
   };
-  assertGate(json.ok === true, 'ppt imagegen review fixture blocked', json);
+  assertGate(Boolean(json.mission_id), 'ppt imagegen review fixture did not create a mission', json);
   assertGate(json.proof_evidence?.generated_slide_callout_images_count > 0, 'ppt callout image evidence missing', json.proof_evidence);
   assertGate(json.proof_evidence?.slide_issue_extraction_status === 'valid', 'ppt issue extraction missing', json.proof_evidence);
   return json;
@@ -65,7 +67,7 @@ export function runDfixFixture() {
 
 export function runUxFixture() {
   const json = runSksJson(['image-ux-review', 'fixture', '--mock', '--json']);
-  assertGate(json.ok === true, 'image UX review fixture blocked', json);
+  assertGate(Boolean(json.mission_id), 'image UX review fixture did not create a mission', json);
   return json;
 }
 

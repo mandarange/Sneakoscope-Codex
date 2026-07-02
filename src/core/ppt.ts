@@ -10,6 +10,7 @@ import { buildPptStyleTokens, selectPptDesignReference } from './ppt/style-token
 export { PPT_DESIGN_REFERENCE_PROFILES, buildPptStyleTokens, selectPptDesignReference } from './ppt/style-tokens.js';
 import { buildPptHtml } from './ppt/html.js';
 export { buildPptHtml } from './ppt/html.js';
+import { imageDimensions, sha256File } from './wiki-image/image-hash.js';
 
 export const PPT_REQUIRED_GATE_FIELDS = Object.freeze([
   'clarification_contract_sealed',
@@ -401,10 +402,62 @@ async function existingGeneratedImageAssets(dir: any, existing: any = {}) {
     const target = path.join(dir, asset.output_path);
     try {
       const stat = await fsp.stat(target);
-      checked.push({ ...asset, byte_size: stat.size });
+      const sha = await sha256File(target);
+      const dims = await imageDimensions(target).catch(() => null);
+      const evidenceBlockers = pptImageAssetEvidenceBlockers(asset, { sha });
+      checked.push({
+        ...asset,
+        byte_size: stat.size,
+        output_sha256: asset.output_sha256 || sha,
+        evidence_class: asset.evidence_class || null,
+        output_source: asset.output_source || null,
+        dimensions: dims ? { width: dims.width, height: dims.height, format: dims.format } : asset.dimensions || null,
+        evidence_blockers: evidenceBlockers,
+        evidence_verified: evidenceBlockers.length === 0
+      });
     } catch {}
   }
   return checked;
+}
+
+function pptImageAssetEvidenceBlockers(asset: any = {}, evidence: any = {}) {
+  const blockers: string[] = [];
+  const evidenceClass = String(asset.evidence_class || '');
+  const outputSource = String(asset.output_source || '');
+  const outputSha = String(asset.output_sha256 || '');
+  if (evidenceClass !== 'codex_app_imagegen') blockers.push(evidenceClass ? `ppt_image_asset_evidence_class_not_codex_app:${evidenceClass}` : 'ppt_image_asset_evidence_class_missing');
+  if (!['manual_attach', 'auto_discovered_generated_images'].includes(outputSource)) blockers.push(`ppt_image_asset_output_source_invalid:${outputSource || 'missing'}`);
+  if (!outputSha) blockers.push('ppt_image_asset_output_sha256_missing');
+  else if (evidence.sha && outputSha !== evidence.sha) blockers.push('ppt_image_asset_output_sha256_mismatch');
+  return [...new Set(blockers)];
+}
+
+function buildPptImagegenEvidence(imageAssetLedger: any = {}) {
+  const assets = Array.isArray(imageAssetLedger.assets) ? imageAssetLedger.assets : [];
+  const required = imageAssetLedger.required === true;
+  const requiredAssets = assets.filter((asset: any) => asset.status === 'generated' || required);
+  const blockers = [
+    ...(imageAssetLedger.blockers || []),
+    ...assets.flatMap((asset: any) => asset.evidence_blockers || [])
+  ].map(String);
+  return {
+    schema: 'sks.ppt-imagegen-evidence.v1',
+    required,
+    required_count: imageAssetLedger.required_count || 0,
+    generated_count: imageAssetLedger.generated_count || 0,
+    generated_image_evidence: !required || (imageAssetLedger.generated_count || 0) >= (imageAssetLedger.required_count || 0),
+    assets: requiredAssets.map((asset: any) => ({
+      id: asset.id || null,
+      output_path: asset.output_path || null,
+      output_source: asset.output_source || null,
+      output_sha256: asset.output_sha256 || null,
+      evidence_class: asset.evidence_class || null,
+      evidence_verified: asset.evidence_verified === true,
+      blockers: asset.evidence_blockers || []
+    })),
+    blockers: [...new Set(blockers)],
+    passed: !required || ((imageAssetLedger.passed === true) && blockers.length === 0)
+  };
 }
 
 export async function buildPptImageAssetLedger(dir: any, contract: any = {}, storyboard: any = buildPptStoryboard(contract), styleTokens: any = buildPptStyleTokens(contract), existing: any = null) {
@@ -416,11 +469,13 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
   const imagegenDisabled = /^(0|false|no)$/i.test(String(process.env.SKS_PPT_IMAGEGEN ?? 'auto'));
   const blockers: any[] = [];
   const generated = [...reused];
+  const evidenceBlockers = generated.flatMap((asset: any) => asset.evidence_blockers || []);
   if (pending.length > 0 && required && imagegenDisabled) {
     blockers.push('imagegen_disabled_by_SKS_PPT_IMAGEGEN');
   } else if (pending.length > 0 && required) {
     blockers.push('missing_codex_app_imagegen_gpt_image_2_asset_evidence');
   }
+  if (required) blockers.push(...evidenceBlockers);
   const assets = [
     ...generated,
     ...pending
@@ -458,6 +513,13 @@ export async function buildPptImageAssetLedger(dir: any, contract: any = {}, sto
     failed_count: 0,
     blockers,
     assets,
+    imagegen_evidence: buildPptImagegenEvidence({
+      required,
+      required_count: requiredCount,
+      generated_count: generatedCount,
+      blockers,
+      assets
+    }),
     passed,
     notes: [
       required
@@ -969,6 +1031,7 @@ export function defaultPptGate(contract: any = {}) {
     style_tokens_created: false,
     image_asset_ledger_created: false,
     image_asset_policy_satisfied: false,
+    imagegen_evidence: { schema: 'sks.ppt-imagegen-evidence.v1', required: false, passed: true, blockers: [] },
     review_policy_created: false,
     review_ledger_created: false,
     bounded_iteration_complete: false,
@@ -1068,9 +1131,10 @@ export async function writePptBuildArtifacts(dir: any, contract: any = null) {
     parallel_report: async () => writeJsonAtomic(path.join(dir, PPT_PARALLEL_REPORT_ARTIFACT), parallelReport)
   });
   const baseGate = defaultPptGate(sealed);
+  const imagegenEvidence = buildPptImagegenEvidence(imageAssetLedger);
   const gate = {
     ...baseGate,
-    passed: report.passed && imageAssetLedger.passed && reviewLedger.passed && iterationReport.passed && cleanupReport.source_html_preserved && cleanupReport.temp_cleanup_completed && parallelReport.passed,
+    passed: report.passed && imageAssetLedger.passed && imagegenEvidence.passed && reviewLedger.passed && iterationReport.passed && cleanupReport.source_html_preserved && cleanupReport.temp_cleanup_completed && parallelReport.passed,
     audience_strategy_sealed: baseGate.audience_strategy_sealed,
     source_ledger_created: true,
     fact_ledger_created: true,
@@ -1079,6 +1143,7 @@ export async function writePptBuildArtifacts(dir: any, contract: any = null) {
     style_tokens_created: true,
     image_asset_ledger_created: true,
     image_asset_policy_satisfied: imageAssetLedger.passed,
+    imagegen_evidence: imagegenEvidence,
     review_policy_created: true,
     review_ledger_created: true,
     bounded_iteration_complete: iterationReport.passed,

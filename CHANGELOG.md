@@ -5,6 +5,27 @@
 
 
 
+
+## [5.1.2] - 2026-07-02
+
+### Changed
+
+- Merged `$MAD-DB` into `$MAD-SKS` as the MAD-SKS `sql-plane` executor while keeping `$MAD-DB` / `sks mad-db` as deprecated compatibility aliases for one release.
+- Unified SQL-plane stop-gate state under `mad-sks-gate.json`, including `sql_plane.requested`, capability id, operation classes, read-back status, and profile-close evidence.
+- Made Codex App `$imagegen` / `gpt-image-2` the required full-evidence path for `$Image-UX-Review`, `$UX-Review`, and `$PPT` image review flows; OpenAI API fallback is now explicit opt-in and marked non-Codex evidence.
+
+### Fixed
+
+- Added the MAD-DB compatibility command translation:
+  - `sks mad-db run <sql>` -> `sks mad-sks sql <sql>`
+  - `sks mad-db exec <sql>` -> `sks mad-sks sql <sql>`
+  - `sks mad-db apply-migration <file>` -> `sks mad-sks apply-migration <file>`
+  - `sks mad-db status|close|revoke|doctor` -> corresponding `sks mad-sks` status/close/revoke/doctor behavior with `deprecated_alias: "mad-db"`.
+- Added imagegen doctor repair reporting (`imagegen_repair` / `repair.imagegen`) and install-time imagegen readiness repair so unavailable Codex App image generation blocks honestly with manual actions instead of silently falling back.
+- Strengthened generated-image gates with `evidence_class`, `output_source`, and `output_sha256` validation for Image UX and PPT slide review/asset evidence.
+- Registered imagegen wiring and doctor repair coverage in feature fixtures and restored the release script entries used by the UX/PPT/DFix/all-features gates.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [5.1.1] - 2026-07-02
 
 ### Fixed

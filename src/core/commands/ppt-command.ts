@@ -31,6 +31,7 @@ import {
   writePptImagegenReviewArtifacts
 } from '../ppt-review/index.js';
 import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
+import { requireCodexImagegen } from '../imagegen/require-imagegen.js';
 
 export async function pptCommand(command: any, args: any = []) {
   const root = await projectRoot();
@@ -47,6 +48,31 @@ export async function pptCommand(command: any, args: any = []) {
   const { dir, mission } = await loadMission(root, missionId);
   const contract = await readJson(path.join(dir, 'decision-contract.json'), { prompt: mission.prompt, answers: fixtureAnswers(), sealed_hash: 'ppt-fixture-contract' });
   if (action === 'build') {
+    if (!flag(args, '--mock')) {
+      const imagegenRequired = await requireCodexImagegen(root, { autoRepair: true, applyRepair: true });
+      if (!imagegenRequired.ok) {
+        const result = {
+          schema: 'sks.ppt-build.v1',
+          ok: false,
+          status: 'blocked',
+          mission_id: missionId,
+          blocker: 'codex_imagegen_unavailable',
+          imagegen_required: imagegenRequired,
+          gate: {
+            schema: 'sks.ppt-gate.v1',
+            passed: false,
+            status: 'blocked',
+            blockers: ['codex_imagegen_unavailable'],
+            imagegen_evidence: { passed: false, generated_image_evidence: false }
+          }
+        };
+        process.exitCode = 1;
+        if (flag(args, '--json')) return printJson(result);
+        console.error('PPT build blocked: Codex App imagegen/gpt-image-2 is unavailable.');
+        for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
+        return result;
+      }
+    }
     await writePptRouteArtifacts(dir, contract);
     const build = await writePptBuildArtifacts(dir, contract);
     const gate = await evaluatePptGateArtifacts(dir, build.gate);
@@ -126,6 +152,31 @@ async function pptImagegenReview(root: string, command: any, action: string, arg
     if (flag(args, '--json')) return printJson(result);
     console.log(`PPT imagegen review: ${result.ok ? 'ok' : 'blocked'} ${id}`);
     return result;
+  }
+  if (!mockMode) {
+    const imagegenRequired = await requireCodexImagegen(root, { autoRepair: true, applyRepair: true });
+    if (!imagegenRequired.ok) {
+      const result = {
+        schema: 'sks.ppt-imagegen-review.v1',
+        ok: false,
+        status: 'blocked',
+        mission_id: id,
+        blocker: 'codex_imagegen_unavailable',
+        imagegen_required: imagegenRequired,
+        gate: {
+          schema: 'sks.ppt-imagegen-review-gate.v1',
+          passed: false,
+          status: 'blocked',
+          blockers: ['codex_imagegen_unavailable'],
+          imagegen_evidence: { passed: false, generated_image_evidence: false }
+        }
+      };
+      process.exitCode = 1;
+      if (flag(args, '--json')) return printJson(result);
+      console.error('PPT imagegen review blocked: Codex App imagegen/gpt-image-2 is unavailable.');
+      for (const action of imagegenRequired.blocker?.next_actions || []) console.error(`- ${action}`);
+      return result;
+    }
   }
   const artifacts = await writePptImagegenReviewArtifacts({
     root,
@@ -328,6 +379,8 @@ export async function evaluatePptGateArtifacts(dir: string, baseGate: any = {}) 
   const renderReportPassed = renderReport?.passed === true;
   const factLedgerPassed = factLedger?.passed === true && Number(factLedger.unsupported_critical_claims_count || 0) === 0;
   const imageAssetLedgerPassed = imageAssetLedger?.passed === true;
+  const imagegenEvidence = imageAssetLedger?.imagegen_evidence || { schema: 'sks.ppt-imagegen-evidence.v1', required: false, passed: true, blockers: [] };
+  const imagegenEvidencePassed = imagegenEvidence?.required === true ? imagegenEvidence?.passed === true : true;
   const reviewLedgerPassed = reviewLedger?.passed === true;
   const iterationReportPassed = iterationReport?.passed === true;
   const cleanupReportPassed = cleanupReport?.source_html_preserved === true && cleanupReport?.temp_cleanup_completed === true;
@@ -337,6 +390,7 @@ export async function evaluatePptGateArtifacts(dir: string, baseGate: any = {}) 
     ...(renderReportPassed ? [] : ['render_report_not_passed']),
     ...(factLedgerPassed ? [] : ['fact_ledger_not_passed']),
     ...(imageAssetLedgerPassed ? [] : ['image_asset_ledger_not_passed']),
+    ...(imagegenEvidencePassed ? [] : ['ppt_imagegen_evidence_not_passed']),
     ...(reviewLedgerPassed ? [] : ['review_ledger_not_passed']),
     ...(iterationReportPassed ? [] : ['iteration_report_not_passed']),
     ...(cleanupReportPassed ? [] : ['cleanup_report_not_passed']),
@@ -351,6 +405,7 @@ export async function evaluatePptGateArtifacts(dir: string, baseGate: any = {}) 
     render_report_passed: renderReportPassed,
     fact_ledger_passed: factLedgerPassed,
     image_asset_ledger_passed: imageAssetLedgerPassed,
+    imagegen_evidence: imagegenEvidence,
     review_ledger_passed: reviewLedgerPassed,
     iteration_report_passed: iterationReportPassed,
     cleanup_report_passed: cleanupReportPassed,

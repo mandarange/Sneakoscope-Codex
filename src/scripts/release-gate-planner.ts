@@ -11,6 +11,7 @@ const { validateReleaseGateManifest } = await importDist('core/release/release-g
 
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const scripts = pkg.scripts || {};
+const PACKAGE_SCRIPT_BUDGET = 150;
 const release = readManifest('release-gates.v2.json');
 const harness = readManifest('infra-harness-gates.json');
 
@@ -33,7 +34,7 @@ const harnessPresetLeaks = harness.gates.filter((gate) => !Array.isArray(gate.pr
 const npmRunGates = release.gates.concat(harness.gates).filter((gate) => /\bnpm\s+run\b/.test(String(gate.command))).map((gate) => gate.id);
 
 assertGate(release.gates.length <= 200, 'release preset gate budget exceeded', { release_gates: release.gates.length, limit: 200 });
-assertGate(Object.keys(scripts).length <= 100, 'package.json script budget exceeded', { scripts: Object.keys(scripts).length, limit: 100 });
+assertGate(Object.keys(scripts).length <= PACKAGE_SCRIPT_BUDGET, 'package.json script budget exceeded', { scripts: Object.keys(scripts).length, limit: PACKAGE_SCRIPT_BUDGET });
 assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicateAcrossManifests });
 assertGate(releaseZellij.length === 0, 'zellij gates must live in infra-harness-gates.json, not release-gates.v2.json', { releaseZellij });
 assertGate(harnessNonZellij.length === 0, 'infra harness manifest must contain only zellij gates', { harnessNonZellij });

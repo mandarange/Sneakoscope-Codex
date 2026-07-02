@@ -14,7 +14,7 @@
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: `5.1.1`.
+Current release: `5.1.2`.
 
 ## Install
 
@@ -39,6 +39,8 @@ sks doctor --fix
 | `$Work` | Executes the latest plan through evidence-gated SKS work. |
 | `$Swarm "task"` | Runs the Naruto dynamic parallel swarm with machine verification. |
 | `$Team "task"` | Deprecated v5 compatibility alias. New execution redirects to `$Naruto`; legacy Team observe/watch commands remain available for old missions. |
+| `$MAD-SKS` / `sks mad-sks` | Single high-risk MAD route for scoped permission widening plus SQL-plane execution, including read-back proof and profile closure. |
+| `$MAD-DB` / `sks mad-db` | Deprecated compatibility alias. Translates to `$MAD-SKS` sql-plane commands for one release. |
 | `$Review` / `sks review --staged` | Reviews diffs with `evidence: machine` findings sorted above `evidence: llm`. |
 | `sks ui` | Opens the local live dashboard at `http://127.0.0.1:4477`. |
 
@@ -81,7 +83,7 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - Project memory: `sks memory build`
 - Release gates: `node ./dist/scripts/release-gate-dag-runner.js --preset release --full`
 - Release readiness notes: [docs/release-readiness.md](docs/release-readiness.md) and [CHANGELOG.md](CHANGELOG.md)
-- Image generation review routes require real generated-image evidence; current image docs and prompts refer to `gpt-image-2`.
+- Image generation review routes require Codex App `$imagegen`/`gpt-image-2` evidence with recorded output hashes; direct API fallback and mock fixtures do not satisfy full route gates.
 
 ## Requirements
 

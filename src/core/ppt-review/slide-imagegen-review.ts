@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { nowIso } from '../fsx.js';
+import { nowIso, readJson } from '../fsx.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_IMAGEGEN_REQUIRED_POLICY } from '../routes.js';
 import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { generateGptImage2CalloutReview } from '../image-ux-review/imagegen-adapter.js';
@@ -48,6 +48,9 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
         ...metadata,
         status: 'generated',
         source: 'mock_fixture',
+        evidence_class: 'mock_fixture',
+        output_source: 'mock_fixture',
+        output_sha256: metadata.sha256,
         callout_extraction_status: 'succeeded',
         callouts: [{
           callout_id: 'callout-1',
@@ -64,8 +67,15 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
   } else if (generatedSlideImage && slides.length > 0) {
     const slide = slides[0];
     const generatedPath = await stageGeneratedSlideReview(root, dir, path.resolve(root, generatedSlideImage), path.basename(generatedSlideImage));
+    const metadata = await generatedSlideMetadata(root, generatedPath, slide, {
+      mock: false,
+      realGenerated: true,
+      providerSurface: 'codex_app_imagegen',
+      evidenceClass: 'codex_app_imagegen',
+      outputSource: 'manual_attach'
+    });
     generatedReviewImages.push({
-      ...await generatedSlideMetadata(root, generatedPath, slide, { mock: false, realGenerated: true }),
+      ...metadata,
       status: 'attached_generated_review',
       source: 'user_attached_generated_slide_review',
       callout_extraction_status: 'pending',
@@ -86,15 +96,22 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
         blockers.push(generated.blocker || 'ppt_imagegen_callouts_missing');
         continue;
       }
-      const fakeGenerated = generated.provider === 'fake_imagegen_adapter';
+      const response = generated.response_artifact ? await readJson(generated.response_artifact, null).catch(() => null) : null;
+      const evidenceClass = String(response?.evidence_class || '');
+      const fakeGenerated = evidenceClass === 'mock_fixture' || generated.provider === 'fake_imagegen_adapter';
+      const codexGenerated = evidenceClass === 'codex_app_imagegen';
+      if (!codexGenerated) blockers.push(evidenceClass === 'non_codex_api_fallback' ? 'ppt_imagegen_non_codex_api_fallback_not_full_evidence' : fakeGenerated ? 'ppt_imagegen_mock_fixture_not_full_evidence' : 'ppt_imagegen_evidence_class_missing');
       generatedReviewImages.push({
         ...await generatedSlideMetadata(root, generated.generated_image_path, slide, {
           mock: fakeGenerated,
-          realGenerated: !fakeGenerated,
-          providerSurface: generated.provider || 'gpt-image-2'
+          realGenerated: codexGenerated,
+          providerSurface: generated.provider || 'gpt-image-2',
+          evidenceClass,
+          outputSource: response?.output_source || null,
+          outputSha256: response?.output_sha256 || response?.output_image_sha256 || null
         }),
         status: 'generated',
-        source: fakeGenerated ? 'mock_fixture' : 'real_gpt_image_2_callout',
+        source: fakeGenerated ? 'mock_fixture' : codexGenerated ? 'real_gpt_image_2_callout' : 'non_codex_api_fallback',
         callout_extraction_status: fakeGenerated ? 'succeeded' : 'pending',
         callouts: fakeGenerated ? [{
           callout_id: 'fake-slide-callout-1',
@@ -159,7 +176,44 @@ export function buildSlideImagegenResponseArtifact(calloutLedger: any = {}) {
     schema: 'sks.ppt-slide-imagegen-response.v1',
     created_at: nowIso(),
     generated_review_images: calloutLedger.generated_review_images || [],
+    imagegen_evidence: buildSlideImagegenEvidence(calloutLedger),
     blockers: calloutLedger.blockers || []
+  };
+}
+
+export function buildSlideImagegenEvidence(calloutLedger: any = {}) {
+  const images = Array.isArray(calloutLedger.generated_review_images) ? calloutLedger.generated_review_images : [];
+  const requiredCount = Number(calloutLedger.required_count || images.length || 0);
+  const blockers: string[] = [];
+  for (const image of images) {
+    const evidenceClass = String(image.evidence_class || '');
+    const outputSource = String(image.output_source || '');
+    const outputSha = String(image.output_sha256 || '');
+    if (evidenceClass !== 'codex_app_imagegen') blockers.push(evidenceClass ? `ppt_slide_imagegen_evidence_class_not_codex_app:${evidenceClass}` : 'ppt_slide_imagegen_evidence_class_missing');
+    if (!['manual_attach', 'auto_discovered_generated_images'].includes(outputSource)) blockers.push(`ppt_slide_imagegen_output_source_invalid:${outputSource || 'missing'}`);
+    if (!outputSha) blockers.push('ppt_slide_imagegen_output_sha256_missing');
+    else if (image.sha256 && image.sha256 !== outputSha) blockers.push('ppt_slide_imagegen_output_sha256_mismatch');
+    if (image.real_generated !== true) blockers.push('ppt_slide_imagegen_not_real_codex_app_output');
+  }
+  if (requiredCount > 0 && images.length < requiredCount) blockers.push('ppt_slide_imagegen_required_outputs_missing');
+  return {
+    schema: 'sks.ppt-slide-imagegen-evidence.v1',
+    required: requiredCount > 0,
+    required_count: requiredCount,
+    generated_count: images.length,
+    codex_app_generated_count: images.filter((image: any) => image.evidence_class === 'codex_app_imagegen' && image.real_generated === true).length,
+    images: images.map((image: any) => ({
+      image_path: image.image_path || image.path || null,
+      output_source: image.output_source || null,
+      output_sha256: image.output_sha256 || null,
+      sha256: image.sha256 || null,
+      evidence_class: image.evidence_class || null,
+      real_generated: image.real_generated === true,
+      mock: image.mock === true,
+      response_artifact: image.imagegen_response_artifact || null
+    })),
+    blockers: [...new Set(blockers)],
+    passed: requiredCount > 0 && images.length >= requiredCount && blockers.length === 0
   };
 }
 
@@ -171,21 +225,26 @@ async function stageGeneratedSlideReview(root: string, dir: string, source: stri
 }
 
 async function generatedSlideMetadata(root: string, relPath: string, slide: any, opts: any = {}) {
-  const absolute = path.resolve(root, relPath);
+  const absolute = path.isAbsolute(relPath) ? relPath : path.resolve(root, relPath);
   const dims = await imageDimensions(absolute);
+  const normalizedPath = path.relative(root, absolute).split(path.sep).join('/');
+  const sha = await sha256File(absolute);
   return {
     id: opts.mock ? `ppt-generated-review-fixture-${slide.slide_index || 1}` : `ppt-generated-review-${slide.slide_index || 1}`,
     generated_review_image_id: opts.mock ? `ppt-generated-review-fixture-${slide.slide_index || 1}` : `ppt-generated-review-${slide.slide_index || 1}`,
     slide_id: slide.slide_id,
     slide_index: slide.slide_index,
     source_slide_image_path: slide.image_path,
-    image_path: relPath,
-    sha256: await sha256File(absolute),
+    image_path: normalizedPath,
+    sha256: sha,
+    output_sha256: opts.outputSha256 || sha,
+    output_source: opts.outputSource || (opts.mock ? 'mock_fixture' : 'manual_attach'),
+    evidence_class: opts.evidenceClass || (opts.mock ? 'mock_fixture' : opts.realGenerated ? 'codex_app_imagegen' : 'non_codex_api_fallback'),
     width: dims.width,
     height: dims.height,
     format: dims.format,
     provider_surface: opts.mock ? 'mock_fixture' : (opts.providerSurface || 'Codex App $imagegen'),
-    real_generated: opts.realGenerated === true,
+    real_generated: opts.realGenerated === true && (opts.evidenceClass || (opts.mock ? 'mock_fixture' : 'codex_app_imagegen')) === 'codex_app_imagegen',
     mock: opts.mock === true,
     local_only: true
   };
