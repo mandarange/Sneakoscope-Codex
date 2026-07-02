@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { PACKAGE_VERSION, packageRoot, readJson, runProcess, which } from './fsx.js';
+import { PACKAGE_VERSION, packageRoot, readJson, runProcess, throttleLines, which } from './fsx.js';
 import { createRequestedScopeContract } from './safety/requested-scope-contract.js';
 import { guardedPackageInstall, guardContextForRoute } from './safety/mutation-guard.js';
 import {
@@ -14,6 +14,8 @@ import {
 import { installSksMenuBar, type SksMenuBarInstallResult } from './codex-app/sks-menubar.js';
 import { reconcileSkills } from './init/skills.js';
 import { codexHookTrustDoctor } from './codex-hooks/codex-hook-trust-doctor.js';
+import { readCodexHookActualState } from './codex-hooks/codex-hook-actual-discovery.js';
+import { ui as cliUi, withHeartbeat } from '../cli/cli-theme.js';
 
 export interface SksUpdateCheckOptions {
   packageName?: string;
@@ -67,6 +69,8 @@ export interface SksUpdateNowOptions extends SksUpdateCheckOptions {
   version?: string | null;
   dryRun?: boolean;
   projectRoot?: string | null;
+  json?: boolean;
+  quiet?: boolean;
 }
 
 export interface SksUpdateNowStage {
@@ -76,10 +80,17 @@ export interface SksUpdateNowStage {
   detail?: Record<string, unknown>;
 }
 
+export interface SksUpdateVerification {
+  id: 'version_match' | 'hooks_trusted' | 'dist_stamp' | 'skills_manifest';
+  ok: boolean;
+  detail?: string;
+  remediation?: string;
+}
+
 export interface SksUpdateNowResult {
   schema: 'sks.update-now.v2';
   ok: boolean;
-  status: 'updated' | 'current' | 'dry_run' | 'unavailable' | 'failed';
+  status: 'updated' | 'updated_with_issues' | 'current' | 'dry_run' | 'unavailable' | 'failed';
   package: string;
   from: string;
   latest: string | null;
@@ -100,6 +111,7 @@ export interface SksUpdateNowResult {
   migration_current: boolean;
   sks_menubar: SksMenuBarInstallResult | null;
   stages: SksUpdateNowStage[];
+  verification: SksUpdateVerification[];
   error: string | null;
 }
 
@@ -198,8 +210,14 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const globalRoot = npmBin ? await detectNpmGlobalRoot(npmBin, env, options).catch(() => null) : null;
   const projectReceiptRoot = path.resolve(options.projectRoot || env.SKS_MUTATION_LEDGER_ROOT || process.cwd());
   const stages: SksUpdateNowStage[] = [];
+  const quiet = options.quiet === true || /^(1|true)$/i.test(String(env.SKS_UPDATE_QUIET || ''));
+  const machineOutput = quiet || options.json === true;
+  const stageStart = (id: string, status: string) => {
+    if (!machineOutput) cliUi.step(`▸ ${id} - ${status}`);
+  };
   const stage = (id: string, ok: boolean, status: string, detail: Record<string, unknown> = {}) => {
     stages.push({ id, ok, status, detail });
+    if (!machineOutput) cliUi.step(`${ok ? '✔' : '✖'} ${id} - ${status}`);
   };
 
   if (!npmBin) {
@@ -264,9 +282,9 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     const migrationCurrent = isUpdateMigrationReceiptCurrent(receipt);
     stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
     const sksMenuBar = migrationCurrent
-      ? await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage })
+      ? await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput })
       : null;
-    await runUpdateGlobalSkillsReconcile(stage);
+    await runUpdateGlobalSkillsReconcile(stage, { quiet: machineOutput });
     return buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -326,13 +344,14 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const oldDoctorTimeoutMs = Number.isFinite(oldDoctorTimeoutOverride) && oldDoctorTimeoutOverride > 0
     ? oldDoctorTimeoutOverride
     : 60_000;
-  const oldVersionDoctor = await runPackageLocalDoctor({
+  stageStart('old_version_doctor_preflight', 'running migration doctor on current install');
+  const oldVersionDoctor = await updateHeartbeat(machineOutput, 'old-version doctor', runPackageLocalDoctor({
     root: projectReceiptRoot,
     args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'old-version-doctor.json')],
     env,
     timeoutMs: oldDoctorTimeoutMs,
     maxOutputBytes: 32 * 1024
-  });
+  }), 60_000);
   stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.status, { entrypoint: oldVersionDoctor.entrypoint, exit_code: oldVersionDoctor.exit_code, timeout_ms: oldDoctorTimeoutMs });
   if (!oldVersionDoctor.ok && env.SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT !== '1') {
     return buildUpdateNowResult({
@@ -367,22 +386,29 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     projectRoot: mutationLedgerRoot,
     overrides: { package_install: true }
   });
-  const install = await guardedPackageInstall(
+  const npmStdout = machineOutput ? undefined : throttleLines((line) => process.stderr.write(`  npm | ${line}\n`), 500);
+  const npmStderr = machineOutput ? undefined : throttleLines((line) => process.stderr.write(`  npm ! ${line}\n`), 500);
+  stageStart('npm_global_install', command || `npm global install ${packageName}`);
+  const installOptions: Parameters<typeof guardedPackageInstall>[2] = {
+    confirmed: true,
+    command: npmBin,
+    args: npmArgs,
+    cwd,
+    env,
+    timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
+    maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
+  };
+  if (npmStdout) installOptions.onStdout = npmStdout;
+  if (npmStderr) installOptions.onStderr = npmStderr;
+  const install = await updateHeartbeat(machineOutput, `npm install -g ${packageName}`, guardedPackageInstall(
     guardContextForRoute(mutationLedgerRoot, installContract, command || `npm global install ${packageName}`),
     `${packageName}@${installVersion}`,
-    {
-      confirmed: true,
-      command: npmBin,
-      args: npmArgs,
-      cwd,
-      env,
-      timeoutMs: options.timeoutMs ?? 10 * 60 * 1000,
-      maxOutputBytes: options.maxOutputBytes ?? 128 * 1024
-    }
-  ).catch((err: unknown) => ({
+    installOptions
+  ), 60_000).catch((err: unknown) => ({
     code: 1,
     stdout: '',
-    stderr: err instanceof Error ? err.message : String(err)
+    stderr: err instanceof Error ? err.message : String(err),
+    timedOut: false
   }));
   const installOk = install.code === 0;
   stage('npm_global_install', installOk, installOk ? 'installed' : 'failed', { command, code: install.code });
@@ -405,14 +431,15 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
       newVersion = parseVersionText(versionProbe.stdout || versionProbe.stderr || '') || null;
       stage('new_version_probe', Boolean(newVersion), newVersion ? 'version_detected' : 'failed', { new_version: newVersion, code: versionProbe.code });
-      newVersionDoctor = await runPackageLocalDoctor({
+      stageStart('new_version_global_doctor', 'running migration doctor on updated install');
+      newVersionDoctor = await updateHeartbeat(machineOutput, 'new-version doctor', runPackageLocalDoctor({
         root: globalSksRootPath(),
         entrypoint: newBinary,
         args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(), 'update', 'new-version-doctor.json')],
         env,
         timeoutMs: updateDoctorTimeoutMs(env),
         maxOutputBytes: 32 * 1024
-      });
+      }), 60_000);
       stage('new_version_global_doctor', newVersionDoctor.ok, newVersionDoctor.status, { entrypoint: newBinary, exit_code: newVersionDoctor.exit_code, timeout_ms: updateDoctorTimeoutMs(env), timed_out: newVersionDoctor.timedOut });
     }
     if (newVersionDoctor?.ok) {
@@ -434,11 +461,20 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       }).catch(() => null);
       migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt);
       stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
-      if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage });
-      await runUpdateGlobalSkillsReconcile(stage);
+      if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput });
+      await runUpdateGlobalSkillsReconcile(stage, { quiet: machineOutput });
     }
   }
-  const ok = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && hookTrust?.ok !== false && migrationCurrent;
+  const verification = await runFinalUpdateVerification({ installOk, newBinary, installVersion, env, projectReceiptRoot });
+  const verifyOk = verification.length > 0 && verification.every((item) => item.ok);
+  if (verification.length) {
+    stage('final_self_verification', verifyOk, verifyOk ? 'verified' : 'issues', {
+      failed: verification.filter((item) => !item.ok).map((item) => item.id)
+    });
+  }
+  const baseOk = installOk && Boolean(newBinary) && newVersionDoctor?.ok === true && hookTrust?.ok !== false && migrationCurrent;
+  const ok = baseOk && verifyOk;
+  const status: SksUpdateNowResult['status'] = ok ? 'updated' : baseOk ? 'updated_with_issues' : 'failed';
   return buildUpdateNowResult({
     packageName,
     from: check.current,
@@ -451,7 +487,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     cwd,
     registry,
     globalRoot,
-    status: ok ? 'updated' : 'failed',
+    status,
     ok,
     installCode: install.code,
     oldVersionDoctor,
@@ -462,16 +498,18 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     migrationCurrent,
     sksMenuBar,
     stages,
-    error: ok ? null : updateNowError(install, newBinary, newVersionDoctor, migrationCurrent)
+    verification,
+    error: ok ? null : status === 'updated_with_issues' ? verificationError(verification) : updateNowError(install, newBinary, newVersionDoctor, migrationCurrent)
   });
 }
 
-async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void) {
-  const result = await reconcileSkills({
+async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void, opts: { quiet?: boolean } = {}) {
+  const work = reconcileSkills({
     targetDir: path.join(os.homedir(), '.agents', 'skills'),
     scope: 'global',
     fix: true
   }).catch((err: any) => ({ schema: 'sks.skill-reconcile.v1', ok: false, error: err?.message || String(err) }));
+  const result = opts.quiet ? await work : await withHeartbeat('skills reconcile', work, { warnAfterMs: 30_000 });
   const ok = (result as any).ok !== false && !(result as any).error;
   stage('global_skills_reconcile', ok, ok ? 'reconciled' : 'failed', {
     installed: Array.isArray((result as any).installed) ? (result as any).installed.length : null,
@@ -652,6 +690,7 @@ function buildUpdateNowResult(input: {
   migrationCurrent: boolean;
   sksMenuBar?: SksMenuBarInstallResult | null;
   stages: SksUpdateNowStage[];
+  verification?: SksUpdateVerification[];
   error: string | null;
 }): SksUpdateNowResult {
   return {
@@ -678,6 +717,7 @@ function buildUpdateNowResult(input: {
     migration_current: input.migrationCurrent,
     sks_menubar: input.sksMenuBar || null,
     stages: input.stages,
+    verification: input.verification || [],
     error: input.error
   };
 }
@@ -686,16 +726,18 @@ async function installUpdateSksMenuBar(input: {
   root: string;
   env: NodeJS.ProcessEnv;
   stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void;
+  quiet?: boolean;
 }): Promise<SksMenuBarInstallResult | null> {
   if (input.env.SKS_UPDATE_SKIP_SKS_MENUBAR === '1') {
     input.stage('sks_menubar', true, 'skipped', { reason: 'SKS_UPDATE_SKIP_SKS_MENUBAR=1' });
     return null;
   }
-  const result = await installSksMenuBar({
+  const work = installSksMenuBar({
     root: input.root,
     apply: true,
     launch: true,
-    env: input.env
+    env: input.env,
+    quiet: input.quiet === true
   }).catch((err: any) => ({
     schema: 'sks.codex-app-sks-menubar.v1',
     ok: false,
@@ -721,6 +763,7 @@ async function installUpdateSksMenuBar(input: {
     blockers: [err?.message || String(err)],
     warnings: []
   } as SksMenuBarInstallResult));
+  const result = input.quiet ? await work : await withHeartbeat('SKS menu bar install', work, { warnAfterMs: 30_000 });
   input.stage('sks_menubar', result.ok !== false, result.status, {
     app_path: result.app_path,
     launch_agent_path: result.launch_agent_path,
@@ -754,6 +797,70 @@ function globalSksRootPath(): string {
 function updateDoctorTimeoutMs(env: NodeJS.ProcessEnv): number {
   const override = Number.parseInt(env.SKS_UPDATE_NEW_DOCTOR_TIMEOUT_MS || env.SKS_MIGRATION_DOCTOR_TIMEOUT_MS || '', 10);
   return Number.isFinite(override) && override > 0 ? override : 180_000;
+}
+
+async function updateHeartbeat<T>(quiet: boolean, label: string, work: Promise<T>, warnAfterMs = 60_000): Promise<T> {
+  return quiet ? work : withHeartbeat(label, work, { warnAfterMs });
+}
+
+async function runFinalUpdateVerification(input: {
+  installOk: boolean;
+  newBinary: string | null;
+  installVersion: string | null;
+  env: NodeJS.ProcessEnv;
+  projectReceiptRoot: string;
+}): Promise<SksUpdateVerification[]> {
+  if (!input.installOk || !input.newBinary || !input.installVersion) return [];
+  const verification: SksUpdateVerification[] = [];
+  const versionProbe = await runProcess(process.execPath, [input.newBinary, '--version'], {
+    timeoutMs: 5000,
+    maxOutputBytes: 4096,
+    env: { ...input.env, SKS_UPDATE_MIGRATION_GATE_DISABLED: '1', SKS_DISABLE_UPDATE_CHECK: '1' }
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  const got = parseVersionText(`${(versionProbe as any).stdout || ''}\n${(versionProbe as any).stderr || ''}`);
+  verification.push({
+    id: 'version_match',
+    ok: got === input.installVersion,
+    detail: `expected ${input.installVersion}, got ${got || 'missing'}`,
+    remediation: 'Run: sks update now --version <expected>'
+  });
+
+  const hookState = await readCodexHookActualState(input.projectReceiptRoot).catch(() => null);
+  const managedEntries = (hookState?.entries || []).filter((entry: any) => entry.managed === true);
+  const untrusted = managedEntries.filter((entry: any) => entry.trust_status !== 'Trusted' && entry.trust_status !== 'Managed');
+  verification.push({
+    id: 'hooks_trusted',
+    ok: Boolean(hookState && hookState.ok !== false && managedEntries.length > 0 && untrusted.length === 0),
+    detail: untrusted.length ? untrusted.map((entry: any) => entry.key).slice(0, 3).join(', ') : `managed ${managedEntries.length}`,
+    remediation: 'Run: sks codex trust-doctor --fix --managed --actual'
+  });
+
+  const stampPath = path.join(path.dirname(input.newBinary), '..', '.sks-build-stamp.json');
+  const stamp = await readJson<any>(stampPath, null).catch(() => null);
+  const stampVersion = stamp?.package_version || stamp?.version || null;
+  verification.push({
+    id: 'dist_stamp',
+    ok: stampVersion === input.installVersion,
+    detail: `expected ${input.installVersion}, got ${stampVersion || 'missing'}`,
+    remediation: 'Run: npm run build:incremental'
+  });
+
+  const home = input.env.HOME || os.homedir();
+  const skillsManifest = await readJson<any>(path.join(home, '.agents', 'skills', '.sks-generated.json'), null).catch(() => null);
+  verification.push({
+    id: 'skills_manifest',
+    ok: skillsManifest?.version === input.installVersion,
+    detail: `expected ${input.installVersion}, got ${skillsManifest?.version || 'missing'}`,
+    remediation: 'Run: sks doctor --fix --yes'
+  });
+  return verification;
+}
+
+function verificationError(verification: SksUpdateVerification[]): string {
+  const failed = verification.filter((item) => !item.ok);
+  return failed.length
+    ? `update self-verification failed: ${failed.map((item) => item.id).join(', ')}`
+    : 'update self-verification did not run';
 }
 
 function updateNowError(

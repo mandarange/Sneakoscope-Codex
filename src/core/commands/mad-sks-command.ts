@@ -78,7 +78,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
           interactive: false,
           installHomebrew: rawArgs.includes('--install-homebrew'),
           allowHeadlessFallback: headlessZellij,
-          dryRun: true
+          dryRun: true,
+          quiet: rawArgs.includes('--json')
         });
     const report = {
       schema: 'sks.mad-sks-zellij-dry-run.v1',
@@ -122,7 +123,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
           autoApprove: rawArgs.includes('--yes') || rawArgs.includes('-y'),
           interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.SKS_NO_QUESTION !== '1'),
           installHomebrew: rawArgs.includes('--install-homebrew'),
-          allowHeadlessFallback: headlessZellij
+          allowHeadlessFallback: headlessZellij,
+          quiet: rawArgs.includes('--json')
         });
   const zellijRepairBlocked = !headlessZellij && (
     (zellijUpdate as any).status === 'manual_required'

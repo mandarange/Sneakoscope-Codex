@@ -311,7 +311,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const sksMenuBar = await installSksMenuBar({
     root,
     apply: doctorFix,
-    launch: doctorFix
+    launch: doctorFix,
+    quiet: machineOnly || flag(args, '--json')
   }).catch((err: any) => ({
     schema: 'sks.codex-app-sks-menubar.v1',
     ok: false,
@@ -435,9 +436,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       }))
     : null;
   const doctorFixTransaction = doctorFix
-    ? await runDoctorFixTransaction({
+      ? await runDoctorFixTransaction({
         root,
         dirtyPlan: doctorDirtyPlan,
+        json: flag(args, '--json'),
+        machineOnly,
         phases: [
           {
             id: 'setup',

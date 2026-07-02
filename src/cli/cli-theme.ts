@@ -31,3 +31,21 @@ export const ui = {
     }
   }
 };
+
+export function withHeartbeat<T>(label: string, work: Promise<T>, opts: { warnAfterMs?: number } = {}): Promise<T> {
+  if (process.env.SKS_UPDATE_QUIET || !process.stderr.isTTY) return work;
+  const started = Date.now();
+  let index = 0;
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const timer = setInterval(() => {
+    const elapsed = Date.now() - started;
+    const seconds = Math.floor(elapsed / 1000);
+    const warn = opts.warnAfterMs && elapsed > opts.warnAfterMs ? '  (still working; this can be normal)' : '';
+    process.stderr.write(`\r  ${frames[index++ % frames.length]} ${label} ... ${seconds}s${warn}   `);
+  }, 120);
+  timer.unref?.();
+  return work.finally(() => {
+    clearInterval(timer);
+    process.stderr.write(`\r${' '.repeat(80)}\r`);
+  });
+}

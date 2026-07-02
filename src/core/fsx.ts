@@ -53,6 +53,34 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+export function lastLine(chunk: string): string {
+  const lines = String(chunk || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  return lines[lines.length - 1] || '';
+}
+
+export function throttleLines(fn: (line: string) => void, ms = 500): (chunk: string) => void {
+  let lastAt = 0;
+  let pending: string | null = null;
+  let timer: NodeJS.Timeout | null = null;
+  const flush = () => {
+    timer = null;
+    if (!pending) return;
+    lastAt = Date.now();
+    const line = pending;
+    pending = null;
+    fn(line);
+  };
+  return (chunk: string) => {
+    const line = lastLine(chunk);
+    if (!line) return;
+    pending = line;
+    const now = Date.now();
+    const wait = Math.max(0, ms - (now - lastAt));
+    if (wait === 0) flush();
+    else if (!timer) timer = setTimeout(flush, wait);
+  };
+}
+
 export function sha256(input: string | Buffer): string {
   return crypto.createHash('sha256').update(input).digest('hex');
 }

@@ -14,6 +14,7 @@ export async function runDoctorZellijRepair(input: {
     autoApprove: args.includes('--yes') || args.includes('-y'),
     installHomebrew: args.includes('--install-homebrew') || process.env.SKS_ALLOW_HOMEBREW_INSTALL === '1',
     dryRun: args.includes('--dry-run'),
+    quiet: args.includes('--json') || args.includes('--machine-only'),
     interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY && process.env.SKS_NO_QUESTION !== '1'),
     allowHeadlessFallback: false,
     env: process.env

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import type { DoctorDirtyPlan } from './doctor-dirty-planner.js';
 import { isDoctorPhaseClean, markDoctorPhaseClean } from './doctor-dirty-planner.js';
+import { ui as cliUi } from '../../cli/cli-theme.js';
 
 export interface DoctorFixTransactionPhase {
   id: string;
@@ -65,14 +66,18 @@ export async function runDoctorFixTransaction(input: {
   phases: DoctorFixPhaseDefinition[];
   reportPath?: string | null;
   dirtyPlan?: DoctorDirtyPlan | null;
+  json?: boolean;
+  machineOnly?: boolean;
 }): Promise<DoctorFixTransaction> {
   const startedAt = nowIso();
   const phases: DoctorFixTransactionPhase[] = [];
   const proofIdsUsed: string[] = [];
   let rollbackPerformed = false;
+  const liveOutput = input.json !== true && input.machineOnly !== true;
   for (const definition of input.phases) {
     const phaseStarted = nowIso();
     const startedMs = Date.now();
+    if (liveOutput) cliUi.step(`▸ ${definition.id} ...`);
     let phase: DoctorFixTransactionPhase = {
       id: definition.id,
       ok: false,
@@ -95,6 +100,7 @@ export async function runDoctorFixTransaction(input: {
         completed_at: nowIso(),
         duration_ms: Math.max(0, Date.now() - startedMs)
       });
+      if (liveOutput) cliUi.step(`✔ ${definition.id} (${Math.round((Date.now() - startedMs) / 1000)}s)`);
       continue;
     }
     try {
@@ -131,6 +137,7 @@ export async function runDoctorFixTransaction(input: {
       proofIdsUsed.push(proofId);
     }
     phases.push(phase);
+    if (liveOutput) cliUi.step(`${phase.ok ? '✔' : '✖'} ${definition.id} (${Math.round((phase.duration_ms || 0) / 1000)}s)`);
   }
   const writeInput: {
     root: string;

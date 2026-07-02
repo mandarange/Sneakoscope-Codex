@@ -14,6 +14,7 @@ import {
   writeJsonAtomic,
   writeTextAtomic
 } from '../fsx.js';
+import { withHeartbeat } from '../../cli/cli-theme.js';
 
 export interface SksMenuBarBuildStamp {
   schema: 'sks.sks-menubar-build-stamp.v1';
@@ -76,6 +77,7 @@ export interface SksMenuBarInstallOptions {
   home?: string;
   sksEntry?: string;
   env?: NodeJS.ProcessEnv;
+  quiet?: boolean;
 }
 
 export interface SecretLaunchEnvCleanupResult {
@@ -340,7 +342,8 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
         codesign,
         swiftSource,
         infoPlist,
-        actions
+        actions,
+        quiet: opts.quiet === true
       });
     } catch (err: any) {
       return await blockedResult(err?.blocker || 'swift_compile_failed', err?.message || String(err));
@@ -371,7 +374,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     else warnings.push(preferredPosition.warning);
   }
   const launch = launchRequested && launchctl && !(stampMatches && runningBeforeLaunch)
-    ? await launchWithLaunchctl({ launchctl, open, paths, skipIfRunning: stampMatches })
+    ? await launchWithLaunchctl({ launchctl, open, paths, skipIfRunning: stampMatches, quiet: opts.quiet === true })
     : {
         requested: launchRequested && !(stampMatches && runningBeforeLaunch),
         method: 'skipped' as const,
@@ -1047,6 +1050,7 @@ async function buildMenuBarAppAtomically(input: {
   swiftSource: string;
   infoPlist: string;
   actions: string[];
+  quiet?: boolean;
 }) {
   await fs.rm(input.paths.staging_app_path, { recursive: true, force: true });
   await ensureDir(path.join(input.paths.staging_app_path, 'Contents', 'MacOS'));
@@ -1054,10 +1058,11 @@ async function buildMenuBarAppAtomically(input: {
   input.actions.push(`wrote ${input.paths.source_path}`);
   await writeTextAtomic(path.join(input.paths.staging_app_path, 'Contents', 'Info.plist'), input.infoPlist);
   const stagingExecutable = path.join(input.paths.staging_app_path, 'Contents', 'MacOS', 'SKSMenuBar');
-  const compile = await runProcess(input.swiftc, ['-framework', 'Cocoa', input.paths.source_path, '-o', stagingExecutable], {
+  const compileWork = runProcess(input.swiftc, ['-framework', 'Cocoa', input.paths.source_path, '-o', stagingExecutable], {
     timeoutMs: 60_000,
     maxOutputBytes: 64 * 1024
   }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  const compile = input.quiet === true ? await compileWork : await withHeartbeat('swiftc SKS menu bar', compileWork, { warnAfterMs: 30_000 });
   if (compile.code !== 0) {
     throw new MenuBarBuildError('swift_compile_failed', String(compile.stderr || compile.stdout || '').trim());
   }
@@ -1090,6 +1095,7 @@ async function launchWithLaunchctl(input: {
   open: string | null;
   paths: ReturnType<typeof sksMenuBarPaths>;
   skipIfRunning?: boolean;
+  quiet?: boolean;
 }): Promise<NonNullable<SksMenuBarInstallResult['launch']>> {
   const service = launchServiceName();
   const domain = launchDomain();
@@ -1097,7 +1103,8 @@ async function launchWithLaunchctl(input: {
     stdoutFile: path.join(input.paths.install_dir, 'launchctl.out.log'),
     stderrFile: path.join(input.paths.install_dir, 'launchctl.err.log')
   };
-  const already = await waitForLaunchctlRunning(input.launchctl, service);
+  const alreadyWork = waitForLaunchctlRunning(input.launchctl, service);
+  const already = input.quiet === true ? await alreadyWork : await withHeartbeat('launchctl SKS menu bar wait', alreadyWork, { warnAfterMs: 10_000 });
   if (input.skipIfRunning && already.running) {
     return { requested: true, method: 'launchctl', ok: true, print_code: already.code, error: null };
   }
@@ -1116,7 +1123,8 @@ async function launchWithLaunchctl(input: {
       ...stdio
     }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
     if (kickstart.code !== 0) {
-      const printed = await waitForLaunchctlRunning(input.launchctl, service);
+      const printedWork = waitForLaunchctlRunning(input.launchctl, service);
+      const printed = input.quiet === true ? await printedWork : await withHeartbeat('launchctl SKS menu bar wait', printedWork, { warnAfterMs: 10_000 });
       if (printed.running) {
         return {
           requested: true,

@@ -143,12 +143,14 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
     version: valueAfter(effectiveArgs, '--version') || valueAfter(effectiveArgs, '-v'),
     dryRun: flag(effectiveArgs, '--dry-run'),
     projectRoot: root,
+    json: flag(effectiveArgs, '--json'),
+    quiet: flag(effectiveArgs, '--quiet'),
     timeoutMs: 10 * 60 * 1000,
     maxOutputBytes: 128 * 1024
   }));
   if (flag(effectiveArgs, '--json')) return printJson(result);
   cliUi.banner('update');
-  result.ok ? cliUi.ok(result.status) : cliUi.fail(result.status || 'failed');
+  result.ok ? cliUi.ok(result.status) : result.status === 'updated_with_issues' ? cliUi.warn(result.status) : cliUi.fail(result.status || 'failed');
   console.log(`${sksTextLogo()}\n`);
   console.log(`SKS update ${result.status}`);
   if (result.command) console.log(`Command: ${result.command}`);
@@ -158,6 +160,15 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
   if (result.project_receipt) console.log(`Migration receipt: ${result.project_receipt.root} (${result.migration_current ? 'current' : 'not current'})`);
   if (result.sks_menubar) console.log(`SKS menu bar: ${result.sks_menubar.status}${result.sks_menubar.app_path ? ` (${result.sks_menubar.app_path})` : ''}`);
   for (const stage of result.stages || []) console.log(`Stage ${stage.id}: ${stage.ok ? 'ok' : 'failed'} ${stage.status}`);
+  if (result.verification?.length) {
+    console.log('Self verification:');
+    cliUi.table([
+      ['check', 'status', 'detail'],
+      ...result.verification.map((item) => [item.id, item.ok ? 'ok' : 'failed', item.detail || ''])
+    ]);
+    const remediation = [...new Set(result.verification.filter((item) => !item.ok).map((item) => item.remediation).filter((value): value is string => Boolean(value)))];
+    for (const action of remediation) console.log(`Remediation: ${action}`);
+  }
   if (result.error) console.log(`Error: ${result.error}`);
   if (!result.ok) process.exitCode = 1;
 }

@@ -23,7 +23,7 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
     return result;
   }
   if (action === 'install') {
-    const result = await installSksMenuBar({ root, ...(home ? { home } : {}), apply: true, launch: !flag(args, '--no-launch') });
+    const result = await installSksMenuBar({ root, ...(home ? { home } : {}), apply: true, launch: !flag(args, '--no-launch'), quiet: flag(args, '--json') });
     if (flag(args, '--json')) return printJson(result);
     cliUi.banner('menubar install');
     if (result.ok) cliUi.ok(result.status);

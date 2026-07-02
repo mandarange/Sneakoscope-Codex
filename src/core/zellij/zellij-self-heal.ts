@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { ensureDir, nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+import { withHeartbeat } from '../../cli/cli-theme.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { guardContextForRoute, guardedPackageInstall } from '../safety/mutation-guard.js'
 import { mutationLedgerPath } from '../safety/mutation-ledger.js'
@@ -29,6 +30,7 @@ interface ZellijSelfHealInput {
   missionDir?: string | null
   env?: NodeJS.ProcessEnv
   dryRun?: boolean
+  quiet?: boolean
 }
 
 interface BrewDiscovery {
@@ -123,7 +125,7 @@ export async function repairZellijForSks(input: ZellijSelfHealInput): Promise<Ze
         : manualResult(root, input, env, before, latest, brew, policy.blockers[0] || 'homebrew_missing')
     }
     homebrewInstallAttempted = true
-    const homebrewRun = await runHomebrewInstall(root, env)
+    const homebrewRun = await runHomebrewInstall(root, env, input.quiet === true)
     if (homebrewRun.code !== 0) {
       return persistSelfHeal(root, input.missionDir, {
         schema: 'sks.zellij-self-heal.v1',
@@ -157,7 +159,7 @@ export async function repairZellijForSks(input: ZellijSelfHealInput): Promise<Ze
     : install ? 'brew-install-zellij'
       : 'brew-upgrade-zellij'
   const command = `brew ${brewArgs.join(' ')}`
-  const run = await runZellijBrew(root, env, brewBin, brewArgs, command)
+  const run = await runZellijBrew(root, env, brewBin, brewArgs, command, input.quiet === true)
   if (run.code !== 0 && /already installed|already up-to-date/i.test(`${run.stdout}\n${run.stderr}`)) {
     const after = await capabilitySnapshot(root, env, 'after-noop')
     return persistSelfHeal(root, input.missionDir, {
@@ -296,7 +298,7 @@ async function findBrew(env: NodeJS.ProcessEnv): Promise<BrewDiscovery> {
   return { present: false, bin: null }
 }
 
-async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: string, args: string[], command: string): Promise<ProcessRunResult> {
+async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: string, args: string[], command: string, quiet = false): Promise<ProcessRunResult> {
   if (env.SKS_ZELLIJ_SELF_HEAL_FAKE_RUN === '1') {
     await appendFakeBrewLog(env, args)
     return { code: Number(env.SKS_ZELLIJ_SELF_HEAL_FAKE_RUN_CODE || 0), stdout: 'fake brew ok', stderr: '' }
@@ -307,7 +309,7 @@ async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: stri
     projectRoot: root,
     overrides: { package_install: true, zellij_install: true }
   })
-  return guardedPackageInstall(guardContextForRoute(root, contract, command), 'zellij', {
+  const work = guardedPackageInstall(guardContextForRoute(root, contract, command), 'zellij', {
     confirmed: true,
     command: brewBin,
     args,
@@ -315,9 +317,10 @@ async function runZellijBrew(root: string, env: NodeJS.ProcessEnv, brewBin: stri
     timeoutMs: 180000,
     maxOutputBytes: 256 * 1024
   }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: errorMessage(err) }))
+  return quiet ? await work : await withHeartbeat('brew zellij repair', work, { warnAfterMs: 30_000 })
 }
 
-async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv): Promise<ProcessRunResult> {
+async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv, quiet = false): Promise<ProcessRunResult> {
   if (env.SKS_ZELLIJ_SELF_HEAL_FAKE_RUN === '1') {
     await appendFakeBrewLog(env, ['install-homebrew'])
     return { code: Number(env.SKS_ZELLIJ_SELF_HEAL_FAKE_HOMEBREW_CODE || 0), stdout: 'fake homebrew install ok', stderr: '' }
@@ -328,7 +331,7 @@ async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv): Promise
     projectRoot: root,
     overrides: { package_install: true, zellij_install: true }
   })
-  return guardedPackageInstall(guardContextForRoute(root, contract, HOMEBREW_INSTALL_COMMAND), 'homebrew', {
+  const work = guardedPackageInstall(guardContextForRoute(root, contract, HOMEBREW_INSTALL_COMMAND), 'homebrew', {
     confirmed: true,
     command: '/bin/bash',
     args: ['-c', 'curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | /bin/bash'],
@@ -336,6 +339,7 @@ async function runHomebrewInstall(root: string, env: NodeJS.ProcessEnv): Promise
     timeoutMs: 600000,
     maxOutputBytes: 256 * 1024
   }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: errorMessage(err) }))
+  return quiet ? await work : await withHeartbeat('Homebrew install', work, { warnAfterMs: 60_000 })
 }
 
 async function appendFakeBrewLog(env: NodeJS.ProcessEnv, args: string[]) {
