@@ -276,6 +276,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     const receipt = await writeProjectUpdateMigrationReceipt({
       root: projectReceiptRoot,
       source: 'update-now-current',
+      fromVersion: check.current,
       blockers: [],
       warnings: ['package_already_current']
     }).catch(() => null);
@@ -344,39 +345,24 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const oldDoctorTimeoutMs = Number.isFinite(oldDoctorTimeoutOverride) && oldDoctorTimeoutOverride > 0
     ? oldDoctorTimeoutOverride
     : 60_000;
-  stageStart('old_version_doctor_preflight', 'running migration doctor on current install');
-  const oldVersionDoctor = await updateHeartbeat(machineOutput, 'old-version doctor', runPackageLocalDoctor({
-    root: projectReceiptRoot,
-    args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'old-version-doctor.json')],
-    env,
-    timeoutMs: oldDoctorTimeoutMs,
-    maxOutputBytes: 32 * 1024
-  }), 60_000);
-  stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.status, { entrypoint: oldVersionDoctor.entrypoint, exit_code: oldVersionDoctor.exit_code, timeout_ms: oldDoctorTimeoutMs });
-  if (!oldVersionDoctor.ok && env.SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT !== '1') {
-    return buildUpdateNowResult({
-      packageName,
-      from: check.current,
-      latest: check.latest,
-      requestedVersion,
-      installVersion,
-      npmBin,
-      npmArgs,
-      command,
-      cwd,
-      registry,
-      globalRoot,
-      status: 'failed',
-      ok: false,
-      installCode: null,
-      oldVersionDoctor,
-      newBinary: null,
-      newVersion: null,
-      newVersionDoctor: null,
-      projectReceipt: null,
-      migrationCurrent: false,
-      stages,
-      error: oldVersionDoctor.error || 'old-version Doctor preflight failed'
+  let oldVersionDoctor: PackageLocalDoctorRun | null = null;
+  if (env.SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT === '1') {
+    stage('old_version_doctor_preflight', true, 'skipped', { reason: 'SKS_UPDATE_SKIP_OLD_DOCTOR_PREFLIGHT=1' });
+  } else {
+    stageStart('old_version_doctor_preflight', 'running migration doctor on current install');
+    oldVersionDoctor = await updateHeartbeat(machineOutput, 'old-version doctor', runPackageLocalDoctor({
+      root: projectReceiptRoot,
+      args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(projectReceiptRoot, '.sneakoscope', 'update', 'old-version-doctor.json')],
+      env,
+      timeoutMs: oldDoctorTimeoutMs,
+      maxOutputBytes: 32 * 1024
+    }), 60_000);
+    stage('old_version_doctor_preflight', oldVersionDoctor.ok, oldVersionDoctor.ok ? oldVersionDoctor.status : 'failed_continuing', {
+      entrypoint: oldVersionDoctor.entrypoint,
+      exit_code: oldVersionDoctor.exit_code,
+      timeout_ms: oldDoctorTimeoutMs,
+      timed_out: oldVersionDoctor.timedOut,
+      note: oldVersionDoctor.ok ? null : 'legacy doctor unreliable; new-version doctor will repair after install'
     });
   }
   const mutationLedgerRoot = env.SKS_MUTATION_LEDGER_ROOT || packageRoot();
@@ -456,6 +442,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
         source: 'update-now',
         doctor: newVersionDoctor,
         updateStages: stages,
+        fromVersion: check.current,
         blockers: [],
         warnings: []
       }).catch(() => null);

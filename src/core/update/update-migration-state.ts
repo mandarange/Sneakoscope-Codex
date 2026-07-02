@@ -1,9 +1,12 @@
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, runProcess, sha256, which, writeJsonAtomic, writeReceiptRotated } from '../fsx.js';
+import { ensureDir, exists, globalSksRoot, nowIso, packageRoot, PACKAGE_VERSION, projectRoot, readJson, readText, runProcess, sha256, which, writeJsonAtomic, writeReceiptRotated, writeTextAtomic } from '../fsx.js';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { enforceRetention } from '../retention.js';
 import { COMMANDS } from '../../cli/command-registry.js';
+import { reconcileSkills } from '../init/skills.js';
+import { codexHookTrustDoctor } from '../codex-hooks/codex-hook-trust-doctor.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -62,13 +65,28 @@ export interface UpdateMigrationReceipt {
   project_semantic_hash?: string;
   pending_marker_path?: string | null;
   installation_epoch_path?: string | null;
+  from_version?: string | null;
   doctor?: PackageLocalDoctorRun | null;
   retention_cleanup?: UpdateRetentionCleanupRun | null;
   update_stages?: unknown[];
+  legacy_migration_stages?: LegacyMigrationStageRun[];
   required_blockers?: string[];
   optional_warnings?: string[];
   blockers: string[];
   warnings: string[];
+}
+
+export interface LegacyMigrationStageRun {
+  schema: 'sks.legacy-update-migration-stage.v1';
+  id: string;
+  ok: boolean;
+  status: 'ok' | 'skipped' | 'failed';
+  min_from_version: string;
+  from_version: string | null;
+  actions: string[];
+  blockers: string[];
+  warnings: string[];
+  detail?: Record<string, unknown>;
 }
 
 export interface UpdateMigrationGateResult {
@@ -182,21 +200,26 @@ export async function writeProjectUpdateMigrationReceipt(input: {
   status?: UpdateMigrationReceipt['status'];
   doctor?: PackageLocalDoctorRun | null;
   updateStages?: unknown[];
+  fromVersion?: string | null;
   blockers?: string[];
   warnings?: string[];
 }): Promise<UpdateMigrationReceipt> {
   const receiptPath = projectUpdateMigrationReceiptPath(input.root);
   const epoch = await ensureInstallationEpoch(input.source);
   const retentionCleanup = await runUpdateRetentionCleanup(input.root, input.source);
-  const requiredBlockers = input.blockers || [];
-  const optionalWarnings = input.warnings || [];
+  const legacyStages = await runLegacyMigrationStages(input.root, { fromVersion: input.fromVersion || null });
+  const stageBlockers = legacyStages.flatMap((stage) => stage.blockers.map((blocker) => `${stage.id}:${blocker}`));
+  const stageWarnings = legacyStages.flatMap((stage) => stage.warnings.map((warning) => `${stage.id}:${warning}`));
+  const requiredBlockers = [...(input.blockers || []), ...stageBlockers];
+  const optionalWarnings = [...(input.warnings || []), ...stageWarnings];
   const receipt: UpdateMigrationReceipt = {
     schema: UPDATE_MIGRATION_SCHEMA,
-    status: input.status || 'current',
+    status: input.status || (requiredBlockers.length ? 'blocked' : 'current'),
     sks_version: PACKAGE_VERSION,
     root: input.root,
     source: input.source,
     generated_at: nowIso(),
+    from_version: input.fromVersion || null,
     project_root_hash: projectRootHash(input.root),
     installation_epoch_sha256: installationEpochSha256(epoch),
     project_semantic_hash: await projectSemanticHash(input.root),
@@ -204,7 +227,8 @@ export async function writeProjectUpdateMigrationReceipt(input: {
     installation_epoch_path: installationEpochPath(),
     doctor: input.doctor || null,
     retention_cleanup: retentionCleanup,
-    update_stages: input.updateStages || [],
+    update_stages: [...(input.updateStages || []), ...legacyStages],
+    legacy_migration_stages: legacyStages,
     required_blockers: requiredBlockers,
     optional_warnings: optionalWarnings,
     blockers: requiredBlockers,
@@ -277,6 +301,265 @@ export async function runUpdateRetentionCleanup(root: string, source = 'update-m
       error: err?.message || String(err)
     };
   }
+}
+
+type LegacyMigrationStageDefinition = {
+  id: string;
+  min_from_version: string;
+  run: (root: string, fromVersion: string | null) => Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>>;
+};
+
+const LEGACY_MIGRATION_STAGES: LegacyMigrationStageDefinition[] = [
+  {
+    id: 'legacy-team-artifacts',
+    min_from_version: '0.0.0',
+    run: runLegacyTeamArtifactsStage
+  },
+  {
+    id: 'session-state-split',
+    min_from_version: '0.0.0',
+    run: runSessionStateSplitStage
+  },
+  {
+    id: 'skills-reconcile',
+    min_from_version: '0.0.0',
+    run: runSkillsReconcileStage
+  },
+  {
+    id: 'menubar-retarget',
+    min_from_version: '0.0.0',
+    run: runMenubarRetargetStage
+  },
+  {
+    id: 'config-fastmode-normalize',
+    min_from_version: '0.0.0',
+    run: runConfigFastModeNormalizeStage
+  },
+  {
+    id: 'hook-trust-refresh',
+    min_from_version: '0.0.0',
+    run: runHookTrustRefreshStage
+  },
+  {
+    id: 'receipt-rotation',
+    min_from_version: '0.0.0',
+    run: runReceiptRotationStage
+  }
+];
+
+async function runLegacyMigrationStages(root: string, opts: { fromVersion?: string | null } = {}): Promise<LegacyMigrationStageRun[]> {
+  const fromVersion = opts.fromVersion || null;
+  const runs: LegacyMigrationStageRun[] = [];
+  for (const stage of LEGACY_MIGRATION_STAGES) {
+    if (!legacyStageApplies(fromVersion, stage.min_from_version)) {
+      runs.push({
+        schema: 'sks.legacy-update-migration-stage.v1',
+        id: stage.id,
+        ok: true,
+        status: 'skipped',
+        min_from_version: stage.min_from_version,
+        from_version: fromVersion,
+        actions: ['skipped_by_from_version'],
+        blockers: [],
+        warnings: []
+      });
+      continue;
+    }
+    try {
+      const result = await stage.run(root, fromVersion);
+      runs.push({
+        schema: 'sks.legacy-update-migration-stage.v1',
+        id: stage.id,
+        min_from_version: stage.min_from_version,
+        from_version: fromVersion,
+        ...result
+      });
+    } catch (err: any) {
+      runs.push({
+        schema: 'sks.legacy-update-migration-stage.v1',
+        id: stage.id,
+        ok: false,
+        status: 'failed',
+        min_from_version: stage.min_from_version,
+        from_version: fromVersion,
+        actions: [],
+        blockers: [err?.message || String(err)],
+        warnings: []
+      });
+    }
+  }
+  return runs;
+}
+
+async function runLegacyTeamArtifactsStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const candidates = [
+    path.join(root, '.sneakoscope', 'team'),
+    path.join(root, '.sneakoscope', 'team-dashboard-state.json'),
+    path.join(root, '.sneakoscope', 'work-order-ledger.json')
+  ];
+  const present = [];
+  for (const candidate of candidates) {
+    if (await exists(candidate)) present.push(path.relative(root, candidate));
+  }
+  await writeJsonAtomic(path.join(root, '.sneakoscope', 'update', 'legacy-team-artifacts.json'), {
+    schema: 'sks.legacy-team-artifacts-migration.v1',
+    generated_at: nowIso(),
+    present
+  });
+  return {
+    ok: true,
+    status: 'ok',
+    actions: present.length ? ['recorded_legacy_team_artifacts'] : ['no_legacy_team_artifacts'],
+    blockers: [],
+    warnings: [],
+    detail: { present }
+  };
+}
+
+async function runSessionStateSplitStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const legacyCurrent = path.join(root, '.sneakoscope', 'current.json');
+  const stateCurrent = path.join(root, '.sneakoscope', 'state', 'current.json');
+  const sessionsDir = path.join(root, '.sneakoscope', 'state', 'sessions');
+  await ensureDir(sessionsDir);
+  const actions: string[] = [];
+  let current = await readJson<any>(stateCurrent, null).catch(() => null);
+  const legacy = await readJson<any>(legacyCurrent, null).catch(() => null);
+  if (!current && legacy) {
+    current = legacy;
+    await writeJsonAtomic(stateCurrent, current);
+    actions.push('copied_legacy_current_json_to_state_current');
+  }
+  const missionId = typeof current?.mission_id === 'string' ? current.mission_id : typeof current?.mission === 'string' ? current.mission : null;
+  if (missionId) {
+    const sessionPath = path.join(sessionsDir, `${safeFileName(missionId)}.json`);
+    if (!(await exists(sessionPath))) {
+      await writeJsonAtomic(sessionPath, { ...current, migrated_from: path.relative(root, stateCurrent), migrated_at: nowIso() });
+      actions.push('wrote_state_session_alias');
+    }
+  }
+  if (!actions.length) actions.push('session_state_current');
+  return { ok: true, status: 'ok', actions, blockers: [], warnings: [], detail: { legacy_present: Boolean(legacy), mission_id: missionId } };
+}
+
+async function runSkillsReconcileStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const global = await reconcileSkills({ targetDir: path.join(os.homedir(), '.agents', 'skills'), scope: 'global', fix: true })
+    .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+  const project = await reconcileSkills({ targetDir: path.join(root, '.agents', 'skills'), scope: 'project', fix: true })
+    .catch((err: any) => ({ ok: false, error: err?.message || String(err) }));
+  const blockers = [
+    ...((global as any).ok === false || (global as any).error ? [`global:${(global as any).error || 'failed'}`] : []),
+    ...((project as any).ok === false || (project as any).error ? [`project:${(project as any).error || 'failed'}`] : [])
+  ];
+  return {
+    ok: blockers.length === 0,
+    status: blockers.length ? 'failed' : 'ok',
+    actions: ['reconciled_global_skills', 'reconciled_project_skills'],
+    blockers,
+    warnings: [],
+    detail: {
+      global_installed: Array.isArray((global as any).installed) ? (global as any).installed.length : null,
+      project_removed: Array.isArray((project as any).removed) ? (project as any).removed.length : null
+    }
+  };
+}
+
+async function runMenubarRetargetStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const actionScript = path.join(os.homedir(), '.codex', 'sks-menubar', 'sks-menubar-action.sh');
+  const text = await readText(actionScript, null);
+  if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['menubar_action_script_absent'], blockers: [], warnings: [] };
+  const desired = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
+  const line = `SKS_ENTRY=${JSON.stringify(desired)}`;
+  const next = /^\s*SKS_ENTRY\s*=.*$/m.test(text)
+    ? text.replace(/^\s*SKS_ENTRY\s*=.*$/m, line)
+    : `${line}\n${text}`;
+  if (next !== text) {
+    await writeTextAtomic(actionScript, next);
+    return { ok: true, status: 'ok', actions: ['retargeted_menubar_action_script'], blockers: [], warnings: [], detail: { action_script: actionScript } };
+  }
+  return { ok: true, status: 'ok', actions: ['menubar_action_script_current'], blockers: [], warnings: [], detail: { action_script: actionScript } };
+}
+
+async function runConfigFastModeNormalizeStage(): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const configPath = path.join(os.homedir(), '.codex', 'config.toml');
+  const text = await readText(configPath, null);
+  if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['codex_config_absent'], blockers: [], warnings: [] };
+  const table = text.match(/(^|\n)\[user\.fast_mode\][\s\S]*?(?=\n\[|$)/);
+  const misplaced = table?.[0]?.match(/^\s*default_profile\s*=\s*"([^"]+)"\s*$/m)?.[1] || null;
+  const hasTopLevel = /^\s*default_profile\s*=\s*"[^"]+"\s*$/m.test(text.slice(0, Math.max(0, text.search(/^\s*\[/m))));
+  if (!misplaced) return { ok: true, status: 'ok', actions: ['fastmode_default_profile_current'], blockers: [], warnings: [] };
+  let next = text.replace(/(^|\n)(\[user\.fast_mode\][\s\S]*?)(?=\n\[|$)/, (_match, prefix, block) => {
+    const cleaned = String(block).split(/\r?\n/).filter((line) => !/^\s*default_profile\s*=/.test(line)).join('\n').trimEnd();
+    return `${prefix}${cleaned}`;
+  });
+  if (!hasTopLevel) next = insertTopLevelTomlKey(next, `default_profile = ${JSON.stringify(misplaced)}`);
+  if (next !== text) await writeTextAtomic(configPath, `${next.trim()}\n`);
+  return { ok: true, status: 'ok', actions: ['normalized_fastmode_default_profile'], blockers: [], warnings: [], detail: { config_path: configPath, default_profile: misplaced } };
+}
+
+async function runHookTrustRefreshStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const result = await codexHookTrustDoctor(root, { fix: true, managed: true, actual: true });
+  const blockers = (result as any).ok === false ? ((result as any).blockers || ['hook_trust_refresh_failed']) : [];
+  return {
+    ok: blockers.length === 0,
+    status: blockers.length ? 'failed' : 'ok',
+    actions: ['refreshed_hook_trust'],
+    blockers,
+    warnings: (result as any).warnings || [],
+    detail: { entries: (result as any).current_hash_count ?? null }
+  };
+}
+
+async function runReceiptRotationStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
+  const receiptPath = projectUpdateMigrationReceiptPath(root);
+  const dir = path.dirname(receiptPath);
+  const base = path.basename(receiptPath);
+  const rows = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const rotated = await Promise.all(rows
+    .filter((entry) => entry.isFile() && entry.name.startsWith(`${base}.`) && entry.name.endsWith('.json'))
+    .map(async (entry) => {
+      const file = path.join(dir, entry.name);
+      return { file, stat: await fsp.stat(file).catch(() => null) };
+    }));
+  const removable = rotated
+    .filter((row): row is { file: string; stat: import('node:fs').Stats } => Boolean(row.stat))
+    .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+    .slice(5);
+  await Promise.all(removable.map((row) => fsp.rm(row.file, { force: true }).catch(() => undefined)));
+  return {
+    ok: true,
+    status: 'ok',
+    actions: removable.length ? ['rotated_old_update_receipts'] : ['receipt_rotation_current'],
+    blockers: [],
+    warnings: [],
+    detail: { removed: removable.length }
+  };
+}
+
+function legacyStageApplies(fromVersion: string | null, minFromVersion: string): boolean {
+  if (!fromVersion) return true;
+  if (compareVersionLike(fromVersion, PACKAGE_VERSION) > 0) return false;
+  return compareVersionLike(fromVersion, minFromVersion) >= 0;
+}
+
+function compareVersionLike(a: string | null | undefined, b: string | null | undefined): number {
+  const pa = String(a || '').split(/[.-]/).map((value) => Number.parseInt(value, 10) || 0);
+  const pb = String(b || '').split(/[.-]/).map((value) => Number.parseInt(value, 10) || 0);
+  for (let index = 0; index < Math.max(pa.length, pb.length, 3); index += 1) {
+    if ((pa[index] || 0) > (pb[index] || 0)) return 1;
+    if ((pa[index] || 0) < (pb[index] || 0)) return -1;
+  }
+  return 0;
+}
+
+function safeFileName(value: string): string {
+  return String(value || 'session').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'session';
+}
+
+function insertTopLevelTomlKey(text: string, line: string): string {
+  const raw = String(text || '').trimEnd();
+  const firstTable = raw.search(/^\s*\[/m);
+  if (firstTable < 0) return `${line}\n${raw}`.trim() + '\n';
+  return `${raw.slice(0, firstTable).trimEnd()}\n${line}\n\n${raw.slice(firstTable).trimStart()}`.trim() + '\n';
 }
 
 export async function ensureCurrentMigrationBeforeCommand(input: {
