@@ -240,9 +240,9 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${glmRuntime?.profile?.profile_name || madHighProfileName()} | gate ${madLaunch.mission_id}`);
   if (glmRuntime?.profile) console.log(`GLM MAD launch active: ${glmRuntime.profile.model} via OpenRouter; GPT fallback blocked.`);
-  if (madDbGrant.requested) console.log('MAD-DB flag observed; use the first-class route: sks mad-db run|exec|apply-migration.');
+  if (madDbGrant.requested) console.log('MAD-DB flag observed; deprecated route now redirects to MAD-SKS SQL-plane: sks mad-sks sql|apply-migration.');
   if (updateNotice.update_available === true) console.log(`SKS update notice: ${updateNotice.latest_version} available (non-blocking).`);
-  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. MAD-DB SQL-plane execution is not active in MAD-SKS; use the first-class MadDB route for DROP/TRUNCATE/all-row SQL-plane work.');
+  console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. SQL-plane execution is available through MAD-SKS sql-plane and still requires control-plane denial, read-back proof, and read-only restoration.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
   const zellijVisiblePaneSetting = readOption(cleanArgs, '--zellij-visible-panes', process.env.SKS_ZELLIJ_VISIBLE_PANES || process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || '8');
   const zellijViewportSetting = readOption(cleanArgs, '--zellij-viewports', process.env.SKS_ZELLIJ_VIEWPORTS || '4');
@@ -702,6 +702,13 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
     direct_execute_sql_allowed: dbWriteAllowed,
     normal_db_writes_allowed: dbWriteAllowed,
     migration_apply_allowed: dbWriteAllowed,
+    sql_plane: {
+      requested: false,
+      capability_id: null,
+      operation_classes: [],
+      read_back_passed: false,
+      profile_closed: false
+    },
     catastrophic_safety_guard_active: true,
     permission_profile: permissionGateSummary(),
     permission_model: permission,
@@ -932,6 +939,8 @@ const MAD_SKS_COMMAND_SURFACE = Object.freeze([
   'plan',
   'run',
   'apply',
+  'sql',
+  'apply-migration',
   'doctor',
   'status',
   'close',
@@ -949,7 +958,13 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
   const json = args.includes('--json');
   const targetRoot = path.resolve(readOption(args, '--target-root', process.cwd()));
   const userIntent = readOption(args, '--intent', 'MAD-SKS user-authorized maintenance');
-  const flags = parseMadSksFlags(['--mad-sks', subcommand === 'plan' ? '--plan-only' : '', ...args].filter(Boolean));
+  const sqlPlaneSubcommand = subcommand === 'sql' || subcommand === 'apply-migration';
+  const flags = parseMadSksFlags([
+    '--mad-sks',
+    subcommand === 'plan' ? '--plan-only' : '',
+    ...(sqlPlaneSubcommand ? ['--allow-db-write', '--yes'] : []),
+    ...args
+  ].filter(Boolean));
   const permission = buildMadSksPermissionModel({ targetRoot, userIntent, flags });
   const root = await sksRoot();
   await cleanupExpiredMadSks(root);
@@ -986,7 +1001,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
     return emit({
       schema: 'sks.mad-sks-explain.v1',
       ok: true,
-      summary: 'MAD-SKS is a user-authorized general permission widening mode, not a DB-only unlock. Target project work can be widened by explicit flags, while SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
+      summary: 'MAD-SKS is a user-authorized general permission widening mode and the merged SQL-plane execution route. Target project work can be widened by explicit flags, while SQL-plane work runs through the sql-plane executor with MadDB capability/profile/read-back safeguards and SKS harness/package/dist/scripts/schemas/release metadata remain immutable protected core.',
       command_surface: [...MAD_SKS_COMMAND_SURFACE],
       catastrophic_safeguards: permission.forbidden_scopes,
       immutable_harness_guard: 'installed_harness_only_with_engine_source_exception'
@@ -1086,6 +1101,36 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
     return materializeMadSksRun(root, targetRoot, permission, userIntent, json, { action: 'run', args });
   }
 
+  if (subcommand === 'sql') {
+    const sql = readOption(args, '--sql', null) || positionalText(args);
+    return materializeMadSksRun(root, targetRoot, permission, sql || userIntent, json, {
+      action: 'apply',
+      resultSchema: 'sks.mad-sks-sql.v1',
+      args,
+      executor: 'sql-plane',
+      sql,
+      verifySql: readOption(args, '--verify-sql', null),
+      rollbackSql: readOption(args, '--rollback-sql', null),
+      acceptNotRollbackable: args.includes('--accept-not-rollbackable')
+    });
+  }
+
+  if (subcommand === 'apply-migration') {
+    const migrationFile = readOption(args, '--file', null) || args.find((arg: any) => !String(arg).startsWith('--')) || null;
+    return materializeMadSksRun(root, targetRoot, permission, userIntent, json, {
+      action: 'apply',
+      resultSchema: 'sks.mad-sks-apply-migration.v1',
+      args,
+      executor: 'sql-plane',
+      sqlAction: 'apply-migration',
+      migrationFile,
+      migrationName: readOption(args, '--name', null),
+      verifySql: readOption(args, '--verify-sql', null),
+      rollbackSql: readOption(args, '--rollback-sql', null),
+      acceptNotRollbackable: args.includes('--accept-not-rollbackable')
+    });
+  }
+
   if (subcommand === 'rollback-apply') {
     const rollbackPlanPath = readOption(args, '--rollback-plan', readOption(args, '--plan', null));
     const result = await applyMadSksRollbackPlan({
@@ -1120,7 +1165,7 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
   const authorizationPath = opts.authorizationManifestPath || path.join(dir, 'mad-sks-authorization.json');
   if (!opts.authorizationManifestPath) await writeJsonAtomic(authorizationPath, authorization);
   const args = Array.isArray(opts.args) ? opts.args : [];
-  const executorId = readOption(args, '--executor', inferMadSksExecutor(args));
+  const executorId = opts.executor || readOption(args, '--executor', inferMadSksExecutor(args));
   const targetFile = readOption(args, '--write-file', readOption(args, '--path', path.join('.sneakoscope', 'mad-sks-target-file.txt')));
   const executorInput: any = {
     executor: executorId,
@@ -1134,18 +1179,30 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     authorization_manifest: authorization,
     authorization_manifest_path: authorizationPath,
     permission_model: permission,
-    yes: args.includes('--yes')
+    yes: args.includes('--yes') || opts.acceptNotRollbackable === true,
+    mission_id: id,
+    user_intent: userIntent,
+    args
   };
   const operation = readOption(args, '--operation', null);
   const command = readOption(args, '--command', null);
   const argv = readRepeatedOption(args, '--argv');
-  const sql = readOption(args, '--sql', null);
-  const rollbackSql = readOption(args, '--rollback-sql', null);
+  const sql = opts.sql || readOption(args, '--sql', null);
+  const rollbackSql = opts.rollbackSql || readOption(args, '--rollback-sql', null);
+  const verifySql = opts.verifySql || readOption(args, '--verify-sql', null);
+  const migrationFile = opts.migrationFile || readOption(args, '--migration-file', null) || readOption(args, '--file', null);
+  const migrationName = opts.migrationName || readOption(args, '--name', null);
+  const sqlAction = opts.sqlAction || null;
   if (operation) executorInput.operation = operation;
   if (command) executorInput.command = command;
   if (argv) executorInput.argv = argv;
   if (sql) executorInput.sql = sql;
   if (rollbackSql) executorInput.rollback_sql = rollbackSql;
+  if (verifySql) executorInput.verify_sql = verifySql;
+  if (migrationFile) executorInput.migration_file = migrationFile;
+  if (migrationName) executorInput.migration_name = migrationName;
+  if (sqlAction) executorInput.action = sqlAction;
+  if (opts.acceptNotRollbackable === true) executorInput.accept_not_rollbackable = true;
   const executorResult = await runMadSksExecutor(executorInput);
   const protectedProbe = await evaluateMadSksWrite({ packageRoot: packageRoot(), targetRoot, operation: 'file_write', path: path.join(packageRoot(), 'src', 'core', 'version.ts') });
   const audit = createMadSksAuditLedger({
@@ -1212,9 +1269,20 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     prompt: userIntent
   });
   const restore = await verifyMadSksPermissionRestored(root, id);
+  const sqlPlane = executorResult.sql_plane && typeof executorResult.sql_plane === 'object'
+    ? executorResult.sql_plane
+    : { requested: false, capability_id: null, operation_classes: [], read_back_passed: false, profile_closed: false };
+  const sqlPlaneRequested = (sqlPlane as any).requested === true;
+  const sqlPlanePassed = !sqlPlaneRequested || ((sqlPlane as any).read_back_passed === true && (sqlPlane as any).profile_closed === true);
+  const gateBlockers = [
+    ...(restore.permissions_deactivated === true ? [] : ['permission_restore_failed']),
+    ...(comparison.ok === true ? [] : ['protected_core_changed']),
+    ...(executorResult.ok === true ? [] : (executorResult.blockers || ['mad_sks_executor_failed'])),
+    ...(sqlPlanePassed ? [] : ['mad_sks_sql_plane_read_back_or_profile_close_failed'])
+  ];
   const gate = {
     schema_version: 1,
-    passed: proof.ok === true && executorResult.ok === true && restore.permissions_deactivated === true,
+    passed: proof.ok === true && executorResult.ok === true && restore.permissions_deactivated === true && comparison.ok === true && sqlPlanePassed,
     mad_sks_permission_active: false,
     permissions_deactivated: restore.permissions_deactivated === true,
     full_system_authority: permission.mode === 'full_system_authority',
@@ -1224,11 +1292,12 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
     proof_evidence: proofPath,
     permission_restore_read_back: restore,
     permission_profile: permissionGateSummary(),
-    blockers: restore.permissions_deactivated === true ? [] : ['permission_restore_failed']
+    sql_plane: sqlPlane,
+    blockers: [...new Set(gateBlockers)]
   };
   await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), gate);
   return emit({
-    schema: opts.action === 'apply' ? 'sks.mad-sks-apply.v1' : 'sks.mad-sks-run.v1',
+    schema: opts.resultSchema || (opts.action === 'apply' ? 'sks.mad-sks-apply.v1' : 'sks.mad-sks-run.v1'),
     ok: gate.passed === true,
     status: executorResult.status,
     mission_id: id,
@@ -1325,7 +1394,7 @@ async function verifyMadSksPermissionRestored(root: string, missionId: string) {
 }
 
 function inferMadSksExecutor(args: any[] = []) {
-  if (readOption(args, '--sql', null)) return 'db-write';
+  if (readOption(args, '--sql', null)) return 'sql-plane';
   if (readOption(args, '--command', null) || args.includes('--argv')) return 'shell-command';
   if (readOption(args, '--package', null) || args.includes('--allow-package-install')) return 'package-install';
   if (readOption(args, '--service', null) || args.includes('--allow-service-control')) return 'service-control';
@@ -1333,6 +1402,33 @@ function inferMadSksExecutor(args: any[] = []) {
   if (args.includes('--allow-browser-use') || args.includes('--allow-browser')) return 'browser-use';
   if (args.includes('--allow-generated-assets')) return 'generated-asset';
   return 'file-write';
+}
+
+function positionalText(args: any[] = []) {
+  const valueFlags = new Set([
+    '--sql',
+    '--verify-sql',
+    '--rollback-sql',
+    '--target-root',
+    '--intent',
+    '--executor',
+    '--cwd',
+    '--name',
+    '--file',
+    '--migration-file'
+  ]);
+  const out: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] || '');
+    if (!arg || arg === '--json' || arg === '--yes' || arg === '-y' || arg === '--accept-not-rollbackable') continue;
+    if (valueFlags.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--')) continue;
+    out.push(arg);
+  }
+  return out.join(' ').trim();
 }
 
 function readRepeatedOption(args: any[] = [], name: string) {

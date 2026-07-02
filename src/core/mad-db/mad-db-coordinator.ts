@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createMission, missionDir, setCurrent } from '../mission.js';
-import { nowIso, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
+import { ensureDir, nowIso, readJson, readText, sha256, writeJsonAtomic } from '../fsx.js';
 import { createMadDbCapability, activateMadDbCapability, closeMadDbCycle, MAD_DB_ACK, markMadDbTransportReady, readMadDbCapability, type MadDbCapabilityV2 } from './mad-db-capability.js';
 import { MadDbMcpExecutor, type MadDbToolInventory, type MadDbToolResult } from './mad-db-executor.js';
 import { createMadDbRuntimeProfile, closeMadDbRuntimeProfile, redactedRuntimeProfile, type MadDbRuntimeProfile, type ReadOnlyRestorationProof } from './mad-db-runtime-profile.js';
@@ -47,9 +47,19 @@ export async function prepareMadDbMission(input: {
   verifyTools?: boolean;
   runtimeSessionId?: string;
   sessionKey?: string;
+  missionId?: string | null;
+  route?: 'MadDB' | 'MadSKS';
+  routeCommand?: '$MAD-DB' | '$MAD-SKS';
 }): Promise<MadDbPreparedMission> {
   const target = await resolveMadDbTarget(input.root, { args: input.args || [] });
-  const { id, dir } = await createMission(input.root, { mode: 'mad-db', prompt: input.task || 'MadDB SQL-plane execution', sessionKey: input.sessionKey });
+  const route = input.route || 'MadDB';
+  const routeCommand = input.routeCommand || (route === 'MadSKS' ? '$MAD-SKS' : '$MAD-DB');
+  const existingMissionId = input.missionId ? String(input.missionId) : '';
+  const created = existingMissionId
+    ? { id: existingMissionId, dir: missionDir(input.root, existingMissionId) }
+    : await createMission(input.root, { mode: route === 'MadSKS' ? 'mad-sks' : 'mad-db', prompt: input.task || 'MadDB SQL-plane execution', sessionKey: input.sessionKey });
+  const { id, dir } = created;
+  await ensureDir(dir);
   const cycleId = `mad-db-${Date.now().toString(36)}`;
   const runtimeSessionId = input.runtimeSessionId || `mad-db-session-${Date.now().toString(36)}`;
   const blockers = [...target.blockers];
@@ -86,18 +96,28 @@ export async function prepareMadDbMission(input: {
     else await markMadDbTransportReady(input.root, id);
   }
   await writeJsonAtomic(path.join(dir, 'route-context.json'), {
-    route: 'MadDB',
-    command: '$MAD-DB',
-    mode: 'MADDB',
+    route,
+    command: routeCommand,
+    mode: route === 'MadSKS' ? 'MADSKS' : 'MADDB',
     task: input.task,
     target: redactTarget(target),
     capability_file: 'mad-db-capability.json',
     runtime_profile_manifest: 'mad-db/runtime/runtime-profile-manifest.json',
-    tool_inventory: toolInventory ? 'mad-db/runtime/tool-inventory.json' : null
+    tool_inventory: toolInventory ? 'mad-db/runtime/tool-inventory.json' : null,
+    sql_plane_executor: route === 'MadSKS'
   });
-  await writeJsonAtomic(path.join(dir, 'mad-db-gate.json'), {
-    schema: 'sks.mad-db-gate.v1',
+  await writeJsonAtomic(path.join(dir, 'mad-sks-gate.json'), {
+    schema: 'sks.mad-sks-gate.v1',
     passed: false,
+    mad_sks_permission_active: route === 'MadSKS' && !blockers.length,
+    permissions_deactivated: false,
+    sql_plane: {
+      requested: true,
+      capability_id: preparedCapabilityId(id, cycleId),
+      operation_classes: [...madDbOperationClassesFromClassification(classifySql(input.task))],
+      read_back_passed: false,
+      profile_closed: false
+    },
     mad_db_capability_active: !blockers.length,
     sql_plane_all_mutations_allowed: !blockers.length,
     control_plane_denied: true,
@@ -109,18 +129,20 @@ export async function prepareMadDbMission(input: {
   await setCurrent(input.root, {
     mission_id: id,
     mad_db_capability_mission_id: id,
-    route: 'MadDB',
-    route_command: '$MAD-DB',
-    mode: 'MADDB',
-    phase: blockers.length ? 'MADDB_BLOCKED' : 'MADDB_SQL_PLANE_CAPABILITY_ACTIVE',
+    route,
+    route_command: routeCommand,
+    mode: route === 'MadSKS' ? 'MADSKS' : 'MADDB',
+    phase: blockers.length ? `${route.toUpperCase()}_BLOCKED` : `${route.toUpperCase()}_SQL_PLANE_CAPABILITY_ACTIVE`,
     questions_allowed: false,
     implementation_allowed: !blockers.length,
     mad_db_active: !blockers.length,
+    mad_sks_active: route === 'MadSKS' && !blockers.length,
     mad_db_cycle_id: cycleId,
     mad_db_runtime_session_id: runtimeSessionId,
     mad_db_profile_sha256: profile.profile_sha256,
     mad_db_capability_file: 'mad-db-capability.json',
-    stop_gate: 'mad-db-gate.json',
+    mad_sks_gate_file: 'mad-sks-gate.json',
+    stop_gate: 'mad-sks-gate.json',
     prompt: input.task
   }, { sessionKey: input.sessionKey });
   return {
@@ -146,10 +168,23 @@ export async function runMadDbCycle(input: {
   verifySql?: string | null;
   ttlMs?: number | undefined;
   args?: string[];
+  missionId?: string | null;
+  route?: 'MadDB' | 'MadSKS';
+  routeCommand?: '$MAD-DB' | '$MAD-SKS';
 }): Promise<MadDbCycleResult> {
   const timings: Record<string, number> = {};
   const start = Date.now();
-  const prepared = await prepareMadDbMission({ root: input.root, task: input.task, args: input.args || [], ttlMs: input.ttlMs, verifyTools: false });
+  const prepareInput: Parameters<typeof prepareMadDbMission>[0] = {
+    root: input.root,
+    task: input.task,
+    args: input.args || [],
+    ttlMs: input.ttlMs,
+    verifyTools: false,
+    missionId: input.missionId || null
+  };
+  if (input.route) prepareInput.route = input.route;
+  if (input.routeCommand) prepareInput.routeCommand = input.routeCommand;
+  const prepared = await prepareMadDbMission(prepareInput);
   timings.prepare_ms = Date.now() - start;
   const profile = await recreateProfileFromPrepared(input.root, prepared);
   const executor = new MadDbMcpExecutor(profile);
@@ -249,8 +284,51 @@ export async function runMadDbCycle(input: {
     blockers: restoration.ok ? blockers : [...blockers, ...restoration.blockers]
   };
   await writeJsonAtomic(path.join(missionDir(input.root, prepared.mission_id), 'mad-db-result.json'), redactCycleResult(result));
+  await writeMadSksSqlPlaneGate(input.root, result);
   await clearMadDbCurrentState(input.root, prepared.mission_id, result.ok, restoration);
   return result;
+}
+
+function preparedCapabilityId(missionId: string, cycleId: string) {
+  return `${missionId}:${cycleId}`;
+}
+
+export async function writeMadSksSqlPlaneGate(root: string, result: MadDbCycleResult) {
+  const file = path.join(missionDir(root, result.mission_id), 'mad-sks-gate.json');
+  const previous = await readJson<any>(file, {});
+  const operationClasses = result.operation?.operation_classes || [];
+  const blockers = [
+    ...(Array.isArray(previous.blockers) ? previous.blockers : []),
+    ...(result.blockers || [])
+  ];
+  const sqlPlane = {
+    requested: true,
+    capability_id: preparedCapabilityId(result.mission_id, result.cycle_id),
+    operation_classes: operationClasses,
+    read_back_passed: result.read_back ? result.read_back.ok === true : result.execution?.ok === true,
+    profile_closed: result.capability_closed === true && result.read_only_restoration?.ok === true
+  };
+  const passed = result.ok === true && sqlPlane.read_back_passed === true && sqlPlane.profile_closed === true;
+  const gate = {
+    ...previous,
+    schema: previous.schema || 'sks.mad-sks-gate.v1',
+    schema_version: previous.schema_version || 1,
+    passed,
+    mad_sks_permission_active: false,
+    permissions_deactivated: true,
+    sql_plane: sqlPlane,
+    mad_db_capability_active: false,
+    sql_plane_all_mutations_allowed: result.execution?.ok === true,
+    control_plane_denied: true,
+    mission_id: result.mission_id,
+    cycle_id: result.cycle_id,
+    read_only_restoration: result.read_only_restoration,
+    blockers: passed ? [] : [...new Set(blockers.length ? blockers : ['mad_sks_sql_plane_not_passed'])],
+    created_at: previous.created_at || nowIso(),
+    updated_at: nowIso()
+  };
+  await writeJsonAtomic(file, gate);
+  return gate;
 }
 
 async function clearMadDbCurrentState(root: string, missionId: string, ok: boolean, restoration: ReadOnlyRestorationProof) {
@@ -258,9 +336,10 @@ async function clearMadDbCurrentState(root: string, missionId: string, ok: boole
   const current = await readJson(currentPath, {});
   if (current.mission_id !== missionId && current.mad_db_capability_mission_id !== missionId) return;
   await setCurrent(root, {
-    phase: ok ? 'MADDB_CLOSED' : 'MADDB_FAILED_CLOSED',
+    phase: current.mode === 'MADSKS' ? (ok ? 'MADSKS_SQL_PLANE_CLOSED' : 'MADSKS_SQL_PLANE_FAILED_CLOSED') : (ok ? 'MADDB_CLOSED' : 'MADDB_FAILED_CLOSED'),
     implementation_allowed: false,
     mad_db_active: false,
+    mad_sks_active: current.mode === 'MADSKS' ? false : current.mad_sks_active,
     mad_db_runtime_session_id: null,
     mad_db_profile_sha256: null,
     mad_db_read_only_restored: restoration.ok,
@@ -316,14 +395,16 @@ export async function madDbRouteIdentityProof(root: string, missionId: string) {
   const state = await readJson<any>(path.join(root, '.sneakoscope', 'state', 'current.json'), {});
   const profile = await readJson<any>(path.join(missionDir(root, missionId), 'mad-db', 'runtime', 'runtime-profile-manifest.json'), null);
   const sameMission = Boolean(capability && capability.mission_id === missionId && state?.mission_id === missionId);
+  const mergedMadSks = state?.route === 'MadSKS' && state?.route_command === '$MAD-SKS';
   return {
     schema: 'sks.mad-db-route-identity-proof.v1',
-    ok: sameMission && state?.route === 'MadDB' && state?.route_command === '$MAD-DB',
+    ok: sameMission && (mergedMadSks || (state?.route === 'MadDB' && state?.route_command === '$MAD-DB')),
     mission_id: missionId,
     capability_mission_id: capability?.mission_id || null,
     same_mission: sameMission,
     route: state?.route || null,
     route_command: state?.route_command || null,
+    deprecated_route_accepted: mergedMadSks,
     cycle_id: capability?.cycle_id || null,
     project_root_hash: await projectRootHash(root),
     runtime_profile: profile,
@@ -331,8 +412,8 @@ export async function madDbRouteIdentityProof(root: string, missionId: string) {
       ...(capability ? [] : ['capability_missing']),
       ...(profile ? [] : ['runtime_profile_manifest_missing']),
       ...(sameMission ? [] : ['mission_binding_mismatch']),
-      ...(state?.route === 'MadDB' ? [] : ['route_state_not_maddb']),
-      ...(state?.route_command === '$MAD-DB' ? [] : ['route_command_not_maddb'])
+      ...(state?.route === 'MadDB' || mergedMadSks ? [] : ['route_state_not_maddb_or_merged_mad_sks']),
+      ...(state?.route_command === '$MAD-DB' || mergedMadSks ? [] : ['route_command_not_maddb_or_mad_sks'])
     ]
   };
 }

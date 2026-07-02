@@ -134,7 +134,8 @@ export async function writeExecutorEvidence({
   dbRollbacks = [],
   rollbackUnavailable = [],
   auditActions = [],
-  verification = []
+  verification = [],
+  forceProtectedCoreChanged = false
 }: {
   context: MadSksExecutorContext;
   executor: string;
@@ -148,11 +149,18 @@ export async function writeExecutorEvidence({
   rollbackUnavailable?: unknown[];
   auditActions?: ReturnType<typeof madSksAuditAction>[];
   verification?: unknown[];
+  forceProtectedCoreChanged?: boolean;
 }) {
   await ensureDir(context.artifact_dir);
   const before = await snapshotProtectedCore(context.package_root, `${executor}-before`);
   const after = await snapshotProtectedCore(context.package_root, `${executor}-after`);
-  const comparison = compareProtectedCoreSnapshots(before, after);
+  const comparison = forceProtectedCoreChanged && (process.env.NODE_ENV === 'test' || process.env.SKS_TEST_FORCE_PROTECTED_CORE_CHANGED === '1')
+    ? {
+        ...compareProtectedCoreSnapshots(before, after),
+        ok: false,
+        changed: [{ id: '__test_protected_core_changed', before_digest: before.digest, after_digest: after.digest }]
+      }
+    : compareProtectedCoreSnapshots(before, after);
   const beforePath = path.join(context.artifact_dir, `${executor}-protected-core-before.json`);
   const afterPath = path.join(context.artifact_dir, `${executor}-protected-core-after.json`);
   const comparisonPath = path.join(context.artifact_dir, `${executor}-protected-core-comparison.json`);

@@ -816,6 +816,13 @@ async function materializeAutoSealedMadSks(dir: any, id: any, route: any, routeC
     normal_db_writes_allowed: true,
     live_server_writes_allowed: true,
     migration_apply_allowed: true,
+    sql_plane: {
+      requested: false,
+      capability_id: null,
+      operation_classes: [],
+      read_back_passed: false,
+      profile_closed: false
+    },
     catastrophic_safety_guard_active: true,
     permission_profile: permissionGateSummary(),
     contract_hash: contract.sealed_hash || null
@@ -912,7 +919,7 @@ async function prepareDb(root: any, route: any, task: any, required: any, opts: 
 }
 
 async function prepareMadDb(root: any, route: any, task: any, required: any, opts: any = {}) {
-  const prepared = await prepareMadDbMission({ root, task, verifyTools: false, sessionKey: opts.sessionKey });
+  const prepared = await prepareMadDbMission({ root, task, verifyTools: false, sessionKey: opts.sessionKey, route: 'MadSKS', routeCommand: '$MAD-SKS' });
   const dir = missionDir(root, prepared.mission_id);
   const pipelinePlan = await writePipelinePlan(dir, {
     missionId: prepared.mission_id,
@@ -928,7 +935,7 @@ async function prepareMadDb(root: any, route: any, task: any, required: any, opt
     cycle_id: prepared.cycle_id,
     blockers: prepared.blockers
   });
-  await setCurrent(root, routeState(prepared.mission_id, route, prepared.ok ? 'MADDB_SQL_PLANE_CAPABILITY_ACTIVE' : 'MADDB_BLOCKED', required, {
+  await setCurrent(root, routeState(prepared.mission_id, route, prepared.ok ? 'MADSKS_SQL_PLANE_CAPABILITY_ACTIVE' : 'MADSKS_SQL_PLANE_BLOCKED', required, {
     prompt: task,
     questions_allowed: false,
     implementation_allowed: prepared.ok,
@@ -940,7 +947,8 @@ async function prepareMadDb(root: any, route: any, task: any, required: any, opt
     mad_db_profile_sha256: prepared.capability.transport.profile_sha256,
     mad_db_capability_mission_id: prepared.mission_id,
     mad_db_capability_file: 'mad-db-capability.json',
-    stop_gate: 'mad-db-gate.json',
+    mad_sks_gate_file: 'mad-sks-gate.json',
+    stop_gate: 'mad-sks-gate.json',
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
   }), { sessionKey: opts.sessionKey });

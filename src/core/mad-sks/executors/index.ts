@@ -5,6 +5,7 @@ import { shellCommandExecutor } from './shell-command-executor.js';
 import { packageInstallExecutor } from './package-install-executor.js';
 import { serviceControlExecutor } from './service-control-executor.js';
 import { dbWriteExecutor } from './db-write-executor.js';
+import { sqlPlaneExecutor } from './sql-plane-executor.js';
 import { browserUseExecutor, computerUseExecutor, generatedAssetExecutor } from './computer-use-executor.js';
 
 const EXECUTORS = {
@@ -18,6 +19,9 @@ const EXECUTORS = {
   'service-control': serviceControlExecutor,
   db: dbWriteExecutor,
   'db-write': dbWriteExecutor,
+  sql: sqlPlaneExecutor,
+  'sql-plane': sqlPlaneExecutor,
+  'apply-migration': sqlPlaneExecutor,
   computer: computerUseExecutor,
   'computer-use': computerUseExecutor,
   browser: browserUseExecutor,

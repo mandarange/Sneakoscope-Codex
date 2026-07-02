@@ -38,6 +38,13 @@ export async function evaluateGate(root: string, missionId: string, gateFile: st
   if (gate.ok === false) reasons.push('gate_ok_false');
   if (!blockers) reasons.push('gate_blockers_not_array');
   else if (blockers.length > 0) reasons.push('gate_blockers_present');
+  if (gateFile === 'mad-sks-gate.json' || /mad-sks-gate\.json$/.test(gatePath)) {
+    const sqlPlane = (gate as any).sql_plane;
+    if (sqlPlane?.requested === true) {
+      if (sqlPlane.read_back_passed !== true) reasons.push('mad_sks_sql_plane_read_back_not_passed');
+      if (sqlPlane.profile_closed !== true) reasons.push('mad_sks_sql_plane_profile_not_closed');
+    }
+  }
 
   if (reasons.length > 0) {
     return { pass: false, verdict: 'fail', reasons, gate_path: gatePath, gate };

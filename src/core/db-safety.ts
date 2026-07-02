@@ -550,8 +550,8 @@ export function dbBlockReason(decision: any) {
   return [
     'Sneakoscope Codex Database Safety Gate blocked this operation.',
     `Reasons: ${(decision.reasons || []).join(', ') || 'unknown'}.`,
-    'Default DB mode is read-only. Destructive SQL-plane operations require an explicit active MadDB v2 capability opened by $MAD-DB or sks mad-db run|exec|apply-migration.',
-    'Use read-only/project-scoped Supabase MCP URLs outside MadDB. Supabase project/account/billing/credential control-plane operations remain denied even in MadDB.'
+    'Default DB mode is read-only. Destructive SQL-plane operations require an explicit active MAD-SKS sql-plane capability opened by $MAD-SKS/sks mad-sks sql|apply-migration or the deprecated $MAD-DB/sks mad-db redirect.',
+    'Use read-only/project-scoped Supabase MCP URLs outside MAD-SKS sql-plane. Supabase project/account/billing/credential control-plane operations remain denied even there.'
   ].join(' ');
 }
 

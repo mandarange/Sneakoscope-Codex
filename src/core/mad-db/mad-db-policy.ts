@@ -151,14 +151,16 @@ export function activeMadDbAllowsSqlPlane(classification: any = {}): boolean {
 export function madDbSkillText(commandPrefix = 'sks'): string {
   return `---
 name: mad-db
-description: First-class MadDB SQL-plane execution route for explicit $MAD-DB and ${commandPrefix} mad-db run|exec|apply-migration.
+description: Deprecated alias; MadDB SQL-plane execution is merged into mad-sks.
 ---
 
-Use only when the operator explicitly invokes $MAD-DB/$mad-db or ${commandPrefix} mad-db run|exec|apply-migration. This is the single approval boundary for the active MadDB cycle: execute SQL-plane mutations that the operator requested, including CREATE, ALTER, table/schema DROP, column add/drop/rename, INSERT, UPDATE, DELETE including all-row mutations, TRUNCATE, execute_sql, and apply_migration. Do not ask again for each DROP/TRUNCATE/all-row DELETE inside the same bound cycle.
+Deprecated compatibility skill. Use mad-sks for all current SQL-plane execution. $MAD-DB and ${commandPrefix} mad-db run|exec|apply-migration redirect to MAD-SKS sql-plane for one release and must warn the operator.
 
-Keep normal Supabase MCP configuration read-only. MadDB must create a mission-local ephemeral write-capable Supabase MCP profile bound to capability v2, project_ref, root, mission, thread/session, intent, runtime profile hash, TTL, and SQL-plane operation classes. Verify execute_sql and apply_migration availability before claiming readiness. Require actual tool results plus independent read-back verification before claiming success. Close/revoke the capability and runtime profile in finally and prove read-only restoration.
+Merged SQL-plane rules for mad-sks: execute SQL-plane mutations that the operator requested, including CREATE, ALTER, table/schema DROP, column add/drop/rename, INSERT, UPDATE, DELETE including all-row mutations, TRUNCATE, execute_sql, and apply_migration. Catastrophic SQL is allowed only in the sql-plane executor and only when the user's prompt or CLI SQL statement literally names the operation.
 
-Still deny Supabase account/project/billing/credential control-plane actions, credential exfiltration, unrelated non-database admin changes, and unrequested fallback implementation. Do not add prompt-only SQL deny lists inside active MadDB; capability binding, SQL-plane scope, operation ledgering, and read-back verification are the approval boundary. Pair with db-safety-guard, Context7 evidence for MCP/API docs, route-local reflection, and Honest Mode.`;
+Keep normal Supabase MCP configuration read-only. MAD-SKS sql-plane must create a mission-local ephemeral write-capable Supabase MCP profile bound to capability v2, project_ref, root, mission, thread/session, intent, runtime profile hash, TTL, and SQL-plane operation classes. Verify execute_sql and apply_migration availability before claiming readiness. Require actual tool results plus independent read-back verification before claiming success. Close/revoke the capability and runtime profile in finally and prove read-only restoration.
+
+Still deny Supabase account/project/billing/credential control-plane actions, credential exfiltration, unrelated non-database admin changes, and unrequested fallback implementation. Do not add prompt-only SQL deny lists inside active sql-plane; capability binding, SQL-plane scope, operation ledgering, literal catastrophic intent, and read-back verification are the approval boundary. Pair with db-safety-guard, Context7 evidence for MCP/API docs, route-local reflection, and Honest Mode.`;
 }
 
 export function dbSafetyGuardSkillText(): string {
@@ -168,13 +170,13 @@ description: Enforce Sneakoscope Codex database safety before using SQL, Supabas
 ---
 
 Rules:
-- Default non-MadDB mode is read-only and routes writes/destructive SQL to the DB safety gate.
+- Default non-MAD-SKS mode is read-only and routes writes/destructive SQL to the DB safety gate.
 - Supabase MCP must be read-only and project-scoped by default.
-- Live execute_sql writes are blocked unless a bound active MadDB capability v2 is present.
-- Active MadDB is the explicit exception: SQL-plane mutations requested by $MAD-DB or sks mad-db run|exec|apply-migration are allowed, including DROP, DELETE, TRUNCATE, RLS/policy changes, and execute_sql/apply_migration, and must be executed with read-back verification.
-- Default read-only restrictions do not apply to SQL-plane work while the active MadDB capability v2 is bound.
-- Supabase project/account/billing/credential control-plane actions remain denied even in MadDB.
-- If no active bound MadDB cycle exists, fall back to read-only only.`;
+- Live execute_sql writes are blocked unless a bound active MAD-SKS sql-plane capability v2 is present.
+- Active MAD-SKS sql-plane is the explicit exception: SQL-plane mutations requested by $MAD-SKS/sks mad-sks sql|apply-migration, or deprecated $MAD-DB/sks mad-db redirects, are allowed, including DROP, DELETE, TRUNCATE, RLS/policy changes, and execute_sql/apply_migration, and must be executed with read-back verification.
+- Default read-only restrictions do not apply to SQL-plane work while the active MAD-SKS sql-plane capability v2 is bound.
+- Supabase project/account/billing/credential control-plane actions remain denied even in MAD-SKS sql-plane.
+- If no active bound MAD-SKS sql-plane cycle exists, fall back to read-only only.`;
 }
 
 function stringArray(value: unknown): string[] {
