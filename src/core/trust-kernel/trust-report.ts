@@ -55,7 +55,14 @@ export async function latestTrustReport(root: any, missionArg: any = 'latest') {
     return staleTrustReport(report, temporalIssues);
   }
   if (!proof) {
-    return {
+    // Persist this computed report even though it's a blocked result: `trust report`
+    // is expected to leave a durable trust-report.json behind for anyone (a human or
+    // a later `sks trust report <mission>` call) to inspect, the same way the
+    // completion-proof-present path below does via writeTrustArtifactsForProof(). An
+    // in-memory-only "blocked" result that vanishes after this call returns is
+    // surprising and was the reason `sks trust report latest --json` could exit 0
+    // with a blocked status yet leave no artifact on disk.
+    const report = {
       schema: TRUST_REPORT_SCHEMA,
       ...trustKernelMetadata(),
       ok: false,
@@ -63,6 +70,8 @@ export async function latestTrustReport(root: any, missionArg: any = 'latest') {
       status: 'blocked',
       issues: ['completion_proof_missing']
     };
+    await writeJsonAtomic(trustReportPath(root, missionId), report).catch(() => undefined);
+    return report;
   }
   const rebuilt = await writeTrustArtifactsForProof(root, proof);
   if (!rebuilt) {

@@ -75,6 +75,8 @@
     "release:check": "npm run release:check:affected --silent",
     "release:metadata": "node ./dist/scripts/release-metadata-check.js",
     "release:gate-script-parity": "node ./dist/scripts/release-gate-script-parity-check.js",
+    "ppt:real-imagegen-wiring": "node ./dist/scripts/ppt-real-imagegen-wiring-check.js",
+    "ux-review:run-wires-imagegen": "node ./dist/scripts/ux-review-run-wires-imagegen-check.js",
     "release:check:parallel": "npm run build --silent && node ./dist/scripts/release-parallel-check.js && node ./dist/scripts/release-check-stamp.js write",
     "release:check:legacy": "npm run release:check:parallel --silent",
     "release:dag-full-coverage": "node ./dist/scripts/release-dag-full-coverage-check.js",

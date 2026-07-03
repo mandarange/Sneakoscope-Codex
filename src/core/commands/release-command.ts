@@ -53,10 +53,10 @@ export async function releaseCommand(args: string[] = []): Promise<unknown> {
     stdout_tail: tail(String(result.stdout || '')),
     stderr_tail: tail(String(result.stderr || ''))
   };
+  if (!report.ok) process.exitCode = result.status || 1;
   if (json) return printJson(report);
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
-  if (!report.ok) process.exitCode = result.status || 1;
   return report;
 }
 

@@ -129,15 +129,28 @@ export async function runCoreBench(root: any = process.cwd(), { iterations = 3, 
   for (const [label, args, commandRoot] of coreCommands(benchTrustMission)) {
     const values: any[] = [];
     const failures: any[] = [];
+    // TRUST_VALIDATE_BENCH_COMMAND measures latency of `sks trust validate` against a
+    // mock fixture mission. A --mock `$Naruto` run can never satisfy the real agent
+    // gate, so `sks trust validate` legitimately exits 1 (report.ok === false,
+    // status: 'blocked') every time regardless of environment. This row exists to
+    // measure command latency, not to assert the mock mission's trust status, so a
+    // well-formed trust-validation report (valid JSON with the expected schema) is
+    // accepted even on a nonzero exit; only a crash/unparseable-output counts as a
+    // bench failure for this specific command.
+    const acceptNonZeroExit = label === TRUST_VALIDATE_BENCH_COMMAND;
     for (let i = 0; i < CORE_BENCH_WARMUP_ITERATIONS; i += 1) {
       const result = await runBenchProcess(commandRoot || root, script, args);
-      if (result.code !== 0) failures.push({ phase: 'warmup', code: result.code, stderr_tail: result.stderr.slice(-400), stdout_tail: result.stdout.slice(-400) });
+      if (result.code !== 0 && !(acceptNonZeroExit && isWellFormedTrustValidation(result.stdout))) {
+        failures.push({ phase: 'warmup', code: result.code, stderr_tail: result.stderr.slice(-400), stdout_tail: result.stdout.slice(-400) });
+      }
     }
     for (let i = 0; i < measuredIterations; i += 1) {
       const t0 = performance.now();
       const result = await runBenchProcess(commandRoot || root, script, args);
       values.push(performance.now() - t0);
-      if (result.code !== 0) failures.push({ phase: 'measure', code: result.code, stderr_tail: result.stderr.slice(-400), stdout_tail: result.stdout.slice(-400) });
+      if (result.code !== 0 && !(acceptNonZeroExit && isWellFormedTrustValidation(result.stdout))) {
+        failures.push({ phase: 'measure', code: result.code, stderr_tail: result.stderr.slice(-400), stdout_tail: result.stdout.slice(-400) });
+      }
     }
     const p95 = Math.round(percentile(values, 95));
     rows.push({
@@ -173,8 +186,20 @@ async function runBenchProcess(root: any, script: any, args: any) {
   });
 }
 
+function isWellFormedTrustValidation(stdout: string): boolean {
+  const parsed = parseJsonOutput(stdout);
+  return Boolean(parsed && parsed.schema === 'sks.trust-validation.v1' && typeof parsed.status === 'string');
+}
+
 async function ensureBenchTrustMission(root: any, script: any) {
   const benchRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-core-bench-trust-')).catch(() => root);
+  // `sks run` blocks the agent gate (and skips writing completion-proof.json) when
+  // its cwd is not a git repo (git_collaboration.status -> not_git_repo). The bench
+  // trust-mission scratch dir must be a git repo so completion-proof.json/
+  // trust-report.json/run-classification.json actually get written and
+  // hasBenchTrustArtifacts() can find a usable mission instead of falling back to
+  // a nonexistent 'bench-fixture-missing' id (which always fails trust validate).
+  await runProcess('git', ['init', '-q', '.'], { cwd: benchRoot, timeoutMs: 10_000 }).catch(() => null);
   const beforeMissionIds = await listMissionIds(benchRoot);
   const result = await runProcess(process.execPath, [script, 'run', 'fixture', '--mock', '--json'], {
     cwd: benchRoot,

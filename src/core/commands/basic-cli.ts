@@ -323,7 +323,7 @@ export async function selftestRealCommand(args: any = []) {
   for (const feature of registry.features || []) {
     const fx = feature.fixture || {};
     if (executableKinds.has(fx.kind)) {
-      const run = runFeatureFixture(feature, { root });
+      const run = await runFeatureFixture(feature, { root });
       results.push(run);
     } else if (fx.kind === 'mock' || fx.kind === 'wiring_only' || fx.quality === 'wiring_only') {
       skippedWiringOnly.push({ id: feature.id, kind: fx.kind, reason: fx.reason || 'mock_or_wiring_only_kind_not_executed' });

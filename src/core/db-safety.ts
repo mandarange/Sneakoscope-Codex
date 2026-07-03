@@ -585,7 +585,14 @@ async function scanSupabaseMcpConfigs(root: any) {
 
 function extractSupabaseMcpUrls(text: any) {
   const out = new Set();
-  const re = /https:\/\/mcp\.supabase\.com\/mcp[^"'\s)>,]*/gi;
+  // Config files (TOML/JSON) always quote URL values, so a closing quote or
+  // whitespace is the only reliable terminator. A comma is a legitimate query-string
+  // character (e.g. "...&features=database,docs") - excluding it here silently
+  // truncated multi-value features lists, which happened to be benign only because
+  // the truncated remainder still contained an allowed feature. Stopping at ')'/'>' is
+  // unnecessary for structured config scanning and risks the same truncation for any
+  // URL whose query string legitimately contains those characters (URL-encoded or not).
+  const re = /https:\/\/mcp\.supabase\.com\/mcp[^"'\s]*/gi;
   let m;
   while ((m = re.exec(text))) out.add(m[0]);
   if (/mcp\.supabase\.com\/mcp/i.test(text) && !out.size) out.add('https://mcp.supabase.com/mcp');
