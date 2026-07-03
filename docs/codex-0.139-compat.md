@@ -12,7 +12,7 @@ baseline evidence for older SKS gates and release-history continuity.
 
 ## Current Release Note
 
-SKS 5.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening the macOS SKS menu bar companion with Codex lifecycle sync, native password/choice prompts, non-Terminal action execution, runtime smoke checks, and doctor post-repair verification.
+SKS 5.3.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version and preserving the 5.2.0 macOS SKS menu bar hardening evidence.
 
 ## Historical Release Ledger
 

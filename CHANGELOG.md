@@ -7,6 +7,13 @@
 
 
 
+
+## [5.3.0] - 2026-07-03
+
+### Fixed
+
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [5.2.0] - 2026-07-03
 
 ### Added

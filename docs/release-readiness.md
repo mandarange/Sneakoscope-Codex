@@ -1,8 +1,8 @@
 # Release Readiness
 
-SKS 5.2.0 is the macOS SKS menu bar lifecycle, real-action, and native UX hardening release after 5.1.2. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, menu bar install coverage, action-script smoke evidence, doctor post-repair checks, and affected release DAG evidence to agree on 5.2.0 before `npm publish --ignore-scripts`.
+SKS 5.3.0 is the release metadata alignment bump after 5.2.0. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, menu bar install coverage, action-script smoke evidence, doctor post-repair checks, and affected release DAG evidence to agree on 5.3.0 before `npm publish --ignore-scripts`.
 
-5.2.0 release readiness adds proof that the SKS menu bar companion follows Codex App lifecycle when a bundle id is known, exposes a visible sync-disabled state when Codex is not detected, runs actions without Terminal/osascript Terminal fallbacks, uses native choice/password prompts, records secure redacted action logs, and makes doctor/install checks fail on missing launchd runtime or action smoke instead of false success.
+5.3.0 release readiness keeps the 5.2.0 menu bar lifecycle proof surface while advancing all publish-facing version metadata to avoid npm publish conflicts.
 
 SKS 5.1.1 is the dollar-command proof-truth hardening release after the current 5.1.0 line. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, gate manifests, mock/real proof schemas, stop-gate evaluation, and affected release DAG evidence to agree on 5.1.1 before `npm publish --ignore-scripts`.
 
