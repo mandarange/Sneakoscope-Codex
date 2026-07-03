@@ -14,6 +14,7 @@ import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js';
 import { flag, promptOf, readBoundedIntegerFlag, readFlagValue, readMaxCycles, resolveMissionId, safeReadTextFile } from './command-utils.js';
 import { runCodexAppHandoff, qaLoopShouldRequestAppHandoff } from '../codex-app/codex-app-handoff.js';
+import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js';
 import { writeCodexAccountUsageArtifacts } from '../usage/codex-account-usage.js';
 import { buildQaLoopBudgetPolicy, selectQaLoopEscalatedEffort } from '../qa-loop/qa-loop-budget-policy.js';
@@ -426,7 +427,9 @@ async function qaLoopStatus(args: any) {
   const desktop = await readJson(path.join(dir, 'qa-loop', 'app-handoff.json'), null);
   const desktopConfirmation = await readJson(path.join(dir, 'qa-loop', 'app-handoff-confirmation.json'), null);
   const desktopReviewComplete = desktopConfirmation?.verdict === 'pass';
-  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, desktop_app_handoff: desktop, desktop_app_confirmation: desktopConfirmation, desktop_review_complete: desktopReviewComplete, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null }, null, 2));
+  const gateVerdict = await evaluateGate(root, id, 'qa-gate.json');
+  if (flag(args, '--json')) return console.log(JSON.stringify({ mission, state, qa: status, desktop_app_handoff: desktop, desktop_app_confirmation: desktopConfirmation, desktop_review_complete: desktopReviewComplete, native_agent_plan: nativeAgentPlan, agent_sessions: agentSessions?.sessions || null, gate_verdict: gateVerdict }, null, 2));
+  console.log(gateVerdict.verdict);
   console.log('SKS QA-LOOP Status\n');
   console.log(`Mission:   ${id}`);
   console.log(`Phase:     ${state.phase || mission.phase}`);

@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { findLatestMission, loadMission } from '../mission.js'
+import { findLatestMission, loadMission, missionDir } from '../mission.js'
 import { readJson, readText, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { parseAgentCommandArgs } from '../agents/agent-command-surface.js'
@@ -23,12 +23,48 @@ export async function agentCommand(commandOrArgs: string | string[] = 'agent', m
 
 async function agentRun(parsed: any) {
   const result = await runNativeAgentOrchestrator({ ...parsed, routeCommand: 'sks agent run', routeBlackboxKind: 'actual_agent_command' })
+  if (normalizeRouteName(parsed.route) === 'release-review' && result.mission_id) {
+    await writeReleaseReviewNativeAgentPlan(parsed, result)
+  }
   return emit(parsed, result, () => {
     console.log('Native agent mission: ' + result.mission_id)
     console.log('Backend: ' + result.backend)
     console.log('Agents: ' + result.roster.agent_count + ' (concurrency ' + result.roster.concurrency + ')')
     console.log('Proof: ' + result.proof.status)
   })
+}
+
+function normalizeRouteName(route: any = ''): string {
+  return String(route || '').replace(/^\$/, '').trim().toLowerCase()
+}
+
+/**
+ * $Release-Review runs through the generic native agent orchestrator (sks agent run
+ * --route "$Release-Review"), which does not itself know it is a release-review run.
+ * Write the route-specific release-review-native-agent-plan.json summary artifact here
+ * so `route-release-review`'s fixture contract (plan file + agent proof evidence +
+ * agent effort policy) is genuinely satisfied by this command rather than only partially.
+ */
+async function writeReleaseReviewNativeAgentPlan(parsed: any, result: any) {
+  const root = await sksRoot()
+  const dir = missionDir(root, result.mission_id)
+  const plan = {
+    schema: 'sks.release-review-native-agent-plan.v1',
+    ok: Boolean(result.ok),
+    mission_id: result.mission_id,
+    route: '$Release-Review',
+    route_command: 'sks agent run',
+    backend: result.backend,
+    prompt: parsed.prompt,
+    roster: {
+      agent_count: result.roster?.agent_count ?? parsed.agents ?? null,
+      concurrency: result.roster?.concurrency ?? parsed.concurrency ?? null
+    },
+    proof_status: result.proof?.status || null,
+    agent_proof_evidence: 'agents/agent-proof-evidence.json',
+    agent_effort_policy: 'agents/agent-effort-policy.json'
+  }
+  await writeJsonAtomic(path.join(dir, 'release-review-native-agent-plan.json'), plan)
 }
 
 async function agentPlan(parsed: any) {

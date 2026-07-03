@@ -8,6 +8,7 @@ import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksR
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
+import { runFeatureFixture } from '../feature-fixture-executor.js';
 import { hooksExplainReport } from '../../cli/feature-commands.js';
 import { writeSelftestRouteProof } from '../proof/selftest-proof-fixtures.js';
 import { createMission } from '../mission.js';
@@ -277,6 +278,7 @@ export async function postinstallCommand(args: any = []) {
 }
 
 export async function selftestCommand(args: any = []) {
+  if (flag(args, '--real')) return selftestRealCommand(args);
   process.env.CI = 'true';
   const root = await projectRoot();
   const tmp = tmpdir('sks-selftest-');
@@ -300,6 +302,60 @@ export async function selftestCommand(args: any = []) {
   };
   if (flag(args, '--json')) return printJson(result);
   console.log('SKS selftest passed');
+}
+
+/**
+ * `sks selftest --real`: actually spawns every feature fixture whose kind is
+ * 'execute' or 'execute_and_validate_artifacts', derives real pass/fail status
+ * from the process exit code (and, for execute_and_validate_artifacts, from
+ * whether the declared expected_artifacts actually exist and match their
+ * declared schema), and writes a JSON report that explicitly lists fixtures
+ * skipped because they are mock/wiring_only kind rather than silently omitting
+ * them. This is additive: plain `sks selftest --mock` behavior is unchanged.
+ */
+export async function selftestRealCommand(args: any = []) {
+  process.env.CI = 'true';
+  const root = await projectRoot();
+  const registry = await buildFeatureRegistry({ root });
+  const executableKinds = new Set(['execute', 'execute_and_validate_artifacts']);
+  const results: any[] = [];
+  const skippedWiringOnly: any[] = [];
+  for (const feature of registry.features || []) {
+    const fx = feature.fixture || {};
+    if (executableKinds.has(fx.kind)) {
+      const run = runFeatureFixture(feature, { root });
+      results.push(run);
+    } else if (fx.kind === 'mock' || fx.kind === 'wiring_only' || fx.quality === 'wiring_only') {
+      skippedWiringOnly.push({ id: feature.id, kind: fx.kind, reason: fx.reason || 'mock_or_wiring_only_kind_not_executed' });
+    }
+  }
+  const failures = results.filter((row: any) => !row.ok);
+  const ok = failures.length === 0;
+  const report = {
+    schema: 'sks.selftest-real.v1',
+    ok,
+    version: PACKAGE_VERSION,
+    generated_at: nowIso(),
+    root,
+    checked: results.length,
+    passed: results.filter((row: any) => row.ok).length,
+    failed: failures.length,
+    results,
+    skipped_wiring_only: skippedWiringOnly,
+    skipped_wiring_only_count: skippedWiringOnly.length,
+    blockers: failures.flatMap((row: any) => row.blockers || [])
+  };
+  const reportPath = path.join(root, '.sneakoscope', 'reports', 'selftest-real-report.json');
+  await writeJsonAtomic(reportPath, report);
+  const output = { ...report, report_file: path.relative(root, reportPath) };
+  if (flag(args, '--json')) return printJson(output);
+  console.log(`SKS selftest --real: ${ok ? 'passed' : 'blocked'} (checked=${results.length}, skipped_wiring_only=${skippedWiringOnly.length})`);
+  console.log(`Report: ${path.relative(root, reportPath)}`);
+  if (!ok) {
+    for (const blocker of report.blockers) console.log(`- ${blocker}`);
+    process.exitCode = 1;
+  }
+  return output;
 }
 
 export async function reasoningCommand(args: any = []) {

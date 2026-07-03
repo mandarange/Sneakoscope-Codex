@@ -8,11 +8,36 @@
 
 
 
+
+## [5.4.0] - 2026-07-03
+
+### Added
+
+- Wire the 14차–16차 regression test suites (proof/stop-gate, commands, mad-sks, menubar/doctor, dfix/ppt) into `release-gates.v2.json` as five blocking release gates plus an `npm test` script, so breaking any of them now fails `release:check`.
+- Add `runFeatureFixture()` real-execution verifier and `sks selftest --real` (also `npm run selftest:real`): execute-kind fixtures are actually spawned, expected artifacts checked on disk, and `fixture_status_claim_mismatch` blockers raised when a fixture's claimed `pass` is not reproducible. The first full measured run (~23 min) reported 59/103 passing with 44 claim mismatches recorded in `selftest-real-report.json`; the gate therefore ships as a manual/nightly script rather than a blocking release gate until those claims are reconciled.
+- Surface `gate_verdict` (pass/fail/mock_only/missing/invalid) in the status output of `qa-loop`, `research`, `image-ux-review`, `mad-sks`, and `seo-geo-optimizer`, printed as the first human-readable line so mock or failed gates cannot be mistaken for success.
+- Upgrade mock feature fixtures to real execute-and-validate fixtures where honestly possible (25 → 19 mock), with documented `reason` fields for the fixtures that must stay mock and `not_available` reclassification for the dead `cli-tmux` entry.
+
+### Fixed
+
+- Fix the SKS menu bar icon not reappearing after quitting and relaunching the Codex desktop app: re-showing the status item now reasserts the Control Center visibility defaults (`NSStatusItem Visible/VisibleCC`) that were previously only seeded at install time.
+- Fix the menu bar "action script broken" warning surviving `doctor --fix`: the installer now re-asserts the action script's executable bit on every run (including the up-to-date fast path), the status/doctor smoke check executes the script directly the same way the Swift app does (catching a missing `+x` that the old interpreter-based check masked), and a lost bit is reported as an explicit `action_script_not_executable` blocker.
+- Close the PPT imagegen-evidence bypass: a missing `imagegen_evidence` section in an image-asset ledger that contains raster assets now fails the gate with `imagegen_evidence_missing` (derivation basis recorded in the gate JSON) instead of silently defaulting to passed.
+- Require SEO/GEO `apply` to be preceded by a mutation plan (`seo_apply_missing_mutation_plan` hard blocker) and to produce a rollback manifest before reporting success; final SEO ok is now re-evaluated against the on-disk gate, failing closed on `mock_fixture` gates via the shared `evaluateLocalGate` helper (also hardening Insane-Search status).
+- Fix `sks goal create` crashing with "Agent count 5 exceeds max N" whenever the loop worker budget was below the default agent count.
+- Write the promised `release-review-native-agent-plan.json` artifact during `$Release-Review` agent runs.
+- Stabilize the unit test suite (deterministic 78/78 across repeated runs) by serializing the node test runner, isolating the doctor menubar test's launchctl probe, and pinning `NPM_CONFIG_PREFIX` in the action-script resolution test.
+
+### Changed
+
+- Document the MAD-DB→MAD-SKS merge in AGENTS.md and the new menu bar options (`quit_with_codex`, `--api-key-stdin`, View Last Log, `codex_sync`) in README.md.
+- Raise the packed-package budget to 2340 KiB and the release-gate count budgets to 220 to accommodate the new production modules and test gates; every release gate now declares either `output_contract` or an explicit `contract_note`.
+
 ## [5.3.0] - 2026-07-03
 
 ### Fixed
 
-- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+- Harden the SKS menu bar lifecycle: Codex App bundle-id detection with explicit "sync disabled" fallback, doctor `--fix` runtime verification (launchd state, action-script smoke, status reinspection) with a runtime probe that defeats stale clean markers, runtime-first `sks` resolution in the action script, and native modal/background menu actions replacing Terminal windows (commit 2aa9e41e; user-facing details listed under 5.2.0).
 
 ## [5.2.0] - 2026-07-03
 

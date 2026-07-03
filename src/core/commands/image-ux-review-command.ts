@@ -31,6 +31,7 @@ import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 import { writeRouteCollaborationArtifacts } from '../agents/route-collaboration-ledger.js';
 import { codexChromeExtensionStatus } from '../codex-app.js';
 import { requireCodexImagegen } from '../imagegen/require-imagegen.js';
+import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 
 const ONE_BY_ONE_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/axX7V8AAAAASUVORK5CYII=';
 const IMAGE_UX_REVIEW_ARTIFACT_PATHS: Record<string, string | Record<string, any>> = {
@@ -352,8 +353,10 @@ async function statusImageUxReview(root: string, args: any[] = []) {
   const gate = await readJson(path.join(dir, 'image-ux-review-gate.json'), null);
   const issueLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT), null);
   const generatedLedger = await readJson(path.join(dir, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT), null);
-  const result = { schema: 'sks.image-ux-review-status.v2', ok: true, mission_id: missionId, gate, issue_ledger: issueLedger, generated_review_ledger: generatedLedger };
+  const gateVerdict = await evaluateGate(root, missionId, 'image-ux-review-gate.json');
+  const result = { schema: 'sks.image-ux-review-status.v2', ok: true, mission_id: missionId, gate, gate_verdict: gateVerdict, issue_ledger: issueLedger, generated_review_ledger: generatedLedger };
   if (flag(args, '--json')) return printJson(result);
+  console.log(gateVerdict.verdict);
   console.log(`Image UX Review mission: ${missionId}`);
   console.log(`Gate: ${gate?.status || (gate?.passed ? 'passed' : gate ? 'present' : 'missing')}`);
   if (gate?.verified_level) console.log(`Verified level: ${gate.verified_level}`);

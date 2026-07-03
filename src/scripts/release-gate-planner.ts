@@ -33,7 +33,7 @@ const releasePresetLeaks = release.gates.filter((gate) => !Array.isArray(gate.pr
 const harnessPresetLeaks = harness.gates.filter((gate) => !Array.isArray(gate.preset) || !gate.preset.includes('harness') || gate.preset.includes('release')).map((gate) => gate.id);
 const npmRunGates = release.gates.concat(harness.gates).filter((gate) => /\bnpm\s+run\b/.test(String(gate.command))).map((gate) => gate.id);
 
-assertGate(release.gates.length <= 200, 'release preset gate budget exceeded', { release_gates: release.gates.length, limit: 200 });
+assertGate(release.gates.length <= 220, 'release preset gate budget exceeded', { release_gates: release.gates.length, limit: 220 });
 assertGate(Object.keys(scripts).length <= PACKAGE_SCRIPT_BUDGET, 'package.json script budget exceeded', { scripts: Object.keys(scripts).length, limit: PACKAGE_SCRIPT_BUDGET });
 assertGate(duplicateAcrossManifests.length === 0, 'gate appears in both release and harness manifests', { duplicateAcrossManifests });
 assertGate(releaseZellij.length === 0, 'zellij gates must live in infra-harness-gates.json, not release-gates.v2.json', { releaseZellij });

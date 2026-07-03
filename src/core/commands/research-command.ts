@@ -23,6 +23,7 @@ import { readImplementationBlueprint, validateImplementationBlueprint } from '..
 import { readExperimentPlan, validateExperimentPlan } from '../research/experiment-plan.js';
 import { readReplicationPack, validateReplicationPack } from '../research/replication-pack.js';
 import { readResearchFinalReview } from '../research/research-final-reviewer.js';
+import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 
 const RESEARCH_DEFAULT_MAX_CYCLES = 12;
 const RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES = 120;
@@ -359,6 +360,8 @@ async function researchStatus(args: any) {
   const { dir, mission } = await loadMission(root, id);
   const state = await readJson(stateFile(root), {});
   const gate = await readJson(path.join(dir, 'research-gate.evaluated.json'), await readJson(path.join(dir, 'research-gate.json'), null));
+  const gateVerdict = await evaluateGate(root, id, 'research-gate.json');
+  console.log(gateVerdict.verdict);
   const ledger = await readJson(path.join(dir, 'novelty-ledger.json'), null);
   const sourceLedger = await readJson(path.join(dir, 'source-ledger.json'), null);
   const agentLedger = await readJson(path.join(dir, 'agent-ledger.json'), null);
@@ -397,6 +400,7 @@ async function researchStatus(args: any) {
     autoresearch_cycle_policy: plan?.autoresearch_cycle_policy || null,
     legacy_alias_policy: plan?.native_agent_plan?.legacy_artifact_alias_policy || null,
     gate,
+    gate_verdict: gateVerdict,
     novelty_entries: ledger?.entries?.length ?? null,
     source_entries: sourceLedger?.sources?.length ?? null,
     source_layers_required: sourceLayerRows.length || gate?.metrics?.source_layers_required || gate?.source_layers_required || null,

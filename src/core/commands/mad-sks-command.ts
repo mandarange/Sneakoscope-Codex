@@ -31,6 +31,7 @@ import {
 } from '../providers/glm/glm-mad-launch.js';
 import { GLM_MAD_MODE } from '../providers/glm/glm-52-settings.js';
 import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
+import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 
 const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
 
@@ -1011,6 +1012,11 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
   if (subcommand === 'doctor' || subcommand === 'status') {
     const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot });
     const before = await snapshotProtectedCore(packageRoot(), 'status');
+    const statusMissionId = await findLatestMission(root);
+    const gateVerdict = statusMissionId
+      ? await evaluateGate(root, statusMissionId, 'mad-sks-gate.json')
+      : await evaluateGate(root, 'no-mission', 'mad-sks-gate.json');
+    if (!json) console.log(gateVerdict.verdict);
     return emit({
       schema: subcommand === 'doctor' ? 'sks.mad-sks-doctor.v1' : 'sks.mad-sks-status.v1',
       ok: true,
@@ -1020,7 +1026,9 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
       protected_core_snapshot: before,
       protected_core_immutable: !protectedCore.engine_source_exception,
       protected_core_write_allowed: protectedCore.engine_source_exception,
-      permission_active: false
+      permission_active: false,
+      mission_id: statusMissionId,
+      gate_verdict: gateVerdict
     }, json);
   }
 

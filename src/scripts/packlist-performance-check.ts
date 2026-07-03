@@ -8,7 +8,13 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
 const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 1024);
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2300 * 1024);
+// Raised from 2300 KiB after the 5.4.0 dollar-command hardening pass added
+// src/core/feature-fixture-executor.ts and expanded several command modules
+// (route-success-helpers.ts, seo-command.ts, ppt-command.ts, qa-loop-command.ts,
+// research-command.ts, image-ux-review-command.ts, mad-sks-command.ts,
+// sks-menubar.ts) with genuine new production logic, pushing the packed size
+// to ~2306 KiB. Kept modest headroom rather than a large jump.
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2340 * 1024);
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`

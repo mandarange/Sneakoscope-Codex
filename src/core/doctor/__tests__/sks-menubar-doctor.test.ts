@@ -36,11 +36,19 @@ test('doctor menubar phase treats undefined ok as failed, even though optional f
 test('doctor dirty planner marks menubar dirty when runtime probe fails despite clean marker', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-doctor-menubar-dirty-'));
   const previousHome = process.env.HOME;
+  const previousLaunchctl = process.env.SKS_MENUBAR_LAUNCHCTL;
   process.env.HOME = path.join(root, 'home');
+  // Point the runtime probe's launchctl lookup at a non-existent path so it never shells
+  // out to the REAL, machine-wide launchd service (a slow, blocking spawnSync call that
+  // has nothing to do with this test's isolated root and can race concurrently-running
+  // test files that also spawn real subprocesses).
+  process.env.SKS_MENUBAR_LAUNCHCTL = path.join(root, 'no-such-launchctl');
   await fs.mkdir(process.env.HOME, { recursive: true });
   t.after(async () => {
     if (previousHome === undefined) delete process.env.HOME;
     else process.env.HOME = previousHome;
+    if (previousLaunchctl === undefined) delete process.env.SKS_MENUBAR_LAUNCHCTL;
+    else process.env.SKS_MENUBAR_LAUNCHCTL = previousLaunchctl;
     await fs.rm(root, { recursive: true, force: true });
   });
 

@@ -14,6 +14,7 @@ import {
   resolveSearchVisibilityMission,
 } from '../search-visibility/index.js';
 import type { SearchVisibilityCliOptions, SearchVisibilityFramework, SearchVisibilityTarget } from '../search-visibility/types.js';
+import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 import { evaluateLocalGate } from './route-success-helpers.js';
 
 export async function seoCommand(args: string[] = []) {
@@ -35,8 +36,11 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
     const blockers = [];
     if (!mission) blockers.push('mission_required_for_apply');
     else {
+      // explicit_apply_only precondition: a mutation plan must already exist on disk,
+      // proving a prior `plan` step was run and reviewed before this apply can mutate anything.
       const planGate = await evaluateLocalGate({ root: mission.root, dir: mission.dir, gateFile: mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json', requiredArtifacts: ['search-visibility/mutation-plan.json'] });
-      blockers.push(...planGate.blockers.filter((blocker) => blocker !== 'gate_not_passed' && blocker !== 'gate_ok_false'));
+      if (planGate.blockers.includes('missing_artifact:search-visibility/mutation-plan.json')) blockers.push('seo_apply_missing_mutation_plan');
+      blockers.push(...planGate.blockers.filter((blocker) => blocker !== 'gate_not_passed' && blocker !== 'gate_ok_false' && blocker !== 'missing_artifact:search-visibility/mutation-plan.json'));
     }
     if (blockers.length) {
       result = { schema: 'sks.search-visibility.apply-command.v1', ok: false, route: mode === 'seo' ? '$SEO-GEO-OPTIMIZER' : '$SEO-GEO-OPTIMIZER', status: 'blocked', blockers };
@@ -77,18 +81,35 @@ async function applySearchVisibilityGateResult(mode: 'seo' | 'geo', action: stri
     : action === 'status'
       ? []
       : ['search-visibility/verification-report.json'];
+  const gateFile = mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json';
   const evaluated = await evaluateLocalGate({
     root: mission.root,
     dir: mission.dir,
-    gateFile: mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json',
+    gateFile,
     requiredArtifacts
   });
   const blockers = [...new Set([...(result.blockers || []), ...evaluated.blockers])];
+  if (action === 'apply') {
+    // explicit_apply_only postcondition: apply must not report success unless both the mutation
+    // plan and the rollback manifest it produces are actually present on disk after execution.
+    if (blockers.includes('missing_artifact:search-visibility/mutation-plan.json') && !blockers.includes('seo_apply_missing_mutation_plan')) blockers.push('seo_apply_missing_mutation_plan');
+    if (blockers.includes('missing_artifact:search-visibility/rollback-manifest.json') && !blockers.includes('seo_apply_missing_rollback_manifest')) blockers.push('seo_apply_missing_rollback_manifest');
+  }
+  // Re-evaluate against the authoritative on-disk gate (catches mock/fixture-only gates,
+  // not just the presence checks `evaluateLocalGate` performs) before reporting final success.
+  const authoritative = await evaluateGate(mission.root, mission.id, gateFile);
+  if (!authoritative.pass) {
+    for (const reason of authoritative.reasons) {
+      if (!blockers.includes(reason)) blockers.push(reason);
+    }
+  }
+  const ok = result.ok === true && evaluated.ok === true && authoritative.pass === true && blockers.length === 0;
   return {
     ...result,
-    ok: result.ok === true && evaluated.ok === true,
-    status: result.ok === true && evaluated.ok === true ? result.status : 'blocked',
+    ok,
+    status: ok ? result.status : 'blocked',
     gate_evaluation: evaluated,
+    gate_verdict: authoritative.verdict,
     blockers
   };
 }
@@ -173,6 +194,7 @@ function isBlocked(value: unknown): boolean {
 
 function printHuman(mode: 'seo' | 'geo', action: string, value: unknown) {
   const rec = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  if (action === 'status' && rec.gate_verdict) console.log(String(rec.gate_verdict));
   console.log(`SKS ${mode.toUpperCase()} ${action}: ${rec.status || (rec.ok === false ? 'blocked' : 'ok')}`);
   if (rec.mission_id) console.log(`Mission: ${rec.mission_id}`);
   if (rec.artifacts_dir) console.log(`Artifacts: ${rec.artifacts_dir}`);

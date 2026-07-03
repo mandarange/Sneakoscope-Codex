@@ -4,7 +4,30 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { actionScriptSource } from '../sks-menubar.js';
+import { actionScriptSource, smokeSksMenuBarAction } from '../sks-menubar.js';
+
+test('smoke check fails with a distinct non-executable signal when the action script lost its +x bit', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-smoke-noexec-'));
+  t.after(async () => {
+    await fs.rm(temp, { recursive: true, force: true });
+  });
+  const script = path.join(temp, 'sks-menubar-action.sh');
+  // Write a script that WOULD succeed if invoked through an interpreter — the exact
+  // condition that used to mask a missing +x bit and let doctor report a healthy
+  // action target while the menu bar showed "action script broken".
+  await fs.writeFile(script, '#!/bin/zsh\necho "sneakoscope 9.9.9"\n', { mode: 0o644 });
+
+  const broken = await smokeSksMenuBarAction(script);
+  assert.equal(broken.ok, false);
+  assert.equal(broken.executable, false);
+  assert.match(String(broken.output), /not executable/);
+
+  await fs.chmod(script, 0o755);
+  const repaired = await smokeSksMenuBarAction(script);
+  assert.equal(repaired.ok, true);
+  assert.equal(repaired.executable, true);
+  assert.equal(repaired.versionDetected, true);
+});
 
 test('SKS menu bar action script resolves sks dynamically from the login shell PATH first', async (t) => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-'));
@@ -34,13 +57,22 @@ test('SKS menu bar action script exits 127 when every candidate is unavailable',
     await fs.rm(temp, { recursive: true, force: true });
   });
   const home = path.join(temp, 'home');
+  const npmPrefix = path.join(temp, 'npm-prefix');
   await fs.mkdir(home, { recursive: true });
+  await fs.mkdir(path.join(npmPrefix, 'lib', 'node_modules'), { recursive: true });
   const script = path.join(temp, 'sks-menubar-action.sh');
   await fs.writeFile(script, actionScriptSource({ nodeBin: '/missing/node', sksEntry: '/missing/sks.js' }), { mode: 0o755 });
 
   const result = await run('/bin/zsh', [script, 'version'], {
     HOME: home,
-    PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+    PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    // The generated script shells out to `npm root -g` via a login shell, whose PATH
+    // (rebuilt by /etc/zprofile's path_helper) can legitimately resolve a REAL npm binary
+    // on the developer's machine regardless of this test's own PATH restriction. Pinning
+    // NPM_CONFIG_PREFIX ensures `npm root -g` reports this isolated, empty prefix — which
+    // provably has no `sneakoscope` package installed — instead of a real global root that
+    // might, making the "nothing found" assertion deterministic on any real dev machine.
+    NPM_CONFIG_PREFIX: npmPrefix
   });
   assert.equal(result.code, 127);
   assert.match(result.stderr, /SKS command not found/);

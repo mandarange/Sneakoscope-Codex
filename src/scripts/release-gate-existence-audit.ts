@@ -45,7 +45,7 @@ const releaseCheckTarget = releaseCheck.includes('release:check:affected')
   ? String(scripts['release:check:affected'] || '')
   : releaseCheck;
 assertGate(releaseCheckTarget.includes('release-gate-dag-runner') && /--preset\s+(?:release|affected)/.test(releaseCheckTarget), 'release:check must use the v2 DAG release/affected preset', { release_check: scripts['release:check'], resolved_release_check: releaseCheckTarget });
-assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { gate_count: releaseGates.length });
+assertGate(releaseGates.length > 0 && releaseGates.length <= 220, 'release v2 manifest must include 1..220 release gates', { gate_count: releaseGates.length });
 const PACKAGE_SCRIPT_BUDGET = 150;
 assertGate(Object.keys(scripts).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(scripts).length, limit: PACKAGE_SCRIPT_BUDGET });
 

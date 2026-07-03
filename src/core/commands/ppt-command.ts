@@ -347,6 +347,45 @@ function mockPptFixtureGate(gate: any = {}) {
   };
 }
 
+// The image-asset-ledger's `assets` array (see buildPptImageAssetLedger in ../ppt.ts) is the
+// authoritative list of raster/bitmap image assets planned or generated for the deck; every
+// entry in it is a raster PNG produced (or pending) via Codex App $imagegen/gpt-image-2. When the
+// ledger omits `imagegen_evidence` outright, we must NOT assume the imagegen-required policy was
+// satisfied. Instead derive a safe default from that asset list: any raster asset present forces
+// the derived evidence to fail-closed (required + not passed) rather than silently pass.
+function deriveImagegenEvidenceDefault(imageAssetLedger: any) {
+  if (imageAssetLedger?.imagegen_evidence) return imageAssetLedger.imagegen_evidence;
+  const rasterAssets = Array.isArray(imageAssetLedger?.assets) ? imageAssetLedger.assets : [];
+  const rasterAssetCount = rasterAssets.length;
+  if (rasterAssetCount === 0) {
+    return {
+      schema: 'sks.ppt-imagegen-evidence.v1',
+      required: false,
+      passed: true,
+      blockers: [],
+      derived: true,
+      derivation_basis: { raster_asset_count: 0, source: 'derived_default_no_raster_assets' }
+    };
+  }
+  return {
+    schema: 'sks.ppt-imagegen-evidence.v1',
+    required: true,
+    passed: false,
+    required_count: imageAssetLedger?.required_count || rasterAssetCount,
+    generated_count: imageAssetLedger?.generated_count || 0,
+    generated_image_evidence: false,
+    assets: [],
+    blockers: ['imagegen_evidence_missing'],
+    derived: true,
+    derivation_basis: {
+      raster_asset_count: rasterAssetCount,
+      source: 'derived_default_raster_assets_present',
+      note: `imagegen_evidence section was absent from the image-asset-ledger while ${rasterAssetCount} raster asset(s) were present; failing closed instead of silently passing.`
+    },
+    passed_note: 'imagegen_evidence_missing: ledger omitted imagegen_evidence despite raster assets requiring Codex App imagegen verification'
+  };
+}
+
 export async function evaluatePptGateArtifacts(dir: string, baseGate: any = {}) {
   const factLedger = await readJson(path.join(dir, PPT_FACT_LEDGER_ARTIFACT), null);
   const imageAssetLedger = await readJson(path.join(dir, PPT_IMAGE_ASSET_LEDGER_ARTIFACT), null);
@@ -379,7 +418,7 @@ export async function evaluatePptGateArtifacts(dir: string, baseGate: any = {}) 
   const renderReportPassed = renderReport?.passed === true;
   const factLedgerPassed = factLedger?.passed === true && Number(factLedger.unsupported_critical_claims_count || 0) === 0;
   const imageAssetLedgerPassed = imageAssetLedger?.passed === true;
-  const imagegenEvidence = imageAssetLedger?.imagegen_evidence || { schema: 'sks.ppt-imagegen-evidence.v1', required: false, passed: true, blockers: [] };
+  const imagegenEvidence = deriveImagegenEvidenceDefault(imageAssetLedger);
   const imagegenEvidencePassed = imagegenEvidence?.required === true ? imagegenEvidence?.passed === true : true;
   const reviewLedgerPassed = reviewLedger?.passed === true;
   const iterationReportPassed = iterationReport?.passed === true;

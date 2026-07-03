@@ -1,5 +1,7 @@
 import { PACKAGE_VERSION } from './fsx.js';
 
+export { runFeatureFixture } from './feature-fixture-executor.js';
+
 export const FEATURE_FIXTURE_SCHEMA = 'sks.feature-fixtures.v1';
 export const FEATURE_QUALITY_LEVELS = Object.freeze([
   'runtime_verified',
@@ -81,13 +83,21 @@ const FIXTURES = Object.freeze({
   'cli-deps': fixture('execute', 'sks deps check --json', [], 'pass'),
   'cli-auth': fixture('execute', 'sks auth status --json', [], 'pass'),
   'cli-codex-native': fixture('execute', 'sks codex-native status --json', [], 'pass'),
-  'cli-zellij': fixture('mock', 'npm run zellij:capability --silent', [], 'pass'),
-  'cli-tmux': fixture('mock', 'removed runtime migration notice: sks tmux --json', [], 'pass'),
+  'cli-zellij': fixture('execute', 'npm run zellij:capability --silent', [], 'pass'),
+  'cli-tmux': fixture('not_available', null, [], 'not_required', {
+    quality: 'missing',
+    reason: 'tmux runtime was removed from SKS (see tmuxCommand in basic-cli.ts and `sks tmux` deprecation notice); the prior fixture command string was not a real invocable command ("removed runtime migration notice: sks tmux --json"), so it is reclassified as not_available instead of being mislabeled mock.',
+    root_mode: 'source_checkout_required'
+  }),
   'cli-mad': fixture('execute', 'sks mad --help', [], 'pass'),
   'cli-mad-sks': fixture('static', 'sks mad-sks status --json', [], 'pass'),
   'cli-auto-review': fixture('execute', 'sks auto-review status --json', [], 'pass'),
-  'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass'),
-  'cli-commit-and-push': fixture('mock', 'sks commit-and-push --dry-run', [], 'pass'),
+  'cli-commit': fixture('mock', 'sks commit --dry-run', [], 'pass', {
+    reason: 'simpleGitCommitCommand() in git-simple.ts performs a real `git add -A && git commit` against whatever repo cwd it runs in; it has no --dry-run implementation (argValue() only reads --message/-m/--json, so --dry-run is silently ignored) and would mutate git history if actually spawned by an automated fixture runner. Left as documented mock rather than execute a real commit or invent an unsupported --dry-run mode.'
+  }),
+  'cli-commit-and-push': fixture('mock', 'sks commit-and-push --dry-run', [], 'pass', {
+    reason: 'Same underlying simpleGitCommitCommand() as cli-commit plus a real `git push`; genuinely destructive (commits and pushes to the remote) with no real --dry-run support. Left as documented mock rather than execute a real commit+push or invent an unsupported --dry-run mode.'
+  }),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
   'cli-insane-search': fixture('execute', 'sks insane-search doctor --json', [], 'pass'),
   'cli-ultra-search': fixture('execute', 'sks ultra-search doctor --json', [], 'pass'),
@@ -126,43 +136,77 @@ const FIXTURES = Object.freeze({
   'route-swarm': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['completion-proof.json', 'naruto-gate.json'], 'pass'),
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'route-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'route-shadowclone': fixture('mock', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass'),
-  'route-kagebunshin': fixture('mock', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass'),
+  'route-shadowclone': fixture('mock', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass', {
+    reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
+  }),
+  'route-kagebunshin': fixture('mock', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass', {
+    reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
+  }),
   'route-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['completion-proof.json', 'qa-gate.json'], 'pass'),
   'route-research': fixture('execute_and_validate_artifacts', 'sks research run latest --mock --json', ['completion-proof.json', 'research-gate.json'], 'pass'),
   'route-ppt': fixture('execute_and_validate_artifacts', 'sks ppt fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'ppt-imagegen-review-gate.json', 'ppt-slide-issue-ledger.json'], 'pass'),
   'route-image-ux-review': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'image-ux-generated-review-ledger.json'], 'pass'),
   'route-computer-use': fixture('execute_and_validate_artifacts', 'sks computer-use import-fixture --mock --json', ['computer-use-evidence-ledger.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'completion-proof.json'], 'pass'),
-  'route-cu': fixture('mock', '$CU mock evidence ledger', ['computer-use-evidence-ledger.json', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass'),
+  'route-cu': fixture('mock', '$CU mock evidence ledger', ['computer-use-evidence-ledger.json', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass', {
+    reason: 'Underlying command (`sks cu import-fixture --mock`, same handler as route-computer-use) intentionally exits non-zero for mock Computer Use evidence imports (import-fixture in computer-use-command.ts always sets ok:false/process.exitCode=1, by honest design: mock evidence can never claim a real Computer Use verification). It does write the declared artifacts, but an execute_and_validate_artifacts fixture would need to special-case exit-code-1-as-expected for this one command, which would weaken the generic exit-code pass/fail contract; left as documented mock rather than encode that special case.'
+  }),
   'route-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
-  'route-answer': fixture('mock', '$Answer answer-only route policy', [], 'pass'),
-  'route-goal': fixture('mock', '$Goal bridge route', ['goal-workflow.json', 'completion-proof.json'], 'pass'),
+  'route-answer': fixture('mock', '$Answer answer-only route policy', [], 'pass', {
+    reason: 'Policy-only route (answer-only conversational mode with no writes); nothing executable to run beyond static contract text.'
+  }),
+  'route-goal': fixture('mock', '$Goal bridge route', ['goal-workflow.json', 'completion-proof.json'], 'pass', {
+    reason: 'sks goal create "<prompt>" --json never calls maybeFinalizeRoute, so it does not write completion-proof.json even on success; live-testing it also surfaced a real defect (loop-worker-runtime.ts omitted an explicit `agents` value, so buildAgentRoster() fell back to DEFAULT_AGENT_COUNT=5 while maxAgentCount was capped to the loop\'s smaller worker budget, throwing "Agent count 5 exceeds max N" for any ordinary fixture prompt) which has been fixed in this change, but goal-workflow.json/completion-proof.json parity still requires either wiring maybeFinalizeRoute into goalCreate or relaxing this fixture\'s expected_artifacts, both out of scope here; left as documented mock.'
+  }),
   'route-insane-search': fixture('execute', 'sks run "$Insane-Search source intelligence fixture" --execute --json', [], 'pass'),
   'route-insanesearch': fixture('execute', 'sks run "$InsaneSearch source intelligence fixture" --execute --json', [], 'pass'),
   'route-ultra-search': fixture('execute', 'sks run "$Ultra-Search source intelligence fixture" --execute --json', [], 'pass'),
   'route-ultrasearch': fixture('execute', 'sks run "$UltraSearch source intelligence fixture" --execute --json', [], 'pass'),
   'route-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'search-visibility/verification-report.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
-  'route-autoresearch': fixture('mock', '$AutoResearch fixture route', ['research-gate.json', 'completion-proof.json'], 'pass'),
-  'route-mad-sks': fixture('mock', '$MAD-SKS permission gate + sql_plane route', [{ path: 'mad-sks-gate.json', schema: 'sks.mad-sks-gate.v1' }, 'completion-proof.json'], 'pass'),
-  'route-from-chat-img': fixture('mock', '$From-Chat-IMG visual work order route', ['from-chat-img-work-order.md', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass'),
-  'route-ux-review': fixture('mock', '$UX-Review image UX alias route', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
+  'route-autoresearch': fixture('mock', '$AutoResearch fixture route', ['research-gate.json', 'completion-proof.json'], 'pass', {
+    reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route (`sks run "$AutoResearch ..."`) instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
+  }),
+  'route-mad-sks': fixture('mock', '$MAD-SKS permission gate + sql_plane route', [{ path: 'mad-sks-gate.json', schema: 'sks.mad-sks-gate.v1' }, 'completion-proof.json'], 'pass', {
+    reason: 'mad-sks-gate.json is written by materializeAutoSealedMadSks() inside prepareClarificationGate() in pipeline-internals/runtime-core.ts, which only runs via the real Codex App route dispatch pipeline (prepareRoute), not via `sks run "<prompt>" --json` (that CLI command only classifies the route in lightweight prepare mode and never calls prepareRoute); `sks run ... --execute` instead maps $MAD-SKS to team execution, a different path entirely. No safe single sks CLI invocation reaches materializeAutoSealedMadSks; verified live in a hermetic run where mad-sks-gate.json was not produced. Left as documented mock.'
+  }),
+  'route-from-chat-img': fixture('mock', '$From-Chat-IMG visual work order route', ['from-chat-img-work-order.md', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass', {
+    reason: 'hasFromChatImgSignal() routes $From-Chat-IMG to the full Naruto multi-agent work-order pipeline (routes.ts routeById(\'Naruto\')), which requires real chat-screenshot attachments to produce from-chat-img-work-order.md; there is no lightweight deterministic `--mock` single-command invocation that produces this route\'s specific work-order/coverage artifacts the way route-naruto\'s generic fixture prompt does. Left as documented mock.'
+  }),
+  'route-ux-review': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'image-ux-generated-review-ledger.json'], 'pass'),
   'route-db': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['completion-proof.json', 'db-operation-report.json'], 'pass'),
-  'route-mad-db': fixture('mock', '$MAD-DB deprecated alias to $MAD-SKS sql-plane contract', ['mad-sks-gate.json', 'completion-proof.json'], 'pass'),
+  'route-mad-db': fixture('mock', '$MAD-DB deprecated alias to $MAD-SKS sql-plane contract', ['mad-sks-gate.json', 'completion-proof.json'], 'pass', {
+    reason: 'Deprecated alias of $MAD-SKS; shares the same gap as route-mad-sks (mad-sks-gate.json is only written via the real Codex App route dispatch pipeline, not any safe single sks CLI invocation). Left as documented mock alongside route-mad-sks.'
+  }),
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'pass'),
-  'route-sks': fixture('mock', '$SKS control-surface route', ['completion-proof.json'], 'pass'),
+  'route-sks': fixture('mock', '$SKS control-surface route', ['completion-proof.json'], 'pass', {
+    reason: 'Pure control-surface alias route with no independent behavior beyond the underlying CLI command fixtures it dispatches to.'
+  }),
   'route-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
-  'route-fast-on': fixture('mock', '$Fast-On covered by hermetic fast-mode blackbox toggle test', [], 'pass'),
-  'route-fast-off': fixture('mock', '$Fast-Off covered by hermetic fast-mode blackbox toggle test', [], 'pass'),
+  'route-fast-on': fixture('mock', '$Fast-On covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
+    reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic fast-mode blackbox toggle test suite, not a standalone CLI invocation.'
+  }),
+  'route-fast-off': fixture('mock', '$Fast-Off covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
+    reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic fast-mode blackbox toggle test suite, not a standalone CLI invocation.'
+  }),
   'route-local-model': fixture('execute', 'sks with-local-llm status --json', [], 'pass'),
-  'route-with-local-llm-on': fixture('mock', '$with-local-llm-on covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass'),
-  'route-with-local-llm-off': fixture('mock', '$with-local-llm-off covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass'),
-  'route-help': fixture('mock', '$Help lightweight route', [], 'pass'),
-  'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass'),
-  'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass'),
-  'route-release-review': fixture('mock', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
-  'route-native-agent-intake': fixture('mock', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 5 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
-  'proof-agent-evidence': fixture('mock', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'agents/agent-proof-evidence.json'], 'pass')
+  'route-with-local-llm-on': fixture('mock', '$with-local-llm-on covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
+    reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic local-model dollar-command blackbox toggle test suite, not a standalone CLI invocation.'
+  }),
+  'route-with-local-llm-off': fixture('mock', '$with-local-llm-off covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
+    reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic local-model dollar-command blackbox toggle test suite, not a standalone CLI invocation.'
+  }),
+  'route-help': fixture('mock', '$Help lightweight route', [], 'pass', {
+    reason: 'Pure alias of the cli-help command; no independent behavior to verify beyond cli-help\'s own execute fixture.'
+  }),
+  'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass', {
+    reason: 'Dollar-command alias of cli-commit; dispatches to the same simpleGitCommitCommand() that performs a real `git add -A && git commit` with no working --dry-run mode, so it is not safe to execute from an automated fixture runner. Left as documented mock alongside cli-commit.'
+  }),
+  'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass', {
+    reason: 'Dollar-command alias of cli-commit-and-push; dispatches to the same simpleGitCommitCommand() that performs a real commit and `git push` with no working --dry-run mode. Left as documented mock alongside cli-commit-and-push.'
+  }),
+  'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
+  'route-native-agent-intake': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 5 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass'),
+  'proof-agent-evidence': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'agents/agent-proof-evidence.json'], 'pass')
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([

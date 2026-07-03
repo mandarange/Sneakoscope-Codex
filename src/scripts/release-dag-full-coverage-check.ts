@@ -65,7 +65,7 @@ const schemaComplete = [...releaseManifest.gates, ...harnessManifest.gates].ever
 const report = {
   schema: 'sks.release-dag-full-coverage-check.v2',
   ok: schemaComplete
-    && releasePreset.length <= 200
+    && releasePreset.length <= 220
     && missingRequiredReleasePreset.length === 0
     && missingRequiredHarnessPreset.length === 0
     && duplicateAcrossManifests.length === 0

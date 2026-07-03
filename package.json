@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "5.3.0",
+  "version": "5.4.0",
   "description": "Sneakoscope Codex: fast proof-first Codex trust layer with image-based Voxel TriWiki.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -63,6 +63,8 @@
     "build": "npm run build:clean",
     "build:clean": "node -e \"const fs=require('fs'); fs.rmSync('dist',{recursive:true,force:true}); fs.rmSync('.sneakoscope/cache/tsbuildinfo',{recursive:true,force:true})\" && tsc -p tsconfig.json && node ./dist/scripts/ensure-bin-executable.js && node ./dist/scripts/build-dist.js",
     "build:incremental": "tsc -p tsconfig.json && node ./dist/scripts/ensure-bin-executable.js && node ./dist/scripts/build-dist.js",
+    "test": "node --test --test-concurrency=1 dist/core/proof/__tests__/*.test.js dist/core/stop-gate/__tests__/*.test.js dist/core/commands/__tests__/*.test.js dist/core/dfix/__tests__/*.test.js dist/core/ppt/__tests__/*.test.js dist/core/mad-sks/__tests__/*.test.js dist/core/codex-app/__tests__/*.test.js dist/core/doctor/__tests__/*.test.js dist/cli/__tests__/*.test.js",
+    "selftest:real": "node ./dist/bin/sks.js selftest --real --json",
     "check": "npm run release:check:affected",
     "dev:sks": "npm run build:incremental --silent && node ./dist/bin/sks.js",
     "prepublishOnly": "npm run release:check:affected",

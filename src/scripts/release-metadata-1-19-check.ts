@@ -375,7 +375,7 @@ assertGate(
 );
 assertGate(releaseManifest?.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest?.schema || null });
 assertGate(harnessManifest?.schema === 'sks.infra-harness-gates.v1', 'infra harness manifest schema mismatch', { schema: harnessManifest?.schema || null });
-assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { release_gates: releaseGates.length });
+assertGate(releaseGates.length > 0 && releaseGates.length <= 220, 'release v2 manifest must include 1..220 release gates', { release_gates: releaseGates.length });
 assertGate(harnessGates.length > 0, 'infra harness manifest must include harness gates', { harness_gates: harnessGates.length });
 const PACKAGE_SCRIPT_BUDGET = 100;
 assertGate(Object.keys(pkg.scripts || {}).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length, limit: PACKAGE_SCRIPT_BUDGET });

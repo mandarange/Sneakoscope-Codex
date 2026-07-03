@@ -121,6 +121,7 @@ export interface SksMenuBarStatusResult {
     smoke_code: number | null;
     smoke_output: string | null;
     version_detected: boolean;
+    executable: boolean;
     ok: boolean;
   };
   codex_sync: {
@@ -364,10 +365,22 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   } else {
     if (!target.used_previous_script && await readText(paths.action_script_path, '') !== actionScript) {
       await writeTextAtomic(paths.action_script_path, actionScript);
-      await fs.chmod(paths.action_script_path, 0o755);
       actions.push(`wrote ${paths.action_script_path}`);
-    } else if (!target.used_previous_script) {
-      await fs.chmod(paths.action_script_path, 0o755).catch(() => undefined);
+    }
+  }
+
+  // The Swift app executes the action script DIRECTLY (Process.executableURL points at the
+  // script itself), so a lost executable bit breaks every menu action even when the script
+  // content is current. Re-assert the bit on every install run — including the up-to-date
+  // fast path, which previously never touched permissions and therefore could never repair
+  // a 0644 script — and surface chmod failures instead of swallowing them.
+  if (await exists(paths.action_script_path)) {
+    const previouslyExecutable = await fs.access(paths.action_script_path, fs.constants.X_OK).then(() => true).catch(() => false);
+    const chmodError = await fs.chmod(paths.action_script_path, 0o755).then(() => null).catch((err: any) => (err?.message ? String(err.message) : String(err)));
+    if (chmodError) {
+      warnings.push(`action_script_chmod_failed:${chmodError}`);
+    } else if (!previouslyExecutable) {
+      actions.push('restored action script executable bit');
     }
   }
 
@@ -572,9 +585,23 @@ async function resolveCodexBundleId(input: { home: string; env: NodeJS.ProcessEn
   return null;
 }
 
-async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{ ok: boolean; code: number | null; output: string | null; versionDetected: boolean }> {
-  if (!(await exists(actionScriptPath))) return { ok: false, code: null, output: null, versionDetected: false };
-  const result = await runProcess('/bin/zsh', [actionScriptPath, 'version'], {
+export async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{ ok: boolean; code: number | null; output: string | null; versionDetected: boolean; executable: boolean }> {
+  if (!(await exists(actionScriptPath))) return { ok: false, code: null, output: null, versionDetected: false, executable: false };
+  // The Swift app runs the script directly (which requires the executable bit), so the smoke
+  // check must invoke it the same way. Running it via `/bin/zsh <script>` — as this check used
+  // to — succeeds even when +x is missing, which let doctor/status report a healthy action
+  // target while the menu bar itself was showing "action script broken".
+  const executable = await fs.access(actionScriptPath, fs.constants.X_OK).then(() => true).catch(() => false);
+  if (!executable) {
+    return {
+      ok: false,
+      code: null,
+      output: 'action script is not executable (missing +x); the menu bar app cannot run it',
+      versionDetected: false,
+      executable: false
+    };
+  }
+  const result = await runProcess(actionScriptPath, ['version'], {
     timeoutMs: 5_000,
     maxOutputBytes: 16 * 1024
   }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
@@ -584,7 +611,8 @@ async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{ ok: bo
     ok: result.code === 0 && versionDetected,
     code: result.code,
     output: output ? output.slice(0, 700) : null,
-    versionDetected
+    versionDetected,
+    executable: true
   };
 }
 
@@ -625,6 +653,7 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
   const warnings: string[] = [];
   if (!installed) blockers.push('menubar_app_missing');
   if (installed && launchd.checked && !launchd.ok) blockers.push('launchd_not_running');
+  if (installed && !actionSmoke.executable) blockers.push('action_script_not_executable');
   if (installed && !actionSmoke.ok) blockers.push('action_script_smoke_failed');
   if (installed && signature.checked && !signature.ok) warnings.push('codesign_identifier_unexpected');
   if (!codexSync.ok) warnings.push('codex_sync_disabled');
@@ -645,6 +674,7 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
       smoke_code: actionSmoke.code,
       smoke_output: actionSmoke.output,
       version_detected: actionSmoke.versionDetected,
+      executable: actionSmoke.executable,
       ok: actionSmoke.ok
     },
     codex_sync: codexSync,
@@ -910,6 +940,9 @@ export function swiftMenuSource(input: { actionScriptPath: string; buildStampPat
 
     func setIconVisible(_ visible: Bool) {
         statusItem.isVisible = visible
+        if visible {
+            reassertControlCenterVisibility()
+        }
     }
 
     func isCodexRunning() -> Bool {
@@ -924,6 +957,9 @@ export function swiftMenuSource(input: { actionScriptPath: string; buildStampPat
 
     func setIconVisible(_ visible: Bool) {
         statusItem.isVisible = visible
+        if visible {
+            reassertControlCenterVisibility()
+        }
     }
 
     func isCodexRunning() -> Bool {
@@ -939,6 +975,32 @@ let menubarConfigPath = ${swiftString(input.configPath)}
 let lastActionLogPath = ${swiftString(input.lastActionLogPath)}
 let codexBundleId: String? = ${input.codexBundleId ? swiftString(input.codexBundleId) : 'nil'}
 let packageVersion = ${swiftString(input.packageVersion)}
+let menuBarLabel = ${swiftString(SKS_MENUBAR_LABEL)}
+let controlCenterDomain = ${swiftString(CONTROL_CENTER_DOMAIN)}
+
+/// macOS persists status-item visibility hints per-label in Control Center's
+/// defaults domain (see installSksMenuBar's seedMenuBarPreferredPosition).
+/// Toggling NSStatusItem.isVisible back to true inside a resident process is
+/// not always sufficient to make Control Center re-render a previously
+/// hidden item, so re-show must reassert the same Control Center defaults
+/// the installer seeds, or the icon can stay invisible after a Codex
+/// quit/relaunch cycle even though isVisible is technically true again.
+func reassertControlCenterVisibility() {
+    let defaultsBin = "/usr/bin/defaults"
+    guard FileManager.default.isExecutableFile(atPath: defaultsBin) else { return }
+    let writes: [[String]] = [
+        ["write", controlCenterDomain, "NSStatusItem Visible \\(menuBarLabel)", "-bool", "true"],
+        ["write", controlCenterDomain, "NSStatusItem VisibleCC \\(menuBarLabel)", "-bool", "true"]
+    ]
+    for args in writes {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: defaultsBin)
+        process.arguments = args
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+    }
+}
 
 func shellQuote(_ value: String) -> String {
     return "'" + value.replacingOccurrences(of: "'", with: "'\\\\''") + "'"

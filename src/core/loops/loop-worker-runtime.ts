@@ -120,6 +120,12 @@ async function runLoopWorkerNative(input: LoopWorkerRunInput): Promise<LoopWorke
     backend: 'codex-sdk',
     readonly: input.phase === 'checker',
     workspaceWrite: input.phase === 'maker',
+    // Bug fix: agents must be explicitly bounded to workerCount here. Without it,
+    // buildAgentRoster()'s normalizeAgentCount() falls back to DEFAULT_AGENT_COUNT (5)
+    // while maxAgentCount below is capped to workerCount, so any loop node with a
+    // worker_count/max_subagents budget under 5 (the common case) threw
+    // "Agent count 5 exceeds max N" instead of clamping to the smaller budget.
+    agents: Math.max(1, workerCount),
     desiredWorkItemCount: workGraph.total_work_items,
     minimumWorkItems: 1,
     maxAgentCount: Math.max(1, workerCount),

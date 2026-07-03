@@ -42,6 +42,7 @@ export async function evaluateLocalGate(input: {
   if (gate) {
     if (!(gate.passed === true || gate.ok === true || gate.status === 'pass' || gate.status === 'passed')) blockers.push('gate_not_passed');
     if (gate.ok === false) blockers.push('gate_ok_false');
+    if (gate.execution_class === 'mock_fixture') blockers.push('gate_execution_class_mock_fixture');
     if (Array.isArray(gate.blockers) && gate.blockers.length) blockers.push(...gate.blockers.map(String));
     if (Array.isArray(gate.missing_fields) && gate.missing_fields.length) blockers.push(...gate.missing_fields.map((field: any) => `missing_field:${field}`));
     for (const section of input.requiredSections || []) {
