@@ -1,6 +1,20 @@
-# Codex 0.139 Compatibility
+# Codex Compatibility Baselines
+
+This file is a release-evidence ledger for historical Codex compatibility
+baselines. It intentionally keeps the `docs/codex-0.139-compat.md` path because
+the SKS release metadata gate treats that path as a versioned release document.
+
+It is not the current Codex product manual, and it does not claim that Codex
+0.139 is the current, recommended, or bundled Codex runtime. Current Codex
+behavior should be checked against the official Codex Manual and the installed
+Codex CLI/App runtime. The 0.139 notes below remain only as legacy fallback
+baseline evidence for older SKS gates and release-history continuity.
+
+## Current Release Note
 
 SKS 5.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening the macOS SKS menu bar companion with Codex lifecycle sync, native password/choice prompts, non-Terminal action execution, runtime smoke checks, and doctor post-repair verification.
+
+## Historical Release Ledger
 
 SKS 5.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening dollar-command proof truth, mock fixture labeling, and release gate output contracts for the current package metadata.
 
@@ -70,7 +84,7 @@ SKS 3.1.6 keeps the Codex 0.139 compatibility baseline while productionizing the
 
 SKS 3.1.4 is Codex 0.139-aware: it bundles @openai/codex-sdk 0.138.0 at this release boundary, and it detects Codex 0.139 features from the external Codex CLI when that CLI is installed and supports them. The minimum supported baseline stays `rust-v0.136.0`; 0.139 features are detected, recorded, and used opportunistically rather than assumed for every environment. The release gates include hermetic fixtures plus actual real-probe artifacts; `codex:0139-real-probes:require-real` fails when high-value 0.139 probes are skipped or failed. See [Codex 0.139 Real Probes](codex-0.139-real-probes.md).
 
-## Capability detection
+## Legacy 0.139 Capability Detection
 
 `detectCodex0139Capability` / `writeCodex0139CapabilityArtifacts` (gate: `codex:0139-capability`) write `.sneakoscope/codex-0139-capability.json` plus a mission-scoped copy on `sks --mad` and `sks naruto run` launches, mirroring the 0.138 capability artifacts. Flags:
 
@@ -86,12 +100,12 @@ SKS 3.1.4 is Codex 0.139-aware: it bundles @openai/codex-sdk 0.138.0 at this rel
 
 Probe mode (`SKS_CODEX_0139_PROBE=1`) additionally exercises `codex plugin marketplace list --json` (checking the new `source` field shape) and the `-P` alias in `codex --help`. `SKS_CODEX_0139_FAKE=1` with `SKS_CODEX_VERSION_FAKE` drives hermetic gate fixtures. SKS is Codex-0.139-aware capability detection, not a claim that every installed environment bundles or always supports Codex 0.139 features.
 
-## Runtime adaptations
+## Legacy Runtime Adaptations
 
 - **`interrupt_agent` event classification.** The cockpit subagent-stage classifier accepts both `close_agent` (≤0.138) and `interrupt_agent` (0.139+) so multi-agent v2 lifecycle events keep mapping to `result` stages on newer CLIs.
 - **Marketplace `source` tolerance.** The plugin marketplace JSON parser treats the new per-marketplace `source` field as evidence of the 0.139 surface and tolerates array, `marketplaces`, and `items` wrapper shapes.
 - **Richer schemas, fewer workarounds.** SKS-generated worker output schemas already avoid deep nesting for compaction safety; on 0.139 the preserved `oneOf`/`allOf` support is recorded so future schema tightening can be gated on `supports_rich_tool_schemas` instead of version sniffing.
 
-## Non-goals
+## Legacy Non-Goals
 
 Sandbox proxy-network enforcement (#27035), approval-decision preservation (#24981), TUI fixes, and symbol-archive release chores need no SKS-side changes; they are upstream behavior SKS simply benefits from. The Codex baseline policy (`CODEX_REQUIRED_BASELINE_TAG = rust-v0.136.0`) is unchanged.
