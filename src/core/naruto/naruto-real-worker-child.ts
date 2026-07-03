@@ -134,7 +134,7 @@ function startDeadmanHeartbeat(input: { intake: any; startedAt: number; maxRunti
         schema: 'sks.naruto-actual-worker-heartbeat.v1',
         ts: nowIso(),
         item_id: input.intake.item.id,
-        status: 'blocked',
+        status: 'timed_out',
         elapsed_ms: elapsedMs,
         progress: null
       }, 2 * 1024 * 1024).catch(() => undefined)

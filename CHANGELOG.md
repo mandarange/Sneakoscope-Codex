@@ -6,6 +6,21 @@
 
 
 
+
+## [5.2.0] - 2026-07-03
+
+### Added
+
+- Add Codex App bundle-id based SKS menu bar lifecycle sync so the status item appears when Codex runs, hides when Codex exits, and reports `codex_sync` in `sks menubar status`.
+- Add native macOS menu prompts for codex-lb/OpenRouter secret entry and a `View Last Log` menu action backed by a private `~/.codex/sks-menubar/logs/last-action.log`.
+
+### Fixed
+
+- Resolve the menu bar `sks` command at action runtime before falling back to the install-time entry, preventing project-local path lock-in after `doctor --fix`.
+- Make `sks doctor --fix` verify the menu bar runtime with launchd state, action-script smoke execution, and status reinspection instead of accepting self-reported install success.
+- Prevent doctor dirty-plan clean skips from hiding menu bar runtime failures by adding a menubar runtime probe.
+- Replace default menu Terminal windows with background execution, notifications, secure stdin secret delivery, and redacted 0600 action logs.
+
 ## [5.1.2] - 2026-07-02
 
 ### Changed

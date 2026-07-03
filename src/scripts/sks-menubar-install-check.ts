@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PACKAGE_VERSION } from '../core/fsx.js';
+import { PACKAGE_VERSION, runProcess, which } from '../core/fsx.js';
 import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-check-'));
@@ -47,23 +47,31 @@ const actionScript = result.action_script_path ? await fs.readFile(result.action
 const launchAgentSource = result.launch_agent_path ? await fs.readFile(result.launch_agent_path, 'utf8').catch(() => '') : '';
 const infoPlistPath = result.app_path ? path.join(result.app_path, 'Contents', 'Info.plist') : null;
 const infoPlist = infoPlistPath ? await fs.readFile(infoPlistPath, 'utf8').catch(() => '') : '';
+const swiftParse = await swiftParseSmoke(generatedSourcePath);
 const commandRegistry = await fs.readFile(path.join(process.cwd(), 'src', 'cli', 'command-registry.ts'), 'utf8');
 const installHelpers = await fs.readFile(path.join(process.cwd(), 'src', 'cli', 'install-helpers.ts'), 'utf8');
+const cltMissing = process.platform === 'darwin' && result.blockers.includes('xcode_clt_missing');
 
 const hasVisibleStatusSource = generatedSource.includes('NSStatusItem.variableLength')
   && generatedSource.includes('configureStatusButton(button, title: state.title)')
   && generatedSource.includes('SKS ⚠')
   && generatedSource.includes('SKS ↑')
+  && generatedSource.includes('SKS ⋯')
   && generatedSource.includes('Timer.scheduledTimer(withTimeInterval: 30.0');
 const hasBackgroundReadonlyActions = generatedSource.includes('runSksBackground(["codex-lb", "fast-check"]')
   && generatedSource.includes('runSksBackground(["update", "check"]')
   && generatedSource.includes('display notification')
-  && !generatedSource.includes('@objc func fastCheck() {\n        runSksInTerminal');
-const hasTerminalFailureAlert = generatedSource.includes('output.contains("-1743")')
-  && generatedSource.includes('Privacy & Security > Automation');
-const hasTerminalExit = generatedSource.includes('; exit');
+  && !generatedSource.includes('runSksInTerminal')
+  && !generatedSource.includes('runInTerminal');
+const hasNativeModalSource = generatedSource.includes('func promptText(title: String, message: String')
+  && generatedSource.includes('NSSecureTextField')
+  && generatedSource.includes('stdinText: key + "\\n"');
+const hasActionLogSource = generatedSource.includes('lastActionLogPath')
+  && generatedSource.includes('.posixPermissions: 0o600')
+  && generatedSource.includes('redactSecrets');
 const hasAutosaveNameSource = generatedSource.includes('statusItem.autosaveName = "com.sneakoscope.sks-menubar"');
-const hasExplicitVisibleSource = generatedSource.includes('statusItem.isVisible = true');
+const hasCodexLifecycleSource = generatedSource.includes('Codex app not detected — sync disabled')
+  || (generatedSource.includes('NSWorkspace.didLaunchApplicationNotification') && generatedSource.includes('NSWorkspace.didTerminateApplicationNotification'));
 const hasNoUnconditionalKeepAlive = !launchAgentSource.includes('<key>KeepAlive</key>');
 const hasNoLaunchAgentSecrets = !launchAgentSource.includes('EnvironmentVariables')
   && !launchAgentSource.includes('CODEX_LB_API_KEY')
@@ -73,11 +81,13 @@ const hasInteractiveProcessType = launchAgentSource.includes('<key>ProcessType</
 const hasPackagePlistVersion = infoPlist.includes(`<string>${PACKAGE_VERSION}</string>`)
   && infoPlist.includes('<key>CFBundleShortVersionString</key>')
   && infoPlist.includes('<key>CFBundleVersion</key>');
-const hasActionFallbacks = actionScript.includes('.nvm/versions/node/*/bin/node(Nn[-1])')
+const hasActionFallbacks = actionScript.includes('command -v sks')
+  && actionScript.includes('npm root -g')
+  && actionScript.includes('.nvm/versions/node/*/lib/node_modules/sneakoscope/dist/bin/sks.js')
   && actionScript.includes('/bin/zsh -lc')
-  && actionScript.includes('command -v sks');
-const hasEntryWarning = result.warnings.includes('sks_entry_project_local_ignored_global_package_used')
-  || result.warnings.includes('sks_entry_resolved_under_project_root');
+  && actionScript.includes('exit 127')
+  && actionScript.includes('display notification');
+const hasEntryWarning = result.warnings.includes('sks_entry_project_local');
 const hasBuildStamp = buildStampExists
   && result.build_stamp?.package_version === PACKAGE_VERSION
   && result.build_stamp?.codesign_identifier === 'com.sneakoscope.sks-menubar';
@@ -98,7 +108,8 @@ const expectedMenuItems = [
   'Set OpenRouter Key and GLM Profiles',
   'Fast Check',
   'SKS Version Check',
-  'Update SKS Now'
+  'Update SKS Now',
+  'View Last Log'
 ];
 const missingExpectedItems = expectedMenuItems.filter((item) => !result.menu_items.includes(item));
 const hasExpectedItems = missingExpectedItems.length === 0;
@@ -114,8 +125,9 @@ const launchSkippedForTempInstall = result.launch?.requested === false
   && envHomeResult.warnings.includes('launch_skipped_temp_install');
 const preferredPositionSkippedForTempInstall = !result.actions.includes('seeded SKS menu bar preferred position')
   && !envHomeResult.actions.includes('seeded SKS menu bar preferred position');
-const ok = process.platform === 'darwin'
-  ? result.ok === true
+const darwinOk = cltMissing
+  ? swiftParse.status === 'skipped' && swiftParse.reason === 'xcode_clt_missing'
+  : result.ok === true
     && result.status === 'installed_launch_skipped'
     && secondResult.ok === true
     && envHomeResult.ok === true
@@ -126,10 +138,10 @@ const ok = process.platform === 'darwin'
     && hasExpectedItems
     && hasVisibleStatusSource
     && hasBackgroundReadonlyActions
-    && hasTerminalFailureAlert
-    && hasTerminalExit
+    && hasNativeModalSource
+    && hasActionLogSource
     && hasAutosaveNameSource
-    && hasExplicitVisibleSource
+    && hasCodexLifecycleSource
     && hasNoUnconditionalKeepAlive
     && hasNoLaunchAgentSecrets
     && hasInteractiveProcessType
@@ -137,6 +149,7 @@ const ok = process.platform === 'darwin'
     && hasActionFallbacks
     && hasEntryWarning
     && hasBuildStamp
+    && swiftParse.ok === true
     && isIdempotent
     && hasCommandRegistry
     && noLaunchctlSecretSetenv
@@ -144,7 +157,9 @@ const ok = process.platform === 'darwin'
     && launchSkippedForTempHome
     && launchSkippedForEnvHome
     && launchSkippedForTempInstall
-    && preferredPositionSkippedForTempInstall
+    && preferredPositionSkippedForTempInstall;
+const ok = process.platform === 'darwin'
+  ? darwinOk
   : result.ok === true && result.status === 'unsupported_platform';
 
 const report = {
@@ -162,10 +177,10 @@ const report = {
   generated_source_path: generatedSourcePath,
   has_visible_status_source: hasVisibleStatusSource,
   has_background_readonly_actions: hasBackgroundReadonlyActions,
-  has_terminal_failure_alert: hasTerminalFailureAlert,
-  has_terminal_exit: hasTerminalExit,
+  has_native_modal_source: hasNativeModalSource,
+  has_action_log_source: hasActionLogSource,
   has_autosave_name_source: hasAutosaveNameSource,
-  has_explicit_visible_source: hasExplicitVisibleSource,
+  has_codex_lifecycle_source: hasCodexLifecycleSource,
   has_no_unconditional_keepalive: hasNoUnconditionalKeepAlive,
   has_no_launch_agent_secrets: hasNoLaunchAgentSecrets,
   has_interactive_process_type: hasInteractiveProcessType,
@@ -173,6 +188,7 @@ const report = {
   has_action_fallbacks: hasActionFallbacks,
   has_entry_warning: hasEntryWarning,
   has_build_stamp: hasBuildStamp,
+  swift_parse: swiftParse,
   is_idempotent: isIdempotent,
   has_command_registry: hasCommandRegistry,
   no_launchctl_secret_setenv: noLaunchctlSecretSetenv,
@@ -197,4 +213,23 @@ async function exists(file: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function swiftParseSmoke(sourcePath: string | null): Promise<{ ok: boolean; status: 'parsed' | 'skipped' | 'failed'; reason: string | null; code?: number | null; error?: string | null }> {
+  if (process.platform !== 'darwin') return { ok: true, status: 'skipped', reason: 'not_macos' };
+  const xcodeSelect = await which('xcode-select').catch(() => null) || '/usr/bin/xcode-select';
+  const clt = await runProcess(xcodeSelect, ['-p'], { timeoutMs: 5_000, maxOutputBytes: 8 * 1024 })
+    .catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  if (clt.code !== 0) return { ok: true, status: 'skipped', reason: 'xcode_clt_missing', code: clt.code, error: String(clt.stderr || clt.stdout || '').trim() };
+  if (!sourcePath) return { ok: false, status: 'failed', reason: 'source_missing' };
+  const swiftc = await which('swiftc').catch(() => null) || '/usr/bin/swiftc';
+  const parsed = await runProcess(swiftc, ['-parse', sourcePath], { timeoutMs: 30_000, maxOutputBytes: 32 * 1024 })
+    .catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  return {
+    ok: parsed.code === 0,
+    status: parsed.code === 0 ? 'parsed' : 'failed',
+    reason: parsed.code === 0 ? null : 'swift_parse_failed',
+    code: parsed.code,
+    error: parsed.code === 0 ? null : String(parsed.stderr || parsed.stdout || '').trim()
+  };
 }

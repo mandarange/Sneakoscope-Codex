@@ -7,6 +7,7 @@ import { enforceRetention } from '../retention.js';
 import { COMMANDS } from '../../cli/command-registry.js';
 import { reconcileSkills } from '../init/skills.js';
 import { codexHookTrustDoctor } from '../codex-hooks/codex-hook-trust-doctor.js';
+import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -492,8 +493,28 @@ async function runConfigFastModeNormalizeStage(): Promise<Omit<LegacyMigrationSt
     return `${prefix}${cleaned}`;
   });
   if (!hasTopLevel) next = insertTopLevelTomlKey(next, `default_profile = ${JSON.stringify(misplaced)}`);
-  if (next !== text) await writeTextAtomic(configPath, `${next.trim()}\n`);
-  return { ok: true, status: 'ok', actions: ['normalized_fastmode_default_profile'], blockers: [], warnings: [], detail: { config_path: configPath, default_profile: misplaced } };
+  let guardResult: any = null;
+  if (next !== text) {
+    guardResult = await writeCodexConfigGuarded({
+      configPath,
+      before: text,
+      mutate: () => `${next.trim()}\n`,
+      cause: 'project-update-fastmode-default-profile',
+      backupTag: 'project-update-fastmode-default-profile',
+      preserveFastUiKeys: true
+    });
+    if (!guardResult.ok) {
+      return {
+        ok: false,
+        status: 'failed',
+        actions: ['normalize_fastmode_default_profile_blocked'],
+        blockers: [`codex_config_guard:${guardResult.status}`],
+        warnings: [],
+        detail: { config_path: configPath, default_profile: misplaced, guard: guardResult }
+      };
+    }
+  }
+  return { ok: true, status: 'ok', actions: ['normalized_fastmode_default_profile'], blockers: [], warnings: [], detail: { config_path: configPath, default_profile: misplaced, guard: guardResult } };
 }
 
 async function runHookTrustRefreshStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {

@@ -1,12 +1,10 @@
 import path from 'node:path';
-import os from 'node:os';
-import fsp from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { COMMANDS, LEGACY_COMMAND_ALIASES, type CommandEntry } from '../../cli/command-registry.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
-import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
+import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
@@ -281,7 +279,7 @@ export async function postinstallCommand(args: any = []) {
 export async function selftestCommand(args: any = []) {
   process.env.CI = 'true';
   const root = await projectRoot();
-  const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-selftest-'));
+  const tmp = tmpdir('sks-selftest-');
   await ensureDir(tmp);
   const registry = await buildFeatureRegistry({ root });
   const coverage = validateFeatureRegistry(registry);

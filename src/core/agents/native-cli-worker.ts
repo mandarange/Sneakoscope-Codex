@@ -332,7 +332,6 @@ function startWorkerProgressTelemetry(input: {
       status: 'running',
       backend: input.backend,
       serviceTier: input.serviceTier,
-      progress: { done: tick, total: 0, label: 'heartbeat' },
       artifacts: [input.heartbeatRel],
       logTail: `backend running ${tick}`
     }).catch(() => undefined)

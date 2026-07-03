@@ -78,7 +78,8 @@ function printStatus(result: Awaited<ReturnType<typeof inspectSksMenuBarStatus>>
   console.log(`Running:   ${result.running ? 'yes' : 'no'}`);
   console.log(`Launchd:   ${result.launchd.ok ? result.launchd.state || 'present' : result.launchd.error || 'missing'}`);
   console.log(`Version:   ${result.build_stamp?.package_version || 'unknown'} (package ${result.package_version})`);
-  console.log(`Target:    ${result.action_target.sks_entry || 'missing'} ${result.action_target.sks_entry_exists ? '(ok)' : '(missing)'}`);
+  console.log(`Target:    ${result.action_target.sks_entry || 'runtime'} ${result.action_target.ok ? '(smoke ok)' : '(smoke failed)'}`);
+  console.log(`Codex sync:${result.codex_sync.bundle_id || 'disabled'} ${result.codex_sync.codex_running === null ? '' : result.codex_sync.codex_running ? '(running)' : '(not running)'}`);
   console.log(`Signature: ${result.signature.identifier || 'unknown'} ${result.signature.ok ? '(ok)' : '(check)'}`);
   if (result.warnings.length) {
     console.log('Warnings:');

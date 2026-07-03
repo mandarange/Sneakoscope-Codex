@@ -1,6 +1,6 @@
 # Codex 0.139 Compatibility
 
-SKS 5.1.2 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while merging MAD-DB SQL-plane execution into MAD-SKS and requiring Codex App imagegen/gpt-image-2 evidence for full image-based route verification.
+SKS 5.2.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening the macOS SKS menu bar companion with Codex lifecycle sync, native password/choice prompts, non-Terminal action execution, runtime smoke checks, and doctor post-repair verification.
 
 SKS 5.1.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while tightening dollar-command proof truth, mock fixture labeling, and release gate output contracts for the current package metadata.
 

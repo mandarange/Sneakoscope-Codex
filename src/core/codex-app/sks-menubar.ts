@@ -14,6 +14,7 @@ import {
   writeJsonAtomic,
   writeTextAtomic
 } from '../fsx.js';
+import { findCodexApp } from '../codex-app.js';
 import { withHeartbeat } from '../../cli/cli-theme.js';
 
 export interface SksMenuBarBuildStamp {
@@ -47,7 +48,9 @@ export interface SksMenuBarInstallResult {
   launch_agent_path: string | null;
   action_script_path: string | null;
   build_stamp_path: string | null;
+  config_path?: string | null;
   report_path: string | null;
+  codex_bundle_id?: string | null;
   menu_items: string[];
   actions: string[];
   launch?: {
@@ -89,6 +92,12 @@ export interface SecretLaunchEnvCleanupResult {
   next_actions: string[];
 }
 
+export interface SksMenuBarConfig {
+  schema: 'sks.sks-menubar-config.v1';
+  codex_bundle_id: string | null;
+  quit_with_codex: boolean;
+}
+
 export interface SksMenuBarStatusResult {
   schema: 'sks.menubar-status.v1';
   ok: boolean;
@@ -109,7 +118,17 @@ export interface SksMenuBarStatusResult {
     node_exists: boolean;
     sks_entry: string | null;
     sks_entry_exists: boolean;
+    smoke_code: number | null;
+    smoke_output: string | null;
+    version_detected: boolean;
     ok: boolean;
+  };
+  codex_sync: {
+    ok: boolean;
+    bundle_id: string | null;
+    codex_running: boolean | null;
+    icon_visible_expected: boolean;
+    warning: string | null;
   };
   build_stamp: SksMenuBarBuildStamp | null;
   package_version: string;
@@ -150,6 +169,7 @@ const MENU_ITEMS = [
   'Open Dashboard',
   'Open Codex Settings',
   'Restart Codex',
+  'View Last Log',
   'Quit SKS Menu'
 ];
 
@@ -174,10 +194,13 @@ export function sksMenuBarPaths(homeInput?: string, rootInput?: string) {
     info_plist_path: path.join(contentsPath, 'Info.plist'),
     action_script_path: path.join(installDir, 'sks-menubar-action.sh'),
     build_stamp_path: path.join(installDir, 'build-stamp.json'),
+    config_path: path.join(installDir, 'config.json'),
     launch_agent_path: path.join(home, 'Library', 'LaunchAgents', `${LABEL}.plist`),
     report_path: path.join(root, '.sneakoscope', 'reports', 'sks-menubar.json'),
     stdout_log_path: path.join(installDir, 'menubar.out.log'),
-    stderr_log_path: path.join(installDir, 'menubar.err.log')
+    stderr_log_path: path.join(installDir, 'menubar.err.log'),
+    logs_dir: path.join(installDir, 'logs'),
+    last_action_log_path: path.join(installDir, 'logs', 'last-action.log')
   };
 }
 
@@ -189,6 +212,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   const warnings: string[] = [];
   const nextActions = defaultNextActions();
   let secretEnvCleanup: SecretLaunchEnvCleanupResult | undefined;
+  let codexBundleId: string | null = null;
 
   if (process.platform !== 'darwin') {
     const result: SksMenuBarInstallResult = {
@@ -202,7 +226,9 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       launch_agent_path: null,
       action_script_path: null,
       build_stamp_path: null,
+      config_path: null,
       report_path: apply ? paths.report_path : null,
+      codex_bundle_id: null,
       menu_items: MENU_ITEMS,
       actions: [],
       launch: { requested: false, method: 'none', ok: true },
@@ -219,9 +245,10 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     const installed = await exists(paths.executable_path);
     const launchAgent = await exists(paths.launch_agent_path);
     const status = await inspectSksMenuBarStatus({ home: paths.home, root: paths.root }).catch(() => null);
+    const statusWarnings = [...(status?.warnings || []), ...(launchAgent ? [] : ['launch_agent_not_installed_yet'])];
     return {
       schema: 'sks.codex-app-sks-menubar.v1',
-      ok: true,
+      ok: status ? status.ok === true : true,
       apply,
       status: 'planned',
       platform: process.platform,
@@ -230,7 +257,9 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       launch_agent_path: paths.launch_agent_path,
       action_script_path: paths.action_script_path,
       build_stamp_path: paths.build_stamp_path,
+      config_path: paths.config_path,
       report_path: paths.report_path,
+      codex_bundle_id: status?.codex_sync.bundle_id || null,
       menu_items: MENU_ITEMS,
       actions: installed ? ['menubar_app_present'] : ['menubar_app_install_available'],
       launch: {
@@ -249,12 +278,13 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       build_stamp: status?.build_stamp || null,
       tcc_automation_status: 'unknown',
       next_actions: launchAgent ? defaultNextActions() : ['Run: sks menubar install'],
-      blockers: [],
-      warnings: launchAgent ? [] : ['launch_agent_not_installed_yet']
+      blockers: status?.blockers || [],
+      warnings: statusWarnings
     };
   }
 
   await ensureDir(paths.install_dir);
+  await ensureDir(paths.logs_dir);
   await ensureDir(path.dirname(paths.launch_agent_path));
   secretEnvCleanup = await cleanupMacLaunchSecretEnvironment({ env }).catch((err: any) => ({
     ok: false,
@@ -272,8 +302,14 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   const open = env.SKS_MENUBAR_OPEN || await which('open').catch(() => null) || await fallbackTool('/usr/bin/open');
   const codesign = env.SKS_MENUBAR_CODESIGN || await which('codesign').catch(() => null) || await fallbackTool('/usr/bin/codesign');
   const xcodeSelect = env.SKS_MENUBAR_XCODE_SELECT || await which('xcode-select').catch(() => null) || await fallbackTool('/usr/bin/xcode-select');
+  const clt = await xcodeCltStatus(xcodeSelect);
+  if (!clt.ok) return await blockedResult('xcode_clt_missing', clt.error || 'Xcode Command Line Tools missing');
   if (!swiftc) return await blockedResult('swiftc_missing', 'swiftc not found');
   const swiftcVersion = await toolVersion(swiftc, ['--version']);
+  codexBundleId = await resolveCodexBundleId({ home: paths.home, env, warnings });
+  if (!codexBundleId) warnings.push('codex_app_bundle_id_unresolved');
+  const config = await writeDefaultMenuBarConfig(paths.config_path, codexBundleId);
+  actions.push(`wrote ${paths.config_path}`);
 
   const target = await resolveSksEntryForInstall({
     ...(opts.sksEntry ? { explicit: opts.sksEntry } : {}),
@@ -295,6 +331,9 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   const swiftSource = swiftMenuSource({
     actionScriptPath: paths.action_script_path,
     buildStampPath: paths.build_stamp_path,
+    configPath: paths.config_path,
+    lastActionLogPath: paths.last_action_log_path,
+    codexBundleId: config.codex_bundle_id,
     packageVersion: PACKAGE_VERSION
   });
   const infoPlist = infoPlistSource(PACKAGE_VERSION);
@@ -333,8 +372,6 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   }
 
   if (!stampMatches && !binaryStable) {
-    const clt = await xcodeCltStatus(xcodeSelect);
-    if (!clt.ok) return await blockedResult('xcode_clt_missing', clt.error || 'Xcode Command Line Tools missing');
     try {
       await buildMenuBarAppAtomically({
         paths,
@@ -402,7 +439,9 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     launch_agent_path: paths.launch_agent_path,
     action_script_path: paths.action_script_path,
     build_stamp_path: paths.build_stamp_path,
+    config_path: paths.config_path,
     report_path: paths.report_path,
+    codex_bundle_id: codexBundleId,
     menu_items: MENU_ITEMS,
     actions,
     launch,
@@ -410,10 +449,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     build_stamp: stamp,
     tcc_automation_status: 'unknown',
     secret_env_cleanup: secretEnvCleanup,
-    next_actions: [
-      ...nextActions,
-      'If Terminal automation was denied: System Settings > Privacy & Security > Automation > SKS Menu Bar > Terminal.'
-    ],
+    next_actions: nextActions,
     blockers: ok ? [] : [launch.error || 'sks_menubar_launch_failed'],
     warnings
   };
@@ -432,7 +468,9 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       launch_agent_path: paths.launch_agent_path,
       action_script_path: paths.action_script_path,
       build_stamp_path: paths.build_stamp_path,
+      config_path: paths.config_path,
       report_path: paths.report_path,
+      codex_bundle_id: typeof codexBundleId === 'string' ? codexBundleId : null,
       menu_items: MENU_ITEMS,
       actions,
       launch: { requested: false, method: 'none', ok: false, error: detail || reason },
@@ -484,6 +522,83 @@ export async function cleanupMacLaunchSecretEnvironment(opts: { env?: NodeJS.Pro
   };
 }
 
+async function writeDefaultMenuBarConfig(configPath: string, codexBundleId: string | null): Promise<SksMenuBarConfig> {
+  const previous = await readMenuBarConfig(configPath);
+  const config: SksMenuBarConfig = {
+    schema: 'sks.sks-menubar-config.v1',
+    codex_bundle_id: codexBundleId,
+    quit_with_codex: previous.quit_with_codex === true
+  };
+  await writeJsonAtomic(configPath, config);
+  return config;
+}
+
+async function readMenuBarConfig(configPath: string): Promise<SksMenuBarConfig> {
+  const config = await readJson<Partial<SksMenuBarConfig> | null>(configPath, null);
+  return {
+    schema: 'sks.sks-menubar-config.v1',
+    codex_bundle_id: typeof config?.codex_bundle_id === 'string' && config.codex_bundle_id.trim()
+      ? config.codex_bundle_id.trim()
+      : null,
+    quit_with_codex: config?.quit_with_codex === true
+  };
+}
+
+async function resolveCodexBundleId(input: { home: string; env: NodeJS.ProcessEnv; warnings: string[] }): Promise<string | null> {
+  if (process.platform !== 'darwin') return null;
+  const appPath = await findCodexApp({ home: input.home, env: input.env }).catch(() => null);
+  if (!appPath) {
+    input.warnings.push('codex_app_not_found_for_bundle_sync');
+    return null;
+  }
+  const mdls = input.env.SKS_MENUBAR_MDLS || await which('mdls').catch(() => null) || await fallbackTool('/usr/bin/mdls');
+  if (mdls) {
+    const result = await runProcess(mdls, ['-name', 'kMDItemCFBundleIdentifier', '-raw', appPath], {
+      timeoutMs: 3_000,
+      maxOutputBytes: 8 * 1024
+    }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+    const value = String(result.stdout || '').trim();
+    if (result.code === 0 && value && value !== '(null)' && value !== 'null') return value;
+  }
+  const defaults = input.env.SKS_MENUBAR_DEFAULTS || await which('defaults').catch(() => null) || await fallbackTool('/usr/bin/defaults');
+  if (defaults) {
+    const result = await runProcess(defaults, ['read', path.join(appPath, 'Contents', 'Info'), 'CFBundleIdentifier'], {
+      timeoutMs: 3_000,
+      maxOutputBytes: 8 * 1024
+    }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+    const value = String(result.stdout || '').trim();
+    if (result.code === 0 && value) return value;
+  }
+  return null;
+}
+
+async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{ ok: boolean; code: number | null; output: string | null; versionDetected: boolean }> {
+  if (!(await exists(actionScriptPath))) return { ok: false, code: null, output: null, versionDetected: false };
+  const result = await runProcess('/bin/zsh', [actionScriptPath, 'version'], {
+    timeoutMs: 5_000,
+    maxOutputBytes: 16 * 1024
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  const output = String(`${result.stdout || ''}\n${result.stderr || ''}`).trim();
+  const versionDetected = /\b(?:sks|sneakoscope)?\s*v?\d+\.\d+\.\d+\b/i.test(output);
+  return {
+    ok: result.code === 0 && versionDetected,
+    code: result.code,
+    output: output ? output.slice(0, 700) : null,
+    versionDetected
+  };
+}
+
+async function isCodexAppRunningByBundleId(bundleId: string, env: NodeJS.ProcessEnv = process.env): Promise<boolean> {
+  if (process.platform !== 'darwin' || !bundleId) return false;
+  const osascript = env.SKS_MENUBAR_OSASCRIPT || await which('osascript').catch(() => null) || await fallbackTool('/usr/bin/osascript');
+  if (!osascript) return false;
+  const result = await runProcess(osascript, ['-e', `application id "${bundleId.replace(/"/g, '\\"')}" is running`], {
+    timeoutMs: 2_000,
+    maxOutputBytes: 8 * 1024
+  }).catch(() => ({ code: 1, stdout: '', stderr: '' }));
+  return result.code === 0 && String(result.stdout || '').trim().toLowerCase() === 'true';
+}
+
 export async function inspectSksMenuBarStatus(opts: { home?: string; root?: string; env?: NodeJS.ProcessEnv } = {}): Promise<SksMenuBarStatusResult> {
   const paths = sksMenuBarPaths(opts.home || opts.env?.HOME, opts.root);
   const installed = await exists(paths.executable_path);
@@ -493,14 +608,26 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
   const sksEntry = shellAssignment(actionText, 'SKS_ENTRY');
   const nodeExists = nodeBin ? await isExecutable(nodeBin) : false;
   const sksEntryExists = sksEntry ? await exists(sksEntry) : false;
+  const actionSmoke = await smokeSksMenuBarAction(paths.action_script_path);
+  const config = await readMenuBarConfig(paths.config_path);
+  const codexRunning = config.codex_bundle_id ? await isCodexAppRunningByBundleId(config.codex_bundle_id, opts.env) : null;
+  const codexSync = {
+    ok: Boolean(config.codex_bundle_id),
+    bundle_id: config.codex_bundle_id,
+    codex_running: codexRunning,
+    icon_visible_expected: config.codex_bundle_id ? codexRunning === true : true,
+    warning: config.codex_bundle_id ? null : 'codex_sync_disabled'
+  };
   const buildStamp = await readJson<SksMenuBarBuildStamp | null>(paths.build_stamp_path, null);
   const launchd = await inspectLaunchdService(opts.env);
   const signature = await inspectSignature(paths.app_path, opts.env);
   const blockers: string[] = [];
   const warnings: string[] = [];
   if (!installed) blockers.push('menubar_app_missing');
-  if (installed && !sksEntryExists) blockers.push('action_script_target_missing');
+  if (installed && launchd.checked && !launchd.ok) blockers.push('launchd_not_running');
+  if (installed && !actionSmoke.ok) blockers.push('action_script_smoke_failed');
   if (installed && signature.checked && !signature.ok) warnings.push('codesign_identifier_unexpected');
+  if (!codexSync.ok) warnings.push('codex_sync_disabled');
   if (buildStamp?.package_version && buildStamp.package_version !== PACKAGE_VERSION) warnings.push('build_stamp_package_version_mismatch');
   return {
     schema: 'sks.menubar-status.v1',
@@ -515,8 +642,12 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
       node_exists: nodeExists,
       sks_entry: sksEntry,
       sks_entry_exists: sksEntryExists,
-      ok: Boolean(nodeExists && sksEntryExists)
+      smoke_code: actionSmoke.code,
+      smoke_output: actionSmoke.output,
+      version_detected: actionSmoke.versionDetected,
+      ok: actionSmoke.ok
     },
+    codex_sync: codexSync,
     build_stamp: buildStamp,
     package_version: PACKAGE_VERSION,
     signature,
@@ -668,15 +799,7 @@ async function resolveSksEntryForInstall(input: {
   let existsResolved = await exists(resolved);
   let projectLocal = isSubpath(resolved, input.root);
   if (projectLocal) {
-    const globalCandidate = await findGlobalSksEntry(input.home, input.env, packaged);
-    if (globalCandidate && globalCandidate !== resolved) {
-      input.warnings.push('sks_entry_project_local_ignored_global_package_used');
-      resolved = globalCandidate;
-      existsResolved = true;
-      projectLocal = isSubpath(resolved, input.root);
-    } else {
-      input.warnings.push('sks_entry_resolved_under_project_root');
-    }
+    input.warnings.push('sks_entry_project_local');
   }
   const usedPreviousScript = !existsResolved && await exists(input.actionScriptPath);
   if (!existsResolved && usedPreviousScript) input.warnings.push('sks_entry_unresolved_kept_previous_script');
@@ -690,78 +813,196 @@ async function resolveSksEntryForInstall(input: {
   };
 }
 
-async function findGlobalSksEntry(home: string, env: NodeJS.ProcessEnv, packaged: string): Promise<string | null> {
-  const candidates = new Set<string>();
-  const nodeRoot = path.resolve(path.dirname(process.execPath), '..');
-  candidates.add(path.join(nodeRoot, 'lib', 'node_modules', 'sneakoscope', 'dist', 'bin', 'sks.js'));
-  candidates.add(path.join(home, '.nvm', 'versions', 'node'));
-  const nvmRoot = path.join(home, '.nvm', 'versions', 'node');
-  try {
-    const versions = await fs.readdir(nvmRoot);
-    for (const version of versions.sort().reverse()) {
-      candidates.add(path.join(nvmRoot, version, 'lib', 'node_modules', 'sneakoscope', 'dist', 'bin', 'sks.js'));
-    }
-  } catch {}
-  if (env.SKS_GLOBAL_ROOT) candidates.add(path.join(path.resolve(env.SKS_GLOBAL_ROOT), 'dist', 'bin', 'sks.js'));
-  for (const candidate of candidates) {
-    if (candidate === nvmRoot) continue;
-    if (path.resolve(candidate) === path.resolve(packaged)) continue;
-    if (await exists(candidate)) return path.resolve(candidate);
-  }
-  return null;
-}
-
-function actionScriptSource(input: { nodeBin: string; sksEntry: string }) {
+export function actionScriptSource(input: { nodeBin: string; sksEntry: string }) {
   return `#!/bin/zsh
 set -e
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 NODE_BIN=${shellQuote(input.nodeBin)}
 SKS_ENTRY=${shellQuote(input.sksEntry)}
-if [ -x "$NODE_BIN" ] && [ -f "$SKS_ENTRY" ]; then
-  exec "$NODE_BIN" "$SKS_ENTRY" "$@"
+
+notify_sks_missing() {
+  /usr/bin/osascript -e 'display notification "sks CLI를 찾을 수 없습니다. sks doctor --fix 또는 npm install -g sneakoscope 실행 후 다시 시도하세요." with title "SKS Menu Bar"' >/dev/null 2>&1 || true
+}
+
+resolve_node_bin() {
+  if [ -x "$NODE_BIN" ]; then
+    printf '%s\\n' "$NODE_BIN"
+    return 0
+  fi
+  local login_node
+  login_node="$(/bin/zsh -lc 'command -v node' 2>/dev/null | /usr/bin/head -n 1 || true)"
+  if [ -n "$login_node" ] && [ -x "$login_node" ]; then
+    printf '%s\\n' "$login_node"
+    return 0
+  fi
+  for cand in "$HOME"/.nvm/versions/node/*/bin/node(Nn[-1]) /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+    if [ -x "$cand" ]; then
+      printf '%s\\n' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_node_entry() {
+  local entry="$1"
+  shift
+  if [ ! -f "$entry" ]; then
+    return 1
+  fi
+  local node_bin
+  node_bin="$(resolve_node_bin || true)"
+  if [ -z "$node_bin" ]; then
+    return 1
+  fi
+  exec "$node_bin" "$entry" "$@"
+}
+
+SKS_BIN="$(/bin/zsh -lc 'command -v sks' 2>/dev/null | /usr/bin/head -n 1 || true)"
+if [ -n "$SKS_BIN" ] && [ -x "$SKS_BIN" ]; then
+  exec "$SKS_BIN" "$@"
 fi
-for cand in "$HOME"/.nvm/versions/node/*/bin/node(Nn[-1]); do
-  if [ -x "$cand" ] && [ -f "$SKS_ENTRY" ]; then
-    exec "$cand" "$SKS_ENTRY" "$@"
+
+NPM_ROOT="$(/bin/zsh -lc 'npm root -g' 2>/dev/null | /usr/bin/head -n 1 || true)"
+if [ -n "$NPM_ROOT" ]; then
+  run_node_entry "$NPM_ROOT/sneakoscope/dist/bin/sks.js" "$@" || true
+fi
+
+for entry in "$HOME"/.nvm/versions/node/*/lib/node_modules/sneakoscope/dist/bin/sks.js(Nn[-1]) /opt/homebrew/lib/node_modules/sneakoscope/dist/bin/sks.js /usr/local/lib/node_modules/sneakoscope/dist/bin/sks.js; do
+  if [ -f "$entry" ]; then
+    run_node_entry "$entry" "$@" || true
   fi
 done
-if /bin/zsh -lc 'command -v sks' >/dev/null 2>&1; then
-  exec /bin/zsh -lc "sks $(printf '%q ' "$@")"
-fi
+run_node_entry "$SKS_ENTRY" "$@" || true
+notify_sks_missing
 echo "SKS command not found. Run npm install -g sneakoscope or sks doctor --fix, then try again." >&2
 exit 127
 `;
 }
 
-function swiftMenuSource(input: { actionScriptPath: string; buildStampPath: string; packageVersion: string }) {
+export function swiftMenuSource(input: { actionScriptPath: string; buildStampPath: string; configPath: string; lastActionLogPath: string; codexBundleId: string | null; packageVersion: string }) {
+  const codexLifecycleSource = input.codexBundleId ? `
+    func configureCodexLifecycleSync() {
+        setIconVisible(isCodexRunning())
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(self, selector: #selector(workspaceAppLaunched(_:)), name: NSWorkspace.didLaunchApplicationNotification, object: nil)
+        center.addObserver(self, selector: #selector(workspaceAppTerminated(_:)), name: NSWorkspace.didTerminateApplicationNotification, object: nil)
+    }
+
+    @objc func workspaceAppLaunched(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+        if app.bundleIdentifier == codexBundleId {
+            setIconVisible(true)
+            updateState()
+        }
+    }
+
+    @objc func workspaceAppTerminated(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+        if app.bundleIdentifier == codexBundleId {
+            if quitWithCodex {
+                NSApplication.shared.terminate(nil)
+            } else {
+                setIconVisible(false)
+            }
+        }
+    }
+
+    func setIconVisible(_ visible: Bool) {
+        statusItem.isVisible = visible
+    }
+
+    func isCodexRunning() -> Bool {
+        guard let bundle = codexBundleId else { return true }
+        return NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundle }
+    }
+` : `
+    func configureCodexLifecycleSync() {
+        setIconVisible(true)
+        statusLineItem.title = "Codex app not detected — sync disabled"
+    }
+
+    func setIconVisible(_ visible: Bool) {
+        statusItem.isVisible = visible
+    }
+
+    func isCodexRunning() -> Bool {
+        return true
+    }
+`;
   return `import Cocoa
 import Foundation
 
 let actionScript = ${swiftString(input.actionScriptPath)}
 let buildStampPath = ${swiftString(input.buildStampPath)}
+let menubarConfigPath = ${swiftString(input.configPath)}
+let lastActionLogPath = ${swiftString(input.lastActionLogPath)}
+let codexBundleId: String? = ${input.codexBundleId ? swiftString(input.codexBundleId) : 'nil'}
 let packageVersion = ${swiftString(input.packageVersion)}
 
 func shellQuote(_ value: String) -> String {
     return "'" + value.replacingOccurrences(of: "'", with: "'\\\\''") + "'"
 }
 
+func clipped(_ value: String, limit: Int = 700) -> String {
+    return String(value.prefix(limit))
+}
+
 func showAlert(_ message: String, informative: String = "") {
     DispatchQueue.main.async {
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = message
-        alert.informativeText = informative
+        alert.informativeText = clipped(informative)
         alert.alertStyle = .warning
         alert.runModal()
     }
 }
 
-func runProcess(_ executable: String, _ args: [String] = [], completion: ((Int32, String) -> Void)? = nil) {
+func promptText(title: String, message: String, placeholder: String = "", secure: Bool = false) -> String? {
+    NSApp.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Cancel")
+    let field: NSTextField = secure ? NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24)) : NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+    field.placeholderString = placeholder
+    alert.accessoryView = field
+    let response = alert.runModal()
+    if response != .alertFirstButtonReturn { return nil }
+    let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    return value.isEmpty ? nil : value
+}
+
+func promptChoice(title: String, message: String, options: [String]) -> String? {
+    NSApp.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Cancel")
+    let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 320, height: 26), pullsDown: false)
+    popup.addItems(withTitles: options)
+    alert.accessoryView = popup
+    let response = alert.runModal()
+    if response != .alertFirstButtonReturn { return nil }
+    return popup.titleOfSelectedItem
+}
+
+func runProcess(_ executable: String, _ args: [String] = [], stdinText: String? = nil, completion: ((Int32, String) -> Void)? = nil) {
     let process = Process()
     let output = Pipe()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = args
     process.standardOutput = output
     process.standardError = output
+    var inputPipe: Pipe?
+    if stdinText != nil {
+        let pipe = Pipe()
+        process.standardInput = pipe
+        inputPipe = pipe
+    }
     process.terminationHandler = { proc in
         let data = output.fileHandleForReading.readDataToEndOfFile()
         let text = String(data: data, encoding: .utf8) ?? ""
@@ -769,14 +1010,17 @@ func runProcess(_ executable: String, _ args: [String] = [], completion: ((Int32
     }
     do {
         try process.run()
+        if let stdinText = stdinText, let inputPipe = inputPipe {
+            inputPipe.fileHandleForWriting.write(Data(stdinText.utf8))
+            inputPipe.fileHandleForWriting.closeFile()
+        }
     } catch {
         completion?(-1, String(describing: error))
     }
 }
 
 func showNotification(_ title: String, _ body: String) {
-    let clipped = String(body.prefix(700))
-    let script = "display notification " + shellQuote(clipped) + " with title " + shellQuote(title)
+    let script = "display notification " + shellQuote(clipped(body)) + " with title " + shellQuote(title)
     runProcess("/usr/bin/osascript", ["-e", script]) { code, output in
         if code != 0 {
             showAlert(title, informative: output)
@@ -784,34 +1028,39 @@ func showNotification(_ title: String, _ body: String) {
     }
 }
 
-func runInTerminal(_ command: String) {
-    let commandWithExit = "printf '\\\\e]0;SKS\\\\a'; " + command + "; exit"
-    let escaped = commandWithExit
-        .replacingOccurrences(of: "\\\\", with: "\\\\\\\\")
-        .replacingOccurrences(of: "\\\"", with: "\\\\\\\"")
-    let script = """
-tell application "Terminal"
-  activate
-  set sksWindow to missing value
-  repeat with w in windows
-    if name of w contains "SKS" then set sksWindow to w
-  end repeat
-  if sksWindow is missing value then
-    do script "\\(escaped)"
-  else
-    do script "\\(escaped)" in selected tab of sksWindow
-  end if
-end tell
-"""
-    runProcess("/usr/bin/osascript", ["-e", script]) { code, output in
-        if code != 0 {
-            let denied = output.contains("-1743") || output.localizedCaseInsensitiveContains("not authorized")
-            if denied {
-                showAlert("SKS menu cannot control Terminal", informative: "Open System Settings > Privacy & Security > Automation, then allow SKS Menu Bar to control Terminal.")
-            } else {
-                showAlert("SKS menu action failed", informative: output)
-            }
+func redactSecrets(_ value: String, secrets: [String] = []) -> String {
+    var text = value
+    for secret in secrets where secret.count >= 4 {
+        text = text.replacingOccurrences(of: secret, with: "[redacted]")
+    }
+    let patterns = [
+        #"sk-proj-[A-Za-z0-9_-]{12,}"#,
+        #"sk-or-v1-[A-Za-z0-9_-]{12,}"#,
+        #"sk-or-[A-Za-z0-9_-]{12,}"#,
+        #"sk-clb-[A-Za-z0-9_-]{8,}"#,
+        #"sk-[A-Za-z0-9_-]{20,}"#,
+        #"(?i)(api[_-]?key|secret|token)\\s*[:=]\\s*[^\\s"',}]+"#
+    ]
+    for pattern in patterns {
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            text = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "[redacted]")
         }
+    }
+    return text
+}
+
+func writeActionLog(_ text: String) {
+    let url = URL(fileURLWithPath: lastActionLogPath)
+    try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    if !FileManager.default.fileExists(atPath: lastActionLogPath) {
+        FileManager.default.createFile(atPath: lastActionLogPath, contents: Data(), attributes: [.posixPermissions: 0o600])
+    }
+    try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: lastActionLogPath)
+    if let handle = try? FileHandle(forWritingTo: url) {
+        try? handle.truncate(atOffset: 0)
+        handle.write(Data(text.utf8))
+        try? handle.close()
     }
 }
 
@@ -820,27 +1069,37 @@ struct MenuState {
     let line: String
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+struct MenuBarConfig {
+    let quitWithCodex: Bool
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var statusLineItem: NSMenuItem!
+    var codexLbItem: NSMenuItem!
+    var oauthItem: NSMenuItem!
     var timer: Timer?
+    var busy = false
+    var lastFailure = false
+    var quitWithCodex = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        quitWithCodex = readConfig().quitWithCodex
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.autosaveName = "com.sneakoscope.sks-menubar"
-        statusItem.isVisible = true
         if let button = statusItem.button {
             configureStatusButton(button, title: "SKS")
         }
 
         let menu = NSMenu()
+        menu.delegate = self
         statusLineItem = NSMenuItem(title: "SKS v\\(packageVersion) - starting", action: nil, keyEquivalent: "")
         statusLineItem.isEnabled = false
         menu.addItem(statusLineItem)
         menu.addItem(NSMenuItem.separator())
-        add(menu, "Use codex-lb", #selector(useCodexLb))
-        add(menu, "Use ChatGPT OAuth", #selector(useChatGptOAuth))
+        codexLbItem = add(menu, "Use codex-lb", #selector(useCodexLb))
+        oauthItem = add(menu, "Use ChatGPT OAuth", #selector(useChatGptOAuth))
         add(menu, "Set codex-lb Domain and Key", #selector(setCodexLbDomainAndKey))
         menu.addItem(NSMenuItem.separator())
         add(menu, "Set OpenRouter Key and GLM Profiles", #selector(setOpenRouterKey))
@@ -852,10 +1111,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         add(menu, "Open Codex Settings", #selector(openCodexSettings))
         add(menu, "Restart Codex", #selector(restartCodex))
         menu.addItem(NSMenuItem.separator())
+        add(menu, "View Last Log", #selector(viewLastLog))
         add(menu, "Quit SKS Menu", #selector(quit))
         statusItem.menu = menu
+        configureCodexLifecycleSync()
         updateState()
         timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in self?.updateState() }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        updateState()
+        updateAuthModeChecks()
     }
 
     func configureStatusButton(_ button: NSStatusBarButton, title: String) {
@@ -873,10 +1139,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.setAccessibilityHelp("Open SKS menu")
     }
 
-    func add(_ menu: NSMenu, _ title: String, _ selector: Selector) {
+    func add(_ menu: NSMenu, _ title: String, _ selector: Selector) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
         item.target = self
         menu.addItem(item)
+        return item
+    }
+
+${codexLifecycleSource}
+
+    func readConfig() -> MenuBarConfig {
+        guard let data = FileManager.default.contents(atPath: menubarConfigPath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return MenuBarConfig(quitWithCodex: false)
+        }
+        return MenuBarConfig(quitWithCodex: json["quit_with_codex"] as? Bool == true)
     }
 
     func updateState() {
@@ -888,9 +1165,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func readMenuState() -> MenuState {
-        let actionTargetOk = actionScriptTargetExists()
-        if !actionTargetOk {
+        if codexBundleId == nil {
+            return MenuState(title: "SKS", line: "Codex app not detected — sync disabled")
+        }
+        if busy {
+            return MenuState(title: "SKS ⋯", line: "SKS v\\(packageVersion) - working")
+        }
+        if !actionScriptUsable() {
             return MenuState(title: "SKS ⚠", line: "SKS v\\(packageVersion) - action script broken (run sks doctor --fix)")
+        }
+        if lastFailure {
+            return MenuState(title: "SKS ⚠", line: "SKS v\\(packageVersion) - last action failed")
         }
         if updateAvailable() {
             return MenuState(title: "SKS ↑", line: "SKS v\\(packageVersion) - update available")
@@ -898,10 +1183,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return MenuState(title: "SKS", line: "SKS v\\(packageVersion) - OK")
     }
 
-    func actionScriptTargetExists() -> Bool {
-        guard let text = try? String(contentsOfFile: actionScript, encoding: .utf8) else { return false }
-        guard let entry = shellAssignment(text, key: "SKS_ENTRY") else { return false }
-        return FileManager.default.fileExists(atPath: entry)
+    func actionScriptUsable() -> Bool {
+        return FileManager.default.isExecutableFile(atPath: actionScript)
     }
 
     func updateAvailable() -> Bool {
@@ -913,48 +1196,83 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return latest != packageVersion && !latest.isEmpty
     }
 
-    func shellAssignment(_ text: String, key: String) -> String? {
-        for line in text.components(separatedBy: .newlines) {
-            if line.hasPrefix(key + "=") {
-                var value = String(line.dropFirst(key.count + 1))
-                if value.hasPrefix("'") && value.hasSuffix("'") && value.count >= 2 {
-                    value.removeFirst()
-                    value.removeLast()
-                    return value.replacingOccurrences(of: "'\\\\''", with: "'")
+    func runSksCapture(_ args: [String], title: String, stdinText: String? = nil, notify: Bool = true, completion: ((Int32, String) -> Void)? = nil) {
+        busy = true
+        lastFailure = false
+        updateState()
+        runProcess(actionScript, args, stdinText: stdinText) { [weak self] code, output in
+            let redacted = redactSecrets(output, secrets: stdinText == nil ? [] : [stdinText ?? ""])
+            writeActionLog("$ sks \\(args.joined(separator: " "))\\n\\(redacted)\\n")
+            DispatchQueue.main.async {
+                self?.busy = false
+                self?.lastFailure = code != 0
+                self?.updateState()
+                if notify {
+                    if code == 0 {
+                        showNotification(title, "OK\\n" + redacted)
+                    } else {
+                        showAlert(title + " failed", informative: redacted)
+                    }
                 }
-                return value
+                completion?(code, redacted)
             }
         }
-        return nil
     }
 
-    func runSksInTerminal(_ args: [String], tail: String = "echo; echo 'SKS command finished.'") {
-        let quoted = args.map(shellQuote).joined(separator: " ")
-        runInTerminal("\\(shellQuote(actionScript)) \\(quoted); \\(tail)")
+    func runSksBackground(_ args: [String], title: String, stdinText: String? = nil, completion: ((Int32, String) -> Void)? = nil) {
+        runSksCapture(args, title: title, stdinText: stdinText, notify: true, completion: completion)
     }
 
-    func runSksBackground(_ args: [String], title: String) {
-        runProcess(actionScript, args) { code, output in
-            let status = code == 0 ? "OK" : "failed (\\(code))"
-            showNotification(title, status + "\\n" + output)
+    func startSksDetached(_ args: [String], title: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: actionScript)
+        process.arguments = args
+        writeActionLog("$ sks \\(args.joined(separator: " "))\\nstarted\\n")
+        if let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: lastActionLogPath)) {
+            process.standardOutput = handle
+            process.standardError = handle
+        }
+        do {
+            try process.run()
+            showNotification(title, "started")
+        } catch {
+            showAlert(title + " failed", informative: String(describing: error))
+        }
+    }
+
+    func updateAuthModeChecks() {
+        runSksCapture(["codex-lb", "status", "--json"], title: "SKS Auth Status", notify: false) { [weak self] code, output in
+            guard let self = self else { return }
+            let lower = output.lowercased()
+            let codexLbActive = code == 0 && (lower.contains(#""configured": true"#) || lower.contains(#""model_provider": "codex-lb""#) || lower.contains(#""mode": "codex-lb""#))
+            self.codexLbItem.state = codexLbActive ? .on : .off
+            self.oauthItem.state = codexLbActive ? .off : .on
         }
     }
 
     @objc func useCodexLb() {
-        runSksInTerminal(["codex-lb", "use-codex-lb"])
+        runSksBackground(["codex-lb", "use-codex-lb", "--json"], title: "Use codex-lb") { [weak self] code, _ in
+            if code == 0 { self?.updateAuthModeChecks() }
+        }
     }
 
     @objc func useChatGptOAuth() {
-        runSksInTerminal(["codex-lb", "use-oauth"])
+        runSksBackground(["codex-lb", "use-oauth", "--json"], title: "Use ChatGPT OAuth") { [weak self] code, _ in
+            if code == 0 { self?.updateAuthModeChecks() }
+        }
     }
 
     @objc func setCodexLbDomainAndKey() {
-        runSksInTerminal(["codex-lb", "setup"])
+        guard let domain = promptText(title: "Set codex-lb Domain", message: "Enter your codex-lb domain or base URL.", placeholder: "https://lb.example.com/backend-api/codex") else { return }
+        guard let key = promptText(title: "Set codex-lb Key", message: "Enter your codex-lb API key.", placeholder: "sk-clb-...", secure: true) else { return }
+        runSksBackground(["codex-lb", "setup", "--host", domain, "--api-key-stdin", "--yes", "--json"], title: "Set codex-lb", stdinText: key + "\\n") { [weak self] code, _ in
+            if code == 0 { self?.updateAuthModeChecks() }
+        }
     }
 
     @objc func setOpenRouterKey() {
-        let command = "printf 'Paste OpenRouter key, then press Return: '; read -r key; printf '%s\\\\n' \\"$key\\" | \\(shellQuote(actionScript)) codex-app set-openrouter-key --api-key-stdin; \\(shellQuote(actionScript)) codex-app glm-profile install; echo; echo 'OpenRouter/GLM update finished. Restart Codex if the model picker was already open.'"
-        runInTerminal(command)
+        guard let key = promptText(title: "Set OpenRouter Key", message: "Enter your OpenRouter API key.", placeholder: "sk-or-v1-...", secure: true) else { return }
+        runSksBackground(["codex-app", "set-openrouter-key", "--api-key-stdin", "--json"], title: "Set OpenRouter Key", stdinText: key + "\\n")
     }
 
     @objc func fastCheck() {
@@ -966,13 +1284,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func updateSksNow() {
-        runSksInTerminal(["update"], tail: "echo; echo 'SKS update finished.'")
+        runSksBackground(["update"], title: "Update SKS Now")
     }
 
     @objc func openDashboard() {
-        let command = "\\(shellQuote(actionScript)) ui; echo; echo 'SKS dashboard requested.'"
-        runInTerminal(command)
-        runProcess("/usr/bin/open", ["http://127.0.0.1:4477"])
+        let urlString = "http://127.0.0.1:4477"
+        runProcess("/usr/bin/curl", ["-fsS", "--max-time", "1", urlString]) { [weak self] code, _ in
+            DispatchQueue.main.async {
+                if code != 0 {
+                    self?.startSksDetached(["ui"], title: "SKS Dashboard")
+                }
+                if let url = URL(string: urlString) {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
     }
 
     @objc func openCodexSettings() {
@@ -980,7 +1306,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func restartCodex() {
-        runInTerminal("/usr/bin/osascript -e 'tell application \\"Codex\\" to quit'; sleep 1; /usr/bin/open -a Codex; echo 'Codex restart requested.'")
+        let running = NSWorkspace.shared.runningApplications.filter { app in
+            if let bundle = codexBundleId, app.bundleIdentifier == bundle { return true }
+            return app.localizedName == "Codex"
+        }
+        for app in running {
+            app.terminate()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if let bundle = codexBundleId, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) {
+                NSWorkspace.shared.open(url)
+                showNotification("Restart Codex", "requested")
+            } else {
+                showAlert("Restart Codex failed", informative: "Codex app bundle could not be resolved.")
+            }
+        }
+    }
+
+    @objc func viewLastLog() {
+        if FileManager.default.fileExists(atPath: lastActionLogPath) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: lastActionLogPath))
+        } else {
+            showAlert("No SKS menu log yet", informative: lastActionLogPath)
+        }
     }
 
     @objc func quit() {
@@ -1213,13 +1561,14 @@ async function inspectLaunchdService(env: NodeJS.ProcessEnv = process.env): Prom
   const text = `${result.stdout || ''}\n${result.stderr || ''}`;
   const state = text.match(/\bstate = ([^\n]+)/)?.[1]?.trim() || null;
   const pidText = text.match(/\bpid = (\d+)/)?.[1] || null;
+  const running = result.code === 0 && (state === 'running' || Boolean(pidText));
   return {
     checked: true,
-    ok: result.code === 0,
+    ok: running,
     service,
     state,
     pid: pidText ? Number(pidText) : null,
-    error: result.code === 0 ? null : String(result.stderr || result.stdout || '').trim()
+    error: running ? null : String(result.stderr || result.stdout || state || 'launchd_not_running').trim()
   };
 }
 
@@ -1313,6 +1662,7 @@ async function writeReport(reportPath: string, result: SksMenuBarInstallResult):
     await writeJsonAtomic(reportPath, result);
   } catch (err: any) {
     result.report_write_failed = true;
+    if (!result.warnings.includes('menubar_report_write_failed')) result.warnings.push('menubar_report_write_failed');
     console.error(`warning: failed to write SKS menubar report ${reportPath}: ${err?.message || err}`);
   }
 }

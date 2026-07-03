@@ -120,14 +120,15 @@ export async function killTimedOutAgentSessions(root: string, now = Date.now(), 
       const sessionId = session.session_id || session.session_key || session.agent_id
       const next = {
         ...session,
-        status: 'killed',
+        status: 'timed_out',
         killed_at: new Date(now).toISOString(),
+        timed_out_at: new Date(now).toISOString(),
         closed_at: new Date(now).toISOString(),
         heartbeat_at: new Date(now).toISOString(),
         kill_reason: hardTimedOut ? 'hard_timeout' : 'heartbeat_timeout'
       }
       await writeSessionRecord(root, next)
-      await appendAgentLedgerEvent(root, { agent_id: String(session.agent_id || sessionId), session_id: sessionId, event_type: 'session_killed_timeout', payload: { kill_reason: next.kill_reason } })
+      await appendAgentLedgerEvent(root, { agent_id: String(session.agent_id || sessionId), session_id: sessionId, event_type: 'session_timed_out', payload: { kill_reason: next.kill_reason } })
       killed.push(sessionId)
     }
     await writeAgentLifecycleAggregate(root)
@@ -136,7 +137,8 @@ export async function killTimedOutAgentSessions(root: string, now = Date.now(), 
       generated_at: nowIso(),
       hard_timeout_ms: hardTimeoutMs,
       ok: killed.length === 0,
-      killed_sessions: killed
+      killed_sessions: killed,
+      timed_out_sessions: killed
     }
     await writeJsonAtomic(path.join(root, 'agent-timeout-kill-report.json'), report)
     return report

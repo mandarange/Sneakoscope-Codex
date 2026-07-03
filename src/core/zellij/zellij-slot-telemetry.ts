@@ -374,7 +374,7 @@ function isTelemetryTerminalStatus(status: unknown): boolean {
 function normalizeStatus(value: unknown): ZellijSlotTelemetryStatus {
   const text = String(value || '').toLowerCase()
   if (text === 'closed' || text === 'done' || text === 'passed') return 'completed'
-  if (text === 'blocked' || text === 'error') return 'failed'
+  if (text === 'blocked' || text === 'error' || text === 'timed_out') return 'failed'
   if (text === 'coding') return 'running'
   if (['queued', 'launching', 'running', 'verifying', 'completed', 'failed', 'headless', 'drained'].includes(text)) return text as ZellijSlotTelemetryStatus
   return 'running'

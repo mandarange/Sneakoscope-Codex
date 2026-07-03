@@ -42,7 +42,7 @@ import { planDoctorDirtyRepair } from '../core/doctor/doctor-dirty-planner.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
 import { writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
-import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
+import { inspectSksMenuBarStatus, installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { reconcileSkills } from '../core/init/skills.js';
 import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
@@ -528,14 +528,36 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
             required_for_ready: false,
             run: async () => ({
               id: 'sks_menubar',
-              ok: (sksMenuBar as any)?.ok !== false,
+              ok: (sksMenuBar as any)?.ok === true,
               repaired: doctorFix && Array.isArray((sksMenuBar as any)?.actions) && (sksMenuBar as any).actions.length > 0,
               required_for_ready: false,
               blockers: (sksMenuBar as any)?.blockers || [],
               warnings: (sksMenuBar as any)?.warnings || [],
               artifact_path: (sksMenuBar as any)?.report_path || null,
               rollback_evidence: (sksMenuBar as any)?.launch_agent_path || (sksMenuBar as any)?.report_path || 'sks_menubar_optional_no_core_mutation'
-            })
+            }),
+            postcheck: async () => {
+              const status = await inspectSksMenuBarStatus({ root }).catch((err: any) => ({
+                ok: false,
+                launchd: { ok: false, state: null, pid: null, error: err?.message || String(err) },
+                action_target: { ok: false, smoke_code: null, smoke_output: null },
+                blockers: [err?.message || String(err)],
+                warnings: []
+              } as any));
+              const blockers = [
+                ...((status as any).launchd?.ok === true ? [] : [`launchd_not_running:${(status as any).launchd?.error || (status as any).launchd?.state || 'unknown'}`]),
+                ...((status as any).action_target?.ok === true ? [] : [`action_script_smoke_failed:${(status as any).action_target?.smoke_code ?? 'no_code'}`]),
+                ...((status as any).ok === true ? [] : ((status as any).blockers || ['menubar_status_not_ok']))
+              ];
+              return {
+                ok: blockers.length === 0,
+                blockers,
+                warnings: [
+                  ...((status as any).warnings || []),
+                  blockers.length === 0 ? 'menubar_postcheck_passed' : 'menubar_postcheck_failed'
+                ]
+              };
+            }
           },
           {
             id: 'command_alias_cleanup',
@@ -947,6 +969,13 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   if (codexAppUi.next_action) console.log(`  next action: ${codexAppUi.next_action}`);
   console.log('SKS Menu Bar:');
   console.log(`  status: ${(sksMenuBar as any).status || ((sksMenuBar as any).ok ? 'ok' : 'blocked')}`);
+  const menubarPhase = (doctorFixTransaction as any)?.phases?.find((phase: any) => phase?.id === 'sks_menubar');
+  if (menubarPhase) {
+    const menubarSummary = menubarPhase.ok
+      ? (menubarPhase.repaired ? 'repaired' : 'verified')
+      : `blocked(${(menubarPhase.blockers || []).join(', ') || 'unknown'})`;
+    console.log(`  menubar: ${menubarSummary}`);
+  }
   if ((sksMenuBar as any).app_path) console.log(`  app: ${(sksMenuBar as any).app_path}`);
   if ((sksMenuBar as any).launch_agent_path) console.log(`  launch agent: ${(sksMenuBar as any).launch_agent_path}`);
   if (Array.isArray((sksMenuBar as any).blockers) && (sksMenuBar as any).blockers.length) console.log(`  blockers: ${(sksMenuBar as any).blockers.join(', ')}`);

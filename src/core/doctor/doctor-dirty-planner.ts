@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { MANAGED_ASSET_VERSION } from '../managed-assets/managed-assets-manifest.js';
 import { PACKAGE_VERSION, packageRoot, sha256 } from '../fsx.js';
 import { hashJson } from '../triwiki/triwiki-cache-key.js';
+import { SKS_MENUBAR_LABEL, sksMenuBarPaths } from '../codex-app/sks-menubar.js';
 
 export const DOCTOR_DIRTY_PLAN_SCHEMA = 'sks.doctor-dirty-plan.v2';
 
@@ -12,6 +14,7 @@ export interface DoctorDirtyPlan {
   phases: DoctorDirtyPhase[];
   dirty_count: number;
   clean_count: number;
+  runtime_probe_failed: string[];
   semantic_dirty_plan_path: string;
 }
 
@@ -23,6 +26,7 @@ export interface DoctorDirtyPhase {
   last_clean_proof_id: string | null;
   postcheck_required: boolean;
   postcheck_pending: boolean;
+  runtime_probe_failed: string[];
 }
 
 export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorDirtyPlan {
@@ -31,24 +35,29 @@ export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorD
     const inputHash = phaseInputHash(root, id);
     const postcheckRequired = phaseRequiresPostcheck(id);
     const markerState = readMarker(marker);
-    if (!markerState) return { id, status: 'dirty' as const, reason: 'no_clean_marker', input_hash: inputHash, last_clean_proof_id: null, postcheck_required: postcheckRequired, postcheck_pending: false };
+    const runtimeProbeFailed = runtimeProbeFailures(root, id);
+    if (!markerState) return { id, status: 'dirty' as const, reason: 'no_clean_marker', input_hash: inputHash, last_clean_proof_id: null, postcheck_required: postcheckRequired, postcheck_pending: false, runtime_probe_failed: runtimeProbeFailed };
     if (markerState.input_hash !== inputHash) {
-      return { id, status: 'dirty' as const, reason: 'input_hash_changed', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false };
+      return { id, status: 'dirty' as const, reason: 'input_hash_changed', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false, runtime_probe_failed: runtimeProbeFailed };
     }
     if (markerState.proof_id && !proofExists(root, markerState.proof_id)) {
-      return { id, status: 'dirty' as const, reason: 'clean_proof_missing', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false };
+      return { id, status: 'dirty' as const, reason: 'clean_proof_missing', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false, runtime_probe_failed: runtimeProbeFailed };
     }
     if (!markerState.repair_applied) {
-      return { id, status: 'dirty' as const, reason: 'repair_not_applied', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false };
+      return { id, status: 'dirty' as const, reason: 'repair_not_applied', input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false, runtime_probe_failed: runtimeProbeFailed };
+    }
+    if (runtimeProbeFailed.length) {
+      return { id, status: 'dirty' as const, reason: `runtime_probe_failed:${runtimeProbeFailed.join(',')}`, input_hash: inputHash, last_clean_proof_id: markerState.proof_id, postcheck_required: postcheckRequired, postcheck_pending: false, runtime_probe_failed: runtimeProbeFailed };
     }
     return {
       id,
-      status: 'clean' as const,
+      status: markerState.postcheck_pending ? 'dirty' as const : 'clean' as const,
       reason: postcheckRequired && markerState.postcheck_pending ? 'matching_repair_marker_postcheck_pending' : 'matching_clean_proof',
       input_hash: inputHash,
       last_clean_proof_id: markerState.proof_id,
       postcheck_required: postcheckRequired,
-      postcheck_pending: postcheckRequired && markerState.postcheck_pending
+      postcheck_pending: postcheckRequired && markerState.postcheck_pending,
+      runtime_probe_failed: []
     };
   });
   const plan: DoctorDirtyPlan = {
@@ -57,6 +66,7 @@ export function planDoctorDirtyRepair(root: string, phaseIds: string[]): DoctorD
     phases,
     dirty_count: phases.filter((phase) => phase.status === 'dirty').length,
     clean_count: phases.filter((phase) => phase.status === 'clean').length,
+    runtime_probe_failed: phases.flatMap((phase) => phase.runtime_probe_failed.map((failure) => `${phase.id}:${failure}`)),
     semantic_dirty_plan_path: dirtyPlanPath(root)
   };
   writeDirtyPlan(root, plan);
@@ -250,7 +260,38 @@ function proofExists(root: string, proofId: string): boolean {
 }
 
 function phaseRequiresPostcheck(id: string): boolean {
-  return /zellij|context7|startup|supabase|native|secret/i.test(id);
+  return /zellij|context7|startup|supabase|native|secret|menubar/i.test(id);
+}
+
+function runtimeProbeFailures(root: string, id: string): string[] {
+  if (!id.includes('menubar') || process.platform !== 'darwin') return [];
+  const failures: string[] = [];
+  const paths = sksMenuBarPaths(process.env.HOME, root);
+  if (!fs.existsSync(paths.executable_path)) failures.push('menubar_app_missing');
+  if (!fs.existsSync(paths.action_script_path)) failures.push('action_script_missing');
+  else {
+    try {
+      fs.accessSync(paths.action_script_path, fs.constants.X_OK);
+    } catch {
+      failures.push('action_script_not_executable');
+    }
+  }
+  const launchctl = process.env.SKS_MENUBAR_LAUNCHCTL || '/bin/launchctl';
+  if (!fs.existsSync(launchctl)) {
+    failures.push('launchctl_missing');
+    return failures;
+  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : null;
+  const service = `${uid === null ? 'gui' : `gui/${uid}`}/${SKS_MENUBAR_LABEL}`;
+  const result = spawnSync(launchctl, ['print', service], {
+    encoding: 'utf8',
+    timeout: 500,
+    maxBuffer: 32 * 1024
+  });
+  const text = `${result.stdout || ''}\n${result.stderr || ''}`;
+  if (result.error) failures.push(`launchctl_probe_error:${result.error.message}`);
+  else if (result.status !== 0 || !(/\bstate = running\b|\bpid = \d+\b/.test(text))) failures.push('launchd_not_running');
+  return failures;
 }
 
 function writeDirtyPlan(root: string, plan: DoctorDirtyPlan): void {

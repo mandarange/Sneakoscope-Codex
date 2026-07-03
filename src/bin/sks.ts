@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const FAST_PACKAGE_VERSION = '5.1.2';
+const FAST_PACKAGE_VERSION = '5.2.0';
 const args = process.argv.slice(2);
 
 try {

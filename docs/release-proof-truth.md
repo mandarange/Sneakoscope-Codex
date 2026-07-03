@@ -1,8 +1,8 @@
 # Release Proof Truth
 
-SKS 5.1.2 keeps release proof truth aligned with the 5.1.2 package metadata, built output, MAD-SKS SQL-plane gate inventory, imagegen repair gates, Codex App image evidence policy, mock/API fallback caps, and publish readiness evidence before `npm publish --ignore-scripts`.
+SKS 5.2.0 keeps release proof truth aligned with the 5.2.0 package metadata, built output, SKS menu bar install gate inventory, runtime action smoke evidence, Codex lifecycle sync status, doctor post-repair checks, and publish readiness evidence before `npm publish --ignore-scripts`.
 
-SKS 5.1.2 release proof truth requires proof that deprecated `mad-db` execution is routed through MAD-SKS, SQL-plane read-back/profile closure remains gate-visible, Codex App imagegen/gpt-image-2 is the only full visual evidence path, and mock/API fallback outputs stay capped below real success.
+SKS 5.2.0 release proof truth requires proof that menu bar installation does not pass on build-only artifacts, launchd is actually running, the generated action script can execute `sks-menubar-action.sh version`, Terminal fallbacks are absent from the Swift template, and Codex sync/report failures are visible as blocked or warning states instead of false success.
 
 SKS 5.1.1 keeps release proof truth aligned with the 5.1.1 package metadata, built output, release gate inventory, mock/real proof schemas, route stop-gate evaluator, gate-result output contract, feature fixture quality labels, and publish readiness evidence before `npm publish --ignore-scripts`.
 
