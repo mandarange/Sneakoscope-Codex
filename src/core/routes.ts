@@ -172,6 +172,7 @@ export const ROUTES = [
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'medium',
     stopGate: 'none',
+    coverageExemptReason: 'read-only answer route; never writes or modifies code/files',
     cliEntrypoint: 'implicit question route',
     examples: ['이 파이프라인이 왜 이렇게 동작해?', 'What does this hook do?']
   },
@@ -186,6 +187,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
     stopGate: 'honest_mode',
+    coverageExemptReason: 'setup/help/status routing only; delegates any real work to the target route it dispatches to',
     cliEntrypoint: 'sks commands',
     examples: ['$SKS show me available workflows']
   },
@@ -230,6 +232,7 @@ export const ROUTES = [
     context7Policy: 'not_required',
     reasoningPolicy: 'low',
     stopGate: 'none',
+    coverageExemptReason: 'single boolean project-config toggle, not a code-changing work order',
     cliEntrypoint: 'sks fast-mode on|off|status|clear [--json]',
     examples: ['$Fast-On', '$Fast-Off', '$Fast-Mode status']
   },
@@ -246,6 +249,7 @@ export const ROUTES = [
     context7Policy: 'not_required',
     reasoningPolicy: 'low',
     stopGate: 'none',
+    coverageExemptReason: 'single boolean project-config toggle, not a code-changing work order',
     cliEntrypoint: 'sks with-local-llm on|off|status|set-model [--json]',
     examples: ['$with-local-llm-on', '$with-local-llm-off', 'sks with-local-llm status --json']
   },
@@ -266,6 +270,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
+    coverage_required: true,
     cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|open-zellij|attach-zellij|cleanup-zellij',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
@@ -282,6 +287,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
+    coverage_required: true,
     cliEntrypoint: 'sks naruto run "task" [--clones N] [--backend codex-sdk|fake|ollama] [--parallel-write] | sks naruto status',
     examples: ['$Naruto run sweep the codebase for TODO comments with 50 clones', '$Work', '$Swarm "fix all lint errors"']
   },
@@ -370,6 +376,7 @@ export const ROUTES = [
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'medium',
     stopGate: 'loop-graph-proof.json',
+    coverage_required: true,
     cliEntrypoint: 'sks goal create|pause|resume|clear|status',
     examples: ['$Goal persist this migration workflow with native /goal continuation']
   },
@@ -384,6 +391,7 @@ export const ROUTES = [
     context7Policy: 'not_required',
     reasoningPolicy: 'low',
     stopGate: 'none',
+    coverageExemptReason: 'packages already-made changes into one commit; does not itself decide what work to do',
     cliEntrypoint: 'sks commit [--message "msg"] [--json]',
     examples: ['$Commit 이번 작업 커밋해줘']
   },
@@ -398,6 +406,7 @@ export const ROUTES = [
     context7Policy: 'not_required',
     reasoningPolicy: 'low',
     stopGate: 'none',
+    coverageExemptReason: 'packages already-made changes into one commit and pushes; does not itself decide what work to do',
     cliEntrypoint: 'sks commit-and-push [--message "msg"] [--json]',
     examples: ['$Commit-And-Push 커밋하고 바로 푸쉬해줘']
   },
@@ -531,6 +540,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
     stopGate: 'none',
+    coverageExemptReason: 'single fixed maintenance action (refresh/pack/validate/prune), not a free-form work order',
     cliEntrypoint: 'sks wiki refresh|pack|validate|prune',
     examples: ['$Wiki refresh', '$Wiki prune and validate']
   },
@@ -545,6 +555,7 @@ export const ROUTES = [
     context7Policy: 'optional',
     reasoningPolicy: 'medium',
     stopGate: 'none',
+    coverageExemptReason: 'read-only help/discovery output; never writes or modifies code/files',
     cliEntrypoint: 'sks help',
     examples: ['$Help show available SKS commands']
   }

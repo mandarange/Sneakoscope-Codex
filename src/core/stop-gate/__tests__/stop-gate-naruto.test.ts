@@ -141,6 +141,18 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
   const root = await makeTempRoot();
   const missionId = 'M-test-007';
   const dir = await setupMission(root, missionId);
+  // Naruto is a coverage_required route: a real naruto run always creates and
+  // closes a work-order-ledger, so a fully-resolved ledger here matches reality.
+  await fsp.writeFile(path.join(dir, 'work-order-ledger.json'), JSON.stringify({
+    schema_version: 1,
+    mission_id: missionId,
+    route: 'Naruto',
+    source_inventory_complete: true,
+    all_customer_requests_preserved: true,
+    all_customer_requests_mapped: true,
+    all_work_items_verified: true,
+    items: []
+  }));
   await fsp.writeFile(path.join(dir, 'stop-gate.json'), JSON.stringify({
     schema: 'sks.stop-gate.v1',
     route: 'Naruto',

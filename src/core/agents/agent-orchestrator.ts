@@ -831,7 +831,8 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
     const writePaths = normalizePathList(item.write_paths)
     const readonlyPaths = normalizePathList(item.readonly_paths)
     const targetPaths = normalizePathList(item.target_paths)
-    const parentObjective = normalizeWorkerPromptText(parentPrompt)
+    const parentObjectiveNormalized = normalizeWorkerPromptText(parentPrompt)
+    const parentObjective = parentObjectiveNormalized.text
     return Array.from({ length: candidateCount }, (_unused, candidateOffset) => {
       const candidateIndex = candidateOffset + 1
       const candidateSliceId = candidateCount > 1 ? `${sliceId}-cand${candidateIndex}` : sliceId
@@ -878,6 +879,9 @@ function applyNarutoWorkGraphToPartition(partition: any, graph: any, roster: any
       goal_mode_ref: goalModeRef,
       strategy_refs: strategyRefs,
       parent_prompt: parentObjective,
+      worker_prompt_truncated: parentObjectiveNormalized.truncated
+        ? { worker: owner, dropped_chars: parentObjectiveNormalized.dropped_chars }
+        : null,
       max_attempts: 1,
       description: [
         parentObjective ? `Parent Naruto objective:\n${parentObjective}` : null,
@@ -2046,8 +2050,17 @@ function buildDirectSdkWorkerPrompt(slice: any) {
   ].join('\n')
 }
 
+const WORKER_PROMPT_TEXT_MAX_CHARS = 32000
+
 function normalizeWorkerPromptText(value: unknown) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
+  const normalized = String(value || '').replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+  const truncated = normalized.length > WORKER_PROMPT_TEXT_MAX_CHARS
+  const text = truncated ? normalized.slice(0, WORKER_PROMPT_TEXT_MAX_CHARS) : normalized
+  return {
+    text,
+    truncated,
+    dropped_chars: truncated ? normalized.length - WORKER_PROMPT_TEXT_MAX_CHARS : 0
+  }
 }
 
 function buildDirectNoPatchReason(slice: any, opts: any) {

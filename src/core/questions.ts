@@ -464,7 +464,7 @@ export function buildRequestIntake(prompt: any, explicitAnswers: any = {}, opts:
   const answers = { ...(inferred.answers || {}), ...(explicitAnswers || {}) };
   const ambiguity = buildAmbiguityAssessment(originalPrompt, explicitAnswers);
   const wikiContext = summarizeWikiContext(opts.wikiContext);
-  const promptRequirements = promptRequirementItems(originalPrompt);
+  const { items: promptRequirements } = promptRequirementItems(originalPrompt);
   const semanticRequirements = semanticRequirementItems(originalPrompt);
   const acceptance = toStringList(answers.ACCEPTANCE_CRITERIA);
   const constraints = toStringList(answers.RISK_BOUNDARY);
@@ -538,19 +538,22 @@ function summarizeWikiContext(wikiContext: any = null) {
   };
 }
 
-function promptRequirementItems(prompt: string) {
-  const cleaned = prompt
-    .replace(/(?:^|\s)\$[A-Za-z0-9_-]+(?:\s|$)/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!cleaned) return [];
+const PROMPT_REQUIREMENT_ITEM_CEILING = 128;
+
+export function promptRequirementItems(prompt: string) {
+  const stripped = String(prompt || '').replace(/(?:^|\s)\$[A-Za-z0-9_-]+(?:\s|$)/g, ' ');
+  const cleaned = stripped.replace(/[ \t]+/g, ' ').trim();
+  if (!cleaned) return { items: [], truncated: false, truncated_count: 0 };
   const sourceChunks = cleaned
-    .split(/\n+|(?:^|\s)[-*]\s+/)
+    .split(/\n+|(?:^|\s)[-*]\s+|(?:^|\n)\s*\d+[.)]\s+|(?:^|\n)\s*[①-⑳]\s*|(?:^|\n)\s*[A-Z]-\d+[.)]?\s+|(?:^|\n)\s*#{1,4}\s+/m)
     .flatMap((chunk) => splitLooseClauses(chunk))
-    .map((chunk) => chunk.trim())
+    .map((chunk) => chunk.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
   const chunks = sourceChunks.length ? sourceChunks : [cleaned];
-  return chunks.slice(0, 12).map((text, index) => requirementItem('prompt', index + 1, text, 'source_prompt_order'));
+  const truncated = chunks.length > PROMPT_REQUIREMENT_ITEM_CEILING;
+  const kept = truncated ? chunks.slice(0, PROMPT_REQUIREMENT_ITEM_CEILING) : chunks;
+  const items = kept.map((text, index) => requirementItem('prompt', index + 1, text, 'source_prompt_order'));
+  return { items, truncated, truncated_count: truncated ? chunks.length - PROMPT_REQUIREMENT_ITEM_CEILING : 0 };
 }
 
 function splitLooseClauses(text: string) {

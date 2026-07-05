@@ -18,7 +18,9 @@ export async function planLoopsFromRequest(input: {
 }): Promise<SksLoopPlan> {
   const parallelism = input.parallelism || 'balanced';
   const maxLoops = Math.max(1, Math.min(32, input.maxLoops || 8));
-  const domains = decomposeRequestIntoLoopDomains(input.request).slice(0, maxLoops);
+  const allDomains = decomposeRequestIntoLoopDomains(input.request);
+  const domains = allDomains.slice(0, maxLoops);
+  const domainsTruncated = allDomains.slice(maxLoops).map((domain) => domain.id);
   const actionNodes = domains.map((domain): SksLoopNode => {
     const loopId = `loop-${domain.id}`;
     const ownerScope = inferLoopOwnerScope({ domain });
@@ -37,7 +39,7 @@ export async function planLoopsFromRequest(input: {
     });
     return { ...nodeBase, gates: selectLoopGates({ node: nodeBase, changedFiles: [...ownerScope.files, ...ownerScope.directories], risk }) };
   });
-  const integrationOwner = inferLoopOwnerScope({ domain: { id: 'integration', dirs: [], files: [], gates: ['release:dag-full-coverage'] }, integration: true });
+  const integrationOwner = inferLoopOwnerScope({ domain: { id: 'integration', dirs: [], files: [], gates: ['release:dag-full-coverage'], covers_work_order_items: [] }, integration: true });
   const integrationRisk = classifyLoopRisk({ loop_id: 'loop-integration', owner_scope: integrationOwner, level: 'L1-assisted' });
   const integrationBase = makeNode({
     missionId: input.missionId,
@@ -101,7 +103,9 @@ export async function planLoopsFromRequest(input: {
       goal_compat_artifact: input.sourceCommand === 'goal' ? `.sneakoscope/missions/${input.missionId}/goal-compat.json` : null,
       source_command: input.sourceCommand
     },
-    blockers: []
+    blockers: [],
+    domains_truncated: domainsTruncated,
+    unassigned_work_order_items: [...domainsTruncated]
   };
   const projectMemory = await readInitDeepMemory(input.root).catch(() => null);
   if (projectMemory) {

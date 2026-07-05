@@ -151,6 +151,8 @@ export async function checkStopGate(input: {
   const bugfixMission = await missionHasBugfixWork(root, missionId, normalizedGate);
   if (bugfixMission && normalizedGate.evidence.regression_test_added !== true) missingFields.push('regression_test_added');
   if (bugfixMission && normalizedGate.evidence.regression_test_failed_before_fix !== true) missingFields.push('regression_test_failed_before_fix');
+  if (normalizedGate.evidence.required_coverage_passed === false) missingFields.push('coverage_required_but_not_passed');
+  if ((normalizedGate.evidence.uncovered_required_count ?? 0) > 0) missingFields.push(`work_order_uncovered_count:${normalizedGate.evidence.uncovered_required_count}`);
 
   if (
     normalizedGate.status === 'passed'

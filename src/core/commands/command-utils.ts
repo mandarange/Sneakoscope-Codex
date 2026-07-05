@@ -3,8 +3,18 @@ import { DOLLAR_SKILL_NAMES, RECOMMENDED_SKILLS } from '../routes.js';
 
 export const flag = (args: any = [], name: any) => args.includes(name);
 
-export function promptOf(args: any = []) {
-  return args.filter((x: any) => !String(x).startsWith('--')).join(' ').trim();
+// Blindly dropping every "--"-prefixed argv token (the previous behavior of
+// promptOf/positionalArgs) silently deletes any part of an unquoted work-order
+// prompt that happens to contain a flag-lookalike phrase (e.g. "--files 로
+// 확인해라"). Only strip tokens that are actually recognized boolean/global
+// flags; anything else stays in the reconstructed prompt.
+const KNOWN_BOOLEAN_FLAGS = new Set([
+  '--json', '--mock', '--execute', '--auto', '--visual', '--research', '--db',
+  '--legacy-goal-runtime', '--help', '-h'
+]);
+
+export function promptOf(args: any = [], knownFlags: Set<string> = KNOWN_BOOLEAN_FLAGS) {
+  return args.filter((x: any) => !knownFlags.has(String(x))).join(' ').trim();
 }
 
 export async function resolveMissionId(root: any, arg: any) {
@@ -61,7 +71,8 @@ export function positionalArgs(args: any = []) {
       i += 1;
       continue;
     }
-    if (!arg.startsWith('--')) out.push(arg);
+    if (KNOWN_BOOLEAN_FLAGS.has(arg)) continue;
+    out.push(arg);
   }
   return out;
 }

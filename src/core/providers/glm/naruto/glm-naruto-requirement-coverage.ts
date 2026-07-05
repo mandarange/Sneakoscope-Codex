@@ -64,7 +64,7 @@ export function inferCandidateRequirementCoverage(input: {
       continue;
     }
 
-    if (input.envelope.patch.trim()) {
+    if (input.envelope.patch.trim() && hasKeywordOverlap(requirement.text, input.envelope.patch, input.envelope.target_paths)) {
       satisfied.push(requirement.id);
     } else {
       missing.push(requirement.id);
@@ -124,4 +124,25 @@ export function buildGlmNarutoRequirementCoverageSummary(input: {
 
 function extractPaths(text: string): readonly string[] {
   return [...new Set(text.match(/[A-Za-z0-9_.-]+\/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+/g) ?? [])];
+}
+
+const REQUIREMENT_STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'on', 'for', 'with', 'is', 'are', 'be',
+  'this', 'that', 'it', 'as', 'by', 'at', 'from', 'should', 'must', 'will', 'not', 'no',
+  '이', '가', '을', '를', '은', '는', '에', '의', '으로', '로', '만', '및', '그리고'
+]);
+
+function extractKeywords(text: string): readonly string[] {
+  const tokens = text.toLowerCase().match(/[a-z0-9_]{3,}|[가-힣]{2,}/g) ?? [];
+  return [...new Set(tokens.filter((token) => !REQUIREMENT_STOPWORDS.has(token)))];
+}
+
+function hasKeywordOverlap(requirementText: string, patch: string, targetPaths: readonly string[]): boolean {
+  const keywords = extractKeywords(requirementText);
+  if (keywords.length === 0) return false;
+  const patchLower = patch.toLowerCase();
+  const pathsLower = targetPaths.map((file) => file.toLowerCase());
+  return keywords.some(
+    (keyword) => patchLower.includes(keyword) || pathsLower.some((file) => file.includes(keyword))
+  );
 }

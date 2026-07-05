@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { ui as cliUi } from '../../cli/cli-theme.js'
 import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js'
+import { createAndWriteWorkOrderLedgerForPrompt, closeWorkOrderLedgerForRouteResult } from '../work-order-ledger.js'
 import { nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
 import { runNativeAgentOrchestrator } from '../agents/agent-orchestrator.js'
 import { classifyOllamaWorkerSlice } from '../agents/agent-runner-ollama.js'
@@ -90,6 +91,7 @@ async function narutoRun(parsed: NarutoArgs) {
     maxAgentCount: MAX_NARUTO_AGENT_COUNT
   })
   const mission = await createMission(root, { mode: 'naruto', prompt: parsed.prompt })
+  await createAndWriteWorkOrderLedgerForPrompt(mission.dir, { missionId: mission.id, route: 'Naruto', prompt: parsed.prompt })
   await writeCodex0138CapabilityArtifacts(root, { missionId: mission.id }).catch(() => null)
   await writeCodex0139CapabilityArtifacts(root, { missionId: mission.id }).catch(() => null)
   const gitWorktreeCapability = writeCapable
@@ -275,13 +277,13 @@ async function narutoRun(parsed: NarutoArgs) {
     rebalance_ready: rebalancePolicy.ok === true,
     concurrency_governor_ready: true,
     active_pool_simulated: activePool.ok === true,
-    verification_dag_ready: true,
-    gpt_final_pack_ready: true,
+    verification_dag_ready: Array.isArray(verificationDag?.tasks),
+    gpt_final_pack_ready: Boolean(gptFinalPack?.schema),
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: false,
     final_arbiter_accepted: false,
     session_cleanup: false,
-    blockers: [],
+    blockers: [...(workGraph.blockers || []), ...(allocationPolicy.blockers || [])],
     updated_at: nowIso()
   })
   await setCurrent(root, {
@@ -408,9 +410,11 @@ async function narutoRun(parsed: NarutoArgs) {
   const regressionProof = summarizeRegressionProof(workGraph, result)
   await writeJsonAtomic(path.join(mission.dir, 'regression-proof-summary.json'), regressionProof)
   const tddOk = !regressionProof.required || (regressionProof.regression_test_added && regressionProof.regression_test_failed_before_fix && regressionProof.regression_test_passed_after_fix)
+  const narutoGateFullPassed = result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk && tddOk && workGraph.ok === true && allocationPolicy.ok === true
+  const narutoGateFullBlockers = [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing']), ...(workGraph.blockers || []), ...(allocationPolicy.blockers || [])]
   await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
     schema: 'sks.naruto-gate.v1',
-    passed: result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk && tddOk,
+    passed: narutoGateFullPassed,
     mission_id: mission.id,
     clone_roster_built: true,
     clone_count: roster.agent_count,
@@ -420,8 +424,8 @@ async function narutoRun(parsed: NarutoArgs) {
     rebalance_ready: rebalancePolicy.ok === true,
     concurrency_governor_ready: true,
     active_pool_simulated: activePool.ok === true,
-    verification_dag_ready: true,
-    gpt_final_pack_ready: true,
+    verification_dag_ready: Array.isArray(verificationDag?.tasks),
+    gpt_final_pack_ready: Boolean(gptFinalPack?.schema),
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: nativeProofOk,
     parallel_runtime_proof: parallelRuntimeOk,
@@ -431,9 +435,10 @@ async function narutoRun(parsed: NarutoArgs) {
     regression_proof: 'regression-proof-summary.json',
     final_arbiter_accepted: finalAccepted,
     session_cleanup: result.proof?.all_sessions_closed === true || nativeProofOk,
-    blockers: [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing'])],
+    blockers: narutoGateFullBlockers,
     updated_at: nowIso()
   })
+  await closeWorkOrderLedgerForRouteResult(mission.dir, { ok: narutoGateFullPassed, blockers: narutoGateFullBlockers })
   const clones = result.roster?.agent_count ?? roster.agent_count
   const localWorkerSummary = summarizeNarutoLocalWorkerResult(localWorker, result)
   // Finalizer policy: when local LLM workers contributed patches, the GPT

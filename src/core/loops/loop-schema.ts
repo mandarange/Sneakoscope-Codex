@@ -119,6 +119,8 @@ export interface SksLoopPlan {
     source_command: 'goal' | 'loop' | 'naruto' | 'qa-loop' | 'research';
   };
   blockers: string[];
+  domains_truncated?: string[];
+  unassigned_work_order_items?: string[];
   project_memory?: {
     source: string;
     injected: boolean;

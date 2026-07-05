@@ -9,6 +9,34 @@
 
 
 
+
+## [5.5.0] - 2026-07-05
+
+### Added
+
+- Add `work-order-ledger.json` (`createWorkOrderLedger`/`writeWorkOrderLedger`/`readWorkOrderLedger`/`updateWorkOrderItem`/`evaluateWorkOrderCoverage`/`createAndWriteWorkOrderLedgerForPrompt`/`closeWorkOrderLedgerForRouteResult`) as the per-item source of truth for a work order's items (`WO-001..N`, verbatim text preserved), wired into `$Naruto`, `$Team` (alias of Naruto), `$Goal`, and `sks run --mock/--execute` at mission creation, and closed to `verified`/honestly-`blocked` once each route's own gate resolves.
+- Add a coverage gate to `evaluateStop` (the single choke point every route's stop decision passes through): stop is blocked while a mission's `work-order-ledger.json` has any item that is neither verified nor honestly blocked, and — for routes newly flagged `coverage_required` in `routes.ts` (`Naruto`, `Team`, `Goal`) — a missing ledger itself blocks stop. Also enforced inside the no-question/autonomous path and the canonical Naruto stop-gate `allow_stop` fast path, which previously bypassed every check below it.
+- Enforce the previously-unused `required_coverage_passed`/`uncovered_required_count` stop-gate evidence fields in both the stop-gate writer and reader, so a gate cannot claim `passed` over failing coverage and a stale/hand-written gate file cannot be used to bypass it.
+- Rewrite the work-order prompt parser (`promptRequirementItems`) to split on numbered/lettered/heading markers before whitespace normalization (previously whitespace was collapsed first, silently merging every numbered item into one), and remove the hard 12-item cap (raised to 128, with truncation now signaled via `{ truncated, truncated_count }` instead of dropped silently).
+- Surface previously-invisible work-item loss as explicit blockers: `agent-proof-evidence.json` now reports `work_items_not_all_completed`, `work_items_failed`, and `work_items_orphaned_pending` (items whose dependency failed/blocked, which the scheduler's own pending-queue filter could never see).
+- Fix the GLM Naruto requirement ledger collapsing an entire task into one requirement when no constraint keyword matched, and its coverage checker treating "the patch isn't empty" as proof every requirement was addressed.
+- Preserve newlines and raise the worker-prompt truncation ceiling (4000 → 32000 chars) in `agent-orchestrator.ts`'s `normalizeWorkerPromptText`, recording `worker_prompt_truncated` when truncation still occurs instead of silently cutting instructions.
+- Record silently-dropped domains (`domains_truncated`) in the loop planner instead of a bare `slice(0, maxLoops)`, and add `covers_work_order_items`/`unassigned_work_order_items` tracking fields to loop plans/domains.
+- Add a `docs/mission-scoping-design.md` design/migration plan for scoping `findLatestMission()` by route/mode (not implemented this release — classification and staged rollout plan only).
+- Add `test:core-root-regression` to `release-gates.v2.json` covering `dist/core/__tests__/*.test.js`, which was previously built and run by `npm test` but not gated by any release preset.
+
+### Fixed
+
+- Fix `sks run --execute` mislabeling its `$Team --mock` fallback (and any dedicated route whose command never references the prompt) as `execution_kind: 'live_route'`/`status: 'completed'`; it now reports `mock_safe`/`verified_partial` for the mock fallback and a `prompt_delivered` flag for routes whose command doesn't reference the prompt at all.
+- Fix `naruto-gate.json`'s `passed` condition omitting `workGraph.ok`/`allocationPolicy.ok`, so a broken work-graph or allocation pass could not block the gate; also replace the hardcoded `verification_dag_ready`/`gpt_final_pack_ready: true` literals with values derived from the actual DAG/pack build.
+- Fix `command-utils.ts`'s `promptOf`/`positionalArgs` silently deleting any part of an unquoted prompt that looked like a flag (dropping every `--`-prefixed token, plus the following token for ~50 known value-flags); only recognized flags are stripped now, everything else is preserved in the reconstructed prompt.
+- Remove the phantom `five_lane_review`/`integration_evidence`/`session_cleanup` sections `release-command.ts` required from `release-readiness-report.json` — no producer had ever written them (introduced in commit `d4526f84` with no producer wired up), so `sks release affected` failed on a schema mismatch unrelated to real release readiness.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Changed
+
+- `feature-fixtures.ts`: add `work-order-ledger.json` to the expected artifacts of fixtures whose routes now create/close it (`cli-run`, `cli-goal`, `route-team`, `route-naruto`, `route-work`, `route-swarm`); update `cli-release`'s reason to reflect the fixed schema mismatch while it stays honestly `blocked` on other unrelated release-gate failures.
+
 ## [5.4.0] - 2026-07-03
 
 ### Added

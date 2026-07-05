@@ -7,7 +7,7 @@ import { evaluateQaGate } from '../qa-loop.js';
 import { PPT_REQUIRED_GATE_FIELDS } from '../ppt.js';
 import { validateFinalHonestModeReport } from '../artifact-schemas.js';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, IMAGE_UX_REVIEW_REFERENCE_GATE_FIELDS, IMAGE_UX_REVIEW_HONEST_MODE_ARTIFACT, imageUxReviewGateAllowsReferenceCloseout } from '../image-ux-review.js';
-import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, evidenceMentionsForbiddenBrowserAutomation, reflectionRequiredForRoute } from '../routes.js';
+import { CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, evidenceMentionsForbiddenBrowserAutomation, reflectionRequiredForRoute, routeById } from '../routes.js';
 import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
 import { AGENT_INTAKE_STAGE_ID } from '../agents/agent-schema.js';
@@ -17,6 +17,7 @@ import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-rec
 import { SSOT_GUARD_ARTIFACT, validateSsotGuardArtifact } from '../safety/ssot-guard.js';
 import { validateTeamRuntimeArtifacts } from '../team-dag.js';
 import { checkStopGate } from '../stop-gate/stop-gate-check.js';
+import { readWorkOrderLedger, evaluateWorkOrderCoverage } from '../work-order-ledger.js';
 import {
   clarificationStopReason,
   context7Evidence,
@@ -70,6 +71,26 @@ async function reflectionGateStatus(root: any, state: any = {}, jsonCache?: Map<
     }, { sessionKey: state._session_key });
   }
   return { ok, missing };
+}
+
+// The single choke point every route's stop decision passes through
+// (hookStop -> evaluateStop). A work-order-ledger.json here means SOME
+// code already committed to tracking this mission's work items; once that
+// commitment exists, stop must not be allowed while items remain
+// unresolved (neither verified nor honestly blocked), or an omission can
+// reach "done" silently. Missions with no ledger are unaffected (routes
+// that haven't adopted per-item tracking yet, or non-work routes).
+async function workOrderCoverageGateStatus(root: any, state: any = {}) {
+  const id = state?.mission_id;
+  if (!id) return { ok: true, blockers: [] };
+  const ledger = await readWorkOrderLedger(missionDir(root, id));
+  if (!ledger) {
+    const route = routeById(routeFromState(state));
+    if (route?.coverage_required) return { ok: false, blockers: ['work_order_ledger_missing'] };
+    return { ok: true, blockers: [] };
+  }
+  const coverage = evaluateWorkOrderCoverage(ledger);
+  return { ok: coverage.ok, blockers: coverage.blockers };
 }
 
 async function staleReflectionReasons(root: any, state: any = {}, gate: any = {}) {
@@ -228,8 +249,14 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
       };
     }
     if (gate.ok) {
+      const coverage = await workOrderCoverageGateStatus(root, state);
+      if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
       const reflection = await reflectionGateStatus(root, state, jsonCache);
-      if (!reflection.ok) await appendHonestModeNote(root, state, `reflection stale: ${(reflection.missing || []).join(', ')}`);
+      if (!reflection.ok) {
+        const coverageRequiredRoute = routeById(routeFromState(state))?.coverage_required === true;
+        if (coverageRequiredRoute) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
+        await appendHonestModeNote(root, state, `reflection stale: ${(reflection.missing || []).join(', ')}`);
+      }
       return { continue: true };
     }
     const missing = gate.missing?.length ? ` Missing gate fields: ${gate.missing.join(', ')}.` : '';
@@ -249,7 +276,11 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
         allowLatestFallback: opts.allowLatestFallback !== true ? false : true,
       });
       if (stopCheck.action === 'allow_stop') {
-        if (narutoFamily) return { continue: true, systemMessage: `SKS: canonical stop-gate passed at ${stopCheck.gate_path}` };
+        if (narutoFamily) {
+          const coverage = await workOrderCoverageGateStatus(root, state);
+          if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
+          return { continue: true, systemMessage: `SKS: canonical stop-gate passed at ${stopCheck.gate_path}` };
+        }
       } else if (stopCheck.action === 'hard_blocked') {
         return { continue: true, systemMessage: stopCheck.feedback, action: 'hard_blocked', gate: stopCheck.gate_path };
       } else {
@@ -279,6 +310,8 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   }
   const reflection = await reflectionGateStatus(root, state, jsonCache);
   if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
+  const coverage = await workOrderCoverageGateStatus(root, state);
+  if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
   fireAndForgetProjectMemory(root, state);
   return null;
 }

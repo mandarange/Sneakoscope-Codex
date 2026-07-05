@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { exists, projectRoot, runProcess, writeJsonAtomic, type RunProcessResult } from '../fsx.js';
 import { createMission, missionDir, setCurrent } from '../mission.js';
+import { createAndWriteWorkOrderLedgerForPrompt, closeWorkOrderLedgerForRouteResult } from '../work-order-ledger.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { routePrompt } from '../routes.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
@@ -44,6 +45,7 @@ export interface RunRouteExecution {
   stderr_tail?: string;
   steps?: RunRouteStep[];
   trust_status?: string;
+  prompt_delivered?: boolean;
   blockers: string[];
   unverified: string[];
   next_action: string;
@@ -110,6 +112,7 @@ interface RouteExecutionOptions {
   trustStatus?: string;
   unverified?: string[];
   executionKind?: RouteExecutionKind;
+  promptDelivered?: boolean;
 }
 
 interface FinalizeResult {
@@ -178,6 +181,7 @@ export async function runCommand(args: readonly string[] = []): Promise<RunResul
     console.log(`Next: ${classification.next_action}`);
     return result;
   }
+  await createAndWriteWorkOrderLedgerForPrompt(dir, { missionId: id, route: route.command, prompt });
   if (execute) return executeRunRoute(root, { id, dir, route, prompt, args, classification, auto });
   return finalizeMockRun(root, { id, route, prompt, args, classification, mode });
 }
@@ -216,6 +220,7 @@ async function finalizeMockRun(
   });
   const trust = await loadTrustReport(root, id);
   const completionOk = proof.ok && proof.proof?.status !== 'mock_only' && gate.passed === true;
+  await closeWorkOrderLedgerForRouteResult(missionDir(root, id), { ok: completionOk, blockers: gate.blockers });
   await setCurrent(root, {
     mission_id: id,
     mode: 'RUN',
@@ -285,12 +290,14 @@ async function executeRunRoute(root: string, context: ExecuteRunContext): Promis
     : await loadTrustReport(root, id);
   const autoVerification = auto ? await runAutoVerification(root, id) : null;
   const autoOk = autoVerification?.ok ?? true;
+  const executeOk = execution.ok && proof.ok && autoOk;
+  await closeWorkOrderLedgerForRouteResult(dir, { ok: executeOk, blockers: execution.blockers });
   await setCurrent(root, {
     mission_id: id,
     mode: 'RUN',
     route: route.id,
     route_command: route.command,
-    phase: execution.ok && proof.ok && autoOk ? 'RUN_EXECUTE_DONE' : 'RUN_EXECUTE_BLOCKED',
+    phase: executeOk ? 'RUN_EXECUTE_DONE' : 'RUN_EXECUTE_BLOCKED',
     implementation_allowed: execution.ok,
     nested_mission_id: execution.nested_mission_id,
     completion_proof: 'completion-proof.json',
@@ -298,7 +305,7 @@ async function executeRunRoute(root: string, context: ExecuteRunContext): Promis
   });
   const result: RunResult = {
     schema: 'sks.run.v2',
-    ok: execution.ok && proof.ok && autoOk,
+    ok: executeOk,
     mission_id: id,
     route: route.command,
     mode: auto ? 'auto' : 'execute',
@@ -377,11 +384,21 @@ async function executeRouteCommand(
     });
   }
   const commandArgs = safeRouteExecutionArgs(route, prompt, { auto });
+  // safeRouteExecutionArgs() falls back to `team <prompt> --mock` for any route it
+  // doesn't have a dedicated safe live command for, and several dedicated branches
+  // (DB/Wiki/Fast-Mode/with-local-llm-on/Commit/Commit-And-Push) run a fixed
+  // command that never references the prompt at all. Both must be labeled
+  // honestly rather than as a live-route completion: a --mock invocation cannot
+  // claim a real completion (14차 honest-mock principle), and a fixed command
+  // that never saw the prompt cannot claim to have addressed it.
+  const isMockFallback = commandArgs.includes('--mock');
+  const promptDelivered = Boolean(prompt) && commandArgs.includes(prompt);
   const result = await runSks(root, commandArgs);
   return routeExecutionResult(route, ['sks', ...commandArgs].join(' '), result, {
-    okStatus: 'completed',
-    trustStatus: 'verified_partial',
-    executionKind: 'live_route',
+    okStatus: isMockFallback ? 'verified_partial' : 'completed',
+    trustStatus: isMockFallback ? 'mock_only' : 'verified_partial',
+    executionKind: isMockFallback ? 'mock_safe' : 'live_route',
+    promptDelivered,
   });
 }
 
@@ -479,6 +496,7 @@ function routeExecutionResult(
     next_action: ok ? 'review completion proof and trust report' : 'inspect run-route-execution.json stderr_tail',
   };
   if (options.steps) execution.steps = options.steps;
+  if (options.promptDelivered !== undefined) execution.prompt_delivered = options.promptDelivered;
   return execution;
 }
 

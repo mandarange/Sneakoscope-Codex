@@ -9,6 +9,7 @@ export interface LoopDomain {
   dirs: string[];
   files: string[];
   gates: string[];
+  covers_work_order_items: string[];
 }
 
 export const LOOP_DOMAIN_RULES: LoopDomainRule[] = [
@@ -36,14 +37,15 @@ export function decomposeRequestIntoLoopDomains(request: string, changedFiles: s
       id: rule.id,
       dirs: rule.dirs.filter((dir) => !dir.includes('*')),
       files: matchedFiles,
-      gates: rule.gates
+      gates: rule.gates,
+      covers_work_order_items: []
     });
   }
   if (selected.size === 0 && explicitFiles.length) {
-    selected.set('loop-general-coding', { id: 'loop-general-coding', dirs: [], files: explicitFiles, gates: ['loop:affected'] });
+    selected.set('loop-general-coding', { id: 'loop-general-coding', dirs: [], files: explicitFiles, gates: ['loop:affected'], covers_work_order_items: [] });
   }
   if (selected.size === 0) {
-    selected.set('loop-general-coding', { id: 'loop-general-coding', dirs: ['src'], files: [], gates: ['loop:affected'] });
+    selected.set('loop-general-coding', { id: 'loop-general-coding', dirs: ['src'], files: [], gates: ['loop:affected'], covers_work_order_items: [] });
   }
   return [...selected.values()];
 }

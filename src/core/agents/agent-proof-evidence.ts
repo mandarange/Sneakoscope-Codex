@@ -135,6 +135,19 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     || (scheduler.pending_queue_drained === true
       && Number(scheduler.active_slot_count || 0) === 0
       && Number(scheduler.max_observed_active_slots || 0) >= Number(scheduler.target_active_slots || 0))
+  const workQueueItems = Array.isArray(workQueue?.items) ? workQueue.items : []
+  const workItemsNotAllCompletedIds = workQueueItems
+    .filter((item: any) => item.status !== 'completed')
+    .map((item: any) => String(item.id))
+  const workItemsFailedOrBlockedCount = Number(scheduler?.failed_count || 0) + Number(scheduler?.blocked_count || 0)
+  const workItemStatusById = new Map(workQueueItems.map((item: any) => [String(item.id), String(item.status)]))
+  const orphanedPendingWorkItemIds = workQueueItems
+    .filter((item: any) => item.status === 'pending')
+    .filter((item: any) => (Array.isArray(item.dependencies) ? item.dependencies : []).some((dep: any) => {
+      const depStatus = workItemStatusById.get(String(dep))
+      return depStatus === 'failed' || depStatus === 'blocked' || !depStatus
+    }))
+    .map((item: any) => String(item.id))
   const blockers = [
     ...(lifecycle.ok ? [] : ['agent_lifecycle_not_all_closed']),
     ...(lifecycle.ok ? [] : lifecycle.open_sessions.map((id: string) => 'session_open:' + id)),
@@ -155,6 +168,9 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     ...(taskGraph && !taskGraphMatchesCliOptions ? ['task_graph_cli_options_mismatch'] : []),
     ...(workQueue && taskGraph && !workQueueMatchesTaskGraph ? ['work_queue_task_graph_mismatch'] : []),
     ...(scheduler && workQueue && !schedulerMatchesWorkQueue ? ['scheduler_work_queue_mismatch'] : []),
+    ...(workQueue && schedulerTotalWorkItems && Number(scheduler?.completed_count || 0) !== schedulerTotalWorkItems ? ['work_items_not_all_completed:' + workItemsNotAllCompletedIds.join(',')] : []),
+    ...(workItemsFailedOrBlockedCount > 0 ? ['work_items_failed:' + workItemsFailedOrBlockedCount] : []),
+    ...(orphanedPendingWorkItemIds.length ? ['work_items_orphaned_pending:' + orphanedPendingWorkItemIds.join(',')] : []),
     ...(taskGraph && !taskGraphSourceRefsOk ? ['task_graph_source_refs_missing'] : []),
     ...(taskGraph && !taskGraphGoalRefsOk ? ['task_graph_goal_refs_missing'] : []),
     ...(taskGraph && !taskGraphStrategyRefsOk ? ['task_graph_strategy_refs_missing'] : []),

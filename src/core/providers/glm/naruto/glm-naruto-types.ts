@@ -112,6 +112,7 @@ export interface GlmNarutoRequirementLedger {
     readonly text: string;
     readonly source: 'user_task' | 'git_status' | 'test_error' | 'inferred';
     readonly required: boolean;
+    readonly kind: 'constraint' | 'task';
   }[];
 }
 
