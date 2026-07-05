@@ -610,6 +610,13 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
   if (input.skipMigrationGate === true || commandSkipsMigrationGate(command)) {
     return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, failed_stage_id: null, blockers: [], warnings: [`skip_migration_gate_command:${command}`] };
   }
+  // projectRoot() falls back to the raw cwd when no project marker is found.
+  // launchd-spawned callers (the SKS menu bar app) run with cwd=/ — there is
+  // no project to migrate there, and proceeding would mkdir /.sneakoscope and
+  // crash the whole command before it starts.
+  if (root === path.parse(root).root) {
+    return { ...empty, ok: true, status: 'skipped', receipt: null, doctor: null, failed_stage_id: null, blockers: [], warnings: ['no_project_workspace_at_filesystem_root'] };
+  }
 
   const [epoch, receipt] = await Promise.all([
     ensureInstallationEpoch('first-command-gate'),
@@ -908,7 +915,13 @@ async function withUpdateMigrationLock(
   options: { recheck?: () => Promise<UpdateMigrationGateResult | null>; maxWaitMs?: number } = {}
 ): Promise<UpdateMigrationGateResult> {
   const lockPath = path.join(root, '.sneakoscope', 'update', 'migration.lock');
-  await ensureDir(path.dirname(lockPath));
+  try {
+    await ensureDir(path.dirname(lockPath));
+  } catch (err: any) {
+    // An unwritable root (read-only mount, cwd outside any workspace) must fail
+    // the gate with a reportable blocker, not crash the whole CLI dispatch.
+    return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, failed_stage_id: 'migration-lock', blockers: [`update_migration_lock_dir_unwritable:${err?.message || String(err)}`], warnings: [] };
+  }
   const recheck = options.recheck ?? null;
   const deadline = Date.now() + (options.maxWaitMs ?? MIGRATION_LOCK_WAIT_MS);
   let reapedStale = false;

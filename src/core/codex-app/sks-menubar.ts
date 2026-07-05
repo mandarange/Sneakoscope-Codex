@@ -847,6 +847,14 @@ export function actionScriptSource(input: { nodeBin: string; sksEntry: string })
   return `#!/bin/zsh
 set -e
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+# launchd starts this app with cwd=/. sks treats an unmarked cwd as the project
+# root fallback, and / is neither writable nor a workspace, so give every
+# menu-bar-spawned command a sane home-directory cwd instead.
+cd "$HOME" 2>/dev/null || true
+# Menu-bar actions operate on global state (~/.codex, keychain, launchd), never
+# on a project, so the per-project update-migration gate must not fire here —
+# it would otherwise treat $HOME as a project and run a migration doctor in it.
+export SKS_UPDATE_MIGRATION_GATE_DISABLED=1
 NODE_BIN=${shellQuote(input.nodeBin)}
 SKS_ENTRY=${shellQuote(input.sksEntry)}
 
