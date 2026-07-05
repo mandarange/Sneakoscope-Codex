@@ -1,7 +1,9 @@
+import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
 import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
-import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock } from '../mcp/mcp-config-preservation.js';
+import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock, tomlTableRange } from '../mcp/mcp-config-preservation.js';
 
 export interface SupabaseMcpRepairReport {
   schema: 'sks.doctor-supabase-mcp-repair.v1';
@@ -14,6 +16,8 @@ export interface SupabaseMcpRepairReport {
   token_env_present: boolean;
   unsafe_write_access: boolean;
   read_only_migrated: boolean;
+  stdio_url_transport_collision: boolean;
+  transport_collision_resolved: boolean;
   write_scope_requires_confirmation: boolean;
   ready_blocking: boolean;
   manual_required: boolean;
@@ -33,9 +37,35 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
   const tokenEnvPresent = Boolean(process.env.SUPABASE_ACCESS_TOKEN);
   const readOnlyBefore = /read[_-]?only\s*=\s*true|access_mode\s*=\s*"read-only"|--read-only/.test(block);
   const unsafeWriteAccessBefore = configured && !disabled && !readOnlyBefore && /write|service_role|SUPABASE_ACCESS_TOKEN/.test(block);
+  // Codex merges the global (~/.codex) and project (.codex) config per key. When
+  // the project defines a stdio supabase server (command=...) while the global
+  // one uses a streamable-http url, the merged table has both `command` and
+  // `url`, and Codex refuses to load with "url is not supported for stdio",
+  // blocking every chat/task in that project. Detect and disable the project's
+  // stdio block so it inherits the safe global read-only url form.
+  const globalConfig = await readGlobalCodexConfigText();
+  const distinctConfigs = path.resolve(globalConfig.path) !== path.resolve(config.path);
+  const projectTransport = blockTransport(block);
+  const globalTransport = distinctConfigs ? blockTransport(mcpServerBlock(globalConfig.text, 'supabase')) : null;
+  const stdioUrlTransportCollision = configured && !disabled && projectTransport === 'stdio' && globalTransport === 'url';
   let afterText = config.text;
   let readOnlyMigrated = false;
-  if (configured && !disabled && !readOnlyBefore && input.apply) {
+  let transportCollisionResolved = false;
+  if (stdioUrlTransportCollision && input.apply) {
+    const range = tomlTableRange(config.text, 'mcp_servers.supabase', true);
+    if (range) {
+      const commented = commentOutStdioSupabaseBlock(config.text.slice(range.start, range.end));
+      afterText = `${config.text.slice(0, range.start)}${commented}${config.text.slice(range.end)}`;
+      transportCollisionResolved = afterText !== config.text;
+      if (transportCollisionResolved) await writeCodexConfigGuarded({
+        root,
+        configPath: config.path,
+        before: config.text,
+        cause: 'supabase-mcp-transport-collision',
+        mutate: () => afterText
+      });
+    }
+  } else if (configured && !disabled && !readOnlyBefore && input.apply) {
     afterText = replaceOrAppendMcpServerBlock(config.text, 'supabase', setReadOnly(block));
     readOnlyMigrated = afterText !== config.text;
     if (readOnlyMigrated) await writeCodexConfigGuarded({
@@ -46,16 +76,20 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
       mutate: () => afterText
     });
   }
-  const afterBlock = readOnlyMigrated ? mcpServerBlock(afterText, 'supabase') || '' : block;
+  // A resolved collision comments the whole stdio block out, so the project no
+  // longer contributes an active supabase server at all.
+  const effectivelyConfigured = configured && !transportCollisionResolved;
+  const afterBlock = transportCollisionResolved ? '' : readOnlyMigrated ? mcpServerBlock(afterText, 'supabase') || '' : block;
   const readOnlyAfter = /read[_-]?only\s*=\s*true|access_mode\s*=\s*"read-only"|--read-only/.test(afterBlock);
-  const unsafeWriteAccess = configured && !disabled && !readOnlyAfter && /write|service_role|SUPABASE_ACCESS_TOKEN/.test(afterBlock);
-  const writeScopeRequiresConfirmation = configured && !disabled && (unsafeWriteAccessBefore || !readOnlyAfter);
-  const readyBlocking = unsafeWriteAccess;
-  const manualRequired = configured && !disabled && (!tokenEnvPresent || writeScopeRequiresConfirmation);
+  const unsafeWriteAccess = effectivelyConfigured && !disabled && !readOnlyAfter && /write|service_role|SUPABASE_ACCESS_TOKEN/.test(afterBlock);
+  const transportCollisionUnresolved = stdioUrlTransportCollision && !transportCollisionResolved;
+  const writeScopeRequiresConfirmation = effectivelyConfigured && !disabled && (unsafeWriteAccessBefore || !readOnlyAfter);
+  const readyBlocking = unsafeWriteAccess || transportCollisionUnresolved;
+  const manualRequired = effectivelyConfigured && !disabled && (!tokenEnvPresent || writeScopeRequiresConfirmation);
   let report: SupabaseMcpRepairReport = {
     schema: 'sks.doctor-supabase-mcp-repair.v1',
     generated_at: nowIso(),
-    ok: !configured || disabled || !unsafeWriteAccess,
+    ok: (!configured || disabled || !unsafeWriteAccess) && !transportCollisionUnresolved,
     apply: input.apply === true,
     configured,
     disabled,
@@ -63,18 +97,26 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
     token_env_present: tokenEnvPresent,
     unsafe_write_access: unsafeWriteAccess,
     read_only_migrated: readOnlyMigrated,
+    stdio_url_transport_collision: stdioUrlTransportCollision,
+    transport_collision_resolved: transportCollisionResolved,
     write_scope_requires_confirmation: writeScopeRequiresConfirmation,
     ready_blocking: readyBlocking,
     manual_required: manualRequired,
-    next_action: manualRequired
-      ? tokenEnvPresent
-        ? 'Set persistent Supabase MCP to read-only. Write-scoped Supabase MCP is allowed only through a mission-local MadDB runtime profile.'
-        : 'Set SUPABASE_ACCESS_TOKEN only when an explicit MadDB run needs Supabase MCP auth; otherwise keep persistent Supabase MCP disabled/read-only.'
-      : null,
-    blockers: readyBlocking ? ['supabase_mcp_write_access_not_safe_by_default'] : [],
+    next_action: transportCollisionUnresolved
+      ? 'Project Supabase MCP uses stdio while the global config uses a streamable-http url; Codex rejects the merged config with "url is not supported for stdio". Run `sks doctor --fix` to disable the project stdio block so it inherits the safe global read-only url.'
+      : manualRequired
+        ? tokenEnvPresent
+          ? 'Set persistent Supabase MCP to read-only. Write-scoped Supabase MCP is allowed only through a mission-local MadDB runtime profile.'
+          : 'Set SUPABASE_ACCESS_TOKEN only when an explicit MadDB run needs Supabase MCP auth; otherwise keep persistent Supabase MCP disabled/read-only.'
+        : null,
+    blockers: [
+      ...(unsafeWriteAccess ? ['supabase_mcp_write_access_not_safe_by_default'] : []),
+      ...(transportCollisionUnresolved ? ['supabase_mcp_stdio_url_transport_collision'] : [])
+    ],
     warnings: [
-      ...(configured && !tokenEnvPresent ? ['supabase_access_token_unset_write_features_manual_required'] : []),
-      ...(readOnlyMigrated ? ['supabase_mcp_migrated_to_read_only'] : [])
+      ...(effectivelyConfigured && !tokenEnvPresent ? ['supabase_access_token_unset_write_features_manual_required'] : []),
+      ...(readOnlyMigrated ? ['supabase_mcp_migrated_to_read_only'] : []),
+      ...(transportCollisionResolved ? ['supabase_mcp_stdio_block_disabled_for_url_collision'] : [])
     ],
     raw_secret_values_recorded: false
   };
@@ -100,4 +142,31 @@ function setReadOnly(block: string): string {
   if (index >= 0) lines[index] = 'read_only = true';
   else lines.push('read_only = true');
   return `${lines.join('\n')}\n`;
+}
+
+async function readGlobalCodexConfigText(): Promise<{ path: string; text: string }> {
+  const home = process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex');
+  const file = path.join(home, 'config.toml');
+  const text = await fs.readFile(file, 'utf8').catch(() => '');
+  return { path: file, text };
+}
+
+function blockTransport(block: string | null): 'stdio' | 'url' | null {
+  if (!block) return null;
+  if (/^\s*command\s*=/m.test(block)) return 'stdio';
+  if (/^\s*url\s*=/m.test(block)) return 'url';
+  return null;
+}
+
+/** Comment every line of a supabase MCP block (header + child .env table) so
+ * Codex stops loading it as a stdio server, while keeping the original text —
+ * including the access token — recoverable in place. */
+function commentOutStdioSupabaseBlock(block: string): string {
+  const note = '# [sks doctor] Supabase MCP stdio block disabled: it collided with the global read-only URL Supabase entry (Codex: "url is not supported for stdio"). Re-add a read-only URL form (url = "https://mcp.supabase.com/mcp?project_ref=<ref>&read_only=true&features=database,docs") if this project needs its own Supabase MCP.\n';
+  const commented = String(block || '')
+    .replace(/\s+$/, '')
+    .split(/\r?\n/)
+    .map((line) => (line.length ? `# ${line}` : '#'))
+    .join('\n');
+  return `${note}${commented}\n`;
 }

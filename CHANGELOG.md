@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 
+
+## [5.5.3] - 2026-07-05
+
+### Fixed
+
+- Make `sks doctor --fix` repair the Supabase MCP `url is not supported for stdio` failure that blocked Codex from starting any chat/task in a project. Codex merges the global (`~/.codex`) and project (`.codex`) config per key, so a project that defines Supabase MCP as stdio (`command = ...` + `SUPABASE_ACCESS_TOKEN`) while the global config uses a streamable-http `url` produces a merged table with both `command` and `url`, which Codex rejects. The Supabase MCP repair now reads the global config too, detects this stdio/url transport collision, and under `--fix` comments out the project's stdio block (with a backup, keeping the token recoverable in place) so the project inherits the safe global read-only url form. Without `--fix` it reports the `supabase_mcp_stdio_url_transport_collision` blocker instead of silently passing.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [5.5.2] - 2026-07-05
 
 ### Fixed
