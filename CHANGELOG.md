@@ -6,6 +6,14 @@
 
 
 
+
+## [5.6.1] - 2026-07-05
+
+### Fixed
+
+- Fix the SKS menu bar's "Set codex-lb Domain" dialog UX: the placeholder showed the full `/backend-api/codex` suffixed URL, misleadingly implying it must be typed by hand even though a bare domain is already normalized to the correct full URL automatically; the placeholder now shows a bare-domain example, and the message text clarifies the suffix is added automatically. Command failures shown in menu bar alerts now go through a humanizer that translates JSON reason/status/blocker codes into plain English (with a readable "snake_case -> Words" fallback for unknown codes) instead of dumping the raw JSON blob — applies to every menu action's failure alert, not just codex-lb setup.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [5.6.0] - 2026-07-05
 
 ### Added
