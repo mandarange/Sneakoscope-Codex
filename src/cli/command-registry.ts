@@ -266,7 +266,13 @@ export const COMMANDS = {
   features: entry('beta', 'Validate feature registry', 'dist/commands/features.js', directCommand(() => import('../commands/features.js'), 'dist/commands/features.js')),
   'all-features': entry('beta', 'Run all-features selftest', 'dist/commands/all-features.js', directCommand(() => import('../commands/all-features.js'), 'dist/commands/all-features.js')),
   perf: entry('beta', 'Run performance checks', 'dist/commands/perf.js', directCommand(() => import('../commands/perf.js'), 'dist/commands/perf.js')),
-  bench: entry('beta', 'Run core trust-kernel benchmark budgets', 'dist/core/commands/bench-command.js', argsCommand(() => import('../core/commands/bench-command.js'), 'benchCommand', 'dist/core/commands/bench-command.js'))
+  bench: entry('beta', 'Run core trust-kernel benchmark budgets', 'dist/core/commands/bench-command.js', argsCommand(() => import('../core/commands/bench-command.js'), 'benchCommand', 'dist/core/commands/bench-command.js')),
+  'mcp-server': entry('beta', 'Run a stdio MCP server exposing SKS commands as tools for any MCP-capable agent host', 'dist/core/commands/mcp-server-command.js', argsCommand(() => import('../core/commands/mcp-server-command.js'), 'mcpServerCommand', 'dist/core/commands/mcp-server-command.js'), {
+    skipMigrationGate: true,
+    allowedDuringActiveRoute: true,
+    activeRoutePolicy: 'always'
+  }),
+  'agent-bridge': readOnly(entry('beta', 'Publish the agent-bridge manifest and print host registration snippets for external agent systems', 'dist/core/commands/agent-bridge-command.js', subcommand(() => import('../core/commands/agent-bridge-command.js'), 'agentBridgeCommand', 'dist/core/commands/agent-bridge-command.js', 'setup')))
 } satisfies Record<string, CommandEntry>;
 
 export const TYPED_COMMANDS = COMMANDS;

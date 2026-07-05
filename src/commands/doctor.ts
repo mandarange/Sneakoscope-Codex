@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { projectRoot, exists, formatBytes } from '../core/fsx.js';
+import { projectRoot, exists, formatBytes, nowIso, writeJsonAtomic } from '../core/fsx.js';
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 import { ui as cliUi } from '../cli/cli-theme.js';
@@ -48,6 +48,9 @@ import { reconcileSkills } from '../core/init/skills.js';
 import { codexHookTrustDoctor } from '../core/codex-hooks/codex-hook-trust-doctor.js';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
 import { repairCodexImagegen } from '../core/doctor/imagegen-repair.js';
+import { repairComputerUse } from '../core/doctor/computer-use-repair.js';
+import { repairBrowserUse } from '../core/doctor/browser-use-repair.js';
+import { detectAndRepairMcpTransportCollisions } from '../core/doctor/mcp-transport-collision-repair.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -641,7 +644,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         after: imagegen,
         steps: [],
         blockers: [],
-        manual_actions: []
+        manual_actions: [],
+        communication_test: { level: 'flag_level', ok: true, checked: 'codex features list --json (feature-flag/plugin metadata only)', real_generation_round_trip_performed: false, blocker: null }
       }
     : await repairCodexImagegen({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
         schema: 'sks.doctor-imagegen-repair.v1',
@@ -652,6 +656,49 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         blockers: [err?.message || String(err)],
         manual_actions: ['Run `sks doctor --fix --json` after enabling Codex App image_generation.']
       }));
+  const computerUseRepair = await repairComputerUse({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+    schema: 'sks.doctor-computer-use-repair.v1',
+    ok: false,
+    attempted: false,
+    apply: doctorFix,
+    recovered: false,
+    blockers: [err?.message || String(err)],
+    next_actions: ['Run `sks doctor --fix --json` after checking Codex App settings for Computer Use.']
+  }));
+  const browserUseRepair = await repairBrowserUse({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+    schema: 'sks.doctor-browser-use-repair.v1',
+    ok: false,
+    attempted: false,
+    apply: doctorFix,
+    recovered: false,
+    blockers: [err?.message || String(err)],
+    next_actions: ['Run `sks doctor --fix --json` after checking Codex App settings for Browser Use / Chrome extension.']
+  }));
+  const mcpTransportCollisionRepair = doctorFix
+    ? await detectAndRepairMcpTransportCollisions({ root, apply: true }).catch((err: any) => ({
+        schema: 'sks.mcp-transport-collision-repair.v1',
+        ok: false,
+        apply: true,
+        project_config_path: null,
+        global_config_path: null,
+        servers: [],
+        blockers: [err?.message || String(err)],
+        warnings: [],
+        raw_secret_values_recorded: false
+      }))
+    : null;
+  const nativeCapabilityReadinessStatus = (repair: any) => (repair?.recovered === true || repair?.ok === true ? 'ok' : repair?.attempted ? 'blocked' : 'not-needed');
+  const nativeCapabilityReadiness = {
+    schema: 'sks.native-capability-readiness.v1',
+    generated_at: nowIso(),
+    apply: doctorFix,
+    imagegen: { status: nativeCapabilityReadinessStatus(imagegenRepair), communication_test: (imagegenRepair as any)?.communication_test || null, blockers: (imagegenRepair as any)?.blockers || [] },
+    computer_use: { status: nativeCapabilityReadinessStatus(computerUseRepair), blockers: (computerUseRepair as any)?.blockers || [], next_actions: (computerUseRepair as any)?.next_actions || [] },
+    browser_use: { status: nativeCapabilityReadinessStatus(browserUseRepair), blockers: (browserUseRepair as any)?.blockers || [], next_actions: (browserUseRepair as any)?.next_actions || [] }
+  };
+  if (doctorFix) {
+    await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'native-capability-readiness.json'), nativeCapabilityReadiness).catch(() => undefined);
+  }
   const codex0138Capability = deepDiagnostics
     ? await writeCodex0138CapabilityArtifacts(root, { codexBin: codexBin || null }).catch((err: any) => ({ error: err?.message || String(err), report: null }))
     : { skipped: true, report: null };
@@ -858,7 +905,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     sneakoscope: { ok: await exists(`${root}/.sneakoscope`) },
     package: { bytes: pkgBytes, human: formatBytes(pkgBytes) },
     skills: skillsReconcile,
-    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, imagegen: imagegenRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
+    repair: { sks_update: sksUpdate, setup: setupRepair, codex_config: configRepair, migration_journal: migrationJournal, global_sks_installs: globalSksInstallCleanup, agent_role_config: agentRoleConfigRepair, zellij: zellijRepair, context7: context7Repair, codex_startup: codexStartupRepair, startup_config: startupConfigRepair, context7_mcp: context7McpRepair, supabase_mcp: supabaseMcpRepair, mcp_transport_collision: mcpTransportCollisionRepair, imagegen: imagegenRepair, computer_use: computerUseRepair, browser_use: browserUseRepair, hook_trust: hookTrustRepair, sks_menubar: sksMenuBar, doctor_transaction: doctorFixTransaction, doctor_dirty_plan: doctorDirtyPlan, doctor_postcheck: doctorFixPostcheck, codex_native: codexNativeRepair, doctor_native_capability: doctorNativeCapabilityRepair, command_aliases: commandAliasCleanup, skills: skillsReconcile, sks_temp_sweep: sksTempSweep }
   };
   if (reportFile) await writeJsonReportFile(reportFile, result);
   if (machineOnly && !flag(args, '--json')) {
@@ -991,6 +1038,14 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }
   console.log(`Image Gen repair: ${(imagegenRepair as any).recovered ? 'ok' : (imagegenRepair as any).attempted ? 'blocked' : 'not-needed'}`);
   for (const action of (imagegenRepair as any).manual_actions || []) console.log(`  - ${action}`);
+  console.log(`Computer Use repair: ${(computerUseRepair as any).recovered ? 'ok' : (computerUseRepair as any).attempted ? 'blocked' : 'not-needed'}`);
+  for (const action of (computerUseRepair as any).next_actions || []) console.log(`  - ${action}`);
+  console.log(`Browser Use repair: ${(browserUseRepair as any).recovered ? 'ok' : (browserUseRepair as any).attempted ? 'blocked' : 'not-needed'}`);
+  for (const action of (browserUseRepair as any).next_actions || []) console.log(`  - ${action}`);
+  if (mcpTransportCollisionRepair) {
+    const collisionCount = ((mcpTransportCollisionRepair as any).servers || []).filter((s: any) => s.status === 'collision_resolved').length;
+    console.log(`MCP transport collision repair: ${(mcpTransportCollisionRepair as any).ok ? 'ok' : 'blocked'}${collisionCount ? ` (${collisionCount} resolved)` : ''}`);
+  }
   const codex0138 = (codex0138Capability as any).report || {};
   console.log('Codex current compatibility:');
   console.log(`  target: rust-v0.142.0`);

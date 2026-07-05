@@ -461,6 +461,11 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
         quiet: machineOutput,
         newPackageRoot: newBinary ? path.resolve(path.dirname(newBinary), '..', '..') : null
       });
+      await runUpdateNativeCapabilitySetup(stage, {
+        quiet: machineOutput,
+        newPackageRoot: newBinary ? path.resolve(path.dirname(newBinary), '..', '..') : null,
+        root: projectReceiptRoot
+      });
     }
   }
   const verification = await runFinalUpdateVerification({ installOk, newBinary, installVersion, env, projectReceiptRoot });
@@ -550,6 +555,51 @@ async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, s
     error: (result as any).error || null
   });
   return result;
+}
+
+async function runUpdateNativeCapabilitySetup(
+  stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void,
+  opts: { quiet?: boolean; newPackageRoot?: string | null; root: string }
+) {
+  if (!opts.newPackageRoot) {
+    stage('native_capability_setup', true, 'skipped', { reason: 'new_package_root_unresolved' });
+    return null;
+  }
+  const root = opts.root;
+  const moduleHref = (rel: string) => pathToFileURL(path.join(opts.newPackageRoot as string, 'dist', 'core', 'doctor', rel)).href;
+  // Same as global_skills_reconcile above: run the newly installed package's own
+  // modules in a subprocess rather than in-process, so an old (pre-update) driver
+  // binary never runs post-update repair logic with stale compiled-in behavior.
+  const script = [
+    `const [{ repairCodexImagegen }, { repairComputerUse }, { repairBrowserUse }] = await Promise.all([import(${JSON.stringify(moduleHref('imagegen-repair.js'))}), import(${JSON.stringify(moduleHref('computer-use-repair.js'))}), import(${JSON.stringify(moduleHref('browser-use-repair.js'))})]);`,
+    `const root = ${JSON.stringify(root)};`,
+    'const imagegen = await repairCodexImagegen({ root, apply: true, reportPath: null }).catch((err) => ({ ok: false, recovered: false, attempted: true, error: String((err && err.message) || err) }));',
+    'const computerUse = await repairComputerUse({ root, apply: true, reportPath: null }).catch((err) => ({ ok: false, recovered: false, attempted: true, error: String((err && err.message) || err) }));',
+    'const browserUse = await repairBrowserUse({ root, apply: true, reportPath: null }).catch((err) => ({ ok: false, recovered: false, attempted: true, error: String((err && err.message) || err) }));',
+    'console.log(JSON.stringify({ imagegen, computer_use: computerUse, browser_use: browserUse }));'
+  ].join('\n');
+  const work = runProcess(process.execPath, ['--input-type=module', '-e', script], {
+    timeoutMs: 180_000,
+    maxOutputBytes: 1024 * 1024
+  }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+  const run = opts.quiet ? await work : await withHeartbeat('native capability setup', work, { warnAfterMs: 30_000 });
+  let parsed: any = null;
+  for (const line of String(run.stdout || '').trim().split('\n').reverse()) {
+    try { parsed = JSON.parse(line); break; } catch { /* not the JSON result line */ }
+  }
+  const summarize = (r: any) => (r?.recovered === true || r?.ok === true ? 'ok' : r?.attempted ? 'blocked' : 'not-needed');
+  const ok = run.code === 0 && Boolean(parsed);
+  // A repair reporting 'blocked' (e.g. no verified CLI subcommand for a plugin
+  // install) is a valid, honest terminal state for this stage, not a stage
+  // failure — the update itself must not be blocked on a manual-only step.
+  stage('native_capability_setup', ok, ok ? 'completed' : 'failed', {
+    via: 'new_package_binary',
+    summary: ok
+      ? { imagegen: summarize(parsed.imagegen), computer_use: summarize(parsed.computer_use), browser_use: summarize(parsed.browser_use) }
+      : null,
+    error: ok ? null : String(run.stderr || '').trim().slice(-400) || `exit_${run.code}`
+  });
+  return parsed;
 }
 
 export function sksGlobalInstallArgs(packageName: string, version: string, registry = DEFAULT_REGISTRY): string[] {
