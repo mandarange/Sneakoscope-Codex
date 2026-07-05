@@ -104,7 +104,7 @@ export async function withSecretPreservationGuard<T>(
   }
   try {
     const after = await captureSecretPreservationSnapshot({ root: resolvedRoot, artifactPath: afterPath });
-    const changedOrMissing = changedOrMissingProtectedSecrets(before, after);
+    const changedOrMissing = await withoutSecretsPreservedInComments(changedOrMissingProtectedSecrets(before, after));
     let rollbackAttempted = false;
     let rollbackOk = false;
     let restoredKeysCount = 0;
@@ -165,6 +165,48 @@ export function changedOrMissingProtectedSecrets(before: SecretPreservationSnaps
       return null;
     })
     .filter((item): item is ChangedOrMissingSecret => Boolean(item));
+}
+
+// A repair that intentionally deactivates a config block (e.g. commenting out
+// a colliding stdio MCP server) makes the secret disappear from the *live*
+// scan even though its value is still sitting right there in a comment, fully
+// recoverable. Without this check the guard treats that as an accidental loss,
+// rolls the whole file back (undoing the repair), and still throws — so the
+// repair can never stick. Only 'missing' entries are reconsidered here: a
+// 'changed' entry means a live value actually differs and must still trip the
+// guard. Never reads the pre-image value itself — only re-hashes whatever text
+// is currently on disk, so raw_values_recorded stays false throughout.
+async function withoutSecretsPreservedInComments(entries: ChangedOrMissingSecret[]): Promise<ChangedOrMissingSecret[]> {
+  const textBySource = new Map<string, string>();
+  const kept: ChangedOrMissingSecret[] = [];
+  for (const entry of entries) {
+    if (entry.reason !== 'missing' || !entry.before_sha256) {
+      kept.push(entry);
+      continue;
+    }
+    let text = textBySource.get(entry.source);
+    if (text === undefined) {
+      text = await fs.readFile(entry.source, 'utf8').catch(() => '');
+      textBySource.set(entry.source, text);
+    }
+    const preserved = readAllAssignmentValues(text, entry.key).some((value) => sha256(value) === entry.before_sha256);
+    if (!preserved) kept.push(entry);
+  }
+  return kept;
+}
+
+/** Like readAssignment, but also matches the same key commented out (`# KEY = ...`)
+ * and returns every candidate value found, not just the first. */
+function readAllAssignmentValues(text: string, key: string): string[] {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\./g, '\\s*\\.\\s*');
+  const re = new RegExp(`^\\s*#?\\s*(?:export\\s+)?${escaped}\\s*=\\s*(.+?)\\s*$`, 'gm');
+  const values: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    const raw = match[1]?.trim();
+    if (raw) values.push(unquote(raw));
+  }
+  return values;
 }
 
 function secretSources(root: string): string[] {

@@ -4,6 +4,14 @@
 
 
 
+
+## [5.5.4] - 2026-07-05
+
+### Fixed
+
+- Fix `sks doctor --fix` never actually resolving the Supabase MCP `url is not supported for stdio` collision even after the 5.5.3 repair: `doctor --fix` wraps its whole run in a generic secret-preservation guard, and commenting out the colliding stdio block (5.5.3's fix) intentionally makes `SUPABASE_ACCESS_TOKEN` disappear from the guard's live scan — even though the value is still sitting right there in the comment. The guard treated that as an accidental secret loss, rolled the **entire file** back from backup (silently undoing the repair every time), and still threw `secret_preservation_restored`, crashing `doctor --fix` with exit 1. The guard now recognizes a protected secret whose value is still recoverably present in a commented-out line as preserved (not lost), so the transport-collision repair actually sticks; a secret that goes missing with no trace anywhere in the file still trips the guard exactly as before. Verified against a real, previously-broken project config.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
 ## [5.5.3] - 2026-07-05
 
 ### Fixed
