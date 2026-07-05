@@ -1046,6 +1046,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     const collisionCount = ((mcpTransportCollisionRepair as any).servers || []).filter((s: any) => s.status === 'collision_resolved').length;
     console.log(`MCP transport collision repair: ${(mcpTransportCollisionRepair as any).ok ? 'ok' : 'blocked'}${collisionCount ? ` (${collisionCount} resolved)` : ''}`);
   }
+  {
+    const manifestPath = path.join(root, '.sneakoscope', 'agent-bridge', 'manifest.json');
+    const manifestExists = await exists(manifestPath);
+    console.log(`Agent bridge: ${manifestExists ? 'manifest present' : 'not set up'}${manifestExists ? '' : ' — run `sks agent-bridge setup` to publish the manifest and register with an MCP host'}`);
+  }
   const codex0138 = (codex0138Capability as any).report || {};
   console.log('Codex current compatibility:');
   console.log(`  target: rust-v0.142.0`);
