@@ -147,6 +147,22 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   // restore the codex-lb snapshot in finally (even on the early bootstrap return / on throw).
   try {
   console.log('\nSKS installed.');
+  // The published tarball deliberately excludes dist/.sks-build-stamp.json
+  // (package.json files: "!dist/.sks-build-stamp.json"), but `sks update`
+  // self-verification requires a version-matching stamp inside the installed
+  // package. Regenerate it here so npm installs are verifiable; never
+  // overwrite an existing stamp (in a dev checkout the build writes the real
+  // one, and re-stamping against the current source tree would mask a stale
+  // dist).
+  try {
+    const stampLib: any = await import('../scripts/lib/ensure-dist-fresh.js');
+    await fsp.access(stampLib.distStampPath).catch(async () => {
+      await fsp.writeFile(stampLib.distStampPath, `${JSON.stringify(stampLib.buildStampPayload(), null, 2)}\n`);
+      console.log('SKS build stamp: restored for update self-verification (npm packages ship without it).');
+    });
+  } catch (err: any) {
+    console.log(`SKS build stamp: could not restore (${err?.message || err}); \`sks update\` self-verification may report dist_stamp missing.`);
+  }
   const shim = await ensureSksCommandDuringInstall();
   if (shim.status === 'present') console.log(`SKS command: available (${shim.command ?? 'unknown'}).`);
   else if (shim.status === 'repaired') console.log(`SKS command: stale PATH shim repaired (${shim.command ?? 'unknown'}).`);

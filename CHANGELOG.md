@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix `sks update` always ending in `updated_with_issues` after an npm-published install: (1) `postinstall` now regenerates `dist/.sks-build-stamp.json` inside the installed package — the tarball deliberately excludes it, so the `dist_stamp` self-verification could never pass on a registry install; (2) the update flow's `global_skills_reconcile` stage now delegates to the freshly installed package's own module instead of running in-process in the old driver binary, which stamped `~/.agents/skills/.sks-generated.json` with the old version and clobbered the manifest the new binary's migration doctor had just written (`skills_manifest` self-verification failure); (3) after a `launchctl kickstart` timeout the menu bar installer now waits up to ~30s (was ~9s) for the app to reach running state before declaring the stage blocked, since relaunch under `npm install -g` load routinely outlives the kickstart timeout. Note: one more `skills_manifest` warning may appear on the next update (the already-published driver still clobbers), after which updates verify clean.
+
 
 
 

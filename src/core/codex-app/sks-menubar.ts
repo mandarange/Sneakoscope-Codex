@@ -1533,7 +1533,11 @@ async function launchWithLaunchctl(input: {
       ...stdio
     }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
     if (kickstart.code !== 0) {
-      const printedWork = waitForLaunchctlRunning(input.launchctl, service);
+      // A kickstart timeout does not mean the relaunch failed — under heavy
+      // system load (e.g. mid `npm install -g`) the app can take well past the
+      // kickstart timeout to reach running state, so give the recheck a much
+      // longer window before declaring the whole install blocked.
+      const printedWork = waitForLaunchctlRunning(input.launchctl, service, 20);
       const printed = input.quiet === true ? await printedWork : await withHeartbeat('launchctl SKS menu bar wait', printedWork, { warnAfterMs: 10_000 });
       if (printed.running) {
         return {
@@ -1582,9 +1586,9 @@ async function launchWithLaunchctl(input: {
   };
 }
 
-async function waitForLaunchctlRunning(launchctl: string, service: string): Promise<{ code: number | null; running: boolean }> {
+async function waitForLaunchctlRunning(launchctl: string, service: string, attempts = 6): Promise<{ code: number | null; running: boolean }> {
   let lastCode: number | null = null;
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     const printed = await runProcess(launchctl, ['print', service], {
       timeoutMs: 1_000,
       maxOutputBytes: 32 * 1024

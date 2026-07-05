@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { PACKAGE_VERSION, packageRoot, readJson, runProcess, throttleLines, which } from './fsx.js';
 import { createRequestedScopeContract } from './safety/requested-scope-contract.js';
 import { guardedPackageInstall, guardContextForRoute } from './safety/mutation-guard.js';
@@ -456,7 +457,10 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt);
       stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
       if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput });
-      await runUpdateGlobalSkillsReconcile(stage, { quiet: machineOutput });
+      await runUpdateGlobalSkillsReconcile(stage, {
+        quiet: machineOutput,
+        newPackageRoot: newBinary ? path.resolve(path.dirname(newBinary), '..', '..') : null
+      });
     }
   }
   const verification = await runFinalUpdateVerification({ installOk, newBinary, installVersion, env, projectReceiptRoot });
@@ -497,9 +501,43 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   });
 }
 
-async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void, opts: { quiet?: boolean } = {}) {
+async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void, opts: { quiet?: boolean; newPackageRoot?: string | null } = {}) {
+  const targetDir = path.join(os.homedir(), '.agents', 'skills');
+  // reconcileSkills stamps ~/.agents/skills/.sks-generated.json with the
+  // PACKAGE_VERSION compiled into whichever module runs it. This function
+  // executes inside the OLD (driver) binary, so after a real version install
+  // an in-process reconcile would overwrite the manifest the new binary's
+  // migration doctor just wrote and make final self-verification report
+  // skills_manifest stale forever. Delegate to the freshly installed package.
+  if (opts.newPackageRoot) {
+    const moduleHref = pathToFileURL(path.join(opts.newPackageRoot, 'dist', 'core', 'init', 'skills.js')).href;
+    const script = [
+      `const m = await import(${JSON.stringify(moduleHref)});`,
+      `const r = await m.reconcileSkills({ targetDir: ${JSON.stringify(targetDir)}, scope: 'global', fix: true });`,
+      'console.log(JSON.stringify(r));',
+      'if (r && (r.ok === false || r.error)) process.exit(1);'
+    ].join('\n');
+    const work = runProcess(process.execPath, ['--input-type=module', '-e', script], {
+      timeoutMs: 120_000,
+      maxOutputBytes: 1024 * 1024
+    }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+    const run = opts.quiet ? await work : await withHeartbeat('skills reconcile', work, { warnAfterMs: 30_000 });
+    let parsed: any = null;
+    for (const line of String(run.stdout || '').trim().split('\n').reverse()) {
+      try { parsed = JSON.parse(line); break; } catch { /* not the JSON result line */ }
+    }
+    const ok = run.code === 0 && parsed?.ok !== false && !parsed?.error;
+    stage('global_skills_reconcile', ok, ok ? 'reconciled' : 'failed', {
+      via: 'new_package_binary',
+      installed: Array.isArray(parsed?.installed) ? parsed.installed.length : null,
+      updated: Array.isArray(parsed?.updated) ? parsed.updated.length : null,
+      removed: Array.isArray(parsed?.removed) ? parsed.removed.length : null,
+      error: ok ? null : parsed?.error || String(run.stderr || '').trim().slice(-400) || `exit_${run.code}`
+    });
+    return parsed || { schema: 'sks.skill-reconcile.v1', ok };
+  }
   const work = reconcileSkills({
-    targetDir: path.join(os.homedir(), '.agents', 'skills'),
+    targetDir,
     scope: 'global',
     fix: true
   }).catch((err: any) => ({ schema: 'sks.skill-reconcile.v1', ok: false, error: err?.message || String(err) }));
