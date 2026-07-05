@@ -6150,6 +6150,36 @@
         "release"
       ],
       "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
+    },
+    {
+      "id": "test:code-index-agent-bridge-regression",
+      "command": "node --test --test-concurrency=1 dist/core/triwiki/__tests__/*.test.js dist/core/naruto/__tests__/*.test.js dist/core/agent-bridge/__tests__/*.test.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/triwiki/**",
+          "src/core/naruto/**",
+          "src/core/agent-bridge/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
     }
   ]
 }

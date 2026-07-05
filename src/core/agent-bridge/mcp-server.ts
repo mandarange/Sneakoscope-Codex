@@ -130,3 +130,48 @@ export async function runMcpServer(opts: RunMcpServerOptions = {}): Promise<void
   const transport = new StdioServerTransport(input as any, output as any);
   await server.connect(transport);
 }
+
+/** Round-trips initialize -> tools/list over in-memory streams and returns, instead of
+ * staying resident on real stdio — this is what `sks mcp-server --probe` runs, so a
+ * fixture/CI check can prove the server actually works without hanging on a real client. */
+export async function probeMcpServer(opts: { exposeExec?: boolean; timeoutMs?: number } = {}): Promise<{ ok: boolean; server_name: string | null; protocol_version: string | null; tool_count: number }> {
+  const { PassThrough } = await import('node:stream');
+  const clientToServer = new PassThrough();
+  const serverToClient = new PassThrough();
+  const responses: any[] = [];
+  let buffer = '';
+  serverToClient.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString('utf8');
+    let idx: number;
+    while ((idx = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 1);
+      if (line.trim()) {
+        try { responses.push(JSON.parse(line)); } catch { /* not a complete JSON line yet */ }
+      }
+    }
+  });
+  const send = (message: Record<string, unknown>) => clientToServer.write(`${JSON.stringify(message)}\n`);
+  const waitForId = async (id: number, timeoutMs: number): Promise<any> => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const found = responses.find((r) => r.id === id);
+      if (found) return found;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`mcp_probe_timed_out_waiting_for_response_id_${id}`);
+  };
+  runMcpServer({ exposeExec: opts.exposeExec === true, input: clientToServer, output: serverToClient }).catch(() => undefined);
+  const timeoutMs = opts.timeoutMs ?? 10_000;
+  send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'sks-mcp-probe', version: '1.0.0' } } });
+  const initResponse = await waitForId(1, timeoutMs);
+  send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+  const listResponse = await waitForId(2, timeoutMs);
+  clientToServer.end();
+  return {
+    ok: Boolean(initResponse?.result) && Array.isArray(listResponse?.result?.tools),
+    server_name: initResponse?.result?.serverInfo?.name || null,
+    protocol_version: initResponse?.result?.protocolVersion || null,
+    tool_count: Array.isArray(listResponse?.result?.tools) ? listResponse.result.tools.length : 0
+  };
+}
