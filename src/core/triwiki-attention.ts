@@ -228,7 +228,32 @@ function uniqueAttentionRows(rows: any = [], max: any = 4) {
   return out;
 }
 
-export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker', maxUse = 4, maxHydrate = 4 }: any = {}) {
+/** Ranks code-pack entries (LLM-consumable, source-cited codebase summaries — see
+ * src/core/triwiki/code-pack.ts) by trust_score into a dedicated attention sub-budget,
+ * independent of the policy-claim RGBA/geometric selection above: code entries carry
+ * no meaningful mission-coordinate proximity, so competing them against policy claims
+ * for the same fixed slot budget would make their appearance arbitrary. Each surviving
+ * entry becomes a use_first row (bare id, no fabricated RGBA) plus a hydrate_first row
+ * pointing at its source citations, so a consumer knows which real files back it. */
+function codePackAttentionRows(codePackEntries: any[] = [], tokenBudget = 2000): { useFirst: any[]; hydrateFirst: any[] } {
+  const sorted = [...(codePackEntries || [])]
+    .filter((entry: any) => entry && typeof entry.id === 'string')
+    .sort((a: any, b: any) => Number(b.trust_score || 0) - Number(a.trust_score || 0));
+  const useFirst: any[] = [];
+  const hydrateFirst: any[] = [];
+  let tokens = 0;
+  for (const entry of sorted) {
+    const cost = Number(entry.token_cost) || Math.max(1, Math.ceil(String(entry.text || '').length / 4));
+    if (tokens + cost > tokenBudget) continue;
+    tokens += cost;
+    useFirst.push([entry.id, null, null]);
+    const citationPaths = Array.isArray(entry.citations) ? entry.citations.map((c: any) => c?.path).filter(Boolean) : [];
+    if (citationPaths.length) hydrateFirst.push([entry.id, `code_citations:${citationPaths.join(',')}`]);
+  }
+  return { useFirst, hydrateFirst };
+}
+
+export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker', maxUse = 4, maxHydrate = 4, codePackEntries = [], codePackTokenBudget = 2000 }: any = {}) {
   const anchors = attentionAnchorMap(wiki);
   const ranked = [...(selected || [])]
     .map((claim: any, index: any) => ({ claim, index }))
@@ -256,10 +281,11 @@ export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker
     ...voxelRows,
     ...selectedHydrateRows
   ], maxHydrate);
+  const codeRows = codePackAttentionRows(codePackEntries, codePackTokenBudget);
   return {
     mode: 'aggressive_triwiki_active_recall',
-    use_first: useFirst,
-    hydrate_first: hydrateFirst
+    use_first: uniqueAttentionRows([...useFirst, ...codeRows.useFirst], maxUse + codeRows.useFirst.length),
+    hydrate_first: uniqueAttentionRows([...hydrateFirst, ...codeRows.hydrateFirst], maxHydrate + codeRows.hydrateFirst.length)
   };
 }
 
@@ -289,7 +315,7 @@ export function geometricOffsets(max: any = 65536) {
   return out;
 }
 
-export function contextCapsule({ mission, role = 'worker', contractHash = null, claims = [], q4 = {}, q3 = [], budget = {} }: any) {
+export function contextCapsule({ mission, role = 'worker', contractHash = null, claims = [], q4 = {}, q3 = [], budget = {}, codePackEntries = [] }: any) {
   const trustPolicy = budget.trustPolicy || DEFAULT_TRUST_POLICY;
   const claimsWithTrust = (claims || []).map((claim: any) => withTrust(claim, trustPolicy));
   const selected = selectClaims(mission, claims, { maxClaims: budget.maxClaims ?? (role.includes('verifier') ? 16 : 9), trustPolicy });
@@ -319,7 +345,9 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
       wiki,
       role,
       maxUse: budget.maxAttentionUse ?? (role.includes('verifier') ? 7 : 4),
-      maxHydrate: budget.maxAttentionHydrate ?? (role.includes('verifier') ? 7 : 4)
+      maxHydrate: budget.maxAttentionHydrate ?? (role.includes('verifier') ? 7 : 4),
+      codePackEntries,
+      codePackTokenBudget: budget.codePackTokenBudget ?? 2000
     }),
     claims: selected.map((c: any) => {
       const anchor = anchorsById.get(c.id);

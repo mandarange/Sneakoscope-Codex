@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { appendJsonlBounded, ensureDir, exists, formatBytes, nowIso, PACKAGE_VERSION, readJson, sksRoot, writeJsonAtomic } from '../fsx.js';
+import { appendJsonlBounded, ensureDir, exists, formatBytes, nowIso, PACKAGE_VERSION, readJson, runProcess, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { contextCapsule } from '../triwiki-attention.js';
 import { rgbaKey, rgbaToWikiCoord, validateWikiCoordinateIndex } from '../wiki-coordinate.js';
 import { pruneWikiArtifacts } from '../retention.js';
@@ -19,6 +19,8 @@ import { wikiWrongnessCommand } from '../triwiki-wrongness/wrongness-cli.js';
 import { wrongnessContextForRoute } from '../triwiki-wrongness/wrongness-retrieval.js';
 import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-wrongness.js';
 import { publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
+import { scanCodebaseIndex } from '../triwiki/code-index-scanner.js';
+import { buildCodePack, validateCodePack, writeCodePackAtomic } from '../triwiki/code-pack.js';
 import { flag, positionalArgs, readFlagValue, readOption, resolveMissionId } from './command-utils.js';
 
 export async function wikiCommand(sub: any, args: any = []) {
@@ -90,6 +92,9 @@ export async function wikiCommand(sub: any, args: any = []) {
     if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
     console.log(`Memory summary rebuilt: ${result.ok ? 'ok' : 'blocked'}`);
     return;
+  }
+  if (sub === 'refresh' && flag(args, '--code')) {
+    return wikiRefreshCode(args);
   }
   if (sub === 'refresh') {
     const root = await sksRoot();
@@ -172,16 +177,59 @@ export async function wikiCommand(sub: any, args: any = []) {
     const target = positionalArgs(args)[0] || path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
     const pack = await readJson(path.resolve(target));
     const { result, trustAnchors } = wikiValidationResult(pack);
-    if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+    const codePack = await codePackFreshness(root);
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...result, code_pack: codePack }, null, 2));
     console.log(`Wiki coordinate index: ${result.ok ? 'ok' : 'failed'}`);
     console.log(`Anchors checked: ${result.checked}`);
     console.log(`Trust anchors: ${trustAnchors}/${result.checked}`);
     for (const issue of result.issues) console.log(`- ${issue.severity}: ${issue.id}${issue.anchor ? ` ${issue.anchor}` : ''}`);
+    console.log(`Code pack: ${codePack.status}${codePack.status === 'stale' ? ' — run `sks wiki refresh --code`' : ''}`);
     process.exitCode = result.ok ? 0 : 2;
     return;
   }
   console.error('Usage: sks wiki coords|pack|refresh|publish|rebuild-index|rebuild-summary|validate|validate-shared|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
   process.exitCode = 1;
+}
+
+async function wikiRefreshCode(args: any = []): Promise<void> {
+  const root = await sksRoot();
+  const index = await scanCodebaseIndex(root);
+  const tokenBudgetRaw = readFlagValue(args, '--token-budget', null);
+  const tokenBudget = tokenBudgetRaw ? Number.parseInt(String(tokenBudgetRaw), 10) : undefined;
+  const pack = tokenBudget && Number.isFinite(tokenBudget) ? buildCodePack(root, index, tokenBudget) : buildCodePack(root, index);
+  const validation = await validateCodePack(pack, root);
+  const written = validation.ok ? await writeCodePackAtomic(root, pack) : null;
+  const result = {
+    schema: 'sks.wiki-refresh-code.v1',
+    ok: validation.ok,
+    issues: validation.issues,
+    modules: index.modules.length,
+    truncated: index.truncated,
+    scanned_file_count: index.scanned_file_count,
+    entries: pack.entries.length,
+    token_cost: pack.total_token_cost,
+    token_budget: pack.token_budget,
+    written: written ? written.path : null
+  };
+  process.exitCode = validation.ok ? 0 : 2;
+  if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
+  console.log('Sneakoscope TriWiki Code Pack Refresh');
+  console.log(`Code pack refresh: ${validation.ok ? 'ok' : 'blocked'} (${pack.entries.length} entries from ${index.modules.length} modules${index.truncated ? ', truncated' : ''})`);
+  for (const issue of validation.issues) console.log(`- ${issue}`);
+}
+
+/** Cheap freshness check: compares the code pack's recorded git HEAD sha (at
+ * generation time) against the current HEAD. Any uncertainty (no pack, no git,
+ * spawn failure) resolves to 'stale' rather than 'fresh', never overclaiming. */
+async function codePackFreshness(root: any): Promise<{ status: 'fresh' | 'stale' | 'missing'; git_head_sha: string | null; pack_sha: string | null }> {
+  const packPath = path.join(root, '.sneakoscope', 'wiki', 'code-pack.json');
+  if (!(await exists(packPath))) return { status: 'missing', git_head_sha: null, pack_sha: null };
+  const pack = await readJson<any>(packPath, null).catch(() => null);
+  const packSha = pack?.git_head_sha || null;
+  if (!packSha) return { status: 'missing', git_head_sha: null, pack_sha: null };
+  const head = await runProcess('git', ['rev-parse', 'HEAD'], { cwd: root, timeoutMs: 5000 }).catch(() => null);
+  const currentSha = head && head.code === 0 ? head.stdout.trim() : null;
+  return { status: currentSha && currentSha === packSha ? 'fresh' : 'stale', git_head_sha: currentSha, pack_sha: packSha };
 }
 
 function wikiRefreshFailureAnalysis(validationResult: any, gate: any = {}) {
@@ -298,6 +346,8 @@ async function wikiImageLinkProof(args: any = []) {
 export async function writeWikiContextPack(root: any, args: any = [], opts: any = {}) {
   const role = readFlagValue(args, '--role', 'worker');
   const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
+  const codePackData = await readJson<any>(path.join(root, '.sneakoscope', 'wiki', 'code-pack.json'), null).catch(() => null);
+  const codePackEntries = Array.isArray(codePackData?.entries) ? codePackData.entries : [];
   const pack = contextCapsule({
     mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
     role,
@@ -305,11 +355,23 @@ export async function writeWikiContextPack(root: any, args: any = [], opts: any 
     claims: await projectWikiClaims(root),
     q4: { mode: 'project-continuity', package: PACKAGE_VERSION, hydrate: 'anchor-first' },
     q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
-    budget: { maxWikiAnchors: maxAnchors, includeTrustSummary: true }
+    budget: { maxWikiAnchors: maxAnchors, includeTrustSummary: true },
+    codePackEntries
   });
   const wrongnessContext = await wrongnessContextForRoute(root, { route: '$Wiki', limit: 12 });
+  // buildTriWikiAttention's use_first/hydrate_first can reference code: ids that were
+  // never routed through selectClaims (no fabricated RGBA coordinate for them — see
+  // codePackAttentionRows), so append their real summary text here or a recallpulse
+  // consumer resolving pack.claims by id would only see the bare id string.
+  const codePackClaimRows = codePackEntries.map((entry: any) => ({
+    id: entry.id,
+    text: `${entry.text}${Array.isArray(entry.citations) && entry.citations.length ? ` (source: ${entry.citations.map((c: any) => c?.path).filter(Boolean).join(', ')})` : ''}`,
+    source: 'code-pack',
+    trust: entry.trust_score
+  }));
   const enrichedPack = {
     ...pack,
+    claims: [...(pack.claims || []), ...codePackClaimRows],
     wrongness_context: wrongnessContext,
     q3: Array.from(new Set([...(pack.q3 || []), 'wrongness-memory', 'negative-evidence']))
   };
