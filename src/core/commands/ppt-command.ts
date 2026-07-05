@@ -43,7 +43,10 @@ export async function pptCommand(command: any, args: any = []) {
   if (action === 'explain') return pptExplain(root, args.slice(1));
 
   const missionArg = args[1] && !String(args[1]).startsWith('--') ? args[1] : 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  // build/status act on ppt-gate.json (written by build, not the imagegen-review gate),
+  // so scope by mode only here - requiring the imagegen-review gate would wrongly exclude
+  // a fresh ppt mission that hasn't gone through review yet.
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'ppt' }) : missionArg;
   if (!missionId) return missingMission(args);
   const { dir, mission } = await loadMission(root, missionId);
   const contract = await readJson(path.join(dir, 'decision-contract.json'), { prompt: mission.prompt, answers: fixtureAnswers(), sealed_hash: 'ppt-fixture-contract' });
@@ -110,7 +113,7 @@ async function pptImagegenReview(root: string, command: any, action: string, arg
   const shouldCreate = Boolean(deckPath || mockMode || action === 'review' || action === 'export-slides' || action === 'slide-export' || action === 'callouts' || action === 'extract-issues');
   const missionId = shouldCreate && !missionArg
     ? null
-    : missionArg === 'latest' || !missionArg ? await findLatestMission(root) : missionArg;
+    : missionArg === 'latest' || !missionArg ? await findLatestMission(root, { mode: 'ppt', route: '$PPT', gateFile: PPT_IMAGEGEN_REVIEW_GATE_ARTIFACT }) : missionArg;
   const loaded = missionId ? await loadMission(root, missionId) : await createMission(root, { mode: 'ppt', prompt: `PPT imagegen review ${deckPath || 'fixture'}` });
   const id = 'id' in loaded ? loaded.id : missionId;
   const dir = loaded.dir;
@@ -256,7 +259,7 @@ async function pptFixture(root: string, command: any, args: any[]) {
 
 async function pptExplain(root: string, args: any[] = []) {
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'ppt', route: '$PPT', gateFile: PPT_IMAGEGEN_REVIEW_GATE_ARTIFACT }) : missionArg;
   if (!missionId) return missingMission(args);
   const { dir } = await loadMission(root, missionId);
   const gate = await readJson(path.join(dir, PPT_IMAGEGEN_REVIEW_GATE_ARTIFACT), null);

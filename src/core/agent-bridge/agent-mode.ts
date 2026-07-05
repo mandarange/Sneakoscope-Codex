@@ -1,7 +1,27 @@
+import { nowIso } from '../fsx.js';
+
 // non-interactive contract: any subprocess-invoking system can gate readline prompts on agentModeActive() without hanging.
 
 export function agentModeActive(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.SKS_AGENT_MODE === '1';
+}
+
+export type StreamEventKind = 'start' | 'progress' | 'partial' | 'result' | 'error';
+
+export interface StreamEvent {
+  event: StreamEventKind;
+  ts: string;
+  data: unknown;
+}
+
+const STREAM_EVENT_KINDS: readonly StreamEventKind[] = ['start', 'progress', 'partial', 'result', 'error'];
+
+// Real-time consumers (e.g. a Slack bot relaying progress) parse stdout line-by-line;
+// one write per event keeps events from interleaving mid-line under backpressure.
+export function emitStreamEvent(event: StreamEventKind, data: unknown, out: NodeJS.WritableStream = process.stdout): void {
+  if (!STREAM_EVENT_KINDS.includes(event)) throw new Error(`invalid stream event kind: ${String(event)}`);
+  const line: StreamEvent = { event, ts: nowIso(), data };
+  out.write(JSON.stringify(line) + '\n');
 }
 
 export interface InteractiveInputRequiredResponse {

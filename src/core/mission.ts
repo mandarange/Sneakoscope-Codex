@@ -51,23 +51,43 @@ export async function loadMission(root: any, id: any): Promise<JsonData> {
   return { id, dir, mission };
 }
 
-export async function findLatestMission(root: any) {
+function normalizeMissionRoute(value: any): string {
+  return String(value || '').replace(/^\$/, '').replace(/_/g, '-').toLowerCase();
+}
+
+export interface FindLatestMissionOptions {
+  route?: string | null;
+  mode?: string | null;
+  gateFile?: string | null;
+}
+
+export async function findLatestMission(root: any, opts: FindLatestMissionOptions = {}) {
+  const { route = null, mode = null, gateFile = null } = opts || {};
   const dir = missionsDir(root);
   if (!(await exists(dir))) return null;
   const fs = await import('node:fs/promises');
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const ids = entries.filter((e: any) => e.isDirectory() && e.name.startsWith('M-')).map((e: any) => e.name);
-  const candidates = await Promise.all(ids.map(async (id: any) => {
+  const candidates = (await Promise.all(ids.map(async (id: any) => {
     const dirPath = missionDir(root, id);
     const stat = await fs.stat(dirPath).catch(() => null);
     const mission = await readJson(path.join(dirPath, 'mission.json'), {}).catch(() => ({}));
+    if (mode && mission.mode !== mode) return null;
+    // Route scoping is indirect: mission.json never carries a route field, so the
+    // caller must name the route-specific gate artifact to probe for.
+    if (route && gateFile) {
+      const gate = await readJson(path.join(dirPath, gateFile), null).catch(() => null);
+      if (!gate) return null;
+      const actual = normalizeMissionRoute((gate as any).route || (gate as any).route_command || '');
+      if (actual && actual !== normalizeMissionRoute(route)) return null;
+    }
     const createdMs = Date.parse(mission.created_at || mission.updated_at || '');
     return {
       id,
       createdMs: Number.isFinite(createdMs) ? createdMs : 0,
       mtimeMs: stat?.mtimeMs || 0
     };
-  }));
+  }))).filter((candidate): candidate is { id: string; createdMs: number; mtimeMs: number } => candidate !== null);
   candidates.sort((a: any, b: any) => (a.createdMs - b.createdMs) || (a.mtimeMs - b.mtimeMs) || a.id.localeCompare(b.id));
   return candidates.at(-1)?.id || null;
 }

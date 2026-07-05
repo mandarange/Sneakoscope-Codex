@@ -21,7 +21,7 @@ async function redirectTeamCreateToNaruto(args: any[] = []) {
   const result: any = jsonRequested
     ? await withSuppressedConsoleLog(() => narutoCommand(narutoArgs))
     : await narutoCommand(narutoArgs)
-  const missionId = result?.mission_id || await findLatestMission(root)
+  const missionId = result?.mission_id || await findLatestMission(root, { mode: 'naruto' })
   const nativeAgentRun = missionId ? await buildTeamNativeAgentCompatibility(root, missionId, result) : null
   if (missionId) {
     await writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'team-alias-to-naruto.json'), {

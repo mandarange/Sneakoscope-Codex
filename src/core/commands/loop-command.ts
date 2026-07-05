@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { printJson } from '../../cli/output.js';
-import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js';
+import { createMission, findLatestMission, setCurrent } from '../mission.js';
 import { readJson, sksRoot } from '../fsx.js';
 import { loopActiveWorkerHandlesPath, loopIntegrationMergePath, loopLatestCheckpointPath, loopPlanPath, loopProofPath, loopRoot, loopSideEffectReportPath } from '../loops/loop-artifacts.js';
 import { finalizeLoopGraph } from '../loops/loop-finalizer.js';
@@ -174,10 +174,7 @@ async function loopResume(args: string[]): Promise<void> {
 
 async function resolveLoopMission(root: string, arg?: string): Promise<string | null> {
   if (arg && arg !== 'latest') return arg;
-  const latest = await findLatestMission(root);
-  if (!latest) return null;
-  const loaded = await loadMission(root, latest).catch(() => null);
-  return loaded?.mission?.mode === 'loop' || await readJson(loopPlanPath(root, latest), null) ? latest : null;
+  return findLatestMission(root, { mode: 'loop' });
 }
 
 function normalizeParallelism(value: unknown): 'safe' | 'balanced' | 'extreme' {

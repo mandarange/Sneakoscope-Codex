@@ -749,7 +749,7 @@ function validRegressionProof(proof: any): boolean {
 
 async function narutoStatus(parsed: NarutoArgs) {
   const root = await sksRoot()
-  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root, { mode: 'naruto' })
   if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'status', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
   const { dir } = await loadMission(root, id)
   const proof = await readJson<any>(path.join(dir, 'agents', 'agent-proof-evidence.json'), null)
@@ -786,7 +786,7 @@ async function narutoStatus(parsed: NarutoArgs) {
 
 async function narutoDashboard(parsed: NarutoArgs) {
   const root = await sksRoot()
-  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root, { mode: 'naruto' })
   if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'dashboard', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
   const { dir } = await loadMission(root, id)
   const snapshot = await readJson<any>(path.join(dir, 'zellij-dashboard-snapshot.json'), null)
@@ -809,7 +809,7 @@ async function narutoDashboard(parsed: NarutoArgs) {
 
 async function narutoWorkers(parsed: NarutoArgs) {
   const root = await sksRoot()
-  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root, { mode: 'naruto' })
   if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'workers', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
   const { dir } = await loadMission(root, id)
   const swarm = await readJson<any>(path.join(dir, 'agents', 'agent-native-cli-session-swarm.json'), null)
@@ -836,7 +836,7 @@ async function narutoWorkers(parsed: NarutoArgs) {
 
 async function narutoProof(parsed: NarutoArgs) {
   const root = await sksRoot()
-  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root)
+  const id = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : await findLatestMission(root, { mode: 'naruto' })
   if (!id) return emit(parsed, { schema: NARUTO_RESULT_SCHEMA, ok: false, action: 'proof', status: 'missing_mission' }, () => console.log('No Naruto mission found.'))
   const summary = await buildRuntimeProofSummary(root, id, { maxMessages: parsed.messages })
   return emit(parsed, { ...summary, action: 'proof' }, () => {

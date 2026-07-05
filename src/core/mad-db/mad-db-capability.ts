@@ -147,7 +147,7 @@ export async function resolveMadDbMissionId(root: string, state: any = {}, expli
   if (explicitMissionId && explicitMissionId !== 'latest') return explicitMissionId;
   if (state?.mad_db_capability_mission_id) return String(state.mad_db_capability_mission_id);
   if (state?.mission_id) return String(state.mission_id);
-  return findLatestMission(root);
+  return findLatestMission(root, { mode: 'mad-db' });
 }
 
 export function isMadDbCapabilityActive(capability: MadDbCapabilityV2 | null, nowMs = Date.now()) {

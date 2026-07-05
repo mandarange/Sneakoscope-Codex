@@ -76,7 +76,7 @@ export async function imageUxReviewCommand(command: any, args: any = []) {
 async function runImageUxReview(root: string, command: string, args: any[] = []) {
   const missionRequested = readOption(args, '--mission', null);
   const missionId = missionRequested
-    ? missionRequested === 'latest' ? await findLatestMission(root) : missionRequested
+    ? missionRequested === 'latest' ? await findLatestMission(root, { mode: 'image-ux-review', route: '$Image-UX-Review', gateFile: IMAGE_UX_REVIEW_GATE_ARTIFACT }) : missionRequested
     : null;
   const imagePath = readOption(args, '--image', null) || readOption(args, '--screenshot', null);
   const generatedImage = readOption(args, '--generated-image', null);
@@ -276,7 +276,7 @@ async function extractIssuesImageUxReview(root: string, command: string, args: a
 
 async function attachGeneratedImageCommand(root: string, command: string, args: any[] = []) {
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'image-ux-review', route: '$Image-UX-Review', gateFile: IMAGE_UX_REVIEW_GATE_ARTIFACT }) : missionArg;
   const imagePath = readOption(args, '--image', null) || readOption(args, '--generated-image', null);
   if (!missionId || !imagePath) {
     const result = { schema: 'sks.image-ux-review-attach-generated.v1', ok: false, status: 'blocked', blocker: !missionId ? 'mission_required' : 'generated_image_required' };
@@ -296,7 +296,7 @@ async function attachGeneratedImageCommand(root: string, command: string, args: 
 
 async function attachAfterImageCommand(root: string, command: string, args: any[] = []) {
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'image-ux-review', route: '$Image-UX-Review', gateFile: IMAGE_UX_REVIEW_GATE_ARTIFACT }) : missionArg;
   const imagePath = readOption(args, '--image', null) || readOption(args, '--screenshot', null);
   if (!missionId || !imagePath) {
     const result = { schema: 'sks.image-ux-review-attach-after.v1', ok: false, status: 'blocked', blocker: !missionId ? 'mission_required' : 'after_image_required' };
@@ -324,7 +324,7 @@ async function attachAfterImageCommand(root: string, command: string, args: any[
 
 async function rebuildExistingMission(root: string, command: string, args: any[] = [], opts: any = {}) {
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'image-ux-review', route: '$Image-UX-Review', gateFile: IMAGE_UX_REVIEW_GATE_ARTIFACT }) : missionArg;
   if (!missionId) return missingMission(args);
   const { dir, mission } = await loadMission(root, missionId);
   const contract = await readJson(path.join(dir, 'decision-contract.json'), { prompt: mission.prompt, answers: {}, sealed_hash: null });
@@ -347,7 +347,7 @@ async function rebuildExistingMission(root: string, command: string, args: any[]
 
 async function statusImageUxReview(root: string, args: any[] = []) {
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'image-ux-review', route: '$Image-UX-Review', gateFile: IMAGE_UX_REVIEW_GATE_ARTIFACT }) : missionArg;
   if (!missionId) return missingMission(args);
   const { dir } = await loadMission(root, missionId);
   const gate = await readJson(path.join(dir, 'image-ux-review-gate.json'), null);
@@ -365,7 +365,7 @@ async function statusImageUxReview(root: string, args: any[] = []) {
 
 async function explainImageUxReview(root: string, args: any[] = []) {
   const missionArg = args.find((arg: any) => !String(arg).startsWith('--')) || 'latest';
-  const missionId = missionArg === 'latest' ? await findLatestMission(root) : missionArg;
+  const missionId = missionArg === 'latest' ? await findLatestMission(root, { mode: 'image-ux-review', route: '$Image-UX-Review', gateFile: IMAGE_UX_REVIEW_GATE_ARTIFACT }) : missionArg;
   if (!missionId) return missingMission(args);
   const { dir } = await loadMission(root, missionId);
   const gate = await readJson(path.join(dir, IMAGE_UX_REVIEW_GATE_ARTIFACT), null);

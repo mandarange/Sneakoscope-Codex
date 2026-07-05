@@ -1012,7 +1012,7 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
   if (subcommand === 'doctor' || subcommand === 'status') {
     const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot });
     const before = await snapshotProtectedCore(packageRoot(), 'status');
-    const statusMissionId = await findLatestMission(root);
+    const statusMissionId = await findLatestMission(root, { mode: 'mad-sks', route: '$MAD-SKS', gateFile: 'mad-sks-gate.json' });
     const gateVerdict = statusMissionId
       ? await evaluateGate(root, statusMissionId, 'mad-sks-gate.json')
       : await evaluateGate(root, 'no-mission', 'mad-sks-gate.json');
@@ -1324,7 +1324,7 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
 }
 
 async function closeMadSks(root: string, args: any[] = [], json = false, action = 'close') {
-  const missionId = readOption(args, '--mission', null) || args.find((arg: any) => !String(arg).startsWith('--')) || await findLatestMission(root);
+  const missionId = readOption(args, '--mission', null) || args.find((arg: any) => !String(arg).startsWith('--')) || await findLatestMission(root, { mode: 'mad-sks', route: '$MAD-SKS', gateFile: 'mad-sks-gate.json' });
   if (!missionId) {
     const result = { schema: 'sks.mad-sks-close.v1', ok: false, action, mission_id: null, blockers: ['mad_sks_mission_missing'] };
     process.exitCode = 1;
@@ -1348,7 +1348,7 @@ async function closeMadSks(root: string, args: any[] = [], json = false, action 
 }
 
 async function cleanupExpiredMadSks(root: string) {
-  const missionId = await findLatestMission(root);
+  const missionId = await findLatestMission(root, { mode: 'mad-sks', route: '$MAD-SKS', gateFile: 'mad-sks-gate.json' });
   if (!missionId) return null;
   const gate = await readJson(path.join(missionDir(root, missionId), 'mad-sks-gate.json'), null);
   const expires = Date.parse(String(gate?.expires_at || ''));

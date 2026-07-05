@@ -1,0 +1,95 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import os from 'node:os';
+import fsp from 'node:fs/promises';
+import { createMission, findLatestMission, missionDir } from '../mission.js';
+
+async function makeRoot(prefix: string): Promise<string> {
+  return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
+}
+
+test('findLatestMission(root) with no options returns the single newest mission unfiltered', async () => {
+  const root = await makeRoot('sks-mission-scoping-baseline-');
+  const first = await createMission(root, { mode: 'ppt', prompt: 'first' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const second = await createMission(root, { mode: 'naruto', prompt: 'second' });
+  const latest = await findLatestMission(root);
+  assert.equal(latest, second.id);
+  assert.notEqual(latest, first.id);
+});
+
+test('findLatestMission(root) with no missions dir returns null', async () => {
+  const root = await makeRoot('sks-mission-scoping-empty-');
+  const latest = await findLatestMission(root);
+  assert.equal(latest, null);
+});
+
+test('findLatestMission(root, { mode }) returns only the mission matching that mode, not the overall latest', async () => {
+  const root = await makeRoot('sks-mission-scoping-mode-');
+  const loopMission = await createMission(root, { mode: 'loop', prompt: 'loop one' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  // Created after the loop mission, so it would win an unscoped "latest" lookup.
+  const pptMission = await createMission(root, { mode: 'ppt', prompt: 'ppt one' });
+
+  const latestLoop = await findLatestMission(root, { mode: 'loop' });
+  assert.equal(latestLoop, loopMission.id);
+  assert.notEqual(latestLoop, pptMission.id);
+
+  const latestPpt = await findLatestMission(root, { mode: 'ppt' });
+  assert.equal(latestPpt, pptMission.id);
+
+  const latestUnscoped = await findLatestMission(root);
+  assert.equal(latestUnscoped, pptMission.id);
+});
+
+test('findLatestMission(root, { mode }) returns the newest among multiple missions sharing that mode', async () => {
+  const root = await makeRoot('sks-mission-scoping-mode-multi-');
+  const first = await createMission(root, { mode: 'naruto', prompt: 'naruto one' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await createMission(root, { mode: 'ppt', prompt: 'unrelated ppt' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const second = await createMission(root, { mode: 'naruto', prompt: 'naruto two' });
+
+  const latestNaruto = await findLatestMission(root, { mode: 'naruto' });
+  assert.equal(latestNaruto, second.id);
+  assert.notEqual(latestNaruto, first.id);
+});
+
+test('findLatestMission(root, { mode }) returns null when no candidate matches that mode', async () => {
+  const root = await makeRoot('sks-mission-scoping-mode-miss-');
+  await createMission(root, { mode: 'ppt', prompt: 'ppt only' });
+  const latest = await findLatestMission(root, { mode: 'mad-sks' });
+  assert.equal(latest, null);
+});
+
+test('findLatestMission(root, { route, gateFile }) skips missions missing the named gate artifact', async () => {
+  const root = await makeRoot('sks-mission-scoping-gate-');
+  const withoutGate = await createMission(root, { mode: 'mad-sks', prompt: 'no gate yet' });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const withGate = await createMission(root, { mode: 'mad-sks', prompt: 'has gate' });
+  await fsp.writeFile(
+    path.join(missionDir(root, withGate.id), 'mad-sks-gate.json'),
+    JSON.stringify({ schema: 'sks.mad-sks-gate.v1', route: '$MAD-SKS' }, null, 2)
+  );
+
+  const latest = await findLatestMission(root, { mode: 'mad-sks', route: '$MAD-SKS', gateFile: 'mad-sks-gate.json' });
+  assert.equal(latest, withGate.id);
+  assert.notEqual(latest, withoutGate.id);
+});
+
+test('findLatestMission(root, { route, gateFile }) rejects a gate whose route field disagrees', async () => {
+  const root = await makeRoot('sks-mission-scoping-gate-route-mismatch-');
+  const wrongRoute = await createMission(root, { mode: 'image-ux-review', prompt: 'wrong route' });
+  await fsp.writeFile(
+    path.join(missionDir(root, wrongRoute.id), 'image-ux-review-gate.json'),
+    JSON.stringify({ schema: 'sks.image-ux-review-gate.v2', route: '$PPT' }, null, 2)
+  );
+
+  const latest = await findLatestMission(root, {
+    mode: 'image-ux-review',
+    route: '$Image-UX-Review',
+    gateFile: 'image-ux-review-gate.json'
+  });
+  assert.equal(latest, null);
+});

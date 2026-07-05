@@ -24,6 +24,7 @@ import { writeCodexModelEffortCapabilityArtifact } from '../codex-control/codex-
 import { discoverImageArtifactsInDir, writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 import { pluginAppTemplatePolicy } from '../codex-plugins/codex-plugin-json.js';
 import { confirmQaLoopAppHandoff } from '../qa-loop/qa-loop-app-handoff-confirmation.js';
+import { emitStreamEvent } from '../agent-bridge/agent-mode.js';
 import fsp from 'node:fs/promises';
 
 export async function qaLoopCommand(sub: any, args: any = []) {
@@ -40,7 +41,7 @@ export async function qaLoopCommand(sub: any, args: any = []) {
 Usage:
   sks qa-loop prepare "target"
   sks qa-loop answer <mission-id|latest> <answers.json>
-  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--surface auto|codex_in_app_browser|codex_chrome_extension|codex_computer_use] [--report-only] [--app-handoff] [--app-handoff-required] [--app-handoff-launch] [--app-handoff-artifact-only]
+  sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N] [--surface auto|codex_in_app_browser|codex_chrome_extension|codex_computer_use] [--report-only] [--app-handoff] [--app-handoff-required] [--app-handoff-launch] [--app-handoff-artifact-only] [--stream]
   sks qa-loop app-confirm <mission-id|latest> --verdict pass|fail --notes "..."
   sks qa-loop status <mission-id|latest> [--desktop]
 `);
@@ -118,7 +119,9 @@ async function qaLoopRun(args: any) {
   const root = await sksRoot();
   const id = await resolveMissionId(root, args[0]);
   if (!id) throw new Error('Usage: sks qa-loop run <mission-id|latest> [--mock] [--max-cycles N]');
+  const stream = flag(args, '--stream');
   const { dir, mission } = await loadMission(root, id);
+  if (stream) emitStreamEvent('start', { schema: 'sks.qa-loop-run.v1', mission_id: id });
   const contractPath = path.join(dir, 'decision-contract.json');
   if (!(await exists(contractPath))) throw new Error('QA-LOOP cannot run: decision-contract.json is missing.');
   const contract = await readJson(contractPath, {});
@@ -140,6 +143,7 @@ async function qaLoopRun(args: any) {
     console.error('QA-LOOP cannot run: SKS safety scan found unsafe project data-tool configuration.');
     console.error(JSON.stringify(safetyScan.findings, null, 2));
     process.exitCode = 2;
+    if (stream) emitStreamEvent('result', { schema: 'sks.qa-loop-run.v1', ok: false, mission_id: id, status: 'blocked', blocker: 'db_safety_scan_failed', findings: safetyScan.findings });
     return;
   }
   const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || DEFAULT_QA_MAX_CYCLES;
@@ -251,7 +255,9 @@ async function qaLoopRun(args: any) {
     if (appHandoffRequired && appHandoff && appHandoff.ok !== true) {
       await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: nextGate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'qa-loop/app-handoff.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nextGate.blockers, command: { cmd: `sks qa-loop run ${id} --app-handoff-required`, status: 2 } });
       await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_DESKTOP_APP_HANDOFF', questions_allowed: true });
-      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked_for_desktop_review', mission_id: id, app_handoff: appHandoff, gate: nextGate }, null, 2));
+      const handoffResult = { schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked_for_desktop_review', mission_id: id, app_handoff: appHandoff, gate: nextGate };
+      if (stream) emitStreamEvent('result', handoffResult);
+      if (flag(args, '--json')) return console.log(JSON.stringify(handoffResult, null, 2));
       console.error('QA-LOOP blocked: Codex Desktop /app handoff is required but unavailable or still pending.');
       process.exitCode = 2;
       return;
@@ -286,7 +292,9 @@ async function qaLoopRun(args: any) {
       await writeJsonAtomic(path.join(dir, 'qa-gate.json'), blockedGate);
       await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: blockedGate, artifacts: ['qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], statusHint: 'blocked', blockers: blockedGate.blockers, command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
       await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_CHROME_EXTENSION_SETUP_REQUIRED', questions_allowed: true });
-      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked', blocker: 'codex_chrome_extension_setup_required', mission_id: id, chrome_extension: chrome, gate: blockedGate }, null, 2));
+      const chromeBlockedResult = { schema: 'sks.qa-loop-run.v1', ok: false, status: 'blocked', blocker: 'codex_chrome_extension_setup_required', mission_id: id, chrome_extension: chrome, gate: blockedGate };
+      if (stream) emitStreamEvent('result', chromeBlockedResult);
+      if (flag(args, '--json')) return console.log(JSON.stringify(chromeBlockedResult, null, 2));
       console.error('QA-LOOP blocked: this journey was routed to @Chrome, but the Codex Chrome Extension is not connected. Install/enable it, then resume.');
       console.error(chrome.docs_url);
       process.exitCode = 2;
@@ -295,11 +303,13 @@ async function qaLoopRun(args: any) {
   }
   await setCurrent(root, { mission_id: id, route: 'QALoop', route_command: '$QA-LOOP', mode: 'QALOOP', phase: 'QALOOP_RUNNING_NO_QUESTIONS', questions_allowed: false, stop_gate: 'qa-gate.json', reasoning_effort: 'high', reasoning_profile: 'sks-logic-high', reasoning_temporary: true });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.run.started', maxCycles, mock });
+  if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.run.started', max_cycles: maxCycles, mock });
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
   const nativeRoster = requestedAgents === 3 ? nativeAgentPlan : null;
   const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command', env: { SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown', SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role' } });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
+  if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (flag(args, '--native-proof-only')) {
     const proofOnlyGate = {
       schema: 'sks.qa-native-proof-only-gate.v1',
@@ -308,7 +318,7 @@ async function qaLoopRun(args: any) {
       proof_status: nativeAgentRun.proof?.status || null,
       blockers: nativeAgentRun.proof?.blockers || []
     };
-    if (flag(args, '--json')) return console.log(JSON.stringify({
+    const proofOnlyResult = {
       schema: 'sks.qa-loop-run.v1',
       ok: proofOnlyGate.ok,
       status: proofOnlyGate.ok ? 'native_proof_ready' : 'blocked',
@@ -317,7 +327,9 @@ async function qaLoopRun(args: any) {
       proof: nativeAgentRun.proof,
       native_agent_run: nativeAgentRun,
       native_proof_only: true
-    }, null, 2));
+    };
+    if (stream) emitStreamEvent('result', proofOnlyResult);
+    if (flag(args, '--json')) return console.log(JSON.stringify(proofOnlyResult, null, 2));
     console.log(`QA-LOOP native proof ready: ${id}`);
     return;
   }
@@ -354,7 +366,7 @@ async function qaLoopRun(args: any) {
       command: { cmd: `sks qa-loop run ${id} --mock`, status: 0 }
     });
     await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: gate.passed ? 'QALOOP_DONE' : 'QALOOP_PAUSED', questions_allowed: true });
-    if (flag(args, '--json')) return console.log(JSON.stringify({
+    const mockResult = {
       schema: 'sks.qa-loop-run.v1',
       ok: proof.ok && (!needsVisual || gate.passed === true),
       status: needsVisual && gate.passed !== true ? 'verified_partial_mock_no_live_web_evidence' : (gate.passed ? 'passed' : 'blocked'),
@@ -364,7 +376,9 @@ async function qaLoopRun(args: any) {
       native_agent_run: nativeAgentRun,
       mock_only: true,
       live_web_evidence: !needsVisual || gate.passed === true
-    }, null, 2));
+    };
+    if (stream) emitStreamEvent('result', mockResult);
+    if (flag(args, '--json')) return console.log(JSON.stringify(mockResult, null, 2));
     console.log(`Mock QA-LOOP done: ${id}`);
     console.log(`Gate: ${gate.passed ? 'passed' : 'blocked'}`);
     return;
@@ -373,6 +387,7 @@ async function qaLoopRun(args: any) {
     await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: await readJson(path.join(dir, 'qa-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: nativeAgentRun.proof?.blockers || ['native_agent_backend_blocked'], command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
     await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_NATIVE_AGENTS', questions_allowed: true });
     process.exitCode = 2;
+    if (stream) emitStreamEvent('result', { schema: 'sks.qa-loop-run.v1', ok: false, mission_id: id, status: 'blocked', blocker: 'native_agent_backend_blocked', blockers: nativeAgentRun.proof?.blockers || ['native_agent_backend_blocked'] });
     return;
   }
   const codex = await getCodexInfo();
@@ -381,6 +396,7 @@ async function qaLoopRun(args: any) {
     await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: await readJson(path.join(dir, 'qa-gate.json'), null), artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'completion-proof.json'], statusHint: 'blocked', blockers: ['codex_cli_missing'], command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
     await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_BLOCKED_REAL_RUN_REQUIRED', questions_allowed: true });
     process.exitCode = 2;
+    if (stream) emitStreamEvent('result', { schema: 'sks.qa-loop-run.v1', ok: false, mission_id: id, status: 'blocked', blocker: 'codex_cli_missing' });
     return;
   }
   let last = '';
@@ -389,11 +405,13 @@ async function qaLoopRun(args: any) {
     const outputFile = path.join(cycleDir, 'final.md');
     const prompt = buildQaLoopPrompt({ id, mission, contract, cycle, previous: last, reportFile, imagePathContract: imagePathContract?.contract || null, appHandoff, executionProfile });
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.start', cycle });
+    if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.cycle.start', cycle, max_cycles: maxCycles });
     const result = await runCodexExec({ root, prompt, outputFile, json: true, profile, logDir: cycleDir });
     await writeJsonAtomic(path.join(cycleDir, 'process.json'), { code: result.code, stdout_tail: result.stdout, stderr_tail: result.stderr, stdout_bytes: result.stdoutBytes, stderr_bytes: result.stderrBytes, truncated: result.truncated, timed_out: result.timedOut });
     last = await safeReadTextFile(fsp, outputFile, result.stdout || result.stderr || '');
     if (containsUserQuestion(last)) {
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.guard.question_blocked', cycle });
+      if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.guard.question_blocked', cycle });
       last = `${last}\n\n${noQuestionContinuationReason()}`;
       continue;
     }
@@ -402,16 +420,21 @@ async function qaLoopRun(args: any) {
       const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], visual: uiRequired, command: { cmd: `sks qa-loop run ${id}`, status: 0 } });
       await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_DONE', questions_allowed: true });
       await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.done', cycle });
-      if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation }, null, 2));
+      const doneResult = { schema: 'sks.qa-loop-run.v1', ok: proof.ok, mission_id: id, gate, proof: proof.validation };
+      if (stream) emitStreamEvent('result', doneResult);
+      if (flag(args, '--json')) return console.log(JSON.stringify(doneResult, null, 2));
       console.log(`QA-LOOP done: ${id}`);
       return;
     }
     await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.cycle.continue', cycle, reasons: gate.reasons });
+    if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.cycle.continue', cycle, reasons: gate.reasons });
   }
   const gate = await evaluateQaGate(dir);
   const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$QA-LOOP', gateFile: 'qa-gate.json', gate: gate.gate || gate, artifacts: ['agents/agent-proof-evidence.json', 'qa-native-agent-run.json', 'qa-gate.json', 'qa-ledger.json', reportFile, 'completion-proof.json'], mock: false, statusHint: 'blocked', reason: 'max_cycles', command: { cmd: `sks qa-loop run ${id}`, status: 2 } });
   await setCurrent(root, { mission_id: id, mode: 'QALOOP', phase: 'QALOOP_PAUSED_MAX_CYCLES', questions_allowed: true });
-  if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.qa-loop-run.v1', ok: false, mission_id: id, gate, proof: proof.validation }, null, 2));
+  const pausedResult = { schema: 'sks.qa-loop-run.v1', ok: false, mission_id: id, gate, proof: proof.validation };
+  if (stream) emitStreamEvent('result', pausedResult);
+  if (flag(args, '--json')) return console.log(JSON.stringify(pausedResult, null, 2));
   console.log(`QA-LOOP paused after max cycles: ${id}`);
 }
 
