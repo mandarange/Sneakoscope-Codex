@@ -1010,10 +1010,6 @@ func reassertControlCenterVisibility() {
     }
 }
 
-func shellQuote(_ value: String) -> String {
-    return "'" + value.replacingOccurrences(of: "'", with: "'\\\\''") + "'"
-}
-
 func clipped(_ value: String, limit: Int = 700) -> String {
     return String(value.prefix(limit))
 }
@@ -1090,8 +1086,12 @@ func runProcess(_ executable: String, _ args: [String] = [], stdinText: String? 
 }
 
 func showNotification(_ title: String, _ body: String) {
-    let script = "display notification " + shellQuote(clipped(body)) + " with title " + shellQuote(title)
-    runProcess("/usr/bin/osascript", ["-e", script]) { code, output in
+    // AppleScript string literals require double quotes and cannot contain raw
+    // newlines, so inlining arbitrary command output into the script text throws
+    // a -2741 syntax error. Keep the script a fixed literal and pass body/title
+    // as osascript argv instead — no escaping, no syntax error, any text is safe.
+    let script = "on run argv\\ndisplay notification (item 1 of argv) with title (item 2 of argv)\\nend run"
+    runProcess("/usr/bin/osascript", ["-e", script, clipped(body), title]) { code, output in
         if code != 0 {
             showAlert(title, informative: output)
         }

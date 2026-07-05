@@ -105,3 +105,15 @@ test('SKS menu bar template re-shows the status item through the same setIconVis
   assert.match(swift, /let menuBarLabel = "com\.sneakoscope\.sks-menubar"/);
   assert.match(swift, /let controlCenterDomain = "com\.apple\.controlcenter"/);
 });
+
+test('SKS menu bar template builds display notification via a fixed osascript argv script (no inline-string interpolation)', () => {
+  const swift = source('com.openai.codex');
+  // The body/title are passed as osascript argv against a fixed AppleScript
+  // literal, so arbitrary command output (quotes, newlines) can never produce a
+  // -2741 AppleScript syntax error.
+  assert.match(swift, /on run argv\\ndisplay notification \(item 1 of argv\) with title \(item 2 of argv\)\\nend run/);
+  assert.match(swift, /osascript", \["-e", script, clipped\(body\), title\]/);
+  // The old shell-style single-quote helper misused for AppleScript is gone.
+  assert.doesNotMatch(swift, /func shellQuote/);
+  assert.doesNotMatch(swift, /display notification " \+ /);
+});
