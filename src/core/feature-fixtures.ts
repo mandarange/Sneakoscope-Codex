@@ -144,10 +144,10 @@ const FIXTURES = Object.freeze({
   'route-swarm': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 285000, reason: 'Same as route-work: naruto-command.ts never invokes the completion-proof pipeline.' }),
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'route-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'route-shadowclone': fixture('mock', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass', {
+  'route-shadowclone': fixture('static', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass', {
     reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
   }),
-  'route-kagebunshin': fixture('mock', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass', {
+  'route-kagebunshin': fixture('static', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass', {
     reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
   }),
   'route-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['completion-proof.json', 'qa-gate.json'], 'blocked', { timeout_ms: 180000, reason: 'qaLoopRun() resolves "latest" via the same globally-unscoped findLatestMission used everywhere else and qa-loop is a two-step prepare-then-run workflow gated between steps by an active-route-not-closed check a single fixture command cannot express.' }),
@@ -155,11 +155,11 @@ const FIXTURES = Object.freeze({
   'route-ppt': fixture('mock', 'sks ppt fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'ppt-imagegen-review-gate.json', 'ppt-slide-issue-ledger.json'], 'pass', { reason: 'Underlying command intentionally exits non-zero and reports ok:false by honest design (mockPptFixtureGate() hardcodes a blocked mock PPT gate); it does write all four declared artifacts.' }),
   'route-image-ux-review': fixture('mock', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'image-ux-generated-review-ledger.json'], 'pass', { reason: 'imageUxFixture() intentionally overrides the gate to passed:false/execution_class:mock_fixture and always exits non-zero for mock fixture runs so they can never claim a real pass; it does write the declared artifacts.' }),
   'route-computer-use': fixture('execute_and_validate_artifacts', 'sks computer-use import-fixture --mock --json', ['computer-use-evidence-ledger.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'completion-proof.json'], 'blocked', { reason: 'importFixture() unconditionally sets process.exitCode=1 by design (execution_class: mock_fixture) so a mock Computer Use import can never claim a real pass.' }),
-  'route-cu': fixture('mock', '$CU mock evidence ledger', ['computer-use-evidence-ledger.json', 'image-voxel-ledger.json', 'completion-proof.json'], 'pass', {
-    reason: 'Underlying command (`sks cu import-fixture --mock`, same handler as route-computer-use) intentionally exits non-zero for mock Computer Use evidence imports (import-fixture in computer-use-command.ts always sets ok:false/process.exitCode=1, by honest design: mock evidence can never claim a real Computer Use verification). It does write the declared artifacts, but an execute_and_validate_artifacts fixture would need to special-case exit-code-1-as-expected for this one command, which would weaken the generic exit-code pass/fail contract; left as documented mock rather than encode that special case.'
+  'route-cu': fixture('execute_and_validate_artifacts', 'sks computer-use import-fixture --mock --json', ['computer-use-evidence-ledger.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'completion-proof.json'], 'blocked', {
+    reason: 'Same handler as route-computer-use: importFixture() unconditionally sets process.exitCode=1 by design (execution_class: mock_fixture) so a mock Computer Use import can never claim a real pass. execute_and_validate_artifacts already treats a matching claimed_status:\'blocked\' as ok (see feature-fixture-executor.ts\'s statusMatches check), so no special-casing is needed - upgraded from the previous mock registration to get real command-exit and artifact-schema verification.'
   }),
   'route-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
-  'route-answer': fixture('mock', '$Answer answer-only route policy', [], 'pass', {
+  'route-answer': fixture('static', '$Answer answer-only route policy', [], 'pass', {
     reason: 'Policy-only route (answer-only conversational mode with no writes); nothing executable to run beyond static contract text.'
   }),
   'route-goal': fixture('mock', '$Goal bridge route', ['goal-workflow.json', 'completion-proof.json'], 'pass', {
@@ -186,24 +186,24 @@ const FIXTURES = Object.freeze({
   }),
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; it does write all three declared artifacts.' }),
-  'route-sks': fixture('mock', '$SKS control-surface route', ['completion-proof.json'], 'pass', {
+  'route-sks': fixture('static', '$SKS control-surface route', ['completion-proof.json'], 'pass', {
     reason: 'Pure control-surface alias route with no independent behavior beyond the underlying CLI command fixtures it dispatches to.'
   }),
   'route-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
-  'route-fast-on': fixture('mock', '$Fast-On covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
+  'route-fast-on': fixture('static', '$Fast-On covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic fast-mode blackbox toggle test suite, not a standalone CLI invocation.'
   }),
-  'route-fast-off': fixture('mock', '$Fast-Off covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
+  'route-fast-off': fixture('static', '$Fast-Off covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic fast-mode blackbox toggle test suite, not a standalone CLI invocation.'
   }),
   'route-local-model': fixture('execute', 'sks with-local-llm status --json', [], 'pass'),
-  'route-with-local-llm-on': fixture('mock', '$with-local-llm-on covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
+  'route-with-local-llm-on': fixture('static', '$with-local-llm-on covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic local-model dollar-command blackbox toggle test suite, not a standalone CLI invocation.'
   }),
-  'route-with-local-llm-off': fixture('mock', '$with-local-llm-off covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
+  'route-with-local-llm-off': fixture('static', '$with-local-llm-off covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic local-model dollar-command blackbox toggle test suite, not a standalone CLI invocation.'
   }),
-  'route-help': fixture('mock', '$Help lightweight route', [], 'pass', {
+  'route-help': fixture('static', '$Help lightweight route', [], 'pass', {
     reason: 'Pure alias of the cli-help command; no independent behavior to verify beyond cli-help\'s own execute fixture.'
   }),
   'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass', {
