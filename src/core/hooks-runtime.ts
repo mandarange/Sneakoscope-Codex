@@ -18,6 +18,7 @@ import { scanAgentTextForRecursion } from './agents/agent-recursion-guard.js';
 import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js';
 import { diagnosticPromptAllowedDuringNoQuestions } from './routes/diagnostic-allowlist.js';
 import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reconcile-preflight.js';
+import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-preflight.js';
 import {
   buildCompactContinue,
   buildPermissionRequestAllow,
@@ -347,6 +348,8 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     else contexts.push((await prepareRoute(root, prompt, state, { sessionKey })).additionalContext);
     if (goalOverlay) contexts.push(goalOverlay);
     if (teamDigest?.context) contexts.push(teamDigest.context);
+    const codePackNote = await codePackFreshnessNote(root);
+    if (codePackNote) contexts.push(codePackNote);
     const additionalContext = contexts.filter(Boolean).join('\n\n');
     return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
   }

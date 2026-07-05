@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildTriWikiAttention } from '../triwiki-attention.js';
+import { createWrongnessRecord } from '../triwiki-wrongness/wrongness-schema.js';
 
 test('buildTriWikiAttention is unchanged when codePackEntries is omitted (backward compatible)', () => {
   const withDefault = buildTriWikiAttention({ selected: [], wiki: {}, maxUse: 4, maxHydrate: 4 });
@@ -36,4 +37,44 @@ test('buildTriWikiAttention does not let code-pack entries crowd out policy-clai
   const useIds = attention.use_first.map((row: any) => row[0]);
   assert.ok(useIds.includes('policy-claim-1'), 'existing policy claim selection must be preserved');
   assert.ok(useIds.includes('code:module-a'), 'code entry is additive, not competing for the same maxUse slots');
+});
+
+test('buildTriWikiAttention ranks a wrongness-flagged module first and tags its hydrate row with the wrongness count (A-6)', () => {
+  const codePackEntries = [
+    { id: 'code:clean-module', text: 'clean module summary', trust_score: 0.99, token_cost: 10, citations: [{ path: 'src/clean.ts' }] },
+    { id: 'code:buggy-module', text: 'buggy module summary', trust_score: 0.5, token_cost: 10, citations: [{ path: 'src/buggy.ts' }] }
+  ];
+  const attention = buildTriWikiAttention({
+    selected: [], wiki: {}, maxUse: 4, maxHydrate: 4,
+    codePackEntries, codePackTokenBudget: 2000,
+    wrongnessByModule: { 'buggy-module': 3 }
+  });
+  const useIds = attention.use_first.map((row: any) => row[0]);
+  // Despite lower trust_score, the past-wrongness module is ranked ahead of the clean one.
+  assert.ok(useIds.indexOf('code:buggy-module') < useIds.indexOf('code:clean-module'), 'wrongness-flagged module must rank first');
+  const buggyHydrate = attention.hydrate_first.find((row: any) => row[0] === 'code:buggy-module');
+  assert.ok(buggyHydrate, 'wrongness-flagged module must have a hydrate row');
+  assert.match(String(buggyHydrate?.[1] || ''), /wrongness:3/);
+  // A clean module with no wrongness must not carry a wrongness signal.
+  const cleanHydrate = attention.hydrate_first.find((row: any) => row[0] === 'code:clean-module');
+  assert.doesNotMatch(String(cleanHydrate?.[1] || ''), /wrongness:/);
+});
+
+test('createWrongnessRecord derives module_ids from linked files that map to a known TriWiki module (A-6)', () => {
+  const record = createWrongnessRecord({
+    wrongness_kind: 'incorrect_claim',
+    claim: { text: 'a wrong claim about the triwiki module' },
+    links: { files: ['src/core/triwiki/triwiki-cache-key.ts'] }
+  });
+  assert.ok(Array.isArray(record.module_ids), 'expected module_ids to be derived');
+  assert.ok(record.module_ids!.includes('triwiki'), `expected 'triwiki' module id, got ${JSON.stringify(record.module_ids)}`);
+});
+
+test('createWrongnessRecord omits module_ids when no linked file maps to a known module (backward compatible)', () => {
+  const record = createWrongnessRecord({
+    wrongness_kind: 'incorrect_claim',
+    claim: { text: 'a wrong claim with no mappable files' },
+    links: { files: ['some/unrelated/path/outside/any/module.txt'] }
+  });
+  assert.equal(record.module_ids, undefined);
 });

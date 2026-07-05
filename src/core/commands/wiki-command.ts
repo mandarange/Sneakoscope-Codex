@@ -17,6 +17,7 @@ import { validateImageVoxelLedger } from '../wiki-image/validation.js';
 import { maybeFinalizeRoute } from '../proof/auto-finalize.js';
 import { wikiWrongnessCommand } from '../triwiki-wrongness/wrongness-cli.js';
 import { wrongnessContextForRoute } from '../triwiki-wrongness/wrongness-retrieval.js';
+import { readCombinedWrongnessRecords } from '../triwiki-wrongness/wrongness-ledger.js';
 import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-wrongness.js';
 import { publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 import { scanCodebaseIndex } from '../triwiki/code-index-scanner.js';
@@ -225,6 +226,20 @@ async function wikiRefreshCode(args: any = []): Promise<void> {
 /** Cheap freshness check: compares the code pack's recorded git HEAD sha (at
  * generation time) against the current HEAD. Any uncertainty (no pack, no git,
  * spawn failure) resolves to 'stale' rather than 'fresh', never overclaiming. */
+/** Active-wrongness counts per TriWiki module id (from wrongness records' module_ids),
+ * so attention can hydrate frequently-wrong modules' code entries first. */
+async function buildWrongnessByModule(root: any): Promise<Record<string, number>> {
+  const records = await readCombinedWrongnessRecords(root, null).catch(() => []);
+  const counts: Record<string, number> = {};
+  for (const record of records) {
+    if ((record as any)?.status && (record as any).status !== 'active') continue;
+    for (const moduleId of Array.isArray((record as any)?.module_ids) ? (record as any).module_ids : []) {
+      if (moduleId) counts[moduleId] = (counts[moduleId] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
 async function codePackFreshness(root: any): Promise<{ status: 'fresh' | 'stale' | 'missing'; git_head_sha: string | null; pack_sha: string | null }> {
   const packPath = path.join(root, '.sneakoscope', 'wiki', 'code-pack.json');
   if (!(await exists(packPath))) return { status: 'missing', git_head_sha: null, pack_sha: null };
@@ -352,6 +367,7 @@ export async function writeWikiContextPack(root: any, args: any = [], opts: any 
   const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
   const codePackData = await readJson<any>(path.join(root, '.sneakoscope', 'wiki', 'code-pack.json'), null).catch(() => null);
   const codePackEntries = Array.isArray(codePackData?.entries) ? codePackData.entries : [];
+  const wrongnessByModule = await buildWrongnessByModule(root);
   const pack = contextCapsule({
     mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
     role,
@@ -360,7 +376,8 @@ export async function writeWikiContextPack(root: any, args: any = [], opts: any 
     q4: { mode: 'project-continuity', package: PACKAGE_VERSION, hydrate: 'anchor-first' },
     q3: ['sks', 'llm-wiki', 'wiki-coordinate', 'gx', 'skills'],
     budget: { maxWikiAnchors: maxAnchors, includeTrustSummary: true },
-    codePackEntries
+    codePackEntries,
+    wrongnessByModule
   });
   const wrongnessContext = await wrongnessContextForRoute(root, { route: '$Wiki', limit: 12 });
   // buildTriWikiAttention's use_first/hydrate_first can reference code: ids that were

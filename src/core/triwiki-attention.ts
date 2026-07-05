@@ -235,10 +235,12 @@ function uniqueAttentionRows(rows: any = [], max: any = 4) {
  * for the same fixed slot budget would make their appearance arbitrary. Each surviving
  * entry becomes a use_first row (bare id, no fabricated RGBA) plus a hydrate_first row
  * pointing at its source citations, so a consumer knows which real files back it. */
-function codePackAttentionRows(codePackEntries: any[] = [], tokenBudget = 2000): { useFirst: any[]; hydrateFirst: any[] } {
+function codePackAttentionRows(codePackEntries: any[] = [], tokenBudget = 2000, wrongnessByModule: Record<string, number> = {}): { useFirst: any[]; hydrateFirst: any[] } {
+  const moduleWrongness = (entryId: any): number => Number(wrongnessByModule[String(entryId || '').replace(/^code:/, '')] || 0);
   const sorted = [...(codePackEntries || [])]
     .filter((entry: any) => entry && typeof entry.id === 'string')
-    .sort((a: any, b: any) => Number(b.trust_score || 0) - Number(a.trust_score || 0));
+    // Modules SKS has been wrong about before are worth re-reading first, then rank by trust.
+    .sort((a: any, b: any) => (moduleWrongness(b.id) - moduleWrongness(a.id)) || (Number(b.trust_score || 0) - Number(a.trust_score || 0)));
   const useFirst: any[] = [];
   const hydrateFirst: any[] = [];
   let tokens = 0;
@@ -248,12 +250,17 @@ function codePackAttentionRows(codePackEntries: any[] = [], tokenBudget = 2000):
     tokens += cost;
     useFirst.push([entry.id, null, null]);
     const citationPaths = Array.isArray(entry.citations) ? entry.citations.map((c: any) => c?.path).filter(Boolean) : [];
-    if (citationPaths.length) hydrateFirst.push([entry.id, `code_citations:${citationPaths.join(',')}`]);
+    const citationReason = citationPaths.length ? `code_citations:${citationPaths.join(',')}` : null;
+    const wrongCount = moduleWrongness(entry.id);
+    // A module with past wrongness earns a hydrate row even without citations, tagged
+    // with a wrongness:<count> signal so a consumer re-reads it before trusting recall.
+    const reason = wrongCount > 0 ? `wrongness:${wrongCount}${citationReason ? `;${citationReason}` : ''}` : citationReason;
+    if (reason) hydrateFirst.push([entry.id, reason]);
   }
   return { useFirst, hydrateFirst };
 }
 
-export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker', maxUse = 4, maxHydrate = 4, codePackEntries = [], codePackTokenBudget = 2000 }: any = {}) {
+export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker', maxUse = 4, maxHydrate = 4, codePackEntries = [], codePackTokenBudget = 2000, wrongnessByModule = {} }: any = {}) {
   const anchors = attentionAnchorMap(wiki);
   const ranked = [...(selected || [])]
     .map((claim: any, index: any) => ({ claim, index }))
@@ -281,7 +288,7 @@ export function buildTriWikiAttention({ selected = [], wiki = {}, role = 'worker
     ...voxelRows,
     ...selectedHydrateRows
   ], maxHydrate);
-  const codeRows = codePackAttentionRows(codePackEntries, codePackTokenBudget);
+  const codeRows = codePackAttentionRows(codePackEntries, codePackTokenBudget, wrongnessByModule);
   return {
     mode: 'aggressive_triwiki_active_recall',
     use_first: uniqueAttentionRows([...useFirst, ...codeRows.useFirst], maxUse + codeRows.useFirst.length),
@@ -315,7 +322,7 @@ export function geometricOffsets(max: any = 65536) {
   return out;
 }
 
-export function contextCapsule({ mission, role = 'worker', contractHash = null, claims = [], q4 = {}, q3 = [], budget = {}, codePackEntries = [] }: any) {
+export function contextCapsule({ mission, role = 'worker', contractHash = null, claims = [], q4 = {}, q3 = [], budget = {}, codePackEntries = [], wrongnessByModule = {} }: any) {
   const trustPolicy = budget.trustPolicy || DEFAULT_TRUST_POLICY;
   const claimsWithTrust = (claims || []).map((claim: any) => withTrust(claim, trustPolicy));
   const selected = selectClaims(mission, claims, { maxClaims: budget.maxClaims ?? (role.includes('verifier') ? 16 : 9), trustPolicy });
@@ -347,7 +354,8 @@ export function contextCapsule({ mission, role = 'worker', contractHash = null, 
       maxUse: budget.maxAttentionUse ?? (role.includes('verifier') ? 7 : 4),
       maxHydrate: budget.maxAttentionHydrate ?? (role.includes('verifier') ? 7 : 4),
       codePackEntries,
-      codePackTokenBudget: budget.codePackTokenBudget ?? 2000
+      codePackTokenBudget: budget.codePackTokenBudget ?? 2000,
+      wrongnessByModule
     }),
     claims: selected.map((c: any) => {
       const anchor = anchorsById.get(c.id);

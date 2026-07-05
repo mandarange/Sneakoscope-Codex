@@ -1,4 +1,5 @@
 import { nowIso, randomId, sha256 } from '../fsx.js';
+import { moduleIdsForPath } from '../triwiki/triwiki-module-card.js';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -186,6 +187,11 @@ export interface WrongnessRecord {
   avoidance_rule: WrongnessAvoidanceRule;
   correction: WrongnessCorrection;
   links: WrongnessLinks;
+  /** Optional (backward-compatible): TriWiki module ids this wrongness touches,
+   * derived from links.files. Lets attention surface a "frequently-wrong module"
+   * signal on that module's code-pack entry. Omitted when no file maps to a known
+   * module (i.e. moduleIdsForPath returns only 'unknown'). */
+  module_ids?: string[];
   rule_compiled?: boolean;
   compiled_rule_id?: string | null;
 }
@@ -218,6 +224,8 @@ export function createWrongnessRecord(input: unknown = {}): WrongnessRecord {
   const avoidanceText = stringOrNull(asRecord(row.avoidance_rule).text)
     || stringOrNull(row.avoidance_rule)
     || defaultAvoidanceRule(kind, claim.text);
+  const links = normalizeLinks(row.links);
+  const moduleIds = moduleIdsForWrongness(links.files);
   return {
     schema: WRONGNESS_RECORD_SCHEMA,
     id: stringOrNull(row.id) || wrongnessId(kind),
@@ -236,10 +244,24 @@ export function createWrongnessRecord(input: unknown = {}): WrongnessRecord {
     corrective_action: normalizeCorrectiveAction(row.corrective_action),
     avoidance_rule: normalizeAvoidanceRule(row.avoidance_rule, kind, avoidanceText, severity),
     correction: normalizeCorrection(row.correction ?? row.corrected_anchor),
-    links: normalizeLinks(row.links),
+    links,
+    ...(moduleIds.length ? { module_ids: moduleIds } : (Array.isArray((row as JsonRecord).module_ids) ? { module_ids: stringList((row as JsonRecord).module_ids) } : {})),
     ...(row.rule_compiled === undefined ? {} : { rule_compiled: Boolean(row.rule_compiled) }),
     ...(row.compiled_rule_id === undefined ? {} : { compiled_rule_id: stringOrNull(row.compiled_rule_id) })
   };
+}
+
+/** Best-effort module attribution from the wrongness's linked files. Excludes the
+ * 'unknown' sentinel moduleIdsForPath returns for unmapped paths, so a record only
+ * carries module_ids when at least one file maps to a real TriWiki module. */
+function moduleIdsForWrongness(files: readonly string[]): string[] {
+  const ids = new Set<string>();
+  for (const file of files) {
+    for (const id of moduleIdsForPath(String(file || ''))) {
+      if (id && id !== 'unknown') ids.add(id);
+    }
+  }
+  return [...ids];
 }
 
 export function emptyWrongnessLedger(scope: 'project' | 'mission' = 'project', missionId: string | null = null): WrongnessLedger {

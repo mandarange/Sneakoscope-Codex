@@ -9,6 +9,11 @@
 
 ## [5.6.1] - 2026-07-05
 
+### Added
+
+- Complete the TriWiki code-index work from the 5.6.0 work order: the user-prompt hook now injects a one-line "code pack is stale — run `sks wiki refresh --code`" nudge when a published code pack exists but was built against a different git HEAD than the current one. It is a bounded, non-blocking check (one JSON read + one `git rev-parse HEAD`, hard-timeout capped) that never regenerates the pack in the hook and stays silent for repos that never opted into the code pack, so it can't nag or blow the hook latency budget.
+- Link TriWiki wrongness (negative-evidence) records to code modules: wrongness records now carry an optional `module_ids` field derived from their linked files, and the code-pack attention ranking surfaces modules SKS has been wrong about before ahead of higher-trust ones, tagging their hydrate rows with a `wrongness:<count>` signal so a consumer re-reads a frequently-wrong module before trusting recall. Both are backward-compatible additions (existing records/packs are unaffected).
+
 ### Fixed
 
 - Fix the SKS menu bar's "Set codex-lb Domain" dialog UX: the placeholder showed the full `/backend-api/codex` suffixed URL, misleadingly implying it must be typed by hand even though a bare domain is already normalized to the correct full URL automatically; the placeholder now shows a bare-domain example, and the message text clarifies the suffix is added automatically. Command failures shown in menu bar alerts now go through a humanizer that translates JSON reason/status/blocker codes into plain English (with a readable "snake_case -> Words" fallback for unknown codes) instead of dumping the raw JSON blob — applies to every menu action's failure alert, not just codex-lb setup.
