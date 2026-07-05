@@ -1014,6 +1014,51 @@ func clipped(_ value: String, limit: Int = 700) -> String {
     return String(value.prefix(limit))
 }
 
+// sks commands report failures as JSON ({reason|status|error|blockers[]|guidance[]}
+// as short snake_case codes), which read as opaque "error codes" if dumped raw into
+// an alert. Extract the readable parts and translate known codes into plain English;
+// unknown codes fall back to "snake_case -> Words" rather than staying cryptic, and
+// genuinely non-JSON output (already plain text) passes through unchanged.
+func humanizeSksFailure(_ text: String) -> String {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let data = trimmed.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+        return text
+    }
+    var lines: [String] = []
+    if let reason = obj["reason"] as? String {
+        lines.append(humanizeSksCode(reason))
+    } else if let status = obj["status"] as? String, !["ok", "pass", "verified", "verified_partial"].contains(status) {
+        lines.append(humanizeSksCode(status))
+    }
+    if let errorMessage = obj["error"] as? String, !errorMessage.isEmpty {
+        lines.append(errorMessage)
+    }
+    if let blockers = obj["blockers"] as? [String], !blockers.isEmpty {
+        lines.append(contentsOf: blockers.map { "- " + humanizeSksCode($0) })
+    }
+    if let guidance = obj["guidance"] as? [String], !guidance.isEmpty {
+        lines.append("")
+        lines.append(contentsOf: guidance)
+    }
+    return lines.isEmpty ? text : lines.joined(separator: "\\n")
+}
+
+func humanizeSksCode(_ code: String) -> String {
+    let known: [String: String] = [
+        "missing_host_or_base_url": "No domain or base URL was entered.",
+        "missing_api_key": "No API key was entered.",
+        "setup_needed": "codex-lb is not configured yet.",
+        "cancelled": "Setup was cancelled.",
+        "process_only_cancelled": "Setup was cancelled (process-only mode was not confirmed).",
+        "process_only_requires_yes": "This setup would only be kept for the current session — nothing durable was saved."
+    ]
+    if let mapped = known[code] { return mapped }
+    let words = code.split(separator: "_").joined(separator: " ")
+    guard let first = words.first else { return code }
+    return String(first).uppercased() + words.dropFirst()
+}
+
 func showAlert(_ message: String, informative: String = "") {
     DispatchQueue.main.async {
         NSApp.activate(ignoringOtherApps: true)
@@ -1281,7 +1326,7 @@ ${codexLifecycleSource}
                     if code == 0 {
                         showNotification(title, "OK\\n" + redacted)
                     } else {
-                        showAlert(title + " failed", informative: redacted)
+                        showAlert(title + " failed", informative: humanizeSksFailure(redacted))
                     }
                 }
                 completion?(code, redacted)
@@ -1333,7 +1378,7 @@ ${codexLifecycleSource}
     }
 
     @objc func setCodexLbDomainAndKey() {
-        guard let domain = promptText(title: "Set codex-lb Domain", message: "Enter your codex-lb domain or base URL.", placeholder: "https://lb.example.com/backend-api/codex") else { return }
+        guard let domain = promptText(title: "Set codex-lb Domain", message: "Enter just your codex-lb domain or base URL — the /backend-api/codex path is added automatically.", placeholder: "lb.example.com") else { return }
         guard let key = promptText(title: "Set codex-lb Key", message: "Enter your codex-lb API key.", placeholder: "sk-clb-...", secure: true) else { return }
         runSksBackground(["codex-lb", "setup", "--host", domain, "--api-key-stdin", "--yes", "--json"], title: "Set codex-lb", stdinText: key + "\\n") { [weak self] code, _ in
             if code == 0 { self?.updateAuthModeChecks() }

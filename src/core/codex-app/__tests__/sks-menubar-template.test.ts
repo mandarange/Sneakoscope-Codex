@@ -117,3 +117,30 @@ test('SKS menu bar template builds display notification via a fixed osascript ar
   assert.doesNotMatch(swift, /func shellQuote/);
   assert.doesNotMatch(swift, /display notification " \+ /);
 });
+
+test('SKS menu bar template codex-lb domain prompt uses a bare-domain placeholder, not the full backend-api suffixed URL', () => {
+  const swift = source('com.openai.codex');
+  const promptMatch = swift.match(/guard let domain = promptText\(title: "Set codex-lb Domain"[\s\S]*?\) else \{ return \}/);
+  assert.ok(promptMatch, 'expected to find the Set codex-lb Domain prompt call');
+  const promptCall = promptMatch[0];
+  const placeholderMatch = promptCall.match(/placeholder: "([^"]*)"/);
+  assert.ok(placeholderMatch, 'expected to find a placeholder value on the prompt call');
+  // The placeholder (the example text shown inside the empty field) showing the
+  // full "/backend-api/codex" suffixed form implies the user must type it
+  // themselves, when normalizeCodexLbBaseUrl already appends it automatically
+  // from a bare domain - showing the suffix there is actively misleading. The
+  // message text above the field may still explain the suffix is auto-added.
+  assert.doesNotMatch(placeholderMatch[1]!, /backend-api/);
+  assert.equal(placeholderMatch[1]!, 'lb.example.com');
+  assert.match(promptCall, /added automatically/);
+});
+
+test('SKS menu bar template humanizes sks command failure JSON instead of showing raw error codes', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /func humanizeSksFailure\(_ text: String\) -> String \{/);
+  assert.match(swift, /func humanizeSksCode\(_ code: String\) -> String \{/);
+  // The failure alert path must run output through the humanizer, not show the raw
+  // JSON/blocker-code text directly.
+  assert.match(swift, /showAlert\(title \+ " failed", informative: humanizeSksFailure\(redacted\)\)/);
+  assert.doesNotMatch(swift, /showAlert\(title \+ " failed", informative: redacted\)/);
+});
