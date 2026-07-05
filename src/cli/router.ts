@@ -43,6 +43,31 @@ export function normalizeCommand(args: readonly string[] = []): NormalizedComman
 
 export async function dispatch(args?: readonly string[]): Promise<unknown> {
   const argv = args ?? process.argv.slice(2);
+  try {
+    return await dispatchInner(argv);
+  } catch (err: unknown) {
+    // Final choke point: any uncaught bug anywhere in the dispatch chain (gate
+    // checks, lazy command import, command run()) must never leak a raw stack
+    // dump to the user as their "answer" — convert it to a structured, honest
+    // failure instead. Every existing explicit error path above already sets
+    // process.exitCode and returns normally (never throws), so this only ever
+    // catches genuinely unexpected exceptions; it changes nothing about those
+    // paths' exit codes or messages.
+    const message = err instanceof Error ? err.message : String(err);
+    if (err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`);
+    else process.stderr.write(`${message}\n`);
+    process.exitCode = 1;
+    const result = { ok: false, error: message, command: normalizeCommand(argv).rawCommand };
+    // A --json caller depends on stdout always being exactly one JSON result
+    // (this is the same non-interactive contract SKS_AGENT_MODE promises) — an
+    // uncaught crash must not leave stdout empty, or a JSON.parse on the
+    // consuming end breaks with no diagnosable output at all.
+    if (argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+    return result;
+  }
+}
+
+async function dispatchInner(argv: readonly string[]): Promise<unknown> {
   const globalMode = detectGlobalMode(argv);
   if (globalMode?.kind === 'mad-glm') {
     const mod = await import('../core/commands/glm-command.js');
