@@ -47,7 +47,12 @@ const FIXTURES = Object.freeze({
   'cli-versioning': fixture('execute', 'sks versioning status --json', [], 'pass'),
   'cli-aliases': fixture('execute', 'sks aliases', [], 'pass'),
   'cli-fix-path': fixture('execute', 'sks fix-path --json', [], 'pass'),
-  'cli-wiki-code': fixture('execute_and_validate_artifacts', 'sks wiki refresh --code --json', [{ path: '.sneakoscope/wiki/code-pack.json', schema: 'sks.code-pack.v1', optional: true }], 'pass'),
+  // selftest --real executes this fixture directly against this real repo (no
+  // hermetic isolation for execute/execute_and_validate_artifacts fixtures - see
+  // feature-fixture-executor.ts), so a real full scan (~79 modules) needs a
+  // realistic budget; the 8000 default is sized for smaller/typical repos, not
+  // this one, so pass an explicit larger budget rather than lowering the gate.
+  'cli-wiki-code': fixture('execute_and_validate_artifacts', 'sks wiki refresh --code --token-budget 20000 --json', [{ path: '.sneakoscope/wiki/code-pack.json', schema: 'sks.code-pack.v1', optional: true }], 'pass'),
   'cli-agent-bridge': fixture('execute_and_validate_artifacts', 'sks agent-bridge setup --json', [{ path: '.sneakoscope/agent-bridge/manifest.json', schema: 'sks.agent-manifest.v1', optional: true }], 'pass'),
   'cli-mcp-server': fixture('execute', 'sks mcp-server --probe', [], 'pass'),
   'cli-selftest': fixture('execute', 'sks selftest --mock', [], 'pass'),

@@ -212,6 +212,10 @@ async function wikiRefreshCode(args: any = []): Promise<void> {
     written: written ? written.path : null
   };
   process.exitCode = validation.ok ? 0 : 2;
+  // Always note the counts/issues on stderr (even in --json mode, where stdout must
+  // stay pure JSON) so a blocked run is diagnosable from stderr_tail alone without
+  // needing to reproduce it separately in an isolated environment.
+  process.stderr.write(`wiki-refresh-code: root=${root} modules=${index.modules.length} entries=${pack.entries.length} token_cost=${pack.total_token_cost}/${pack.token_budget} issues=${JSON.stringify(validation.issues)}\n`);
   if (flag(args, '--json')) return console.log(JSON.stringify(result, null, 2));
   console.log('Sneakoscope TriWiki Code Pack Refresh');
   console.log(`Code pack refresh: ${validation.ok ? 'ok' : 'blocked'} (${pack.entries.length} entries from ${index.modules.length} modules${index.truncated ? ', truncated' : ''})`);

@@ -14,7 +14,7 @@
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: `5.3.0`.
+Current release: `5.6.0`. New in this release: a source-cited TriWiki code index/pack (`sks wiki refresh --code`) so LLMs use fewer tokens navigating a codebase, native repair for Codex Desktop's Computer Use and Browser Use features, and an agent bridge (`sks mcp-server`, `SKS_AGENT_MODE`, NDJSON `--stream`) so any agent system — not a specific one — can drive SKS's full command surface. See [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -81,6 +81,9 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - Review report: `.sneakoscope/reports/review-report.json`
 - Harness benchmark: `.sneakoscope/reports/harness-benchmark.json`
 - Project memory: `sks memory build`
+- Codebase index/pack for LLM context: `sks wiki refresh --code`, `sks wiki validate --json` (code-pack freshness)
+- Native capability repair: `sks doctor --fix` (imagegen/Computer Use/Browser Use), `.sneakoscope/reports/native-capability-readiness.json`
+- Agent bridge for any agent system: `sks mcp-server`, `sks agent-bridge setup`, `SKS_AGENT_MODE=1` — see [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)
 - Release gates: `node ./dist/scripts/release-gate-dag-runner.js --preset release --full`
 - Release readiness notes: [docs/release-readiness.md](docs/release-readiness.md) and [CHANGELOG.md](CHANGELOG.md)
 - Image generation review routes require Codex App `$imagegen`/`gpt-image-2` evidence with recorded output hashes; direct API fallback and mock fixtures do not satisfy full route gates.

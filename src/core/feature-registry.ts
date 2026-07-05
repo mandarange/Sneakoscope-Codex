@@ -60,6 +60,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
   features.push(agentProofEvidenceFeature());
   features.push(doctorImagegenRepairFeature());
   features.push(...imagegenWiringFeatures());
+  features.push(wikiCodePackFeature());
   for (const skillName of skillNames) {
     if (!skillCoveredByRoute(skillName)) features.push(skillFeature(skillName));
   }
@@ -728,6 +729,27 @@ function agentProofEvidenceFeature() {
       dollar_commands: [],
       app_skill_aliases: [],
       skills: []
+    }
+  });
+}
+
+function wikiCodePackFeature() {
+  return baseFeature({
+    id: 'cli-wiki-code',
+    commands: ['sks wiki refresh --code --json', 'sks wiki validate --json'],
+    aliases: ['wiki.code_pack', 'code_pack_refresh'],
+    category: 'triwiki',
+    maturity: 'beta',
+    intent: 'Deterministic codebase scan (any repo, not just this one) turned into a source-cited, quality-gated code pack, wired into TriWiki attention as a dedicated code: sub-budget so LLM handoffs see accurate codebase context at low token cost.',
+    voxel_triwiki_integration: 'code: entries ranked into attention.use_first/hydrate_first by trust_score, independent of the policy-claim RGBA/geometric selection',
+    completion_proof_integration: 'sks wiki validate --json reports code_pack freshness (fresh/stale/missing) by comparing the pack\'s recorded git HEAD sha to the current one',
+    known_gaps: ['ranking is by trust_score only, not live per-prompt keyword relevance, since contextCapsule\'s call site here refreshes a project-wide pack rather than a per-mission one'],
+    source_refs: {
+      cli_command_names: ['wiki'],
+      handler_keys: ['wiki'],
+      dollar_commands: [],
+      app_skill_aliases: [],
+      skills: ['triwiki']
     }
   });
 }

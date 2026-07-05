@@ -663,7 +663,9 @@ export const COMMAND_CATALOG = [
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
   { name: 'gc', usage: 'sks gc [--dry-run] [--json]', description: 'Compact oversized logs and prune stale runtime artifacts.' },
-  { name: 'stats', usage: 'sks stats [--json]', description: 'Show package and .sneakoscope storage size.' }
+  { name: 'stats', usage: 'sks stats [--json]', description: 'Show package and .sneakoscope storage size.' },
+  { name: 'mcp-server', usage: 'sks mcp-server [--expose-exec] [--probe]', description: 'Run a stdio MCP server exposing SKS read-only commands as tools for any MCP-capable agent host; --expose-exec also exposes non-read-only commands; --probe round-trips initialize/tools-list and exits.' },
+  { name: 'agent-bridge', usage: 'sks agent-bridge setup [--json]', description: 'Publish the agent-bridge manifest, print host registration snippets (generic MCP host, Codex CLI, non-interactive contract), and run a live non-interactive smoke test.' }
 ];
 
 export function routeById(id: any): any {

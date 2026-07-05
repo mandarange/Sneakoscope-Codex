@@ -5,6 +5,28 @@
 
 
 
+
+## [5.6.0] - 2026-07-05
+
+### Added
+
+- Add a codebase index and code pack to TriWiki (`sks wiki refresh --code`, `--token-budget`): a deterministic (no LLM calls), git-aware scanner infers module boundaries, entry points, exported symbols, and cross-module dependency edges for any codebase (not just this repo), then a source-cited pack generator turns that into an LLM-consumable summary following openwiki's principles — every entry must cite a real repository path (uncited entries are rejected outright), the pack is validated by a fully deterministic code-based gate (not a prompt), and publication is atomic with the previous pack preserved as `code-pack.prev.json`. `sks wiki validate --json` now reports code-pack freshness (`fresh`/`stale`/`missing`, by git HEAD sha).
+- Wire the code pack into TriWiki's attention system: `buildTriWikiAttention` ranks code-pack entries by trust score into a dedicated ~2000-token sub-budget, additive to (never crowding out) the existing policy-claim `use_first`/`hydrate_first` selection. `sks recallpulse run --json` now surfaces real, source-cited `code:` entries in `decision.l1.selected`.
+- Add doctor repair functions for Codex Desktop's Computer Use and Browser Use / Chrome extension features (previously detection-only, with no repair path): both attempt what's safely automatable via `codex features enable`, and honestly report `blocked` with concrete `next_actions` for steps that have no verified CLI subcommand (e.g. plugin install) or that can't be done via CLI at all (the Chrome Web Store install itself) — never guessing or claiming false success. Generalize the Supabase-only MCP stdio/url transport-collision repair (5.5.3) into `mcp-transport-collision-repair.ts`, which detects and fixes the collision for *any* MCP server name and in *either* direction (the Supabase-specific fix only caught project=stdio + global=url). `sks doctor --fix` now runs all of this, and writes an aggregated `.sneakoscope/reports/native-capability-readiness.json` (imagegen/computer_use/browser_use status).
+- Add a `native_capability_setup` stage to `sks update`: after a successful install, the newly installed package's own repair modules run in a subprocess (same pattern as the existing `global_skills_reconcile` stage, avoiding a stale old-driver in-process run) to bring imagegen/computer-use/browser-use up to date automatically, without blocking the update on a manual-required step.
+- Add an agent bridge so any agent system (not a specific one) can use SKS's full command surface: `sks mcp-server` is a real stdio MCP server (built on the already-installed `@modelcontextprotocol/sdk`) exposing read-only commands as MCP tools by default (`--expose-exec` opts in to the rest, never spawning a tool name absent from the manifest); `SKS_AGENT_MODE=1` is a non-interactive CLI contract (stdout is always exactly one JSON result, interactive prompts return `interactive_input_required` immediately instead of blocking, exit code 3); `--stream` (piloted on `sks qa-loop run`) emits NDJSON progress events ending in a `result` event, for a Slack bot (or any chat surface) to relay real-time progress. `sks agent-bridge setup` publishes the manifest, prints host registration snippets (generic MCP host, Codex CLI, non-interactive contract), and runs a live smoke test. See `docs/AGENT-BRIDGE.md` for the full reference and Slack-bot streaming recipe.
+
+### Fixed
+
+- Fix an ENOENT crash in `triwiki-cache-key.ts`'s file scanner when a directory in an input pattern vanishes or becomes inaccessible mid-walk (this was crashing `npm run release:check:affected` entirely, since the cache-key computation sits underneath the whole release gate DAG).
+- Fix a router-level gap where an uncaught error mid-command left `--json` callers with empty stdout to `JSON.parse` — `dispatch()`'s final catch now always emits `{ok:false, error, command}` to stdout when `--json` was requested (stack still goes to stderr only), on top of the existing exit-code-1 behavior.
+- Deduplicate three separate, buggy prompt-truncation implementations (`naruto-real-worker-runtime.ts`, `naruto-real-worker-child.ts`, `agent-orchestrator.ts` — the latter already fixed in 18차) into one shared `normalizeWorkerPromptText` helper: preserves newlines (previously collapsed, destroying prompt structure), raises the cap from 4000 to 32000 chars, and records truncation explicitly instead of silently cutting.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Changed
+
+- Add a cwd-independence regression sweep (`src/cli/__tests__/cwd-independence.test.ts`) spawning all read-only commands from `cwd=/` and asserting none hit the filesystem-root crash class that the 5.5.1 menu bar fix addressed for one call path — this now covers the whole read-only command surface.
+
 ## [5.5.4] - 2026-07-05
 
 ### Fixed
