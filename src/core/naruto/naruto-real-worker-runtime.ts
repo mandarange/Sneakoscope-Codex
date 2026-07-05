@@ -7,6 +7,7 @@ import { allocateWorkerWorktree } from '../git/git-worktree-manager.js'
 import { cleanupGitWorktree } from '../git/git-worktree-cleanup.js'
 import type { NarutoWorkItem } from './naruto-work-item.js'
 import type { NarutoWorkerPlacementDecision } from './naruto-active-pool.js'
+import { normalizeWorkerPromptText } from './normalize-worker-prompt-text.js'
 
 export interface NarutoActualWorkerHandle {
   id: string
@@ -53,12 +54,15 @@ export async function spawnActualNarutoWorker(input: {
   const resultPath = path.join(workerDir, 'worker-result.json')
   const heartbeatPath = path.join(workerDir, 'worker-heartbeat.jsonl')
   const intakePath = path.join(workerDir, 'worker-intake.json')
+  const normalizedParentPrompt = normalizeWorkerPromptText(input.parentPrompt)
   await writeJsonAtomic(intakePath, {
     schema: 'sks.naruto-actual-worker-intake.v1',
     generated_at: nowIso(),
     mission_id: input.missionId,
     item: input.item,
-    parent_prompt: normalizeWorkerPromptText(input.parentPrompt),
+    parent_prompt: normalizedParentPrompt.text,
+    parent_prompt_truncated: normalizedParentPrompt.truncated,
+    parent_prompt_dropped_chars: normalizedParentPrompt.dropped_chars,
     placement: input.placement,
     backend: input.backend,
     result_path: resultPath,
@@ -115,10 +119,6 @@ export async function collectActualNarutoWorker(handle: NarutoActualWorkerHandle
     worker_artifact_dir: handle.worker_artifact_dir,
     blockers
   }
-}
-
-function normalizeWorkerPromptText(value: unknown) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
 }
 
 function actualWorkerEntrypoint(): string {

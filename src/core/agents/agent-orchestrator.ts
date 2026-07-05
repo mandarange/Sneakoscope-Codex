@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { createMission, missionDir, setCurrent } from '../mission.js'
+import { normalizeWorkerPromptText } from '../naruto/normalize-worker-prompt-text.js'
 import { exists, nowIso, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { buildAgentRoster, normalizeAgentConcurrency } from './agent-roster.js'
 import { buildAgentWorkPartition } from './agent-work-partition.js'
@@ -2048,19 +2049,6 @@ function buildDirectSdkWorkerPrompt(slice: any) {
       : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; inspect relevant files/artifacts, do not mutate files, do not create temporary/build outputs, do not run package scripts/build/test commands unless explicitly required, and do not report pre-existing repository dirtiness as changed_files.`,
     'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
   ].join('\n')
-}
-
-const WORKER_PROMPT_TEXT_MAX_CHARS = 32000
-
-function normalizeWorkerPromptText(value: unknown) {
-  const normalized = String(value || '').replace(/[^\S\n]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
-  const truncated = normalized.length > WORKER_PROMPT_TEXT_MAX_CHARS
-  const text = truncated ? normalized.slice(0, WORKER_PROMPT_TEXT_MAX_CHARS) : normalized
-  return {
-    text,
-    truncated,
-    dropped_chars: truncated ? normalized.length - WORKER_PROMPT_TEXT_MAX_CHARS : 0
-  }
 }
 
 function buildDirectNoPatchReason(slice: any, opts: any) {

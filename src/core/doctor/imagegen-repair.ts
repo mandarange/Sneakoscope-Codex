@@ -133,6 +133,15 @@ export async function repairCodexImagegen(input: {
     blocker: after?.core_ready === true ? null : 'codex_app_builtin_imagegen_capability_missing'
   });
 
+  // No real generation round-trip primitive exists in imagegen-capability.ts today; this only re-confirms the feature flag, not actual output.
+  const communicationTest = {
+    level: 'flag_level' as const,
+    ok: after?.core_ready === true,
+    checked: 'codex features list --json (feature-flag/plugin metadata only)',
+    real_generation_round_trip_performed: false,
+    blocker: after?.core_ready === true ? null : 'codex_app_builtin_imagegen_capability_missing'
+  };
+
   const recovered = after?.core_ready === true;
   const blockers = recovered ? [] : [
     ...new Set([
@@ -151,6 +160,7 @@ export async function repairCodexImagegen(input: {
     before,
     after,
     steps,
+    communication_test: communicationTest,
     blockers,
     manual_actions: recovered ? [] : [
       `Install/update Codex CLI if missing: npm i -g @openai/codex@latest`,

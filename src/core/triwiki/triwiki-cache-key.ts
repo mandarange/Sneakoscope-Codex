@@ -156,7 +156,13 @@ function globToRegex(pattern: string): RegExp {
 function listFiles(root: string, start: string): string[] {
   const out: string[] = [];
   if (!fs.existsSync(start)) return out;
-  const stat = fs.lstatSync(start);
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(start);
+  } catch (error) {
+    if (isMissingOrInaccessible(error)) return out;
+    throw error;
+  }
   if (stat.isSymbolicLink() || stat.isFile()) return [relativeUnix(root, start)];
   if (!stat.isDirectory()) return out;
   const stack = [start];
@@ -165,7 +171,15 @@ function listFiles(root: string, start: string): string[] {
     if (!dir) continue;
     const relDir = relativeUnix(root, dir);
     if (relDir && isExcluded(relDir)) continue;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (error) {
+      // dir can vanish or become unreadable between stack push and pop (TOCTOU) — contribute zero files, not a crash
+      if (isMissingOrInaccessible(error)) continue;
+      throw error;
+    }
+    for (const entry of entries) {
       const absolute = path.join(dir, entry.name);
       const rel = relativeUnix(root, absolute);
       if (isExcluded(rel)) continue;
@@ -174,6 +188,11 @@ function listFiles(root: string, start: string): string[] {
     }
   }
   return out.sort();
+}
+
+function isMissingOrInaccessible(error: unknown): boolean {
+  const code = (error as { code?: string } | undefined)?.code;
+  return code === 'ENOENT' || code === 'EACCES' || code === 'ENOTDIR' || code === 'EPERM';
 }
 
 function isExcluded(rel: string): boolean {

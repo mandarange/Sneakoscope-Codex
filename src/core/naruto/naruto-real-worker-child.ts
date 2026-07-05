@@ -3,6 +3,7 @@ import path from 'node:path'
 import { appendJsonlBounded, ensureDir, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { runCodexTask, type CodexControlBackend } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
+import { normalizeWorkerPromptText } from './normalize-worker-prompt-text.js'
 
 async function main() {
   const intakePath = process.argv[2]
@@ -77,6 +78,8 @@ async function main() {
         sdk_run_id: taskResult.sdkRunId || null
       },
       changed_files: Array.isArray(workerResult?.changed_files) ? workerResult.changed_files : [],
+      parent_prompt_truncated: intake.parent_prompt_truncated === true,
+      parent_prompt_dropped_chars: Number(intake.parent_prompt_dropped_chars || 0),
       blockers
     })
     finished = true
@@ -166,7 +169,8 @@ function backendPreference(value: unknown): CodexControlBackend[] {
 
 function buildNarutoWorkerPrompt(item: any, parentPrompt?: string) {
   const writeAllowed = item?.write_allowed === true
-  const parentObjective = normalizeWorkerPromptText(parentPrompt)
+  const parentObjectiveNormalized = normalizeWorkerPromptText(parentPrompt)
+  const parentObjective = parentObjectiveNormalized.text
   return [
     'You are a Naruto route worker. Complete only this assigned work item and return JSON matching the required schema.',
     parentObjective ? `Parent Naruto objective:\n${parentObjective}` : null,
@@ -194,10 +198,6 @@ function buildNarutoWorkerPrompt(item: any, parentPrompt?: string) {
     'Impact scan, machine feedback, diff-quality, mistake-rule, TDD, and repair-hypothesis gates run before patch queue acceptance.',
     'Include verification checks, rollback notes, blockers, findings, and changed_files.'
   ].filter(Boolean).join('\n')
-}
-
-function normalizeWorkerPromptText(value: unknown) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 4000)
 }
 
 main().then(() => {

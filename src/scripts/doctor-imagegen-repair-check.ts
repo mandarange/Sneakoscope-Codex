@@ -49,7 +49,11 @@ const ok = report.schema === 'sks.doctor-imagegen-repair.v1'
   && report.recovered === true
   && report.after?.core_ready === true
   && report.steps?.some((step) => step.id === 'image_generation_feature_enable' && step.ok === true)
-  && reportFile.recovered === true;
+  && report.communication_test?.level === 'flag_level'
+  && report.communication_test?.ok === true
+  && report.communication_test?.real_generation_round_trip_performed === false
+  && reportFile.recovered === true
+  && reportFile.communication_test?.level === 'flag_level';
 
 console.log(JSON.stringify({
   schema: 'sks.doctor-imagegen-repair-check.v1',
@@ -58,6 +62,7 @@ console.log(JSON.stringify({
   attempted: report.attempted,
   recovered: report.recovered,
   after_core_ready: report.after?.core_ready === true,
+  communication_test_level: report.communication_test?.level,
   report_path: reportPath
 }, null, 2));
 if (!ok) process.exitCode = 1;
