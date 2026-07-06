@@ -15,10 +15,45 @@ const releaseGateManifest = readJson('release-gates.v2.json', { gates: [] });
 const releaseGateIds = new Set((Array.isArray(releaseGateManifest.gates) ? releaseGateManifest.gates : [])
   .filter((gate) => Array.isArray(gate.preset) && gate.preset.includes('release'))
   .map((gate) => gate.id));
-const latestReleaseDagSummary = readCurrentReleaseDagSummary() || readLatestReleaseDagSummary();
+const currentReleaseDagDir = process.env.SKS_REPORT_DIR ? path.dirname(process.env.SKS_REPORT_DIR) : null;
+const currentReleaseDagSummary = readCurrentReleaseDagSummary();
+const latestReleaseDagSummary = currentReleaseDagSummary || readLatestReleaseDagSummary();
+let currentReleaseDagPassedGateIdsCache = null;
 const releaseParallelCheckSource = readText('src/scripts/release-parallel-check.ts', '');
 const releaseRealCheckSource = readText('src/scripts/release-real-check.ts', '');
 const hooksRuntimeSource = readText('src/core/hooks-runtime.ts', '');
+const readinessGateIds = {
+  retention_cleanup_safety: 'retention:cleanup-safety',
+  codex_0134_compat: 'codex:0.134-compat',
+  codex_0134_official_compat: 'codex:0.134-official-compat',
+  mcp_0134_modernization: 'mcp:0.134-modernization',
+  agent_parallel_write_kernel: 'agent:parallel-write-kernel',
+  agent_parallel_write_blackbox: 'agent:parallel-write-blackbox',
+  team_parallel_write_blackbox: 'team:parallel-write-blackbox',
+  agent_patch_envelope_extraction: 'agent:patch-envelope-extraction',
+  agent_patch_queue_runtime: 'agent:patch-queue-runtime',
+  agent_strategy_to_lease_wiring: 'agent:strategy-to-lease-wiring',
+  agent_patch_swarm_runtime: 'agent:patch-swarm-runtime',
+  agent_patch_swarm_runtime_truth: 'agent:patch-swarm-runtime-truth',
+  agent_patch_transaction_journal: 'agent:patch-transaction-journal',
+  agent_patch_conflict_rebase: 'agent:patch-conflict-rebase',
+  agent_strategy_to_patch_strict: 'agent:strategy-to-patch-strict',
+  agent_rollback_command: 'agent:rollback-command',
+  agent_official_subagent_helper_policy: 'agent:official-subagent-helper-policy',
+  agent_worker_backend_router: 'agent:worker-backend-router',
+  zellij_pane_proof: 'zellij:pane-proof',
+  zellij_screen_proof: 'zellij:screen-proof',
+  zellij_lane_renderer: 'zellij:lane-renderer',
+  codex_fast_mode_profile_propagation: 'codex:fast-mode-profile-propagation',
+  mad_sks_fast_mode_propagation: 'mad-sks:fast-mode-propagation',
+  agent_patch_verification_dag: 'agent:patch-verification-dag',
+  agent_patch_rollback_dag: 'agent:patch-rollback-dag',
+  agent_patch_proof_runtime: 'agent:patch-proof-runtime',
+  agent_patch_swarm_route_blackbox: 'agent:patch-swarm-route-blackbox',
+  team_patch_swarm_route_blackbox: 'team:patch-swarm-route-blackbox',
+  agent_patch_proof: 'agent:patch-proof',
+  agent_patch_rollback: 'agent:patch-rollback'
+};
 
 const checks = {
   runtime_no_src_mjs: scriptContains('release:check:parallel', 'runtime:no-src-mjs'),
@@ -105,7 +140,7 @@ const checks = {
   computer_use_live_evidence: scriptContains('release:check', 'computer-use:live-evidence'),
   docs_truthfulness: scriptContains('release:check', 'docs:truthfulness'),
   release_readiness: scriptContains('release:check:parallel', 'release:readiness'),
-  insane_search_provider_interface: scriptContains('release:check:parallel', 'insane-search:provider-interface'),
+  super_search_provider_interface: scriptContains('release:check:parallel', 'super-search:provider-interface'),
   source_intelligence_policy: scriptContains('release:check:parallel', 'source-intelligence:policy'),
   source_intelligence_all_modes: scriptContains('release:check:parallel', 'source-intelligence:all-modes'),
   codex_web_adapter: scriptContains('release:check:parallel', 'codex-web:adapter'),
@@ -325,7 +360,13 @@ const nonPublishGaps = [];
 const legacyReportOnlyGaps = [];
 const strictReadinessMode = !affectedReadinessMode || process.env.SKS_RELEASE_REQUIRE_FULL_READINESS === '1';
 const recordReadinessGateGap = (name) => {
+  const gateId = readinessGateIds[name];
+  if (gateId && releaseDagGatePassed(gateId)) return;
   const gap = `${name}_gate_missing`;
+  if (gateId && releaseDagGateIsLegacyReportOnly(gateId)) {
+    legacyReportOnlyGaps.push(gap);
+    return;
+  }
   if (!strictReadinessMode) {
     legacyReportOnlyGaps.push(gap);
     nonPublishGaps.push(gap);
@@ -346,7 +387,7 @@ for (const [name, ok] of Object.entries({
   verification_parallel_engine: checks.verification_parallel_engine,
   release_metadata: checks.release_metadata,
   release_readiness: checks.release_readiness,
-  insane_search_provider_interface: checks.insane_search_provider_interface,
+  super_search_provider_interface: checks.super_search_provider_interface,
   source_intelligence_policy: checks.source_intelligence_policy,
   source_intelligence_all_modes: checks.source_intelligence_all_modes,
   codex_web_adapter: checks.codex_web_adapter,
@@ -832,12 +873,12 @@ const report = {
     flagship_proof_graph_v4_report_ok: runtimeChecks.flagship_proof_graph_v4
   },
   source_intelligence_1_18: {
-    status: checks.ultra_search_provider_interface
+    status: checks.super_search_provider_interface
       && checks.source_intelligence_policy
       && checks.source_intelligence_all_modes
       && checks.codex_web_adapter ? 'present' : 'missing',
-    mode_default: 'ultra_balanced',
-    x_search_public_discovery: checks.ultra_search_provider_interface,
+    mode_default: 'super_balanced',
+    x_search_public_discovery: checks.super_search_provider_interface,
     no_xai_runtime_dependency: checks.source_intelligence_all_modes,
     codex_web_adapter: checks.codex_web_adapter
   },
@@ -1070,10 +1111,50 @@ console.log(JSON.stringify(report, null, 2));
 if (!report.ok) process.exitCode = 1;
 
 function releaseDagGatePassed(gateId) {
+  if (currentReleaseDagPassedGateIds().has(gateId)) return true;
   return latestReleaseDagSummary?.ok === true
     && latestReleaseDagSummary?.failed === 0
     && Array.isArray(latestReleaseDagSummary?.selected_gate_ids)
     && latestReleaseDagSummary.selected_gate_ids.includes(gateId);
+}
+
+function releaseDagGateIsLegacyReportOnly(gateId) {
+  return !releaseGateIds.has(gateId)
+    && !(Array.isArray(latestReleaseDagSummary?.selected_gate_ids) && latestReleaseDagSummary.selected_gate_ids.includes(gateId));
+}
+
+function currentReleaseDagPassedGateIds() {
+  if (currentReleaseDagPassedGateIdsCache) return currentReleaseDagPassedGateIdsCache;
+  const passed = new Set();
+  if (!currentReleaseDagDir) {
+    currentReleaseDagPassedGateIdsCache = passed;
+    return passed;
+  }
+  if (Array.isArray(currentReleaseDagSummary?.cached_gates)) {
+    for (const gateId of currentReleaseDagSummary.cached_gates) passed.add(String(gateId));
+  }
+  const timeline = path.join(currentReleaseDagDir, 'timeline.jsonl');
+  try {
+    for (const line of fs.readFileSync(timeline, 'utf8').split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const event = JSON.parse(line);
+      if ((event?.event === 'pass' || event?.event === 'cache_hit') && event?.gate_id) passed.add(String(event.gate_id));
+    }
+  } catch {
+    // Timeline evidence is best-effort; per-gate result files are checked below.
+  }
+  try {
+    for (const entry of fs.readdirSync(currentReleaseDagDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const resultFile = path.join(currentReleaseDagDir, entry.name, 'result.json');
+      const result = JSON.parse(fs.readFileSync(resultFile, 'utf8'));
+      if (result?.ok === true && result?.id) passed.add(String(result.id));
+    }
+  } catch {
+    // Missing per-gate result files should not hide a real failure.
+  }
+  currentReleaseDagPassedGateIdsCache = passed;
+  return passed;
 }
 
 function readCurrentReleaseDagSummary() {

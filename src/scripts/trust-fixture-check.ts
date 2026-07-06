@@ -14,19 +14,32 @@ await runProcess('git', ['init', '-q'], {
   env: { CI: 'true' }
 });
 const sks = path.join(process.cwd(), 'dist', 'bin', 'sks.js');
-const run = await runJson(root, sks, ['run', 'fixture', '--mock', '--json']);
-const trust = await runJson(root, sks, ['trust', 'validate', run.mission_id, '--json']);
-const ok = run.ok === true && ['verified', 'verified_partial'].includes(trust.status);
-console.log(JSON.stringify({ schema: 'sks.trust-fixture-check.v1', ok, mission_id: run.mission_id, trust_status: trust.status, issues: trust.issues || [] }, null, 2));
+const run = await runJson(root, sks, ['run', 'fixture', '--mock', '--json'], { allowNonZero: true });
+const trust = await runJson(root, sks, ['trust', 'validate', run.mission_id, '--json'], { allowNonZero: true });
+const issues = [...new Set([...(run.trust_report?.issues || []), ...(trust.issues || [])])];
+const ok = run.ok === false
+  && run.status === 'mock_only'
+  && run.trust_status === 'blocked'
+  && trust.status === 'blocked'
+  && issues.includes('agent_gate_not_passed');
+console.log(JSON.stringify({
+  schema: 'sks.trust-fixture-check.v1',
+  ok,
+  mission_id: run.mission_id,
+  run_status: run.status,
+  trust_status: trust.status,
+  fake_success_blocked: run.ok === false && run.status === 'mock_only',
+  issues
+}, null, 2));
 if (!ok) process.exitCode = 1;
 
-async function runJson(rootDir, sksBin, args) {
+async function runJson(rootDir, sksBin, args, opts = {}) {
   const result = await runProcess(process.execPath, [sksBin, ...args], {
     cwd: rootDir,
     timeoutMs: 60_000,
     maxOutputBytes: 512 * 1024,
     env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
   });
-  if (result.code !== 0) throw new Error(`${args.join(' ')} failed: ${result.stderr || result.stdout}`);
+  if (result.code !== 0 && opts.allowNonZero !== true) throw new Error(`${args.join(' ')} failed: ${result.stderr || result.stdout}`);
   return JSON.parse(result.stdout);
 }

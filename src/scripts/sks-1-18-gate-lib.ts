@@ -50,8 +50,8 @@ export const SOURCE_INTELLIGENCE_FILES = [
   'src/core/source-intelligence/source-intelligence-policy.ts',
   'src/core/source-intelligence/source-intelligence-runner.ts',
   'src/core/source-intelligence/source-intelligence-proof.ts',
-  'src/core/ultra-search/types.ts',
-  'src/core/ultra-search/runtime.ts',
+  'src/core/super-search/types.ts',
+  'src/core/super-search/runtime.ts',
   'src/core/codex/codex-web-search-adapter.ts'
 ];
 

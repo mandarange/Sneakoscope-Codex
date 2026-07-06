@@ -20,7 +20,7 @@ export const RELEASE_1_17_GATE_SNAPSHOT = Object.freeze([
 ])
 
 export const RELEASE_1_18_REQUIRED_GATES = Object.freeze([
-  'insane-search:provider-interface',
+  'super-search:provider-interface',
   'source-intelligence:policy',
   'source-intelligence:all-modes',
   'codex-web:adapter',

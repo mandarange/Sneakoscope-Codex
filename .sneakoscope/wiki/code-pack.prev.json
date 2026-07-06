@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-05T13:01:39.647Z",
-  "git_head_sha": "057005a64f9fa6b32f1ca537cfb2d92ef850cfb4",
-  "source_file_count": 3310,
+  "generated_at": "2026-07-05T13:20:59.546Z",
+  "git_head_sha": "26384e8c8af773dee0ad5ef90803336e65209b7b",
+  "source_file_count": 3312,
   "index_digest": "18fbf5b30a17513f74b35b54b80926cddcda81f1fc632af2c4aac9beba1e8775",
   "entries": [
     {
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (83 files, 28246 loc, high risk). Key exports: const ARTIFACT_SCHEMA_VERSION = 1;; const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);; const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);; const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);; const ARTIFACT_FILES =, and 502 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (84 files, 28309 loc, high risk). Key exports: const ARTIFACT_SCHEMA_VERSION = 1;; const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);; const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);; const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);; const ARTIFACT_FILES =, and 502 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -295,7 +295,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (2 files, 134 loc, low risk). Key exports: async function maybeReconcileProjectSkillsPreflight(root: string); async function teamLiveDigest(root: any, state: any = {}); function joinSystemMessages(...parts: any[]). It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (3 files, 178 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function maybeReconcileProjectSkillsPreflight(root: string); async function teamLiveDigest(root: any, state: any = {}); function joinSystemMessages(...parts: any[]). It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
@@ -303,7 +303,7 @@
       ],
       "trust_score": 0.8,
       "freshness": "unknown",
-      "token_cost": 81
+      "token_cost": 108
     },
     {
       "id": "code:core-image",
@@ -967,5 +967,5 @@
     }
   ],
   "token_budget": 20000,
-  "total_token_cost": 8529
+  "total_token_cost": 8556
 }

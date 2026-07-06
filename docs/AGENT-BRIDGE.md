@@ -3,7 +3,7 @@
 SKS exposes its full command surface to any agent system — not a specific one — through two
 contracts every agent host already understands: a stdio MCP server, and a non-interactive CLI
 contract. This document is the reference for both, plus the real-time streaming recipe for
-answering Slack (or any chat surface) from a long-running SKS command.
+answering a chat surface from a long-running SKS command.
 
 ## Quick start
 
@@ -23,8 +23,7 @@ sks mcp-server            # exposes read-only commands only
 sks mcp-server --expose-exec   # also exposes non-read-only commands
 ```
 
-Any MCP-capable host (Codex, Claude-family agents, LangChain MCP adapters, Hermes-style
-agents, etc.) can register this as a toolset. It speaks standard MCP over stdio, built on the
+Any MCP-capable host can register this as a toolset. It speaks standard MCP over stdio, built on the
 already-installed `@modelcontextprotocol/sdk` (the same SDK SKS already uses as an MCP *client*
 elsewhere in the codebase) — `initialize`, `tools/list`, and `tools/call` are handled by the
 real SDK, not a hand-rolled wire protocol.
@@ -40,7 +39,7 @@ real SDK, not a hand-rolled wire protocol.
 - Each tool call runs `sks <name> [--json]` as a subprocess with `SKS_AGENT_MODE=1` set (see
   Contract 2) so the invocation is guaranteed to be non-interactive and returns clean JSON.
 
-Register with Codex CLI:
+Register with a CLI host:
 
 ```bash
 codex mcp add sks -- sks mcp-server
@@ -80,7 +79,7 @@ The contract:
 
 ## Real-time answers: NDJSON streaming (`--stream`)
 
-For a Slack bot (or any chat surface) that wants to relay progress instead of waiting silently
+For a chat bot that wants to relay progress instead of waiting silently
 for a long-running command to finish, pass `--stream` on a command that supports it (currently
 piloted on `sks qa-loop run`):
 
@@ -100,7 +99,7 @@ stdout becomes newline-delimited JSON, one event per line:
 The stream always ends with exactly one `result` event, regardless of which internal branch
 produced it.
 
-### Slack bot recipe
+### Chat Bot Recipe
 
 1. Spawn `sks <command> --stream --json` as a child process (with `SKS_AGENT_MODE=1`).
 2. On the first `start` event, open a thread and stash `data.mission_id` for later reference.

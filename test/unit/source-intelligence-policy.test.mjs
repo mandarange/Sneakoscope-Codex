@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSourceIntelligencePolicy } from '../../dist/core/source-intelligence/source-intelligence-policy.js';
 
-test('selects UltraSearch v2 default, X-search, degraded, and blocked source intelligence modes', () => {
+test('selects Super-Search v2 default, X-search, degraded, and blocked source intelligence modes', () => {
   const base = buildSourceIntelligencePolicy({
     query: 'current release notes',
     context7Available: true,
     codexWebCapability: { available: true, status: 'available', reason: 'fixture' }
   });
-  assert.equal(base.mode, 'ultra_balanced');
+  assert.equal(base.mode, 'super_balanced');
 
   const xSearch = buildSourceIntelligencePolicy({
     query: 'site:x.com product launch',
@@ -25,7 +25,7 @@ test('selects UltraSearch v2 default, X-search, degraded, and blocked source int
     context7Available: true,
     codexWebCapability: { available: false, status: 'unavailable', reason: 'fixture' }
   });
-  assert.equal(degraded.mode, 'ultra_balanced');
+  assert.equal(degraded.mode, 'super_balanced');
 
   const blocked = buildSourceIntelligencePolicy({ query: 'npm package docs', context7Available: false });
   assert.equal(blocked.mode, 'blocked');

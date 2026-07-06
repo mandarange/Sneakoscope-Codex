@@ -37,7 +37,6 @@ import {
   buildUserPromptSubmitContinue
 } from './codex-compat/codex-hook-output-builders.js';
 import { joinSystemMessages, teamLiveDigest } from './hooks-runtime/team-digest.js';
-
 const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json';
 const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
 const CODEX_GIT_ACTION_STOP_ARTIFACT = 'codex-git-action-stop-bypass.json';
@@ -45,13 +44,10 @@ const STOP_REPEAT_GUARD_WINDOW_MS = 10 * 60 * 1000;
 const STOP_REPEAT_GUARD_MAX_ENTRIES = 25;
 const DEFAULT_STOP_REPEAT_GUARD_LIMIT = 2;
 const CODEX_GIT_ACTION_STOP_TTL_MS = 15 * 60 * 1000;
-
 const UPDATE_CHECK_HOOK_INVOCATION_POLICY = 'function-only:no-runSksUpdateCheck-call-in-hooks';
-
 // Update checks stay function-only in hooks: the policy marker above is checked
 // by release readiness so ordinary Codex hook flow cannot grow a hidden update
 // prompt path.
-
 async function loadHookPayload() {
   const raw = await readStdin();
   try { return raw.trim() ? JSON.parse(raw) : {}; } catch { return { raw }; }

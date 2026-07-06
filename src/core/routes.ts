@@ -10,6 +10,16 @@ export * from './routes/design-policy.js';
 export * from './routes/evidence.js';
 export * from './routes/ppt-policy.js';
 
+export interface PromptIntentScores {
+  answerOnly: number;
+  directWork: number;
+  tinyDirectFix: number;
+  research: number;
+  db: number;
+  superSearch: number;
+  reasons: string[];
+}
+
 export function looksLikeProblemSolvingRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
@@ -425,19 +435,19 @@ export const ROUTES = [
     examples: ['$Research investigate this idea']
   },
   {
-    id: 'InsaneSearch',
-    command: '$Insane-Search',
-    mode: 'ULTRA_SEARCH',
+    id: 'SuperSearch',
+    command: '$Super-Search',
+    mode: 'SUPER_SEARCH',
     route: 'provider-independent source intelligence',
-    description: 'Run InsaneSearch source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring xAI/Grok.',
-    requiredSkills: ['insane-search', 'pipeline-runner', 'context7-docs', 'honest-mode'],
-    dollarAliases: ['$InsaneSearch', '$Ultra-Search', '$UltraSearch'],
-    lifecycle: ['source_intent', 'query_variants', 'provider_plan', 'source_ledgers', 'claim_ledgers', 'ultra_search_gate', 'honest_mode'],
+    description: 'Run Super-Search source acquisition, source normalization, claim/proof ledgers, and provider-independent citation evidence without requiring xAI/Grok.',
+    requiredSkills: ['super-search', 'pipeline-runner', 'context7-docs', 'honest-mode'],
+    appSkillAliases: ['super-search'],
+    lifecycle: ['source_intent', 'query_variants', 'provider_plan', 'source_ledgers', 'claim_ledgers', 'super_search_gate', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'high',
-    stopGate: 'ultra-search/ultra-search-gate.json',
-    cliEntrypoint: 'sks insane-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai',
-    examples: ['$Insane-Search run "current package release notes"', '$InsaneSearch x "site:x.com product launch"']
+    stopGate: 'super-search/super-search-gate.json',
+    cliEntrypoint: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench',
+    examples: ['$Super-Search run "current package release notes"', '$Super-Search x "site:x.com product launch"']
   },
   {
     id: 'SEOGEOOptimizer',
@@ -619,9 +629,8 @@ export const COMMAND_CATALOG = [
   { name: 'image-ux-review', usage: 'sks ux-review run --image <path> --fix --json | sks image-ux-review status <mission-id|latest> [--json]', description: 'Run or inspect $Image-UX-Review gpt-image-2/imagegen annotated UI/UX review artifacts, issue ledgers, safe fix loops, recapture, and proof gates.' },
   { name: 'computer-use', usage: 'sks computer-use import|status|smoke|require ... [--json]', description: 'Record native Mac/non-web Computer Use visual evidence while keeping web verification on the Chrome Extension path.' },
   { name: 'context7', usage: 'sks context7 check|setup|tools|resolve|docs|evidence ...', description: 'Check, configure, and call the local Context7 MCP requirement.' },
-  { name: 'insane-search', usage: 'sks insane-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench|migrate-xai', description: 'Run provider-independent InsaneSearch source intelligence.' },
-  { name: 'ultra-search', usage: 'compatibility alias for sks insane-search', description: 'Deprecated compatibility alias; use sks insane-search.' },
-  { name: 'xai', usage: 'sks xai check|status|docs', description: 'Deprecated compatibility notice; use sks insane-search.' },
+  { name: 'super-search', usage: 'sks super-search doctor|run|x|fetch|status|inspect|sources|claims|cache|bench', description: 'Run Super-Search provider-independent source intelligence.' },
+  { name: 'xai', usage: 'sks xai check|status|docs', description: 'Deprecated compatibility notice; use sks super-search.' },
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
@@ -663,7 +672,7 @@ export const COMMAND_CATALOG = [
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
   { name: 'gc', usage: 'sks gc [--dry-run] [--json]', description: 'Compact oversized logs and prune stale runtime artifacts.' },
-  { name: 'stats', usage: 'sks stats [--json]', description: 'Show package and .sneakoscope storage size.' },
+  { name: 'stats', usage: 'sks stats [--full] [--json]', description: 'Show package and .sneakoscope storage size.' },
   { name: 'mcp-server', usage: 'sks mcp-server [--expose-exec] [--probe]', description: 'Run a stdio MCP server exposing SKS read-only commands as tools for any MCP-capable agent host; --expose-exec also exposes non-read-only commands; --probe round-trips initialize/tools-list and exits.' },
   { name: 'agent-bridge', usage: 'sks agent-bridge setup [--json]', description: 'Publish the agent-bridge manifest, print host registration snippets (generic MCP host, Codex CLI, non-interactive contract), and run a live non-interactive smoke test.' }
 ];
@@ -806,53 +815,131 @@ export function looksLikeGenerativeEngineOptimizationRequest(prompt: any = '') {
   return /\b(?:GEO|generative\s+engine\s+optimization|AI\s+(?:answer|search)\s+(?:visibility|discoverability)|LLM\s+(?:citation|answer|visibility|discoverability)|answerability|entity\s+(?:facts?|clarity)|claim\s+evidence|crawler\s+policy|OAI-SearchBot|GPTBot|ChatGPT-User|Claude-SearchBot|ClaudeBot|Claude-User|llms\.txt|AI\s*검색\s*가시성|AI\s*답변\s*가시성|생성형\s*엔진\s*최적화)\b/i.test(text);
 }
 
-export function looksLikeUltraSearchRequest(prompt: any = '') {
+export function looksLikeSuperSearchRequest(prompt: any = '') {
   const text = String(prompt || '');
-  return /\b(?:InsaneSearch|Insane-Search|insane\s*search|UltraSearch|Ultra-Search|ultra\s*search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search)\b|인세인\s*서치|울트라\s*서치|소스\s*인텔리전스/i.test(text);
+  return /\b(?:SuperSearch|Super-Search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search)\b|슈퍼\s*서치|소스\s*인텔리전스/i.test(text);
 }
 
 export function routePrompt(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
-  if (/^\$?plan\b/i.test(text)) return routeById('Planner');
-  if (/^\$?work\b/i.test(text)) return routeById('Naruto');
-  if (/^\$?swarm\b/i.test(text)) return routeById('Naruto');
+  const intentScores = scorePromptIntent(text);
+  const select = (route: any) => withPromptIntentScores(route, intentScores);
+  if (/^\$?plan\b/i.test(text)) return select(routeById('Planner'));
+  if (/^\$?work\b/i.test(text)) return select(routeById('Naruto'));
+  if (/^\$?swarm\b/i.test(text)) return select(routeById('Naruto'));
   const command = dollarCommand(text);
   if (command) {
     if (command === 'MAD-SKS') {
       const afterModifier = stripMadSksSignal(text);
       const nestedCommand = dollarCommand(afterModifier);
-      if (nestedCommand) return routeByDollarCommand(nestedCommand) || routeById('MadSKS');
-      if (looksLikeAnswerOnlyRequest(afterModifier)) return routeById('Answer');
-      if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return routeById('Naruto');
-      return routeById('MadSKS');
+      if (nestedCommand) return select(routeByDollarCommand(nestedCommand) || routeById('MadSKS'));
+      if (looksLikeAnswerOnlyRequest(afterModifier)) return select(routeById('Answer'));
+      if (looksLikeCodeChangingWork(afterModifier) || looksLikeDirectWorkRequest(afterModifier)) return select(routeById('Naruto'));
+      return select(routeById('MadSKS'));
     }
     const route = routeByDollarCommand(command) || routeById('SKS');
-    if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return routeById('Naruto');
-    if (route?.id === 'Team') return routeById('Naruto');
-    return route;
+    if (route?.id === 'SKS' && looksLikeTeamDefaultWork(stripDollarCommand(text))) return select(routeById('Naruto'));
+    if (route?.id === 'Team') return select(routeById('Naruto'));
+    return select(route);
   }
-  if (hasFromChatImgSignal(text)) return routeById('Naruto');
+  if (hasFromChatImgSignal(text)) return select(routeById('Naruto'));
   const simpleGitRoute = simpleGitOnlyRouteId(text);
-  if (simpleGitRoute) return routeById(simpleGitRoute);
-  if (looksLikePresentationArtifactRequest(text)) return routeById('PPT');
-  if (looksLikeImageUxReviewRequest(text)) return routeById('ImageUXReview');
-  if (looksLikeComputerUseFastLane(text)) return routeById('ComputerUse');
-  if (looksLikeTinyDirectFix(text)) return routeById('DFix');
-  if (looksLikeQuestionShapedDirective(text)) return routeById('Naruto');
-  if (looksLikeAnswerOnlyRequest(text)) return routeById('Answer');
-  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return routeById('DB');
-  if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return routeById('Naruto');
-  if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('Naruto');
-  if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return routeById('QALoop');
-  if (looksLikeUltraSearchRequest(text) && !looksLikeCodeChangingWork(text) && !looksLikeAnswerOnlyRequest(text)) return routeById('InsaneSearch');
-  if (looksLikeGenerativeEngineOptimizationRequest(text)) return routeById('SEOGEOOptimizer');
-  if (looksLikeSeoRequest(text)) return routeById('SEOGEOOptimizer');
-  if (/\b(autoresearch|experiment|benchmark|ranking|optimi[sz]e|improve metric|github stars?|npm downloads?|스타|다운로드)\b/i.test(text)) return routeById('AutoResearch');
-  if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return routeById('Research');
-  if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return routeById('Wiki');
-  if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return routeById('GX');
-  if (looksLikeTeamDefaultWork(text)) return routeById('Naruto');
-  return routeById('SKS');
+  if (simpleGitRoute) return select(routeById(simpleGitRoute));
+  if (looksLikePresentationArtifactRequest(text)) return select(routeById('PPT'));
+  if (looksLikeImageUxReviewRequest(text)) return select(routeById('ImageUXReview'));
+  if (looksLikeComputerUseFastLane(text)) return select(routeById('ComputerUse'));
+  if (looksLikeTinyDirectFix(text)) return select(routeById('DFix'));
+  if (looksLikeQuestionShapedDirective(text)) return select(routeById('Naruto'));
+  if (looksLikeDirectWorkRequest(text)) return select(routeById('Naruto'));
+  if (looksLikeAnswerOnlyRequest(text)) return select(routeById('Answer'));
+  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return select(routeById('DB'));
+  if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return select(routeById('Naruto'));
+  if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return select(routeById('Naruto'));
+  if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return select(routeById('QALoop'));
+  if (looksLikeSuperSearchRequest(text) && !looksLikeCodeChangingWork(text) && !looksLikeAnswerOnlyRequest(text)) return select(routeById('SuperSearch'));
+  if (looksLikeGenerativeEngineOptimizationRequest(text)) return select(routeById('SEOGEOOptimizer'));
+  if (looksLikeSeoRequest(text)) return select(routeById('SEOGEOOptimizer'));
+  if (/\b(autoresearch|experiment|benchmark|ranking|optimi[sz]e|improve metric|github stars?|npm downloads?|스타|다운로드)\b/i.test(text)) return select(routeById('AutoResearch'));
+  if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) return select(routeById('Research'));
+  if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return select(routeById('Wiki'));
+  if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return select(routeById('GX'));
+  if (looksLikeTeamDefaultWork(text)) return select(routeById('Naruto'));
+  return select(routeById('SKS'));
+}
+
+export function scorePromptIntent(prompt: any = ''): PromptIntentScores {
+  const text = String(prompt || '').trim();
+  const reasons = new Set<string>();
+  const questionShape = /(?:\?|^(?:why|what|how|when|where|who|which|can|could|should|would)\b|^(?:왜|뭐|무엇|어떻게|언제|어디|누구|가능|인가|인지)\b)/i.test(text);
+  const conditionalWork = looksLikeConditionalWorkRequest(text);
+  const complaintDirective = looksLikeComplaintDirectiveRequest(text);
+  const commandSignal = Boolean(dollarCommand(text));
+  const tinyDirectFix = looksLikeTinyDirectFix(text);
+  const directWork = looksLikeDirectWorkRequest(text);
+  const answerOnly = looksLikeAnswerOnlyRequest(text);
+  let answerOnlyScore = 0;
+  let directWorkScore = 0;
+  let tinyDirectFixScore = 0;
+  let researchScore = 0;
+  let dbScore = 0;
+  let superSearchScore = 0;
+
+  if (questionShape) {
+    answerOnlyScore += 1;
+    reasons.add('question_shape');
+  }
+  if (commandSignal) reasons.add('command_signal');
+  if (tinyDirectFix) {
+    tinyDirectFixScore += 5;
+    directWorkScore += 2;
+    reasons.add('tiny_direct_fix');
+  }
+  if (conditionalWork) {
+    directWorkScore += 5;
+    reasons.add('conditional_work');
+  }
+  if (complaintDirective) {
+    directWorkScore += 4;
+    reasons.add('complaint_directive');
+  }
+  if (looksLikeQuestionShapedDirective(text)) {
+    directWorkScore += 4;
+    reasons.add('question_shaped_directive');
+  }
+  if (directWork) {
+    directWorkScore += 3;
+    reasons.add('direct_work');
+  }
+  if (answerOnly) {
+    answerOnlyScore += 4;
+    reasons.add('answer_only');
+  }
+  if (/\b(research|hypothesis|falsify|novelty|frontier|조사|연구)\b/i.test(text)) {
+    researchScore += 2;
+    reasons.add('research');
+  }
+  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) {
+    dbScore += 3;
+    reasons.add('db');
+  }
+  if (looksLikeSuperSearchRequest(text)) {
+    superSearchScore += 4;
+    reasons.add('super_search');
+  }
+  return {
+    answerOnly: answerOnlyScore,
+    directWork: directWorkScore,
+    tinyDirectFix: tinyDirectFixScore,
+    research: researchScore,
+    db: dbScore,
+    superSearch: superSearchScore,
+    reasons: [...reasons]
+  };
+}
+
+function withPromptIntentScores(route: any, intentScores: PromptIntentScores) {
+  if (!route) return route;
+  return { ...route, intent_scores: intentScores };
 }
 
 export function looksLikeComputerUseFastLane(prompt: any = '') {
@@ -874,6 +961,8 @@ export function looksLikeAnswerOnlyRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
   if (looksLikeQuestionShapedDirective(text)) return false;
+  if (looksLikeConditionalWorkRequest(text)) return false;
+  if (looksLikeComplaintDirectiveRequest(text)) return false;
   const infoCue = /(왜|뭐야|무엇|뭔가|어떤|어떻게|언제|어디|누구|얼마|가능해|맞아|인가|인지|차이|의미|원리|이유|방법|설명|알려줘|요약|정리|비교|찾아줘|찾아봐|검색|조사|근거|출처|fact|source|cite|explain|what|why|how|when|where|who|which|whether|compare|summari[sz]e|search|look up|research|tell me|question|\?)/i.test(text);
   if (!infoCue) return false;
   return !looksLikeDirectWorkRequest(text);
@@ -882,11 +971,12 @@ export function looksLikeAnswerOnlyRequest(prompt: any = '') {
 export function looksLikeQuestionShapedDirective(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
-  const complaint = /(왜|근데|그런데).*(안\s*하|안\s*되|없이|누락|빠뜨|생략|스킵|못\s*하).*(많|자주|계속|이렇게|함|하지|하냐|하니|\?)/i.test(text);
+  const complaint = looksLikeComplaintDirectiveRequest(text);
   if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeExplicitDirectWorkDirective(text) && !complaint) return false;
+  const questionDirective = /(?:\?|왜|why)[\s\S]{0,160}(?:질문|물음표|answer|라우팅|route|routing)[\s\S]{0,160}(?:고쳐|수정|변경|막아|fix|patch|change|update)/i.test(text);
   const directive = /(반드시|필수|무조건|해야\s*(?:해|함|돼|한다|하지|한다는|되는)|해야지|해야돼|해야한다|알지|기억해|파악해야|구분해야|막아야|보장해야|강제|기본적으로)/i.test(text);
   const pipelineCue = /(질문|질문형|암묵|지시|파이프라인|라우팅|route|routing|team|팀|sks|기본|구성|게이트|gate|작업|수정|구현|실행)/i.test(text);
-  return (directive && pipelineCue) || complaint;
+  return questionDirective || (directive && pipelineCue) || complaint;
 }
 
 export function looksLikeDirectWorkRequest(prompt: any = '') {
@@ -896,10 +986,26 @@ export function looksLikeDirectWorkRequest(prompt: any = '') {
   if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text) && !explicitDirective) return false;
   return looksLikeCodeChangingWork(text)
     || looksLikeChatCaptureRequest(text)
+    || looksLikeConditionalWorkRequest(text)
     || looksLikeQuestionShapedDirective(text)
     || explicitDirective
     || /(작업|파이프라인|구현|수정|변경|추가|적용|반영|처리|수행|검수|설치|해결|리드미|README).*(해줘|해달|해라|해야|되게|줘야|줘야지|달라)/i.test(text)
     || /(진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|바꿔줘|해결해줘|만들어줘|해줘야|해줘야지|해달라|해야지|되게 해|install|run|execute|test|deploy|commit|push)/i.test(text);
+}
+
+function looksLikeConditionalWorkRequest(prompt: any = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  return /(확인하고|검토하고|봐서|보고|문제\s*있으면|가능한지).*(고쳐|수정|변경|처리|해결|진행|반영|해줘|해달)/i.test(text)
+    || /\b(?:check|inspect|verify|see)\b[\s\S]{0,120}\b(?:if|whether|when)\b[\s\S]{0,120}\b(?:fix|patch|update|change|repair|resolve)\b/i.test(text)
+    || /\b(?:if|when)\b[\s\S]{0,120}\b(?:problem|issue|bug|broken|fails?)\b[\s\S]{0,120}\b(?:fix|patch|update|change|repair|resolve)\b/i.test(text);
+}
+
+function looksLikeComplaintDirectiveRequest(prompt: any = '') {
+  const text = String(prompt || '').trim();
+  if (!text) return false;
+  return /(왜|근데|그런데).*(안\s*하|안\s*되|없이|누락|빠뜨|생략|스킵|못\s*하).*(많|자주|계속|이렇게|함|하지|하냐|하니|\?)/i.test(text)
+    || /\bwhy\b[\s\S]{0,80}\b(?:not|missing|skipped|failed|still|keeps?)\b[\s\S]{0,120}\b(?:fix|patch|route|routing|work|do|done)\b/i.test(text);
 }
 
 function looksLikeExplicitDirectWorkDirective(prompt: any = '') {
@@ -926,7 +1032,7 @@ export function routeRequiresSubagents(route: any, prompt: any = '') {
   if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
   if (route.id === 'PPT') return false;
   if (route.id === 'ImageUXReview') return false;
-  if (route.id === 'InsaneSearch') return false;
+  if (route.id === 'SuperSearch') return false;
   if (route.id === 'SEOGEOOptimizer') return false;
   if (route.id === 'MadDB') return false;
   if (route.id === 'Research' || route.id === 'AutoResearch') return true;
@@ -1000,7 +1106,7 @@ export function routeReasoning(route: any, prompt: any = '') {
   if (/(?:^|\s)sks\s+--mad\b|(?:^|\s)--mad\b|\$MAD-SKS\b|\$MAD-DB\b|\bmad-sks\b|\bmadsks\b|\bmad-db\b|\bmaddb\b/i.test(text)) return reasoning('xhigh', 'mad_sks_or_mad_launch_default');
   if (route?.id === 'Team' || route?.id === 'Naruto') return narutoRouteReasoning(text);
   if (route?.id === 'Research' || route?.id === 'AutoResearch') return reasoning('xhigh', 'research_or_experiment_route');
-  if (route?.id === 'InsaneSearch') return reasoning('high', 'source_intelligence_route');
+  if (route?.id === 'SuperSearch') return reasoning('high', 'source_intelligence_route');
   if (route?.id === 'SEOGEOOptimizer') return reasoning('high', 'search_visibility_route');
   if (route?.id === 'ImageUXReview') return reasoning('high', 'image_generation_visual_review_route');
   if (/\b(research|autoresearch|hypothesis|falsify|novelty|frontier|benchmark|experiment|ranking|연구|실험|가설|검증)\b/i.test(text)) return reasoning('xhigh', 'research_level_prompt');

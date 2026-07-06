@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { runUltraSearch } from '../../dist/core/ultra-search/index.js';
+import { runSuperSearch } from '../../dist/core/super-search/index.js';
 
-test('runs provider-independent UltraSearch and records typed proof', async () => {
-  const missionDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-ultra-'));
-  const result = await runUltraSearch({
+test('runs provider-independent Super-Search and records typed proof', async () => {
+  const missionDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-super-search-'));
+  const result = await runSuperSearch({
     missionDir,
     query: 'npm package docs',
     context7: async () => [{ title: 'npm docs', url: 'https://docs.npmjs.com', snippet: 'official docs' }],
@@ -21,8 +21,8 @@ test('runs provider-independent UltraSearch and records typed proof', async () =
 });
 
 test('does not promote public X discovery-only results to parity', async () => {
-  const missionDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-ultra-x-'));
-  const result = await runUltraSearch({
+  const missionDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-super-search-x-'));
+  const result = await runSuperSearch({
     missionDir,
     query: 'site:x.com product launch',
     mode: 'x_search',

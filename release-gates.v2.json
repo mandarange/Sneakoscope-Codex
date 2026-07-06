@@ -2863,8 +2863,39 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "insane-search:provider-interface",
-      "command": "node ./dist/scripts/ultra-search-provider-interface-check.js",
+      "id": "super-search:name-guard",
+      "command": "node ./dist/scripts/super-search-name-guard-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "README.md",
+          "docs/**",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "super-search:provider-interface",
+      "command": "node ./dist/scripts/super-search-provider-interface-check.js",
       "deps": [],
       "resource": [
         "cpu-light",

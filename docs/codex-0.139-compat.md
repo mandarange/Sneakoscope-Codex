@@ -12,7 +12,7 @@ baseline evidence for older SKS gates and release-history continuity.
 
 ## Current Release Note
 
-SKS 5.7.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version, repairing the macOS SKS menu bar/Fast Mode/codex-lb migration surface, and preserving lifecycle-disabled `npm publish --ignore-scripts` readiness evidence.
+SKS 5.8.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version, hardening intent routing and parallel-write proof evidence, consolidating source intelligence under Super-Search, and preserving lifecycle-disabled `npm publish --ignore-scripts` readiness evidence.
 
 ## Historical Release Ledger
 
@@ -34,9 +34,9 @@ SKS 4.6.5 keeps the historical Codex 0.139 compatibility notes as a fallback bas
 
 SKS 4.6.4 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while hardening mission retention for closed/terminal agent sessions, project-scoped update cleanup, and `npm publish --ignore-scripts` readiness without changing the active Codex compatibility baseline.
 
-SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the InsaneSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, MadDB direct Supabase MCP `apply_migration` hook fix, MadDB Supabase transport diagnostics hardening, and global npm update detection hardening without restoring legacy split `$SEO`/`$GEO` routes.
+SKS 4.6.3 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while preserving the SuperSearch source-intelligence command rename, unified `seo-geo-optimizer` search-visibility route, Lean Engineering Policy evidence, MadDB direct Supabase MCP `apply_migration` hook fix, MadDB Supabase transport diagnostics hardening, and global npm update detection hardening without restoring legacy split `$SEO`/`$GEO` routes.
 
-SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to UltraSearch: provider-independent planning/proof, x-search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring xAI/Grok runtime dependency.
+SKS 4.4.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while moving source intelligence to SuperSearch: provider-independent planning/proof, x-search parity gaps, and `npm publish --ignore-scripts` readiness are release-gated without restoring xAI/Grok runtime dependency.
 
 SKS 4.2.1 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning the publish path with `npm publish --ignore-scripts`: the release wrapper now runs the full prepublish gate explicitly before invoking npm with lifecycle scripts disabled.
 

@@ -149,7 +149,8 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     writeCapable,
     visualRequired,
     appshotsOk: sourceIntelligence.appshots?.ok === true,
-    sourceIntelligenceOk: sourceIntelligence.ok
+    sourceIntelligenceOk: sourceIntelligence.ok,
+    sourceIntelligenceRequired: sourceIntelligenceRequiredForWriteGate(sourceIntelligence, route)
   })
   await writeStrategyGateArtifact(dir, strategyGate)
   const strategyRef = {
@@ -493,7 +494,9 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     minActiveWorkers: Math.min(targetActiveSlots, desiredWorkItemCount),
     ...(backend === 'codex-sdk' && opts.real === true ? { minSpeedupRatio: 3 } : {}),
     proofMode: opts.mock === true ? 'mock-process' : 'production',
-    requireWorkerPids: opts.nativeCliSwarm !== false && targetActiveSlots >= 16
+    requireWorkerPids: opts.nativeCliSwarm !== false && targetActiveSlots >= 16,
+    requireChangedFiles: writeCapable && effectiveWriteMode === 'parallel',
+    minChangedFiles: Math.min(2, desiredWorkItemCount)
   })
   let results = scheduler.results
   const tournamentSelection = await selectSolutionTournamentWinners(root, ledgerRoot, results)
@@ -679,6 +682,17 @@ function normalizeMissionHardTimeoutMs(opts: any = {}, route = '') {
   const raw = Number(opts.hardTimeoutMs || opts.agentHardTimeoutMs || process.env.SKS_AGENT_HARD_TIMEOUT_MS || 0)
   if (Number.isFinite(raw) && raw > 0) return Math.max(1000, Math.min(Math.floor(raw), 24 * 60 * 60 * 1000))
   return String(route || '').replace(/^\$/, '').toUpperCase() === 'NARUTO' ? 10 * 60 * 1000 : 30 * 60 * 1000
+}
+
+function sourceIntelligenceRequiredForWriteGate(sourceIntelligence: any, route: string): boolean {
+  const policy = sourceIntelligence?.policy || {}
+  const mode = String(sourceIntelligence?.mode || policy.mode || '')
+  if (String(route || '').replace(/^\$/, '').toLowerCase() === 'super-search') return true
+  if (policy.context7?.required === true) return true
+  if (policy.requirements?.official_sources === true) return true
+  if (policy.requirements?.social_recency === true) return true
+  if (policy.requirements?.code_execution_verification === true && mode !== 'offline_cache') return true
+  return mode !== 'offline_cache'
 }
 
 function withFinalGptPatchEnvelopes(results: any[], patchEnvelopes: any[] = []) {

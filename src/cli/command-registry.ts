@@ -231,8 +231,12 @@ export const COMMANDS = {
   'image-ux-review': routeStateMutator(entry('labs', 'Inspect image UX artifacts', 'dist/core/commands/image-ux-review-command.js', commandArgsCommand(() => import('../core/commands/image-ux-review-command.js'), 'imageUxReviewCommand', 'dist/core/commands/image-ux-review-command.js')), ['image-ux-review-gate.json']),
   'computer-use': routeStateMutator(entry('beta', 'Record native Mac/non-web Computer Use visual evidence', 'dist/core/commands/computer-use-command.js', commandArgsCommand(() => import('../core/commands/computer-use-command.js'), 'computerUseCommand', 'dist/core/commands/computer-use-command.js')), ['computer-use-gate.json']),
   context7: entry('beta', 'Context7 checks and docs', 'dist/cli/context7-command.js', subcommand(() => import('./context7-command.js'), 'context7Command', 'dist/cli/context7-command.js', 'check')),
-  'insane-search': entry('beta', 'Run provider-independent InsaneSearch source intelligence', 'dist/cli/insane-search-command.js', subcommand(() => import('./insane-search-command.js'), 'insaneSearchCommand', 'dist/cli/insane-search-command.js', 'doctor')),
-  'ultra-search': entry('beta', 'Compatibility alias for InsaneSearch source intelligence', 'dist/cli/insane-search-command.js', subcommand(() => import('./insane-search-command.js'), 'ultraSearchCommand', 'dist/cli/insane-search-command.js', 'doctor')),
+  'super-search': entry(
+    'beta',
+    'Run Super-Search provider-independent source intelligence',
+    'dist/cli/super-search-command.js',
+    subcommand(() => import('./super-search-command.js'), 'superSearchCommand', 'dist/cli/super-search-command.js', 'doctor')
+  ),
   xai: entry('beta', 'Deprecated compatibility notice for removed xAI/Grok setup', 'dist/cli/xai-command.js', subcommand(() => import('./xai-command.js'), 'xaiCommand', 'dist/cli/xai-command.js', 'check')),
   recallpulse: entry('labs', 'RecallPulse evidence route', 'dist/commands/recallpulse.js', directCommand(() => import('../commands/recallpulse.js'), 'dist/commands/recallpulse.js')),
   pipeline: activeRouteDiagnostic(entry('beta', 'Inspect pipeline missions', 'dist/commands/pipeline.js', directCommand(() => import('../commands/pipeline.js'), 'dist/commands/pipeline.js'))),

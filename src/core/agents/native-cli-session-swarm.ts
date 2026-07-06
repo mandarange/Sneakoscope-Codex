@@ -289,6 +289,7 @@ class NativeCliSessionSwarmRecorder {
 	      status: result.status === 'done' ? 'completed' : 'failed',
 	      artifacts: result.artifacts || [],
 	      blockers: result.blockers || [],
+	      changedFiles: changedFilesFromWorkerResult(result),
 	      logTail: result.summary || ''
 	    })
 	    await this.record(record)
@@ -678,6 +679,7 @@ class NativeCliSessionSwarmRecorder {
 	      status: parsed.status === 'done' ? 'completed' : 'failed',
 	      artifacts: [...new Set([...(Array.isArray(parsed.artifacts) ? parsed.artifacts : []), input.stdoutRel, input.stderrRel, path.join(input.workerDirRel, 'zellij-worker-pane.json')])],
 	      blockers: input.record.blockers,
+	      changedFiles: changedFilesFromWorkerResult(parsed),
 	      logTail: parsed.summary || ''
 	    })
 	    return validateAgentWorkerResult({
@@ -749,6 +751,7 @@ class NativeCliSessionSwarmRecorder {
 	    status: ZellijSlotTelemetryStatus
 	    artifacts?: string[]
 	    blockers?: string[]
+	    changedFiles?: string[]
 	    logTail?: string
 	  }) {
 	    await appendZellijSlotTelemetry(this.root, {
@@ -794,6 +797,7 @@ class NativeCliSessionSwarmRecorder {
 	        meta: {
 	          status: input.status,
 	          artifacts: input.artifacts || [],
+	          changed_files: input.changedFiles || [],
 	          blockers: input.blockers || []
 	        }
 	      }).catch(() => undefined)
@@ -1025,9 +1029,20 @@ function mapTelemetryToParallelEvent(eventType: ZellijSlotTelemetryEventType) {
   return null
 }
 
+function changedFilesFromWorkerResult(result: any): string[] {
+  const direct = Array.isArray(result?.changed_files) ? result.changed_files : []
+  const envelopeFiles = (Array.isArray(result?.patch_envelopes) ? result.patch_envelopes : [])
+    .flatMap((envelope: any) => [
+      ...(Array.isArray(envelope?.changed_files) ? envelope.changed_files : []),
+      ...(Array.isArray(envelope?.allowed_paths) ? envelope.allowed_paths : []),
+      ...(Array.isArray(envelope?.operations) ? envelope.operations.map((operation: any) => operation?.path) : [])
+    ])
+  return [...new Set([...direct, ...envelopeFiles].map((file) => String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '')).filter(Boolean))]
+}
+
 function normalizeParallelPlacement(value: unknown) {
   const text = String(value || '')
-  if (text === 'zellij-pane' || text === 'process' || text === 'headless') return text
+  if (text === 'zellij-pane' || text === 'process' || text === 'headless' || text === 'headless_by_design_viewport_ui') return text
   return 'unknown'
 }
 

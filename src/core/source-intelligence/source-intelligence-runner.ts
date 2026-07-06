@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { ensureDir, nowIso, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { detectCodexWebSearchCapability, type CodexWebSearchEvidence, type CodexWebSearchFunction } from '../codex/codex-web-search-adapter.js'
-import { runUltraSearch, type UltraSearchMode, type UltraSearchResult, type UltraSearchSourceFunction } from '../ultra-search/index.js'
+import { runSuperSearch, type SuperSearchMode, type SuperSearchResult, type SuperSearchSourceFunction } from '../super-search/index.js'
 import { buildSourceIntelligencePolicy, writeSourceIntelligencePolicyArtifact, type SourceIntelligencePolicy } from './source-intelligence-policy.js'
 import { buildSourceIntelligenceProof, type SourceIntelligenceProof } from './source-intelligence-proof.js'
 import { buildAppshotsEvidence, writeAppshotsEvidenceArtifact, type AppshotsEvidence } from './appshots-evidence.js'
@@ -32,19 +32,19 @@ export interface SourceIntelligenceEvidence {
   cache: {
     key: string
     local_only: boolean
-    ultra_search_hit: boolean
+    super_search_hit: boolean
   }
   policy: SourceIntelligencePolicy
   context7: Context7Evidence
   codex_web_search: CodexWebSearchEvidence | null
-  ultra_search: UltraSearchResult
+  super_search: SuperSearchResult
   appshots: AppshotsEvidence | null
   proof: SourceIntelligenceProof
   blockers: string[]
   warnings: string[]
 }
 
-export type Context7SourceFunction = UltraSearchSourceFunction
+export type Context7SourceFunction = SuperSearchSourceFunction
 
 export async function runSourceIntelligence(input: {
   root?: string
@@ -111,13 +111,13 @@ export async function runSourceIntelligence(input: {
     offline: input.offline === true,
     ...(input.context7 ? { context7: input.context7 } : {})
   })
-  const ultraMode = sourceModeToUltraMode(policy.mode)
-  const ultraSearch = await runUltraSearch({
+  const superSearchMode = sourceModeToSuperSearchMode(policy.mode)
+  const superSearch = await runSuperSearch({
     root,
     missionDir,
     route: input.route || 'unknown',
     query: input.query,
-    mode: ultraMode,
+    mode: superSearchMode,
     ...(input.offline === undefined ? {} : { offline: input.offline }),
     ...(input.context7 ? { context7: input.context7 } : {}),
     ...(input.codexWebSearch ? { codexWebSearch: input.codexWebSearch } : {}),
@@ -136,13 +136,13 @@ export async function runSourceIntelligence(input: {
   const providersRequested = policy.selected_providers
   const providersCompleted = [
     ...(context7.ok && policy.context7.required ? ['context7'] : []),
-    ...(ultraSearch.sources.some((source) => source.provider_id === 'codex_web') ? ['codex_web'] : []),
-    ...(ultraSearch.sources.some((source) => source.provider_id === 'x_public') ? ['x_public'] : []),
-    'ultra_search'
+    ...(superSearch.sources.some((source) => source.provider_id === 'codex_web') ? ['codex_web'] : []),
+    ...(superSearch.sources.some((source) => source.provider_id === 'x_public') ? ['x_public'] : []),
+    'super_search'
   ]
-  const proof = buildSourceIntelligenceProof(policy, { context7, ultra_search: ultraSearch, appshots })
+  const proof = buildSourceIntelligenceProof(policy, { context7, super_search: superSearch, appshots })
   const blockers = [...new Set([...policy.blockers, ...context7.blockers, ...appshots.blockers, ...proof.blockers])]
-  const warnings = [...new Set([...policy.warnings, ...ultraSearch.warnings, ...appshots.warnings])]
+  const warnings = [...new Set([...policy.warnings, ...superSearch.warnings, ...appshots.warnings])]
   const cacheKey = sha256(JSON.stringify({ route: input.route || 'unknown', query: input.query, mode: policy.mode })).slice(0, 16)
   const evidence: SourceIntelligenceEvidence = {
     schema: SOURCE_INTELLIGENCE_EVIDENCE_SCHEMA,
@@ -159,12 +159,12 @@ export async function runSourceIntelligence(input: {
     cache: {
       key: cacheKey,
       local_only: true,
-      ultra_search_hit: ultraSearch.cache.hit
+      super_search_hit: superSearch.cache.hit
     },
     policy,
     context7,
     codex_web_search: null,
-    ultra_search: ultraSearch,
+    super_search: superSearch,
     appshots,
     proof,
     blockers,
@@ -185,7 +185,7 @@ export function renderSourceIntelligenceEvidenceMarkdown(evidence: SourceIntelli
     `- Route: ${evidence.route}`,
     `- Mode: ${evidence.mode}`,
     `- Context7: ${evidence.context7.status}`,
-    `- UltraSearch: ${evidence.ultra_search.proof.ok ? 'ok' : 'partial'}`,
+    `- Super-Search: ${evidence.super_search.proof.ok ? 'ok' : 'partial'}`,
     `- Legacy x-search MCP: not_required`,
     `- Appshots: ${evidence.appshots?.status || 'not_required'}`,
     `- Providers completed: ${evidence.parallel.providers_completed.join(', ') || 'none'}`,
@@ -194,10 +194,10 @@ export function renderSourceIntelligenceEvidenceMarkdown(evidence: SourceIntelli
   ].join('\n')
 }
 
-function sourceModeToUltraMode(mode: SourceIntelligencePolicy['mode']): UltraSearchMode {
-  if (mode === 'ultra_fast') return 'fast'
-  if (mode === 'ultra_deep') return 'deep'
-  if (mode === 'ultra_exhaustive') return 'exhaustive'
+function sourceModeToSuperSearchMode(mode: SourceIntelligencePolicy['mode']): SuperSearchMode {
+  if (mode === 'super_fast') return 'fast'
+  if (mode === 'super_deep') return 'deep'
+  if (mode === 'super_exhaustive') return 'exhaustive'
   if (mode === 'url_acquisition') return 'url_acquisition'
   if (mode === 'x_search') return 'x_search'
   if (mode === 'offline_cache') return 'offline_cache'

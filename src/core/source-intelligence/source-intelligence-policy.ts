@@ -5,10 +5,10 @@ import type { CodexWebSearchCapability } from '../codex/codex-web-search-adapter
 export const SOURCE_INTELLIGENCE_POLICY_SCHEMA = 'sks.source-intelligence-policy.v2'
 
 export type SourceIntelligenceMode =
-  | 'ultra_fast'
-  | 'ultra_balanced'
-  | 'ultra_deep'
-  | 'ultra_exhaustive'
+  | 'super_fast'
+  | 'super_balanced'
+  | 'super_deep'
+  | 'super_exhaustive'
   | 'url_acquisition'
   | 'x_search'
   | 'offline_cache'
@@ -83,7 +83,7 @@ export function buildSourceIntelligencePolicy(input: {
     wrongnessKinds.push('context7_missing')
   }
   if (!offline && codex.status === 'unavailable') {
-    warnings.push('codex_web_search_unavailable_degraded_to_ultra_cache_or_docs')
+    warnings.push('codex_web_search_unavailable_degraded_to_super_cache_or_docs')
     wrongnessKinds.push('codex_web_search_missing')
   }
   if (input.xaiDetection) warnings.push('xai_detection_input_ignored_by_source_intelligence_v2')
@@ -97,8 +97,8 @@ export function buildSourceIntelligencePolicy(input: {
         : xIntent
           ? 'x_search'
           : /deep|exhaustive|가능한 전부|누락 없이|완벽하게 조사/i.test(query)
-            ? 'ultra_deep'
-            : 'ultra_balanced')
+            ? 'super_deep'
+            : 'super_balanced')
 
   const selected = new Set<string>()
   if (docsIntent && context7Available) selected.add('context7')
@@ -114,8 +114,8 @@ export function buildSourceIntelligencePolicy(input: {
     mode,
     requirements: {
       official_sources: docsIntent,
-      full_content: mode !== 'ultra_fast',
-      counter_search: mode === 'ultra_deep' || mode === 'ultra_exhaustive',
+      full_content: mode !== 'super_fast',
+      counter_search: mode === 'super_deep' || mode === 'super_exhaustive',
       claim_ledger: true,
       social_recency: xIntent || mode === 'x_search',
       code_execution_verification: /\b(code|implementation|test|runtime|구현)\b/i.test(query)

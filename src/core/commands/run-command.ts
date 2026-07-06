@@ -523,7 +523,7 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
 
 function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] {
   if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
-  if (route.command === '$Insane-Search') return ultraSearchExecutionArgs(prompt);
+  if (route.command === '$Super-Search') return superSearchExecutionArgs(prompt);
   if (route.command === '$SEO-GEO-OPTIMIZER') return ['seo-geo-optimizer', searchVisibilityActionFromPrompt(prompt), '--mode', searchVisibilityModeFromPrompt(prompt), '--target', searchVisibilityTargetFromPrompt(prompt), '--offline', '--json'];
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];
   if (route.command === '$Fast-Mode') return ['fast-mode', fastModeActionFromPrompt(prompt), '--json'];
@@ -533,31 +533,34 @@ function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = 
   return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-open-zellij'] : [])];
 }
 
-function ultraSearchExecutionArgs(prompt = ''): string[] {
-  const stripped = stripUltraSearchPrompt(prompt);
+function superSearchExecutionArgs(prompt = ''): string[] {
+  const stripped = stripSuperSearchPrompt(prompt);
   const lower = stripped.toLowerCase();
-  if (!stripped || /^(?:doctor|check|status)\b/.test(lower)) return ['insane-search', 'doctor', '--json'];
+  if (!stripped || /^(?:doctor|check|status)\b/.test(lower)) return ['super-search', 'doctor', '--json'];
   if (/^(?:x|x-search|x_search)\b/.test(lower)) {
     const query = stripped.replace(/^(?:x|x-search|x_search)\b[:\s-]*/i, '').trim() || 'source intelligence fixture';
-    return ['insane-search', 'x', query, '--json'];
+    return ['super-search', 'x', query, '--json'];
   }
   const url = stripped.match(/\bhttps?:\/\/\S+/)?.[0];
-  if (/^(?:fetch|url)\b/.test(lower) || url) return ['insane-search', 'fetch', url || stripped.replace(/^(?:fetch|url)\b[:\s-]*/i, '').trim() || 'https://example.com', '--json'];
+  if (/^(?:fetch|url)\b/.test(lower) || url) {
+    const fetchTarget = url || stripped.replace(/^(?:fetch|url)\b[:\s-]*/i, '').trim();
+    return fetchTarget ? ['super-search', 'fetch', fetchTarget, '--json'] : ['super-search', 'fetch', '--json'];
+  }
   const query = stripped.replace(/^run\b[:\s-]*/i, '').trim() || 'source intelligence fixture';
-  return ['insane-search', 'run', query, '--mode', 'balanced', '--json'];
+  return ['super-search', 'run', query, '--mode', 'balanced', '--json'];
 }
 
-function stripUltraSearchPrompt(prompt = ''): string {
+function stripSuperSearchPrompt(prompt = ''): string {
   return String(prompt || '')
     .trim()
-    .replace(/^\[\$Insane-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\[\$InsaneSearch\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\[\$Ultra-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\[\$UltraSearch\]\([^)]+\)(?:\s|:)?\s*/i, '')
-    .replace(/^\$Insane-Search(?:\s|:)?\s*/i, '')
-    .replace(/^\$InsaneSearch(?:\s|:)?\s*/i, '')
-    .replace(/^\$Ultra-Search(?:\s|:)?\s*/i, '')
-    .replace(/^\$UltraSearch(?:\s|:)?\s*/i, '')
+    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\[\$Super-Search\]\([^)]+\)(?:\s|:)?\s*/i, '')
+    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
+    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
+    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
+    .replace(/^\$Super-Search(?:\s|:)?\s*/i, '')
     .trim();
 }
 

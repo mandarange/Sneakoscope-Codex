@@ -118,7 +118,7 @@ export async function storageReport(root: any): Promise<any> {
   return report;
 }
 
-async function lightweightStorageReport(root: any): Promise<any> {
+export async function lightweightStorageReport(root: any): Promise<any> {
   const sks = path.join(root, '.sneakoscope');
   const report: any = {
     root,

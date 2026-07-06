@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
-import { createMission, findLatestMission, missionDir } from '../mission.js';
+import { closeRouteState, createMission, findLatestMission, missionDir, setCurrent, stateFile, stateFileForSession } from '../mission.js';
 
 async function makeRoot(prefix: string): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -92,4 +92,28 @@ test('findLatestMission(root, { route, gateFile }) rejects a gate whose route fi
     gateFile: 'image-ux-review-gate.json'
   });
   assert.equal(latest, null);
+});
+
+test('closeRouteState closes the matching session mirror when closing by mission id', async () => {
+  const root = await makeRoot('sks-mission-close-session-');
+  const sessionKey = 'qa-lane-session';
+  const mission = await createMission(root, { mode: 'naruto', prompt: 'qa lane', sessionKey });
+  await setCurrent(root, {
+    mission_id: mission.id,
+    mode: 'NARUTO',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    phase: 'NARUTO_READY',
+    implementation_allowed: true
+  }, { sessionKey });
+
+  const closed = await closeRouteState(root, { missionId: mission.id });
+  assert.equal(closed.ok, true);
+
+  const current = JSON.parse(await fsp.readFile(stateFile(root), 'utf8'));
+  const session = JSON.parse(await fsp.readFile(stateFileForSession(root, sessionKey), 'utf8'));
+  assert.equal(current.route_closed, true);
+  assert.equal(session.route_closed, true);
+  assert.equal(current.phase, 'NARUTO_READY_CLOSED');
+  assert.equal(session.phase, 'NARUTO_READY_CLOSED');
 });

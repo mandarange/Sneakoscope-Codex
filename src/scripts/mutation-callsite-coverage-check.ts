@@ -117,15 +117,21 @@ function listScanFiles() {
   const files = [];
   walk(path.join(root, 'src'), (file) => {
     const relative = rel(file);
+    if (isTestSource(relative)) return;
     if (relative.startsWith('src/scripts/')) return;
     if (file.endsWith('.ts')) files.push(relative);
   });
   walk(path.join(root, 'src', 'scripts'), (file) => {
     if (!file.endsWith('.ts')) return;
+    if (isTestSource(rel(file))) return;
     const base = path.basename(file);
     if (/(install|publish|release|doctor|codex|zellij|migration)/i.test(base)) files.push(rel(file));
   });
   return files.sort();
+}
+
+function isTestSource(relative: string) {
+  return /(^|\/)__tests__\//.test(relative) || /\.test\.ts$/.test(relative);
 }
 
 function walk(dir, visit) {

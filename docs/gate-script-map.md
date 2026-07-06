@@ -86,7 +86,7 @@
 | `goal:artifact-compat` | `release` | `node ./dist/scripts/goal-artifact-compat-check.js` | direct |
 | `image:artifact-path-contract` | `release` | `node ./dist/scripts/image-artifact-path-contract-check.js` | direct |
 | `init-deep:backup-retention` | `release` | `node ./dist/scripts/init-deep-backup-retention-check.js` | direct |
-| `insane-search:provider-interface` | `release` | `node ./dist/scripts/ultra-search-provider-interface-check.js` | direct |
+| `super-search:provider-interface` | `release` | `node ./dist/scripts/super-search-provider-interface-check.js` | direct |
 | `legacy:upgrade-zero-break` | `release` | `node ./dist/scripts/legacy-upgrade-matrix-check.js` | direct |
 | `lint:no-ts-nocheck-core` | `release` | `node ./dist/scripts/no-ts-nocheck-core-check.js` | direct |
 | `local-collab:all-pipelines-final-gpt` | `release` | `node ./dist/scripts/local-collab-all-pipelines-final-gpt-check.js` | direct |

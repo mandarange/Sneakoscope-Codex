@@ -26,8 +26,10 @@ export function evaluateStrategyGate(input: {
   visualRequired?: boolean
   appshotsOk?: boolean
   sourceIntelligenceOk?: boolean
+  sourceIntelligenceRequired?: boolean
 }): StrategyGateResult {
   const writeCapable = input.writeCapable === true
+  const sourceIntelligenceRequired = input.sourceIntelligenceRequired !== false
   const gate = input.compiled.gate
   const strategyFirstRequired = writeCapable || gate.visual_appshot_required_count > 0 || input.visualRequired === true
   const blockers = [
@@ -38,7 +40,7 @@ export function evaluateStrategyGate(input: {
     ...(writeCapable && input.visualRequired === true && input.appshotsOk !== true
       ? ['appshots_operator_action_missing_for_visual_proof']
       : []),
-    ...(writeCapable && input.sourceIntelligenceOk === false ? ['source_intelligence_gate_failed'] : [])
+    ...(writeCapable && sourceIntelligenceRequired && input.sourceIntelligenceOk === false ? ['source_intelligence_gate_failed'] : [])
   ]
   return {
     schema: STRATEGY_GATE_SCHEMA,

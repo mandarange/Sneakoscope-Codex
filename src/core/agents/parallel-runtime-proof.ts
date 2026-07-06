@@ -2,7 +2,7 @@ import path from 'node:path'
 import { appendJsonlBounded, ensureDir, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 
 export const PARALLEL_RUNTIME_EVENT_SCHEMA = 'sks.parallel-runtime-event.v1'
-export const PARALLEL_RUNTIME_PROOF_SCHEMA = 'sks.parallel-runtime-proof.v1'
+export const PARALLEL_RUNTIME_PROOF_SCHEMA = 'sks.parallel-runtime-proof.v2'
 
 export type ParallelRuntimeEventType =
   | 'batch_dispatch_started'
@@ -46,11 +46,16 @@ export interface ParallelRuntimeProof {
   schema: typeof PARALLEL_RUNTIME_PROOF_SCHEMA
   mission_id: string
   generated_at: string
+  ok: boolean
   proof_mode: 'production' | 'mock-process' | 'in-process-fixture'
+  production_runtime: boolean
+  mock_only: boolean
   require_worker_pids: boolean
   allow_missing_pids: boolean
   requested_workers: number
   target_active_slots: number
+  observed_worker_count: number
+  unique_worker_ids: string[]
   max_observed_active_workers: number
   max_observed_worker_processes: number
   unique_worker_pids: number
@@ -62,11 +67,16 @@ export interface ParallelRuntimeProof {
   sequential_estimate_ms: number
   speedup_ratio: number
   overlap_windows: Array<{
-    start_ms: number
-    end_ms: number
-    active_workers: number
-    active_model_calls: number
+    start_ms?: number
+    end_ms?: number
+    active_workers?: number
+    active_model_calls?: number
+    worker_a?: string
+    worker_b?: string
+    overlap_ms?: number
   }>
+  changed_file_count: number
+  changed_files_by_worker: Record<string, string[]>
   visible_panes: number
   headless_workers: number
   utilization_proof_consistency: {
@@ -114,6 +124,8 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
   proofMode?: 'production' | 'mock-process' | 'in-process-fixture'
   requireWorkerPids?: boolean
   allowMissingPids?: boolean
+  requireChangedFiles?: boolean
+  minChangedFiles?: number
 } = {}): Promise<ParallelRuntimeProof> {
   const events = await readParallelRuntimeEvents(root, missionId)
   const sorted = events.sort((a, b) => a.ms - b.ms)
@@ -195,7 +207,7 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
     ? workerDurations.reduce((sum, value) => sum + value, 0)
     : requestedWorkers * positiveInt(opts.expectedWorkerRuntimeMs, 4000)
   const visiblePanes = nonNegativeInt(opts.visiblePanes, sorted.filter((event) => event.placement === 'zellij-pane').length ? new Set(sorted.filter((event) => event.placement === 'zellij-pane').map((event) => event.slot_id || event.session_id || '')).size : 0)
-  const observedHeadlessWorkers = sorted.filter((event) => event.placement === 'headless' && (event.event_type === 'worker_launch_invoked' || event.event_type === 'worker_process_spawned')).length
+  const observedHeadlessWorkers = sorted.filter((event) => (event.placement === 'headless' || event.placement === 'headless_by_design_viewport_ui') && (event.event_type === 'worker_launch_invoked' || event.event_type === 'worker_process_spawned')).length
   const headlessWorkers = Math.max(observedHeadlessWorkers, Math.max(0, targetActiveSlots - visiblePanes))
   const minActiveWorkers = opts.minActiveWorkers === undefined
     ? Math.min(targetActiveSlots, requestedWorkers)
@@ -207,6 +219,7 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
   const firstBatchLimit = positiveInt(opts.firstBatchLaunchSpanLimitMs, requestedWorkers >= 16 ? 2500 : 30000)
   const schedulerState = await readJson<any>(path.join(root, 'agent-scheduler-state.json'), null).catch(() => null)
   const coalescedOverlapWindows = coalesceOverlapWindows(overlapWindows)
+  const workerEvidence = buildWorkerRuntimeEvidence(sorted, firstMs, lastMs)
   const utilizationProofConsistency = buildUtilizationProofConsistency(schedulerState, {
     proofMaxActive: maxWorkers,
     proofWallMs: wallMs,
@@ -219,16 +232,25 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
   if (requireWorkerPids && workerPids.size === 0) blockers.push('unique_worker_pids_missing_in_production_proof')
   if (speedupRatio < minSpeedup) blockers.push('speedup_ratio_below_target')
   if (firstBatchLaunchSpanMs > firstBatchLimit) blockers.push('first_batch_launch_span_above_limit')
+  if (minActiveWorkers > 1 && workerEvidence.unique_worker_ids.length < Math.min(minActiveWorkers, 2)) blockers.push('worker_id_diversity_below_target')
+  if (minActiveWorkers > 1 && workerEvidence.overlap_windows.length === 0) blockers.push('worker_timestamp_overlap_missing')
+  if (opts.requireChangedFiles === true && workerEvidence.changed_file_count < positiveInt(opts.minChangedFiles, Math.min(2, requestedWorkers))) blockers.push('parallel_write_changed_files_below_target')
 
+  const passed = blockers.length === 0
   return {
     schema: PARALLEL_RUNTIME_PROOF_SCHEMA,
     mission_id: missionId,
     generated_at: nowIso(),
+    ok: passed,
     proof_mode: proofMode,
+    production_runtime: proofMode === 'production',
+    mock_only: proofMode !== 'production',
     require_worker_pids: requireWorkerPids,
     allow_missing_pids: allowMissingPids,
     requested_workers: requestedWorkers,
     target_active_slots: targetActiveSlots,
+    observed_worker_count: workerEvidence.unique_worker_ids.length,
+    unique_worker_ids: workerEvidence.unique_worker_ids,
     max_observed_active_workers: maxWorkers,
     max_observed_worker_processes: Math.max(maxProcesses, workerPids.size ? maxProcesses : maxWorkers),
     unique_worker_pids: workerPids.size,
@@ -239,11 +261,13 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
     wall_ms: wallMs,
     sequential_estimate_ms: sequentialEstimateMs,
     speedup_ratio: speedupRatio,
-    overlap_windows: coalescedOverlapWindows,
+    overlap_windows: [...coalescedOverlapWindows, ...workerEvidence.overlap_windows],
+    changed_file_count: workerEvidence.changed_file_count,
+    changed_files_by_worker: workerEvidence.changed_files_by_worker,
     visible_panes: visiblePanes,
     headless_workers: headlessWorkers,
     utilization_proof_consistency: utilizationProofConsistency,
-    passed: blockers.length === 0,
+    passed,
     blockers
   }
 }
@@ -296,7 +320,7 @@ function normalizeParallelRuntimeEvent(
 
 function normalizePlacement(value: unknown): ParallelRuntimePlacement {
   const text = String(value || 'unknown')
-  if (text === 'zellij-pane' || text === 'process' || text === 'headless') return text
+  if (text === 'zellij-pane' || text === 'process' || text === 'headless' || text === 'headless_by_design_viewport_ui') return text
   return 'unknown'
 }
 
@@ -352,14 +376,72 @@ function buildUtilizationProofConsistency(state: any, input: { proofMaxActive: n
 }
 
 function activeSlotTimeMsFromWindows(windows: ParallelRuntimeProof['overlap_windows']) {
-  return windows.reduce((sum, window) => sum + Math.max(0, window.end_ms - window.start_ms) * Math.max(0, window.active_workers), 0)
+  return windows.reduce((sum, window) => sum + Math.max(0, Number(window.end_ms || 0) - Number(window.start_ms || 0)) * Math.max(0, Number(window.active_workers || 0)), 0)
 }
 
 function coalesceOverlapWindows(windows: ParallelRuntimeProof['overlap_windows']) {
   return windows
-    .filter((window) => window.end_ms > window.start_ms)
-    .filter((window) => window.active_workers > 0 || window.active_model_calls > 0)
+    .filter((window) => Number(window.end_ms || 0) > Number(window.start_ms || 0))
+    .filter((window) => Number(window.active_workers || 0) > 0 || Number(window.active_model_calls || 0) > 0)
     .slice(0, 2000)
+}
+
+function buildWorkerRuntimeEvidence(events: ParallelRuntimeEvent[], firstMs: number, lastMs: number) {
+  const intervals = new Map<string, { start: number; end: number; changedFiles: Set<string> }>()
+  for (const event of events) {
+    const workerId = workerRuntimeId(event)
+    if (!workerId) continue
+    if (event.event_type === 'worker_launch_invoked' || event.event_type === 'worker_process_spawned') {
+      const current = intervals.get(workerId)
+      if (current) current.start = Math.min(current.start, event.ms)
+      else intervals.set(workerId, { start: event.ms, end: event.ms, changedFiles: new Set<string>() })
+    }
+    if (event.event_type === 'worker_completed' || event.event_type === 'worker_failed') {
+      const current = intervals.get(workerId) || { start: event.ms, end: event.ms, changedFiles: new Set<string>() }
+      current.end = event.ms
+      for (const file of eventChangedFiles(event)) current.changedFiles.add(file)
+      intervals.set(workerId, current)
+    }
+  }
+  const uniqueWorkerIds = [...intervals.keys()].sort()
+  const changedFilesByWorker = Object.fromEntries(uniqueWorkerIds.map((id) => [id, [...(intervals.get(id)?.changedFiles || new Set<string>())].sort()]))
+  const changedFileCount = new Set(Object.values(changedFilesByWorker).flat()).size
+  const overlapWindows: ParallelRuntimeProof['overlap_windows'] = []
+  for (let i = 0; i < uniqueWorkerIds.length; i++) {
+    for (let j = i + 1; j < uniqueWorkerIds.length; j++) {
+      const a = uniqueWorkerIds[i]!
+      const b = uniqueWorkerIds[j]!
+      const left = intervals.get(a)!
+      const right = intervals.get(b)!
+      const overlapMs = Math.max(0, Math.min(left.end, right.end) - Math.max(left.start, right.start))
+      if (overlapMs > 0 && Math.max(left.start, right.start) < Math.min(left.end, right.end)) {
+        overlapWindows.push({
+          worker_a: a,
+          worker_b: b,
+          overlap_ms: overlapMs,
+          start_ms: Math.max(left.start, right.start) - firstMs,
+          end_ms: Math.min(left.end, right.end) - firstMs,
+          active_workers: 2,
+          active_model_calls: 0
+        })
+      }
+    }
+  }
+  return {
+    unique_worker_ids: uniqueWorkerIds,
+    changed_files_by_worker: changedFilesByWorker,
+    changed_file_count: changedFileCount,
+    overlap_windows: overlapWindows.slice(0, 2000)
+  }
+}
+
+function workerRuntimeId(event: ParallelRuntimeEvent): string | null {
+  return event.slot_id || event.session_id || (event.pid == null ? null : `pid:${event.pid}`)
+}
+
+function eventChangedFiles(event: ParallelRuntimeEvent): string[] {
+  const fromMeta = Array.isArray(event.meta?.changed_files) ? event.meta.changed_files : []
+  return fromMeta.map((file) => String(file || '').replace(/\\/g, '/').replace(/^\.\/+/, '')).filter(Boolean)
 }
 
 function inferAgentsDir(root: string, missionId: string): string {

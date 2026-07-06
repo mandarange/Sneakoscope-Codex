@@ -18,3 +18,16 @@ test('strategy gate blocks visual work when Appshots evidence is missing', () =>
   assert.equal(gate.scheduler_allowed, false);
   assert.match(gate.blockers.join('\n'), /appshots_operator_action_missing_for_visual_proof/);
 });
+
+test('strategy gate does not block local-only write proof when source intelligence is optional', () => {
+  const compiled = compileStrategy({ prompt: 'Patch `file-1.txt`.', writeTargets: ['file-1.txt'] });
+  const gate = evaluateStrategyGate({
+    compiled,
+    writeCapable: true,
+    sourceIntelligenceOk: false,
+    sourceIntelligenceRequired: false
+  });
+  assert.equal(gate.ok, true);
+  assert.equal(gate.scheduler_allowed, true);
+  assert.doesNotMatch(gate.blockers.join('\n'), /source_intelligence_gate_failed/);
+});

@@ -150,7 +150,7 @@ function sourceIntelligenceTrust(proof: any = {}) {
   const proofBlockers = evidence.proof?.blockers || evidence.blockers || [];
   const issues = [...proofBlockers];
   if (evidence.policy?.context7?.required === true && evidence.context7?.ok !== true) issues.push('context7_missing');
-  if (evidence.policy?.codex_web_search?.required === true && evidence.ultra_search?.proof?.provider_independent !== true) issues.push('ultra_search_provider_independent_proof_missing');
+  if (evidence.policy?.codex_web_search?.required === true && evidence.super_search?.proof?.provider_independent !== true) issues.push('super_search_provider_independent_proof_missing');
   return {
     issues: [...new Set(issues.map(String))],
     summary: {
@@ -160,7 +160,7 @@ function sourceIntelligenceTrust(proof: any = {}) {
       mode: evidence.mode || evidence.policy?.mode || 'unknown',
       context7_status: evidence.context7?.status || 'unknown',
       codex_web_status: evidence.codex_web_search?.status || 'not_required',
-      ultra_search_status: evidence.ultra_search?.proof?.ok === true ? 'verified' : evidence.ultra_search ? 'partial' : 'not_required',
+      super_search_status: evidence.super_search?.proof?.ok === true ? 'verified' : evidence.super_search ? 'partial' : 'not_required',
       providers_completed: evidence.parallel?.providers_completed || [],
       blockers: proofBlockers
     }

@@ -1,6 +1,6 @@
-# InsaneSearch, Context7, And Codex Web Policy
+# Super-Search, Context7, And Codex Web Policy
 
-InsaneSearch is the public source-intelligence command for SKS. The underlying proof runtime was formerly exposed as UltraSearch; it decomposes queries, selects source lanes by capability, records typed artifacts, normalizes sources, separates weak discovery from verified content, and builds claim/citation proof without requiring xAI/Grok.
+Super-Search is the public source-intelligence command for SKS. It decomposes queries, selects source lanes by capability, records typed artifacts, normalizes sources, separates weak discovery from verified content, and builds claim/citation proof without requiring xAI/Grok.
 
 Policy summary:
 
@@ -13,7 +13,6 @@ Policy summary:
 Release gates:
 
 ```bash
-npm run insane-search:provider-interface
-npm run source-intelligence:policy
-npm run source-intelligence:all-modes
+node ./dist/scripts/super-search-provider-interface-check.js
+node ./dist/scripts/source-intelligence-all-modes-check.js
 ```

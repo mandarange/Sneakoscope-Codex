@@ -1,7 +1,7 @@
-export const ULTRA_SEARCH_PROOF_SCHEMA = 'sks.ultra-search-proof.v1'
-export const ULTRA_SEARCH_GATE_SCHEMA = 'sks.ultra-search-gate.v1'
+export const SUPER_SEARCH_PROOF_SCHEMA = 'sks.super-search-proof.v1'
+export const SUPER_SEARCH_GATE_SCHEMA = 'sks.super-search-gate.v1'
 
-export type UltraSearchMode =
+export type SuperSearchMode =
   | 'fast'
   | 'balanced'
   | 'deep'
@@ -37,7 +37,7 @@ export type AcquisitionVerdict =
   | 'rate_limited'
   | 'unknown'
 
-export interface UltraSearchAxis {
+export interface SuperSearchAxis {
   axis_id: string
   question: string
   territories: string[]
@@ -46,7 +46,7 @@ export interface UltraSearchAxis {
   overlap_keys: string[]
 }
 
-export interface UltraSourceRecord {
+export interface SuperSearchSourceRecord {
   source_id: string
   provider_id: string
   source_family: string
@@ -92,7 +92,7 @@ export interface LeadRaisedEvent {
   priority: 'P0' | 'P1' | 'P2'
 }
 
-export interface UltraClaim {
+export interface SuperSearchClaim {
   claim_id: string
   text: string
   claim_type: 'code_behavior' | 'numeric' | 'dated' | 'legal' | 'financial' | 'causal' | 'capability' | 'opinion' | 'social_signal'
@@ -105,8 +105,8 @@ export interface UltraClaim {
   status: 'verified' | 'supported' | 'unresolved' | 'refuted'
 }
 
-export interface UltraSearchConvergence {
-  schema: 'sks.ultra-search-convergence.v1'
+export interface SuperSearchConvergence {
+  schema: 'sks.super-search-convergence.v1'
   waves_completed: number
   minimum_waves_required: number
   new_leads_per_wave: number[]
@@ -117,10 +117,10 @@ export interface UltraSearchConvergence {
   reason: string
 }
 
-export interface UltraSearchProof {
-  schema: typeof ULTRA_SEARCH_PROOF_SCHEMA
+export interface SuperSearchProof {
+  schema: typeof SUPER_SEARCH_PROOF_SCHEMA
   ok: boolean
-  mode: UltraSearchMode
+  mode: SuperSearchMode
   intent: SearchIntent
   provider_independent: boolean
   xai_runtime_dependency: false
@@ -130,21 +130,21 @@ export interface UltraSearchProof {
   verified_source_count: number
   claim_count: number
   unresolved_high_risk_claims: number
-  convergence: UltraSearchConvergence
+  convergence: SuperSearchConvergence
   blockers: string[]
   warnings: string[]
 }
 
-export interface UltraSearchResult {
-  schema: 'sks.ultra-search-result.v1'
+export interface SuperSearchResult {
+  schema: 'sks.super-search-result.v1'
   generated_at: string
   ok: boolean
   mission_id: string
   artifact_dir: string
   query: string
-  mode: UltraSearchMode
+  mode: SuperSearchMode
   intent: SearchIntent
-  axes: UltraSearchAxis[]
+  axes: SuperSearchAxis[]
   query_variants: string[]
   provider_plan: {
     selected_capabilities: string[]
@@ -152,11 +152,22 @@ export interface UltraSearchResult {
     blockers: string[]
     warnings: string[]
   }
-  sources: UltraSourceRecord[]
+  sources: SuperSearchSourceRecord[]
   leads: LeadRaisedEvent[]
-  claims: UltraClaim[]
-  convergence: UltraSearchConvergence
-  proof: UltraSearchProof
+  claims: SuperSearchClaim[]
+  convergence: SuperSearchConvergence
+  proof: SuperSearchProof
+  attempt_ledger: {
+    schema: 'sks.attempt-ledger.v1'
+    attempts: Array<{
+      id: string
+      strategy: string
+      status: 'completed' | 'failed' | 'skipped' | 'blocked'
+      reason: string
+      next_strategy: string | null
+    }>
+    repeated_failed_strategy_count: number
+  }
   synthesis: string
   blockers: string[]
   warnings: string[]
@@ -170,4 +181,4 @@ export interface UltraSearchResult {
   }
 }
 
-export type UltraSearchSourceFunction = (query: string) => Promise<unknown>
+export type SuperSearchSourceFunction = (query: string) => Promise<unknown>

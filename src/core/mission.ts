@@ -127,27 +127,16 @@ export async function closeRouteState(root: any, input: { missionId?: string | n
     if (input.missionId && current.mission_id && String(current.mission_id) !== String(input.missionId)) {
       return { ok: false, status: 'mission_mismatch', mission_id: missionId, current_mission_id: current.mission_id };
     }
-    const next = {
-      ...current,
-      mission_id: missionId || current.mission_id || null,
-      route_closed: true,
-      route_closed_at: nowIso(),
-      route_close_reason: input.reason || 'route_close_command',
-      implementation_allowed: false,
-      questions_allowed: true,
-      mad_sks_active: false,
-      permission_gate_active: false,
-      gate_owner_mission_id: null,
-      phase: current.phase ? `${current.phase}_CLOSED` : 'ROUTE_CLOSED',
-      updated_at: nowIso(),
-      ...(sessionKey ? { _session_key: sessionKey } : {})
-    };
+    const next = closedRouteState(current, missionId, input.reason, sessionKey);
     if (sessionKey) {
       await ensureDir(stateSessionsDir(root));
       await writeJsonAtomic(targetFile, next);
       await writeJsonAtomic(stateFile(root), next).catch(() => undefined);
     } else {
       await writeJsonAtomic(stateFile(root), next);
+      for (const row of await matchingSessionStates(root, missionId, current._session_key)) {
+        await writeJsonAtomic(row.path, closedRouteState(row.state, missionId, input.reason, row.session_key));
+      }
     }
     if (missionId) {
       await appendJsonl(path.join(missionDir(root, missionId), 'events.jsonl'), {
@@ -159,6 +148,43 @@ export async function closeRouteState(root: any, input: { missionId?: string | n
     }
     return { ok: true, status: 'closed', mission_id: missionId || null, state_file: targetFile };
   });
+}
+
+function closedRouteState(current: any, missionId: string, reason?: string | null, sessionKey?: string | null) {
+  const phase = String(current.phase || '');
+  return {
+    ...current,
+    mission_id: missionId || current.mission_id || null,
+    route_closed: true,
+    route_closed_at: nowIso(),
+    route_close_reason: reason || 'route_close_command',
+    implementation_allowed: false,
+    questions_allowed: true,
+    mad_sks_active: false,
+    permission_gate_active: false,
+    gate_owner_mission_id: null,
+    phase: phase ? (/_CLOSED$/i.test(phase) ? phase : `${phase}_CLOSED`) : 'ROUTE_CLOSED',
+    updated_at: nowIso(),
+    ...(sessionKey ? { _session_key: sessionKey } : {})
+  };
+}
+
+async function matchingSessionStates(root: any, missionId: string, preferredSessionKey?: string | null) {
+  const dir = stateSessionsDir(root);
+  const rows: Array<{ session_key: string; path: string; state: any }> = [];
+  if (!(await exists(dir))) return rows;
+  const fs = await import('node:fs/promises');
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue;
+    const file = path.join(dir, entry.name);
+    const state = await readJson(file, {}).catch(() => ({}));
+    const key = String(state._session_key || entry.name.replace(/\.json$/, ''));
+    if (String(state.mission_id || '') === missionId || (preferredSessionKey && key === String(preferredSessionKey))) {
+      rows.push({ session_key: key, path: file, state });
+    }
+  }
+  return rows;
 }
 
 function withStateLock<T>(root: any, fn: () => Promise<T>): Promise<T> {

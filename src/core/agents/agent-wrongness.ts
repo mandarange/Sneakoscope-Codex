@@ -12,7 +12,7 @@ const WRONGNESS_MAP = [
   ['missing_follow_up_schema', /follow_up_work_item|follow_up_work_items|schema_invalid:.*follow_up/],
   ['session_generation_missing', /session_generation_open|terminal_close_report_missing|source_intelligence_missing_for_generation|goal_mode_missing_for_generation/],
   ['schema_invalid_output', /^schema_invalid:/],
-  ['ultra_search_provider_independent_proof_missing', /ultra_search_provider_independent_proof_missing/],
+  ['super_search_provider_independent_proof_missing', /super_search_provider_independent_proof_missing/],
   ['codex_web_search_missing', /codex_web_search_missing/],
   ['context7_missing', /context7_missing|docs_context_missing/],
   ['stale_heartbeat', /stale_heartbeat/],

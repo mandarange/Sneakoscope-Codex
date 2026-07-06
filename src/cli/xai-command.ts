@@ -9,18 +9,18 @@ export async function xaiCommand(sub: string = 'check', args: string[] = []) {
     setup_performed: false,
     xai_required: false,
     replacement: {
-      doctor: 'sks insane-search doctor',
-      x_search: 'sks insane-search x "<query>"',
-      migration: 'sks insane-search migrate-xai [--apply]'
+      doctor: 'sks super-search doctor',
+      x_search: 'sks super-search x "<query>"',
+      fetch: 'sks super-search fetch "<url>"'
     },
-    blockers: action === 'setup' ? ['xai_setup_removed_use_ultra_search'] : [],
+    blockers: action === 'setup' ? ['xai_setup_removed_use_super_search'] : [],
     warnings: ['sks_xai_is_deprecated_and_does_not_configure_mcp_or_require_XAI_API_KEY']
   }
   if (json) console.log(JSON.stringify(result, null, 2))
   else {
-    console.log('`sks xai` is deprecated. InsaneSearch no longer requires xAI/Grok or XAI_API_KEY.')
-    console.log('Use: sks insane-search doctor')
-    console.log('Use: sks insane-search x "<query>"')
+    console.log('`sks xai` is deprecated. Super-Search no longer requires xAI/Grok or XAI_API_KEY.')
+    console.log('Use: sks super-search doctor')
+    console.log('Use: sks super-search x "<query>"')
     if (action === 'setup') {
       console.log('No MCP setup was performed.')
       process.exitCode = 1

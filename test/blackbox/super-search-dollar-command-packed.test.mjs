@@ -15,7 +15,7 @@ const testEnv = {
   SKS_UPDATE_MIGRATION_GATE_DISABLED: '1'
 };
 
-test('dollar command list exposes InsaneSearch route and compatibility aliases', () => {
+test('dollar command list exposes only the canonical Super-Search source route', () => {
   const result = spawnSync(process.execPath, [distCli, 'dollar-commands', '--json'], {
     cwd: repoRoot,
     encoding: 'utf8',
@@ -24,23 +24,22 @@ test('dollar command list exposes InsaneSearch route and compatibility aliases',
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
   const commands = new Set(parsed.dollar_commands.map((entry) => entry.command));
-  assert.ok(commands.has('$Insane-Search'));
-  assert.ok(commands.has('$InsaneSearch'));
-  assert.ok(commands.has('$Ultra-Search'));
-  assert.ok(commands.has('$UltraSearch'));
-  assert.ok(parsed.app_skill_aliases.some((entry) => entry.canonical === '$Insane-Search' && entry.app_skill === '$insane-search'));
+  assert.ok(commands.has('$Super-Search'));
+  assert.equal(commands.has(['$Insane', 'Search'].join('-')), false);
+  assert.equal(commands.has(['$Ultra', 'Search'].join('-')), false);
+  assert.ok(parsed.app_skill_aliases.some((entry) => entry.canonical === '$Super-Search' && entry.app_skill === '$super-search'));
 });
 
-test('$InsaneSearch executes through the insane-search CLI path', async () => {
-  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-ultra-dollar-'));
-  const result = spawnSync(process.execPath, [distCli, 'run', '$InsaneSearch source intelligence fixture', '--execute', '--json'], {
+test('$Super-Search executes through the super-search CLI path', async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-super-search-dollar-'));
+  const result = spawnSync(process.execPath, [distCli, 'run', '$Super-Search doctor', '--execute', '--json'], {
     cwd,
     encoding: 'utf8',
     env: testEnv
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.route, '$Insane-Search');
-  assert.equal(parsed.execution.execution_kind, 'mock_safe');
-  assert.match(parsed.execution.command, /sks insane-search run/);
+  assert.equal(parsed.route, '$Super-Search');
+  assert.equal(parsed.execution.execution_kind, 'live_route');
+  assert.match(parsed.execution.command, /sks super-search doctor/);
 });

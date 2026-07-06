@@ -14,9 +14,9 @@ const common = {
   codexWebSearch: async () => [{ title: 'web', url: 'https://example.com' }],
   env: { SKS_CODEX_WEB_SEARCH_AVAILABLE: '1' }
 };
-const balanced = await mod.runSourceIntelligence({ ...common, query: 'fixture' });
+const balanced = await mod.runSourceIntelligence({ ...common, query: 'npm package docs' });
 const xSearch = await mod.runSourceIntelligence({ ...common, query: 'site:x.com product launch', xaiDetection: { configured: true, search_capable: true } });
-assertGate(balanced.ok === true && balanced.mode === 'ultra_balanced', 'balanced UltraSearch mode must pass with provider-independent proof', balanced);
+assertGate(balanced.ok === true && balanced.mode === 'super_balanced', 'balanced Super-Search mode must pass with provider-independent proof', balanced);
 assertGate(xSearch.ok === false && xSearch.mode === 'x_search' && xSearch.blockers.includes('x_search_parity_not_proven'), 'X mode must not treat discovery-only public X evidence as parity', xSearch);
 assertGate(xSearch.parallel.providers_requested.includes('x_public'), 'X public provider must be capability-selected', xSearch.parallel);
 emitGate('source-intelligence:all-modes', { modes: [balanced.mode, xSearch.mode], x_parity_claim: 'not_proven_without_real_corpus' });

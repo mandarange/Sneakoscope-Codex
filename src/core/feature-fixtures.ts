@@ -15,7 +15,9 @@ const FIXTURES = Object.freeze({
   'cli-help': fixture('execute', 'sks help', [], 'pass'),
   'cli-version': fixture('execute', 'sks --version', [], 'pass'),
   'cli-root': fixture('execute', 'sks root --json', [], 'pass'),
-  'cli-doctor': fixture('real_optional', 'sks doctor --json', [], 'pass'),
+  'cli-doctor': fixture('execute', 'sks doctor --json', [], 'pass', {
+    reason: 'doctor without --fix is a read-only runtime readiness command, so the release fixture can execute it directly instead of counting it as optional integration evidence.'
+  }),
   'doctor:imagegen-repair': fixture('execute_and_validate_artifacts', 'sks doctor --json', [{ path: '.sneakoscope/reports/feature-fixtures/doctor-imagegen-repair.json', schema: 'sks.doctor-imagegen-repair.v1', optional: true }], 'pass', {
     quality: 'runtime_verified',
     validates_json_fields: ['imagegen_repair', 'repair.imagegen']
@@ -93,7 +95,7 @@ const FIXTURES = Object.freeze({
   'cli-codex-native': fixture('execute', 'sks codex-native status --json', [], 'pass'),
   'cli-zellij': fixture('execute', 'npm run zellij:capability --silent', [], 'pass'),
   'cli-tmux': fixture('not_available', null, [], 'not_required', {
-    quality: 'missing',
+    quality: 'static_contract',
     reason: 'tmux runtime was removed from SKS (see tmuxCommand in basic-cli.ts and `sks tmux` deprecation notice); the prior fixture command string was not a real invocable command ("removed runtime migration notice: sks tmux --json"), so it is reclassified as not_available instead of being mislabeled mock.',
     root_mode: 'source_checkout_required'
   }),
@@ -107,8 +109,7 @@ const FIXTURES = Object.freeze({
     reason: 'Same underlying simpleGitCommitCommand() as cli-commit plus a real `git push`; genuinely destructive (commits and pushes to the remote) with no real --dry-run support. Left as documented mock rather than execute a real commit+push or invent an unsupported --dry-run mode.'
   }),
   'cli-context7': fixture('real_optional', 'sks context7 check --json', [], 'pass'),
-  'cli-insane-search': fixture('execute', 'sks insane-search doctor --json', [], 'pass'),
-  'cli-ultra-search': fixture('execute', 'sks ultra-search doctor --json', [], 'pass'),
+  'cli-super-search': fixture('execute', 'sks super-search doctor --json', [], 'pass'),
   'cli-xai': fixture('real_optional', 'sks xai check --json', [], 'pass'),
   'cli-task': fixture('execute', 'sks task instant --plan --json', [], 'pass'),
   'cli-release': fixture('execute', 'sks release affected --json', [], 'blocked', { reason: '18차: the phantom requiredSections schema mismatch (five_lane_review/integration_evidence/session_cleanup, from commit d4526f84 with no producer ever wired up) has been fixed -- missing_sections is now honestly empty. The release-gate DAG still legitimately fails/blocks on other real gates (e.g. release:readiness) independent of this fix, so the command still exits non-zero and this fixture stays honestly blocked rather than claiming full green.' }),
@@ -145,9 +146,11 @@ const FIXTURES = Object.freeze({
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'route-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
   'route-shadowclone': fixture('static', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
   }),
   'route-kagebunshin': fixture('static', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
   }),
   'route-qa-loop': fixture('execute_and_validate_artifacts', 'sks qa-loop run latest --mock --json', ['completion-proof.json', 'qa-gate.json'], 'blocked', { timeout_ms: 180000, reason: 'qaLoopRun() resolves "latest" via the same globally-unscoped findLatestMission used everywhere else and qa-loop is a two-step prepare-then-run workflow gated between steps by an active-route-not-closed check a single fixture command cannot express.' }),
@@ -160,15 +163,13 @@ const FIXTURES = Object.freeze({
   }),
   'route-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
   'route-answer': fixture('static', '$Answer answer-only route policy', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Policy-only route (answer-only conversational mode with no writes); nothing executable to run beyond static contract text.'
   }),
   'route-goal': fixture('mock', '$Goal bridge route', ['goal-workflow.json', 'completion-proof.json'], 'pass', {
     reason: 'sks goal create "<prompt>" --json never calls maybeFinalizeRoute, so it does not write completion-proof.json even on success; live-testing it also surfaced a real defect (loop-worker-runtime.ts omitted an explicit `agents` value, so buildAgentRoster() fell back to DEFAULT_AGENT_COUNT=5 while maxAgentCount was capped to the loop\'s smaller worker budget, throwing "Agent count 5 exceeds max N" for any ordinary fixture prompt) which has been fixed in this change, but goal-workflow.json/completion-proof.json parity still requires either wiring maybeFinalizeRoute into goalCreate or relaxing this fixture\'s expected_artifacts, both out of scope here; left as documented mock.'
   }),
-  'route-insane-search': fixture('execute', 'sks run "$Insane-Search source intelligence fixture" --execute --json', [], 'pass'),
-  'route-insanesearch': fixture('execute', 'sks run "$InsaneSearch source intelligence fixture" --execute --json', [], 'pass'),
-  'route-ultra-search': fixture('execute', 'sks run "$Ultra-Search source intelligence fixture" --execute --json', [], 'pass'),
-  'route-ultrasearch': fixture('execute', 'sks run "$UltraSearch source intelligence fixture" --execute --json', [], 'pass'),
+  'route-super-search': fixture('execute', 'sks run "$Super-Search doctor" --execute --json', [], 'pass'),
   'route-seo-geo-optimizer': fixture('execute_and_validate_artifacts', 'sks seo-geo-optimizer fixture --mode geo --json', ['search-visibility/site-inventory.json', 'search-visibility/geo-findings.json', 'search-visibility/verification-report.json', 'geo-gate.json', 'completion-proof.json'], 'pass'),
   'route-autoresearch': fixture('mock', '$AutoResearch fixture route', ['research-gate.json', 'completion-proof.json'], 'pass', {
     reason: 'Producing research-gate.json + completion-proof.json requires the two-step `research prepare` then `research run latest --mock --autoresearch --json` sequence (same as route-research\'s safe-args setup step), which a single spawned command cannot express; the $AutoResearch pipeline-dispatch route (`sks run "$AutoResearch ..."`) instead writes autoresearch-gate.json, a different contract. Left as documented mock pending multi-step fixture setup support.'
@@ -187,23 +188,29 @@ const FIXTURES = Object.freeze({
   'route-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: 'completion-proof.json', schema: 'sks.completion-proof.v1' }, { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }], 'pass'),
   'route-gx': fixture('execute_and_validate_artifacts', 'sks gx validate fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'gx-validation.json'], 'blocked', { reason: 'gxValidateFixture() intentionally exits non-zero (execution_class: mock_fixture) for an honest mock/blocked result; it does write all three declared artifacts.' }),
   'route-sks': fixture('static', '$SKS control-surface route', ['completion-proof.json'], 'pass', {
+    quality: 'wiring_only',
     reason: 'Pure control-surface alias route with no independent behavior beyond the underlying CLI command fixtures it dispatches to.'
   }),
   'route-fast-mode': fixture('execute', 'sks fast-mode status --json', [], 'pass'),
   'route-fast-on': fixture('static', '$Fast-On covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic fast-mode blackbox toggle test suite, not a standalone CLI invocation.'
   }),
   'route-fast-off': fixture('static', '$Fast-Off covered by hermetic fast-mode blackbox toggle test', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic fast-mode blackbox toggle test suite, not a standalone CLI invocation.'
   }),
   'route-local-model': fixture('execute', 'sks with-local-llm status --json', [], 'pass'),
   'route-with-local-llm-on': fixture('static', '$with-local-llm-on covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic local-model dollar-command blackbox toggle test suite, not a standalone CLI invocation.'
   }),
   'route-with-local-llm-off': fixture('static', '$with-local-llm-off covered by hermetic local-model dollar-command blackbox toggle test', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Toggle-only dollar-command alias; behavior is covered by the hermetic local-model dollar-command blackbox toggle test suite, not a standalone CLI invocation.'
   }),
   'route-help': fixture('static', '$Help lightweight route', [], 'pass', {
+    quality: 'wiring_only',
     reason: 'Pure alias of the cli-help command; no independent behavior to verify beyond cli-help\'s own execute fixture.'
   }),
   'route-commit': fixture('mock', '$Commit git route', ['completion-proof.json'], 'pass', {

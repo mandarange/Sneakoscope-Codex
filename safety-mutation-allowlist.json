@@ -464,12 +464,6 @@
       "reason": "Release registry auth preflight writes only the scoped release-publish-auth report under .sneakoscope/reports."
     },
     {
-      "file": "src/scripts/release-readiness-report.ts",
-      "symbol": "module",
-      "token": "writeFileSync",
-      "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
       "file": "src/scripts/release-version-truth-check.ts",
       "symbol": "module",
       "token": "writeFileSync",
@@ -492,12 +486,6 @@
       "symbol": "walk",
       "token": "writeFileSync",
       "reason": "Release/check script writes scoped fixture, report, manifest, or temp artifact; exact callsite is externally audited."
-    },
-    {
-      "file": "src/scripts/zellij-layout-valid-check.ts",
-      "symbol": "narutoFanoutPaneCount",
-      "token": "fs.writeFile",
-      "reason": "Release/check script writes a scoped temporary Zellij layout fixture; exact callsite is externally audited."
     },
     {
       "file": "src/scripts/zellij-real-session-heartbeat-check.ts",
@@ -544,12 +532,6 @@
     {
       "file": "src/cli/install-helpers.ts",
       "symbol": "migrateCodexAuthKeyFormat",
-      "token": "chmod",
-      "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
-    },
-    {
-      "file": "src/cli/install-helpers.ts",
-      "symbol": "reconcileCodexLbAuthConflict",
       "token": "chmod",
       "reason": "Permission normalization for created auth, shim, socket, or release artifacts; exact callsite is audited."
     },
@@ -680,12 +662,6 @@
       "reason": "Atomic or repair rename primitive is caller-scoped and externally audited by exact symbol."
     },
     {
-      "file": "src/core/codex-control/codex-task-runner.ts",
-      "symbol": "ensurePythonCodexLbConfig",
-      "token": "codex config write",
-      "reason": "Python SDK backend writes only a scoped temporary CODEX_HOME/config.toml so the real SDK runner uses the caller-provided Codex LB endpoint."
-    },
-    {
       "file": "src/core/codex-control/python-codex-sdk-adapter.ts",
       "symbol": "terminatePythonRunner",
       "token": "process.kill",
@@ -774,36 +750,6 @@
       "symbol": "createOpenAIImagesApiAdapter",
       "token": "fsp.writeFile",
       "reason": "Runtime artifact writer has caller-scoped path and is externally audited for guard migration."
-    },
-    {
-      "file": "src/core/init.ts",
-      "symbol": "removeGeneratedAgentSkillAliases",
-      "token": "fsp.rm",
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
-    },
-    {
-      "file": "src/core/init.ts",
-      "symbol": "removeGeneratedCodexSkillMirrors",
-      "token": "fsp.rm",
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
-    },
-    {
-      "file": "src/core/init.ts",
-      "symbol": "removeGeneratedPluginSkillCollisions",
-      "token": "fsp.rm",
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
-    },
-    {
-      "file": "src/core/init.ts",
-      "symbol": "removeGeneratedRelPath",
-      "token": "fsp.rm",
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
-    },
-    {
-      "file": "src/core/init.ts",
-      "symbol": "removeStaleGeneratedSkillsFromManifest",
-      "token": "fsp.rm",
-      "reason": "Cleanup/removal path is route-owned, generated, or temporary artifact; exact callsite is audited."
     },
     {
       "file": "src/core/mad-sks/executors/file-write-executor.ts",
@@ -1262,30 +1208,6 @@
       "reason": "Thread registry lock writes/removes only its scoped lock owner metadata during the critical section."
     },
     {
-      "file": "src/core/providers/glm/bench/__tests__/glm-bench-fixture.test.ts",
-      "symbol": "module",
-      "token": "fs.rm",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/bench/__tests__/glm-bench-fixture.test.ts",
-      "symbol": "module",
-      "token": "fs.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/bench/__tests__/glm-bench-no-mutation.test.ts",
-      "symbol": "gitExec",
-      "token": "fs.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/bench/__tests__/glm-bench-no-mutation.test.ts",
-      "symbol": "gitExec",
-      "token": "fs.rm",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
       "file": "src/core/providers/glm/bench/glm-bench-fixture.ts",
       "symbol": "createGlmBenchFixture",
       "token": "fsp.writeFile",
@@ -1296,72 +1218,6 @@
       "symbol": "cleanupFixture",
       "token": "fsp.rm",
       "reason": "GLM benchmark fixture creates or removes only isolated benchmark fixture directories."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-apply-transaction-targeted-checks.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-apply-transaction.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-combined-patch.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-dirty-tree-policy.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-dirty-tree-policy.test.ts",
-      "symbol": "patchEnvelope",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-patch-candidate-gate.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-secret-audit.test.ts",
-      "symbol": "module",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-targeted-checks.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-worktree-candidate-extraction.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/providers/glm/naruto/__tests__/glm-naruto-worktree-isolation.test.ts",
-      "symbol": "tempRepo",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
-    },
-    {
-      "file": "src/core/stop-gate/__tests__/stop-gate-naruto.test.ts",
-      "symbol": "writeCurrent",
-      "token": "fsp.writeFile",
-      "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
     },
     {
       "file": "src/core/update/update-migration-state.ts",
@@ -1386,6 +1242,282 @@
       "symbol": "module",
       "token": "fsp.rm",
       "reason": "Release/test fixture writes or removes only isolated temporary files created for this check."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "postinstall",
+      "token": "fsp.writeFile",
+      "reason": "Postinstall writes only the package dist stamp JSON under the installed package runtime directory."
+    },
+    {
+      "file": "src/cli/install-helpers.ts",
+      "symbol": "writeApiKeyAuth",
+      "token": "chmod",
+      "reason": "API key auth writer enforces 0600 permissions only on created auth and backup files."
+    },
+    {
+      "file": "src/core/codex-app/sks-menubar.ts",
+      "symbol": "installSksMenuBar",
+      "token": "chmod",
+      "reason": "Menu bar installer sets executable bit only on the SKS-owned action script in the install path."
+    },
+    {
+      "file": "src/core/codex-app/sks-menubar.ts",
+      "symbol": "uninstallSksMenuBar",
+      "token": "fs.rm",
+      "reason": "Menu bar uninstaller removes only SKS-owned launch agent and install directory paths."
+    },
+    {
+      "file": "src/core/codex-app/sks-menubar.ts",
+      "symbol": "buildMenuBarAppAtomically",
+      "token": "fs.rm",
+      "reason": "Menu bar atomic build mutates only staging, backup, and app bundle paths under the SKS-managed install directory."
+    },
+    {
+      "file": "src/core/codex-app/sks-menubar.ts",
+      "symbol": "buildMenuBarAppAtomically",
+      "token": "chmod",
+      "reason": "Menu bar atomic build mutates only staging, backup, and app bundle paths under the SKS-managed install directory."
+    },
+    {
+      "file": "src/core/codex-app/sks-menubar.ts",
+      "symbol": "buildMenuBarAppAtomically",
+      "token": "rename",
+      "reason": "Menu bar atomic build mutates only staging, backup, and app bundle paths under the SKS-managed install directory."
+    },
+    {
+      "file": "src/core/codex/codex-config-toml.ts",
+      "symbol": "cleanupCodexConfigBackups",
+      "token": "fs.rm",
+      "reason": "Codex config backup cleanup removes only selected backup entries discovered by the cleanup policy."
+    },
+    {
+      "file": "src/core/commands/uninstall-command.ts",
+      "symbol": "uninstallCommand",
+      "token": "fsp.rm",
+      "reason": "Explicit uninstall command removes only user-requested SKS-owned install, config, and artifact paths."
+    },
+    {
+      "file": "src/core/commands/uninstall-command.ts",
+      "symbol": "removeLazycodexAgents",
+      "token": "fsp.rm",
+      "reason": "Explicit uninstall command removes only user-requested SKS-owned install, config, and artifact paths."
+    },
+    {
+      "file": "src/core/commands/uninstall-command.ts",
+      "symbol": "removeGlobalSksSkills",
+      "token": "fsp.rm",
+      "reason": "Explicit uninstall command removes only user-requested SKS-owned install, config, and artifact paths."
+    },
+    {
+      "file": "src/core/commands/uninstall-command.ts",
+      "symbol": "sweepUninstallTemp",
+      "token": "fsp.rm",
+      "reason": "Explicit uninstall command removes only user-requested SKS-owned install, config, and artifact paths."
+    },
+    {
+      "file": "src/core/commands/uninstall-command.ts",
+      "symbol": "purgeProjectArtifacts",
+      "token": "fsp.rm",
+      "reason": "Explicit uninstall command removes only user-requested SKS-owned install, config, and artifact paths."
+    },
+    {
+      "file": "src/core/doctor/imagegen-repair.ts",
+      "symbol": "repairCodexImagegen",
+      "token": "runProcess(npm/brew)",
+      "reason": "Imagegen repair runs package installation only from the explicit doctor repair path for Codex imagegen recovery."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeReceiptRotated",
+      "token": "rename",
+      "reason": "Receipt rotation mutates only the target receipt path and bounded rotated receipt cleanup files."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "writeReceiptRotated",
+      "token": "fsp.rm",
+      "reason": "Receipt rotation mutates only the target receipt path and bounded rotated receipt cleanup files."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "withScratchDir",
+      "token": "fsp.rm",
+      "reason": "Scratch directory helper removes only the mkdtemp directory it created unless keep is requested."
+    },
+    {
+      "file": "src/core/fsx.ts",
+      "symbol": "withScratchDirSync",
+      "token": "rmSync",
+      "reason": "Scratch directory helper removes only the mkdtemp directory it created unless keep is requested."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "reconcileProjectSkillEntries",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "quarantineSkillDir",
+      "token": "rename",
+      "reason": "Skill quarantine mutates only SKS-managed generated skill directories after collision checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "quarantineSkillDir",
+      "token": "fsp.rm",
+      "reason": "Skill quarantine mutates only SKS-managed generated skill directories after collision checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "pruneProjectGeneratedManifest",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "removeStaleGeneratedSkillsFromManifest",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "removeGeneratedPluginSkillCollisions",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "removeGeneratedCodexSkillMirrors",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "removeGeneratedAgentSkillAliases",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/init/skills.ts",
+      "symbol": "removeGeneratedRelPath",
+      "token": "fsp.rm",
+      "reason": "Skill reconciliation removes only generated SKS-owned skill directories or manifests after marker checks."
+    },
+    {
+      "file": "src/core/naruto/naruto-active-pool.ts",
+      "symbol": "sendSignal",
+      "token": "process.kill",
+      "reason": "Naruto active pool sends signals only to tracked worker process or process-group ids during cleanup."
+    },
+    {
+      "file": "src/core/release/release-gate-hermetic-env.ts",
+      "symbol": "cleanupReleaseGateHermeticEnv",
+      "token": "rmSync",
+      "reason": "Release gate hermetic cleanup removes only mkdtemp gate runtime directories."
+    },
+    {
+      "file": "src/core/release/release-gate-hermetic-env.ts",
+      "symbol": "cleanupReleaseGateRunTemp",
+      "token": "rmSync",
+      "reason": "Release gate hermetic cleanup removes only mkdtemp gate runtime directories."
+    },
+    {
+      "file": "src/core/search-visibility/mutation.ts",
+      "symbol": "rollbackMutationPlan",
+      "token": "fs.rm",
+      "reason": "Search visibility rollback removes only files listed in the rollback mutation plan."
+    },
+    {
+      "file": "src/core/update/update-migration-state.ts",
+      "symbol": "runReceiptRotationStage",
+      "token": "fsp.rm",
+      "reason": "Update migration receipt rotation removes only bounded rotated receipt files in the SKS update state path."
+    },
+    {
+      "file": "src/core/verification/mistake-rule-compiler.ts",
+      "symbol": "validateRule",
+      "token": "fs.writeFile",
+      "reason": "Mistake-rule compiler writes only temporary good/bad validation fixtures in an isolated directory."
+    },
+    {
+      "file": "src/scripts/codex-app-provider-model-ui-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/codex-app-provider-model-ui-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/codex-lb-fast-mode-truth-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/codex-lb-fast-mode-truth-check.ts",
+      "symbol": "module",
+      "token": "codex config write",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/codex-lb-fast-ui-preservation-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/codex-lb-gpt55-fast-profile-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/doctor-imagegen-repair-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/doctor-imagegen-repair-check.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/release-readiness-report.ts",
+      "symbol": "recordReadinessGateGap",
+      "token": "writeFileSync",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/sks-menubar-install-check.ts",
+      "symbol": "module",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/sks-menubar-install-check.ts",
+      "symbol": "module",
+      "token": "fs.rm",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/sks-menubar-install-check.ts",
+      "symbol": "module",
+      "token": "chmod",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/scripts/zellij-layout-valid-check.ts",
+      "symbol": "viewportPaneCount",
+      "token": "fs.writeFile",
+      "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
     }
   ]
 }

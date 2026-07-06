@@ -1,5 +1,5 @@
 import { dirSize, formatBytes, packageRoot, projectRoot, sksRoot } from '../fsx.js';
-import { enforceRetention, storageReport } from '../retention.js';
+import { enforceRetention, lightweightStorageReport, storageReport } from '../retention.js';
 import { flag } from './command-utils.js';
 import { projectTriwikiToAgentsMd } from '../triwiki/agents-md-projector.js';
 import { compileMistakeRules } from '../verification/mistake-rule-compiler.js';
@@ -43,11 +43,17 @@ function readOption(args: any[] = [], name: string, fallback: unknown = null) {
 
 export async function statsCommand(args: any = []) {
   const root = await sksRoot();
-  const report = await storageReport(root);
-  const pkgBytes = await dirSize(packageRoot()).catch(() => 0);
-  const out = { package: { bytes: pkgBytes, human: formatBytes(pkgBytes) }, storage: report };
+  const full = flag(args, '--full');
+  const report = full ? await storageReport(root) : await lightweightStorageReport(root);
+  const pkgBytes = full ? await dirSize(packageRoot()).catch(() => 0) : null;
+  const out = {
+    package: full
+      ? { bytes: pkgBytes, human: formatBytes(pkgBytes), full_size: true }
+      : { bytes: null, human: null, full_size: false, note: 'Run `sks stats --full --json` for recursive package sizing.' },
+    storage: report
+  };
   if (flag(args, '--json')) return console.log(JSON.stringify(out, null, 2));
   console.log('ㅅㅋㅅ Stats');
-  console.log(`Package: ${out.package.human}`);
-  console.log(`State:   ${report.total_human || '0 B'}`);
+  console.log(`Package: ${out.package.human || 'not scanned (use --full)'}`);
+  console.log(`State:   ${report.total_human || 'not scanned (use --full)'}`);
 }

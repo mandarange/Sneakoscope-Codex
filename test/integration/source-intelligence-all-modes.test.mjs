@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runSourceIntelligence } from '../../dist/core/source-intelligence/source-intelligence-runner.js';
 
-test('runs source intelligence through UltraSearch v2 modes', async () => {
+test('runs source intelligence through Super-Search v2 modes', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-source-int-'));
   const common = {
     missionDir: dir,
@@ -16,7 +16,7 @@ test('runs source intelligence through UltraSearch v2 modes', async () => {
   };
   const balanced = await runSourceIntelligence({ ...common });
   assert.equal(balanced.ok, true);
-  assert.equal(balanced.mode, 'ultra_balanced');
+  assert.equal(balanced.mode, 'super_balanced');
   const xSearch = await runSourceIntelligence({ ...common, query: 'site:x.com product launch', xaiDetection: { configured: true, search_capable: true } });
   assert.equal(xSearch.ok, false);
   assert.equal(xSearch.mode, 'x_search');

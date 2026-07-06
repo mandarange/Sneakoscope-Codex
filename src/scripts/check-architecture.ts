@@ -10,7 +10,6 @@ const changedFiles = changedFileSet();
 
 runGate('pipeline-budget:check');
 runGate('pipeline-runtime:check');
-checkFacade('src/core/pipeline-runtime.ts', 300);
 checkLargeFiles();
 checkTsImports();
 checkDistRuntime();

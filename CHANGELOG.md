@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+
+## [5.8.0] - 2026-07-06
+
+### Fixed
+
+- Fix intent routing so question-shaped work requests no longer route to answer-only solely because they contain a question mark.
+- Fix Naruto parallel write proof so independent multi-file work must show worker diversity, timestamp overlap, changed files by worker, and production-vs-mock classification.
+- Block mock-only, synthetic-source, source-less claim, and fallback-only evidence from passing production Super-Search gates.
+
+### Changed
+
+- Replace the fragmented InsaneSearch/UltraSearch search surface with the single canonical Super-Search route, CLI command, generated skill, schema, artifact namespace, and release gate.
+- Add Super-Search provider availability reporting, attempt ledgers, source-acquisition blockers, and fail-closed inspect/status behavior instead of fake source fallbacks.
+- Add repository cleanup gates for legacy search names, orphan command entries, generated SKS-owned legacy search skills, and release-time name regressions.
+
+### Removed
+
+- Remove the `insane-search` and `ultra-search` CLI commands instead of keeping them as deprecated aliases.
+- Remove old UltraSearch/InsaneSearch runtime names, schemas, artifacts, and generated skill surfaces from production code.
+
 ## [5.7.0] - 2026-07-06
 
 ### Fixed

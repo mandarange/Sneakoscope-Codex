@@ -39,7 +39,7 @@ export interface AgentCodexCockpitState {
   janitor_ok: boolean | null
   proof_status: string | null
   source_intelligence_status: string | null
-  ultra_search_status: string | null
+  super_search_status: string | null
   codex_web_search_status: string | null
   goal_mode_status: string | null
   terminal_session_status: string | null
@@ -140,7 +140,7 @@ export async function buildAgentCodexCockpitState(
     janitor_ok: janitor?.ok ?? null,
     proof_status: proof?.status || (proof?.ok ? 'passed' : proof ? 'blocked' : null),
     source_intelligence_status: sourceIntelligence?.ok === true ? sourceIntelligence.mode || 'ok' : sourceIntelligence ? 'blocked' : null,
-    ultra_search_status: sourceIntelligence?.ultra_search?.proof?.ok === true ? 'verified' : sourceIntelligence?.ultra_search ? 'partial' : null,
+    super_search_status: sourceIntelligence?.super_search?.proof?.ok === true ? 'verified' : sourceIntelligence?.super_search ? 'partial' : null,
     codex_web_search_status: sourceIntelligence?.codex_web_search?.status || sourceIntelligence?.policy?.codex_web_search?.status || null,
     goal_mode_status: goalMode?.mode || null,
     terminal_session_status: terminalClosed ? 'closed' : proof ? 'blocked_or_unverified' : null,
@@ -184,7 +184,7 @@ export function renderAgentCodexDashboard(state: AgentCodexCockpitState): string
     `- Concurrency: ${state.concurrency ?? 'unknown'}`,
     `- Proof: ${state.proof_status || 'unknown'}`,
     `- Source intelligence: ${state.source_intelligence_status || 'unknown'}`,
-    `- UltraSearch: ${state.ultra_search_status || 'unknown'}`,
+    `- Super-Search: ${state.super_search_status || 'unknown'}`,
     `- Codex Web Search: ${state.codex_web_search_status || 'unknown'}`,
     `- Goal mode: ${state.goal_mode_status || 'unknown'}`,
     `- Terminal sessions: ${state.terminal_session_status || 'unknown'}`,
@@ -267,7 +267,7 @@ function summarizeLiveState(state: AgentCodexCockpitState) {
     session_generation_count: state.session_generations.length,
     proof_status: state.proof_status,
     source_intelligence_status: state.source_intelligence_status,
-    ultra_search_status: state.ultra_search_status,
+    super_search_status: state.super_search_status,
     codex_web_search_status: state.codex_web_search_status,
     goal_mode_status: state.goal_mode_status,
     terminal_session_status: state.terminal_session_status,
