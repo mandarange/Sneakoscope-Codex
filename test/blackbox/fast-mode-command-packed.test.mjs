@@ -5,9 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { REQUIRED_CODEX_MODEL } from '../../dist/core/codex-model-guard.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const distCli = path.join(repoRoot, 'dist', 'bin', 'sks.js');
+
+function isolatedEnv(home) {
+  return { ...process.env, HOME: home, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' };
+}
 
 async function fileExists(file) {
   try {
@@ -26,7 +31,7 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
     const result = spawnSync(process.execPath, [distCli, 'fast-mode', ...args, '--json'], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, HOME: home, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+      env: isolatedEnv(home)
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return JSON.parse(result.stdout);
@@ -61,7 +66,7 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   ], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: isolatedEnv(home)
   });
   assert.equal(agent.status, 0, agent.stderr || agent.stdout);
   const agentRun = JSON.parse(agent.stdout);
@@ -72,7 +77,7 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   const dollarOn = spawnSync(process.execPath, [distCli, 'run', '$Fast-On', '--execute', '--json'], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: isolatedEnv(home)
   });
   assert.equal(dollarOn.status, 0, dollarOn.stderr || dollarOn.stdout);
   const afterDollarOn = run('status');
@@ -82,7 +87,7 @@ test('sks fast-mode toggles project-local preference from an unpacked cwd', asyn
   const dollarOff = spawnSync(process.execPath, [distCli, 'run', '$Fast-Off', '--execute', '--json'], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: isolatedEnv(home)
   });
   assert.equal(dollarOff.status, 0, dollarOff.stderr || dollarOff.stdout);
   const afterDollarOff = run('status');
@@ -116,7 +121,7 @@ test('sks fast-mode on repairs Codex fast-mode UI when explicitly disabled', asy
   const configPath = path.join(codexDir, 'config.toml');
   await fs.mkdir(codexDir, { recursive: true });
   await fs.writeFile(configPath, [
-    'model = "gpt-5.5"',
+    `model = "${REQUIRED_CODEX_MODEL}"`,
     'service_tier = "standard"',
     '',
     '[user.fast_mode]',
@@ -128,7 +133,7 @@ test('sks fast-mode on repairs Codex fast-mode UI when explicitly disabled', asy
   const result = spawnSync(process.execPath, [distCli, 'fast-mode', 'on', '--json'], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: isolatedEnv(home)
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
@@ -136,9 +141,10 @@ test('sks fast-mode on repairs Codex fast-mode UI when explicitly disabled', asy
   assert.equal(parsed.codex_fast_mode_repair.status, 'updated');
   const config = await fs.readFile(configPath, 'utf8');
   assert.match(config, /^service_tier = "fast"/m);
+  assert.match(config, /^default_profile = "sks-fast-high"/m);
   assert.match(config, /\[user\.fast_mode\][\s\S]*visible = true/);
   assert.match(config, /\[user\.fast_mode\][\s\S]*enabled = true/);
-  assert.match(config, /\[user\.fast_mode\][\s\S]*default_profile = "sks-fast-high"/);
+  assert.doesNotMatch(config, /\[user\.fast_mode\][\s\S]*default_profile = /);
   assert.match(config, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
 });
 
@@ -149,7 +155,7 @@ test('sks fast-mode off repairs Codex Desktop config without hiding the UI', asy
   const configPath = path.join(codexDir, 'config.toml');
   await fs.mkdir(codexDir, { recursive: true });
   await fs.writeFile(configPath, [
-    'model = "gpt-5.5"',
+    `model = "${REQUIRED_CODEX_MODEL}"`,
     'service_tier = "fast"',
     '',
     '[user.fast_mode]',
@@ -158,14 +164,14 @@ test('sks fast-mode off repairs Codex Desktop config without hiding the UI', asy
     'default_profile = "sks-fast-high"',
     '',
     '[profiles.sks-fast-high]',
-    'model = "gpt-5.5"',
+    `model = "${REQUIRED_CODEX_MODEL}"`,
     'service_tier = "fast"'
   ].join('\n') + '\n');
 
   const result = spawnSync(process.execPath, [distCli, 'fast-mode', 'off', '--json'], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, HOME: home, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: isolatedEnv(home)
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
@@ -182,12 +188,13 @@ test('sks fast-mode off repairs Codex Desktop config without hiding the UI', asy
 
 test('$Fast-Mode status questions do not toggle project preference', async () => {
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-question-'));
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-home-'));
   const stateFile = path.join(cwd, '.sneakoscope', 'state', 'fast-mode.json');
   const runPrompt = (prompt) => {
     const result = spawnSync(process.execPath, [distCli, 'run', prompt, '--execute', '--json'], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+      env: isolatedEnv(home)
     });
     assert.equal(result.status, 0, result.stderr || result.stdout);
     return JSON.parse(result.stdout);
@@ -214,11 +221,12 @@ test('$Fast-Mode status questions do not toggle project preference', async () =>
   assert.equal(priorityTier.execution.command, 'sks fast-mode on --json');
 });
 
-test('dollar command list includes fast mode on/off aliases', () => {
+test('dollar command list includes fast mode on/off aliases', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-mode-home-'));
   const result = spawnSync(process.execPath, [distCli, 'dollar-commands', '--json'], {
     cwd: repoRoot,
     encoding: 'utf8',
-    env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: isolatedEnv(home)
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);

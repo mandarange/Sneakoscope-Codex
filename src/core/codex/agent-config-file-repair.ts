@@ -3,6 +3,7 @@ import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { managedAgentRoleConfigForFile, managedAgentRoleConfigForRole } from '../agents/agent-role-config.js';
 import { writeCodexConfigGuarded } from './codex-config-guard.js';
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js';
 
 export interface AgentConfigFileRepairReport {
   schema: 'sks.agent-config-file-repair.v1';
@@ -196,7 +197,7 @@ function escapeRegExp(value: string): string {
 
 function minimalManagedConfigToml(): string {
   return [
-    'model = "gpt-5.5"',
+    `model = "${REQUIRED_CODEX_MODEL}"`,
     'model_reasoning_effort = "medium"',
     'service_tier = "fast"',
     '',

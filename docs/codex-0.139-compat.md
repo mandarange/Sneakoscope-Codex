@@ -12,7 +12,7 @@ baseline evidence for older SKS gates and release-history continuity.
 
 ## Current Release Note
 
-SKS 5.3.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version and preserving the 5.2.0 macOS SKS menu bar hardening evidence.
+SKS 5.7.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version, repairing the macOS SKS menu bar/Fast Mode/codex-lb migration surface, and preserving lifecycle-disabled `npm publish --ignore-scripts` readiness evidence.
 
 ## Historical Release Ledger
 

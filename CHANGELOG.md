@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [5.7.0] - 2026-07-06
+
+### Fixed
+
+- Repair the Codex App SKS menu bar install path so generated actions are retargeted to the current package entrypoint, regain their executable bit during legacy migrations, and expose Fast Mode On/Off controls in the menu template.
+- Keep codex-lb Fast Mode on the required current Codex model by normalizing the `sks-fast-high` profile to `gpt-5.5` with `service_tier = "fast"` during setup, update migration, and doctor repair.
+- Make `sks doctor --fix` run and report the same legacy update migration receipt path used by `sks update`, instead of claiming migration state is current without writing a current receipt.
+
+### Changed
+
+- Bump the release train to 5.7.0 and restore the npm publish script contract: `prepack` rebuilds dist, `prepublishOnly` verifies the release stamp, tarball contract, unpublished version, and publish auth, and `publish:dry`/`publish:ignore-scripts` run explicit gates before lifecycle-disabled publish.
+
 
 
 

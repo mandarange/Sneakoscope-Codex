@@ -1,8 +1,8 @@
 # Release Proof Truth
 
-SKS 5.3.0 keeps release proof truth aligned with the 5.3.0 package metadata, built output, SKS menu bar install gate inventory, runtime action smoke evidence, Codex lifecycle sync status, doctor post-repair checks, and publish readiness evidence before `npm publish --ignore-scripts`.
+SKS 5.7.0 keeps release proof truth aligned with the 5.7.0 package metadata, built output, SKS menu bar install gate inventory, runtime action smoke evidence, Fast Mode action visibility, codex-lb `gpt-5.5` fast profile defaults, `sks update` migration repair evidence, `sks doctor --fix` post-repair checks, and lifecycle-disabled publish readiness evidence before `npm publish --ignore-scripts`.
 
-SKS 5.3.0 release proof truth requires proof that the 5.2.0 menu bar lifecycle hardening remains backed by current 5.3.0 package metadata, built output, and publish readiness evidence instead of stale version surfaces.
+SKS 5.7.0 release proof truth requires proof that menu bar settings and Fast Mode controls survive update/doctor repair, codex-lb Fast Mode uses the current required Codex model, publish preflight no longer depends on npm lifecycle hooks disabled by `--ignore-scripts`, and package/version/lockfile/docs/dist surfaces agree before publication.
 
 SKS 5.1.1 keeps release proof truth aligned with the 5.1.1 package metadata, built output, release gate inventory, mock/real proof schemas, route stop-gate evaluator, gate-result output contract, feature fixture quality labels, and publish readiness evidence before `npm publish --ignore-scripts`.
 

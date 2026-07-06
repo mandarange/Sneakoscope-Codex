@@ -2,6 +2,7 @@ import path from 'node:path'
 import { appendJsonl, ensureDir, nowIso, readText, sha256, writeTextAtomic } from '../fsx.js'
 import { diffCodexAppUiSnapshots, snapshotCodexAppUiState } from '../codex-app/codex-app-ui-state-snapshot.js'
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from './codex-config-toml.js'
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export interface WriteCodexConfigGuardedInput {
   root?: string
@@ -162,8 +163,11 @@ export function removeLegacyTopLevelCodexModeLocks(text: string = '') {
   const lines = String(text || '').split('\n')
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x))
   const end = firstTable === -1 ? lines.length : firstTable
+  const topLevelModel = topLevelTomlString(text, 'model')
+  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL
   return ensureTrailingNewline(lines.filter((line, index) => {
     if (index >= end) return true
+    if (!removeSksOwnedModeLock) return true
     return !/^\s*(?:model|model_reasoning_effort)\s*=/.test(line)
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n'))
 }
@@ -205,6 +209,12 @@ function topLevelTomlKeyLine(text: string, key: string) {
     if (pattern.test(line)) return line
   }
   return null
+}
+
+function topLevelTomlString(text: string, key: string) {
+  const line = topLevelTomlKeyLine(text, key)
+  const match = line?.match(/^\s*[^=]+\s*=\s*"([^"]*)"\s*(?:#.*)?$/)
+  return match?.[1] || null
 }
 
 function upsertTopLevelTomlLine(text: string, line: string) {

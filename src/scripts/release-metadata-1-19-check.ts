@@ -394,11 +394,26 @@ for (const gate of allManifestGates) assertDistScriptTargetsExist(gate);
 assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bin/sks.js');
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
 assertGate(!pkg.files?.includes('src'), 'package files must not include src runtime shadows');
+const publishPrepIgnoreScripts = String(pkg.scripts?.['publish:prep-ignore-scripts'] || '');
 assertGate(
-  pkg.scripts?.['publish:prep-ignore-scripts'] === 'npm run prepublishOnly',
-  'publish:prep-ignore-scripts must run the prepublishOnly release gate before lifecycle-disabled publish',
-  { script: pkg.scripts?.['publish:prep-ignore-scripts'] || null }
+  !/\bprepublishOnly\b/.test(publishPrepIgnoreScripts),
+  'publish:prep-ignore-scripts must not depend on npm lifecycle hooks that --ignore-scripts disables',
+  { script: publishPrepIgnoreScripts || null }
 );
+for (const required of [
+  'build:incremental',
+  'release:version-truth',
+  'publish:packlist-performance',
+  'package-published-contract-check.js',
+  'release-registry-check.js --require-unpublished --require-publish-auth',
+  'publish-tag:check'
+]) {
+  assertGate(
+    publishPrepIgnoreScripts.includes(required),
+    `publish:prep-ignore-scripts missing lifecycle-disabled publish preflight: ${required}`,
+    { script: publishPrepIgnoreScripts || null }
+  );
+}
 assertGate(
   String(pkg.scripts?.['publish:ignore-scripts'] || '').includes('npm run publish:prep-ignore-scripts'),
   'publish:ignore-scripts must run publish:prep-ignore-scripts before npm publish --ignore-scripts',

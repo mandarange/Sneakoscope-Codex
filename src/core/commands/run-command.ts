@@ -393,13 +393,18 @@ async function executeRouteCommand(
   // that never saw the prompt cannot claim to have addressed it.
   const isMockFallback = commandArgs.includes('--mock');
   const promptDelivered = Boolean(prompt) && commandArgs.includes(prompt);
+  const deterministicRoute = isSafeDeterministicRoute(route.command);
   const result = await runSks(root, commandArgs);
   return routeExecutionResult(route, ['sks', ...commandArgs].join(' '), result, {
     okStatus: isMockFallback ? 'verified_partial' : 'completed',
     trustStatus: isMockFallback ? 'mock_only' : 'verified_partial',
-    executionKind: isMockFallback ? 'mock_safe' : 'live_route',
+    executionKind: isMockFallback ? 'mock_safe' : deterministicRoute ? 'safe_deterministic' : 'live_route',
     promptDelivered,
   });
+}
+
+function isSafeDeterministicRoute(command: string): boolean {
+  return new Set(['$DB', '$Wiki', '$Fast-Mode', '$with-local-llm-on', '$Commit', '$Commit-And-Push']).has(command);
 }
 
 async function runAutoVerification(root: string, missionId: string): Promise<RunAutoVerification> {

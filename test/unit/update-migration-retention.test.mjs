@@ -41,6 +41,76 @@ test('project update migration receipt cleans disposable closed-mission runtime 
   }
 });
 
+test('project update migration repairs legacy menubar and fast-mode config', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-legacy-repair-unit-'));
+  const home = path.join(root, 'home');
+  const project = path.join(root, 'project');
+  const previousHome = process.env.HOME;
+  const previousGlobalRoot = process.env.SKS_GLOBAL_ROOT;
+  process.env.HOME = home;
+  process.env.SKS_GLOBAL_ROOT = path.join(home, '.sneakoscope-global');
+  try {
+    const { writeProjectUpdateMigrationReceipt } = await import('../../dist/core/update/update-migration-state.js');
+    const { packageRoot } = await import('../../dist/core/fsx.js');
+    const { REQUIRED_CODEX_MODEL } = await import('../../dist/core/codex-model-guard.js');
+    const actionScript = path.join(home, '.codex', 'sks-menubar', 'sks-menubar-action.sh');
+    const configPath = path.join(home, '.codex', 'config.toml');
+    await writeText(actionScript, [
+      '#!/usr/bin/env sh',
+      'SKS_ENTRY="/old/sneakoscope/dist/bin/sks.js"',
+      'exec "$SKS_ENTRY" "$@"',
+      ''
+    ].join('\n'));
+    await fs.chmod(actionScript, 0o644);
+    await writeText(configPath, [
+      '[user.fast_mode]',
+      'visible = true',
+      'default_profile = "sks-fast-high"',
+      '',
+      '[profiles.sks-fast-high]',
+      'model = "gpt-5.4"',
+      'service_tier = "default"',
+      ''
+    ].join('\n'));
+    await fs.mkdir(path.join(project, '.sneakoscope'), { recursive: true });
+    await fs.mkdir(path.join(project, '.codex'), { recursive: true });
+
+    const receipt = await writeProjectUpdateMigrationReceipt({
+      root: project,
+      source: 'unit-legacy-repair',
+      fromVersion: '5.6.1',
+      blockers: [],
+      warnings: []
+    });
+
+    const stages = new Map((receipt.legacy_migration_stages || []).map((stage) => [stage.id, stage]));
+    assert.equal(stages.get('menubar-retarget')?.ok, true);
+    assert.ok(stages.get('menubar-retarget')?.actions.includes('retargeted_menubar_action_script'));
+    assert.ok(stages.get('menubar-retarget')?.actions.includes('restored_menubar_action_executable_bit'));
+    assert.equal(stages.get('config-fastmode-normalize')?.ok, true);
+    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('normalized_fastmode_default_profile_location'));
+    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('normalized_sks_fast_high_profile'));
+
+    const expectedEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
+    const scriptAfter = await fs.readFile(actionScript, 'utf8');
+    const statAfter = await fs.stat(actionScript);
+    assert.match(scriptAfter, new RegExp(`^SKS_ENTRY=${escapeRegExp(JSON.stringify(expectedEntry))}$`, 'm'));
+    assert.notEqual(statAfter.mode & 0o111, 0);
+
+    const configAfter = await fs.readFile(configPath, 'utf8');
+    const userFastModeBlock = configAfter.match(/(^|\n)\[user\.fast_mode\][\s\S]*?(?=\n\[|$)/)?.[0] || '';
+    assert.doesNotMatch(userFastModeBlock, /^\s*default_profile\s*=/m);
+    assert.match(configAfter, /^default_profile = "sks-fast-high"$/m);
+    assert.match(configAfter, new RegExp(`\\[profiles\\.sks-fast-high\\][\\s\\S]*model = "${escapeRegExp(REQUIRED_CODEX_MODEL)}"`));
+    assert.match(configAfter, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+    if (previousGlobalRoot === undefined) delete process.env.SKS_GLOBAL_ROOT;
+    else process.env.SKS_GLOBAL_ROOT = previousGlobalRoot;
+  }
+});
+
 async function writeJson(file, data) {
   await writeText(file, `${JSON.stringify(data, null, 2)}\n`);
 }
@@ -56,4 +126,8 @@ async function assertExists(file) {
 
 async function assertMissing(file) {
   await assert.rejects(fs.access(file), `${file} should be removed`);
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

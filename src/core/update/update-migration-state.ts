@@ -8,6 +8,7 @@ import { COMMANDS } from '../../cli/command-registry.js';
 import { reconcileSkills } from '../init/skills.js';
 import { codexHookTrustDoctor } from '../codex-hooks/codex-hook-trust-doctor.js';
 import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -470,51 +471,71 @@ async function runMenubarRetargetStage(root: string): Promise<Omit<LegacyMigrati
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['menubar_action_script_absent'], blockers: [], warnings: [] };
   const desired = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
   const line = `SKS_ENTRY=${JSON.stringify(desired)}`;
+  const actions: string[] = [];
   const next = /^\s*SKS_ENTRY\s*=.*$/m.test(text)
     ? text.replace(/^\s*SKS_ENTRY\s*=.*$/m, line)
     : `${line}\n${text}`;
   if (next !== text) {
     await writeTextAtomic(actionScript, next);
-    return { ok: true, status: 'ok', actions: ['retargeted_menubar_action_script'], blockers: [], warnings: [], detail: { action_script: actionScript } };
+    actions.push('retargeted_menubar_action_script');
   }
-  return { ok: true, status: 'ok', actions: ['menubar_action_script_current'], blockers: [], warnings: [], detail: { action_script: actionScript } };
+  const stat = await fsp.stat(actionScript).catch(() => null);
+  if (!stat || (stat.mode & 0o111) === 0) {
+    await fsp.chmod(actionScript, 0o755);
+    actions.push('restored_menubar_action_executable_bit');
+  }
+  return {
+    ok: true,
+    status: 'ok',
+    actions: actions.length ? actions : ['menubar_action_script_current'],
+    blockers: [],
+    warnings: [],
+    detail: { action_script: actionScript }
+  };
 }
 
 async function runConfigFastModeNormalizeStage(): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
   const configPath = path.join(os.homedir(), '.codex', 'config.toml');
   const text = await readText(configPath, null);
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['codex_config_absent'], blockers: [], warnings: [] };
-  const table = text.match(/(^|\n)\[user\.fast_mode\][\s\S]*?(?=\n\[|$)/);
-  const misplaced = table?.[0]?.match(/^\s*default_profile\s*=\s*"([^"]+)"\s*$/m)?.[1] || null;
-  const hasTopLevel = /^\s*default_profile\s*=\s*"[^"]+"\s*$/m.test(text.slice(0, Math.max(0, text.search(/^\s*\[/m))));
-  if (!misplaced) return { ok: true, status: 'ok', actions: ['fastmode_default_profile_current'], blockers: [], warnings: [] };
-  let next = text.replace(/(^|\n)(\[user\.fast_mode\][\s\S]*?)(?=\n\[|$)/, (_match, prefix, block) => {
-    const cleaned = String(block).split(/\r?\n/).filter((line) => !/^\s*default_profile\s*=/.test(line)).join('\n').trimEnd();
-    return `${prefix}${cleaned}`;
-  });
-  if (!hasTopLevel) next = insertTopLevelTomlKey(next, `default_profile = ${JSON.stringify(misplaced)}`);
-  let guardResult: any = null;
-  if (next !== text) {
-    guardResult = await writeCodexConfigGuarded({
-      configPath,
-      before: text,
-      mutate: () => `${next.trim()}\n`,
-      cause: 'project-update-fastmode-default-profile',
-      backupTag: 'project-update-fastmode-default-profile',
-      preserveFastUiKeys: true
-    });
-    if (!guardResult.ok) {
-      return {
-        ok: false,
-        status: 'failed',
-        actions: ['normalize_fastmode_default_profile_blocked'],
-        blockers: [`codex_config_guard:${guardResult.status}`],
-        warnings: [],
-        detail: { config_path: configPath, default_profile: misplaced, guard: guardResult }
-      };
-    }
+  const normalized = normalizeLegacyFastModeConfigForUpdate(text);
+  if (normalized.text === ensureTrailingNewline(text)) {
+    return {
+      ok: true,
+      status: 'ok',
+      actions: ['fastmode_config_current'],
+      blockers: [],
+      warnings: [],
+      detail: { config_path: configPath, default_profile: normalized.defaultProfile }
+    };
   }
-  return { ok: true, status: 'ok', actions: ['normalized_fastmode_default_profile'], blockers: [], warnings: [], detail: { config_path: configPath, default_profile: misplaced, guard: guardResult } };
+  let guardResult: any = null;
+  guardResult = await writeCodexConfigGuarded({
+    configPath,
+    before: text,
+    mutate: () => normalized.text,
+    cause: 'project-update-fastmode-normalize',
+    backupTag: 'project-update-fastmode-normalize',
+    preserveFastUiKeys: true
+  });
+  if (!guardResult.ok) {
+    return {
+      ok: false,
+      status: 'failed',
+      actions: ['normalize_fastmode_config_blocked'],
+      blockers: [`codex_config_guard:${guardResult.status}`],
+      warnings: [],
+      detail: { config_path: configPath, default_profile: normalized.defaultProfile, guard: guardResult }
+    };
+  }
+  return {
+    ok: true,
+    status: 'ok',
+    actions: normalized.actions.length ? normalized.actions : ['fastmode_config_current'],
+    blockers: [],
+    warnings: [],
+    detail: { config_path: configPath, default_profile: normalized.defaultProfile, guard: guardResult }
+  };
 }
 
 async function runHookTrustRefreshStage(root: string): Promise<Omit<LegacyMigrationStageRun, 'schema' | 'id' | 'min_from_version' | 'from_version'>> {
@@ -581,6 +602,138 @@ function insertTopLevelTomlKey(text: string, line: string): string {
   const firstTable = raw.search(/^\s*\[/m);
   if (firstTable < 0) return `${line}\n${raw}`.trim() + '\n';
   return `${raw.slice(0, firstTable).trimEnd()}\n${line}\n\n${raw.slice(firstTable).trimStart()}`.trim() + '\n';
+}
+
+function normalizeLegacyFastModeConfigForUpdate(text: string): { text: string; actions: string[]; defaultProfile: string | null } {
+  let next = String(text || '');
+  const actions: string[] = [];
+  const misplaced = tomlTableString(next, 'user.fast_mode', 'default_profile');
+  const topLevel = topLevelTomlString(next, 'default_profile');
+  if (misplaced) {
+    next = removeTomlTableKeyLocal(next, 'user.fast_mode', 'default_profile');
+    actions.push('normalized_fastmode_default_profile_location');
+  }
+  if (topLevel && topLevel !== 'sks-fast-high' && !tomlTableBlock(next, `profiles.${topLevel}`)) {
+    next = upsertTopLevelTomlStringLocal(next, 'default_profile', 'sks-fast-high');
+    actions.push('retargeted_missing_fastmode_default_profile_target');
+  } else if (!topLevel && misplaced === 'sks-fast-high') {
+    next = insertTopLevelTomlKey(next, `default_profile = ${JSON.stringify(misplaced)}`);
+    actions.push('restored_fastmode_top_level_default_profile');
+  }
+  const beforeUi = next;
+  next = upsertTomlTableKeyIfAbsentLocal(next, 'user.fast_mode', 'visible = true');
+  next = upsertTomlTableKeyIfAbsentLocal(next, 'user.fast_mode', 'enabled = true');
+  if (next !== beforeUi) actions.push('ensured_fastmode_ui_visibility');
+  const beforeProfile = next;
+  next = upsertTomlTableKeyLocal(next, 'profiles.sks-fast-high', `model = "${REQUIRED_CODEX_MODEL}"`);
+  next = upsertTomlTableKeyLocal(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
+  if (next !== beforeProfile) actions.push('normalized_sks_fast_high_profile');
+  return { text: ensureTrailingNewline(next), actions, defaultProfile: misplaced || topLevel };
+}
+
+function tomlTableString(text: string, table: string, key: string): string | null {
+  const block = tomlTableBlock(text, table);
+  const match = block?.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, 'm'));
+  return match?.[1] || null;
+}
+
+function topLevelTomlString(text: string, key: string): string | null {
+  const top = String(text || '').slice(0, Math.max(0, String(text || '').search(/^\s*\[/m)));
+  const match = top.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, 'm'));
+  return match?.[1] || null;
+}
+
+function tomlTableBlock(text: string, table: string): string | null {
+  const lines = String(text || '').split(/\r?\n/);
+  const start = lines.findIndex((line) => tableHeaderMatches(line, table));
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[[^\]]+\]\s*$/.test(lines[index] || '')) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join('\n');
+}
+
+function removeTomlTableKeyLocal(text: string, table: string, key: string): string {
+  const lines = String(text || '').split(/\r?\n/);
+  let inTable = false;
+  const out: string[] = [];
+  for (const line of lines) {
+    if (/^\s*\[[^\]]+\]\s*$/.test(line)) inTable = tableHeaderMatches(line, table);
+    if (inTable && new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(line)) continue;
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+function upsertTomlTableKeyIfAbsentLocal(text: string, table: string, line: string): string {
+  const key = tomlLineKey(line);
+  return tomlTableHasKey(text, table, key) ? text : upsertTomlTableKeyLocal(text, table, line);
+}
+
+function upsertTomlTableKeyLocal(text: string, table: string, line: string): string {
+  const raw = String(text || '').trimEnd();
+  const key = tomlLineKey(line);
+  const lines = raw ? raw.split(/\r?\n/) : [];
+  const start = lines.findIndex((candidate) => tableHeaderMatches(candidate, table));
+  if (start < 0) {
+    return `${raw}${raw ? '\n\n' : ''}[${table}]\n${line}\n`;
+  }
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[[^\]]+\]\s*$/.test(lines[index] || '')) {
+      end = index;
+      break;
+    }
+  }
+  for (let index = start + 1; index < end; index += 1) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[index] || '')) {
+      if (lines[index] === line) return `${lines.join('\n')}\n`;
+      lines[index] = line;
+      return `${lines.join('\n')}\n`;
+    }
+  }
+  lines.splice(end, 0, line);
+  return `${lines.join('\n')}\n`;
+}
+
+function upsertTopLevelTomlStringLocal(text: string, key: string, value: string): string {
+  const raw = String(text || '').trimEnd();
+  const line = `${key} = ${JSON.stringify(value)}`;
+  const lines = raw ? raw.split(/\r?\n/) : [];
+  const firstTable = lines.findIndex((candidate) => /^\s*\[[^\]]+\]\s*$/.test(candidate || ''));
+  const end = firstTable < 0 ? lines.length : firstTable;
+  for (let index = 0; index < end; index += 1) {
+    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[index] || '')) {
+      lines[index] = line;
+      return `${lines.join('\n')}\n`;
+    }
+  }
+  return insertTopLevelTomlKey(raw, line);
+}
+
+function tomlTableHasKey(text: string, table: string, key: string): boolean {
+  const block = tomlTableBlock(text, table);
+  return Boolean(block && new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`, 'm').test(block));
+}
+
+function tableHeaderMatches(line: string, table: string): boolean {
+  return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\]\\s*$`).test(line || '');
+}
+
+function tomlLineKey(line: string): string {
+  return String(line || '').split('=')[0]?.trim() || '';
+}
+
+function ensureTrailingNewline(text: string): string {
+  return `${String(text || '').trim()}\n`;
+}
+
+function escapeRegExp(value: string): string {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export async function ensureCurrentMigrationBeforeCommand(input: {

@@ -164,6 +164,8 @@ const MENU_ITEMS = [
   'Use ChatGPT OAuth',
   'Set codex-lb Domain and Key',
   'Set OpenRouter Key and GLM Profiles',
+  'Fast Mode On',
+  'Fast Mode Off',
   'Fast Check',
   'SKS Version Check',
   'Update SKS Now',
@@ -214,6 +216,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   const nextActions = defaultNextActions();
   let secretEnvCleanup: SecretLaunchEnvCleanupResult | undefined;
   let codexBundleId: string | null = null;
+  let lastTargetCheck: SksMenuBarTargetCheck | undefined;
 
   if (process.platform !== 'darwin') {
     const result: SksMenuBarInstallResult = {
@@ -320,15 +323,12 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
     actionScriptPath: paths.action_script_path,
     warnings
   });
-  const previousActionScript = await readText(paths.action_script_path, '');
-  if (!target.exists && previousActionScript) actions.push('kept previous action script because resolved SKS entry was missing');
-  if (!target.exists && !previousActionScript) {
-    return await blockedResult('sks_entry_unresolved', `Resolved SKS entry does not exist: ${target.resolved || target.packaged}`);
+  lastTargetCheck = target;
+  if (!target.exists) {
+    return await blockedResult('sks_entry_unresolved', `Resolved SKS entry does not exist: ${target.requested || target.resolved || target.packaged}`);
   }
 
-  const actionScript = target.used_previous_script
-    ? previousActionScript
-    : actionScriptSource({ nodeBin: process.execPath, sksEntry: target.resolved || target.packaged });
+  const actionScript = actionScriptSource({ nodeBin: process.execPath, sksEntry: target.resolved || target.packaged });
   const swiftSource = swiftMenuSource({
     actionScriptPath: paths.action_script_path,
     buildStampPath: paths.build_stamp_path,
@@ -351,7 +351,9 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   };
   const previousStamp = await readJson<SksMenuBarBuildStamp | null>(paths.build_stamp_path, null);
   const appInstalled = await exists(paths.executable_path);
-  const stampMatches = appInstalled && buildStampEquals(previousStamp, stamp);
+  const currentActionScript = await readText(paths.action_script_path, '');
+  const actionScriptCurrent = currentActionScript === actionScript;
+  const stampMatches = appInstalled && buildStampEquals(previousStamp, stamp) && actionScriptCurrent;
   const binaryStable = appInstalled
     && previousStamp?.schema === stamp.schema
     && previousStamp.package_version === stamp.package_version
@@ -363,7 +365,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
   if (stampMatches) {
     actions.push('menubar_up_to_date');
   } else {
-    if (!target.used_previous_script && await readText(paths.action_script_path, '') !== actionScript) {
+    if (currentActionScript !== actionScript) {
       await writeTextAtomic(paths.action_script_path, actionScript);
       actions.push(`wrote ${paths.action_script_path}`);
     }
@@ -487,6 +489,7 @@ export async function installSksMenuBar(opts: SksMenuBarInstallOptions = {}): Pr
       menu_items: MENU_ITEMS,
       actions,
       launch: { requested: false, method: 'none', ok: false, error: detail || reason },
+      target_check: lastTargetCheck,
       build_stamp: null,
       tcc_automation_status: 'unknown',
       secret_env_cleanup: secretEnvCleanup,
@@ -539,7 +542,7 @@ async function writeDefaultMenuBarConfig(configPath: string, codexBundleId: stri
   const previous = await readMenuBarConfig(configPath);
   const config: SksMenuBarConfig = {
     schema: 'sks.sks-menubar-config.v1',
-    codex_bundle_id: codexBundleId,
+    codex_bundle_id: codexBundleId || previous.codex_bundle_id,
     quit_with_codex: previous.quit_with_codex === true
   };
   await writeJsonAtomic(configPath, config);
@@ -831,15 +834,14 @@ async function resolveSksEntryForInstall(input: {
   if (projectLocal) {
     input.warnings.push('sks_entry_project_local');
   }
-  const usedPreviousScript = !existsResolved && await exists(input.actionScriptPath);
-  if (!existsResolved && usedPreviousScript) input.warnings.push('sks_entry_unresolved_kept_previous_script');
+  if (!existsResolved && await exists(input.actionScriptPath)) input.warnings.push('sks_entry_unresolved_stale_action_script_not_reused');
   return {
     requested: input.explicit ? path.resolve(input.explicit) : null,
     resolved: existsResolved ? resolved : null,
     packaged,
     exists: existsResolved,
     project_local: projectLocal,
-    used_previous_script: usedPreviousScript
+    used_previous_script: false
   };
 }
 
@@ -1101,6 +1103,11 @@ func promptChoice(title: String, message: String, options: [String]) -> String? 
     return popup.titleOfSelectedItem
 }
 
+func parseJsonObject(_ text: String) -> [String: Any]? {
+    guard let data = text.data(using: .utf8) else { return nil }
+    return (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any]
+}
+
 func runProcess(_ executable: String, _ args: [String] = [], stdinText: String? = nil, completion: ((Int32, String) -> Void)? = nil) {
     let process = Process()
     let output = Pipe()
@@ -1193,6 +1200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusLineItem: NSMenuItem!
     var codexLbItem: NSMenuItem!
     var oauthItem: NSMenuItem!
+    var fastModeOnItem: NSMenuItem!
+    var fastModeOffItem: NSMenuItem!
     var timer: Timer?
     var busy = false
     var lastFailure = false
@@ -1218,6 +1227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(menu, "Set codex-lb Domain and Key", #selector(setCodexLbDomainAndKey))
         menu.addItem(NSMenuItem.separator())
         add(menu, "Set OpenRouter Key and GLM Profiles", #selector(setOpenRouterKey))
+        fastModeOnItem = add(menu, "Fast Mode On", #selector(fastModeOn))
+        fastModeOffItem = add(menu, "Fast Mode Off", #selector(fastModeOff))
         add(menu, "Fast Check", #selector(fastCheck))
         add(menu, "SKS Version Check", #selector(sksVersionCheck))
         add(menu, "Update SKS Now", #selector(updateSksNow))
@@ -1237,6 +1248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         updateState()
         updateAuthModeChecks()
+        updateFastModeChecks()
     }
 
     func configureStatusButton(_ button: NSStatusBarButton, title: String) {
@@ -1338,6 +1350,15 @@ ${codexLifecycleSource}
         runSksCapture(args, title: title, stdinText: stdinText, notify: true, completion: completion)
     }
 
+    func runSksSilent(_ args: [String], completion: ((Int32, String) -> Void)? = nil) {
+        runProcess(actionScript, args) { code, output in
+            let redacted = redactSecrets(output)
+            DispatchQueue.main.async {
+                completion?(code, redacted)
+            }
+        }
+    }
+
     func startSksDetached(_ args: [String], title: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: actionScript)
@@ -1356,12 +1377,27 @@ ${codexLifecycleSource}
     }
 
     func updateAuthModeChecks() {
-        runSksCapture(["codex-lb", "status", "--json"], title: "SKS Auth Status", notify: false) { [weak self] code, output in
+        runSksSilent(["codex-lb", "status", "--json"]) { [weak self] code, output in
             guard let self = self else { return }
-            let lower = output.lowercased()
-            let codexLbActive = code == 0 && (lower.contains(#""configured": true"#) || lower.contains(#""model_provider": "codex-lb""#) || lower.contains(#""mode": "codex-lb""#))
+            let json = parseJsonObject(output)
+            let selected = json?["selected"] as? Bool == true
+            let provider = (json?["model_provider"] as? String)?.lowercased() == "codex-lb"
+            let mode = (json?["mode"] as? String)?.lowercased() == "codex-lb"
+            let codexLbActive = code == 0 && (selected || provider || mode)
             self.codexLbItem.state = codexLbActive ? .on : .off
             self.oauthItem.state = codexLbActive ? .off : .on
+        }
+    }
+
+    func updateFastModeChecks() {
+        runSksSilent(["fast-mode", "status", "--json"]) { [weak self] code, output in
+            guard let self = self else { return }
+            let json = parseJsonObject(output)
+            let fastMode = json?["fast_mode"] as? Bool == true
+            let serviceTier = (json?["service_tier"] as? String)?.lowercased()
+            let fastActive = code == 0 && (fastMode || serviceTier == "fast" || serviceTier == "priority")
+            self.fastModeOnItem.state = fastActive ? .on : .off
+            self.fastModeOffItem.state = fastActive ? .off : .on
         }
     }
 
@@ -1388,6 +1424,18 @@ ${codexLifecycleSource}
     @objc func setOpenRouterKey() {
         guard let key = promptText(title: "Set OpenRouter Key", message: "Enter your OpenRouter API key.", placeholder: "sk-or-v1-...", secure: true) else { return }
         runSksBackground(["codex-app", "set-openrouter-key", "--api-key-stdin", "--json"], title: "Set OpenRouter Key", stdinText: key + "\\n")
+    }
+
+    @objc func fastModeOn() {
+        runSksBackground(["fast-mode", "on", "--json"], title: "Fast Mode On") { [weak self] code, _ in
+            if code == 0 { self?.updateFastModeChecks() }
+        }
+    }
+
+    @objc func fastModeOff() {
+        runSksBackground(["fast-mode", "off", "--json"], title: "Fast Mode Off") { [weak self] code, _ in
+            if code == 0 { self?.updateFastModeChecks() }
+        }
     }
 
     @objc func fastCheck() {

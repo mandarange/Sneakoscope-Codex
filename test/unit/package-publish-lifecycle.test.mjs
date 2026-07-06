@@ -8,7 +8,7 @@ const buildManifestWriter = fs.readFileSync('dist/scripts/write-build-manifest.j
 const distRuntimeCheck = fs.readFileSync('dist/scripts/check-dist-runtime.js', 'utf8');
 const npmrc = fs.readFileSync('.npmrc', 'utf8');
 
-test('publish lifecycle requires the full release stamp for publish readiness', () => {
+test('publish lifecycle separates full release stamps from lifecycle-disabled publish readiness', () => {
   assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pkg.publishConfig?.tag, 'latest');
   assert.match(npmrc, /^tag=latest$/m);
@@ -27,11 +27,18 @@ test('publish lifecycle requires the full release stamp for publish readiness', 
   assert.match(scripts.prepublishOnly, /release-check-stamp\.js verify/);
   assert.match(scripts.prepublishOnly, /--require-unpublished/);
   assert.match(scripts.prepublishOnly, /--require-publish-auth/);
-  assert.match(scripts['publish:dry'], /npm run release:check:full/);
-  assert.match(scripts['publish:dry'], /release-check-stamp\.js verify/);
+  assert.doesNotMatch(scripts['publish:dry'], /release:check:full/);
+  assert.match(scripts['publish:dry'], /npm run publish:prep-ignore-scripts/);
   assert.match(scripts['publish:dry'], /--dry-run/);
+  assert.match(scripts['publish:dry'], /--ignore-scripts/);
   assert.doesNotMatch(scripts['publish:dry'], /--tag rc/);
-  assert.equal(scripts['publish:prep-ignore-scripts'], 'npm run prepublishOnly');
+  assert.doesNotMatch(scripts['publish:prep-ignore-scripts'], /prepublishOnly/);
+  assert.match(scripts['publish:prep-ignore-scripts'], /build:incremental/);
+  assert.match(scripts['publish:prep-ignore-scripts'], /release:version-truth/);
+  assert.match(scripts['publish:prep-ignore-scripts'], /publish:packlist-performance/);
+  assert.match(scripts['publish:prep-ignore-scripts'], /package-published-contract-check\.js/);
+  assert.match(scripts['publish:prep-ignore-scripts'], /release-registry-check\.js --require-unpublished --require-publish-auth/);
+  assert.match(scripts['publish:prep-ignore-scripts'], /publish-tag:check/);
   assert.match(scripts['publish:ignore-scripts'], /npm run publish:prep-ignore-scripts/);
   assert.match(scripts['publish:ignore-scripts'], /--ignore-scripts/);
   assert.doesNotMatch(scripts['publish:ignore-scripts'], /--tag rc/);

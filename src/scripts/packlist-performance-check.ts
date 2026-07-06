@@ -13,8 +13,10 @@ const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 10
 // (route-success-helpers.ts, seo-command.ts, ppt-command.ts, qa-loop-command.ts,
 // research-command.ts, image-ux-review-command.ts, mad-sks-command.ts,
 // sks-menubar.ts) with genuine new production logic, pushing the packed size
-// to ~2306 KiB. Kept modest headroom rather than a large jump.
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2340 * 1024);
+// to ~2306 KiB. 5.7.0 adds doctor/update migration repair coverage and publish
+// contract checks, pushing the packed tarball to ~2345 KiB. Keep a narrow cap
+// rather than giving the package a broad size budget.
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2350 * 1024);
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`

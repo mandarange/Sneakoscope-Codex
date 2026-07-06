@@ -29,6 +29,45 @@ const secondResult = await installSksMenuBar({
   sksEntry: localEntry,
   env: launchGuardEnv
 });
+if (secondResult.action_script_path) await fs.rm(secondResult.action_script_path, { force: true });
+const restoredScriptResult = await installSksMenuBar({
+  apply: true,
+  launch: true,
+  home: temp,
+  root: fakeRoot,
+  sksEntry: localEntry,
+  env: launchGuardEnv
+});
+if (restoredScriptResult.action_script_path) {
+  await fs.writeFile(restoredScriptResult.action_script_path, '#!/bin/zsh\necho stale-sks-menubar-action\n', 'utf8');
+}
+const staleScriptMissingEntryResult = await installSksMenuBar({
+  apply: true,
+  launch: true,
+  home: temp,
+  root: fakeRoot,
+  sksEntry: path.join(fakeRoot, 'dist', 'bin', 'missing-sks.js'),
+  env: launchGuardEnv
+});
+const recoveredStaleScriptResult = await installSksMenuBar({
+  apply: true,
+  launch: true,
+  home: temp,
+  root: fakeRoot,
+  sksEntry: localEntry,
+  env: launchGuardEnv
+});
+if (recoveredStaleScriptResult.action_script_path) {
+  await fs.chmod(recoveredStaleScriptResult.action_script_path, 0o644);
+}
+const restoredExecutableBitResult = await installSksMenuBar({
+  apply: true,
+  launch: true,
+  home: temp,
+  root: fakeRoot,
+  sksEntry: localEntry,
+  env: launchGuardEnv
+});
 const envHomeResult = await installSksMenuBar({
   apply: true,
   launch: true,
@@ -59,6 +98,9 @@ const hasVisibleStatusSource = generatedSource.includes('NSStatusItem.variableLe
   && generatedSource.includes('SKS ⋯')
   && generatedSource.includes('Timer.scheduledTimer(withTimeInterval: 30.0');
 const hasBackgroundReadonlyActions = generatedSource.includes('runSksBackground(["codex-lb", "fast-check"]')
+  && generatedSource.includes('runSksBackground(["fast-mode", "on", "--json"]')
+  && generatedSource.includes('runSksBackground(["fast-mode", "off", "--json"]')
+  && generatedSource.includes('runSksSilent(["fast-mode", "status", "--json"]')
   && generatedSource.includes('runSksBackground(["update", "check"]')
   && generatedSource.includes('display notification')
   && !generatedSource.includes('runSksInTerminal')
@@ -93,6 +135,21 @@ const hasBuildStamp = buildStampExists
   && result.build_stamp?.codesign_identifier === 'com.sneakoscope.sks-menubar';
 const isIdempotent = secondResult.actions.includes('menubar_up_to_date')
   && secondResult.build_stamp?.action_script_sha256 === result.build_stamp?.action_script_sha256;
+const restoresMissingActionScript = restoredScriptResult.actions.includes(`wrote ${secondResult.action_script_path}`)
+  && actionScriptExists
+  && restoredScriptResult.build_stamp?.action_script_sha256 === result.build_stamp?.action_script_sha256;
+const blocksStaleActionScriptReuse = staleScriptMissingEntryResult.ok === false
+  && staleScriptMissingEntryResult.blockers.includes('sks_entry_unresolved')
+  && staleScriptMissingEntryResult.warnings.includes('sks_entry_unresolved_stale_action_script_not_reused')
+  && staleScriptMissingEntryResult.target_check?.used_previous_script === false;
+const recoversStaleActionScriptWhenEntryExists = recoveredStaleScriptResult.ok === true
+  && recoveredStaleScriptResult.actions.includes(`wrote ${restoredScriptResult.action_script_path}`)
+  && recoveredStaleScriptResult.build_stamp?.action_script_sha256 === result.build_stamp?.action_script_sha256;
+const restoresExecutableBit = restoredExecutableBitResult.ok === true
+  && restoredExecutableBitResult.actions.includes('menubar_up_to_date')
+  && restoredExecutableBitResult.actions.includes('restored action script executable bit')
+  && actionScriptExists
+  && await isExecutable(result.action_script_path);
 const hasCommandRegistry = commandRegistry.includes('menubar:')
   && commandRegistry.includes('menubarCommand')
   && commandRegistry.includes('dist/core/commands/menubar-command.js');
@@ -106,6 +163,8 @@ const expectedMenuItems = [
   'Use ChatGPT OAuth',
   'Set codex-lb Domain and Key',
   'Set OpenRouter Key and GLM Profiles',
+  'Fast Mode On',
+  'Fast Mode Off',
   'Fast Check',
   'SKS Version Check',
   'Update SKS Now',
@@ -151,6 +210,10 @@ const darwinOk = cltMissing
     && hasBuildStamp
     && swiftParse.ok === true
     && isIdempotent
+    && restoresMissingActionScript
+    && blocksStaleActionScriptReuse
+    && recoversStaleActionScriptWhenEntryExists
+    && restoresExecutableBit
     && hasCommandRegistry
     && noLaunchctlSecretSetenv
     && hasLaunchctlUnsetenv
@@ -169,6 +232,10 @@ const report = {
   env_home_temp: envHomeTemp,
   result,
   second_result: secondResult,
+  restored_script_result: restoredScriptResult,
+  stale_script_missing_entry_result: staleScriptMissingEntryResult,
+  recovered_stale_script_result: recoveredStaleScriptResult,
+  restored_executable_bit_result: restoredExecutableBitResult,
   env_home_result: envHomeResult,
   executable_exists: executableExists,
   launch_agent_exists: launchAgentExists,
@@ -190,6 +257,10 @@ const report = {
   has_build_stamp: hasBuildStamp,
   swift_parse: swiftParse,
   is_idempotent: isIdempotent,
+  restores_missing_action_script: restoresMissingActionScript,
+  blocks_stale_action_script_reuse: blocksStaleActionScriptReuse,
+  recovers_stale_action_script_when_entry_exists: recoversStaleActionScriptWhenEntryExists,
+  restores_executable_bit: restoresExecutableBit,
   has_command_registry: hasCommandRegistry,
   no_launchctl_secret_setenv: noLaunchctlSecretSetenv,
   has_launchctl_unsetenv: hasLaunchctlUnsetenv,
@@ -209,6 +280,16 @@ if (!ok) process.exit(1);
 async function exists(file: string): Promise<boolean> {
   try {
     await fs.access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isExecutable(file: string | null | undefined): Promise<boolean> {
+  if (!file) return false;
+  try {
+    await fs.access(file, fs.constants.X_OK);
     return true;
   } catch {
     return false;

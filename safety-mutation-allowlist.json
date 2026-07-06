@@ -140,6 +140,12 @@
       "reason": "Core skill integrity repair writes a scoped backup under .sneakoscope/backups before restoring a managed immutable skill."
     },
     {
+      "file": "src/core/update/update-migration-state.ts",
+      "symbol": "runMenubarRetargetStage",
+      "token": "chmod",
+      "reason": "Legacy update migration restores the executable bit only on the SKS-owned menu bar action script after retargeting it to the current package entrypoint."
+    },
+    {
       "file": "src/core/codex-native/native-capability-postcheck.ts",
       "symbol": "writeReadSample",
       "token": "fs.writeFile",

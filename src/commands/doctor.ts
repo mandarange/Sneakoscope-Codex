@@ -41,7 +41,7 @@ import { runDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
 import { planDoctorDirtyRepair } from '../core/doctor/doctor-dirty-planner.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 import { withSecretPreservationGuard } from '../core/config/config-migration-journal.js';
-import { writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
+import { isUpdateMigrationReceiptCurrent, projectUpdateMigrationReceiptPath, writeProjectUpdateMigrationReceipt } from '../core/update/update-migration-state.js';
 import { inspectSksMenuBarStatus, installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { reconcileSkills } from '../core/init/skills.js';
@@ -85,16 +85,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const doctorPhaseIds = doctorPhaseIdsForProfile(doctorProfile);
   const doctorDirtyPlan = doctorFix ? planDoctorDirtyRepair(root, doctorPhaseIds) : null;
   let setupRepair = null;
-  const sksUpdate = doctorFix
-    ? {
-        schema: 'sks.update-now.v2',
-        ok: true,
-        status: 'skipped',
-        reason: 'manual_update_commands_only',
-        stages: [],
-        migration_current: true
-      }
-    : null;
+  let sksUpdate: any = null;
   let migrationPreFix: Record<string, string | null> | null = null;
   if (doctorFix) {
     // Snapshot config content before ANY mutation so the migration journal can
@@ -118,7 +109,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       // backs up + parse-validates before writing, no-op when already present.
       codex_app_fast_mode: flag(args, '--local-only')
         ? { status: 'skipped', reason: 'local-only repair' }
-        : deepDiagnostics ? await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) })) : { status: 'skipped', reason: 'default_doctor_no_global_fast_mode_regeneration' }
+        : await ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))
     };
   }
   const skillsReconcile = doctorFix
@@ -825,16 +816,45 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       ...(pluginPolicy?.doctor_warnings || [])
     ]
   });
-  if (doctorFix && ready.ready === true) {
-    await writeProjectUpdateMigrationReceipt({
-      root,
-      source: `doctor-${doctorProfile}`,
-      blockers: [],
-      warnings: [
-        ...((doctorNativeCapabilityRepair as any)?.optional_warnings || []),
-        ...((doctorFixPostcheck as any)?.optional_warnings || [])
-      ]
-    }).catch(() => undefined);
+  if (doctorFix) {
+    const readinessBlockers = Array.isArray((ready as any).blockers) ? (ready as any).blockers.map(String).filter(Boolean) : [];
+    const migrationWarnings = [
+      ...((doctorNativeCapabilityRepair as any)?.optional_warnings || []),
+      ...((doctorFixPostcheck as any)?.optional_warnings || [])
+    ];
+    try {
+      const receiptInput: Parameters<typeof writeProjectUpdateMigrationReceipt>[0] = {
+        root,
+        source: `doctor-${doctorProfile}`,
+        blockers: readinessBlockers,
+        warnings: migrationWarnings
+      };
+      if (readinessBlockers.length) receiptInput.status = 'blocked';
+      const receipt = await writeProjectUpdateMigrationReceipt(receiptInput);
+      sksUpdate = {
+        schema: 'sks.update-now.v2',
+        ok: receipt.status === 'current' && isUpdateMigrationReceiptCurrent(receipt),
+        status: receipt.status === 'current' ? 'repaired' : receipt.status,
+        reason: receipt.status === 'current' ? 'doctor_fix_wrote_current_project_migration_receipt' : 'doctor_fix_migration_receipt_blocked',
+        stages: receipt.legacy_migration_stages || [],
+        migration_current: isUpdateMigrationReceiptCurrent(receipt),
+        receipt_path: projectUpdateMigrationReceiptPath(root),
+        blockers: receipt.blockers || [],
+        warnings: receipt.warnings || []
+      };
+    } catch (err: any) {
+      sksUpdate = {
+        schema: 'sks.update-now.v2',
+        ok: false,
+        status: 'blocked',
+        reason: 'doctor_fix_migration_receipt_failed',
+        stages: [],
+        migration_current: false,
+        receipt_path: projectUpdateMigrationReceiptPath(root),
+        blockers: [`migration_receipt_failed:${err?.message || String(err)}`],
+        warnings: migrationWarnings
+      };
+    }
   }
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);

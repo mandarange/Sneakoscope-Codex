@@ -12,6 +12,7 @@ import {
 } from '../cli/install-helpers.js'
 import { repairCodexConfigStructure, splitCodexProjectConfigPolicy } from '../core/codex/codex-project-config-policy.js'
 import { parseCodexConfigToml, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js'
+import { REQUIRED_CODEX_MODEL } from '../core/codex-model-guard.js'
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-gpt55-fast-'))
 const home = path.join(tmp, 'home')
@@ -55,7 +56,7 @@ await fs.writeFile(projectConfig, [
   'enabled = true',
   '',
   '[profiles.sks-fast-high]',
-  'model = "gpt-5.5"',
+  `model = "${REQUIRED_CODEX_MODEL}"`,
   'service_tier = "fast"',
   ''
 ].join('\n'))
@@ -99,7 +100,7 @@ function assertFastProfile(text: string, label: string) {
     ...validation.blockers,
     ...(parsed.default_profile === 'sks-fast-high' ? [] : ['default_profile_not_sks_fast_high']),
     ...(parsed.user?.fast_mode?.default_profile === undefined ? [] : ['default_profile_inside_user_fast_mode']),
-    ...(profile.model === 'gpt-5.5' ? [] : ['sks_fast_high_model_not_gpt55']),
+    ...(profile.model === REQUIRED_CODEX_MODEL ? [] : ['sks_fast_high_model_not_required_codex_model']),
     ...(profile.service_tier === 'fast' ? [] : ['sks_fast_high_service_tier_not_fast']),
     ...(provider.requires_openai_auth === true ? [] : ['codex_lb_requires_openai_auth_not_true']),
     ...(provider.wire_api === 'responses' ? [] : ['codex_lb_wire_api_not_responses']),

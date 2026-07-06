@@ -1,8 +1,8 @@
 # Release Readiness
 
-SKS 5.3.0 is the release metadata alignment bump after 5.2.0. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, menu bar install coverage, action-script smoke evidence, doctor post-repair checks, and affected release DAG evidence to agree on 5.3.0 before `npm publish --ignore-scripts`.
+SKS 5.7.0 is the menu bar, Fast Mode, codex-lb, legacy migration, and lifecycle-disabled publish readiness minor release after 5.6.x. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, menu bar install coverage, action-script smoke evidence, codex-lb Fast Mode defaults, `sks update` migration repair, `sks doctor --fix` post-repair checks, and publish preflight evidence to agree on 5.7.0 before `npm publish --ignore-scripts`.
 
-5.3.0 release readiness keeps the 5.2.0 menu bar lifecycle proof surface while advancing all publish-facing version metadata to avoid npm publish conflicts.
+5.7.0 release readiness adds proof that lifecycle-disabled publish flows do not depend on npm lifecycle hooks: `publish:prep-ignore-scripts` rebuilds `dist`, checks version truth, packlist performance, published-package script targets, registry unpublished/auth state, and the publish tag before `publish:dry` or `publish:ignore-scripts` call npm with `--ignore-scripts`.
 
 SKS 5.1.1 is the dollar-command proof-truth hardening release after the current 5.1.0 line. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, gate manifests, mock/real proof schemas, stop-gate evaluation, and affected release DAG evidence to agree on 5.1.1 before `npm publish --ignore-scripts`.
 
@@ -256,10 +256,13 @@ unless npm config references it.
 
 The operator-facing publish entrypoint is `npm run publish:npm` (or
 `npm run release:publish`), which runs `npm run publish:prep-ignore-scripts`
-and then calls `npm publish --ignore-scripts`. That prep command runs
-`prepublishOnly` explicitly before the final npm lifecycle hooks are disabled on
-purpose. Operators who intentionally run `npm publish --ignore-scripts`
-directly must run `npm run publish:prep-ignore-scripts` immediately before it.
+and then calls `npm publish --ignore-scripts`. That prep command intentionally
+does not rely on `prepublishOnly`, because the final npm publish command disables
+npm lifecycle hooks on purpose. It rebuilds `dist`, checks version truth,
+packlist performance, published-package script targets, registry unpublished/auth
+state, and the publish tag. Operators who intentionally run
+`npm publish --ignore-scripts` directly must run
+`npm run publish:prep-ignore-scripts` immediately before it.
 
 ```bash
 npm run insane-search:provider-interface

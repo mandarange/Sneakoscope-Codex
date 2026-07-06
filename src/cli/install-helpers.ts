@@ -34,6 +34,7 @@ import { extractTomlTable, writeCodexConfigGuarded } from '../core/codex/codex-c
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js';
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 import { repairCodexImagegen } from '../core/doctor/imagegen-repair.js';
+import { REQUIRED_CODEX_MODEL } from '../core/codex-model-guard.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -319,7 +320,7 @@ async function postinstallHarnessConflictNotice(conflictScan: any) {
   console.log(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
   console.log('\nWhat this means: npm can finish installing the package, but `sks setup` and `sks doctor --fix` will refuse to activate SKS until the conflicting harness is removed with human approval.');
   console.log('No files were removed by postinstall.');
-  console.log('Cleanup requires a human-approved Codex App session. Recommended model: GPT-5.5, reasoning: high.');
+  console.log(`Cleanup requires a human-approved Codex App session. Recommended model: ${REQUIRED_CODEX_MODEL}, reasoning: high.`);
   if (shouldAskPostinstallQuestion()) {
     const answer = await askPostinstallQuestion('Show the cleanup prompt now? [y/N] ');
     if (/^(y|yes|예|네|응)$/i.test(answer.trim())) {
@@ -903,7 +904,7 @@ export async function checkCodexLbResponseChain(status: any = {}, opts: any = {}
   if (cached) return cached;
   const fetchImpl = opts.fetch || globalThis.fetch;
   if (typeof fetchImpl !== 'function') return { ok: true, status: 'skipped', skipped: true, reason: 'fetch unavailable' };
-  const model = opts.model || env.SKS_CODEX_MODEL || 'gpt-5.5';
+  const model = opts.model || env.SKS_CODEX_MODEL || REQUIRED_CODEX_MODEL;
   const timeoutMs = Number(opts.timeoutMs || env.SKS_CODEX_LB_CHAIN_CHECK_TIMEOUT_MS || 8000);
   const serviceTier = opts.fastMode === true || opts.serviceTier === 'fast' || opts.serviceTier === CODEX_LB_CANONICAL_FAST_SERVICE_TIER
     ? CODEX_LB_CANONICAL_FAST_SERVICE_TIER
@@ -1852,8 +1853,9 @@ export function normalizeCodexFastModeUiConfig(text: any = '', opts: any = {}) {
 }
 
 function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
-  // Keep model and reasoning selection out of top-level config so Codex Desktop can
-  // expose its native model/speed selectors. SKS-owned defaults live in profiles below.
+  // Keep SKS-owned model/reasoning defaults out of top-level config so Codex
+  // Desktop can expose its native selectors, but preserve a user's deliberate
+  // top-level model/service/reasoning choices across install, update, and doctor.
   let next = String(text || '');
   const misplacedDefaultProfile = tomlTableString(next, 'user.fast_mode', 'default_profile');
   next = removeLegacyTopLevelCodexModeLocks(next);
@@ -1900,7 +1902,7 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   // they are managed as per-file `<name>.config.toml` overlays by
   // migrateSksProfilesToPerFile (src/core/auto-review.ts), which also writes the
   // sks-fast-high overlay for CLI `--profile` use.
-  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'model = "gpt-5.5"');
+  next = upsertTomlTableKey(next, 'profiles.sks-fast-high', `model = "${REQUIRED_CODEX_MODEL}"`);
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
   next = upsertTomlTableKey(next, 'profiles.sks-fast-high', 'approval_policy = "on-request"');
   // Do not force a sandbox from the Codex App fast profile. The App/IDE
@@ -1926,8 +1928,11 @@ function removeLegacyTopLevelCodexModeLocks(text: any = '') {
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
+  const topLevelModel = topLevelTomlString(text, 'model');
+  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL;
   return lines.filter((line: any, index: any) => {
     if (index >= end) return true;
+    if (!removeSksOwnedModeLock) return true;
     return !/^\s*(?:model|model_reasoning_effort)\s*=/.test(line);
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
@@ -2100,7 +2105,7 @@ export function codexFastModeDesktopStatus(text: any = '') {
   const profile = validation.parsed?.profiles?.['sks-fast-high'];
   const globalOn = validation.ok
     && validation.default_profile === 'sks-fast-high'
-    && profile?.model === 'gpt-5.5'
+    && profile?.model === REQUIRED_CODEX_MODEL
     && profile?.service_tier === 'fast';
   return {
     schema: 'sks.codex-fast-mode-desktop-status.v1',
@@ -2802,7 +2807,7 @@ export async function selftestCodexLb(tmp: any) {
   // escape that dash emits literally and bash collapses to `"`).
   await writeTextAtomic(codexLbFakeCodex, "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo \"codex-cli 99.0.0\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"status\" ]; then echo \"logged in with browser auth\"; exit 0; fi\nif [ \"$1\" = \"login\" ] && [ \"$2\" = \"--with-api-key\" ]; then read key; mkdir -p \"$HOME/.codex\"; printf '{\"auth_mode\":\"apikey\",\"OPENAI_API_KEY\":\"%s\"}\\n' \"$key\" > \"$HOME/.codex/auth.json\"; printf '%s\\n' \"$key\" >> \"$HOME/.codex/login-calls.log\"; exit 0; fi\necho \"fake codex unsupported\" >&2\nexit 1\n");
   await fsp.chmod(codexLbFakeCodex, 0o755);
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nmodel_reasoning_effort = "low"\nservice_tier = "fast"\nsuppress_unstable_features_warning = true\n\n[profiles.custom]\nmodel_reasoning_effort = "low"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\nhooks = true\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `model = "${REQUIRED_CODEX_MODEL}"\nmodel_reasoning_effort = "low"\nservice_tier = "fast"\nsuppress_unstable_features_warning = true\n\n[profiles.custom]\nmodel_reasoning_effort = "low"\n\n[notice]\nfast_default_opt_out = true\n\n[features]\nhooks = true\n`);
   const codexLbEnvForSelftest = { HOME: codexLbHome, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-global'), PATH: `${codexLbFakeBin}${path.delimiter}${process.env.PATH || ''}`, SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1' };
   const codexLbSetup = await runProcess(process.execPath, [packagedSksEntrypoint(), 'codex-lb', 'setup', '--host', 'lb.example.test', '--api-key', 'sk-test', '--json'], {
     cwd: tmp,
@@ -2881,7 +2886,7 @@ export async function selftestCodexLb(tmp: any) {
     await postinstall({
       bootstrap: async () => {
         await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
-        await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\nsuppress_unstable_features_warning = true\n\n[features]\nhooks = true\n');
+        await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `model = "${REQUIRED_CODEX_MODEL}"\nservice_tier = "fast"\nsuppress_unstable_features_warning = true\n\n[features]\nhooks = true\n`);
       }
     });
   } finally {
@@ -2901,7 +2906,7 @@ export async function selftestCodexLb(tmp: any) {
   await writeTextAtomic(path.join(doctorProject, 'package.json'), '{"name":"codex-lb-doctor-project","version":"0.0.0"}\n');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n");
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"browser"}\n');
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\nsuppress_unstable_features_warning = true\n\n[features]\nhooks = true\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `model = "${REQUIRED_CODEX_MODEL}"\nservice_tier = "fast"\nsuppress_unstable_features_warning = true\n\n[features]\nhooks = true\n`);
   const codexLbDoctorRepair = await runProcess(process.execPath, [packagedSksEntrypoint(), 'doctor', '--fix', '--json'], {
     cwd: doctorProject,
     env: { ...codexLbEnvForSelftest, SKS_GLOBAL_ROOT: path.join(tmp, 'codex-lb-doctor-global') },
@@ -3070,7 +3075,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbLegacyDoctorAuth = await safeReadText(path.join(codexLbHome, '.codex', 'auth.json'));
   if (!codexLbLegacyDoctorJson.repair?.codex_lb?.ok || !codexLbLegacyDoctorJson.repair.codex_lb.legacy_auth_migrated || !codexLbLegacyDoctorEnv.includes("CODEX_LB_API_KEY='sk-legacy-doctor'") || !codexLbLegacyDoctorAuth.includes('"auth_mode":"apikey"') || !codexLbLegacyDoctorAuth.includes('sk-legacy-doctor') || !hasTopLevelCodexLbSelected(codexLbLegacyDoctorConfig) || !codexLbLegacyDoctorConfig.includes('env_key = "CODEX_LB_API_KEY"')) throw new Error('selftest: legacy doctor codex-lb restore');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\n");
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `model = "${REQUIRED_CODEX_MODEL}"\nservice_tier = "fast"\n`);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"apikey","key":"sk-env-only"}\n');
   const codexLbLoginCallsBeforeEnvOnlyPostinstall = await codexLbLoginCallCount(codexLbHome);
   const codexLbEnvOnlyPostinstall = await runProcess(process.execPath, [packagedSksEntrypoint(), 'postinstall'], {
@@ -3086,7 +3091,7 @@ export async function selftestCodexLb(tmp: any) {
   const codexLbLoginCallsAfterEnvOnlyPostinstall = await codexLbLoginCallCount(codexLbHome);
   if (!String(codexLbEnvOnlyPostinstall.stdout || '').includes('codex-lb auth: restored from existing Codex login cache') || !codexLbEnvOnlyPostinstallEnv.includes("CODEX_LB_API_KEY='sk-env-only'") || !codexLbEnvOnlyPostinstallConfig.includes('env_key = "CODEX_LB_API_KEY"') || !hasTopLevelCodexLbSelected(codexLbEnvOnlyPostinstallConfig) || !codexLbEnvOnlyPostinstallAuth.includes('sk-env-only') || codexLbLoginCallsAfterEnvOnlyPostinstall !== codexLbLoginCallsBeforeEnvOnlyPostinstall) throw new Error('selftest: env-only codex-lb postinstall restore');
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\n");
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `model = "${REQUIRED_CODEX_MODEL}"\nservice_tier = "fast"\n`);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'auth.json'), '{"auth_mode":"apikey","key":"sk-env-only-doctor"}\n');
   const codexLbEnvOnlyDoctorProject = tmpdir();
   await ensureDir(path.join(codexLbEnvOnlyDoctorProject, '.git'));
@@ -3203,7 +3208,7 @@ export async function selftestCodexLb(tmp: any) {
     delete process.env.SKS_CODEX_LB_AUTOBYPASS;
   }
   if (autobypassLaunch.status !== 'chain_unhealthy' || autobypassLaunch.bypass_codex_lb !== true || autobypassLaunch.chain_health?.status !== 'second_request_failed') throw new Error('selftest: SKS_CODEX_LB_AUTOBYPASS=1 should bypass codex-lb on hard chain failure');
-  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
+  await writeTextAtomic(path.join(codexLbHome, '.codex', 'config.toml'), `model = "${REQUIRED_CODEX_MODEL}"\nservice_tier = "fast"\n`);
   await writeTextAtomic(path.join(codexLbHome, '.codex', 'sks-codex-lb.env'), "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-test'\n");
   const missingProviderLaunchCalls: any[] = [];
   const missingProviderLaunch = await maybePromptCodexLbSetupForLaunch([], {
@@ -3262,9 +3267,9 @@ export async function selftestCodexLb(tmp: any) {
   if (brokenChain.ok || brokenChain.status !== 'previous_response_not_found' || brokenChain.chain_unhealthy !== true) throw new Error('selftest: codex-lb response chain health check did not detect previous_response_not_found');
   if (!codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('remote_control = true') || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('fast_mode_ui = true') || !codexLbConfig.includes('codex_git_commit = true') || !codexLbConfig.includes('computer_use = true') || !codexLbConfig.includes('browser_use = true') || !codexLbConfig.includes('browser_use_external = true') || !codexLbConfig.includes('guardian_approval = true') || !codexLbConfig.includes('tool_suggest = true') || !codexLbConfig.includes('apps = true') || !codexLbConfig.includes('plugins = true') || !codexLbConfig.includes('[plugins."latex@openai-bundled"]') || !codexLbConfig.includes('[plugins."documents@openai-primary-runtime"]') || !codexLbConfig.includes('[user.fast_mode]') || !codexLbConfig.includes('visible = true') || !codexLbConfig.includes('enabled = true') || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || !/\[profiles\.sks-fast-high\][\s\S]*?service_tier = "fast"/.test(codexLbConfig) || codexLbConfig.includes('fast_default_opt_out = true') || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error('selftest: codex-lb setup did not preserve Codex App feature flags, default plugins, profile-scoped reasoning effort, explicit Fast profile, Codex Git commit generation, or migrate the hooks feature flag');
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
-  const codexLbLaunch = `source ${path.join(tmp, '.codex', 'sks-codex-lb.env')} && codex '--model' 'gpt-5.5'`;
+  const codexLbLaunch = `source ${path.join(tmp, '.codex', 'sks-codex-lb.env')} && codex '--model' '${REQUIRED_CODEX_MODEL}'`;
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: Zellij launch command does not source codex-lb env file');
-  if (!codexLbLaunch.includes("'--model' 'gpt-5.5'")) throw new Error('selftest: Zellij launch command without args did not force GPT-5.5');
+  if (!codexLbLaunch.includes(`'--model' '${REQUIRED_CODEX_MODEL}'`)) throw new Error(`selftest: Zellij launch command without args did not force ${REQUIRED_CODEX_MODEL}`);
   const madLaunchSource = await safeReadText(path.join(packageRoot(), 'src', 'core', 'commands', 'mad-sks-command.js'));
   if (!madLaunchSource.includes('const lb = await deps.maybePromptCodexLbSetupForLaunch(args)') || !madLaunchSource.includes("const launchLb = lb.status === 'present'") || !madLaunchSource.includes('codexLbImmediateLaunchOpts(cleanArgs, launchLb') || !madLaunchSource.includes('bypass_codex_lb') || !madLaunchSource.includes('model_provider="openai"') || !madLaunchSource.includes('codexLbFreshSession: true')) throw new Error('selftest: MAD launch does not sync codex-lb auth and fresh-session launch options');
 

@@ -36,6 +36,7 @@ test('SKS menu bar template uses native modal and background paths instead of Te
   assert.match(swift, /NSSecureTextField/);
   assert.match(swift, /stdinText: key \+ "\\n"/);
   assert.match(swift, /lastActionLogPath/);
+  assert.match(swift, /func runSksSilent\(_ args: \[String\]/);
   assert.doesNotMatch(swift, /runSksInTerminal/);
   assert.doesNotMatch(swift, /runInTerminal/);
   assert.doesNotMatch(swift, /tell application "Terminal"/);
@@ -143,4 +144,29 @@ test('SKS menu bar template humanizes sks command failure JSON instead of showin
   // JSON/blocker-code text directly.
   assert.match(swift, /showAlert\(title \+ " failed", informative: humanizeSksFailure\(redacted\)\)/);
   assert.doesNotMatch(swift, /showAlert\(title \+ " failed", informative: redacted\)/);
+});
+
+test('SKS menu bar template exposes Fast Mode on/off controls and status checkmarks', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /fastModeOnItem = add\(menu, "Fast Mode On", #selector\(fastModeOn\)\)/);
+  assert.match(swift, /fastModeOffItem = add\(menu, "Fast Mode Off", #selector\(fastModeOff\)\)/);
+  assert.match(swift, /runSksBackground\(\["fast-mode", "on", "--json"\], title: "Fast Mode On"\)/);
+  assert.match(swift, /runSksBackground\(\["fast-mode", "off", "--json"\], title: "Fast Mode Off"\)/);
+  assert.match(swift, /func updateFastModeChecks\(\) \{/);
+  assert.match(swift, /runSksSilent\(\["fast-mode", "status", "--json"\]\)/);
+  assert.match(swift, /json\?\["fast_mode"\] as\? Bool == true/);
+  assert.match(swift, /self\.fastModeOnItem\.state = fastActive \? \.on : \.off/);
+  assert.match(swift, /self\.fastModeOffItem\.state = fastActive \? \.off : \.on/);
+});
+
+test('SKS menu bar template shows codex-lb as active only when selected/provider mode says so', () => {
+  const swift = source('com.openai.codex');
+  const checkMatch = swift.match(/func updateAuthModeChecks\(\) \{[\s\S]*?\n    \}\n\n    func updateFastModeChecks/);
+  assert.ok(checkMatch, 'expected to find updateAuthModeChecks body');
+  const body = checkMatch[0];
+  assert.match(body, /runSksSilent\(\["codex-lb", "status", "--json"\]\)/);
+  assert.match(body, /json\?\["selected"\] as\? Bool == true/);
+  assert.match(body, /json\?\["model_provider"\] as\? String/);
+  assert.match(body, /json\?\["mode"\] as\? String/);
+  assert.doesNotMatch(body, /"configured": true/);
 });
