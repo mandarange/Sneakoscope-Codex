@@ -91,6 +91,7 @@ id_ed25519
 *.psd
 # BEGIN SKS MANAGED GIT HYGIENE
 # Local SKS runtime noise
+.opensks/
 .sneakoscope/missions/
 .sneakoscope/layouts/
 .sneakoscope/reports/
@@ -144,6 +145,7 @@ id_ed25519
 .sneakoscope/**/*.log
 
 # Mission outputs must live under .sneakoscope/missions/<id>/, not repo root.
+/SNEAKOSCOPE-개선-작업지시서*.md
 /naruto-gate.json
 /reflection-gate.json
 /reflection.md
