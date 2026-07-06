@@ -248,7 +248,7 @@ export const COMMANDS = {
   selftest: entry('stable', 'Run local mock selftest', 'dist/core/commands/basic-cli.js', basicArgs('selftestCommand')),
   goal: routeStateMutator(entry('beta', 'Manage Goal bridge workflow', 'dist/core/commands/goal-command.js', subcommand(() => import('../core/commands/goal-command.js'), 'goalCommand', 'dist/core/commands/goal-command.js')), ['loop-graph-proof.json']),
   'seo-geo-optimizer': entry('beta', 'Run unified SEO/GEO optimizer audit/plan/apply/verify on the search-visibility kernel', 'dist/core/commands/seo-command.js', argsCommand(() => import('../core/commands/seo-command.js'), 'seoGeoOptimizerCommand', 'dist/core/commands/seo-command.js')),
-  hook: entry('beta', 'Codex hook entrypoint', 'dist/commands/hook.js', directCommand(() => import('../commands/hook.js'), 'dist/commands/hook.js')),
+  hook: skipMigrationGate(entry('beta', 'Codex hook entrypoint', 'dist/commands/hook.js', directCommand(() => import('../commands/hook.js'), 'dist/commands/hook.js'))),
   profile: entry('labs', 'Inspect/set profile', 'dist/commands/profile.js', directCommand(() => import('../commands/profile.js'), 'dist/commands/profile.js')),
   hproof: entry('beta', 'Evaluate H-Proof gate', 'dist/commands/hproof.js', directCommand(() => import('../commands/hproof.js'), 'dist/commands/hproof.js')),
   'validate-artifacts': entry('beta', 'Validate mission artifacts', 'dist/core/commands/validate-artifacts-command.js', argsCommand(() => import('../core/commands/validate-artifacts-command.js'), 'validateArtifactsCommand', 'dist/core/commands/validate-artifacts-command.js')),

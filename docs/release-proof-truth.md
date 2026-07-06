@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 5.9.0 keeps release proof truth aligned with the 5.9.0 package metadata, built output, quantum baseline report, competitor scorecard, installed package smoke, perf/hook latency reports, Super-Search contracts, production parallel smoke, doctor idempotence, retention budget, package surface budget, and lifecycle-disabled publish readiness evidence before `npm publish --ignore-scripts`.
+
+SKS 5.9.0 release proof truth requires proof that installed-package success is based on a real tarball bootstrap plus doctor run, hook latency does not include migration-gate self-repair on the hot path, optional native capability repairs are explicit rather than hidden default doctor work, Super-Search does not fake provider readiness, and package/version/lockfile/docs/dist surfaces agree before publication.
+
 SKS 5.8.0 keeps release proof truth aligned with the 5.8.0 package metadata, built output, intent-routing fixtures, Naruto parallel-runtime proof v2, fake-success policy coverage, Super-Search name guard evidence, canonical Super-Search command/route/artifact surfaces, and lifecycle-disabled publish readiness evidence before `npm publish --ignore-scripts`.
 
 SKS 5.8.0 release proof truth requires proof that question-shaped directives do not fall through to `$Answer`, production parallel-write proof is not mock-only, Super-Search does not synthesize sources or default fetch URLs, legacy search aliases are not executable, and package/version/lockfile/docs/dist surfaces agree before publication.

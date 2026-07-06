@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate, readJson, root } from './sks-1-18-gate-lib.js';
 
 const pkg = readJson('package.json');
 const scripts = pkg.scripts || {};
+const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-package-published-contract-'));
 const dry = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   cwd: root,
   encoding: 'utf8',
+  env: {
+    ...process.env,
+    npm_config_cache: path.join(cacheRoot, 'npm-cache')
+  },
   maxBuffer: 16 * 1024 * 1024
 });
 assertGate(dry.status === 0, 'npm pack --dry-run must succeed for package contract check', {

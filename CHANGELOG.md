@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+## [5.9.0] - 2026-07-06
+
+### Added
+
+- Add a quantum competitor scorecard that turns stability, gate reliability, parallel isolation, performance, install smoke, and maintainability into release-blocking evidence.
+- Add installed-package smoke checks that pack and install SKS in an isolated temp project with lifecycle scripts disabled.
+- Add performance budgets for cold CLI commands, hooks, doctor, and Super-Search doctor.
+- Add production parallel-write smoke with multi-file worker diversity, timestamp overlap, patch envelopes, worktree cleanup, and failure-injection survival.
+- Add Super-Search live/offline smoke split with direct URL acquisition as the minimum default provider path.
+
+### Fixed
+
+- Make doctor/setup/update idempotence release-blocking, with rollback evidence and no-op second-run proof.
+- Make Super-Search doctor report usable/degraded/blocked status based on acquisition readiness instead of core availability alone.
+- Prevent release gates from passing when production proof is mock-only, source-less, or missing installed-package verification.
+
+### Changed
+
+- Add gate timing reports, route intent regressions, retention budgets, and package surface artifacts so the 5.9.0 release path is evidence-driven.
+- Tighten CLI/hook startup checks while keeping heavy modules lazy and bounded.
+
 ## [5.8.0] - 2026-07-06
 
 ### Fixed

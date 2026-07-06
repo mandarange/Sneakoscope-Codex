@@ -1,13 +1,13 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-06T09:47:17.463Z",
-  "git_head_sha": "5edc69b758ee3138aa7028f2806c2fcc2f1cd979",
-  "source_file_count": 3312,
-  "index_digest": "1c4a551dc2e5319e6395c431a6a85e53dcb3ff0b5e0908a2ce89d1923843b76b",
+  "generated_at": "2026-07-06T18:12:04.282Z",
+  "git_head_sha": "0189d0686785aba203517e3c62b432f375c6b4a3",
+  "source_file_count": 3322,
+  "index_digest": "a1d0e1adb89b32ece2ea5b7ffd8f87d78f5307d74d4c61713ab8c220dca9e235",
   "entries": [
     {
       "id": "code:bin",
-      "text": "bin is a module at src/bin (2 files, 68 loc, low risk). It has no detected top-level exports. It has no detected cross-module dependencies.",
+      "text": "bin is a module at src/bin (2 files, 126 loc, low risk). It has no detected top-level exports. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/bin"
@@ -19,7 +19,7 @@
     },
     {
       "id": "code:cli",
-      "text": "cli is a CLI module at src/cli (16 files, 4948 loc, medium risk). Key exports: function flag(args: any = [], name: any); function readOption(args: any = [], name: any, fallback: any = null); function positionalArgs(args: any = []); const ui =; function withHeartbeat<T>(label: string, work: Promise<T>, opts: { warnAfterMs?: number } = {}): Promise<T>, and 37 more. It has no detected cross-module dependencies.",
+      "text": "cli is a CLI module at src/cli (19 files, 5283 loc, medium risk). Key exports: function flag(args: any = [], name: any); function readOption(args: any = [], name: any, fallback: any = null); function positionalArgs(args: any = []); const ui =; function withHeartbeat<T>(label: string, work: Promise<T>, opts: { warnAfterMs?: number } = {}): Promise<T>, and 38 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/cli"
@@ -31,7 +31,7 @@
     },
     {
       "id": "code:commands",
-      "text": "commands is a command module at src/commands (77 files, 3506 loc, high risk). Key exports: async function run() { return aliasesCommand(); }; async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []), and 77 more. It has no detected cross-module dependencies.",
+      "text": "commands is a command module at src/commands (77 files, 3539 loc, high risk). Key exports: async function run() { return aliasesCommand(); }; async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []); async function run(_command: any, args: any = []), and 77 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/commands"
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (84 files, 28468 loc, high risk). Key exports: const ARTIFACT_SCHEMA_VERSION = 1;; const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);; const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);; const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);; const ARTIFACT_FILES =, and 503 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (87 files, 28566 loc, high risk). Key exports: const ARTIFACT_SCHEMA_VERSION = 1;; const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);; const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);; const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);; const ARTIFACT_FILES =, and 503 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -67,7 +67,7 @@
     },
     {
       "id": "code:core-agents",
-      "text": "core-agents is a core module at src/core/agents (76 files, 17046 loc, high risk). Key exports: const AGENT_ORCHESTRATOR_ONLY_FILES = Object.freeze([; function agentLedgerRoot(missionDir: string); function validateAgentLedgerWriteScope(input: { actor_agent_id: string; target_path: string; mode?: 'append' | 'write' }); async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string; dynamicScheduler?: boolean }); async function appendAgentLedgerEvent(root: string, event: { agent_id: string; session_id: string; event_type: string; payload?: any }), and 312 more. It has no detected cross-module dependencies.",
+      "text": "core-agents is a core module at src/core/agents (77 files, 17165 loc, high risk). Key exports: const AGENT_ORCHESTRATOR_ONLY_FILES = Object.freeze([; function agentLedgerRoot(missionDir: string); function validateAgentLedgerWriteScope(input: { actor_agent_id: string; target_path: string; mode?: 'append' | 'write' }); async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string; dynamicScheduler?: boolean }); async function appendAgentLedgerEvent(root: string, event: { agent_id: string; session_id: string; event_type: string; payload?: any }), and 312 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/agents"
@@ -454,7 +454,7 @@
     },
     {
       "id": "code:core-naruto",
-      "text": "core-naruto is a core module at src/core/naruto (25 files, 2757 loc, medium risk). Key exports: interface HardwareCapacityProbeInput; interface HardwareCapacityProbe; function probeHardwareCapacity(input: HardwareCapacityProbeInput = {}): HardwareCapacityProbe; interface NarutoActivePoolReport; interface NarutoWorktreeActivePoolReport extends NarutoActivePoolReport, and 89 more. It has no detected cross-module dependencies.",
+      "text": "core-naruto is a core module at src/core/naruto (25 files, 2761 loc, medium risk). Key exports: interface HardwareCapacityProbeInput; interface HardwareCapacityProbe; function probeHardwareCapacity(input: HardwareCapacityProbeInput = {}): HardwareCapacityProbe; interface NarutoActivePoolReport; interface NarutoWorktreeActivePoolReport extends NarutoActivePoolReport, and 89 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/naruto"
@@ -795,6 +795,21 @@
       "token_cost": 118
     },
     {
+      "id": "code:core-super-search",
+      "text": "core-super-search is a core module at src/core/super-search (5 files, 922 loc, low risk). Key exports: * from './types.js'; * from './runtime.js'; function normalizeGenericSourceRows(raw: unknown, providerId: string, family: string, intent: SearchIntent, tier: SuperSearchSourceRecord['authority_tier']): SuperSearchSourceRecord[]; function sourceFromWebRow(row: any, index: number, intent: SearchIntent): SuperSearchSourceRecord; async function sourceFromUrlFetch(url: string, artifactDir: string, intent: SearchIntent): Promise<, and 18 more. It has no detected cross-module dependencies.",
+      "citations": [
+        {
+          "path": "src/core/super-search"
+        },
+        {
+          "path": "src/core/super-search/index.ts"
+        }
+      ],
+      "trust_score": 1,
+      "freshness": "unknown",
+      "token_cost": 148
+    },
+    {
       "id": "code:core-triwiki",
       "text": "core-triwiki is a core module at src/core/triwiki (14 files, 2142 loc, low risk). Key exports: interface ProjectorReport; async function projectTriwikiToAgentsMd(root: string, opts: { maxLocalFiles?: number } = {}): Promise<ProjectorReport>; async function removeTriwikiAgentsMdBlocks(root: string): Promise<string[]>; const CODE_INDEX_SCHEMA = 'sks.code-index.v1';; interface CodeIndexModuleCard, and 61 more. It has no detected cross-module dependencies.",
       "citations": [
@@ -880,7 +895,7 @@
     },
     {
       "id": "code:core-verification",
-      "text": "core-verification is a core module at src/core/verification (9 files, 1067 loc, low risk). Key exports: interface DiffQuality; async function analyzeDiffQuality(input:; interface ImpactSymbol; interface ImpactReference; interface ImpactReport, and 26 more. It has no detected cross-module dependencies.",
+      "text": "core-verification is a core module at src/core/verification (10 files, 1129 loc, low risk). Key exports: interface DiffQuality; async function analyzeDiffQuality(input:; interface ImpactSymbol; interface ImpactReference; interface ImpactReport, and 28 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/verification"
@@ -916,7 +931,7 @@
     },
     {
       "id": "code:scripts",
-      "text": "scripts is a module at src/scripts (975 files, 40987 loc, high risk). Key exports: async function runDynamicPoolFixture(opts = {}); function writeReport(name, report); function readJson(file); function makeTempPatchProject(prefix = 'sks-patch-swarm-'); async function runPatchSwarmRouteBlackbox({ gate, route, routeCommand, reportName }), and 80 more. It has no detected cross-module dependencies.",
+      "text": "scripts is a module at src/scripts (978 files, 41268 loc, high risk). Key exports: async function runDynamicPoolFixture(opts = {}); function writeReport(name, report); function readJson(file); function makeTempPatchProject(prefix = 'sks-patch-swarm-'); async function runPatchSwarmRouteBlackbox({ gate, route, routeCommand, reportName }), and 82 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/scripts"
@@ -940,7 +955,7 @@
     },
     {
       "id": "code:scripts-lib",
-      "text": "scripts-lib is a module at src/scripts/lib (8 files, 788 loc, low risk). Key exports: { assertGate, emitGate, importDist, readJson, readText, root };; async function readJsonFile(file); async function readTextFile(file); async function runFakeCodexSdkTaskFixture(label = 'fixture', extra = {}); function packageScripts(), and 24 more. It has no detected cross-module dependencies.",
+      "text": "scripts-lib is a module at src/scripts/lib (8 files, 790 loc, low risk). Key exports: { assertGate, emitGate, importDist, readJson, readText, root };; async function readJsonFile(file); async function readTextFile(file); async function runFakeCodexSdkTaskFixture(label = 'fixture', extra = {}); function packageScripts(), and 24 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/scripts/lib"
@@ -952,5 +967,5 @@
     }
   ],
   "token_budget": 20000,
-  "total_token_cost": 8459
+  "total_token_cost": 8607
 }

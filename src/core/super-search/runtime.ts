@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { ensureDir, nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { runCodexWebSearch, type CodexWebSearchFunction } from '../codex/codex-web-search-adapter.js'
+import { humanizeBlockers } from '../errors/blocker-humanizer.js'
 import {
   buildAttemptLedger,
   buildClaims,
@@ -267,6 +268,13 @@ async function writeArtifacts(artifactDir: string, result: SuperSearchResult): P
   await writeJsonAtomic(path.join(artifactDir, 'attempt-ledger.json'), result.attempt_ledger)
   await writeJsonAtomic(path.join(artifactDir, 'convergence.json'), result.convergence)
   await writeJsonAtomic(path.join(artifactDir, 'super-search-proof.json'), result.proof)
+  const gateEvidencePaths = [
+    path.join(artifactDir, 'source-ledger.json'),
+    path.join(artifactDir, 'claim-ledger.json'),
+    path.join(artifactDir, 'super-search-proof.json'),
+    path.join(artifactDir, 'super-search-result.json')
+  ]
+  const blockerDiagnostics = humanizeBlockers(result.proof.blockers, gateEvidencePaths)
   await writeJsonAtomic(path.join(artifactDir, 'super-search-gate.json'), {
     schema: 'sks.super-search-gate.v1',
     ok: result.proof.ok,
@@ -275,6 +283,9 @@ async function writeArtifacts(artifactDir: string, result: SuperSearchResult): P
     mock_only: false,
     replacement_state: result.proof.ok ? 'usable_provider_independent_runtime' : 'replacement_incomplete',
     blockers: result.proof.blockers,
+    human_summary: blockerDiagnostics.human_summary,
+    next_actions: blockerDiagnostics.next_actions,
+    evidence_paths: blockerDiagnostics.evidence_paths,
     warnings: result.proof.warnings
   })
   await writeTextAtomic(path.join(artifactDir, 'synthesis.md'), result.synthesis)

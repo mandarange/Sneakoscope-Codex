@@ -817,7 +817,7 @@ export function looksLikeGenerativeEngineOptimizationRequest(prompt: any = '') {
 
 export function looksLikeSuperSearchRequest(prompt: any = '') {
   const text = String(prompt || '');
-  return /\b(?:SuperSearch|Super-Search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search)\b|슈퍼\s*서치|소스\s*인텔리전스/i.test(text);
+  return /\b(?:SuperSearch|Super-Search|source\s+intelligence|provider-independent\s+source|source\s+acquisition|citation\s+proof|x-search|site:x\.com|site:twitter\.com)\b|슈퍼\s*서치|소스\s*인텔리전스/i.test(text);
 }
 
 export function routePrompt(prompt: any): any {
@@ -849,10 +849,11 @@ export function routePrompt(prompt: any): any {
   if (looksLikeImageUxReviewRequest(text)) return select(routeById('ImageUXReview'));
   if (looksLikeComputerUseFastLane(text)) return select(routeById('ComputerUse'));
   if (looksLikeTinyDirectFix(text)) return select(routeById('DFix'));
+  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return select(routeById('DB'));
+  if (looksLikeSuperSearchRequest(text) && !looksLikeCodeChangingWork(text)) return select(routeById('SuperSearch'));
   if (looksLikeQuestionShapedDirective(text)) return select(routeById('Naruto'));
   if (looksLikeDirectWorkRequest(text)) return select(routeById('Naruto'));
   if (looksLikeAnswerOnlyRequest(text)) return select(routeById('Answer'));
-  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return select(routeById('DB'));
   if (/\b(team|multi-agent|subagent|parallel agents|agent team)\b|병렬|팀/i.test(text)) return select(routeById('Naruto'));
   if (looksLikeChatCaptureRequest(text) && !looksLikeAnswerOnlyRequest(text)) return select(routeById('Naruto'));
   if (/\b(qa[-\s]?loop|qaloop|e2e\s+qa|qa\s+e2e)\b/i.test(text)) return select(routeById('QALoop'));
@@ -981,6 +982,7 @@ export function looksLikeQuestionShapedDirective(prompt: any = '') {
 
 export function looksLikeDirectWorkRequest(prompt: any = '') {
   const text = String(prompt || '');
+  if (/(?:설명만|설명\s*만|just\s+explain|explain\s+only|only\s+explain)/i.test(text)) return false;
   const explicitDirective = looksLikeExplicitDirectWorkDirective(text);
   if (looksLikeDirectFixQuestion(text) && !explicitDirective) return false;
   if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text) && !explicitDirective) return false;

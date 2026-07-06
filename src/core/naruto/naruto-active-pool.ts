@@ -149,7 +149,11 @@ export async function runNarutoRealActivePool(input: {
     maxObserved = Math.max(maxObserved, active.size)
     timeline.push({ tick, active: active.size, pending: pending.length, completed: completed.size, event: launched ? 'refill' : 'wait' })
     const done = await nextCollectableWorkers(active, input.hardTimeoutMs)
-    if (!done.length) break
+    if (!done.length) {
+      tick += 1
+      if (tick > input.graph.work_items.length * 4 + 20) break
+      continue
+    }
     for (const handle of done) {
       active.delete(handle.id)
       if (handle.placement.placement === 'zellij-pane') visibleRunning = Math.max(0, visibleRunning - 1)

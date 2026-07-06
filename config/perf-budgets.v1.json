@@ -1,0 +1,10 @@
+{
+  "schema": "sks.perf-budgets.v1",
+  "commands": [
+    { "name": "version", "argv": ["node", "./dist/bin/sks.js", "--version"], "budget_p50_ms": 170, "budget_p95_ms": 180 },
+    { "name": "commands-json", "argv": ["node", "./dist/bin/sks.js", "commands", "--json"], "budget_p50_ms": 260, "budget_p95_ms": 320 },
+    { "name": "root-json", "argv": ["node", "./dist/bin/sks.js", "root", "--json"], "budget_p50_ms": 170, "budget_p95_ms": 220 },
+    { "name": "doctor-json", "argv": ["node", "./dist/bin/sks.js", "doctor", "--json"], "budget_p50_ms": 2000, "budget_p95_ms": 2500 },
+    { "name": "super-search-doctor-json", "argv": ["node", "./dist/bin/sks.js", "super-search", "doctor", "--json"], "budget_p50_ms": 180, "budget_p95_ms": 240 }
+  ]
+}

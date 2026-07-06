@@ -59,3 +59,31 @@ test('release-check stamp ensure refreshes a stale publish stamp', async () => {
   assert.equal(parsed.schema, 'sks.release-check-stamp.v1');
   assert.equal(parsed.package_version, pkg.version);
 });
+
+test('release-check stamp ignores dist root json files excluded from npm package files', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-stamp-dist-json-'));
+  const stamp = path.join(tmp, 'stamp.json');
+  const volatileDistJson = path.join(process.cwd(), 'dist', '__release-check-stamp-volatile-test.json');
+  const env = { ...process.env, SKS_RELEASE_STAMP_PATH: stamp };
+
+  await fs.writeFile(volatileDistJson, '{"attempt":1}\n');
+  try {
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'write'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env
+    });
+    assert.equal(write.status, 0, write.stderr);
+
+    await fs.writeFile(volatileDistJson, '{"attempt":2}\n');
+    const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env
+    });
+    assert.equal(verify.status, 0, verify.stderr);
+    assert.match(verify.stdout, /Release check stamp verified/);
+  } finally {
+    await fs.rm(volatileDistJson, { force: true });
+  }
+});

@@ -1518,6 +1518,36 @@
       "symbol": "viewportPaneCount",
       "token": "fs.writeFile",
       "reason": "Release/check script writes, removes, or chmods only scoped fixture, report, manifest, or temp artifacts; exact callsite is audited."
+    },
+    {
+      "file": "src/core/agents/parallel-write-fixture.ts",
+      "symbol": "createFixtureRepo",
+      "token": "fsp.writeFile",
+      "reason": "Parallel production smoke writes only files inside its mkdtemp-created fixture repository before proving worker merge behavior."
+    },
+    {
+      "file": "src/core/agents/parallel-write-fixture.ts",
+      "symbol": "$",
+      "token": "fsp.writeFile",
+      "reason": "Parallel production smoke worker writes only its assigned file inside an isolated git worktree fixture."
+    },
+    {
+      "file": "src/core/agents/parallel-write-fixture.ts",
+      "symbol": "cleanupWorktreesAndBranches",
+      "token": "fsp.rm",
+      "reason": "Parallel production smoke removes only its mkdtemp-created worktree fixture root after cleanup proof is recorded."
+    },
+    {
+      "file": "src/core/agents/parallel-write-fixture.ts",
+      "symbol": "bestEffortCleanup",
+      "token": "fsp.rm",
+      "reason": "Parallel production smoke best-effort cleanup removes only its own mkdtemp-created fixture root on failure."
+    },
+    {
+      "file": "src/core/install/installed-package-smoke.ts",
+      "symbol": "runInstalledPackageSmoke",
+      "token": "fs.writeFile",
+      "reason": "Installed package smoke writes only the package.json for its isolated mkdtemp npm install fixture."
     }
   ]
 }

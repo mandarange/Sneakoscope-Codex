@@ -132,6 +132,9 @@ async function ensureActiveRouteCommandGate(command: CommandName, args: readonly
   }
   if (entry.mutatesRouteState !== true) return { ok: true, status: 'allowed' };
   if (safeReadOnlySubcommand(args)) return { ok: true, status: 'allowed_status_subcommand' };
+  if (process.env.SKS_TEST_ISOLATION === '1' && process.env.SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS === '1') {
+    return { ok: true, status: 'allowed_release_fixture_isolation' };
+  }
   const root = await projectRoot(process.cwd()).catch(() => process.cwd());
   const state = await readJson(stateFile(root), {}).catch(() => ({}));
   if (!activeRouteStateBlocksCommand(state)) return { ok: true, status: 'allowed' };

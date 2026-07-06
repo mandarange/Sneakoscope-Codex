@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 5.9.0 is the quantum release-readiness hardening release after 5.8.0. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, installed-package smoke, CLI performance budgets, hook latency, Super-Search contract coverage, parallel production smoke, doctor idempotence, retention budgets, package surface budgets, and competitor scorecard evidence to agree on 5.9.0 before `npm publish --ignore-scripts`.
+
+5.9.0 release readiness adds proof that an installed tarball can bootstrap and pass doctor in an isolated project, hook hot paths skip migration-gate overhead, default doctor defers optional native capability repair to explicit probes, Super-Search has a minimum acquisition path, and release timing records slowest gates without reducing validation coverage.
+
 SKS 5.8.0 is the intent-routing, real parallel-write proof, honest verification, and Super-Search integration minor release after 5.7.x. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, routing coverage, parallel-runtime proof coverage, fake-success policy coverage, Super-Search command/route/artifact cleanup, and publish preflight evidence to agree on 5.8.0 before `npm publish --ignore-scripts`.
 
 5.8.0 release readiness adds proof that question-shaped work requests route by intent instead of punctuation, parallel write success requires actual worker/file/timestamp evidence, production gates reject mock-only or source-less success, legacy search aliases are removed, and `publish:prep-ignore-scripts`/`publish:dry` still run explicit gates before lifecycle-disabled publication.

@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { runSuperSearch, type SuperSearchMode } from '../core/super-search/index.js'
+import { buildSuperSearchDoctorReport, printSuperSearchDoctorReport } from '../core/super-search/doctor.js'
 import { evaluateLocalGate } from '../core/commands/route-success-helpers.js'
 import { evaluateRealEvidencePolicy } from '../core/verification/real-evidence-policy.js'
 
@@ -53,22 +54,8 @@ async function runCommand(args: string[]) {
 
 async function doctorCommand(args: string[]) {
   const json = args.includes('--json')
-  const report = {
-    schema: 'sks.super-search-doctor.v1',
-    ok: true,
-    core_ready: true,
-    xai_required: false,
-    optional: {
-      context7: 'external_runtime_optional_by_intent',
-      codex_web: process.env.SKS_CODEX_WEB_SEARCH_AVAILABLE === '1' || process.env.CODEX_WEB_SEARCH_AVAILABLE === '1' ? 'available' : 'not_bound',
-      authenticated_chrome: 'operator_consented_optional',
-      official_x_api: 'credentials_optional_not_required'
-    },
-    blockers: [],
-    warnings: []
-  }
-  if (json) console.log(JSON.stringify(report, null, 2))
-  else console.log('Super-Search doctor: core ready; xAI/Grok is not required.')
+  const report = buildSuperSearchDoctorReport(args)
+  printSuperSearchDoctorReport(report, json)
   return report
 }
 

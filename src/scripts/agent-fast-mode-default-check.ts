@@ -24,7 +24,16 @@ function run(extra = []) {
     '2',
     '--json',
     ...extra
-  ], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }));
+  ], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      SKS_TEST_ISOLATION: '1',
+      SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS: '1'
+    },
+    maxBuffer: 32 * 1024 * 1024
+  }));
 }
 
 const defaultRun = run();

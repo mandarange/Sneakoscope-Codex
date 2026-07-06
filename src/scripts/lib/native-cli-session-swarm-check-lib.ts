@@ -31,6 +31,8 @@ export function runNativeCliSwarmCheck({ agents, workItems = agents, reportName,
     encoding: 'utf8',
     env: {
       ...process.env,
+      SKS_TEST_ISOLATION: '1',
+      SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS: '1',
       ...(backend === 'codex-sdk' ? { SKS_CODEX_SDK_FAKE: '1', NODE_ENV: 'test' } : {})
     },
     maxBuffer: 96 * 1024 * 1024

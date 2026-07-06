@@ -623,6 +623,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
     ? await cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
     : null;
+  const shouldProbeNativeCapabilityRepairs = doctorFix || deepDiagnostics || nativeCapabilityDiagnosticsRequested;
   const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null, core_ready: false, blockers: ['imagegen_detection_exception'] }));
   const imagegenRepair = (imagegen as any).core_ready === true
     ? {
@@ -638,7 +639,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         manual_actions: [],
         communication_test: { level: 'flag_level', ok: true, checked: 'codex features list --json (feature-flag/plugin metadata only)', real_generation_round_trip_performed: false, blocker: null }
       }
-    : await repairCodexImagegen({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+    : shouldProbeNativeCapabilityRepairs
+      ? await repairCodexImagegen({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
         schema: 'sks.doctor-imagegen-repair.v1',
         ok: false,
         attempted: true,
@@ -646,25 +648,38 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         recovered: false,
         blockers: [err?.message || String(err)],
         manual_actions: ['Run `sks doctor --fix --json` after enabling Codex App image_generation.']
-      }));
-  const computerUseRepair = await repairComputerUse({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
-    schema: 'sks.doctor-computer-use-repair.v1',
-    ok: false,
-    attempted: false,
-    apply: doctorFix,
-    recovered: false,
-    blockers: [err?.message || String(err)],
-    next_actions: ['Run `sks doctor --fix --json` after checking Codex App settings for Computer Use.']
-  }));
-  const browserUseRepair = await repairBrowserUse({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
-    schema: 'sks.doctor-browser-use-repair.v1',
-    ok: false,
-    attempted: false,
-    apply: doctorFix,
-    recovered: false,
-    blockers: [err?.message || String(err)],
-    next_actions: ['Run `sks doctor --fix --json` after checking Codex App settings for Browser Use / Chrome extension.']
-  }));
+      }))
+      : deferredNativeRepair('sks.doctor-imagegen-repair.v1', doctorFix, [
+        'Run `sks doctor --fix --repair-native-capabilities --json` after enabling Codex App image_generation.'
+      ]);
+  const computerUseRepair = shouldProbeNativeCapabilityRepairs
+    ? await repairComputerUse({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+      schema: 'sks.doctor-computer-use-repair.v1',
+      ok: false,
+      attempted: false,
+      apply: doctorFix,
+      recovered: false,
+      blockers: [err?.message || String(err)],
+      next_actions: ['Run `sks doctor --fix --json` after checking Codex App settings for Computer Use.']
+    }))
+    : deferredNativeRepair('sks.doctor-computer-use-repair.v1', doctorFix, [
+      'Computer Use route needs manual OS/App permission verification before use.',
+      'Run `sks doctor --fix --repair-native-capabilities --json` for an explicit Computer Use repair probe.'
+    ]);
+  const browserUseRepair = shouldProbeNativeCapabilityRepairs
+    ? await repairBrowserUse({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+      schema: 'sks.doctor-browser-use-repair.v1',
+      ok: false,
+      attempted: false,
+      apply: doctorFix,
+      recovered: false,
+      blockers: [err?.message || String(err)],
+      next_actions: ['Run `sks doctor --fix --json` after checking Codex App settings for Browser Use / Chrome extension.']
+    }))
+    : deferredNativeRepair('sks.doctor-browser-use-repair.v1', doctorFix, [
+      'Chrome/web review route needs the Codex Chrome Extension enabled before use.',
+      'Run `sks doctor --fix --repair-native-capabilities --json` for an explicit Browser Use repair probe.'
+    ]);
   const mcpTransportCollisionRepair = doctorFix
     ? await detectAndRepairMcpTransportCollisions({ root, apply: true }).catch((err: any) => ({
         schema: 'sks.mcp-transport-collision-repair.v1',
@@ -678,7 +693,9 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
         raw_secret_values_recorded: false
       }))
     : null;
-  const nativeCapabilityReadinessStatus = (repair: any) => (repair?.recovered === true || repair?.ok === true ? 'ok' : repair?.attempted ? 'blocked' : 'not-needed');
+  const nativeCapabilityReadinessStatus = (repair: any) => repair?.skipped === true
+    ? (repair.status || 'deferred')
+    : (repair?.recovered === true || repair?.ok === true ? 'ok' : repair?.attempted ? 'blocked' : 'not-needed');
   const nativeCapabilityReadiness = {
     schema: 'sks.native-capability-readiness.v1',
     generated_at: nowIso(),
@@ -1177,6 +1194,22 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
       ...(researchSource === 'indexed-web-search' ? ['Codex 0.142 indexed web search selected for source-intelligence routes'] : [])
     ],
     repair_actions: [...new Set(repairActions)]
+  };
+}
+
+function deferredNativeRepair(schema: string, doctorFix: boolean, nextActions: string[]) {
+  return {
+    schema,
+    generated_at: nowIso(),
+    ok: true,
+    skipped: true,
+    status: 'deferred_to_explicit_native_capability_probe',
+    attempted: false,
+    apply: doctorFix,
+    recovered: false,
+    blockers: [],
+    next_actions: nextActions,
+    manual_actions: nextActions
   };
 }
 

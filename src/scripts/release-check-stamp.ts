@@ -25,10 +25,10 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function treeDigest(dir) {
+function treeDigest(dir, opts = {}) {
   if (!fs.existsSync(dir)) return { digest: null, file_count: 0 };
   const files = [];
-  collectFiles(dir, files);
+  collectFiles(dir, files, { baseDir: dir, include: opts.include });
   const hash = crypto.createHash('sha256');
   for (const file of files.sort()) {
     const rel = path.relative(dir, file).split(path.sep).join('/');
@@ -45,25 +45,121 @@ function treeDigest(dir) {
 
 function fileDigestForPackageFiles(pkg) {
   const hash = crypto.createHash('sha256');
-  const files = Array.isArray(pkg.files) ? [...pkg.files].sort() : [];
-  for (const entry of files) {
-    const full = path.join(root, entry);
+  const { files, missingEntries } = packageFileSnapshot(pkg);
+  for (const entry of missingEntries.sort()) {
     hash.update(entry);
     hash.update('\0');
+    hash.update('missing\0');
+  }
+  for (const file of files) {
+    const full = path.join(root, file);
+    const stat = fs.statSync(full);
+    hash.update(file);
+    hash.update('\0');
+    hash.update(String(stat.size));
+    hash.update('\0');
+    hash.update(sha256(fs.readFileSync(full)));
+    hash.update('\0');
+  }
+  return sha256(hash.digest('hex'));
+}
+
+function packageFileSnapshot(pkg) {
+  const entries = packageFileEntries(pkg);
+  const candidates = new Set();
+  const missingEntries = [];
+
+  for (const entry of entries) {
+    if (entry.negated || hasGlob(entry.pattern)) continue;
+    const full = path.join(root, entry.pattern);
     if (!fs.existsSync(full)) {
-      hash.update('missing\0');
+      missingEntries.push(entry.pattern);
       continue;
     }
     const stat = fs.statSync(full);
     if (stat.isDirectory()) {
-      const digest = treeDigest(full);
-      hash.update(`${digest.digest || 'empty'}:${digest.file_count}`);
+      const found = [];
+      collectFiles(full, found, { baseDir: root });
+      for (const file of found) candidates.add(path.relative(root, file).split(path.sep).join('/'));
     } else if (stat.isFile()) {
-      hash.update(sha256(fs.readFileSync(full)));
+      candidates.add(entry.pattern);
     }
-    hash.update('\0');
   }
-  return sha256(hash.digest('hex'));
+
+  const files = [...candidates].filter((file) => packageFileIncluded(file, entries)).sort();
+  return { files, missingEntries };
+}
+
+function packageFileEntries(pkg) {
+  return (Array.isArray(pkg.files) ? pkg.files : [])
+    .map((raw) => {
+      const value = String(raw || '').trim();
+      const negated = value.startsWith('!');
+      const pattern = normalizeRel(negated ? value.slice(1) : value);
+      return pattern ? { negated, pattern } : null;
+    })
+    .filter(Boolean);
+}
+
+function packageFileIncluded(file, entries) {
+  let included = false;
+  for (const entry of entries) {
+    if (matchesPackagePattern(file, entry.pattern)) included = !entry.negated;
+  }
+  return included;
+}
+
+function matchesPackagePattern(file, pattern) {
+  const rel = normalizeRel(file);
+  const normalized = normalizeRel(pattern);
+  if (!rel || !normalized) return false;
+  if (!hasGlob(normalized)) return rel === normalized || rel.startsWith(`${normalized}/`);
+
+  const re = globPatternToRegExp(normalized);
+  if (re.test(rel)) return true;
+
+  const parts = rel.split('/');
+  parts.pop();
+  while (parts.length) {
+    if (re.test(parts.join('/'))) return true;
+    parts.pop();
+  }
+  return false;
+}
+
+function globPatternToRegExp(pattern) {
+  let out = '^';
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern[i];
+    if (char === '*') {
+      if (pattern[i + 1] === '*') {
+        if (pattern[i + 2] === '/') {
+          out += '(?:[^/]+/)*';
+          i += 2;
+        } else {
+          out += '.*';
+          i += 1;
+        }
+      } else {
+        out += '[^/]*';
+      }
+      continue;
+    }
+    if (char === '?') {
+      out += '[^/]';
+      continue;
+    }
+    out += char.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+  }
+  return new RegExp(`${out}$`);
+}
+
+function hasGlob(value) {
+  return /[*?]/.test(value);
+}
+
+function normalizeRel(value) {
+  return String(value || '').split(path.sep).join('/').replace(/^\.\/+/, '').replace(/\/+$/, '');
 }
 
 function gitCommit() {
@@ -98,11 +194,15 @@ function releaseGateHash(pkg) {
   return sha256(`${pkg.scripts?.['release:check'] || ''}\0${pkg.scripts?.['prepublishOnly'] || ''}\0${manifests}`);
 }
 
-function collectFiles(dir, out) {
+function collectFiles(dir, out, opts = {}) {
+  const baseDir = opts.baseDir || dir;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
-    if (entry.isDirectory()) collectFiles(file, out);
-    else if (entry.isFile()) out.push(file);
+    if (entry.isDirectory()) collectFiles(file, out, { ...opts, baseDir });
+    else if (entry.isFile()) {
+      const rel = path.relative(baseDir, file).split(path.sep).join('/');
+      if (!opts.include || opts.include(rel, file)) out.push(file);
+    }
   }
 }
 
@@ -165,7 +265,10 @@ function releaseSnapshot() {
 function currentStampPayload() {
   const pkg = readJson('package.json');
   const snapshot = releaseSnapshot();
-  const dist = treeDigest(path.join(root, 'dist'));
+  const packageEntries = packageFileEntries(pkg);
+  const dist = treeDigest(path.join(root, 'dist'), {
+    include: (rel) => packageFileIncluded(`dist/${rel}`, packageEntries)
+  });
   return {
     schema: 'sks.release-check-stamp.v1',
     package_name: pkg.name,

@@ -12,6 +12,8 @@ baseline evidence for older SKS gates and release-history continuity.
 
 ## Current Release Note
 
+SKS 5.9.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding quantum release evidence for installed package smoke, hook latency, CLI performance budgets, Super-Search offline/live contracts, production parallel smoke, and competitor scorecard readiness.
+
 SKS 5.8.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while aligning release metadata with the current package version, hardening intent routing and parallel-write proof evidence, consolidating source intelligence under Super-Search, and preserving lifecycle-disabled `npm publish --ignore-scripts` readiness evidence.
 
 ## Historical Release Ledger

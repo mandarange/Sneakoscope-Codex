@@ -14,9 +14,14 @@ const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 10
 // research-command.ts, image-ux-review-command.ts, mad-sks-command.ts,
 // sks-menubar.ts) with genuine new production logic, pushing the packed size
 // to ~2306 KiB. 5.7.0 adds doctor/update migration repair coverage and publish
-// contract checks, pushing the packed tarball to ~2345 KiB. Keep a narrow cap
-// rather than giving the package a broad size budget.
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2350 * 1024);
+// contract checks, pushing the packed tarball to ~2345 KiB. 5.9.0 adds quantum
+// release evidence scripts (installed package smoke, perf budgets, scorecard,
+// Super-Search contracts, and parallel smoke), pushing the packed tarball to
+// ~2354 KiB. Keep a narrow cap rather than giving the package a broad size
+// budget.
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2365 * 1024);
+const SURFACE_MAX_PACKED = Number(process.env.SKS_PACKAGE_SURFACE_MAX_PACK_BYTES || 25_000_000);
+const SURFACE_MAX_FILES = Number(process.env.SKS_PACKAGE_SURFACE_MAX_FILES || 2500);
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
@@ -70,6 +75,8 @@ assertGate(files.some((f) => f.startsWith('schemas/')), 'packlist_missing_runtim
 const forbidden = files.filter((f) =>
   f.startsWith('test/') ||
   f.startsWith('src/') ||
+  f.includes('/__tests__/') ||
+  f.endsWith('.test.js') ||
   f.startsWith('docs/internal/') ||
   f.endsWith('.map') ||
   f.startsWith('.sneakoscope/') ||
@@ -78,6 +85,8 @@ const forbidden = files.filter((f) =>
   /(^|\/)\.env/.test(f)
 );
 assertGate(forbidden.length === 0, 'packlist_forbidden_files', { forbidden });
+assertGate(info.entryCount <= SURFACE_MAX_FILES, 'package_surface_file_count_over_limit', { entryCount: info.entryCount, max_file_count: SURFACE_MAX_FILES });
+assertGate(info.size <= SURFACE_MAX_PACKED, 'package_surface_tarball_over_limit', { size: info.size, max_tarball_bytes: SURFACE_MAX_PACKED });
 
 const report = {
   entryCount: info.entryCount,
@@ -93,6 +102,26 @@ const report = {
 const out = path.join(root, '.sneakoscope', 'reports', 'packlist-performance.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+
+const surfaceReport = {
+  schema: 'sks.package-surface-budget.v1',
+  ok: true,
+  generated_at: new Date().toISOString(),
+  max_tarball_bytes: SURFACE_MAX_PACKED,
+  max_file_count: SURFACE_MAX_FILES,
+  actual_tarball_bytes: info.size,
+  actual_file_count: info.entryCount,
+  forbidden_globs: [
+    'dist/**/__tests__/**',
+    'dist/**/*.test.js',
+    '.sneakoscope/**',
+    'src/**',
+    'test/**'
+  ],
+  forbidden_findings: forbidden,
+  blockers: []
+};
+fs.writeFileSync(path.join(root, '.sneakoscope', 'reports', 'package-surface-budget.json'), `${JSON.stringify(surfaceReport, null, 2)}\n`);
 
 emitGate('publish:packlist-performance', {
   files: info.entryCount,
