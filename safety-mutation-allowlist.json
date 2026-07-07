@@ -1544,6 +1544,18 @@
       "reason": "Parallel production smoke best-effort cleanup removes only its own mkdtemp-created fixture root on failure."
     },
     {
+      "file": "src/core/update-check.ts",
+      "symbol": "writeUpdateLatestCache",
+      "token": "fs.writeFile",
+      "reason": "Update check writes only the scoped latest-version cache artifact after bounded registry or dry-run discovery."
+    },
+    {
+      "file": "src/scripts/naruto-codex-e2e-check.ts",
+      "symbol": "module",
+      "token": "writeFileSync",
+      "reason": "Naruto E2E gate writes only a package.json fixture inside its mkdtemp-created isolated temp project."
+    },
+    {
       "file": "src/core/install/installed-package-smoke.ts",
       "symbol": "runInstalledPackageSmoke",
       "token": "fs.writeFile",

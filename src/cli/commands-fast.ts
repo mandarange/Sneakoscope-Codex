@@ -1,15 +1,19 @@
-import { COMMANDS, type CommandEntry } from './command-registry.js';
+import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from './command-manifest-lite.js';
 
 interface FastCommandRow {
   name: string;
   usage: string;
   description: string;
-  maturity: CommandEntry['maturity'];
+  maturity: CommandManifestLiteEntry['maturity'];
+  readonly?: boolean;
+  mutating?: boolean;
+  deprecated?: boolean;
+  hidden?: boolean;
 }
 
 export function commandsJsonFast(): void {
-  const commands = Object.entries(COMMANDS)
-    .map(([name, entry]) => fastCommandRow(name, entry))
+  const commands = COMMAND_MANIFEST_LITE
+    .map((entry) => fastCommandRow(entry))
     .sort((a, b) => a.name.localeCompare(b.name));
   console.log(JSON.stringify({
     schema: 'sks.command-registry.v1',
@@ -18,11 +22,16 @@ export function commandsJsonFast(): void {
   }, null, 2));
 }
 
-function fastCommandRow(name: string, entry: CommandEntry): FastCommandRow {
-  return {
-    name,
-    usage: `sks ${name}`,
+function fastCommandRow(entry: CommandManifestLiteEntry): FastCommandRow {
+  const row: FastCommandRow = {
+    name: entry.name,
+    usage: `sks ${entry.name}`,
     description: entry.summary,
     maturity: entry.maturity
   };
+  if (entry.readonly === true) row.readonly = true;
+  if (entry.mutatesRouteState === true) row.mutating = true;
+  if (entry.deprecated === true) row.deprecated = true;
+  if (entry.hidden === true) row.hidden = true;
+  return row;
 }

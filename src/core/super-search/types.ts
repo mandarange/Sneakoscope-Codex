@@ -168,6 +168,15 @@ export interface SuperSearchResult {
     }>
     repeated_failed_strategy_count: number
   }
+  provider_self_heal?: {
+    schema: 'sks.super-search-provider-self-heal-summary.v1'
+    attempted: boolean
+    recovered: boolean
+    manual_required: boolean
+    report_paths: string[]
+    blockers: string[]
+    warnings: string[]
+  }
   synthesis: string
   blockers: string[]
   warnings: string[]

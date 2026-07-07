@@ -9,6 +9,7 @@ export interface GateTimingReport {
   total_ms: number
   slowest_gates: Array<{ id: string; duration_ms: number; cache_hit: boolean }>
   duplicate_builds_detected: boolean
+  duplicate_build_count: number
   redundant_gate_groups: Array<{ command: string; gate_ids: string[] }>
   blockers: string[]
   failure_tail?: { stdout: string; stderr: string }
@@ -32,6 +33,7 @@ export async function runGateTiming(root: string): Promise<GateTimingReport> {
   const summary = latestReleaseSummary(root)
   const slowest = parseSlowestGates(summary, res.stdout)
   const redundantGateGroups = findRedundantBuildGroups(root)
+  const duplicateBuildCount = redundantGateGroups.reduce((sum, group) => sum + Math.max(0, group.gate_ids.length - 1), 0)
   if (redundantGateGroups.length > 0) blockers.push('duplicate_builds_detected')
   return {
     schema: 'sks.gate-timing.v1',
@@ -40,6 +42,7 @@ export async function runGateTiming(root: string): Promise<GateTimingReport> {
     total_ms: totalMs,
     slowest_gates: slowest,
     duplicate_builds_detected: redundantGateGroups.length > 0,
+    duplicate_build_count: duplicateBuildCount,
     redundant_gate_groups: redundantGateGroups,
     blockers,
     ...(res.code !== 0 || res.timedOut ? { failure_tail: { stdout: tail(res.stdout), stderr: tail(res.stderr) } } : {})

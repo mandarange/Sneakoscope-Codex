@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive, managedSksTmpRoot } from './fsx.js';
+import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive, managedSksTmpRoot, sha256 } from './fsx.js';
 import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS } from './routes.js';
 
 export const DEFAULT_RETENTION_POLICY = Object.freeze({
@@ -140,6 +140,17 @@ export async function lightweightStorageReport(root: any): Promise<any> {
 async function listMissionDirs(root: any, opts: any = {}) {
   const base = path.join(root, '.sneakoscope', 'missions');
   if (!(await exists(base))) return [];
+  if (!opts.includeSize && opts.useIndex !== false) {
+    const indexed = await readMissionIndex(root).catch(() => null);
+    if (indexed?.ok && Array.isArray(indexed.missions)) {
+      return indexed.missions.map((mission: any) => ({
+        id: mission.id,
+        path: path.join(base, mission.id),
+        mtimeMs: Number(mission.mtime_ms || 0),
+        size: null
+      })).sort((a: any, b: any) => b.mtimeMs - a.mtimeMs);
+    }
+  }
   const entries = await fs.readdir(base, { withFileTypes: true });
   const out: any[] = [];
   const includeSize = Boolean(opts.includeSize);
@@ -150,6 +161,58 @@ async function listMissionDirs(root: any, opts: any = {}) {
     if (st) out.push({ id: e.name, path: p, mtimeMs: st.mtimeMs, size: includeSize ? await dirSize(p).catch(() => 0) : null });
   }
   return out.sort((a: any, b: any) => b.mtimeMs - a.mtimeMs);
+}
+
+export function missionIndexPath(root: any) {
+  return path.join(root, '.sneakoscope', 'missions', 'index.json');
+}
+
+export async function readMissionIndex(root: any) {
+  const indexFile = missionIndexPath(root);
+  const index = await readJson(indexFile, null).catch(() => null);
+  if (!index || index.schema !== 'sks.mission-index.v1') return null;
+  const base = path.join(root, '.sneakoscope', 'missions');
+  const st = await fs.stat(base).catch(() => null);
+  const indexStat = await fs.stat(indexFile).catch(() => null);
+  if (!st) return { ...index, ok: false, stale: true };
+  const stale = indexStat ? st.mtimeMs > indexStat.mtimeMs + 1000 : Number(index.base_mtime_ms || 0) < st.mtimeMs;
+  if (stale) return { ...index, ok: false, stale: true };
+  return { ...index, ok: true, stale: false };
+}
+
+export async function refreshMissionIndex(root: any, opts: any = {}) {
+  const base = path.join(root, '.sneakoscope', 'missions');
+  await ensureDir(base);
+  const entries = await fs.readdir(base, { withFileTypes: true }).catch(() => []);
+  const missions = (await Promise.all(entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('M-'))
+    .map(async (entry) => {
+      const dir = path.join(base, entry.name);
+      const st = await fs.stat(dir).catch(() => null);
+      const mission = await readJson(path.join(dir, 'mission.json'), {}).catch(() => ({}));
+      const createdMs = Date.parse(String(mission.created_at || ''));
+      return {
+        id: entry.name,
+        mode: mission.mode || null,
+        created_at: mission.created_at || null,
+        created_ms: Number.isFinite(createdMs) ? createdMs : 0,
+        mtime_ms: st?.mtimeMs || 0,
+        ...(opts.includeSize ? { bytes: await dirSize(dir).catch(() => 0) } : {})
+      };
+    })))
+    .sort((a: any, b: any) => (b.created_ms - a.created_ms) || (b.mtime_ms - a.mtime_ms) || b.id.localeCompare(a.id));
+  const baseStat = await fs.stat(base).catch(() => null);
+  const index = {
+    schema: 'sks.mission-index.v1',
+    generated_at: nowIso(),
+    root,
+    base_mtime_ms: baseStat?.mtimeMs || 0,
+    mission_count: missions.length,
+    latest_mission_id: missions[0]?.id || null,
+    missions
+  };
+  await writeJsonAtomic(missionIndexPath(root), index);
+  return index;
 }
 
 async function missionDirById(root: any, id: any) {
@@ -646,6 +709,11 @@ export async function enforceRetention(root: any, opts: any = {}) {
     || (fullMissionSweep && policy.compact_closed_mission_workdirs !== false)
     || Boolean(opts.afterRoute && opts.completedMissionId);
   await ensureDir(path.join(root, '.sneakoscope', 'reports'));
+  const missionIndex = await refreshMissionIndex(root).catch((err) => ({
+    schema: 'sks.mission-index.v1',
+    ok: false,
+    blockers: [`mission_index_refresh_failed:${err instanceof Error ? err.message : String(err)}`]
+  }));
   await pruneTmp(root, policy, dryRun, actions);
   if (fullMissionSweep) await pruneOldMissions(root, policy, dryRun, actions);
   if (fullMissionSweep) await pruneFromChatImgTempTriWiki(root, policy, dryRun, actions);
@@ -676,7 +744,99 @@ export async function enforceRetention(root: any, opts: any = {}) {
     completed_mission_id: opts.completedMissionId || null,
     actions
   };
+  const plan_hash = retentionPlanHash(actions, policy);
+  const plan = {
+    schema: 'sks.retention-plan.v1',
+    generated_at: nowIso(),
+    dry_run: dryRun,
+    plan_hash,
+    action_count: actions.length,
+    mission_index: {
+      path: path.relative(root, missionIndexPath(root)),
+      ok: (missionIndex as any).ok !== false,
+      mission_count: (missionIndex as any).mission_count ?? null,
+      latest_mission_id: (missionIndex as any).latest_mission_id ?? null
+    },
+    protected_durable_context: DURABLE_RETENTION_CLASSES,
+    actions
+  };
+  if (dryRun && opts.writePlan !== false) await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'retention-plan.json'), plan);
   if (!dryRun) await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'storage.json'), report);
   if (!dryRun) await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'retention-cleanup.json'), cleanup);
-  return { dryRun, policy, actions, report, cleanup };
+  return { dryRun, policy, actions, report, cleanup, plan };
+}
+
+export async function retentionStatus(root: any) {
+  const [index, plan, cleanup, report] = await Promise.all([
+    readMissionIndex(root).catch(() => null),
+    readJson(path.join(root, '.sneakoscope', 'reports', 'retention-plan.json'), null).catch(() => null),
+    readJson(path.join(root, '.sneakoscope', 'reports', 'retention-cleanup.json'), null).catch(() => null),
+    readJson(path.join(root, '.sneakoscope', 'reports', 'storage.json'), null).catch(() => null)
+  ]);
+  return {
+    schema: 'sks.retention-status.v1',
+    ok: true,
+    generated_at: nowIso(),
+    mission_index: index ? {
+      ok: index.ok !== false,
+      stale: index.stale === true,
+      mission_count: index.mission_count ?? null,
+      latest_mission_id: index.latest_mission_id ?? null,
+      path: path.relative(root, missionIndexPath(root))
+    } : null,
+    latest_plan: plan ? { plan_hash: plan.plan_hash || null, action_count: plan.action_count ?? null, generated_at: plan.generated_at || null } : null,
+    latest_cleanup: cleanup ? { action_count: cleanup.action_count ?? null, generated_at: cleanup.generated_at || null, dry_run: cleanup.dry_run === true } : null,
+    storage: report || null
+  };
+}
+
+export async function applyRetentionPlan(root: any, opts: any = {}) {
+  const previous = await readJson(path.join(root, '.sneakoscope', 'reports', 'retention-plan.json'), null).catch(() => null);
+  if (!previous?.plan_hash) {
+    return { schema: 'sks.retention-apply.v1', ok: false, applied: false, blockers: ['retention_plan_missing'] };
+  }
+  const expectedHash = String(opts.planHash || previous.plan_hash);
+  const planned = await enforceRetention(root, { ...opts, dryRun: true, skipStorageReport: true, writePlan: false });
+  const actualHash = planned.plan.plan_hash;
+  if (actualHash !== expectedHash) {
+    return {
+      schema: 'sks.retention-apply.v1',
+      ok: false,
+      applied: false,
+      expected_plan_hash: expectedHash,
+      actual_plan_hash: actualHash,
+      blockers: ['retention_plan_hash_mismatch']
+    };
+  }
+  const applied = await enforceRetention(root, { ...opts, dryRun: false });
+  return {
+    schema: 'sks.retention-apply.v1',
+    ok: true,
+    applied: true,
+    expected_plan_hash: expectedHash,
+    actual_plan_hash: applied.plan.plan_hash,
+    action_count: applied.actions.length,
+    cleanup: applied.cleanup,
+    report: applied.report,
+    blockers: []
+  };
+}
+
+function retentionPlanHash(actions: any[], policy: any) {
+  return sha256(JSON.stringify({
+    policy: {
+      max_missions: policy.max_missions,
+      max_mission_age_days: policy.max_mission_age_days,
+      max_event_log_bytes: policy.max_event_log_bytes,
+      max_tmp_age_hours: policy.max_tmp_age_hours
+    },
+    actions: actions.map((action) => ({
+      action: action.action,
+      path: action.path ? String(action.path) : null,
+      mission: action.mission || null,
+      rel: action.rel || null,
+      bytes: Number(action.bytes || 0),
+      reason: action.reason || null
+    })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  }));
 }

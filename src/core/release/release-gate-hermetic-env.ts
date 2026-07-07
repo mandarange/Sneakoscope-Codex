@@ -25,6 +25,7 @@ export function createReleaseGateHermeticEnv(input: {
   fs.mkdirSync(codexHome, { recursive: true })
   fs.mkdirSync(cacheHome, { recursive: true })
   fs.mkdirSync(reportDir, { recursive: true })
+  const migrationGateDisabled = input.gate.id === 'legacy:update-e2e' ? undefined : '1'
   return {
     tmp_dir: tmpRoot,
     report_dir: reportDir,
@@ -37,6 +38,7 @@ export function createReleaseGateHermeticEnv(input: {
       HOME: input.gate.isolation.home === 'temp' ? home : process.env.HOME,
       CODEX_HOME: input.gate.isolation.codex_home === 'temp' ? codexHome : process.env.CODEX_HOME,
       XDG_CACHE_HOME: cacheHome,
+      ...(migrationGateDisabled ? { SKS_UPDATE_MIGRATION_GATE_DISABLED: migrationGateDisabled } : {}),
       SKS_DISABLE_REAL_MODEL_CALLS: input.gate.preset.includes('real-check') ? process.env.SKS_DISABLE_REAL_MODEL_CALLS || '0' : '1',
       SKS_DISABLE_GLOBAL_CONFIG_MUTATION: '1',
       // Gates must never spawn a real GUI menu bar status item into the user's

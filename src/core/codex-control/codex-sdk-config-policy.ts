@@ -31,7 +31,7 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
   }
   const codexLbApiKey = String(process.env.CODEX_LB_API_KEY || '').trim()
   const codexLbBaseUrl = normalizeCodexLbBaseUrl(process.env.CODEX_LB_BASE_URL)
-  if (codexLbApiKey && codexLbBaseUrl) {
+  if (process.env.SKS_CODEX_LB_AUTOBYPASS !== '1' && codexLbApiKey && codexLbBaseUrl) {
     config.model_provider = 'codex-lb'
     config.model_providers = {
       'codex-lb': {

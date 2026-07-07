@@ -1,5 +1,9 @@
 # Release Proof Truth
 
+SKS 5.10.0 keeps release proof truth aligned with the 5.10.0 package metadata, built output, performance baseline/improvement reports, import/fs hot-path reports, perf/hook latency reports, Super-Search offline/local/live smoke, Naruto hermetic/real-Codex E2E evidence, doctor/update fast-path reports, retention dry-run/apply smoke, command/dollar scorecards, release runner efficiency, package surface budget, and lifecycle-disabled publish readiness evidence before `npm publish --ignore-scripts`.
+
+SKS 5.10.0 release proof truth requires proof that fast paths reduce real import and I/O work instead of removing validation, hook output remains bounded and safe, Super-Search local fetch is SSRF-gated, Naruto real-runtime proof is separated from hermetic fixture proof, duplicate release builds remain at zero, and package/version/lockfile/docs/dist surfaces agree before publication.
+
 SKS 5.9.0 keeps release proof truth aligned with the 5.9.0 package metadata, built output, quantum baseline report, competitor scorecard, installed package smoke, perf/hook latency reports, Super-Search contracts, production parallel smoke, doctor idempotence, retention budget, package surface budget, and lifecycle-disabled publish readiness evidence before `npm publish --ignore-scripts`.
 
 SKS 5.9.0 release proof truth requires proof that installed-package success is based on a real tarball bootstrap plus doctor run, hook latency does not include migration-gate self-repair on the hot path, optional native capability repairs are explicit rather than hidden default doctor work, Super-Search does not fake provider readiness, and package/version/lockfile/docs/dist surfaces agree before publication.

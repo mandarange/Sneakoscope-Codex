@@ -1,4 +1,6 @@
 import path from 'node:path'
+import dns from 'node:dns/promises'
+import net from 'node:net'
 import { nowIso, sha256, writeTextAtomic } from '../fsx.js'
 import { evaluateRealEvidencePolicy } from '../verification/real-evidence-policy.js'
 import { classifyAuthority, isOfficialUrl, makeSource, sourceFromKnownUrl } from './source-records.js'
@@ -12,6 +14,8 @@ import type {
   SuperSearchResult,
   SuperSearchSourceRecord
 } from './types.js'
+
+const DEFAULT_FETCH = globalThis.fetch
 
 export function normalizeGenericSourceRows(raw: unknown, providerId: string, family: string, intent: SearchIntent, tier: SuperSearchSourceRecord['authority_tier']): SuperSearchSourceRecord[] {
   const rows = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.results) ? (raw as any).results : raw ? [raw] : []
@@ -47,7 +51,7 @@ export function sourceFromWebRow(row: any, index: number, intent: SearchIntent):
   })
 }
 
-export async function sourceFromUrlFetch(url: string, artifactDir: string, intent: SearchIntent): Promise<{
+export async function sourceFromUrlFetch(url: string, artifactDir: string, intent: SearchIntent, opts: { allowLocal?: boolean } = {}): Promise<{
   source: SuperSearchSourceRecord
   blockers: string[]
   warnings: string[]
@@ -63,18 +67,62 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
       warnings
     }
   }
+  const policyOpts = { ...opts, networkLookupRequired: fetchFn === DEFAULT_FETCH }
+  const initialPolicy = await evaluateUrlFetchPolicy(url, policyOpts)
+  if (!initialPolicy.ok) {
+    blockers.push(...initialPolicy.blockers)
+    warnings.push(...initialPolicy.warnings)
+    return {
+      source: { ...sourceFromKnownUrl(url, intent), blockers, warnings: [...warnings, 'url_parse_only'] },
+      blockers,
+      warnings
+    }
+  }
+  warnings.push(...initialPolicy.warnings)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 10000)
   try {
-    const response = await fetchFn(url, {
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: { 'user-agent': 'sneakoscope-super-search/5.8' }
-    })
+    let currentUrl = url
+    let response: Response | null = null
+    for (let redirectCount = 0; redirectCount <= 5; redirectCount++) {
+      const policy = await evaluateUrlFetchPolicy(currentUrl, policyOpts)
+      if (!policy.ok) {
+        blockers.push(...policy.blockers)
+        warnings.push(...policy.warnings)
+        return {
+          source: { ...sourceFromKnownUrl(currentUrl, intent), blockers, warnings: [...warnings, 'url_parse_only'] },
+          blockers,
+          warnings
+        }
+      }
+      warnings.push(...policy.warnings)
+      response = await fetchFn(currentUrl, {
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: { 'user-agent': 'sneakoscope-super-search/5.10' }
+      })
+      if (![301, 302, 303, 307, 308].includes(response.status)) break
+      const location = response.headers.get('location')
+      if (!location) break
+      currentUrl = new URL(location, response.url || currentUrl).toString()
+      if (redirectCount === 5) blockers.push('direct_url_fetch_redirect_limit')
+    }
+    if (!response) throw new Error('direct URL fetch produced no response')
     const text = await response.text()
     const capped = text.length > 512 * 1024 ? text.slice(0, 512 * 1024) : text
     if (text.length > capped.length) warnings.push('url_content_truncated')
-    const normalizedUrl = response.url || url
+    const normalizedUrl = response.url || currentUrl
+    const finalPolicy = await evaluateUrlFetchPolicy(normalizedUrl, policyOpts)
+    if (!finalPolicy.ok) {
+      blockers.push(...finalPolicy.blockers)
+      warnings.push(...finalPolicy.warnings)
+      return {
+        source: { ...sourceFromKnownUrl(normalizedUrl, intent), blockers, warnings: [...warnings, 'url_parse_only'] },
+        blockers,
+        warnings
+      }
+    }
+    warnings.push(...finalPolicy.warnings)
     if (!response.ok) blockers.push(`direct_url_fetch_http_${response.status}`)
     if (!capped.trim()) blockers.push('direct_url_fetch_empty_content')
     const contentSha = capped.trim() ? sha256(capped) : null
@@ -90,7 +138,7 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
       verdict: response.ok && capped.trim() ? 'verified_content' : 'blocked',
       authority: classifyAuthority(normalizedUrl),
       primary: isOfficialUrl(normalizedUrl),
-      path: ['direct_url_fetch'],
+      path: opts.allowLocal ? ['direct_url_fetch', 'allow_local'] : ['direct_url_fetch'],
       warnings,
       blockers,
       contentArtifact: relArtifact,
@@ -110,6 +158,68 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
   } finally {
     clearTimeout(timer)
   }
+}
+
+async function evaluateUrlFetchPolicy(rawUrl: string, opts: { allowLocal?: boolean; networkLookupRequired?: boolean }): Promise<{ ok: boolean; blockers: string[]; warnings: string[] }> {
+  if (opts.allowLocal === true) return { ok: true, blockers: [], warnings: ['local_fetch_explicitly_allowed'] }
+  const warnings: string[] = []
+  try {
+    const parsed = new URL(rawUrl)
+    if (!/^https?:$/i.test(parsed.protocol)) {
+      return { ok: false, blockers: ['direct_url_fetch_protocol_not_allowed'], warnings }
+    }
+    const host = parsed.hostname.toLowerCase()
+    if (host === 'localhost' || host.endsWith('.localhost')) {
+      return { ok: false, blockers: ['direct_url_fetch_ssrf_blocked:localhost'], warnings }
+    }
+    const literal = normalizeIpLiteral(host)
+    if (!literal && opts.networkLookupRequired === false) {
+      return { ok: true, blockers: [], warnings: ['direct_url_fetch_dns_probe_skipped_for_injected_fetch'] }
+    }
+    const addresses = literal
+      ? [literal]
+      : (await dns.lookup(host, { all: true, verbatim: true })).map((entry) => entry.address)
+    const blocked = addresses.find((address) => isPrivateOrLocalAddress(address))
+    if (blocked) {
+      return { ok: false, blockers: [`direct_url_fetch_ssrf_blocked:${blocked}`], warnings }
+    }
+    return { ok: true, blockers: [], warnings }
+  } catch (error) {
+    warnings.push(`direct_url_fetch_policy_check_failed:${error instanceof Error ? error.message : String(error)}`)
+    return { ok: false, blockers: ['direct_url_fetch_policy_check_failed'], warnings }
+  }
+}
+
+function normalizeIpLiteral(hostname: string): string | null {
+  const unwrapped = hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname
+  return net.isIP(unwrapped) ? unwrapped : null
+}
+
+function isPrivateOrLocalAddress(address: string): boolean {
+  const normalized = normalizeIpLiteral(address) || address
+  if (net.isIP(normalized) === 4) {
+    const parts = normalized.split('.').map((part) => Number(part))
+    const a = parts[0] ?? -1
+    const b = parts[1] ?? -1
+    return a === 10
+      || a === 127
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 169 && b === 254)
+      || a === 0
+  }
+  if (net.isIP(normalized) === 6) {
+    const lower = normalized.toLowerCase()
+    return lower === '::1'
+      || lower.startsWith('fc')
+      || lower.startsWith('fd')
+      || lower.startsWith('fe80:')
+      || lower === '::'
+      || lower.startsWith('::ffff:127.')
+      || lower.startsWith('::ffff:10.')
+      || lower.startsWith('::ffff:192.168.')
+  }
+  return false
 }
 
 export function buildXDiscoverySources(queries: string[], intent: SearchIntent): SuperSearchSourceRecord[] {

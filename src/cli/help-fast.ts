@@ -1,10 +1,10 @@
-import { COMMANDS } from './command-registry.js';
-import { PACKAGE_VERSION } from '../core/version.js';
-import { COMMAND_CATALOG } from '../core/routes.js';
+import { COMMAND_MANIFEST_LITE } from './command-manifest-lite.js';
+
+const FAST_PACKAGE_VERSION = '5.10.0';
 
 export function helpFast() {
   console.log(`SKS
-SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
+SNEAKOSCOPE CODEX v${FAST_PACKAGE_VERSION}
 
 3-pillar frontdoor
 
@@ -31,11 +31,10 @@ Discovery
 }
 
 function commandRows() {
-  const registry = new Map(Object.entries(COMMANDS).map(([name, meta]: any) => [name, meta]));
-  return COMMAND_CATALOG.map((entry: any) => ({
+  return COMMAND_MANIFEST_LITE.map((entry) => ({
     name: entry.name,
-    usage: entry.usage,
-    description: entry.description,
-    maturity: registry.get(entry.name)?.maturity || entry.maturity || 'labs'
+    usage: `sks ${entry.name}`,
+    description: entry.summary,
+    maturity: entry.maturity
   })).sort((a: any, b: any) => a.name.localeCompare(b.name));
 }

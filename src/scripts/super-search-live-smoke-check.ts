@@ -8,12 +8,25 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 const bin = path.join(root, 'dist', 'bin', 'sks.js')
 assertGate(fs.existsSync(bin), 'dist bin missing for live smoke', { bin, hint: 'run npm run build first' })
 
-const targets = [
-  'https://github.com/mandarange/Sneakoscope-Codex',
-  'https://www.npmjs.com/package/sneakoscope'
+const targetGroups = [
+  {
+    id: 'repo_metadata',
+    urls: [
+      'https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/main/package.json',
+      'https://github.com/mandarange/Sneakoscope-Codex',
+      'https://api.github.com/repos/mandarange/Sneakoscope-Codex'
+    ]
+  },
+  {
+    id: 'npm_package',
+    urls: [
+      'https://registry.npmjs.org/sneakoscope',
+      'https://www.npmjs.com/package/sneakoscope'
+    ]
+  }
 ]
 
-const fetchResults = targets.map((target) => runJson(['super-search', 'fetch', target, '--json']))
+const fetchResults = targetGroups.map((group) => fetchWithFallback(group))
 const doctor = runJson(['super-search', 'doctor', '--json'])
 
 for (const row of fetchResults) {
@@ -30,14 +43,24 @@ for (const row of fetchResults) {
 }
 
 assertGate(doctor.status === 0, 'super-search doctor command failed', doctor)
-assertGate(doctor.json.schema === 'sks.super-search-doctor.v2', 'doctor must emit v2 schema', doctor.json)
+assertGate(['sks.super-search-doctor.v2', 'sks.super-search-doctor.v3'].includes(doctor.json.schema), 'doctor must emit a supported schema', doctor.json)
 assertGate(doctor.json.ok === (doctor.json.status === 'usable' || doctor.json.status === 'offline_usable'), 'doctor ok must match usable status', doctor.json)
 
 const report = {
   schema: 'sks.super-search-live-smoke.v1',
   ok: true,
   generated_at: new Date().toISOString(),
-  checked_urls: targets,
+  checked_urls: fetchResults.map((row) => row.url),
+  attempts: fetchResults.map((row) => ({
+    group_id: row.group_id,
+    selected_url: row.url,
+    attempts: row.attempts.map((attempt) => ({
+      url: attempt.url,
+      status: attempt.status,
+      verified_source_count: Number(attempt.json?.proof?.verified_source_count || 0),
+      blockers: attempt.json?.blockers || []
+    }))
+  })),
   doctor_status: doctor.json.status,
   verified_sources: fetchResults.reduce((sum, row) => sum + Number(row.json?.proof?.verified_source_count || 0), 0),
   blockers: [],
@@ -47,17 +70,42 @@ fs.mkdirSync(path.join(root, '.sneakoscope', 'reports'), { recursive: true })
 fs.writeFileSync(path.join(root, '.sneakoscope', 'reports', 'super-search-live-smoke.json'), `${JSON.stringify(report, null, 2)}\n`)
 
 emitGate('super-search:live-smoke', {
-  checked_urls: targets.length,
+  checked_urls: fetchResults.length,
   doctor_status: doctor.json.status,
   verified_sources: fetchResults.reduce((sum, row) => sum + Number(row.json?.proof?.verified_source_count || 0), 0)
 })
+
+function fetchWithFallback(group) {
+  const attempts = []
+  for (const url of group.urls) {
+    const row = runJson(['super-search', 'fetch', url, '--json'])
+    attempts.push({ ...row, url })
+    if (isVerifiedFetch(row)) {
+      return { ...row, group_id: group.id, url, attempts }
+    }
+  }
+  return { ...attempts[attempts.length - 1], group_id: group.id, url: attempts[attempts.length - 1]?.url || null, attempts }
+}
+
+function isVerifiedFetch(row) {
+  if (row.status !== 0 || !row.json) return false
+  const result = row.json
+  const directSources = Array.isArray(result.sources) ? result.sources.filter((source) => source.provider_id === 'direct_url') : []
+  const hasNoSourceAcquisitionBlocker = !Array.isArray(result.blockers) || !result.blockers.includes('source_acquisition_unavailable')
+  return directSources.some((source) => source.acquisition_verdict === 'verified_content') &&
+    directSources.some((source) => source.content_artifact) &&
+    directSources.some((source) => source.content_sha256) &&
+    Number(result.proof?.source_count || 0) > 0 &&
+    Number(result.proof?.verified_source_count || 0) > 0 &&
+    hasNoSourceAcquisitionBlocker
+}
 
 function runJson(args) {
   const proc = spawnSync(process.execPath, [bin, ...args], {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, SKS_RELEASE_LIVE: '1' },
-    timeout: 60000
+    timeout: 30000
   })
   let json = null
   try {

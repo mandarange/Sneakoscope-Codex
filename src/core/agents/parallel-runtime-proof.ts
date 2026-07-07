@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fsp from 'node:fs/promises'
 import { appendJsonlBounded, ensureDir, nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
 
 export const PARALLEL_RUNTIME_EVENT_SCHEMA = 'sks.parallel-runtime-event.v1'
@@ -90,6 +91,8 @@ export interface ParallelRuntimeProof {
     scheduler_observation_delay_tolerance_ms: number
   }
   passed: boolean
+  event_read_mode: 'full' | 'tail-index'
+  scanned_event_count: number
   blockers: string[]
 }
 
@@ -127,7 +130,8 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
   requireChangedFiles?: boolean
   minChangedFiles?: number
 } = {}): Promise<ParallelRuntimeProof> {
-  const events = await readParallelRuntimeEvents(root, missionId)
+  const eventRead = await readParallelRuntimeEvents(root, missionId)
+  const events = eventRead.events
   const sorted = events.sort((a, b) => a.ms - b.ms)
   const firstMs = sorted[0]?.ms || Date.now()
   const lastMs = sorted[sorted.length - 1]?.ms || firstMs
@@ -268,6 +272,8 @@ export async function buildParallelRuntimeProof(root: string, missionId: string,
     headless_workers: headlessWorkers,
     utilization_proof_consistency: utilizationProofConsistency,
     passed,
+    event_read_mode: eventRead.mode,
+    scanned_event_count: sorted.length,
     blockers
   }
 }
@@ -278,9 +284,13 @@ export async function writeParallelRuntimeProof(root: string, missionId: string,
   return proof
 }
 
-async function readParallelRuntimeEvents(root: string, missionId: string): Promise<ParallelRuntimeEvent[]> {
-  const text = await readText(parallelRuntimeEventPath(root, missionId), '')
-  return String(text)
+async function readParallelRuntimeEvents(root: string, missionId: string): Promise<{ mode: 'full' | 'tail-index'; events: ParallelRuntimeEvent[] }> {
+  const file = parallelRuntimeEventPath(root, missionId)
+  const stat = await fsp.stat(file).catch(() => null)
+  const maxReadBytes = Math.max(64 * 1024, Math.floor(Number(process.env.SKS_PARALLEL_PROOF_TAIL_BYTES || 1024 * 1024)))
+  const full = !stat || stat.size <= maxReadBytes
+  const text = full ? await readText(file, '') : await readTailText(file, maxReadBytes)
+  const events = String(text)
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -293,6 +303,24 @@ async function readParallelRuntimeEvents(root: string, missionId: string): Promi
       }
     })
     .filter((row): row is ParallelRuntimeEvent => Boolean(row))
+  return { mode: full ? 'full' : 'tail-index', events }
+}
+
+async function readTailText(file: string, bytes: number): Promise<string> {
+  const handle = await fsp.open(file, 'r').catch(() => null)
+  if (!handle) return ''
+  try {
+    const stat = await handle.stat()
+    const length = Math.min(stat.size, bytes)
+    const start = Math.max(0, stat.size - length)
+    const buffer = Buffer.alloc(length)
+    await handle.read(buffer, 0, length, start)
+    const text = buffer.toString('utf8')
+    const firstNewline = text.indexOf('\n')
+    return start > 0 && firstNewline >= 0 ? text.slice(firstNewline + 1) : text
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
 }
 
 function normalizeParallelRuntimeEvent(

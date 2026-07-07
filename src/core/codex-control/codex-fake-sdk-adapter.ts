@@ -1,5 +1,6 @@
 import { nowIso, randomId } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
+import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID } from './schemas/agent-worker-result.schema.js'
 import { GPT_FINAL_ARBITER_RESULT_SCHEMA_ID } from './gpt-final-review-schema.js'
 
 export function fakeCodexSdkAllowed() {
@@ -73,6 +74,14 @@ function fakeStructuredOutput(input: CodexTaskInput) {
       confidence: unsafe || overbuild ? 'medium' : 'high'
     }
   }
+  const agentWorkerMetadata = input.outputSchemaId === CODEX_AGENT_WORKER_RESULT_SCHEMA_ID
+    ? {
+        work_item_kind: input.workItemId ? 'verification' : null,
+        regression_proof: null,
+        repair_hypothesis: null,
+        tournament: null
+      }
+    : {}
   return {
     status: 'done',
     summary: `Fake Codex SDK task completed for ${input.workItemId || input.route}.`,
@@ -81,7 +90,8 @@ function fakeStructuredOutput(input: CodexTaskInput) {
     patch_envelopes: [],
     verification: { status: 'passed', checks: ['codex-sdk-fake-adapter', input.outputSchemaId] },
     rollback_notes: [],
-    blockers: []
+    blockers: [],
+    ...agentWorkerMetadata
   }
 }
 

@@ -29,7 +29,11 @@ def main():
             "patch_envelopes": [],
             "verification": {"status": "passed", "checks": ["python-codex-sdk-fixture"]},
             "rollback_notes": [],
-            "blockers": []
+            "blockers": [],
+            "work_item_kind": "verification",
+            "regression_proof": None,
+            "repair_hypothesis": None,
+            "tournament": None
         })})
         return 0
 

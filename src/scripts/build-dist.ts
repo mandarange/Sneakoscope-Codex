@@ -14,6 +14,7 @@ await removeDistMjs(distRoot);
 await copyRuntimeConfigFiles();
 await writeSkillsManifest();
 await removeDistNonRuntimeArtifacts(distRoot);
+await writeCommonJsBinScope();
 await import('./write-build-manifest.js');
 
 async function removeDistMjs(dir) {
@@ -57,6 +58,47 @@ async function writeSkillsManifest() {
   const out = path.join(distRoot, 'config', 'skills-manifest.json');
   await fsp.mkdir(path.dirname(out), { recursive: true });
   await fsp.writeFile(out, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+}
+
+async function writeCommonJsBinScope() {
+  const binDir = path.join(distRoot, 'bin');
+  if (!fs.existsSync(binDir)) return;
+  await fsp.writeFile(path.join(binDir, 'package.json'), '{"type":"commonjs"}\n', 'utf8');
+  await rewriteIfPresent(path.join(binDir, 'sks.js'), (text) =>
+    stripSourceMap(text).replace(/\nexport \{\};\n?/, '\n')
+  );
+  await rewriteIfPresent(path.join(binDir, 'sks-dispatch.js'), (text) =>
+    `${stripSourceMap(text).replace(/^export async function runSks/m, 'async function runSks')}\nexports.runSks = runSks;\n`
+  );
+  await rewriteIfPresent(path.join(binDir, 'fast-inline.js'), (text) => {
+    const names = [
+      'rootJsonFastInline',
+      'doctorJsonFastInline',
+      'narutoHelpJsonFastInline',
+      'hookUserPromptSubmitPerfInline'
+    ];
+    let next = stripSourceMap(text);
+    for (const name of names) {
+      next = next.replace(new RegExp(`^export (async )?function ${name}`, 'm'), '$1function ' + name);
+    }
+    return `${next}\n${names.map((name) => `exports.${name} = ${name};`).join('\n')}\n`;
+  });
+  await rewriteIfPresent(path.join(binDir, 'install.js'), (text) =>
+    stripSourceMap(text).replace(
+      /^import \{ spawnSync \} from 'node:child_process';/m,
+      "const { spawnSync } = require('node:child_process');"
+    )
+  );
+}
+
+async function rewriteIfPresent(file, rewrite) {
+  if (!fs.existsSync(file)) return;
+  const text = await fsp.readFile(file, 'utf8');
+  await fsp.writeFile(file, rewrite(text), 'utf8');
+}
+
+function stripSourceMap(text) {
+  return text.replace(/\n\/\/# sourceMappingURL=.*\.map\s*$/s, '\n');
 }
 
 async function copyDirIfPresent(from, to) {

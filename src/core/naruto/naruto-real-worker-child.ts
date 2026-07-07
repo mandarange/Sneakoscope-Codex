@@ -194,9 +194,9 @@ function buildNarutoWorkerPrompt(item: any, parentPrompt?: string) {
       : null,
     writeAllowed
       ? null
-      : 'For read-only work, inspect requested files/artifacts only; do not run package scripts, build commands, tests, or temp-file-creating checks unless the parent objective explicitly requires them.',
+      : 'For read-only work, inspect at most three targeted requested files/artifacts, then return final JSON. Do not recursively enumerate .sneakoscope, do not run broad find scans, and do not run package scripts, build commands, tests, git commands, or temp-file-creating checks unless the parent objective explicitly requires them.',
     'Impact scan, machine feedback, diff-quality, mistake-rule, TDD, and repair-hypothesis gates run before patch queue acceptance.',
-    'Include verification checks, rollback notes, blockers, findings, and changed_files.'
+    'Include verification checks, rollback notes, blockers, findings, changed_files, work_item_kind, regression_proof, repair_hypothesis, and tournament. Use null for optional proof fields that do not apply.'
   ].filter(Boolean).join('\n')
 }
 

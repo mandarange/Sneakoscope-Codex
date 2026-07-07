@@ -1,0 +1,43 @@
+export async function runSks(args: string[]): Promise<void> {
+  if (args[0] === '--agent' && args[1] === 'worker') {
+    const workerModule = '../core/agents/native-cli-' + 'worker.js';
+    const { runNativeCliWorkerFromArgs } = await import(workerModule);
+    await runNativeCliWorkerFromArgs(args.slice(2));
+  } else if (args[0] === 'commands' && args.includes('--json')) {
+    const { commandsJsonFast } = await import('../cli/commands-fast.js');
+    commandsJsonFast();
+  } else if (args[0] === 'dollar-commands' && args.includes('--json')) {
+    const { dollarCommandsJsonFast } = await import('../core/routes/dollar-manifest-lite.js');
+    dollarCommandsJsonFast();
+  } else if (args[0] === 'root' && args.includes('--json')) {
+    const getBuiltinModule = (process as unknown as { getBuiltinModule?: (name: string) => any }).getBuiltinModule;
+    const fs = typeof getBuiltinModule === 'function' ? getBuiltinModule('node:fs') : await import('node:fs');
+    const { rootJsonFastInline } = await import('./fast-inline.js');
+    rootJsonFastInline(fs);
+  } else if (args[0] === 'doctor' && args.includes('--json') && !args.includes('--fix') && !args.includes('--full') && !args.includes('--capabilities')) {
+    const { doctorJsonFastInline } = await import('./fast-inline.js');
+    doctorJsonFastInline();
+  } else if (args[0] === 'super-search' && args[1] === 'doctor') {
+    const superSearchDoctorModule = '../core/super-search/doctor.js';
+    const { buildSuperSearchDoctorReport, printSuperSearchDoctorReport } = await import(superSearchDoctorModule);
+    const doctorArgs = args.slice(2);
+    printSuperSearchDoctorReport(await buildSuperSearchDoctorReport(doctorArgs), doctorArgs.includes('--json'));
+  } else if (args[0] === 'hook' && args[1] === 'user-prompt-submit' && process.env.SKS_PERF_MEASURE === '1') {
+    const { hookUserPromptSubmitPerfInline } = await import('./fast-inline.js');
+    await hookUserPromptSubmitPerfInline();
+  } else if (args[0] === 'naruto' && (args[1] === 'help' || args.includes('--help')) && args.includes('--json')) {
+    const { narutoHelpJsonFastInline } = await import('./fast-inline.js');
+    narutoHelpJsonFastInline();
+  } else if (args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
+    if (args.length > 1) {
+      const { helpCommand } = await import('../core/commands/basic-cli.js');
+      await (helpCommand as (args: string[]) => Promise<unknown> | unknown)(args.slice(1));
+    } else {
+      const { helpFast } = await import('../cli/help-fast.js');
+      helpFast();
+    }
+  } else {
+    const { main } = await import('../cli/main.js');
+    await main(args);
+  }
+}

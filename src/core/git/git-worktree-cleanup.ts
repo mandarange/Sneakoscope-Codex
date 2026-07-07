@@ -18,6 +18,19 @@ export interface GitWorktreeCleanupReport {
   cleanup_command?: string | null
 }
 
+export interface GitWorktreeCleanupBatchReport {
+  schema: 'sks.git-worktree-cleanup-batch.v1'
+  ok: boolean
+  generated_at: string
+  requested_count: number
+  max_parallel: number
+  removed_count: number
+  retained_dirty_count: number
+  failed_count: number
+  reports: GitWorktreeCleanupReport[]
+  blockers: string[]
+}
+
 export async function cleanupGitWorktree(input: {
   repoRoot: string
   worktreePath: string
@@ -80,5 +93,35 @@ export async function cleanupGitWorktree(input: {
     git_locked: false,
     unlock_command: null,
     cleanup_command: null
+  }
+}
+
+export async function cleanupGitWorktreesBatch(input: {
+  worktrees: Array<{ repoRoot: string; worktreePath: string; branch?: string | null; deleteBranch?: boolean }>
+  maxParallel?: number
+}): Promise<GitWorktreeCleanupBatchReport> {
+  const queue = [...(input.worktrees || [])]
+  const maxParallel = Math.max(1, Math.floor(Number(input.maxParallel || queue.length || 1)))
+  const reports: GitWorktreeCleanupReport[] = []
+  const runners = Array.from({ length: Math.min(maxParallel, queue.length) }, async () => {
+    while (queue.length) {
+      const next = queue.shift()
+      if (!next) continue
+      reports.push(await cleanupGitWorktree(next))
+    }
+  })
+  await Promise.all(runners)
+  const blockers = reports.flatMap((report) => report.blockers || [])
+  return {
+    schema: 'sks.git-worktree-cleanup-batch.v1',
+    ok: blockers.length === 0,
+    generated_at: nowIso(),
+    requested_count: input.worktrees?.length || 0,
+    max_parallel: maxParallel,
+    removed_count: reports.filter((report) => report.action === 'removed').length,
+    retained_dirty_count: reports.filter((report) => report.action === 'retained_dirty').length,
+    failed_count: reports.filter((report) => report.action === 'remove_failed').length,
+    reports,
+    blockers
   }
 }

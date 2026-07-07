@@ -8,6 +8,8 @@ import { assertGate, emitGate, importDist, readJson, readText } from './sks-1-18
 const pkg = readJson('package.json')
 const manifest = readJson('release-gates.v2.json')
 const runner = readText('src/core/release/release-gate-dag.ts')
+const runnerCli = readText('src/scripts/release-gate-dag-runner.ts')
+const hermeticEnv = readText('src/core/release/release-gate-hermetic-env.ts')
 const scheduler = readText('src/core/release/release-gate-scheduler.ts')
 const cache = readText('src/core/release/release-gate-cache-v2.ts')
 
@@ -42,6 +44,9 @@ assertGate(runner.includes('cpu_time_saved_ms') && runner.includes('peak_running
 assertGate(runner.includes('sks.five-minute-completion-certificate.v1') && runner.includes('sks.affected-gate-graph.v1') && cache.includes('releaseGateProofBankFile'), 'DAG runner must emit completion certificates, affected graph, and proof-bank cache path')
 assertGate(runner.includes('detached: process.platform') && runner.includes('killGateProcessTree') && runner.includes('timed_out'), 'DAG runner must kill timed-out gate process trees and record timeout evidence')
 assertGate(runner.includes('pruneOldReleaseGateRunDirs') && runner.includes('SKS_RELEASE_GATE_RUN_RETENTION'), 'DAG runner must prune stale release-gate run reports before they exhaust local disk')
+assertGate(runnerCli.includes('ensureCurrentMigrationBeforeCommand') && runnerCli.includes('release-gate-runner-preflight'), 'DAG runner CLI must self-heal project migration before hermetic gates run')
+assertGate(hermeticEnv.includes('SKS_UPDATE_MIGRATION_GATE_DISABLED'), 'hermetic release gates must not rewrite project migration receipts from temporary HOME roots')
+assertGate(hermeticEnv.includes('legacy:update-e2e') && hermeticEnv.includes('migrationGateDisabled'), 'legacy:update-e2e must keep migration gate enabled while testing migration retry/repair behavior')
 
 const dag = await importDist('core/release/release-gate-dag.js')
 const fsx = await importDist('core/fsx.js')

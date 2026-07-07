@@ -1983,7 +1983,11 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
       allowLocalLlm: localPreferred,
       ...(localPreferred ? { localLlmPolicy: { mode: 'local_preferred', requiresGptFinal: true } } : {}),
       mutationLedgerRoot: workerDir,
-      zellijPaneId: null
+      zellijPaneId: null,
+      reliabilityPolicy: {
+        maxEmptyResultRetries: writePaths.length ? 1 : 2,
+        timeoutClass: writePaths.length ? 'standard' : 'short'
+      }
     })
     const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)
     const patchEnvelopes = normalizeDirectSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], agent, opts, sdkTask.sdkThreadId)
@@ -2060,8 +2064,11 @@ function buildDirectSdkWorkerPrompt(slice: any) {
     '',
     write.length
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}. Each patch envelope must include schema, source "model_authored", agent_id, session_id, slot_id, generation_index, task_slice_id, lease_id, allowed_paths, operations, and rationale. Each operation must include op, path, search, replace, content, and diff; use empty strings for operation fields that do not apply. Impact-scan, machine-feedback, diff-quality, and mistake-rule gates run before queue acceptance; exported signature changes require cochanged callers or cochange_acknowledged_reason. Bugfixes require regression_proof failed_before true and passed_after true; repair patches require repair_hypothesis.`
-      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; inspect relevant files/artifacts, do not mutate files, do not create temporary/build outputs, do not run package scripts/build/test commands unless explicitly required, and do not report pre-existing repository dirtiness as changed_files.`,
-    'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers.'
+      : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; inspect at most three targeted relevant files/artifacts, then return final JSON. Do not mutate files, do not create temporary/build outputs, do not recursively enumerate .sneakoscope, do not run broad find scans, do not run git commands, do not run package scripts/build/test commands unless explicitly required, and do not report pre-existing repository dirtiness as changed_files.`,
+    write.length
+      ? ''
+      : 'For synthetic read-only smoke fixtures, minimal package-only workspaces, non-git cwd, missing optional target artifacts, draft parent gates, or pre-existing unfinished mission ledgers are findings only. If your own assigned read-only inspection and Codex SDK structured output succeeded, set status to "done" and blockers to [].',
+    'Required JSON fields: status, summary, findings, changed_files, patch_envelopes, verification, rollback_notes, blockers, work_item_kind, regression_proof, repair_hypothesis, tournament. Use null for optional proof fields that do not apply.'
   ].join('\n')
 }
 

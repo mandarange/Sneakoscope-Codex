@@ -57,9 +57,9 @@ export function validateAgentWorkerResult(result: any): AgentRunnerResult {
     ...(result?.fixture_patch_envelopes === undefined ? {} : { fixture_patch_envelopes: Boolean(result.fixture_patch_envelopes) }),
     ...(result?.no_patch_reason === undefined ? {} : { no_patch_reason: result.no_patch_reason }),
     ...(result?.machine_feedback === undefined ? {} : { machine_feedback: result.machine_feedback }),
-    ...(result?.regression_proof === undefined ? {} : { regression_proof: result.regression_proof }),
-    ...(result?.repair_hypothesis === undefined ? {} : { repair_hypothesis: result.repair_hypothesis }),
-    ...(result?.tournament === undefined ? {} : { tournament: result.tournament }),
+    ...(isRecord(result?.regression_proof) ? { regression_proof: result.regression_proof } : {}),
+    ...(isRecord(result?.repair_hypothesis) ? { repair_hypothesis: result.repair_hypothesis } : {}),
+    ...(isRecord(result?.tournament) ? { tournament: result.tournament } : {}),
     ...(result?.source_intelligence_refs === undefined ? {} : { source_intelligence_refs: result.source_intelligence_refs }),
     ...(result?.goal_mode_ref === undefined ? {} : { goal_mode_ref: result.goal_mode_ref }),
     ...(result?.follow_up_work_items === undefined ? {} : { follow_up_work_items: followUps.accepted }),
@@ -147,9 +147,9 @@ function normalizePatchEnvelopes(value: any) {
     ...(raw?.rollback_hint === undefined ? {} : { rollback_hint: raw.rollback_hint }),
     ...(raw?.cochange_acknowledged === undefined ? {} : { cochange_acknowledged: Boolean(raw.cochange_acknowledged) }),
     ...(raw?.cochange_acknowledged_reason === undefined ? {} : { cochange_acknowledged_reason: String(raw.cochange_acknowledged_reason) }),
-    ...(raw?.regression_proof === undefined ? {} : { regression_proof: raw.regression_proof }),
-    ...(raw?.repair_hypothesis === undefined ? {} : { repair_hypothesis: raw.repair_hypothesis }),
-    ...(raw?.tournament === undefined ? {} : { tournament: raw.tournament })
+    ...(isRecord(raw?.regression_proof) ? { regression_proof: raw.regression_proof } : {}),
+    ...(isRecord(raw?.repair_hypothesis) ? { repair_hypothesis: raw.repair_hypothesis } : {}),
+    ...(isRecord(raw?.tournament) ? { tournament: raw.tournament } : {})
   })) : []
   const blockers = envelopes.flatMap((envelope, index) => {
     const validation = validateAgentPatchEnvelope(envelope)
@@ -167,6 +167,10 @@ function normalizeLeaseCompliance(value: any) {
     ok: value?.ok !== false,
     violations: Array.isArray(value?.violations) ? value.violations : []
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function normalizeVerification(value: any) {

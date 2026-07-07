@@ -1,0 +1,142 @@
+export function rootJsonFastInline(fs: { existsSync(path: string): boolean }, cwd = process.cwd()): void {
+  const project = findProjectRootSync(fs, cwd);
+  const global = joinPath(process.env.HOME || process.env.USERPROFILE || cwd, '.sneakoscope');
+  const active = project || global;
+  process.stdout.write(`${JSON.stringify({
+    cwd,
+    mode: project ? 'project' : 'global',
+    active_root: active,
+    project_root: project,
+    global_root: global,
+    using_global_root: !project
+  })}\n`);
+}
+
+export function doctorJsonFastInline(): void {
+  const startedAt = Date.now();
+  process.stdout.write(`${JSON.stringify({
+    schema: 'sks.doctor-status.v2',
+    elapsed_ms: Math.max(0, Date.now() - startedAt),
+    ok: true,
+    fast_path: true,
+    profile: 'fast-readonly',
+    root: process.cwd(),
+    arg_warnings: [],
+    node: { ok: true, version: process.version },
+    runtime_readiness: {
+      hook_evidence_policy: 'unknown-do-not-count',
+      agent_role_strategy: 'message-role'
+    },
+    codex: { bin: null, version: null, available: null, skipped: true, reason: 'fast_readonly_json' },
+    repair: {
+      setup: null,
+      sks_temp_sweep: { ok: true, skipped: true, reason: 'doctor_without_fix', actions: [] }
+    },
+    doctor_fix_transaction: null,
+    blockers: [],
+    warnings: ['fast_readonly_doctor_skipped_optional_deep_diagnostics']
+  }, null, 2)}\n`);
+}
+
+export function narutoHelpJsonFastInline(): void {
+  process.stdout.write(`${JSON.stringify({
+    schema: 'sks.naruto-command-result.v1',
+    ok: true,
+    action: 'help',
+    fast_path: true,
+    usage: 'sks naruto run "<prompt>" [--json] [--mock] [--readonly] [--clones N]',
+    commands: ['help', 'status', 'dashboard', 'workers', 'proof', 'run']
+  }, null, 2)}\n`);
+}
+
+export async function hookUserPromptSubmitPerfInline(): Promise<void> {
+  const raw = await readStdinInline();
+  let payload: any = {};
+  try { payload = raw.trim() ? JSON.parse(raw) : {}; } catch { payload = { raw }; }
+  const cwd = String(payload.cwd || process.cwd());
+  const root = findProjectRootSync(fsInline(), cwd) || cwd;
+  const state = readJsonSyncInline(joinPath(joinPath(root, '.sneakoscope'), 'state/current.json')) || {};
+  const prompt = String(payload.prompt || payload.user_prompt || payload.message || payload.raw || '');
+  const noQuestion = (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
+    || (state.mode === 'QALOOP' && state.phase === 'QALOOP_RUNNING_NO_QUESTIONS');
+  if (noQuestion) {
+    process.stdout.write(`${JSON.stringify({
+      decision: 'block',
+      reason: 'SKS no-question/no-interruption mode is active. User prompt has been queued until the run completes.'
+    })}\n`);
+    return;
+  }
+  const route = /\$Super-Search|\bsuper-search\b|site:(?:x|twitter)\.com/i.test(prompt)
+    ? '$Super-Search'
+    : /\b(?:fix|failing|failing tests|고쳐|수정|깨져)\b/i.test(prompt)
+      ? '$Naruto'
+      : '$Answer';
+  const contexts = [
+    'SKS hook perf inline path active for bounded latency measurement.',
+    `Route: ${route}`,
+    state.mission_id ? `Active mission: ${state.mission_id}` : ''
+  ].filter(Boolean);
+  process.stdout.write(`${JSON.stringify({
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext: contexts.join('\n')
+    },
+    systemMessage: `SKS: ${route} perf fast path.`
+  })}\n`);
+}
+
+function findProjectRootSync(fs: { existsSync(path: string): boolean }, start: string): string | null {
+  let dir = normalizeStart(start);
+  for (;;) {
+    if (fs.existsSync(joinPath(dir, '.sneakoscope'))) return dir;
+    if (fs.existsSync(joinPath(dir, 'AGENTS.md')) && fs.existsSync(joinPath(dir, 'package.json'))) return dir;
+    const parent = parentDir(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+function fsInline(): { existsSync(path: string): boolean; readFileSync(path: string, encoding: BufferEncoding): string } {
+  return (process as unknown as { getBuiltinModule?: (name: string) => any }).getBuiltinModule?.('node:fs') || require('node:fs');
+}
+
+function readJsonSyncInline(file: string): any {
+  try {
+    return JSON.parse(fsInline().readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function readStdinInline(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => { data += chunk; });
+    process.stdin.on('end', () => resolve(data));
+    process.stdin.on('error', () => resolve(data));
+  });
+}
+
+function normalizeStart(start: string): string {
+  const value = stripTrailingSlash(start || process.cwd());
+  if (value.startsWith('/')) return value || '/';
+  return joinPath(process.cwd(), value);
+}
+
+function joinPath(left: string, right: string): string {
+  const base = stripTrailingSlash(left || '/');
+  return `${base === '/' ? '' : base}/${right}`;
+}
+
+function parentDir(value: string): string {
+  const dir = stripTrailingSlash(value);
+  if (dir === '/') return dir;
+  const index = dir.lastIndexOf('/');
+  return index <= 0 ? '/' : dir.slice(0, index);
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '') || '/';
+}

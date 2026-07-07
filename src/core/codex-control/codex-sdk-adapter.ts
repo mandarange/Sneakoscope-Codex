@@ -42,14 +42,41 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   let finalResponse = ''
   let liveEventsWritten = false
   const liveEventPath = input.mutationLedgerRoot ? path.join(input.mutationLedgerRoot, 'codex-sdk-events.jsonl') : null
-  const streamed = await thread.runStreamed(buildSdkInput(input), { outputSchema: input.outputSchema })
-  for await (const event of streamed.events) {
-    events.push(event)
-    if (liveEventPath) {
-      await appendJsonlBounded(liveEventPath, translateCodexSdkEvent(event), 5 * 1024 * 1024)
-      liveEventsWritten = true
+  const timeoutMs = codexSdkTurnTimeoutMs(input)
+  const controller = new AbortController()
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+  timer.unref?.()
+  try {
+    const streamed = await thread.runStreamed(buildSdkInput(input), { outputSchema: input.outputSchema, signal: controller.signal })
+    for await (const event of streamed.events) {
+      events.push(event)
+      if (liveEventPath) {
+        await appendJsonlBounded(liveEventPath, translateCodexSdkEvent(event), 5 * 1024 * 1024)
+        liveEventsWritten = true
+      }
+      if (event?.type === 'item.completed' && event?.item?.type === 'agent_message') finalResponse = String(event.item.text || '')
     }
-    if (event?.type === 'item.completed' && event?.item?.type === 'agent_message') finalResponse = String(event.item.text || '')
+  } catch (err: any) {
+    if (!timedOut && controller.signal.aborted !== true && String(err?.name || '') !== 'AbortError') throw err
+    return {
+      ok: false,
+      sdkThreadId: String(thread.id || events.find((event) => event?.type === 'thread.started')?.thread_id || ''),
+      sdkRunId: extractRunId(events),
+      events,
+      finalResponse,
+      structuredOutput: null,
+      blockers: [`codex_sdk_turn_timeout:${timeoutMs}`],
+      liveEventsWritten,
+      runtimeIdentity: runtime.identity,
+      executionPolicy,
+      raw: { timeout_ms: timeoutMs, aborted: true }
+    }
+  } finally {
+    clearTimeout(timer)
   }
   const failed = events.find((event) => event?.type === 'turn.failed' || event?.type === 'error')
   if (failed) {
@@ -87,6 +114,15 @@ export function codexSdkRuntimePolicies(input: CodexTaskInput) {
   const env = buildCodexSdkEnv(input)
   const config = buildCodexSdkConfig(input)
   return { env, config }
+}
+
+function codexSdkTurnTimeoutMs(input: CodexTaskInput) {
+  const explicit = Number(process.env.SKS_CODEX_SDK_TURN_TIMEOUT_MS)
+  if (Number.isFinite(explicit) && explicit > 0) return Math.max(1000, Math.floor(explicit))
+  const timeoutClass = input.reliabilityPolicy?.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
+  if (timeoutClass === 'short') return 45_000
+  if (timeoutClass === 'long') return 300_000
+  return 120_000
 }
 
 function buildSdkInput(input: CodexTaskInput): any {

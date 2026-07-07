@@ -2,6 +2,7 @@ import path from 'node:path'
 import { ensureDir, nowIso, readJson, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { runCodexWebSearch, type CodexWebSearchFunction } from '../codex/codex-web-search-adapter.js'
 import { humanizeBlockers } from '../errors/blocker-humanizer.js'
+import { ensureProviderCapability } from '../provider/provider-self-heal.js'
 import {
   buildAttemptLedger,
   buildClaims,
@@ -35,6 +36,7 @@ export interface RunSuperSearchInput {
   offline?: boolean
   context7?: SuperSearchSourceFunction
   codexWebSearch?: CodexWebSearchFunction
+  allowLocalFetch?: boolean
   env?: NodeJS.ProcessEnv
 }
 
@@ -63,7 +65,29 @@ export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperS
   const sourceRows: SuperSearchSourceRecord[] = []
   const warnings = [...providerPlan.warnings]
   const blockers = [...providerPlan.blockers]
-  if (!providerPlan.selected_providers.length && mode !== 'url_acquisition') blockers.push('source_acquisition_unavailable')
+  let providerSelfHeal: SuperSearchResult['provider_self_heal'] | undefined
+  if (!providerPlan.selected_providers.length && mode !== 'url_acquisition') {
+    if (!input.offline) {
+      const selfHeal = await ensureProviderCapability({
+        root,
+        capability: 'super_search_codex_web',
+        apply: false,
+        ...(input.env ? { env: input.env } : {}),
+        reportPath: path.join(artifactDir, 'provider-self-heal-super-search-codex-web.json')
+      })
+      providerSelfHeal = {
+        schema: 'sks.super-search-provider-self-heal-summary.v1',
+        attempted: selfHeal.attempted,
+        recovered: selfHeal.recovered,
+        manual_required: selfHeal.manual_required,
+        report_paths: [selfHeal.report_path],
+        blockers: selfHeal.blockers,
+        warnings: selfHeal.warnings
+      }
+      warnings.push('provider_self_heal_attempted:super_search_codex_web', ...selfHeal.warnings)
+    }
+    blockers.push('source_acquisition_unavailable')
+  }
 
   if (input.context7 && providerPlan.selected_providers.includes('context7')) {
     const raw = await input.context7(queryVariants[0] || input.query)
@@ -87,7 +111,7 @@ export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperS
   if (mode === 'url_acquisition') {
     const url = extractFirstUrl(input.query)
     if (url) {
-      const fetched = await sourceFromUrlFetch(url, artifactDir, intent)
+      const fetched = await sourceFromUrlFetch(url, artifactDir, intent, { allowLocal: input.allowLocalFetch === true })
       sourceRows.push(fetched.source)
       blockers.push(...fetched.blockers)
       warnings.push(...fetched.warnings)
@@ -125,6 +149,7 @@ export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperS
     convergence,
     proof,
     attempt_ledger: attemptLedger,
+    ...(providerSelfHeal ? { provider_self_heal: providerSelfHeal } : {}),
     synthesis,
     blockers: proof.blockers,
     warnings: proof.warnings,
@@ -272,7 +297,8 @@ async function writeArtifacts(artifactDir: string, result: SuperSearchResult): P
     path.join(artifactDir, 'source-ledger.json'),
     path.join(artifactDir, 'claim-ledger.json'),
     path.join(artifactDir, 'super-search-proof.json'),
-    path.join(artifactDir, 'super-search-result.json')
+    path.join(artifactDir, 'super-search-result.json'),
+    ...(result.provider_self_heal?.report_paths || [])
   ]
   const blockerDiagnostics = humanizeBlockers(result.proof.blockers, gateEvidencePaths)
   await writeJsonAtomic(path.join(artifactDir, 'super-search-gate.json'), {
@@ -284,8 +310,14 @@ async function writeArtifacts(artifactDir: string, result: SuperSearchResult): P
     replacement_state: result.proof.ok ? 'usable_provider_independent_runtime' : 'replacement_incomplete',
     blockers: result.proof.blockers,
     human_summary: blockerDiagnostics.human_summary,
-    next_actions: blockerDiagnostics.next_actions,
+    next_actions: [
+      ...blockerDiagnostics.next_actions,
+      ...(result.provider_self_heal?.manual_required
+        ? ['Review the provider self-heal report and bind or enable the missing provider before retrying.']
+        : [])
+    ],
     evidence_paths: blockerDiagnostics.evidence_paths,
+    provider_self_heal: result.provider_self_heal || null,
     warnings: result.proof.warnings
   })
   await writeTextAtomic(path.join(artifactDir, 'synthesis.md'), result.synthesis)

@@ -48,7 +48,7 @@ export function ensureStrictObjectSchema(schema: Record<string, unknown>) {
       ? ensureNestedStrictSchema(value as Record<string, unknown>)
       : value
   ]));
-  next.required = Array.isArray(next.required) ? next.required : Object.keys(properties);
+  next.required = Object.keys(properties);
   next.additionalProperties = false;
   return next;
 }

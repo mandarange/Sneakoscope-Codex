@@ -586,6 +586,29 @@ export const DOLLAR_COMMAND_ALIASES = ROUTES.flatMap((route: any) => [
   ...routeAppSkillNames(route).map((alias: any) => ({ canonical: route.command, app_skill: `$${alias}` }))
 ]);
 
+const ROUTE_BY_ID = new Map<string, any>();
+const ROUTE_BY_DOLLAR_COMMAND = new Map<string, any>();
+
+for (const route of ROUTES as any[]) {
+  for (const key of [route.id, route.mode, dollarSkillName(route.command), ...(route.appSkillAliases || [])]) {
+    if (key) ROUTE_BY_ID.set(String(key).toLowerCase(), route);
+  }
+  for (const key of [
+    dollarSkillName(route.command),
+    ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
+    ...(route.hiddenDollarAliases || []).map((alias: any) => dollarSkillName(alias)),
+    ...(route.appSkillAliases || [])
+  ]) {
+    if (key) ROUTE_BY_DOLLAR_COMMAND.set(String(key).toLowerCase(), route);
+  }
+}
+
+ROUTE_BY_DOLLAR_COMMAND.set('team', ROUTE_BY_ID.get('naruto'));
+ROUTE_BY_DOLLAR_COMMAND.set('from-chat-img', ROUTE_BY_ID.get('naruto'));
+ROUTE_BY_DOLLAR_COMMAND.set('work', ROUTE_BY_ID.get('naruto'));
+ROUTE_BY_DOLLAR_COMMAND.set('swarm', ROUTE_BY_ID.get('naruto'));
+ROUTE_BY_DOLLAR_COMMAND.set('plan', ROUTE_BY_ID.get('planner'));
+
 export const COMMAND_CATALOG = [
   { name: 'help', usage: 'sks help [topic]', description: 'Show CLI help or focused help for a topic.' },
   { name: 'version', usage: 'sks version | sks --version', description: 'Print the installed Sneakoscope Codex version.' },
@@ -679,28 +702,12 @@ export const COMMAND_CATALOG = [
 
 export function routeById(id: any): any {
   const key = String(id || '').replace(/^\$/, '').toLowerCase();
-  return ROUTES.find((route: any) => {
-    const aliases = [
-      route.id,
-      route.mode,
-      dollarSkillName(route.command),
-      ...(route.appSkillAliases || [])
-    ].map((x: any) => String(x || '').toLowerCase());
-    return aliases.includes(key);
-  }) || null;
+  return ROUTE_BY_ID.get(key) || null;
 }
 
 export function routeByDollarCommand(commandName: any): any {
   const key = String(commandName || '').replace(/^\$/, '').toLowerCase();
-  if (key === 'team' || key === 'from-chat-img') return routeById('Naruto');
-  if (key === 'work' || key === 'swarm') return routeById('Naruto');
-  if (key === 'plan') return routeById('Planner');
-  return ROUTES.find((route: any) => [
-    dollarSkillName(route.command),
-    ...(route.dollarAliases || []).map((alias: any) => dollarSkillName(alias)),
-    ...(route.hiddenDollarAliases || []).map((alias: any) => dollarSkillName(alias)),
-    ...(route.appSkillAliases || [])
-  ].includes(key)) || null;
+  return ROUTE_BY_DOLLAR_COMMAND.get(key) || null;
 }
 
 function leadingDollarCommandMatch(prompt: any) {

@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { PACKAGE_VERSION, packageRoot, readJson, runProcess, throttleLines, which } from './fsx.js';
 import { createRequestedScopeContract } from './safety/requested-scope-contract.js';
@@ -131,10 +132,11 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
   if (options.maxOutputBytes !== undefined) effectiveOptions.maxOutputBytes = options.maxOutputBytes;
   const override = env[versionOverrideEnvName(packageName)];
   const effectivePromise = detectEffectiveSksVersion(effectiveOptions);
+  const latestCache = !override ? await readUpdateLatestCache(packageName, registry).catch(() => null) : null;
   const latestPromise = !override && npmBin
     ? runProcess(npmBin, ['view', packageName, 'version', '--silent', '--registry', registry], {
       env,
-      timeoutMs: options.timeoutMs ?? 5000,
+      timeoutMs: options.timeoutMs ?? 1000,
       maxOutputBytes: options.maxOutputBytes ?? 4096
     }).catch((err: unknown) => ({
       code: 1,
@@ -171,6 +173,17 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
     });
   }
   if (result.code !== 0) {
+    if (latestCache?.latest) {
+      return buildResult({
+        packageName,
+        current,
+        effective,
+        latest: latestCache.latest,
+        registry,
+        npmBin,
+        error: null
+      });
+    }
     return buildResult({
       packageName,
       current,
@@ -181,11 +194,13 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
       error: `${result.stderr || result.stdout || 'npm view failed'}`.trim()
     });
   }
+  const latest = String(result.stdout || '').trim().split(/\s+/).pop() || null;
+  if (latest) await writeUpdateLatestCache(packageName, registry, latest).catch(() => undefined);
   return buildResult({
     packageName,
     current,
     effective,
-    latest: String(result.stdout || '').trim().split(/\s+/).pop() || null,
+    latest,
     registry,
     npmBin
   });
@@ -747,6 +762,33 @@ function buildResult(input: {
     registry: input.registry,
     error: input.error || null
   };
+}
+
+async function readUpdateLatestCache(packageName: string, registry: string): Promise<{ latest: string | null } | null> {
+  const file = updateLatestCachePath(packageName, registry);
+  const text = await fs.readFile(file, 'utf8');
+  const parsed = JSON.parse(text);
+  if (parsed?.package !== packageName || parsed?.registry !== registry || !parsed?.latest || !parsed?.generated_at) return null;
+  const ageMs = Date.now() - Date.parse(parsed.generated_at);
+  if (!Number.isFinite(ageMs) || ageMs > 6 * 60 * 60 * 1000) return null;
+  return { latest: String(parsed.latest) };
+}
+
+async function writeUpdateLatestCache(packageName: string, registry: string, latest: string): Promise<void> {
+  const file = updateLatestCachePath(packageName, registry);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, `${JSON.stringify({
+    schema: 'sks.update-check-cache.v1',
+    generated_at: new Date().toISOString(),
+    package: packageName,
+    registry,
+    latest
+  }, null, 2)}\n`, 'utf8');
+}
+
+function updateLatestCachePath(packageName: string, registry: string): string {
+  const safe = `${packageName}-${registry}`.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 120);
+  return path.join(os.tmpdir(), 'sks-update-check-cache', `${safe}.json`);
 }
 
 function buildUpdateNowResult(input: {

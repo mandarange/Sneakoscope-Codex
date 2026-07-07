@@ -14,7 +14,7 @@
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **5.9.0**. New in this release: installed-package smoke checks, quantum performance budgets, Super-Search usable/degraded/blocked readiness, production parallel-write smoke, doctor idempotence proof, retention budgets, and an artifact-driven competitor scorecard. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **5.10.0**. New in this release: local-only dominance performance gates, lighter CLI cold starts and hooks, doctor/update fast paths, SSRF-safe Super-Search smoke, Naruto E2E tiers, retention performance smoke, and command/dollar performance scorecards. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 

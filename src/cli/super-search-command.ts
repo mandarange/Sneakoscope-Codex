@@ -32,6 +32,7 @@ async function runCommand(args: string[]) {
   const result = await runSuperSearch({
     missionDir,
     query,
+    allowLocalFetch: args.includes('--allow-local'),
     ...(mode ? { mode } : {})
   })
   const gate = await evaluateSuperSearchGate(missionDir)
@@ -54,7 +55,7 @@ async function runCommand(args: string[]) {
 
 async function doctorCommand(args: string[]) {
   const json = args.includes('--json')
-  const report = buildSuperSearchDoctorReport(args)
+  const report = await buildSuperSearchDoctorReport(args)
   printSuperSearchDoctorReport(report, json)
   return report
 }
@@ -132,7 +133,7 @@ function positional(args: string[]): string[] {
     const value = args[i]
     if (!value) continue
     if (value.startsWith('--')) {
-      if (value !== '--json') i++
+      if (value !== '--json' && value !== '--allow-local') i++
       continue
     }
     out.push(value)

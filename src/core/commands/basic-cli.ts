@@ -1,11 +1,13 @@
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMMANDS, LEGACY_COMMAND_ALIASES, type CommandEntry } from '../../cli/command-registry.js';
+import { COMMANDS, LEGACY_COMMAND_ALIASES } from '../../cli/command-registry.js';
+import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from '../../cli/command-manifest-lite.js';
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
 import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
-import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
+import { DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
+import { DOLLAR_COMMAND_ALIASES_LITE, DOLLAR_COMMANDS_LITE } from '../routes/dollar-manifest-lite.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
 import { buildFeatureRegistry, validateFeatureRegistry } from '../feature-registry.js';
 import { runFeatureFixture } from '../feature-fixture-executor.js';
@@ -19,7 +21,7 @@ interface CommandRow {
   name: string;
   usage: string;
   description: string;
-  maturity: CommandEntry['maturity'];
+  maturity: CommandManifestLiteEntry['maturity'];
 }
 
 export async function helpCommand(args: string[] = []): Promise<void | unknown> {
@@ -53,7 +55,7 @@ export function commandsCommand(args: string[] = []): unknown {
 }
 
 export function dollarCommandsCommand(args: any = []) {
-  const out = { dollar_commands: DOLLAR_COMMANDS, app_skill_aliases: DOLLAR_COMMAND_ALIASES };
+  const out = { dollar_commands: DOLLAR_COMMANDS_LITE, app_skill_aliases: DOLLAR_COMMAND_ALIASES_LITE };
   if (flag(args, '--json')) return printJson(out);
   console.log(`${sksTextLogo()}\n\n$ Commands\n`);
   const width = Math.max(...DOLLAR_COMMANDS.map((entry: any) => entry.command.length));
@@ -87,6 +89,14 @@ export function usageCommand(args: any = []) {
   if (topic === 'overview') {
     console.log(`Usage topics: ${USAGE_TOPICS}`);
     console.log('Try: sks usage goal, sks usage team, sks usage image-ux-review');
+    return;
+  }
+  if (topic === 'seo-geo-optimizer') {
+    console.log('seo-geo-optimizer\n');
+    console.log('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]');
+    console.log('       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]');
+    console.log('       sks seo-geo-optimizer rollback <mission|latest> --mode seo|geo --apply [--yes] [--json]');
+    console.log('Unified SEO/GEO optimizer audit/plan/apply/verify lifecycle on the search-visibility kernel.');
     return;
   }
   const row = commandRows().find((entry: any) => entry.name === topic);
@@ -427,12 +437,11 @@ export async function autoReviewCommand(sub: any = 'status', args: any = []) {
 }
 
 function commandRows(): CommandRow[] {
-  const registry = new Map<string, CommandEntry>(Object.entries(COMMANDS) as Array<[string, CommandEntry]>);
-  return COMMAND_CATALOG.map((entry) => ({
+  return COMMAND_MANIFEST_LITE.map((entry) => ({
     name: entry.name,
-    usage: entry.usage,
-    description: entry.description,
-    maturity: registry.get(entry.name)?.maturity || 'labs'
+    usage: `sks ${entry.name}`,
+    description: entry.summary,
+    maturity: entry.maturity
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 

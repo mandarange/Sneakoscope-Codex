@@ -235,7 +235,7 @@ function isMeaningfulEvent(event: any) {
 
 function hasFatalError(result: CodexReliabilityAttemptResult, events: any[]) {
   if (isMcpAuthError(result, events)) return false
-  const text = collectText(result, events)
+  const text = collectFatalSignalText(result, events)
   return /\b(?:4\d\d|fatal|unauthorized|forbidden|authrequired|invalid oauth|side-effect applied|partial patch applied)\b/i.test(text)
 }
 
@@ -256,6 +256,19 @@ function collectText(result: CodexReliabilityAttemptResult, events: any[]) {
       event?.item?.text,
       event?.raw?.failed_event?.error?.message
     ].filter(Boolean).join('\n'))
+  ].join('\n')
+}
+
+function collectFatalSignalText(result: CodexReliabilityAttemptResult, events: any[]) {
+  return [
+    ...(Array.isArray(result.blockers) ? result.blockers : []),
+    ...events
+      .filter((event) => event?.type === 'turn.failed' || event?.type === 'error')
+      .map((event) => [
+        event?.error?.message,
+        event?.message,
+        event?.raw?.failed_event?.error?.message
+      ].filter(Boolean).join('\n'))
   ].join('\n')
 }
 

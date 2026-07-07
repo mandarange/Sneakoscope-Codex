@@ -429,6 +429,7 @@ function isRunFailureBlocker(blockers: readonly unknown[]): boolean {
   return blockers.some((blocker) => {
     const text = String(blocker || '')
     return text.startsWith('codex_sdk_run_failed')
+      || text.startsWith('codex_sdk_turn_timeout')
       || text.startsWith('python_codex_sdk_run_failed')
       || text.startsWith('python_codex_sdk_timeout')
       || text.startsWith('python_codex_sdk_error')

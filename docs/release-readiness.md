@@ -1,5 +1,9 @@
 # Release Readiness
 
+SKS 5.10.0 is the local performance dominance release after 5.9.0. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, cold-start/import budgets, hook latency, fs hot-path checks, doctor/update fast paths, Super-Search offline/local/live smoke, Naruto hermetic and real-Codex E2E tiers, retention performance smoke, command/dollar performance scorecards, release runner efficiency, package surface budgets, and lifecycle-disabled publish evidence to agree on 5.10.0 before `npm publish --ignore-scripts`.
+
+5.10.0 release readiness adds proof that fast CLI paths avoid heavy imports, hooks avoid recursive runtime scans, doctor/update no-fix paths stay read-only and lazy, Super-Search fetch remains SSRF-safe, Naruto E2E separates deterministic fixture proof from real runtime proof, release timing records duplicate build count 0, and publish preflight remains explicit even when npm lifecycle scripts are disabled.
+
 SKS 5.9.0 is the quantum release-readiness hardening release after 5.8.0. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, installed-package smoke, CLI performance budgets, hook latency, Super-Search contract coverage, parallel production smoke, doctor idempotence, retention budgets, package surface budgets, and competitor scorecard evidence to agree on 5.9.0 before `npm publish --ignore-scripts`.
 
 5.9.0 release readiness adds proof that an installed tarball can bootstrap and pass doctor in an isolated project, hook hot paths skip migration-gate overhead, default doctor defers optional native capability repair to explicit probes, Super-Search has a minimum acquisition path, and release timing records slowest gates without reducing validation coverage.

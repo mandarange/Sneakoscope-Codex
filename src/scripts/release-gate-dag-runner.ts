@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runReleaseGateDag } from '../core/release/release-gate-dag.js'
 import { ensureDistFresh } from './lib/ensure-dist-fresh.js'
+import { ensureCurrentMigrationBeforeCommand } from '../core/update/update-migration-state.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 process.env.SKS_RELEASE_GATE_CACHE_MEMOIZE ||= '1'
@@ -10,6 +11,18 @@ const freshness = ensureDistFresh({ rebuild: false })
 if (!freshness.ok) {
   console.error(`SKS release gate DAG blocked: dist is stale (${freshness.issues.join(', ')}).`)
   console.error('Run npm run build:incremental first.')
+  process.exit(1)
+}
+const migration = await ensureCurrentMigrationBeforeCommand({
+  command: 'release-gate-runner-preflight',
+  cwd: root
+})
+if (!migration.ok) {
+  console.error('SKS release gate DAG blocked: project migration preflight failed.')
+  console.error(`Stage: ${migration.failed_stage_id || migration.status}`)
+  for (const blocker of migration.blockers) console.error(`Required blocker: ${blocker}`)
+  for (const warning of migration.warnings) console.error(`Optional warning: ${warning}`)
+  console.error(`Receipt: ${migration.receipt_path}`)
   process.exit(1)
 }
 const args = process.argv.slice(2)

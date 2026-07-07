@@ -1,17 +1,15 @@
 import {
-  COMMAND_ALIASES,
-  COMMANDS,
-  type CommandName,
-} from './command-registry.js';
+  COMMAND_ALIASES_LITE,
+  COMMAND_MANIFEST_BY_NAME,
+  COMMAND_NAME_SET,
+  type CommandNameLite,
+} from './command-manifest-lite.js';
 import { detectGlobalMode, glmWithoutMadResult } from './global-mode-router.js';
-import { ensureCurrentMigrationBeforeCommand } from '../core/update/update-migration-state.js';
-import { projectRoot, readJson } from '../core/fsx.js';
-import { stateFile } from '../core/mission.js';
 
 export interface NormalizedCommand {
-  command: CommandName | null;
+  command: CommandNameLite | null;
   rawCommand: string | null;
-  aliasTarget: CommandName | null;
+  aliasTarget: CommandNameLite | null;
   args: string[];
 }
 
@@ -22,15 +20,15 @@ export interface UnknownCommandResult {
   reason: 'unknown_command';
 }
 
-export function isCommandName(value: string): value is CommandName {
-  return Object.prototype.hasOwnProperty.call(COMMANDS, value);
+export function isCommandName(value: string): value is CommandNameLite {
+  return COMMAND_NAME_SET.has(value);
 }
 
 export function normalizeCommand(args: readonly string[] = []): NormalizedCommand {
   const cmd = args[0];
   if (!cmd) return { command: null, rawCommand: null, aliasTarget: null, args: [...args] };
   const mapped: string =
-    cmd in COMMAND_ALIASES ? COMMAND_ALIASES[cmd as keyof typeof COMMAND_ALIASES] : cmd;
+    cmd in COMMAND_ALIASES_LITE ? COMMAND_ALIASES_LITE[cmd as keyof typeof COMMAND_ALIASES_LITE] : cmd;
   const rest = args.slice(1);
   const command = isCommandName(mapped) ? mapped : null;
   return {
@@ -96,13 +94,14 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     };
     return result;
   }
-  const entry = COMMANDS[command];
+  const entry = COMMAND_MANIFEST_BY_NAME[command];
   const commandGate = await ensureActiveRouteCommandGate(command, rest);
   if (!commandGate.ok) {
     console.error(commandGate.message);
     process.exitCode = 1;
     return commandGate;
   }
+  const { ensureCurrentMigrationBeforeCommand } = await import('../core/update/update-migration-state.js');
   const migrationGate = await ensureCurrentMigrationBeforeCommand({
     command,
     args: rest,
@@ -120,13 +119,15 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     process.exitCode = 1;
     return migrationGate;
   }
-  const mod = await entry.lazy();
+  const { COMMANDS } = await import('./command-registry.js');
+  const commandEntry = COMMANDS[command as keyof typeof COMMANDS];
+  const mod = await commandEntry.lazy();
   if (typeof mod.run !== 'function') throw new Error(`Command ${command} must export run(command, args)`);
   return mod.run(rawCommand || command, rest);
 }
 
-async function ensureActiveRouteCommandGate(command: CommandName, args: readonly string[]) {
-  const entry = COMMANDS[command];
+async function ensureActiveRouteCommandGate(command: CommandNameLite, args: readonly string[]) {
+  const entry = COMMAND_MANIFEST_BY_NAME[command];
   if (command === 'route' || entry.readonly === true || entry.allowedDuringActiveRoute === true && entry.mutatesRouteState !== true) {
     return { ok: true, status: 'allowed' };
   }
@@ -135,6 +136,10 @@ async function ensureActiveRouteCommandGate(command: CommandName, args: readonly
   if (process.env.SKS_TEST_ISOLATION === '1' && process.env.SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS === '1') {
     return { ok: true, status: 'allowed_release_fixture_isolation' };
   }
+  const [{ projectRoot, readJson }, { stateFile }] = await Promise.all([
+    import('../core/fsx.js'),
+    import('../core/mission.js')
+  ]);
   const root = await projectRoot(process.cwd()).catch(() => process.cwd());
   const state = await readJson(stateFile(root), {}).catch(() => ({}));
   if (!activeRouteStateBlocksCommand(state)) return { ok: true, status: 'allowed' };

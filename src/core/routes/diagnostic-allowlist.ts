@@ -1,4 +1,4 @@
-import { COMMANDS } from '../../cli/command-registry.js';
+import { COMMAND_MANIFEST_BY_NAME } from '../../cli/command-manifest-lite.js';
 
 export function diagnosticPromptAllowedDuringNoQuestions(prompt: string): boolean {
   const text = String(prompt || '').trim();
@@ -6,7 +6,7 @@ export function diagnosticPromptAllowedDuringNoQuestions(prompt: string): boolea
   const parsed = parseSksCommand(text);
   if (!parsed) return false;
   const { command, subcommand, args } = parsed;
-  const entry = (COMMANDS as Record<string, { diagnostic?: boolean; readonly?: boolean; allowedDuringActiveRoute?: boolean } | undefined>)[command];
+  const entry = (COMMAND_MANIFEST_BY_NAME as Record<string, { diagnostic?: boolean; readonly?: boolean; allowedDuringActiveRoute?: boolean } | undefined>)[command];
   if (!entry || entry.allowedDuringActiveRoute !== true) return false;
   if (entry.readonly === true && safeDiagnosticSubcommand(command, subcommand, args)) return true;
   return Boolean(entry.diagnostic === true && safeDiagnosticSubcommand(command, subcommand, args));

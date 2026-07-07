@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [5.10.0] - 2026-07-07
+
+### Added
+
+- Add local-only dominance performance gates focused on cold start, hook latency, import graph, fs hot paths, Super-Search local HTTP smoke, Naruto E2E tiers, and command/dollar performance scorecards.
+- Add Super-Search local HTTP smoke and SSRF-safe direct fetch policy.
+- Add Naruto hermetic and real-Codex E2E tiers to separate deterministic fixture proof from real runtime proof.
+- Add import graph and fs hot-path checks to keep fast commands and hooks lightweight.
+- Add retention dry-run/apply smoke to turn retention into a runtime performance feature.
+
+### Fixed
+
+- Reduce cold-start overhead for version, commands, root, dollar-commands, Super-Search doctor, and doctor no-fix paths.
+- Reduce hook path I/O and heavy route policy generation.
+- Reduce Naruto worker launch, patch collection, merge, and cleanup bottlenecks.
+- Reduce release gate duplicate builds and repeated report reads.
+
+### Changed
+
+- Tighten performance budgets for CLI and hook paths.
+- Split doctor/setup/update fast read-only paths from repair/apply paths.
+- Split Super-Search doctor capability checks from actual network/source acquisition.
 
 ## [5.9.0] - 2026-07-06
 

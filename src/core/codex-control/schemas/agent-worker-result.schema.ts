@@ -14,6 +14,55 @@ const patchOperationSchema = {
   additionalProperties: false
 } as const
 
+const regressionProofSchema = {
+  type: ['object', 'null'],
+  required: ['test_file', 'failed_before', 'passed_after', 'output_digest'],
+  properties: {
+    test_file: { type: 'string' },
+    failed_before: { type: 'boolean' },
+    passed_after: { type: 'boolean' },
+    output_digest: { type: 'string' }
+  },
+  additionalProperties: false
+} as const
+
+const repairHypothesisSchema = {
+  type: ['object', 'null'],
+  required: ['failure', 'hypotheses', 'chosen', 'minimal_probe'],
+  properties: {
+    failure: { type: 'string' },
+    hypotheses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['cause', 'evidence_for', 'evidence_against'],
+        properties: {
+          cause: { type: 'string' },
+          evidence_for: { type: 'string' },
+          evidence_against: { type: 'string' }
+        },
+        additionalProperties: false
+      }
+    },
+    chosen: { type: 'string' },
+    minimal_probe: { type: 'string' }
+  },
+  additionalProperties: false
+} as const
+
+const tournamentSchema = {
+  type: ['object', 'null'],
+  required: ['schema', 'group_id', 'candidate_index', 'candidate_count', 'approach'],
+  properties: {
+    schema: { type: 'string', enum: ['sks.solution-tournament-candidate.v1', 'sks.solution-tournament.v1'] },
+    group_id: { type: 'string' },
+    candidate_index: { type: 'number' },
+    candidate_count: { type: 'number' },
+    approach: { type: 'string' }
+  },
+  additionalProperties: false
+} as const
+
 const patchEnvelopeSchema = {
   type: 'object',
   required: [
@@ -27,7 +76,12 @@ const patchEnvelopeSchema = {
     'lease_id',
     'allowed_paths',
     'operations',
-    'rationale'
+    'rationale',
+    'cochange_acknowledged',
+    'cochange_acknowledged_reason',
+    'regression_proof',
+    'repair_hypothesis',
+    'tournament'
   ],
   properties: {
     schema: { type: 'string', enum: ['sks.agent-patch-envelope.v1'] },
@@ -41,11 +95,11 @@ const patchEnvelopeSchema = {
     allowed_paths: { type: 'array', items: { type: 'string' } },
     operations: { type: 'array', items: patchOperationSchema },
     rationale: { type: 'string' },
-    cochange_acknowledged: { type: 'boolean' },
-    cochange_acknowledged_reason: { type: 'string' },
-    regression_proof: { type: 'object', additionalProperties: true },
-    repair_hypothesis: { type: 'object', additionalProperties: true },
-    tournament: { type: 'object', additionalProperties: true }
+    cochange_acknowledged: { type: ['boolean', 'null'] },
+    cochange_acknowledged_reason: { type: ['string', 'null'] },
+    regression_proof: regressionProofSchema,
+    repair_hypothesis: repairHypothesisSchema,
+    tournament: tournamentSchema
   },
   additionalProperties: false
 } as const
@@ -60,7 +114,11 @@ export const codexAgentWorkerResultSchema = {
     'patch_envelopes',
     'verification',
     'rollback_notes',
-    'blockers'
+    'blockers',
+    'work_item_kind',
+    'regression_proof',
+    'repair_hypothesis',
+    'tournament'
   ],
   properties: {
     status: { type: 'string', enum: ['done', 'failed', 'blocked'] },
@@ -79,10 +137,10 @@ export const codexAgentWorkerResultSchema = {
     },
     rollback_notes: { type: 'array', items: { type: 'string' } },
     blockers: { type: 'array', items: { type: 'string' } },
-    work_item_kind: { type: 'string' },
-    regression_proof: { type: 'object', additionalProperties: true },
-    repair_hypothesis: { type: 'object', additionalProperties: true },
-    tournament: { type: 'object', additionalProperties: true }
+    work_item_kind: { type: ['string', 'null'] },
+    regression_proof: regressionProofSchema,
+    repair_hypothesis: repairHypothesisSchema,
+    tournament: tournamentSchema
   },
   additionalProperties: false
 } as const
