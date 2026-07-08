@@ -34,7 +34,7 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
   const options = await parseOptions(rest);
   let result: unknown;
   if (action === 'apply' && options.apply) {
-    const mission = await resolveSearchVisibilityMission(options.root, firstPositional(rest) || 'latest');
+    const mission = await resolveSearchVisibilityMission(options.root, firstPositional(rest) || 'latest', mode);
     const blockers = [];
     if (!mission) blockers.push('mission_required_for_apply');
     else {
@@ -42,11 +42,12 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
       // proving a prior `plan` step was run and reviewed before this apply can mutate anything.
       const planGate = await evaluateLocalGate({ root: mission.root, dir: mission.dir, gateFile: mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json', requiredArtifacts: ['search-visibility/mutation-plan.json'] });
       if (planGate.blockers.includes('missing_artifact:search-visibility/mutation-plan.json')) blockers.push('seo_apply_missing_mutation_plan');
-      blockers.push(...planGate.blockers.filter((blocker) => {
-        if (blocker === 'gate_not_passed' || blocker === 'gate_ok_false' || blocker === 'missing_artifact:search-visibility/mutation-plan.json') return false;
-        if (options.includeMarketing && (blocker === 'seo-gate.json_missing' || blocker === 'geo-gate.json_missing')) return false;
-        return true;
-      }));
+      if (!options.includeMarketing) {
+        blockers.push(...planGate.blockers.filter((blocker) => {
+          if (blocker === 'gate_not_passed' || blocker === 'gate_ok_false' || blocker === 'missing_artifact:search-visibility/mutation-plan.json') return false;
+          return true;
+        }));
+      }
     }
     if (blockers.length) {
       result = { schema: 'sks.search-visibility.apply-command.v1', ok: false, route: mode === 'seo' ? '$SEO-GEO-OPTIMIZER' : '$SEO-GEO-OPTIMIZER', status: 'blocked', blockers };
@@ -84,7 +85,7 @@ async function applySearchVisibilityGateResult(mode: 'seo' | 'geo', action: stri
   if (action === 'research' || action === 'strategy') return result;
   if (action === 'plan' && options.includeMarketing) return result;
   if (!result || typeof result !== 'object' || !result.mission_id) return result;
-  const mission = await resolveSearchVisibilityMission(options.root, result.mission_id);
+  const mission = await resolveSearchVisibilityMission(options.root, result.mission_id, mode);
   if (!mission) return { ...result, ok: false, blockers: [...(result.blockers || []), 'mission_missing_for_gate_evaluation'] };
   const requiredArtifacts = action === 'apply'
     ? ['search-visibility/mutation-plan.json', 'search-visibility/rollback-manifest.json', 'search-visibility/verification-report.json']

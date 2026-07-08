@@ -55,9 +55,9 @@ export async function createSearchVisibilityMission(
   return { id, root, dir, artifactDir };
 }
 
-export async function resolveSearchVisibilityMission(rootInput: string, missionRef: string | null): Promise<SearchVisibilityMission | null> {
+export async function resolveSearchVisibilityMission(rootInput: string, missionRef: string | null, mode?: SearchVisibilityMode): Promise<SearchVisibilityMission | null> {
   const root = await projectRoot(rootInput);
-  const id = !missionRef || missionRef === 'latest' ? await findLatestMission(root) : missionRef;
+  const id = !missionRef || missionRef === 'latest' ? await findLatestMission(root, mode ? { mode } : {}) : missionRef;
   if (!id) return null;
   const dir = missionDir(root, id);
   const artifactDir = path.join(dir, SEARCH_VISIBILITY_DIR);

@@ -1,5 +1,16 @@
 <div align="center">
 
+
+<!-- BEGIN SKS SEARCH VISIBILITY MARKETING -->
+## Search Visibility Positioning
+
+sneakoscope is a proof-first Codex trust layer for bounded agent workflows, search visibility, and evidence-backed release gates.
+
+- Source-ledger claims are kept in SKS marketing research and strategy artifacts.
+- SEO/GEO mutation plans update only package metadata and this managed README block in this release.
+- External visibility outcomes require separate measured evidence.
+<!-- END SKS SEARCH VISIBILITY MARKETING -->
+
 # Sneakoscope Codex
 
 **The proof-first swarm harness for Codex. Machine-verified completion, not vibes.**
@@ -14,7 +25,7 @@
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **5.10.0**. New in this release: local-only dominance performance gates, lighter CLI cold starts and hooks, doctor/update fast paths, SSRF-safe Super-Search smoke, Naruto E2E tiers, retention performance smoke, and command/dollar performance scorecards. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **5.11.0**. New in this release: source-backed SEO marketing research/strategy, marketing truthfulness gates, Naruto write E2E proof, broader high-risk contracts, honest fast doctor semantics, tighter scorecards/perf budgets, and retention long-run smoke. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 

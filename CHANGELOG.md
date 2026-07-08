@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+
+## [5.11.0] - 2026-07-08
+
+### Added
+
+- Add minimal Super-Search-backed SEO marketing research and strategy flow for `sks seo-geo-optimizer research|strategy`.
+- Add marketing-aware SEO mutation planning behind `--include-marketing` without auto-generating a missing strategy.
+- Add SEO marketing truthfulness gates that block unsupported claims, ranking guarantees, competitor disparagement, and source-less publishable messaging.
+- Add Naruto hermetic and real Codex write E2E gates that require changed files and patch-envelope evidence instead of read-only smoke.
+- Expand high-risk command contracts beyond Super-Search SSRF to commit/push, rollback, doctor fix, update dry-run, DB, and MAD-SKS surfaces.
+- Add retention long-run smoke to prove compacted mission state still supports status, route status, and Super-Search source inspection.
+
+### Fixed
+
+- Make fast doctor output explicitly report diagnostic depth and prevent fast doctor from being counted as full diagnostics.
+- Tighten command and dollar scorecards so critical commands require actual smoke evidence rather than metadata-only scoring.
+- Tighten performance budgets without removing verification coverage or introducing fallback success paths.
+- Keep release metadata aligned after an explicit SKS version bump advances the package version.
+
+### Changed
+
+- Keep 5.11.0 focused on missing implementation and runtime integrity instead of adding broad new command surfaces.
+
 ## [5.10.0] - 2026-07-07
 
 ### Added

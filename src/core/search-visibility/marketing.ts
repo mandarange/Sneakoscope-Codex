@@ -119,7 +119,7 @@ export async function runMarketingStrategy(
   missionRef: string | null,
   options: SearchVisibilityCliOptions
 ): Promise<JsonData> {
-  const mission = await resolveSearchVisibilityMission(options.root, missionRef || options.strategyRef || 'latest');
+  const mission = await resolveSearchVisibilityMission(options.root, missionRef || options.strategyRef || 'latest', mode);
   if (!mission) return blockedStrategy(null, ['marketing_research_mission_missing']);
   const research = await readJson<MarketingResearch | null>(path.join(mission.artifactDir, 'marketing-research.json'), null);
   if (!research) return blockedStrategy(mission, ['marketing_research_required_for_strategy']);
@@ -131,6 +131,11 @@ export async function runMarketingStrategy(
   const blockers = [...strategy.blockers, ...truth.blockers];
   const finalStrategy: MarketingStrategy = { ...strategy, ok: blockers.length === 0, blockers };
   await writeJsonAtomic(path.join(mission.artifactDir, 'marketing-strategy.json'), finalStrategy);
+  await writeJsonAtomic(path.join(mission.artifactDir, 'marketing-truthfulness-gate.json'), {
+    ...truth,
+    ok: blockers.length === 0,
+    blockers,
+  });
   await writeJsonAtomic(path.join(mission.dir, 'seo-marketing-strategy-gate.json'), {
     schema: 'sks.search-visibility.marketing-strategy-gate.v1',
     ok: finalStrategy.ok,
@@ -164,6 +169,7 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
   const parallelSource = sourceIds.find((id) => id.includes('parallel') || id.includes('naruto'));
   const superSearchSource = sourceIds.find((id) => id.includes('super-search'));
   const oneLiner = `${inventory.package.name || 'Sneakoscope'} is a proof-first Codex trust layer for bounded agent workflows, search visibility, and evidence-backed release gates.`;
+  const strategySources = unique([packageSource, readmeSource, superSearchSource, parallelSource, perfSource].filter(Boolean) as string[]);
   const keywords = unique([
     'sneakoscope',
     'codex',
@@ -172,13 +178,19 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
     'codex-app',
     'agent-orchestration',
     'proof-gates',
-    'super-search',
+    ...(superSearchSource ? ['super-search'] : []),
     'seo',
     'generative-engine-optimization',
     'bounded-memory',
     'rollback',
     'release-integrity',
   ]).slice(0, 20);
+  const messagePillars = [
+    { title: 'Proof-first route gates', claim: 'SKS records route artifacts, blockers, and release gates so Codex workflows can separate verified work from unverified claims.', source_ids: [readmeSource || packageSource].filter(Boolean) },
+    ...(superSearchSource ? [{ title: 'Source-backed search visibility', claim: 'Super-Search and SEO/GEO artifacts keep source ledgers and claim ledgers attached to search visibility work.', source_ids: [superSearchSource] }] : []),
+    ...(parallelSource ? [{ title: 'Bounded parallel implementation', claim: 'Naruto and parallel worker reports track changed files, worker evidence, and patch-envelope style proof for multi-agent coding work.', source_ids: [parallelSource] }] : []),
+    ...(perfSource ? [{ title: 'Measured fast paths', claim: 'Performance budget reports define p95 budgets for selected SKS fast-path commands.', source_ids: [perfSource] }] : []),
+  ];
   const strategy: MarketingStrategy = {
     schema: 'sks.search-visibility.marketing-strategy.v1',
     ok: true,
@@ -187,12 +199,7 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
       one_liner: oneLiner,
       source_ids: [packageSource || readmeSource].filter(Boolean),
     },
-    message_pillars: [
-      { title: 'Proof-first route gates', claim: 'SKS records route artifacts, blockers, and release gates so Codex workflows can separate verified work from unverified claims.', source_ids: [readmeSource || packageSource].filter(Boolean) },
-      { title: 'Source-backed search visibility', claim: 'Super-Search and SEO/GEO artifacts keep source ledgers and claim ledgers attached to search visibility work.', source_ids: [superSearchSource || readmeSource || packageSource].filter(Boolean) },
-      { title: 'Bounded parallel implementation', claim: 'Naruto and parallel worker reports track changed files, worker evidence, and patch-envelope style proof for multi-agent coding work.', source_ids: [parallelSource || readmeSource || packageSource].filter(Boolean) },
-      ...(perfSource ? [{ title: 'Measured fast paths', claim: 'Performance budget reports define p95 budgets for selected SKS fast-path commands.', source_ids: [perfSource] }] : []),
-    ],
+    message_pillars: messagePillars,
     keyword_clusters: [
       { name: 'codex trust layer', keywords: keywords.slice(0, 7), source_ids: [packageSource || readmeSource].filter(Boolean) },
       { name: 'agent release integrity', keywords: keywords.slice(7, 14), source_ids: [readmeSource || packageSource].filter(Boolean) },
@@ -206,24 +213,24 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
         '',
         oneLiner,
         '',
-        '- Source-backed claims are kept in SKS marketing research and strategy artifacts.',
+        '- Source-ledger claims are kept in SKS marketing research and strategy artifacts.',
         '- SEO/GEO mutation plans update only package metadata and this managed README block in this release.',
-        '- Ranking, traffic, and AI citation outcomes are not guaranteed.',
+        '- External visibility outcomes require separate measured evidence.',
         '<!-- END SKS MARKETING POSITIONING -->',
         '',
       ].join('\n'),
-      source_ids: [packageSource || readmeSource].filter(Boolean),
+      source_ids: strategySources,
     }],
     package_plan: [
       {
         operation: 'package-description-update',
-        description: 'Proof-first Codex trust layer for bounded agent workflows, source-backed search visibility, and release integrity gates.',
-        source_ids: [packageSource || readmeSource].filter(Boolean),
+        description: 'Proof-first Codex trust layer for bounded agent workflows, search visibility evidence, and release integrity gates.',
+        source_ids: strategySources,
       },
       {
         operation: 'package-keywords-update',
         keywords,
-        source_ids: [packageSource || readmeSource].filter(Boolean),
+        source_ids: strategySources,
       },
     ],
     docs_plan: [
@@ -254,10 +261,10 @@ async function resolveOrCreateMarketingMission(
   options: SearchVisibilityCliOptions,
   prompt: string
 ): Promise<SearchVisibilityMission> {
-  const explicit = missionRef && missionRef !== 'latest' ? await resolveSearchVisibilityMission(options.root, missionRef) : null;
+  const explicit = missionRef && missionRef !== 'latest' ? await resolveSearchVisibilityMission(options.root, missionRef, mode) : null;
   if (explicit) return explicit;
   if (missionRef === 'latest') {
-    const latest = await resolveSearchVisibilityMission(options.root, 'latest');
+    const latest = await resolveSearchVisibilityMission(options.root, 'latest', mode);
     if (latest) return latest;
   }
   return createSearchVisibilityMission(mode, prompt, options);

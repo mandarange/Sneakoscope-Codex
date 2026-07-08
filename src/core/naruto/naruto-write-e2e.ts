@@ -121,7 +121,7 @@ export async function runRealCodexWriteE2e(): Promise<NarutoWriteE2eReport> {
   const requireReal = process.env.SKS_REQUIRE_CODEX_E2E === '1'
   const explicitlyEnabled = process.env.SKS_TEST_REAL_CODEX_WRITE_E2E === '1'
   const runtime = await probeRealCodexRuntime()
-  if (!explicitlyEnabled || !runtime.ok) {
+  if (!runtime.ok) {
     const blockers = ['real_codex_runtime_required']
     return buildReport({
       mode: 'real-codex',
@@ -141,23 +141,26 @@ export async function runRealCodexWriteE2e(): Promise<NarutoWriteE2eReport> {
       blockers
     })
   }
-  return buildReport({
-    mode: 'real-codex',
-    tempRoot: null,
-    changedFiles: [],
-    workerIds: [],
-    patchEnvelopeCount: 0,
-    parentMergeArtifact: { ok: false, path: null, changed_files: [] },
-    typecheck: { ok: false, command: null, stdout_tail: '', stderr_tail: '' },
-    cleanup: { ok: true, temp_root_removed: true, blockers: [] },
-    runtimeEvidence: {
-      real_codex: true,
-      backend: 'codex-sdk',
-      mock_or_readonly_rejected: true,
-      blockers: ['real_codex_write_runtime_not_implemented']
-    },
-    blockers: ['real_codex_write_runtime_not_implemented']
-  })
+  if (!requireReal && !explicitlyEnabled) {
+    return buildReport({
+      mode: 'real-codex',
+      tempRoot: null,
+      changedFiles: [],
+      workerIds: [],
+      patchEnvelopeCount: 0,
+      parentMergeArtifact: { ok: false, path: null, changed_files: [] },
+      typecheck: { ok: false, command: null, stdout_tail: '', stderr_tail: '' },
+      cleanup: { ok: true, temp_root_removed: true, blockers: [] },
+      runtimeEvidence: {
+        real_codex: false,
+        backend: null,
+        mock_or_readonly_rejected: true,
+        blockers: ['real_codex_write_e2e_not_requested']
+      },
+      blockers: ['real_codex_runtime_required']
+    })
+  }
+  return runRealNarutoCommandWriteE2e()
 }
 
 export function validateNarutoWriteE2eContract(input: ValidateNarutoWriteE2eContractInput): { ok: boolean; blockers: string[] } {
@@ -290,6 +293,9 @@ async function cleanupTempRoot(root: string): Promise<NarutoWriteE2eReport['clea
 }
 
 async function probeRealCodexRuntime(): Promise<{ ok: boolean; blockers: string[] }> {
+  if (process.env.SKS_TEST_REAL_CODEX_RUNTIME_UNAVAILABLE === '1') {
+    return { ok: false, blockers: ['test_forced_real_codex_runtime_unavailable'] }
+  }
   const sksBin = path.join(repoRootFromImportMeta(), 'dist', 'bin', 'sks.js')
   if (!(await pathExists(sksBin))) return { ok: false, blockers: ['dist_sks_missing'] }
   const result = await runProcess(process.execPath, [sksBin, 'codex', 'version', '--json'], {
@@ -298,6 +304,152 @@ async function probeRealCodexRuntime(): Promise<{ ok: boolean; blockers: string[
     maxOutputBytes: 128 * 1024
   })
   return { ok: result.code === 0, blockers: result.code === 0 ? [] : [`codex_version_exit_${result.code}`] }
+}
+
+async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-real-write-e2e-'))
+  const mergeArtifactPath = path.join(tempRoot, '.sneakoscope', 'naruto-real-write-e2e-parent-merge.json')
+  const blockers: string[] = []
+  let cleanup = { ok: false, temp_root_removed: false, blockers: [] as string[] }
+  try {
+    await writeHermeticFixture(tempRoot)
+    const beforeA = await fs.readFile(path.join(tempRoot, 'src', 'a.ts'), 'utf8')
+    const beforeB = await fs.readFile(path.join(tempRoot, 'src', 'b.ts'), 'utf8')
+    const sksBin = path.join(repoRootFromImportMeta(), 'dist', 'bin', 'sks.js')
+    const run = await runProcess(process.execPath, [
+      sksBin,
+      'naruto',
+      'run',
+      'modify src/a.ts and src/b.ts independently for the real write E2E; keep TypeScript valid',
+      '--json',
+      '--write-mode',
+      'parallel',
+      '--apply-patches',
+      '--clones',
+      '2',
+      '--work-items',
+      '2',
+      '--backend',
+      'codex-sdk',
+      '--real',
+      '--no-open-zellij'
+    ], {
+      cwd: tempRoot,
+      timeoutMs: readPositiveIntEnv('SKS_NARUTO_REAL_E2E_TIMEOUT_MS', 300_000),
+      maxOutputBytes: 1024 * 1024,
+      env: {
+        ...process.env,
+        SKS_CODEX_ALLOW_NON_GIT: '1',
+        SKS_DISABLE_UPDATE_CHECK: '1'
+      }
+    })
+    const parsed = parseJsonObjectFromStdout(run.stdout)
+    const afterA = await fs.readFile(path.join(tempRoot, 'src', 'a.ts'), 'utf8').catch(() => beforeA)
+    const afterB = await fs.readFile(path.join(tempRoot, 'src', 'b.ts'), 'utf8').catch(() => beforeB)
+    const changedFiles = [
+      ...(afterA !== beforeA ? ['src/a.ts'] : []),
+      ...(afterB !== beforeB ? ['src/b.ts'] : [])
+    ]
+    const missionId = String(parsed?.mission_id || '')
+    const evidence = missionId ? await collectRealWriteEvidence(tempRoot, missionId) : { workerIds: [], patchEnvelopeCount: 0 }
+    const parentMergeArtifact = {
+      ok: run.code === 0 && changedFiles.length > 0 && evidence.patchEnvelopeCount > 0,
+      path: mergeArtifactPath,
+      changed_files: changedFiles
+    }
+    await writeJsonAtomic(mergeArtifactPath, {
+      schema: 'sks.naruto-real-write-e2e-parent-merge.v1',
+      ok: parentMergeArtifact.ok,
+      mission_id: missionId || null,
+      command_exit_code: run.code,
+      changed_files: changedFiles,
+      worker_ids: evidence.workerIds,
+      patch_envelope_count: evidence.patchEnvelopeCount,
+      stdout_tail: tail(run.stdout),
+      stderr_tail: tail(run.stderr)
+    })
+    const typecheck = await runTempTypecheck(tempRoot)
+    const contract = validateNarutoWriteE2eContract({
+      mode: 'real-codex',
+      changed_files: changedFiles,
+      worker_ids: evidence.workerIds,
+      patch_envelope_count: evidence.patchEnvelopeCount,
+      parent_merge_artifact: parentMergeArtifact,
+      typecheck,
+      cleanup: { ok: true },
+      runtime_evidence: { real_codex: true, backend: 'codex-sdk', mock_or_readonly_rejected: true }
+    })
+    if (run.code !== 0) blockers.push(`real_naruto_command_exit_${run.code}`)
+    blockers.push(...(typecheck.ok ? [] : ['typecheck_failed']), ...contract.blockers)
+    cleanup = await cleanupTempRoot(tempRoot)
+    blockers.push(...cleanup.blockers)
+    return buildReport({
+      mode: 'real-codex',
+      tempRoot,
+      changedFiles,
+      workerIds: evidence.workerIds,
+      patchEnvelopeCount: evidence.patchEnvelopeCount,
+      parentMergeArtifact,
+      typecheck,
+      cleanup,
+      runtimeEvidence: { real_codex: true, backend: 'codex-sdk', mock_or_readonly_rejected: true, blockers: [] },
+      blockers
+    })
+  } catch (error: unknown) {
+    blockers.push(`real_write_e2e_exception:${error instanceof Error ? error.message : String(error)}`)
+    cleanup = await cleanupTempRoot(tempRoot)
+    blockers.push(...cleanup.blockers)
+    return buildReport({
+      mode: 'real-codex',
+      tempRoot,
+      changedFiles: [],
+      workerIds: [],
+      patchEnvelopeCount: 0,
+      parentMergeArtifact: { ok: false, path: mergeArtifactPath, changed_files: [] },
+      typecheck: { ok: false, command: null, stdout_tail: '', stderr_tail: '' },
+      cleanup,
+      runtimeEvidence: { real_codex: true, backend: 'codex-sdk', mock_or_readonly_rejected: true, blockers: [] },
+      blockers
+    })
+  }
+}
+
+async function collectRealWriteEvidence(root: string, missionId: string): Promise<{ workerIds: string[]; patchEnvelopeCount: number }> {
+  const missionRoot = path.join(root, '.sneakoscope', 'missions', missionId)
+  const files = await listJsonFiles(missionRoot, 7)
+  const workerIds = new Set<string>()
+  let patchEnvelopeCount = 0
+  for (const file of files) {
+    const text = await fs.readFile(file, 'utf8').catch(() => '')
+    if (!text.includes('patch_envelope') && !text.includes('agent_id')) continue
+    const parsed = parseJsonObjectFromStdout(text)
+    const stack = [parsed]
+    while (stack.length) {
+      const value = stack.pop()
+      if (!value || typeof value !== 'object') continue
+      if (Array.isArray(value)) {
+        stack.push(...value)
+        continue
+      }
+      if (value.agent_id) workerIds.add(String(value.agent_id))
+      if (Array.isArray(value.patch_envelopes)) patchEnvelopeCount += value.patch_envelopes.length
+      if (value.schema === 'sks.agent-patch-envelope.v1') patchEnvelopeCount += 1
+      stack.push(...Object.values(value))
+    }
+  }
+  return { workerIds: [...workerIds], patchEnvelopeCount }
+}
+
+async function listJsonFiles(dir: string, depth: number): Promise<string[]> {
+  if (depth < 0 || !(await pathExists(dir))) return []
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+  const out: string[] = []
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...await listJsonFiles(full, depth - 1))
+    else if (entry.isFile() && entry.name.endsWith('.json')) out.push(full)
+  }
+  return out
 }
 
 function repoRootFromImportMeta(): string {
@@ -320,6 +472,29 @@ async function pathExists(target: string): Promise<boolean> {
 
 function normalizeRelPath(value: string): string {
   return String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '')
+}
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const parsed = Number(process.env[name])
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
+}
+
+function parseJsonObjectFromStdout(stdout: string): any {
+  const text = String(stdout || '').trim()
+  const first = text.indexOf('{')
+  const last = text.lastIndexOf('}')
+  if (first >= 0 && last > first) {
+    try {
+      return JSON.parse(text.slice(first, last + 1))
+    } catch {}
+  }
+  for (const line of text.split(/\r?\n/).reverse()) {
+    try {
+      const parsed = JSON.parse(line)
+      if (parsed && typeof parsed === 'object') return parsed
+    } catch {}
+  }
+  return null
 }
 
 function tail(value: string, limit = 4000): string {

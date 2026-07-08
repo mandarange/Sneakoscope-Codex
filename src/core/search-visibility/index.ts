@@ -3,18 +3,18 @@ import { adapterForDetection } from './adapter-registry.js';
 import { auditGeo, auditSeo } from './analyzers.js';
 import { detectProject, discoverSiteInventory } from './discovery.js';
 import { runMarketingResearch, runMarketingStrategy } from './marketing.js';
-import { applyMutationPlan, buildMutationPlan, rollbackMutationPlan } from './mutation.js';
-import { createSearchVisibilityMission, resolveSearchVisibilityMission, routeForMode, type SearchVisibilityMission } from './mission.js';
+import { applyMutationPlan, buildMutationPlan, isMarketingMutationPlan, rollbackMutationPlan } from './mutation.js';
+import { createSearchVisibilityMission, gateFileForMode, resolveSearchVisibilityMission, routeForMode, type SearchVisibilityMission } from './mission.js';
 import { finalizeSearchVisibility, statusForMission, writeAuditArtifacts, writeGate } from './artifacts.js';
 import { verifySearchVisibility } from './verifier.js';
-import { projectRoot, readJson, writeJsonAtomic, type JsonData } from '../fsx.js';
-import type { EntityFacts, ProjectContext, SearchVisibilityCliOptions, SearchVisibilityMode, SiteInventory } from './types.js';
+import { exists, projectRoot, readJson, readText, sha256, writeJsonAtomic, type JsonData } from '../fsx.js';
+import type { EntityFacts, MarketingResearch, MarketingStrategy, MarketingTruthfulnessGate, MutationPlan, ProjectContext, RollbackManifest, SearchVisibilityCliOptions, SearchVisibilityMode, SiteInventory } from './types.js';
 
 export * from './types.js';
 export { createSearchVisibilityMission, resolveSearchVisibilityMission } from './mission.js';
 
-export async function runSearchVisibilityResearch(mode: SearchVisibilityMode, options: SearchVisibilityCliOptions): Promise<JsonData> {
-  return runMarketingResearch(mode, null, options);
+export async function runSearchVisibilityResearch(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
+  return runMarketingResearch(mode, missionRef, options);
 }
 
 export async function runSearchVisibilityStrategy(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
@@ -65,7 +65,7 @@ export async function runSearchVisibilityAudit(mode: SearchVisibilityMode, optio
 
 export async function runSearchVisibilityPlan(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
   if (options.includeMarketing) {
-    const existing = await resolveSearchVisibilityMission(options.root, missionRef);
+    const existing = await resolveSearchVisibilityMission(options.root, missionRef, mode);
     if (!existing) {
       return {
         schema: 'sks.search-visibility.plan-command.v1',
@@ -124,6 +124,10 @@ export async function runSearchVisibilityApply(mode: SearchVisibilityMode, missi
 
 export async function runSearchVisibilityVerify(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
   const mission = await resolveOrAudit(mode, missionRef, options);
+  const plan = await readJson<MutationPlan | null>(path.join(mission.artifactDir, 'mutation-plan.json'), null);
+  if (mode === 'seo' && plan && (isMarketingMutationPlan(plan) || await isZeroOperationMarketingPlan(mission, plan))) {
+    return verifyMarketingMutationFlow(mode, mission, plan, options);
+  }
   const root = mission.root;
   const ctx = context(mode, root, options);
   const inventory = await readJson<SiteInventory>(path.join(mission.artifactDir, 'site-inventory.json'));
@@ -146,13 +150,13 @@ export async function runSearchVisibilityVerify(mode: SearchVisibilityMode, miss
 }
 
 export async function runSearchVisibilityStatus(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
-  const mission = await resolveSearchVisibilityMission(options.root, missionRef);
+  const mission = await resolveSearchVisibilityMission(options.root, missionRef, mode);
   if (!mission) return { schema: 'sks.search-visibility.status-command.v1', ok: false, status: 'missing_mission', route: routeForMode(mode) };
   return statusForMission(mission);
 }
 
 export async function runSearchVisibilityRollback(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
-  const mission = await resolveSearchVisibilityMission(options.root, missionRef);
+  const mission = await resolveSearchVisibilityMission(options.root, missionRef, mode);
   if (!mission) return { schema: 'sks.search-visibility.rollback-command.v1', ok: false, status: 'missing_mission', route: routeForMode(mode) };
   const result = await rollbackMutationPlan(mission.root, mission.artifactDir, options.apply);
   const verify = result.status === 'rolled_back' ? await runSearchVisibilityVerify(mode, mission.id, options) : null;
@@ -218,10 +222,123 @@ function context(mode: SearchVisibilityMode, root: string, options: SearchVisibi
 }
 
 async function resolveOrAudit(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<SearchVisibilityMission> {
-  const mission = await resolveSearchVisibilityMission(options.root, missionRef);
+  const mission = await resolveSearchVisibilityMission(options.root, missionRef, mode);
   if (mission) return mission;
   const audit = await runSearchVisibilityAudit(mode, options);
-  const created = await resolveSearchVisibilityMission(options.root, audit.mission_id);
+  const created = await resolveSearchVisibilityMission(options.root, audit.mission_id, mode);
   if (!created) throw new Error('Search visibility audit did not create a mission');
   return created;
+}
+
+async function verifyMarketingMutationFlow(
+  mode: SearchVisibilityMode,
+  mission: SearchVisibilityMission,
+  plan: MutationPlan,
+  options: SearchVisibilityCliOptions
+): Promise<JsonData> {
+  const gateFile = gateFileForMode(mode);
+  const required = [
+    'search-visibility/marketing-research.json',
+    'search-visibility/marketing-source-ledger.json',
+    'search-visibility/marketing-claim-ledger.json',
+    'search-visibility/marketing-strategy.json',
+    'search-visibility/marketing-truthfulness-gate.json',
+    'search-visibility/mutation-plan.json',
+    'search-visibility/rollback-manifest.json',
+  ];
+  const requiredStatus = await Promise.all(required.map(async (artifact) => ({
+    path: artifact,
+    present: await exists(path.join(mission.dir, artifact)),
+  })));
+  const blockers = requiredStatus.filter((item) => !item.present).map((item) => `missing:${item.path}`);
+  const research = await readJson<MarketingResearch | null>(path.join(mission.artifactDir, 'marketing-research.json'), null);
+  const strategy = await readJson<MarketingStrategy | null>(path.join(mission.artifactDir, 'marketing-strategy.json'), null);
+  const truth = await readJson<MarketingTruthfulnessGate | null>(path.join(mission.artifactDir, 'marketing-truthfulness-gate.json'), null);
+  const rollback = await readJson<RollbackManifest | null>(path.join(mission.artifactDir, 'rollback-manifest.json'), null);
+  if (!research?.ok) blockers.push('marketing_research_gate_not_passed');
+  if (!strategy?.ok) blockers.push('marketing_strategy_gate_not_passed');
+  if (!truth?.ok) blockers.push('marketing_truthfulness_gate_not_passed');
+  if (rollback?.blockers?.length) blockers.push(...rollback.blockers);
+  for (const op of plan.operations) {
+    const full = path.join(mission.root, op.path);
+    const current = await readText(full, null);
+    const currentSha = current == null ? null : sha256(current);
+    const rollbackHasOp = Boolean(rollback?.operations?.some((entry) => entry.operation_id === op.id));
+    if (!rollbackHasOp && currentSha !== op.proposedSha256) blockers.push(`marketing_operation_not_applied:${op.id}`);
+  }
+  const unverified = [
+    'production_http_not_verified',
+    'search_ranking_or_traffic_outcome_not_measured',
+    'production URL, browser rendering, Search Console, analytics, ranking, traffic, and AI citation outcomes are not claimed without direct evidence',
+  ];
+  const ok = blockers.length === 0;
+  const verification = {
+    schema: 'sks.search-visibility.verification-report.v1',
+    generated_at: new Date().toISOString(),
+    mission_id: mission.id,
+    route: routeForMode(mode),
+    status: ok ? 'verified_partial' : 'blocked',
+    source_verified: Boolean(research?.ok && strategy?.ok && truth?.ok),
+    build_verified: false,
+    http_verified: false,
+    browser_verified: false,
+    production_verified: false,
+    measured_outcome: 'pending',
+    checked_artifacts: requiredStatus.map((item) => ({ path: item.path, ok: item.present, message: item.present ? 'present' : 'missing' })),
+    blockers,
+    unverified,
+  };
+  await writeJsonAtomic(path.join(mission.artifactDir, 'verification-report.json'), verification);
+  const gate = {
+    schema: 'sks.search-visibility.gate.v1',
+    generated_at: new Date().toISOString(),
+    mission_id: mission.id,
+    route: routeForMode(mode),
+    ok,
+    passed: ok,
+    status: ok ? 'verified_partial' : 'blocked',
+    command_identity: true,
+    required_artifacts: [
+      ...requiredStatus,
+      { path: gateFile, present: true },
+      { path: 'completion-proof.json', present: true },
+    ],
+    unsupported_claims: truth?.unsupported_claims || [],
+    blockers,
+    unverified,
+    completion_proof: `.sneakoscope/missions/${mission.id}/completion-proof.json`,
+  };
+  await writeJsonAtomic(path.join(mission.dir, gateFile), gate);
+  await writeJsonAtomic(path.join(mission.dir, 'completion-proof.json'), {
+    schema: 'sks.search-visibility.marketing-completion-proof.v1',
+    generated_at: new Date().toISOString(),
+    ok,
+    mission_id: mission.id,
+    route: routeForMode(mode),
+    mutation_plan: 'search-visibility/mutation-plan.json',
+    rollback_manifest: 'search-visibility/rollback-manifest.json',
+    gate: gateFile,
+    blockers,
+  });
+  return {
+    schema: 'sks.search-visibility.verify-command.v1',
+    ok,
+    mission_id: mission.id,
+    route: routeForMode(mode),
+    status: gate.status,
+    blockers,
+    unverified,
+    gate,
+  };
+}
+
+async function isZeroOperationMarketingPlan(mission: SearchVisibilityMission, plan: MutationPlan): Promise<boolean> {
+  if (plan.mode !== 'seo' || plan.operations.length !== 0) return false;
+  const required = [
+    'marketing-research.json',
+    'marketing-strategy.json',
+    'marketing-truthfulness-gate.json',
+  ];
+  const present = await Promise.all(required.map((artifact) => exists(path.join(mission.artifactDir, artifact))));
+  return present.every(Boolean);
 }

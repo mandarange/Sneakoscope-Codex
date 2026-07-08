@@ -28,6 +28,7 @@ import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../agents/r
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js'
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js'
 import { writeFinalStopGate } from '../stop-gate/stop-gate-writer.js'
+import { extractNarutoPromptPaths } from '../naruto/naruto-task-hints.js'
 
 const NARUTO_RESULT_SCHEMA = 'sks.naruto-command-result.v1'
 const NARUTO_ROUTE = '$Naruto'
@@ -65,10 +66,12 @@ async function narutoRun(parsed: NarutoArgs) {
   const root = await sksRoot()
   const writeCapable = parsed.readonly !== true && parsed.writeMode !== 'off'
   const patchEnvelopeBasePath = '.sneakoscope/naruto/patch-envelopes'
+  const explicitPromptPaths = writeCapable ? extractNarutoPromptPaths(parsed.prompt) : []
+  const targetPaths = explicitPromptPaths.length ? explicitPromptPaths : [patchEnvelopeBasePath]
   const placeholderGuard = checkPromptPlaceholders({
     prompt: parsed.prompt,
     writeCapable,
-    targetPaths: writeCapable ? [patchEnvelopeBasePath] : []
+    targetPaths: writeCapable ? targetPaths : []
   })
   if (!placeholderGuard.ok) {
     return emit(parsed, {
@@ -125,6 +128,7 @@ async function narutoRun(parsed: NarutoArgs) {
     honorExplicitTotalWorkItems: parsed.workItemsExplicit,
     readonly: parsed.readonly,
     writeCapable,
+    targetPaths,
     leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap,
     worktreePolicy,
@@ -140,6 +144,7 @@ async function narutoRun(parsed: NarutoArgs) {
     honorExplicitTotalWorkItems: parsed.workItemsExplicit,
     readonly: parsed.readonly,
     writeCapable,
+    targetPaths,
     leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap,
     worktreePolicy,

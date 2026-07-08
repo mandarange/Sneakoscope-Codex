@@ -5,6 +5,8 @@ import {
   runRealCodexWriteE2e,
   validateNarutoWriteE2eContract
 } from '../naruto-write-e2e.js'
+import { buildNarutoWorkGraph } from '../naruto-work-graph.js'
+import { extractNarutoPromptPaths } from '../naruto-task-hints.js'
 
 test('hermetic Naruto write E2E proves parallel writes, merge, typecheck, cleanup, and proof level', async () => {
   const report = await runHermeticWriteE2e()
@@ -25,10 +27,30 @@ test('hermetic Naruto write E2E proves parallel writes, merge, typecheck, cleanu
   assert.equal(report.runtime_evidence.mock_or_readonly_rejected, true)
 })
 
+test('Naruto write graph uses explicit prompt file paths instead of patch-envelope placeholders', () => {
+  const prompt = 'modify src/a.ts and src/b.ts independently'
+  const paths = extractNarutoPromptPaths(prompt)
+  const graph = buildNarutoWorkGraph({
+    prompt,
+    requestedClones: 2,
+    totalWorkItems: 2,
+    honorExplicitTotalWorkItems: true,
+    writeCapable: true,
+    targetPaths: paths,
+    maxActiveWorkers: 2
+  })
+
+  assert.deepEqual(paths, ['src/a.ts', 'src/b.ts'])
+  assert.deepEqual(graph.work_items.flatMap((item) => item.write_paths), ['src/a.ts', 'src/b.ts'])
+  assert.equal(graph.ok, true, graph.blockers.join(', '))
+})
+
 test('real Codex write mode blocks instead of passing as mock or hermetic when runtime is unavailable', async () => {
   const previousRequire = process.env.SKS_REQUIRE_CODEX_E2E
   const previousRealWrite = process.env.SKS_TEST_REAL_CODEX_WRITE_E2E
+  const previousUnavailable = process.env.SKS_TEST_REAL_CODEX_RUNTIME_UNAVAILABLE
   process.env.SKS_REQUIRE_CODEX_E2E = '1'
+  process.env.SKS_TEST_REAL_CODEX_RUNTIME_UNAVAILABLE = '1'
   delete process.env.SKS_TEST_REAL_CODEX_WRITE_E2E
   try {
     const report = await runRealCodexWriteE2e()
@@ -43,6 +65,7 @@ test('real Codex write mode blocks instead of passing as mock or hermetic when r
   } finally {
     restoreEnv('SKS_REQUIRE_CODEX_E2E', previousRequire)
     restoreEnv('SKS_TEST_REAL_CODEX_WRITE_E2E', previousRealWrite)
+    restoreEnv('SKS_TEST_REAL_CODEX_RUNTIME_UNAVAILABLE', previousUnavailable)
   }
 })
 

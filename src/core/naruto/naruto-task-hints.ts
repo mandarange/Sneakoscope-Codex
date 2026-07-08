@@ -42,6 +42,10 @@ export function extractNarutoTaskHints(task: NarutoWorkItem | Record<string, any
   }
 }
 
+export function extractNarutoPromptPaths(prompt: string): string[] {
+  return normalizePaths(extractPathsFromText(prompt))
+}
+
 export function pathPrefix(pathValue: string): string {
   const parts = normalizeNarutoPath(pathValue).split('/').filter(Boolean)
   if (parts.length <= 1) return parts[0] || ''

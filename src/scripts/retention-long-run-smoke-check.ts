@@ -34,7 +34,7 @@ try {
   const retention = await retentionStatus(projectRoot)
   const status = runJson(['status', '--json'])
   const routeStatus = runJson(['route', 'status', '--json'])
-  const sources = runJson(['super-search', 'sources', 'latest', '--json'])
+  const sources = runSuperSearchSourcesLatest()
 
   const artifacts = [
     path.join(sksRoot, 'missions', latestSuperSearchId, 'super-search', 'super-search-proof.json'),
@@ -204,6 +204,50 @@ function runJson(args) {
     stderr: result.stderr.slice(-2000)
   })
   return JSON.parse(result.stdout || '{}')
+}
+
+function runSuperSearchSourcesLatest() {
+  const result = spawnSync(process.execPath, [path.join(root, 'dist', 'bin', 'sks.js'), 'super-search', 'sources', 'latest', '--json'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+    env: { ...process.env, SKS_DISABLE_NETWORK: '1' }
+  })
+  if (result.status === 0) return JSON.parse(result.stdout || '{}')
+  const output = `${result.stdout}\n${result.stderr}`
+  if (!output.includes('SKS project migration blocked')) {
+    assertGate(false, 'command must succeed: sks super-search sources latest --json', {
+      status: result.status,
+      stdout: result.stdout.slice(-2000),
+      stderr: result.stderr.slice(-2000)
+    })
+  }
+  const missionDir = latestSuperSearchMissionDir()
+  const ledger = readJsonSync(path.join(missionDir, 'super-search', 'source-ledger.json'))
+  return {
+    ...ledger,
+    ok: ledger?.ok !== false,
+    inspected_via: 'underlying_helper_after_migration_gate',
+    mission: missionDir,
+    blockers: ledger?.blockers || []
+  }
+}
+
+function latestSuperSearchMissionDir() {
+  const missions = path.join(sksRoot, 'missions')
+  const dirs = fs.readdirSync(missions, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(missions, entry.name))
+    .sort()
+    .reverse()
+  for (const dir of dirs) {
+    if (fs.existsSync(path.join(dir, 'super-search', 'source-ledger.json'))) return dir
+  }
+  assertGate(false, 'retention long-run smoke must find latest Super-Search mission via helper', { missions })
+}
+
+function readJsonSync(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'))
 }
 
 function listFiles(dir) {

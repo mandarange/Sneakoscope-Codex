@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appendJsonl, ensureDir, exists, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { evaluateMarketingStrategy } from './marketing-truthfulness.js';
+import { evaluateMarketingTruthfulness } from './marketing-truthfulness.js';
 import type { EntityFacts, Finding, MarketingStrategy, MarketingTruthfulnessGate, MutationJournalEvent, MutationOperation, MutationPlan, RollbackManifest, SearchVisibilityCliOptions, SearchVisibilityMode, SiteInventory } from './types.js';
 import { routeForMode } from './mission.js';
 
@@ -26,6 +26,7 @@ export async function buildMutationPlan(
       const truthfulness = await readJson<MarketingTruthfulnessGate | null>(path.join(artifactDir, 'marketing-truthfulness-gate.json'), null);
       if (!strategy || !strategy.ok) blockers.push('marketing_strategy_required_for_include_marketing');
       else if (!truthfulness?.ok) blockers.push('marketing_truthfulness_gate_required_for_include_marketing');
+      else if (!evaluateMarketingTruthfulness({ strategy }).ok) blockers.push('marketing_truthfulness_gate_required_for_include_marketing');
       else operations.push(...await marketingOperations(inventory, strategy, options));
     }
   }
@@ -218,6 +219,11 @@ export async function rollbackMutationPlan(
   return { ok: blockers.length === 0, status: blockers.length ? 'blocked' : 'rolled_back', rolled_back: rolledBack, blockers };
 }
 
+export function isMarketingMutationPlan(plan: MutationPlan | null | undefined): plan is MutationPlan {
+  return Boolean(plan?.operations?.length)
+    && plan!.operations.every((op) => isMarketingOperation(op) && allowedMarketingOperation(op));
+}
+
 async function seoOperations(inventory: SiteInventory, findings: Finding[], options: SearchVisibilityCliOptions): Promise<MutationOperation[]> {
   const operations: MutationOperation[] = [];
   const robotsMissing = findings.some((finding) => finding.ruleId === 'seo-robots-missing');
@@ -277,32 +283,36 @@ async function marketingOperations(inventory: SiteInventory, strategy: Marketing
   const operations: MutationOperation[] = [];
   const packagePath = inventory.package.path || 'package.json';
   const packageFull = path.join(options.root, packagePath);
-  const packageText = await readText(packageFull, '');
-  const packageJson = packageText ? safeJson(packageText) : null;
+  let packageText = await readText(packageFull, '');
+  let packageJson = packageText ? safeJson(packageText) : null;
   if (packageJson && typeof packageJson === 'object' && !Array.isArray(packageJson)) {
     const descriptionItem = strategy.package_plan.find((item) => item.operation === 'package-description-update' && 'description' in item);
     if (descriptionItem && 'description' in descriptionItem) {
       const next = { ...packageJson, description: descriptionItem.description };
+      const nextText = `${JSON.stringify(next, null, 2)}\n`;
       operations.push(updateOperation(
         'package-description-update',
         packagePath,
         packageText,
-        `${JSON.stringify(next, null, 2)}\n`,
+        nextText,
         'package-description-update',
         ['marketing-strategy'],
         ['sks seo-geo-optimizer verify <mission> --mode seo --strict'],
         'Update only package.json description from source-backed marketing strategy.'
       ));
+      packageJson = next;
+      packageText = nextText;
     }
     const keywordItem = strategy.package_plan.find((item) => item.operation === 'package-keywords-update' && 'keywords' in item);
     if (keywordItem && 'keywords' in keywordItem) {
       const keywords = [...new Set(keywordItem.keywords.map((kw) => String(kw).trim()).filter(Boolean))].slice(0, 20);
       const next = { ...packageJson, keywords };
+      const nextText = `${JSON.stringify(next, null, 2)}\n`;
       operations.push(updateOperation(
         'package-keywords-update',
         packagePath,
         packageText,
-        `${JSON.stringify(next, null, 2)}\n`,
+        nextText,
         'package-keywords-update',
         ['marketing-strategy'],
         ['sks seo-geo-optimizer verify <mission> --mode seo --strict'],
@@ -404,7 +414,9 @@ function safeJson(text: string): Record<string, unknown> | null {
 function upsertReadmeMarketingBlock(readme: string, oneLiner: string, sourceIds: string[]): string {
   const begin = '<!-- BEGIN SKS SEARCH VISIBILITY MARKETING -->';
   const end = '<!-- END SKS SEARCH VISIBILITY MARKETING -->';
-  const block = [
+  const block = oneLiner.includes('<!-- BEGIN SKS MARKETING POSITIONING -->')
+    ? oneLiner.replace('<!-- BEGIN SKS MARKETING POSITIONING -->', begin).replace('<!-- END SKS MARKETING POSITIONING -->', end).trimEnd() + '\n'
+    : [
     begin,
     '## Search Visibility Positioning',
     '',

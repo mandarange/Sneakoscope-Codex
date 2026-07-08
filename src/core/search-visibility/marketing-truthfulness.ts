@@ -106,13 +106,16 @@ function claimsFromStrategy(strategy: MarketingStrategy | null): MarketingClaim[
     const text = plan.operation === 'package-description-update'
       ? plan.description
       : plan.keywords.join(', ');
+    const packageKeywordBlockers = plan.operation === 'package-keywords-update'
+      ? []
+      : plan.source_ids.length ? [] : ['source_ids_required'];
     out.push({
       id: `strategy-package-${index + 1}`,
       text,
-      claim_type: classifyClaim(text),
+      claim_type: plan.operation === 'package-keywords-update' ? 'positioning' : classifyClaim(text),
       source_ids: plan.source_ids,
       publishable: true,
-      blockers: plan.source_ids.length ? [] : ['source_ids_required'],
+      blockers: packageKeywordBlockers,
     });
   }
   return out;
