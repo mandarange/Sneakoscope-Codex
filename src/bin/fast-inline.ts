@@ -15,9 +15,15 @@ export function rootJsonFastInline(fs: { existsSync(path: string): boolean }, cw
 export function doctorJsonFastInline(): void {
   const startedAt = Date.now();
   process.stdout.write(`${JSON.stringify({
-    schema: 'sks.doctor-status.v2',
+    schema: 'sks.doctor-status.v3',
     elapsed_ms: Math.max(0, Date.now() - startedAt),
     ok: true,
+    status: 'fast_readonly_ok',
+    diagnostic_depth: 'fast',
+    deep_diagnostics_skipped: true,
+    deep_ok: null,
+    not_counted_as_full_doctor: true,
+    next_actions: ['Run sks doctor --full --json for deep diagnostics.'],
     fast_path: true,
     profile: 'fast-readonly',
     root: process.cwd(),

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { adapterForDetection } from './adapter-registry.js';
 import { auditGeo, auditSeo } from './analyzers.js';
 import { detectProject, discoverSiteInventory } from './discovery.js';
+import { runMarketingResearch, runMarketingStrategy } from './marketing.js';
 import { applyMutationPlan, buildMutationPlan, rollbackMutationPlan } from './mutation.js';
 import { createSearchVisibilityMission, resolveSearchVisibilityMission, routeForMode, type SearchVisibilityMission } from './mission.js';
 import { finalizeSearchVisibility, statusForMission, writeAuditArtifacts, writeGate } from './artifacts.js';
@@ -11,6 +12,14 @@ import type { EntityFacts, ProjectContext, SearchVisibilityCliOptions, SearchVis
 
 export * from './types.js';
 export { createSearchVisibilityMission, resolveSearchVisibilityMission } from './mission.js';
+
+export async function runSearchVisibilityResearch(mode: SearchVisibilityMode, options: SearchVisibilityCliOptions): Promise<JsonData> {
+  return runMarketingResearch(mode, null, options);
+}
+
+export async function runSearchVisibilityStrategy(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
+  return runMarketingStrategy(mode, missionRef, options);
+}
 
 export async function runSearchVisibilityAudit(mode: SearchVisibilityMode, options: SearchVisibilityCliOptions): Promise<JsonData> {
   const root = await projectRoot(options.root);
@@ -55,6 +64,19 @@ export async function runSearchVisibilityAudit(mode: SearchVisibilityMode, optio
 }
 
 export async function runSearchVisibilityPlan(mode: SearchVisibilityMode, missionRef: string | null, options: SearchVisibilityCliOptions): Promise<JsonData> {
+  if (options.includeMarketing) {
+    const existing = await resolveSearchVisibilityMission(options.root, missionRef);
+    if (!existing) {
+      return {
+        schema: 'sks.search-visibility.plan-command.v1',
+        ok: false,
+        route: routeForMode(mode),
+        status: 'blocked',
+        operations: 0,
+        blockers: ['marketing_strategy_required_for_include_marketing'],
+      };
+    }
+  }
   const mission = await resolveOrAudit(mode, missionRef, options);
   const ctx = context(mode, mission.root, options);
   const inventory = await readJson<SiteInventory>(path.join(mission.artifactDir, 'site-inventory.json'));

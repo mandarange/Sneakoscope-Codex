@@ -34,6 +34,10 @@ export interface SearchVisibilityCliOptions {
   allowDirtyTouched: boolean;
   browser: boolean;
   includeLlmsTxt: boolean;
+  includeMarketing: boolean;
+  includeCompetitors: boolean;
+  strategyRef: string | null;
+  maxMarketingSources: number;
   observeQueries: boolean;
   queryFile: string | null;
   scope: string[];
@@ -183,6 +187,7 @@ export interface MutationOperation {
   baseSha256: string | null;
   proposedSha256: string;
   kind: 'create' | 'replace-range' | 'managed-merge' | 'delete-owned';
+  operationType?: 'package-description-update' | 'package-keywords-update' | 'readme-positioning-block-update';
   owner: 'sks-search-visibility';
   findingIds: string[];
   reversible: boolean;
@@ -192,6 +197,70 @@ export interface MutationOperation {
   requiredVerification: string[];
   scopeAuthorization: string[];
   ownershipStrategy: string;
+}
+
+export interface MarketingSource {
+  id: string;
+  kind: 'internal' | 'external' | 'competitor';
+  path: string | null;
+  url: string | null;
+  title: string;
+  summary: string;
+  sha256: string | null;
+  verified: boolean;
+  observed_at: string;
+  blockers: string[];
+}
+
+export interface MarketingClaim {
+  id: string;
+  text: string;
+  claim_type: 'identity' | 'capability' | 'performance' | 'parallel' | 'super_search' | 'positioning' | 'competitor' | 'unsupported';
+  source_ids: string[];
+  publishable: boolean;
+  blockers: string[];
+}
+
+export interface MarketingResearch {
+  schema: 'sks.search-visibility.marketing-research.v1';
+  ok: boolean;
+  mission_id: string;
+  internal_sources: MarketingSource[];
+  external_sources: MarketingSource[];
+  competitor_sources: MarketingSource[];
+  claims: MarketingClaim[];
+  blocked_claims: MarketingClaim[];
+  blockers: string[];
+}
+
+export interface MarketingStrategy {
+  schema: 'sks.search-visibility.marketing-strategy.v1';
+  ok: boolean;
+  mission_id: string;
+  positioning: {
+    one_liner: string;
+    source_ids: string[];
+  };
+  message_pillars: Array<{ title: string; claim: string; source_ids: string[] }>;
+  keyword_clusters: Array<{ name: string; keywords: string[]; source_ids: string[] }>;
+  readme_plan: Array<{ operation: 'readme-positioning-block-update'; text: string; source_ids: string[] }>;
+  package_plan: Array<
+    | { operation: 'package-description-update'; description: string; source_ids: string[] }
+    | { operation: 'package-keywords-update'; keywords: string[]; source_ids: string[] }
+  >;
+  docs_plan: Array<{ title: string; source_ids: string[]; auto_apply: false }>;
+  do_not_claim: string[];
+  blockers: string[];
+}
+
+export interface MarketingTruthfulnessGate {
+  schema: 'sks.search-visibility.marketing-truthfulness-gate.v1';
+  ok: boolean;
+  unsupported_claims: string[];
+  forbidden_phrases: string[];
+  competitor_disparagement: string[];
+  source_less_publishable_claims: string[];
+  blockers: string[];
 }
 
 export interface MutationPlan {

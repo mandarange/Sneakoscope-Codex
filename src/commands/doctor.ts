@@ -89,9 +89,15 @@ async function runDoctorJsonFastPath(args: any = [], root: string) {
     'Chrome/web review route needs the Codex Chrome Extension enabled before use.'
   ]);
   const result = {
-    schema: 'sks.doctor-status.v2',
+    schema: 'sks.doctor-status.v3',
     elapsed_ms: Date.now() - startedAtMs,
-    ok: ready.ready,
+    ok: true,
+    status: 'fast_readonly_ok',
+    diagnostic_depth: 'fast',
+    deep_diagnostics_skipped: true,
+    deep_ok: null,
+    not_counted_as_full_doctor: true,
+    next_actions: ['Run sks doctor --full --json for deep diagnostics.'],
     root,
     fast_path: true,
     no_fix_write_policy: 'no_writes_performed',

@@ -3,67 +3,128 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
+import { fileURLToPath } from 'node:url'
 import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js'
 import { runProcess } from '../core/fsx.js'
 
-const { COMMAND_MANIFEST_LITE } = await importDist('cli/command-manifest-lite.js')
-const smokeCommands = [
+export const CRITICAL_COMMANDS = new Set([
+  'doctor',
+  'setup',
+  'bootstrap',
+  'update',
+  'run',
+  'naruto',
+  'super-search',
+  'seo-geo-optimizer',
+  'db',
+  'mad-sks',
+  'qa-loop',
+  'review',
+  'release',
+  'rollback',
+  'commit-and-push'
+])
+
+export const COMMAND_SMOKE_MAX_AGE_MS = 60 * 60 * 1000
+
+export const smokeCommands = [
   { name: 'version', argv: ['--version'], budget_p95_ms: 120 },
   { name: 'commands', argv: ['commands', '--json'], budget_p95_ms: 200 },
   { name: 'root', argv: ['root', '--json'], budget_p95_ms: 150 },
   { name: 'dollar-commands', argv: ['dollar-commands', '--json'], budget_p95_ms: 220 },
   { name: 'super-search', argv: ['super-search', 'doctor', '--json'], budget_p95_ms: 180 },
-  { name: 'doctor', argv: ['doctor', '--json'], budget_p95_ms: 1200 }
+  { name: 'doctor', argv: ['doctor', '--json'], budget_p95_ms: 1200 },
+  { name: 'setup', argv: ['setup', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'bootstrap', argv: ['bootstrap', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'update', argv: ['update', 'now', '--dry-run', '--json'], budget_p95_ms: 2500, kind: 'dry_run' },
+  { name: 'run', argv: ['run', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'naruto', argv: ['naruto', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'seo-geo-optimizer', argv: ['seo-geo-optimizer', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'db', argv: ['db', 'check', '--json'], budget_p95_ms: 2000, kind: 'dry_run' },
+  { name: 'mad-sks', argv: ['mad-sks', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'qa-loop', argv: ['qa-loop', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'review', argv: ['review', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'release', argv: ['release', '--help'], budget_p95_ms: 1200, kind: 'read_only' },
+  { name: 'rollback', argv: ['rollback', 'apply'], budget_p95_ms: 1200, kind: 'blocked_negative', expect_blocked: true },
+  { name: 'commit-and-push', argv: ['commit-and-push', '--help'], budget_p95_ms: 1200, kind: 'read_only' }
 ]
 
-const timings = []
-for (const smoke of smokeCommands) timings.push(await measure(smoke))
-const timingByName = new Map(timings.map((row) => [row.name, row]))
+if (isMainModule()) await main()
 
-const entries = COMMAND_MANIFEST_LITE.filter((entry) => entry.hidden !== true)
-const rows = entries.map((entry) => scoreEntry(entry, timingByName.get(entry.name)))
-const average = rows.reduce((sum, row) => sum + row.score, 0) / Math.max(1, rows.length)
-const blockers = [
-  ...(average >= 94 ? [] : [`average_below_94:${average.toFixed(2)}`])
-]
-const report = {
-  schema: 'sks.command-performance-scorecard.v1',
-  ok: blockers.length === 0,
-  generated_at: new Date().toISOString(),
-  average_score: Number(average.toFixed(2)),
-  command_count: rows.length,
-  timings,
-  rows,
-  blockers
+export async function main() {
+  const { COMMAND_MANIFEST_LITE } = await importDist('cli/command-manifest-lite.js')
+  const timings = []
+  for (const smoke of smokeCommands) timings.push(await measure(smoke))
+  const timingByName = new Map(timings.map((row) => [row.name, row]))
+
+  const entries = COMMAND_MANIFEST_LITE.filter((entry) => entry.hidden !== true)
+  const rows = entries.map((entry) => scoreEntry(entry, timingByName.get(entry.name)))
+  const average = rows.reduce((sum, row) => sum + row.score, 0) / Math.max(1, rows.length)
+  const blockers = [
+    ...rows.filter((row) => row.critical && row.score === 0).map((row) => `${row.name}:critical_smoke_missing_or_failed`),
+    ...(average >= 94 ? [] : [`average_below_94:${average.toFixed(2)}`])
+  ]
+  const report = {
+    schema: 'sks.command-performance-scorecard.v1',
+    ok: blockers.length === 0,
+    generated_at: new Date().toISOString(),
+    average_score: Number(average.toFixed(2)),
+    command_count: rows.length,
+    timings,
+    rows,
+    blockers
+  }
+  const out = path.join(root, '.sneakoscope', 'reports', 'command-performance-scorecard.json')
+  fs.mkdirSync(path.dirname(out), { recursive: true })
+  fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`)
+
+  assertGate(report.ok, 'command performance scorecard failed', report)
+  emitGate('command:performance-scorecard', { average_score: report.average_score, command_count: rows.length, report: '.sneakoscope/reports/command-performance-scorecard.json' })
 }
-const out = path.join(root, '.sneakoscope', 'reports', 'command-performance-scorecard.json')
-fs.mkdirSync(path.dirname(out), { recursive: true })
-fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`)
 
-assertGate(report.ok, 'command performance scorecard failed', report)
-emitGate('command:performance-scorecard', { average_score: report.average_score, command_count: rows.length, report: '.sneakoscope/reports/command-performance-scorecard.json' })
-
-function scoreEntry(entry, timing) {
+export function scoreEntry(entry, timing, options = {}) {
+  const now = options.now ? new Date(options.now) : new Date()
+  const critical = CRITICAL_COMMANDS.has(entry.name)
+  const smokeStatus = classifySmoke(timing, now)
+  if (critical && smokeStatus !== 'pass') {
+    return { name: entry.name, maturity: entry.maturity, critical, score: 0, p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), smoke_status: smokeStatus, summary: entry.summary }
+  }
   const hasRunnableSurface = Boolean(timing || entry.summary || entry.readonly || entry.diagnostic || entry.skipMigrationGate || entry.mutatesRouteState)
-  const p95Ok = timing ? timing.ok : true
-  const jsonContract = timing ? timing.json_contract : true
+  const p95Ok = timing ? timing.ok === true : true
+  const jsonContract = timing ? timing.json_contract !== false : true
   const failureSummary = Boolean(entry.summary)
   const installedReady = Array.isArray(entry.packageRequiredFiles)
     ? entry.packageRequiredFiles.every((file) => fs.existsSync(path.join(root, file)))
     : true
+  const lifecyclePenalty = (entry.hidden === true || entry.deprecated === true) && !entry.deprecationReason && !entry.hiddenReason ? 25 : 0
   const score =
     (hasRunnableSurface ? 25 : 0) +
     (p95Ok ? 25 : 0) +
     (jsonContract ? 15 : 0) +
     (failureSummary ? 15 : 0) +
-    (installedReady ? 20 : 0)
-  return { name: entry.name, maturity: entry.maturity, score, p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), summary: entry.summary }
+    (installedReady ? 20 : 0) -
+    lifecyclePenalty
+  return { name: entry.name, maturity: entry.maturity, critical, score: Math.max(0, score), p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), smoke_status: smokeStatus, summary: entry.summary }
 }
 
-async function measure(smoke) {
+export function classifySmoke(timing, now = new Date()) {
+  if (!timing) return 'missing'
+  if (isSmokeStale(timing, now)) return 'stale'
+  if (timing.kind === 'blocked_negative') return timing.blocked === true && timing.ok !== true ? 'pass' : 'failed'
+  return timing.ok === true ? 'pass' : 'failed'
+}
+
+export function isSmokeStale(timing, now = new Date()) {
+  if (!timing.generated_at) return false
+  const generated = new Date(timing.generated_at).getTime()
+  return !Number.isFinite(generated) || now.getTime() - generated > COMMAND_SMOKE_MAX_AGE_MS
+}
+
+export async function measure(smoke) {
   const durations = []
   const exitCodes = []
   let jsonContract = false
+  let blocked = false
   for (let i = 0; i < 3; i++) {
     const started = performance.now()
     const result = await runProcess(process.execPath, [path.join(root, 'dist', 'bin', 'sks.js'), ...smoke.argv], {
@@ -75,10 +136,14 @@ async function measure(smoke) {
     durations.push(Math.round(performance.now() - started))
     exitCodes.push(result.code)
     jsonContract ||= smoke.argv.includes('--json') ? parsesJson(result.stdout) : String(result.stdout || '').trim().length > 0
+    blocked ||= result.code !== 0 && /block|required|missing|denied|explicit/i.test(`${result.stdout || ''}\n${result.stderr || ''}`)
   }
   durations.sort((a, b) => a - b)
   const p95 = durations[Math.min(durations.length - 1, Math.ceil(durations.length * 0.95) - 1)] || 0
-  return { name: smoke.name, p95_ms: p95, budget_p95_ms: smoke.budget_p95_ms, ok: p95 <= smoke.budget_p95_ms && exitCodes.every((code) => code === 0), exit_codes: exitCodes, json_contract: jsonContract }
+  const ok = smoke.kind === 'blocked_negative'
+    ? false
+    : p95 <= smoke.budget_p95_ms && exitCodes.every((code) => code === 0)
+  return { name: smoke.name, kind: smoke.kind || 'read_only', generated_at: new Date().toISOString(), p95_ms: p95, budget_p95_ms: smoke.budget_p95_ms, ok, blocked, exit_codes: exitCodes, json_contract: jsonContract }
 }
 
 function parsesJson(value) {
@@ -88,4 +153,8 @@ function parsesJson(value) {
   } catch {
     return false
   }
+}
+
+function isMainModule() {
+  return process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
 }

@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appendJsonl, ensureDir, exists, readJson, readText, sha256, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import type { EntityFacts, Finding, MutationJournalEvent, MutationOperation, MutationPlan, RollbackManifest, SearchVisibilityCliOptions, SearchVisibilityMode, SiteInventory } from './types.js';
+import { evaluateMarketingStrategy } from './marketing-truthfulness.js';
+import type { EntityFacts, Finding, MarketingStrategy, MarketingTruthfulnessGate, MutationJournalEvent, MutationOperation, MutationPlan, RollbackManifest, SearchVisibilityCliOptions, SearchVisibilityMode, SiteInventory } from './types.js';
 import { routeForMode } from './mission.js';
 
 export async function buildMutationPlan(
@@ -20,6 +21,13 @@ export async function buildMutationPlan(
   if (inventory.detected_adapter.adapterId === 'unsupported') blockers.push('unsupported_framework_mutation_blocked');
   if (!blockers.length && mode === 'seo') {
     operations.push(...await seoOperations(inventory, findings, options));
+    if (options.includeMarketing) {
+      const strategy = await readJson<MarketingStrategy | null>(path.join(artifactDir, 'marketing-strategy.json'), null);
+      const truthfulness = await readJson<MarketingTruthfulnessGate | null>(path.join(artifactDir, 'marketing-truthfulness-gate.json'), null);
+      if (!strategy || !strategy.ok) blockers.push('marketing_strategy_required_for_include_marketing');
+      else if (!truthfulness?.ok) blockers.push('marketing_truthfulness_gate_required_for_include_marketing');
+      else operations.push(...await marketingOperations(inventory, strategy, options));
+    }
   }
   if (!blockers.length && mode === 'geo') {
     operations.push(...await geoOperations(inventory, findings, options, entityFacts));
@@ -50,6 +58,14 @@ export async function applyMutationPlan(
 ): Promise<{ ok: boolean; status: 'applied' | 'blocked'; applied: number; rollback: RollbackManifest; blockers: string[] }> {
   const blockers = [...plan.blockers];
   if (!options.apply) blockers.push('apply_requires_explicit_--apply');
+  const marketingOps = plan.operations.filter((op) => isMarketingOperation(op));
+  if (marketingOps.length && !options.includeMarketing) blockers.push('marketing_apply_requires_explicit_--include-marketing');
+  const invalidMarketingOps = marketingOps.filter((op) => !allowedMarketingOperation(op));
+  blockers.push(...invalidMarketingOps.map((op) => `marketing_operation_not_allowed:${op.id}`));
+  if (marketingOps.length) {
+    const truthfulness = await readJson<MarketingTruthfulnessGate | null>(path.join(artifactDir, 'marketing-truthfulness-gate.json'), null);
+    if (!truthfulness?.ok) blockers.push('marketing_truthfulness_gate_required_for_apply');
+  }
   const previousRollback = await readJson<RollbackManifest | null>(path.join(artifactDir, 'rollback-manifest.json'), null);
   const rollback: RollbackManifest = {
     schema: 'sks.search-visibility.rollback-manifest.v1',
@@ -257,6 +273,96 @@ async function geoOperations(inventory: SiteInventory, findings: Finding[], opti
   return [createOperation('geo-create-llms-txt', rel, content, findings.filter((finding) => finding.ruleId === 'geo-llms-txt-optional-missing').map((finding) => finding.id), ['sks seo-geo-optimizer verify <mission> --mode geo --strict'])];
 }
 
+async function marketingOperations(inventory: SiteInventory, strategy: MarketingStrategy, options: SearchVisibilityCliOptions): Promise<MutationOperation[]> {
+  const operations: MutationOperation[] = [];
+  const packagePath = inventory.package.path || 'package.json';
+  const packageFull = path.join(options.root, packagePath);
+  const packageText = await readText(packageFull, '');
+  const packageJson = packageText ? safeJson(packageText) : null;
+  if (packageJson && typeof packageJson === 'object' && !Array.isArray(packageJson)) {
+    const descriptionItem = strategy.package_plan.find((item) => item.operation === 'package-description-update' && 'description' in item);
+    if (descriptionItem && 'description' in descriptionItem) {
+      const next = { ...packageJson, description: descriptionItem.description };
+      operations.push(updateOperation(
+        'package-description-update',
+        packagePath,
+        packageText,
+        `${JSON.stringify(next, null, 2)}\n`,
+        'package-description-update',
+        ['marketing-strategy'],
+        ['sks seo-geo-optimizer verify <mission> --mode seo --strict'],
+        'Update only package.json description from source-backed marketing strategy.'
+      ));
+    }
+    const keywordItem = strategy.package_plan.find((item) => item.operation === 'package-keywords-update' && 'keywords' in item);
+    if (keywordItem && 'keywords' in keywordItem) {
+      const keywords = [...new Set(keywordItem.keywords.map((kw) => String(kw).trim()).filter(Boolean))].slice(0, 20);
+      const next = { ...packageJson, keywords };
+      operations.push(updateOperation(
+        'package-keywords-update',
+        packagePath,
+        packageText,
+        `${JSON.stringify(next, null, 2)}\n`,
+        'package-keywords-update',
+        ['marketing-strategy'],
+        ['sks seo-geo-optimizer verify <mission> --mode seo --strict'],
+        'Update only package.json keywords from source-backed marketing strategy; capped at 20 keywords.'
+      ));
+    }
+  }
+  const readmePath = inventory.readme.path || 'README.md';
+  const readmeFull = path.join(options.root, readmePath);
+  if (await exists(readmeFull)) {
+    const readmeText = await readText(readmeFull, '');
+    const item = strategy.readme_plan.find((entry) => entry.operation === 'readme-positioning-block-update');
+    if (item) {
+      const next = upsertReadmeMarketingBlock(readmeText, item.text, strategy.positioning.source_ids);
+      operations.push(updateOperation(
+        'readme-positioning-block-update',
+        readmePath,
+        readmeText,
+        next,
+        'readme-positioning-block-update',
+        ['marketing-strategy'],
+        ['sks seo-geo-optimizer verify <mission> --mode seo --strict'],
+        'Update only the SKS managed README marketing positioning block.'
+      ));
+    }
+  }
+  return operations.filter((op) => op.baseSha256 !== op.proposedSha256);
+}
+
+function updateOperation(
+  id: string,
+  rel: string,
+  before: string,
+  content: string,
+  operationType: NonNullable<MutationOperation['operationType']>,
+  findingIds: string[],
+  requiredVerification: string[],
+  preview: string
+): MutationOperation {
+  return {
+    id,
+    path: rel,
+    baseSha256: sha256(before),
+    proposedSha256: sha256(content),
+    kind: 'managed-merge',
+    operationType,
+    owner: 'sks-search-visibility',
+    findingIds,
+    reversible: true,
+    preview,
+    content,
+    risk: 'low',
+    requiredVerification,
+    scopeAuthorization: [id, rel, operationType],
+    ownershipStrategy: operationType === 'readme-positioning-block-update'
+      ? 'managed README block only; preserve user-authored content outside block'
+      : 'single-field package metadata update from source-backed strategy',
+  };
+}
+
 function createOperation(id: string, rel: string, content: string, findingIds: string[], requiredVerification: string[]): MutationOperation {
   return {
     id,
@@ -274,6 +380,52 @@ function createOperation(id: string, rel: string, content: string, findingIds: s
     scopeAuthorization: [id, rel],
     ownershipStrategy: 'create-only; never overwrite user-authored files',
   };
+}
+
+function isMarketingOperation(op: MutationOperation): boolean {
+  return Boolean(op.operationType) || ['package-description-update', 'package-keywords-update', 'readme-positioning-block-update'].includes(op.id);
+}
+
+function allowedMarketingOperation(op: MutationOperation): boolean {
+  return op.operationType === 'package-description-update'
+    || op.operationType === 'package-keywords-update'
+    || op.operationType === 'readme-positioning-block-update';
+}
+
+function safeJson(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function upsertReadmeMarketingBlock(readme: string, oneLiner: string, sourceIds: string[]): string {
+  const begin = '<!-- BEGIN SKS SEARCH VISIBILITY MARKETING -->';
+  const end = '<!-- END SKS SEARCH VISIBILITY MARKETING -->';
+  const block = [
+    begin,
+    '## Search Visibility Positioning',
+    '',
+    oneLiner,
+    '',
+    `Sources: ${sourceIds.slice(0, 8).join(', ') || 'marketing-strategy'}`,
+    end,
+    '',
+  ].join('\n');
+  const pattern = new RegExp(`${escapeRe(begin)}[\\s\\S]*?${escapeRe(end)}\\n?`, 'm');
+  if (pattern.test(readme)) return readme.replace(pattern, block);
+  const lines = readme.split(/\r?\n/);
+  const insertAt = lines.findIndex((line, index) => index > 0 && /^#{1,3}\s+/.test(line));
+  if (insertAt > 0) {
+    return [...lines.slice(0, insertAt), '', block.trimEnd(), '', ...lines.slice(insertAt)].join('\n').replace(/\n{4,}/g, '\n\n\n');
+  }
+  return `${readme.replace(/\s*$/, '\n\n')}${block}`;
+}
+
+function escapeRe(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function preferredPolicyPath(root: string, file: string): Promise<string> {

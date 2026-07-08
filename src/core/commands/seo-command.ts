@@ -8,8 +8,10 @@ import {
   runSearchVisibilityDoctor,
   runSearchVisibilityFixture,
   runSearchVisibilityPlan,
+  runSearchVisibilityResearch,
   runSearchVisibilityRollback,
   runSearchVisibilityStatus,
+  runSearchVisibilityStrategy,
   runSearchVisibilityVerify,
   resolveSearchVisibilityMission,
 } from '../search-visibility/index.js';
@@ -40,7 +42,11 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
       // proving a prior `plan` step was run and reviewed before this apply can mutate anything.
       const planGate = await evaluateLocalGate({ root: mission.root, dir: mission.dir, gateFile: mode === 'seo' ? 'seo-gate.json' : 'geo-gate.json', requiredArtifacts: ['search-visibility/mutation-plan.json'] });
       if (planGate.blockers.includes('missing_artifact:search-visibility/mutation-plan.json')) blockers.push('seo_apply_missing_mutation_plan');
-      blockers.push(...planGate.blockers.filter((blocker) => blocker !== 'gate_not_passed' && blocker !== 'gate_ok_false' && blocker !== 'missing_artifact:search-visibility/mutation-plan.json'));
+      blockers.push(...planGate.blockers.filter((blocker) => {
+        if (blocker === 'gate_not_passed' || blocker === 'gate_ok_false' || blocker === 'missing_artifact:search-visibility/mutation-plan.json') return false;
+        if (options.includeMarketing && (blocker === 'seo-gate.json_missing' || blocker === 'geo-gate.json_missing')) return false;
+        return true;
+      }));
     }
     if (blockers.length) {
       result = { schema: 'sks.search-visibility.apply-command.v1', ok: false, route: mode === 'seo' ? '$SEO-GEO-OPTIMIZER' : '$SEO-GEO-OPTIMIZER', status: 'blocked', blockers };
@@ -54,6 +60,8 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
     }
   }
   if (action === 'doctor') result = await runSearchVisibilityDoctor(mode, options);
+  else if (action === 'research') result = await runSearchVisibilityResearch(mode, firstPositional(rest), options);
+  else if (action === 'strategy') result = await runSearchVisibilityStrategy(mode, firstPositional(rest) || options.strategyRef || 'latest', options);
   else if (action === 'audit') result = await runSearchVisibilityAudit(mode, options);
   else if (action === 'plan') result = await runSearchVisibilityPlan(mode, firstPositional(rest) || 'latest', options);
   else if (action === 'apply') result = await runSearchVisibilityApply(mode, firstPositional(rest) || 'latest', options);
@@ -73,6 +81,8 @@ export async function runSearchVisibilityCommand(mode: 'seo' | 'geo', args: stri
 }
 
 async function applySearchVisibilityGateResult(mode: 'seo' | 'geo', action: string, result: any, options: SearchVisibilityCliOptions) {
+  if (action === 'research' || action === 'strategy') return result;
+  if (action === 'plan' && options.includeMarketing) return result;
   if (!result || typeof result !== 'object' || !result.mission_id) return result;
   const mission = await resolveSearchVisibilityMission(options.root, result.mission_id);
   if (!mission) return { ...result, ok: false, blockers: [...(result.blockers || []), 'mission_missing_for_gate_evaluation'] };
@@ -143,6 +153,10 @@ async function parseOptions(args: string[]): Promise<SearchVisibilityCliOptions>
     allowDirtyTouched: flag(args, '--allow-dirty-touched'),
     browser: flag(args, '--browser'),
     includeLlmsTxt: flag(args, '--include-llms-txt'),
+    includeMarketing: flag(args, '--include-marketing'),
+    includeCompetitors: flag(args, '--include-competitors'),
+    strategyRef: readOption(args, '--strategy-ref', null),
+    maxMarketingSources: Number(readOption(args, '--max-marketing-sources', '4')) || 4,
     observeQueries: flag(args, '--observe-queries'),
     queryFile: readOption(args, '--query-file', null),
     scope: String(readOption(args, '--scope', '') || '').split(',').map((item) => item.trim()).filter(Boolean),
@@ -158,7 +172,7 @@ function frameworkOption(value: string): SearchVisibilityFramework {
 }
 
 function firstPositional(args: string[]): string | null {
-  const valueFlags = new Set(['--root', '--url', '--target', '--framework', '--scope', '--query-file']);
+  const valueFlags = new Set(['--root', '--url', '--target', '--framework', '--scope', '--query-file', '--strategy-ref', '--max-marketing-sources']);
   for (let i = 0; i < args.length; i += 1) {
     const value = args[i] || '';
     if (valueFlags.has(value)) {
@@ -172,15 +186,17 @@ function firstPositional(args: string[]): string | null {
 
 function usage(mode: 'seo' | 'geo', exitCode: number, displayCommand: 'seo' | 'geo' | 'seo-geo-optimizer' = mode) {
   if (displayCommand === 'seo-geo-optimizer') {
-    console.error('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]');
-    console.error('       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]');
+    console.error('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]');
+    console.error('       sks seo-geo-optimizer research [mission|latest] [--offline] [--include-competitors] [--json]');
+    console.error('       sks seo-geo-optimizer strategy <mission|latest> [--json]');
+    console.error('       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-marketing] [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]');
     console.error('       sks seo-geo-optimizer rollback <mission|latest> --mode seo|geo --apply [--yes] [--json]');
     process.exitCode = exitCode;
     return { schema: 'sks.search-visibility.usage.v1', ok: false, status: 'blocked', mode, command: displayCommand, reason: 'invalid_subcommand' };
   }
   const applyFlag = mode === 'geo' ? ' [--include-llms-txt]' : '';
-  console.error(`Usage: sks ${mode} doctor|audit|plan|apply|verify|status|rollback|fixture [mission|latest] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]`);
-  console.error(`       sks ${mode} apply <mission|latest> --apply${applyFlag} [--scope <rule-or-path,...>] [--yes] [--json]`);
+  console.error(`Usage: sks ${mode} doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]`);
+  console.error(`       sks ${mode} apply <mission|latest> --apply${applyFlag} [--include-marketing] [--scope <rule-or-path,...>] [--yes] [--json]`);
   console.error(`       sks ${mode} rollback <mission|latest> --apply [--yes] [--json]`);
   process.exitCode = exitCode;
   return { schema: 'sks.search-visibility.usage.v1', ok: false, status: 'blocked', mode, reason: 'invalid_subcommand' };
