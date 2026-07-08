@@ -1,6 +1,6 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-08T08:51:31.277Z",
+  "generated_at": "2026-07-08T09:30:18.008Z",
   "git_head_sha": "b01376caa9924a15f96339b87e243a56c288c502",
   "source_file_count": 3382,
   "index_digest": "7f81a771edf3f14c8f22c8b3849ba14aaf3931074b9538e07b5164c4f0d60b7a",
@@ -187,7 +187,7 @@
     },
     {
       "id": "code:core-commands",
-      "text": "core-commands is a command module at src/core/commands (72 files, 12140 loc, high risk). Key exports: async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []); async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 99 more. It has no detected cross-module dependencies.",
+      "text": "core-commands is a command module at src/core/commands (72 files, 12145 loc, high risk). Key exports: async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []); async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 99 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/commands"
@@ -478,7 +478,7 @@
     },
     {
       "id": "code:core-naruto",
-      "text": "core-naruto is a core module at src/core/naruto (27 files, 3354 loc, medium risk). Key exports: interface HardwareCapacityProbeInput; interface HardwareCapacityProbe; function probeHardwareCapacity(input: HardwareCapacityProbeInput = {}): HardwareCapacityProbe; interface NarutoActivePoolReport; interface NarutoWorktreeActivePoolReport extends NarutoActivePoolReport, and 95 more. It has no detected cross-module dependencies.",
+      "text": "core-naruto is a core module at src/core/naruto (27 files, 3378 loc, medium risk). Key exports: interface HardwareCapacityProbeInput; interface HardwareCapacityProbe; function probeHardwareCapacity(input: HardwareCapacityProbeInput = {}): HardwareCapacityProbe; interface NarutoActivePoolReport; interface NarutoWorktreeActivePoolReport extends NarutoActivePoolReport, and 96 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/naruto"
