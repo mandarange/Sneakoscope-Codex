@@ -184,6 +184,8 @@ export const ROUTES = [
     stopGate: 'none',
     coverageExemptReason: 'read-only answer route; never writes or modifies code/files',
     cliEntrypoint: 'implicit question route',
+    codexAppOnly: true,
+    codexAppOnlyReason: '$Answer has no direct CLI verb; it is only reachable as an implicit natural-language question route inside Codex App prompts',
     examples: ['이 파이프라인이 왜 이렇게 동작해?', 'What does this hook do?']
   },
   {
@@ -199,6 +201,8 @@ export const ROUTES = [
     stopGate: 'honest_mode',
     coverageExemptReason: 'setup/help/status routing only; delegates any real work to the target route it dispatches to',
     cliEntrypoint: 'sks commands',
+    codexAppOnly: true,
+    codexAppOnlyReason: '$SKS itself has no direct CLI verb; `sks commands` is a related discovery command, not an invocation of $SKS. $SKS is only reachable as a Codex App prompt route',
     examples: ['$SKS show me available workflows']
   },
   {

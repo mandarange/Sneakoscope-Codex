@@ -42,6 +42,13 @@ export async function createMadDbRuntimeProfile(input: {
   const dir = path.join(missionDir(input.root, input.missionId), 'mad-db', 'runtime');
   await fs.mkdir(dir, { recursive: true });
   const url = madDbMcpUrl(input.projectRef, input.mcpUrl);
+  /* intentional: this TOML block is never loaded into a live Codex session config — the
+     agent's own Supabase MCP tool intentionally stays read-only for the whole cycle. It is
+     read only by MadDbMcpExecutor (via profile.server_url in-process) and by
+     mad-db-recovery.ts (existence check for crash cleanup). Keeping writes on that single
+     JS-orchestrated path, rather than handing the model a write-capable MCP server directly,
+     is what makes postcondition/read-back/rollback verification possible; do not "wire this up"
+     into .codex/config.toml without re-deriving those guarantees for a model-driven write path. */
   const text = [
     '[mcp_servers.supabase_mad_db]',
     `url = "${url}"`,

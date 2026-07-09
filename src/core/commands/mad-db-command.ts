@@ -3,7 +3,7 @@ import { madHighCommand } from './mad-sks-command.js';
 export async function madDbCommand(args: string[] = []) {
   const translated = translateMadDbArgs(args);
   const json = args.includes('--json');
-  process.stderr.write("mad-db is deprecated; use 'sks mad-sks sql ...' or 'sks mad-sks apply-migration ...'.\n");
+  process.stderr.write("mad-db is deprecated and will be removed in v6.0.0; use 'sks mad-sks sql ...' or 'sks mad-sks apply-migration ...'.\n");
   if (!json) return madHighCommand(['--mad-sks', ...translated]);
 
   const originalLog = console.log;
