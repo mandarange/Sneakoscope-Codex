@@ -792,6 +792,7 @@ export async function ensureCurrentMigrationBeforeCommand(input: {
 
   return withUpdateMigrationLock(root, empty, async () => {
     const reportFile = path.join(root, '.sneakoscope', 'update', 'doctor-migration.json');
+    await pruneLegacyDoctorMigrationReports(root).catch(() => undefined);
     const baseTimeoutMs = migrationDoctorTimeoutMs(env);
     let doctor = await runPackageLocalDoctor({
       root,
@@ -1127,6 +1128,33 @@ async function withUpdateMigrationLock(
       await fsp.rm(lockPath, { force: true }).catch(() => undefined);
     }
   }
+}
+
+const DOCTOR_MIGRATION_REPORT_KEEP_COUNT = 10;
+const DOCTOR_MIGRATION_REPORT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+// A now-unused legacy naming scheme (doctor-migration-<epoch>.json per run,
+// one per migration-gate doctor invocation) left ~80 files/several MB of
+// dead weight in .sneakoscope/update/ with nothing ever removing them
+// (20차 P2-5c) — the current code writes a single fixed doctor-migration.json
+// instead, but any leftovers from before that change, or from any other
+// path that reintroduces per-run naming, are pruned here: keep the most
+// recent DOCTOR_MIGRATION_REPORT_KEEP_COUNT, and nothing older than
+// DOCTOR_MIGRATION_REPORT_MAX_AGE_MS regardless of count.
+async function pruneLegacyDoctorMigrationReports(root: string): Promise<void> {
+  const dir = path.join(root, '.sneakoscope', 'update');
+  const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+  const candidates = entries.filter((entry) => entry.isFile() && /^doctor-migration-\d+\.json$/.test(entry.name));
+  if (!candidates.length) return;
+  const withStats = await Promise.all(candidates.map(async (entry) => {
+    const filePath = path.join(dir, entry.name);
+    const stat = await fsp.stat(filePath).catch(() => null);
+    return stat ? { filePath, mtimeMs: stat.mtimeMs } : null;
+  }));
+  const rows = withStats.filter((row): row is { filePath: string; mtimeMs: number } => Boolean(row)).sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const now = Date.now();
+  const removable = rows.filter((row, index) => index >= DOCTOR_MIGRATION_REPORT_KEEP_COUNT || now - row.mtimeMs > DOCTOR_MIGRATION_REPORT_MAX_AGE_MS);
+  await Promise.all(removable.map((row) => fsp.rm(row.filePath, { force: true }).catch(() => undefined)));
 }
 
 async function removeStaleMigrationLock(lockPath: string): Promise<boolean> {

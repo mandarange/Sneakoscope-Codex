@@ -179,8 +179,6 @@ export async function runNativeCliWorker(input: any = {}) {
 	      logTail: noPatchReason.reason
 	    })
 	  }
-  const minRuntimeMs = Number(intake.min_runtime_ms || input.minRuntimeMs || 0)
-  if (Number.isFinite(minRuntimeMs) && minRuntimeMs > 0) await delay(Math.min(30000, Math.floor(minRuntimeMs)))
   const report = {
     schema: 'sks.native-cli-worker-process-report.v1',
     generated_at: nowIso(),
@@ -297,10 +295,6 @@ export async function runNativeCliWorker(input: any = {}) {
 	    logTail: 'worker heartbeat finished'
 	  })
   return result
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function startWorkerProgressTelemetry(input: {

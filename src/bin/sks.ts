@@ -1,10 +1,10 @@
 #!/usr/bin/env node
+import { PACKAGE_VERSION } from '../core/version.js';
 
-const FAST_PACKAGE_VERSION = '5.12.0';
 const firstArg = process.argv[2];
 
 if (firstArg === '--version' || firstArg === '-v' || firstArg === 'version') {
-  process.stdout.write(`sneakoscope ${FAST_PACKAGE_VERSION}\n`);
+  process.stdout.write(`sneakoscope ${PACKAGE_VERSION}\n`);
 } else {
   import('./sks-dispatch.js').then(({ runSks }) => runSks(process.argv.slice(2))).catch((err: unknown) => {
     const message = err instanceof Error && err.stack ? err.stack : String(err);

@@ -85,7 +85,6 @@ class NativeCliSessionSwarmRecorder {
       source_intelligence_refs: ctx.agent.source_intelligence_refs || null,
       goal_mode_ref: ctx.agent.goal_mode_ref || null,
       strategy_refs: ctx.slice?.strategy_refs || null,
-      min_runtime_ms: this.input.targetActiveSlots >= 10 ? 8000 : this.input.targetActiveSlots >= 2 ? 2000 : 25,
       recursion_guard_env: true
     }
     await writeJsonAtomic(path.join(this.root, intakeRel), intake)

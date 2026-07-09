@@ -32,6 +32,15 @@ export interface MadDbToolResult {
 export class MadDbMcpExecutor {
   private client: any = null;
   private transport: any = null;
+  // A successful inventory() result is cached for this executor instance's
+  // lifetime (one DB operation cycle) — previously every executeSql/
+  // applyMigration call re-fetched the full tool list from the MCP server
+  // via callToolWithFallback, on top of whatever explicit inventory() the
+  // caller had already done to prepare the mission, doubling the
+  // connect+listTools round trip per SQL call for no reason the available
+  // tool set can't change mid-cycle (20차 P2-5b). Failures are never
+  // cached, so a transient listTools error doesn't get stuck.
+  private cachedInventory: MadDbToolInventory | null = null;
 
   constructor(private readonly profile: MadDbRuntimeProfile, private readonly opts: { timeoutMs?: number } = {}) {}
 
@@ -46,12 +55,13 @@ export class MadDbMcpExecutor {
   }
 
   async inventory(): Promise<MadDbToolInventory> {
+    if (this.cachedInventory) return this.cachedInventory;
     const started = performance.now();
     try {
       await this.connect();
       const result = await this.client!.listTools({}, { timeout: this.opts.timeoutMs || 10_000 });
       const names = (result.tools || []).map((tool: any) => String(tool?.name || '')).filter(Boolean).sort();
-      return {
+      const inventory: MadDbToolInventory = {
         schema: 'sks.mad-db-tool-inventory.v1',
         checked_at: nowIso(),
         ok: hasTool(names, 'execute_sql') && hasTool(names, 'apply_migration'),
@@ -64,6 +74,8 @@ export class MadDbMcpExecutor {
         error_kind: null,
         retry_guidance: null
       };
+      if (inventory.ok) this.cachedInventory = inventory;
+      return inventory;
     } catch (err: unknown) {
       const summary = summarizeMadDbError(err);
       const kind = classifyMadDbError(summary);
@@ -97,6 +109,7 @@ export class MadDbMcpExecutor {
     await this.client?.close().catch(() => undefined);
     this.client = null;
     this.transport = null;
+    this.cachedInventory = null;
   }
 
   private async callToolWithFallback(toolNames: string[], argsList: Array<Record<string, unknown>>): Promise<MadDbToolResult> {

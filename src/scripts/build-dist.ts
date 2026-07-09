@@ -65,7 +65,9 @@ async function writeCommonJsBinScope() {
   if (!fs.existsSync(binDir)) return;
   await fsp.writeFile(path.join(binDir, 'package.json'), '{"type":"commonjs"}\n', 'utf8');
   await rewriteIfPresent(path.join(binDir, 'sks.js'), (text) =>
-    stripSourceMap(text).replace(/\nexport \{\};\n?/, '\n')
+    stripSourceMap(text)
+      .replace(/^import \{ PACKAGE_VERSION \} from '\.\.\/core\/version\.js';$/m, "const { PACKAGE_VERSION } = require('../core/version.js');")
+      .replace(/\nexport \{\};\n?/, '\n')
   );
   await rewriteIfPresent(path.join(binDir, 'sks-dispatch.js'), (text) =>
     `${stripSourceMap(text).replace(/^export async function runSks/m, 'async function runSks')}\nexports.runSks = runSks;\n`
