@@ -32,64 +32,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "agent:fast-mode-default",
-      "command": "node ./dist/scripts/agent-fast-mode-default-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "agent:fast-mode-worker-propagation",
-      "command": "node ./dist/scripts/agent-fast-mode-worker-propagation-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "agent:message-bus-reader",
       "command": "node ./dist/scripts/agent-message-bus-reader-check.js",
       "deps": [],
@@ -104,94 +46,6 @@
         "inputs": [
           "package.json",
           "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "agent:native-cli-session-swarm",
-      "command": "node ./dist/scripts/agent-native-cli-session-swarm-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "agent:native-cli-session-swarm-10",
-      "command": "node ./dist/scripts/agent-native-cli-session-swarm-10-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "agent:native-cli-session-swarm-20",
-      "command": "node ./dist/scripts/agent-native-cli-session-swarm-20-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read",
-        "timing-sensitive"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -246,101 +100,6 @@
       ],
       "side_effect": "hermetic",
       "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-app:agent-role-rich-content",
-      "command": "node ./dist/scripts/codex-agent-role-rich-content-check.js",
-      "deps": [
-        "codex-app:agent-type-routing"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-app:agent-role-sync",
-      "command": "node ./dist/scripts/codex-agent-role-sync-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-app:agent-type-routing",
-      "command": "node ./dist/scripts/codex-agent-type-routing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -519,7 +278,7 @@
       "id": "codex-app:handoff",
       "command": "node ./dist/scripts/codex-app-handoff-check.js",
       "deps": [
-        "codex:0138-capability"
+        "codex:0138-capability-comprehensive"
       ],
       "resource": [
         "cpu-light",
@@ -609,101 +368,6 @@
     {
       "id": "codex-native:agent-role-content",
       "command": "node ./dist/scripts/codex-native-agent-role-content-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-native:feature-broker",
-      "command": "node ./dist/scripts/codex-native-feature-broker-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-native:feature-broker-blackbox",
-      "command": "node ./dist/scripts/codex-native-feature-broker-blackbox.js",
-      "deps": [
-        "codex-native:feature-broker"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-native:harness-compat",
-      "command": "node ./dist/scripts/codex-native-harness-compat-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -968,260 +632,11 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "codex:0138-capability",
-      "command": "node ./dist/scripts/codex-0138-capability-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0138-capability-artifact",
-      "command": "node ./dist/scripts/codex-0138-capability-artifact-check.js",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "codex:0138-doctor",
       "command": "node ./dist/scripts/codex-0138-doctor-check.js",
       "deps": [
-        "codex:0138-capability"
+        "codex:0138-capability-comprehensive"
       ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0138-feature-probes",
-      "command": "node ./dist/scripts/codex-0138-feature-probes-check.js",
-      "deps": [
-        "codex:0138-capability"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0139-capability",
-      "command": "node ./dist/scripts/codex-0139-capability-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0139-doctor-env-redaction",
-      "command": "node ./dist/scripts/codex-0139-doctor-env-redaction-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0139-feature-probes",
-      "command": "node ./dist/scripts/codex-0139-feature-probes-check.js",
-      "deps": [
-        "codex:0139-capability",
-        "codex:0139-interrupt-agent",
-        "codex:0139-doctor-env-redaction",
-        "codex:0139-marketplace-source"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0139-interrupt-agent",
-      "command": "node ./dist/scripts/codex-0139-interrupt-agent-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0139-marketplace-source",
-      "command": "node ./dist/scripts/codex-0139-marketplace-source-check.js",
-      "deps": [],
       "resource": [
         "cpu-light",
         "fs-read"
@@ -1375,35 +790,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "core-skill:card-schema",
-      "command": "node ./dist/scripts/core-skill-card-schema-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "core-skill:route-runtime-integration",
       "command": "node ./dist/scripts/core-skill-route-runtime-integration-check.js",
       "deps": [],
@@ -1420,35 +806,6 @@
           "release-gates.v2.json",
           "src/core/skills/**",
           "src/scripts/core-skill-route-runtime-integration-check.ts"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "core-skill:deployment-snapshot",
-      "command": "node ./dist/scripts/core-skill-deployment-snapshot-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
         ]
       },
       "isolation": {
@@ -1814,68 +1171,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "git:worktree-checkpoint",
-      "command": "node ./dist/scripts/git-worktree-checkpoint-check.js",
-      "deps": [
-        "git:worktree-diff-envelope"
-      ],
-      "resource": [
-        "git-worktree",
-        "cpu-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "git:worktree-cross-rebase",
-      "command": "node ./dist/scripts/git-worktree-cross-rebase-check.js",
-      "deps": [
-        "git:worktree-checkpoint"
-      ],
-      "resource": [
-        "git-worktree",
-        "cpu-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "git:worktree-diff-envelope",
       "command": "node ./dist/scripts/git-worktree-diff-envelope-check.js",
       "deps": [],
@@ -1958,65 +1253,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "git:worktree-untracked-diff",
-      "command": "node ./dist/scripts/git-worktree-untracked-diff-check.js",
-      "deps": [
-        "git:worktree-diff-envelope"
-      ],
-      "resource": [
-        "git-worktree",
-        "cpu-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "src/core/git/git-worktree-diff.ts",
-          "src/scripts/git-worktree-untracked-diff-check.ts"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "git:worktree-integration-primary",
-      "command": "node ./dist/scripts/git-worktree-integration-primary-check.js",
-      "deps": [
-        "git:worktree-diff-envelope"
-      ],
-      "resource": [
-        "git-worktree",
-        "cpu-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "src/core/git/git-worktree-diff.ts",
-          "src/core/git/git-worktree-merge-queue.ts",
-          "src/scripts/git-worktree-integration-primary-check.ts"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "git:worktree-dirty-lock",
       "command": "node ./dist/scripts/git-worktree-dirty-lock-check.js",
       "deps": [],
@@ -2048,7 +1284,7 @@
       "command": "node ./dist/scripts/naruto-worktree-coding-blackbox.js",
       "deps": [
         "git:worktree-diff-envelope",
-        "git:worktree-integration-primary"
+        "git:worktree-diff-apply-pipeline"
       ],
       "resource": [
         "git-worktree",
@@ -2373,30 +1609,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "mad-db:lifecycle-hook-decision",
-      "command": "node ./dist/scripts/mad-db-lifecycle-hook-decision-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "mad-db:mad-command",
       "command": "node ./dist/scripts/mad-db-mad-command-check.js",
       "deps": [],
@@ -2414,32 +1626,6 @@
           "src/**",
           "schemas/**"
         ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "mad-db:mcp-result-lifecycle",
-      "command": "node ./dist/scripts/mad-db-mcp-result-lifecycle-check.js",
-      "deps": [
-        "mad-db:lifecycle-hook-decision"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
       },
       "isolation": {
         "home": "temp",
@@ -2681,161 +1867,6 @@
           "config/codex-releases/**",
           "schemas/codex-*.json",
           "schemas/codex/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "pipeline:codex-native-doctor-mad-routing",
-      "command": "node ./dist/scripts/pipeline-codex-native-doctor-mad-routing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "pipeline:codex-native-image-routing",
-      "command": "node ./dist/scripts/pipeline-codex-native-image-routing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "pipeline:codex-native-loop-routing",
-      "command": "node ./dist/scripts/pipeline-codex-native-loop-routing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "pipeline:codex-native-qa-routing",
-      "command": "node ./dist/scripts/pipeline-codex-native-qa-routing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "pipeline:codex-native-research-routing",
-      "command": "node ./dist/scripts/pipeline-codex-native-research-routing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
         ]
       },
       "isolation": {
@@ -3093,35 +2124,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "release:affected-selector",
-      "command": "node ./dist/scripts/release-affected-selector-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "release:aggressive-resource-governor",
       "command": "node ./dist/scripts/release-aggressive-resource-governor-check.js",
       "deps": [],
@@ -3135,129 +2137,6 @@
         "enabled": true,
         "inputs": [
           "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "release:cache-glob-hashing",
-      "command": "node ./dist/scripts/release-cache-glob-hashing-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": [
-          "src/scripts/release-cache-glob-hashing.ts",
-          "src/core/zellij/**",
-          "src/core/naruto/**",
-          "src/core/release/**",
-          "release-gates.v2.json",
-          "package.json"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "release:cache-input-classifier",
-      "command": "node ./dist/scripts/release-cache-input-classifier-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "release:cache-neutralization-report",
-      "command": "node ./dist/scripts/release-cache-neutralization-report-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "release:cache-version-neutral-fixtures",
-      "command": "node ./dist/scripts/release-cache-version-neutral-fixture-check.js",
-      "deps": [
-        "release:cache-input-classifier"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
           "release-gates.v2.json",
           "src/**",
           "schemas/**"
@@ -3303,92 +2182,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "release:dynamic-presets",
-      "command": "node ./dist/scripts/release-dynamic-presets-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "release:full-parallelism-blackbox",
-      "command": "node ./dist/scripts/release-full-parallelism-blackbox.js",
-      "deps": [
-        "release:dynamic-presets",
-        "release:gate-batch-runner"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read",
-        "timing-sensitive"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "release:gate-batch-runner",
-      "command": "node ./dist/scripts/release-gate-batch-runner-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "release:gate-budget",
       "command": "node ./dist/scripts/release-gate-budget-check.js",
       "deps": [],
@@ -3421,11 +2214,8 @@
       "id": "release:parallel-speed-budget",
       "command": "node ./dist/scripts/release-parallel-speed-budget-check.js",
       "deps": [
-        "agent:fast-mode-default",
-        "agent:fast-mode-worker-propagation",
-        "agent:native-cli-session-swarm",
-        "agent:native-cli-session-swarm-10",
-        "agent:native-cli-session-swarm-20",
+        "agent:fast-mode-policy",
+        "agent:native-cli-session-swarm-scaling",
         "appshots:thread-attachment-discovery",
         "codex-control:all-pipelines",
         "codex-sdk:all-pipelines",
@@ -3434,8 +2224,7 @@
         "codex-sdk:event-stream-ledger",
         "codex:0.134-runner-truth",
         "codex:0.137-compat",
-        "core-skill:card-schema",
-        "core-skill:deployment-snapshot",
+        "core-skill:card-schema-deployment-snapshot",
         "core-skill:heldout-validation",
         "core-skill:no-inference-optimizer",
         "core-skill:patch",
@@ -3452,7 +2241,7 @@
         "prompt:placeholder-guard",
         "provider:badge-context",
         "python-sdk:all-pipelines",
-        "release:cache-glob-hashing",
+        "release:cache-key-comprehensive",
         "release:dag-runner",
         "release:gate-budget",
         "release:provenance",
@@ -3541,99 +2330,10 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "research:blueprint-densifier",
-      "command": "node ./dist/scripts/research-blueprint-densifier-check.js",
-      "deps": [
-        "research:claim-builder"
-      ],
-      "resource": [
-        "cpu-light",
-        "io-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "research:claim-builder",
-      "command": "node ./dist/scripts/research-claim-builder-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "io-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "research:complete-package-fixture",
-      "command": "node ./dist/scripts/research-complete-package-fixture-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "io-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "research:execution-profile-routing",
       "command": "node ./dist/scripts/research-execution-profile-routing-check.js",
       "deps": [
-        "codex-app:agent-type-routing"
+        "codex-app:agent-role-comprehensive"
       ],
       "resource": [
         "cpu-light",
@@ -3649,37 +2349,6 @@
           "release-gates.v2.json",
           "src/**",
           "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "research:final-reviewer-blackbox",
-      "command": "node ./dist/scripts/research-final-reviewer-blackbox.js",
-      "deps": [
-        "research:complete-package-fixture"
-      ],
-      "resource": [
-        "cpu-light",
-        "io-light"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
           "schemas/**"
         ]
       },
@@ -4651,6 +3320,486 @@
         "release"
       ],
       "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
+    },
+    {
+      "id": "release:cache-key-comprehensive",
+      "command": "node ./dist/scripts/release-cache-input-classifier-check.js && node ./dist/scripts/release-cache-glob-hashing-check.js && node ./dist/scripts/release-cache-version-neutral-fixture-check.js && node ./dist/scripts/release-cache-neutralization-report-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 1200000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**",
+          "src/scripts/release-cache-glob-hashing.ts",
+          "src/core/zellij/**",
+          "src/core/naruto/**",
+          "src/core/release/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "release:batch-runner-comprehensive",
+      "command": "node ./dist/scripts/release-gate-batch-runner-check.js && node ./dist/scripts/release-full-parallelism-blackbox.js",
+      "deps": [
+        "release:gate-selection-comprehensive"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read",
+        "timing-sensitive"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 600000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "release:gate-selection-comprehensive",
+      "command": "node ./dist/scripts/release-dynamic-presets-check.js && node ./dist/scripts/release-affected-selector-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 360000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0138-capability-comprehensive",
+      "command": "node ./dist/scripts/codex-0138-capability-check.js && node ./dist/scripts/codex-0138-capability-artifact-check.js && node ./dist/scripts/codex-0138-feature-probes-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 420000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0139-comprehensive",
+      "command": "node ./dist/scripts/codex-0139-capability-check.js && node ./dist/scripts/codex-0139-interrupt-agent-check.js && node ./dist/scripts/codex-0139-doctor-env-redaction-check.js && node ./dist/scripts/codex-0139-marketplace-source-check.js && node ./dist/scripts/codex-0139-feature-probes-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 700000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "git:worktree-checkpoint-rebase-sync",
+      "command": "node ./dist/scripts/git-worktree-checkpoint-check.js && node ./dist/scripts/git-worktree-cross-rebase-check.js",
+      "deps": [
+        "git:worktree-diff-envelope"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 280000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "git:worktree-diff-apply-pipeline",
+      "command": "node ./dist/scripts/git-worktree-untracked-diff-check.js && node ./dist/scripts/git-worktree-integration-primary-check.js",
+      "deps": [
+        "git:worktree-diff-envelope"
+      ],
+      "resource": [
+        "git-worktree",
+        "cpu-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 280000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "src/core/git/git-worktree-diff.ts",
+          "src/scripts/git-worktree-untracked-diff-check.ts",
+          "src/core/git/git-worktree-merge-queue.ts",
+          "src/scripts/git-worktree-integration-primary-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "agent:fast-mode-policy",
+      "command": "node ./dist/scripts/agent-fast-mode-default-check.js && node ./dist/scripts/agent-fast-mode-worker-propagation-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 500000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "agent:native-cli-session-swarm-scaling",
+      "command": "node ./dist/scripts/agent-native-cli-session-swarm-check.js && node ./dist/scripts/agent-native-cli-session-swarm-10-check.js && node ./dist/scripts/agent-native-cli-session-swarm-20-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read",
+        "timing-sensitive"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 700000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex-app:agent-role-comprehensive",
+      "command": "node ./dist/scripts/codex-agent-type-routing-check.js && node ./dist/scripts/codex-agent-role-sync-check.js && node ./dist/scripts/codex-agent-role-rich-content-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 1080000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "core-skill:card-schema-deployment-snapshot",
+      "command": "node ./dist/scripts/core-skill-card-schema-check.js && node ./dist/scripts/core-skill-deployment-snapshot-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex-native:feature-broker-comprehensive",
+      "command": "node ./dist/scripts/codex-native-feature-broker-check.js && node ./dist/scripts/codex-native-feature-broker-blackbox.js && node ./dist/scripts/codex-native-harness-compat-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 660000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "mad-db:operation-lifecycle",
+      "command": "node ./dist/scripts/mad-db-lifecycle-hook-decision-check.js && node ./dist/scripts/mad-db-mcp-result-lifecycle-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "pipeline:codex-native-routing-comprehensive",
+      "command": "node ./dist/scripts/pipeline-codex-native-doctor-mad-routing-check.js && node ./dist/scripts/pipeline-codex-native-image-routing-check.js && node ./dist/scripts/pipeline-codex-native-loop-routing-check.js && node ./dist/scripts/pipeline-codex-native-qa-routing-check.js && node ./dist/scripts/pipeline-codex-native-research-routing-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 720000,
+      "cache": {
+        "enabled": false,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "research:claim-builder-blueprint-comprehensive",
+      "command": "node ./dist/scripts/research-claim-builder-check.js && node ./dist/scripts/research-blueprint-densifier-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "research:complete-package-final-review-comprehensive",
+      "command": "node ./dist/scripts/research-complete-package-fixture-check.js && node ./dist/scripts/research-final-reviewer-blackbox.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "io-light"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
     }
   ]
 }
