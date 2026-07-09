@@ -36,6 +36,27 @@ import { evaluateGate } from '../stop-gate/gate-evaluator.js';
 const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
 
 export async function madHighCommand(args: any = [], deps: any = {}) {
+  const rawArgsForHelp = (args || []).map((arg: any) => String(arg));
+  // 20차 P2-2: --help previously fell through to the full MAD launch flow
+  // below (dependency checks, update prompts) with the flag simply ignored
+  // — `sks mad-sks --help` took ~22s instead of printing usage. Must exit
+  // before any of that work starts.
+  if (rawArgsForHelp.includes('--help') || rawArgsForHelp.includes('-h')) {
+    const usage = [
+      'Usage: sks mad-sks [subcommand] [flags]',
+      '',
+      `Subcommands: ${MAD_SKS_COMMAND_SURFACE.join(', ')}`,
+      '',
+      'With no subcommand, launches the MAD-SKS session (zellij UI, dependency checks, scoped permission model).',
+      '`sks mad-sks <subcommand> --help` shows this same summary — per-subcommand help is not yet implemented; see docs/mad-db.md and docs/mad-sks*.md for flag reference.'
+    ].join('\n');
+    if (rawArgsForHelp.includes('--json')) {
+      console.log(JSON.stringify({ schema: 'sks.mad-sks-help.v1', ok: true, usage, command_surface: [...MAD_SKS_COMMAND_SURFACE] }, null, 2));
+    } else {
+      console.log(usage);
+    }
+    return { schema: 'sks.mad-sks-help.v1', ok: true, usage, command_surface: [...MAD_SKS_COMMAND_SURFACE] };
+  }
   const subcommand = firstSubcommand(args);
   if (subcommand) return madSksSubcommand(subcommand, args.filter((arg: any) => String(arg) !== subcommand));
 

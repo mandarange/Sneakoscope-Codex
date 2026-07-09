@@ -95,35 +95,53 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     return result;
   }
   const entry = COMMAND_MANIFEST_BY_NAME[command];
-  const commandGate = await ensureActiveRouteCommandGate(command, rest);
-  if (!commandGate.ok) {
-    console.error(commandGate.message);
-    process.exitCode = 1;
-    return commandGate;
-  }
-  const { ensureCurrentMigrationBeforeCommand } = await import('../core/update/update-migration-state.js');
-  const migrationGate = await ensureCurrentMigrationBeforeCommand({
-    command,
-    args: rest,
-    skipMigrationGate: entry.skipMigrationGate === true || entry.readonly === true
-  });
-  if (!migrationGate.ok) {
-    console.error('SKS project migration blocked.');
-    console.error(`Scope: ${migrationGate.scope || 'project'}`);
-    console.error(`Stage: ${migrationGate.failed_stage_id || migrationGate.status}`);
-    if (migrationGate.failed_stage_id) console.error(`Failed stage: ${migrationGate.failed_stage_id}`);
-    for (const blocker of migrationGate.blockers) console.error(`Required blocker: ${blocker}`);
-    for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
-    console.error(`Receipt: ${migrationGate.receipt_path}`);
-    console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command registry.');
-    process.exitCode = 1;
-    return migrationGate;
+  const helpRequest = isHelpRequest(rest);
+  if (!helpRequest) {
+    const commandGate = await ensureActiveRouteCommandGate(command, rest);
+    if (!commandGate.ok) {
+      console.error(commandGate.message);
+      process.exitCode = 1;
+      return commandGate;
+    }
+    // 20차 P2-2: --help/-h/help must never wait on (or be blocked by) the
+    // migration gate's lock — a stuck/contended migration lock previously
+    // made `sks <cmd> --help` take the full MIGRATION_LOCK_WAIT_MS (20s) and
+    // then fail, for a request that only wants usage text.
+    const { ensureCurrentMigrationBeforeCommand } = await import('../core/update/update-migration-state.js');
+    const migrationGate = await ensureCurrentMigrationBeforeCommand({
+      command,
+      args: rest,
+      skipMigrationGate: entry.skipMigrationGate === true || entry.readonly === true
+    });
+    if (!migrationGate.ok) {
+      console.error('SKS project migration blocked.');
+      console.error(`Scope: ${migrationGate.scope || 'project'}`);
+      console.error(`Stage: ${migrationGate.failed_stage_id || migrationGate.status}`);
+      if (migrationGate.failed_stage_id) console.error(`Failed stage: ${migrationGate.failed_stage_id}`);
+      for (const blocker of migrationGate.blockers) console.error(`Required blocker: ${blocker}`);
+      for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
+      console.error(`Receipt: ${migrationGate.receipt_path}`);
+      console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command registry.');
+      process.exitCode = 1;
+      return migrationGate;
+    }
   }
   const { COMMANDS } = await import('./command-registry.js');
   const commandEntry = COMMANDS[command as keyof typeof COMMANDS];
   const mod = await commandEntry.lazy();
   if (typeof mod.run !== 'function') throw new Error(`Command ${command} must export run(command, args)`);
   return mod.run(rawCommand || command, rest);
+}
+
+// --help/-h/help must skip the active-route and migration gates regardless
+// of where it appears in args — a pure usage-text request should never wait
+// on (or be blocked by) project state (20차 P2-2).
+function isHelpRequest(args: readonly string[]): boolean {
+  // --help/-h are unambiguous flags wherever they appear; bare "help" is
+  // only treated as the request when it's the subcommand position (args[0])
+  // so an arbitrary value elsewhere (e.g. a commit message of "help") can't
+  // accidentally bypass the gates.
+  return args.includes('--help') || args.includes('-h') || String(args[0] || '').toLowerCase() === 'help';
 }
 
 async function ensureActiveRouteCommandGate(command: CommandNameLite, args: readonly string[]) {

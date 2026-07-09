@@ -1054,8 +1054,13 @@ export async function resolveInstalledSksEntrypoint(input: {
   return which('sks');
 }
 
-const MIGRATION_LOCK_WAIT_MS = 20_000;
+// 20차 P2-2: was 20s — --help now bypasses this gate entirely (cli/router.ts),
+// so this timeout only affects commands that genuinely need the migration
+// gate; 5s is enough to cooperate with a sibling in-flight migration without
+// making every gated command absorb a 20s worst case.
+const MIGRATION_LOCK_WAIT_MS = 5_000;
 const MIGRATION_LOCK_POLL_MS = 150;
+const MIGRATION_LOCK_PROGRESS_INTERVAL_MS = 1_000;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1076,8 +1081,10 @@ async function withUpdateMigrationLock(
     return { ...base, ok: false, status: 'blocked', receipt: null, doctor: null, failed_stage_id: 'migration-lock', blockers: [`update_migration_lock_dir_unwritable:${err?.message || String(err)}`], warnings: [] };
   }
   const recheck = options.recheck ?? null;
-  const deadline = Date.now() + (options.maxWaitMs ?? MIGRATION_LOCK_WAIT_MS);
+  const waitStartedAt = Date.now();
+  const deadline = waitStartedAt + (options.maxWaitMs ?? MIGRATION_LOCK_WAIT_MS);
   let reapedStale = false;
+  let lastProgressAt = 0;
   for (;;) {
     let handle: fsp.FileHandle | null = null;
     try {
@@ -1099,6 +1106,11 @@ async function withUpdateMigrationLock(
       }
       // 3) wait for the in-flight holder to finish, then retry acquisition.
       if (Date.now() < deadline) {
+        const now = Date.now();
+        if (now - lastProgressAt >= MIGRATION_LOCK_PROGRESS_INTERVAL_MS) {
+          lastProgressAt = now;
+          process.stderr.write(`Waiting for SKS migration lock (${Math.round((now - waitStartedAt) / 1000)}s)...\n`);
+        }
         await delay(MIGRATION_LOCK_POLL_MS);
         continue;
       }
