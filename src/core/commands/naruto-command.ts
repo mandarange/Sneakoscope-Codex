@@ -836,6 +836,22 @@ async function withNarutoSwarmInterruptCleanup<T>(input: { missionId: string; ze
   }
 }
 
+// Scales the default clone count (and, via clones*2 below, the default
+// work-item count) to apparent task size instead of always requesting
+// DEFAULT_NARUTO_CLONES — only the *default*; an explicit --clones/--agents
+// always wins over this (20차 P2-3). Broad-scope language or an unclear/
+// unmatched prompt keeps the full default rather than under-provisioning.
+function estimateNarutoDefaultCloneCount(prompt: string): number {
+  const text = String(prompt || '')
+  const broadScope = /\b(entire|all files|whole codebase|across the codebase|comprehensive review|throughout the (?:repo|project|codebase))\b|전체|모든\s*파일|코드베이스\s*전체/i.test(text)
+  if (broadScope || !text.trim()) return DEFAULT_NARUTO_CLONES
+  const fileRefs = extractNarutoPromptPaths(text).length
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length
+  if (fileRefs <= 1 && wordCount <= 20) return 2
+  if (fileRefs <= 4 && wordCount <= 60) return 8
+  return DEFAULT_NARUTO_CLONES
+}
+
 // Resolves the project's real verification command for the Naruto
 // verification DAG. Returns '' (unconfigured) rather than a fabricated
 // no-op when the project type can't be detected — see naruto-verification-dag.ts.
@@ -1033,7 +1049,15 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const action = (actions.has(first) ? first : 'run') as NarutoArgs['action']
   const rest = action === first ? args.slice(1) : args
   const json = hasFlag(args, '--json')
-  const requestedClones = Number(readOption(args, '--clones', readOption(args, '--agents', DEFAULT_NARUTO_CLONES)))
+  // Computed early (normally derived further down) so an explicit --clones/
+  // --agents can still override this exactly as before, but the *default*
+  // scales with apparent task size instead of unconditionally requesting
+  // DEFAULT_NARUTO_CLONES (32) for every run, including a one-line typo fix
+  // (20차 P2-3). --work-items defaults to clones*2 below, so this alone
+  // scales that down proportionally too.
+  const promptSizingValueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages', '--tournament'])
+  const promptForSizing = positionalArgs(rest, promptSizingValueFlags).join(' ').trim()
+  const requestedClones = Number(readOption(args, '--clones', readOption(args, '--agents', String(estimateNarutoDefaultCloneCount(promptForSizing)))))
   const clones = clampClones(requestedClones)
   const workItemsExplicit = hasOption(args, '--work-items')
   const workItems = clampWorkItems(Number(readOption(args, '--work-items', clones * 2)), clones)
@@ -1084,8 +1108,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
   const messages = normalizeMessages(readOption(args, '--messages', '8'))
   const tournament = normalizeTournament(readOption(args, '--tournament', '0'))
-  const valueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages', '--tournament'])
-  const prompt = positionalArgs(rest, valueFlags).join(' ').trim() || 'Naruto shadow clone swarm run'
+  const prompt = promptForSizing || 'Naruto shadow clone swarm run'
   return { action, prompt, clones, workItems, workItemsExplicit, concurrency, backend, backendExplicit, mock, real, readonly, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, json, missionId, noOpenZellij, attach, smoke, parallelism, messages, tournament }
 }
 
