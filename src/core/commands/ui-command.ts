@@ -1,11 +1,12 @@
 import * as http from 'node:http';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { flag } from '../../cli/args.js';
 import { printJson } from '../../cli/output.js';
 import { ui } from '../../cli/cli-theme.js';
 import { DASHBOARD_HTML } from '../ui/dashboard-html.js';
 import { findLatestMission, missionDir } from '../mission.js';
-import { nowIso, projectRoot, readJson, readText, runProcess } from '../fsx.js';
+import { nowIso, projectRoot, readJson, runProcess } from '../fsx.js';
 import { readZellijSlotTelemetrySnapshot } from '../zellij/zellij-slot-telemetry.js';
 
 export async function uiCommand(args: string[] = []) {
@@ -99,9 +100,62 @@ async function readLatestGateSummaries(root: string, missionId: string) {
   return rows;
 }
 
-async function tailJsonl(file: string, limit: number) {
-  const text = await readText(file, '').catch(() => '');
-  return String(text || '').split(/\r?\n/).filter(Boolean).slice(-limit).map((line) => {
+// 20차 P2-4: previously read the *entire* events.jsonl on every tick, for
+// every connected SSE client, once per second — with a long-running
+// mission's events.jsonl at real scale (audited case: 100MB) and a few
+// dashboard tabs open, that's several full-file reads and re-parses per
+// second doing nothing but re-deriving the same last-30-lines tail. Cached
+// per file path, incrementally updated (only the bytes appended since the
+// last read), and shared across every caller — including every connected
+// client's own tick — so within the same second only the first caller to
+// see new data actually touches the filesystem.
+interface JsonlTailCache {
+  offset: number;
+  size: number;
+  carry: string;
+  tailLines: string[];
+  limit: number;
+}
+
+const jsonlTailCaches = new Map<string, JsonlTailCache>();
+// A first-ever read (cache miss) still has to seed the tail from disk, but
+// must not read the whole file to do it — seek to within this many bytes of
+// EOF instead. A JSONL event line is small, so this is comfortably more
+// than `limit` lines' worth without approaching a multi-hundred-MB file.
+const JSONL_TAIL_SEED_BYTES = 256 * 1024;
+
+export async function tailJsonl(file: string, limit: number) {
+  const stat = await fsp.stat(file).catch(() => null);
+  if (!stat) {
+    jsonlTailCaches.delete(file);
+    return [];
+  }
+  let cache = jsonlTailCaches.get(file);
+  const rotated = cache && (stat.size < cache.offset || cache.limit !== limit);
+  if (!cache || rotated) {
+    cache = { offset: Math.max(0, stat.size - JSONL_TAIL_SEED_BYTES), size: 0, carry: '', tailLines: [], limit };
+    jsonlTailCaches.set(file, cache);
+  }
+  if (stat.size > cache.offset) {
+    const handle = await fsp.open(file, 'r');
+    try {
+      const length = stat.size - cache.offset;
+      const buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, cache.offset);
+      const chunk = cache.carry + buffer.toString('utf8');
+      const lines = chunk.split(/\r?\n/);
+      cache.carry = lines.pop() || '';
+      if (lines.length) {
+        cache.tailLines.push(...lines.filter(Boolean));
+        if (cache.tailLines.length > limit) cache.tailLines = cache.tailLines.slice(-limit);
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+  cache.offset = stat.size;
+  cache.size = stat.size;
+  return cache.tailLines.map((line) => {
     try {
       return JSON.parse(line);
     } catch {
