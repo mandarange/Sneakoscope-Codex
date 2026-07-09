@@ -13,7 +13,13 @@ export async function appendMadDbLedgerEvent(root: string, missionId: string, ev
   }
   const dir = missionDir(root, missionId)
   await appendJsonlBounded(path.join(dir, 'mad-db-ledger.jsonl'), row)
-  await writeJsonAtomic(path.join(dir, 'mad-db-ledger.latest.json'), row).catch(() => undefined)
+  // The authoritative append above already succeeded or threw; this is a
+  // convenience "latest" pointer only. Its failure used to vanish silently
+  // (20차 P1-7) — readers of mad-db-ledger.latest.json could see a stale
+  // pointer with no signal anything was wrong.
+  await writeJsonAtomic(path.join(dir, 'mad-db-ledger.latest.json'), row).catch((err: unknown) => {
+    console.error(`mad-db-ledger: failed to update latest pointer for mission ${missionId}: ${err instanceof Error ? err.message : String(err)}`)
+  })
   return row
 }
 

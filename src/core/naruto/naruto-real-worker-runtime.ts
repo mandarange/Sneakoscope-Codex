@@ -23,6 +23,45 @@ export interface NarutoActualWorkerHandle {
   exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>
 }
 
+// Must match naruto-real-worker-child.ts's normalizeMaxRuntimeMs() default —
+// that is the deadline the child schedules its own graceful self-termination
+// against (writes a 'timed_out' result, then process.exit(124)).
+const DEFAULT_MAX_RUNTIME_MS = 10 * 60 * 1000
+// Extra time the parent waits beyond maxRuntimeMs before force-killing, so
+// the child's own graceful deadman-timeout gets a chance to fire first
+// (20차 P1-4: previously the parent hard-killed at a fixed 30s regardless
+// of what the child's own timeout was configured to, discarding any real
+// codex task's result before it could even finish).
+const PARENT_GRACE_MS = 15_000
+
+// Tracks every currently-live worker child so a parent-process interrupt can
+// clean the whole swarm up (20차 P1-5). Children are spawned detached (own
+// process group) specifically so killAllActiveNarutoWorkers's process-group
+// signal reaches any grandchildren (e.g. a codex CLI subprocess) too, not
+// just the immediate child — a plain (non-detached) spawn has no separate
+// group for `kill(-pid)` to target.
+const activeWorkers = new Map<number, { worktreePath: string | null }>()
+
+export function activeNarutoWorkerCount(): number {
+  return activeWorkers.size
+}
+
+export function killAllActiveNarutoWorkers(signal: NodeJS.Signals = 'SIGTERM'): void {
+  for (const pid of activeWorkers.keys()) sendProcessGroupSignal(pid, signal)
+}
+
+export function activeNarutoWorktreePaths(): string[] {
+  return [...activeWorkers.values()].map((entry) => entry.worktreePath).filter((value): value is string => Boolean(value))
+}
+
+function sendProcessGroupSignal(pid: number, signal: NodeJS.Signals): void {
+  /* intentional: the pid/process-group may already be dead (ESRCH) by the time this fires — that's the expected common case, not an error */
+  if (process.platform !== 'win32') {
+    try { process.kill(-pid, signal) } catch {}
+  }
+  try { process.kill(pid, signal) } catch {}
+}
+
 export async function spawnActualNarutoWorker(input: {
   root: string
   missionId: string
@@ -34,7 +73,11 @@ export async function spawnActualNarutoWorker(input: {
   preparedAllocation?: any
   zellijSessionName?: string | null
   visiblePaneCap: number
+  maxRuntimeMs?: number
 }): Promise<NarutoActualWorkerHandle> {
+  const maxRuntimeMs = Number.isFinite(input.maxRuntimeMs) && Number(input.maxRuntimeMs) > 0
+    ? Number(input.maxRuntimeMs)
+    : DEFAULT_MAX_RUNTIME_MS
   const workerDir = path.join(input.root, '.sneakoscope', 'missions', input.missionId, 'agents', 'naruto-real-workers', input.item.id)
   await ensureDir(workerDir)
   let worktree: any = null
@@ -69,13 +112,18 @@ export async function spawnActualNarutoWorker(input: {
     heartbeat_path: heartbeatPath,
     worktree_path: worktree?.worktree_path || null,
     zellij_session_name: input.zellijSessionName || null,
-    visible_pane_cap: input.visiblePaneCap
+    visible_pane_cap: input.visiblePaneCap,
+    max_runtime_ms: maxRuntimeMs
   })
   const child = spawn(process.execPath, [actualWorkerEntrypoint(), intakePath], {
     cwd: worktree?.worktree_path || input.root,
-    stdio: ['ignore', 'ignore', 'ignore']
+    stdio: ['ignore', 'ignore', 'ignore'],
+    detached: process.platform !== 'win32'
   })
-  const exit = waitForExit(child, 30000)
+  if (child.pid) activeWorkers.set(child.pid, { worktreePath: worktree?.worktree_path || null })
+  const exit = waitForExit(child, maxRuntimeMs + PARENT_GRACE_MS).finally(() => {
+    if (child.pid) activeWorkers.delete(child.pid)
+  })
   return {
     id: input.item.id,
     item: input.item,
@@ -93,6 +141,7 @@ export async function spawnActualNarutoWorker(input: {
 
 export async function collectActualNarutoWorker(handle: NarutoActualWorkerHandle) {
   const exit = await handle.exit
+  /* intentional: readJson already falls back to null internally; the outer .catch is defensive redundancy, a missing/corrupt result file is expected when the worker crashed before writing it (surfaced below via naruto_actual_worker_result_missing) */
   const result = await readJson<any>(handle.result_path, null).catch(() => null)
   const blockers = [
     ...(exit.code === 0 ? [] : [`naruto_actual_worker_exit_${exit.code ?? exit.signal ?? 'unknown'}`]),

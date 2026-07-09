@@ -1,37 +1,17 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
-import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js';
+import { ensureDir } from '../fsx.js';
+import { withFileLock } from '../locks/file-lock.js';
 import { missionDir } from '../mission.js';
 
+// Previously a bespoke mkdir-lock with no owner-pid check and no stale
+// recovery at all — a crash mid-operation left the lock permanently stuck
+// (20차 P1-3). Reuses the single owner-token + heartbeat + quarantine-reclaim
+// lock implementation from core/locks/file-lock.ts instead of a second one.
 export async function withMadDbLock<T>(root: string, missionId: string, name: string, fn: () => Promise<T>): Promise<T> {
   const dir = path.join(missionDir(root, missionId), 'mad-db', 'runtime', 'locks');
   await ensureDir(dir);
-  const lockDir = path.join(dir, `${safeName(name)}.lock`);
-  const deadline = Date.now() + 10_000;
-  while (true) {
-    try {
-      await fs.mkdir(lockDir);
-      await writeJsonAtomic(path.join(lockDir, 'owner.json'), {
-        schema: 'sks.mad-db-lock.v1',
-        pid: process.pid,
-        name,
-        acquired_at: nowIso()
-      });
-      break;
-    } catch (err: unknown) {
-      if (Date.now() > deadline) throw new Error(`mad_db_lock_timeout:${name}`);
-      await sleep(25 + Math.floor(Math.random() * 25));
-    }
-  }
-  try {
-    return await fn();
-  } finally {
-    await fs.rm(lockDir, { recursive: true, force: true }).catch(() => undefined);
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  const lockPath = path.join(dir, `${safeName(name)}.lock`);
+  return withFileLock({ lockPath, timeoutMs: 15_000, staleMs: 60_000 }, fn);
 }
 
 function safeName(value: string): string {

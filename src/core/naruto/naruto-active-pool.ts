@@ -235,6 +235,7 @@ async function nextCollectableWorkers(active: Map<string, NarutoWorkerHandle>, h
   for (const handle of handlesWithExit) {
     ;(handle as any).exit.then(() => settled.add(handle), () => settled.add(handle))
   }
+  /* intentional: only racing for settlement timing here — actual outcomes are captured via the .then() handlers above, this catch just prevents an unhandled-rejection warning on the raced promises */
   await Promise.race([
     ...handlesWithExit.map((handle) => (handle as any).exit.catch(() => undefined)),
     delay(1000)
@@ -272,6 +273,7 @@ async function forceCollectTimedOutWorker(handle: NarutoWorkerHandle): Promise<N
 }
 
 function sendSignal(pid: number, signal: NodeJS.Signals) {
+  /* intentional: the pid/process-group may already be dead (ESRCH) by the time this fires — that's the expected common case, not an error */
   if (process.platform !== 'win32') {
     try { process.kill(-pid, signal) } catch {}
   }

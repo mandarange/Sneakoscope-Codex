@@ -92,6 +92,7 @@ export class MadDbMcpExecutor {
   }
 
   async close(): Promise<void> {
+    /* intentional: best-effort teardown on close, session/client are being discarded either way */
     await this.transport?.terminateSession().catch(() => undefined);
     await this.client?.close().catch(() => undefined);
     this.client = null;

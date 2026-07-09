@@ -116,6 +116,7 @@ async function main() {
 }
 
 function startDeadmanHeartbeat(input: { intake: any; startedAt: number; maxRuntimeMs: number; finished: () => boolean }) {
+  /* intentional: heartbeat/result writes below are best-effort — on timeout the process exits right after regardless, and the periodic running-heartbeat just retries next tick */
   const parsed = Number(process.env.SKS_ZELLIJ_WORKER_PROGRESS_MS || 10000)
   const intervalMs = Math.max(1000, Number.isFinite(parsed) ? Math.floor(parsed) : 10000)
   return setInterval(async () => {

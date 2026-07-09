@@ -16,7 +16,8 @@ import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
 import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
 import { runNarutoActivePool, runNarutoRealActivePool } from '../naruto/naruto-active-pool.js'
-import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../naruto/naruto-real-worker-runtime.js'
+import { collectActualNarutoWorker, killAllActiveNarutoWorkers, spawnActualNarutoWorker } from '../naruto/naruto-real-worker-runtime.js'
+import { runZellij } from '../zellij/zellij-command.js'
 import { allocateNarutoTasksToWorkers } from '../naruto/naruto-allocation-policy.js'
 import { rebalanceNarutoReadyWork } from '../naruto/naruto-rebalance-policy.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
@@ -381,7 +382,7 @@ async function narutoRun(parsed: NarutoArgs) {
       console.log('Zellij: blocked (' + Array.from(new Set(liveZellij?.blockers || [])).join('; ') + ')')
     }
   }
-  const result = await runNativeAgentOrchestrator({
+  const result = await withNarutoSwarmInterruptCleanup({ missionId: mission.id, zellijSessionName: liveZellij?.session_name || null }, () => runNativeAgentOrchestrator({
     missionId: mission.id,
     prompt: parsed.prompt,
     route: NARUTO_ROUTE,
@@ -422,7 +423,7 @@ async function narutoRun(parsed: NarutoArgs) {
     narutoAllocationPolicy: allocationPolicy,
     narutoRebalancePolicy: rebalancePolicy,
     json: parsed.json
-  })
+  }))
   const realWriteProof = await maybeWriteNarutoRealWriteProof(mission.dir, mission.id, parsed, result)
   const parallelRuntime = result.parallel_runtime_proof || null
   const nativeProofOk = result.proof?.ok === true || result.proof?.status === 'passed'
@@ -806,6 +807,32 @@ function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {
     ...localWorker,
     selected_worker_count: (backendCounts['local-llm'] || 0) + (backendCounts.ollama || 0),
     backend_counts: backendCounts
+  }
+}
+
+// Wraps the actual swarm execution so Ctrl-C (SIGINT) or SIGTERM during a
+// real Naruto run kills every active worker's process group and the live
+// zellij session instead of leaving them orphaned (20차 P1-5) — previously
+// nothing in the CLI entrypoint handled these signals at all, so Node's
+// default behavior (immediate exit, no cleanup) applied.
+async function withNarutoSwarmInterruptCleanup<T>(input: { missionId: string; zellijSessionName: string | null }, fn: () => Promise<T>): Promise<T> {
+  let interrupted = false
+  const onSignal = (signal: NodeJS.Signals) => {
+    if (interrupted) return
+    interrupted = true
+    killAllActiveNarutoWorkers(signal)
+    const cleanup = input.zellijSessionName
+      ? runZellij(['kill-session', input.zellijSessionName], { timeoutMs: 2500, optional: true }).catch(() => undefined)
+      : Promise.resolve(undefined)
+    cleanup.finally(() => process.exit(signal === 'SIGINT' ? 130 : 143))
+  }
+  process.on('SIGINT', onSignal)
+  process.on('SIGTERM', onSignal)
+  try {
+    return await fn()
+  } finally {
+    process.off('SIGINT', onSignal)
+    process.off('SIGTERM', onSignal)
   }
 }
 

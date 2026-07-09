@@ -76,6 +76,7 @@ export async function closeMadDbRuntimeProfile(input: { root: string; missionId:
   const profilePath = input.profile?.profile_path ? path.join(input.root, input.profile.profile_path) : path.join(missionDir(input.root, input.missionId), 'mad-db', 'runtime', 'codex-mad-db.config.toml');
   if (await exists(profilePath)) {
     const quarantine = `${profilePath}.closed`;
+    /* intentional: best-effort rename-then-rm quarantine of the closed runtime profile; read-only restoration is verified separately below */
     await fs.rename(profilePath, quarantine).catch(async () => {
       await fs.rm(profilePath, { force: true }).catch(() => undefined);
     });

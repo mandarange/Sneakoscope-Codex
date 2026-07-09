@@ -8,6 +8,7 @@ export const MAD_DB_POLICY_DECISION_SCHEMA = 'sks.mad-db-policy-decision.v2';
 export async function resolveMadDbMutationPolicy(root: string, state: any = {}, classification: any = {}, explicitCapability?: MadDbCapabilityV2 | null) {
   const primary = await resolveMadDbMutationPolicyForState(root, state, classification, explicitCapability);
   if (primary.allowed === true || explicitCapability) return primary;
+  /* intentional: optional fallback lookup — primary policy already resolved, this only widens the search */
   const persistedState = await readJson<any>(stateFile(root), null).catch(() => null);
   if (persistedState && persistedState !== state) {
     const fallback = await resolveMadDbMutationPolicyForState(root, persistedState, classification, null);
@@ -42,6 +43,7 @@ async function findLatestActiveMadDbCapability(root: string): Promise<MadDbCapab
   const candidates: Array<{ capability: MadDbCapabilityV2; issuedMs: number; expiresMs: number }> = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || !entry.name.startsWith('M-')) continue;
+    /* intentional: scanning candidate mission dirs for an active capability — a missing/corrupt one is just not a candidate */
     const capability = await readMadDbCapability(root, entry.name).catch(() => null);
     if (!capability || !isMadDbCapabilityActive(capability)) continue;
     const issuedMs = Date.parse(capability.issued_at || '');

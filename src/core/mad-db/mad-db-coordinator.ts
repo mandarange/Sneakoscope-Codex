@@ -263,7 +263,13 @@ export async function runMadDbCycle(input: {
       }
     }
   } catch (err: unknown) {
-    if (!blockers.length) blockers.push(err instanceof Error ? err.message : String(err));
+    // Previously discarded whenever blockers was already non-empty (e.g. a
+    // prior execution failure), silently hiding any *new* exception raised
+    // during read-back verification (20차 P1-7) — always recorded now,
+    // distinctly prefixed once there's already a domain-level blocker so it
+    // isn't mistaken for one.
+    const message = err instanceof Error ? err.message : String(err);
+    blockers.push(blockers.length ? `mad_db_cycle_exception:${message}` : message);
   } finally {
     await executor.close();
   }

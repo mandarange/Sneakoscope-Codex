@@ -142,8 +142,16 @@ export async function writeTextAtomic(p: string, text: string): Promise<void> {
   }
 }
 
+// A non-atomic direct write is only justified when the atomic rename itself
+// is physically impossible (EXDEV: tmp and target span different devices,
+// e.g. an unusual bind-mount) — the rename already fsync'd the tmp file's
+// contents, so a direct write there just relocates already-durable bytes.
+// The other codes previously here (EACCES/EEXIST/ENOENT/ENOTEMPTY/EPERM)
+// have nothing to do with cross-device limits and used to quietly downgrade
+// every one of those failures to a non-atomic write, risking a partially
+// written file on crash (20차 P1-6) — they now propagate instead.
 function canFallbackToDirectWrite(err: unknown): boolean {
-  return ['EACCES', 'EEXIST', 'ENOENT', 'ENOTEMPTY', 'EPERM', 'EXDEV'].includes(errorCode(err));
+  return errorCode(err) === 'EXDEV';
 }
 
 function errorCode(err: unknown): string {

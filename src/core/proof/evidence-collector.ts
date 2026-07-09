@@ -5,6 +5,7 @@ import { imageVoxelSummary } from '../wiki-image/image-voxel-ledger.js';
 import { wrongnessProofEvidence } from '../triwiki-wrongness/wrongness-proof-linker.js';
 
 export async function collectProofEvidence(root: any = packageRoot()) {
+  /* intentional: each field below is optional supplementary evidence for the proof report — a missing/unreadable source just omits that field rather than failing the whole collection */
   return {
     files: await collectGitFileChanges(root),
     image_voxels: await imageVoxelSummary(root).catch(() => null),
@@ -24,6 +25,7 @@ export async function collectProofEvidence(root: any = packageRoot()) {
 }
 
 async function collectGitFileChanges(root: any) {
+  /* intentional: git absent or the status call failing just means no file-change evidence is available, not a collection error */
   const git = await which('git').catch(() => null);
   if (!git) return [];
   const result = await runProcess(git, ['status', '--short'], { cwd: root, timeoutMs: 5000, maxOutputBytes: 64 * 1024 }).catch(() => null);

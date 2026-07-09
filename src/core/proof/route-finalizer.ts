@@ -56,6 +56,7 @@ export async function finalizeRouteWithProof(root: any, {
     status: 'not_collected',
     reason: err?.message || String(err || 'unknown_error')
   }));
+  /* intentional: optional report-enrichment evidence — a read failure here degrades the report, it doesn't invalidate the route decision */
   const agentEvidence = agents === false ? null : await readAgentProofEvidence(root, missionId).catch(() => null);
   const wrongnessEvidence = lightweightEvidence ? null : await wrongnessProofEvidence(root, missionId, { route: policy.route }).catch(() => null);
   const requiresNativeComputerUseLiveEvidence = ['$Computer-Use', '$CU'].includes(String(policy.route || ''));

@@ -519,6 +519,7 @@ function readPositiveIntEnv(name: string, fallback: number): number {
 }
 
 function parseJsonObjectFromStdout(stdout: string): any {
+  /* intentional: best-effort JSON extraction from mixed stdout — each parse attempt below is expected to fail on non-JSON lines, falling through to the next strategy, with null as the final honest outcome */
   const text = String(stdout || '').trim()
   const first = text.indexOf('{')
   const last = text.lastIndexOf('}')
