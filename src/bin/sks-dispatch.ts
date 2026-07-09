@@ -25,6 +25,12 @@ export async function runSks(args: string[]): Promise<void> {
   } else if (args[0] === 'hook' && args[1] === 'user-prompt-submit' && process.env.SKS_PERF_MEASURE === '1') {
     const { hookUserPromptSubmitPerfInline } = await import('./fast-inline.js');
     await hookUserPromptSubmitPerfInline();
+  } else if (args[0] === 'hook' && args[1] && process.env.SKS_HOOK_DAEMON === '1') {
+    // 20차 P2-1: opt-in daemon-accelerated hook path. Default hook behavior
+    // (.codex/hooks.json's actual command) is unchanged until this has been
+    // verified and deliberately turned on.
+    const { hookDaemonInline } = await import('../core/daemon/sksd-hook-dispatch.js');
+    await hookDaemonInline(args[1]);
   } else if (args[0] === 'naruto' && (args[1] === 'help' || args.includes('--help')) && args.includes('--json')) {
     const { narutoHelpJsonFastInline } = await import('./fast-inline.js');
     narutoHelpJsonFastInline();
