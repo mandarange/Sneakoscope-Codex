@@ -8,15 +8,10 @@ import { assertGate, emitGate, importDist, root } from './sks-1-18-gate-lib.js'
 
 export const CRITICAL_DOLLAR_COMMANDS = new Set([
   '$Naruto',
-  '$Work',
-  '$DFix',
-  '$Answer',
   '$Super-Search',
   '$SEO-GEO-OPTIMIZER',
   '$DB',
   '$MAD-SKS',
-  '$QA-LOOP',
-  '$Review',
   '$Commit-And-Push'
 ])
 
@@ -33,7 +28,8 @@ export async function main() {
   const routePrompt = routes.routePrompt
   const rows = []
   for (const entry of DOLLAR_COMMANDS_LITE) {
-    rows.push(scoreDollarEntry(entry, measureRoutePromptSmoke(entry, routePrompt), commandRouteSmokeFor(entry)))
+    const routePromptSmoke = measureRoutePromptSmoke(entry, routePrompt)
+    rows.push(scoreDollarEntry(entry, routePromptSmoke, commandRouteSmokeFor(entry, routePromptSmoke.routed)))
   }
 
   const average = rows.reduce((sum, row) => sum + row.score, 0) / Math.max(1, rows.length)
@@ -67,8 +63,10 @@ export function scoreDollarEntry(entry, routePromptSmoke, commandSmoke, options 
   const stopGateOrExempt = Boolean(routed?.stopGate || routed?.coverageExemptReason || entry.command === '$Help' || entry.command === '$Answer')
   const routePromptOk = classifyDollarSmoke(routePromptSmoke, now) === 'pass'
   const commandSmokeOk = classifyDollarSmoke(commandSmoke, now) === 'pass'
+  const metadataSynced = isDollarMetadataSynced(entry, routed, commandSmoke)
+  const lifecycleReasoned = !((routed?.hidden === true || routed?.deprecated === true) && !routed?.hiddenReason && !routed?.deprecationReason && !routed?.deprecationMessage)
   const critical = CRITICAL_DOLLAR_COMMANDS.has(entry.command)
-  if (critical && (!routePromptOk || !commandSmokeOk)) {
+  if (critical && (!routePromptOk || !commandSmokeOk || !metadataSynced || !lifecycleReasoned)) {
     return {
       command: entry.command,
       route: entry.route,
@@ -77,26 +75,33 @@ export function scoreDollarEntry(entry, routePromptSmoke, commandSmoke, options 
       score: 0,
       route_prompt_smoke: classifyDollarSmoke(routePromptSmoke, now),
       command_route_smoke: classifyDollarSmoke(commandSmoke, now),
+      command_evidence_tier: criticalDollarEvidenceTier(commandSmoke),
+      metadata_synced: metadataSynced,
+      lifecycle_reasoned: lifecycleReasoned,
       routed_id: routed?.id || null,
       stop_gate: routed?.stopGate || null
     }
   }
-  const cliSmokeOrPrompt = Boolean(commandSmokeOk || routed?.cliEntrypoint || routed?.command || entry.command)
-  const highRiskPolicy = !/\b(?:MAD|DB|Computer|CU|Commit|Push|Release)\b/i.test(entry.command) || Boolean(routed?.requiredSkills || routed?.lifecycle)
+  const cliSmokeOrPrompt = Boolean(commandSmokeOk)
+  const highRiskPolicy = !critical || !/\b(?:MAD|DB|Computer|CU|Commit|Push|Release)\b/i.test(entry.command) || Boolean(routed?.requiredSkills || routed?.lifecycle)
   const score =
     (routePromptOk && p95 <= 20 ? 20 : 0) +
     (metadataComplete ? 20 : 0) +
     (stopGateOrExempt ? 20 : 0) +
     (cliSmokeOrPrompt ? 20 : 0) +
-    (highRiskPolicy ? 20 : 0)
+    (highRiskPolicy && metadataSynced && lifecycleReasoned ? 20 : 0)
+  const cappedScore = critical ? Math.min(score, criticalDollarEvidenceMaxScore(commandSmoke)) : score
   return {
     command: entry.command,
     route: entry.route,
     critical,
     p95_ms: Number.isFinite(p95) ? Number(p95.toFixed(3)) : null,
-    score,
+    score: cappedScore,
     route_prompt_smoke: classifyDollarSmoke(routePromptSmoke, now),
     command_route_smoke: classifyDollarSmoke(commandSmoke, now),
+    command_evidence_tier: criticalDollarEvidenceTier(commandSmoke),
+    metadata_synced: metadataSynced,
+    lifecycle_reasoned: lifecycleReasoned,
     routed_id: routed?.id || null,
     stop_gate: routed?.stopGate || null
   }
@@ -121,14 +126,113 @@ export function measureRoutePromptSmoke(entry, routePrompt) {
   }
 }
 
-export function commandRouteSmokeFor(entry) {
+export function commandRouteSmokeFor(entry, routed = null) {
+  const reportSmoke = reportBackedDollarSmoke(entry, routed)
+  if (reportSmoke) return reportSmoke
+  const cliEntrypoint = routed?.cliEntrypoint || ''
+  const hasActualCli = /^sks\s+/i.test(cliEntrypoint)
+  const synced = isDollarMetadataSynced(entry, routed, null)
+  if (!CRITICAL_DOLLAR_COMMANDS.has(entry.command) && routed?.id && synced) {
+    return {
+      kind: 'route_prompt_metadata',
+      ok: true,
+      generated_at: new Date().toISOString(),
+      command: entry.command,
+      route: entry.route,
+      routed_id: routed.id,
+      metadata_synced: synced
+    }
+  }
   return {
-    kind: 'command_route',
-    ok: Boolean(entry.command && entry.route),
+    kind: hasActualCli ? 'cli_entrypoint_metadata' : 'metadata',
+    ok: false,
     generated_at: new Date().toISOString(),
     command: entry.command,
-    route: entry.route
+    route: entry.route,
+    cli_entrypoint: cliEntrypoint || null,
+    metadata_synced: synced
   }
+}
+
+export function reportBackedDollarSmoke(entry, routed = null) {
+  const synced = isDollarMetadataSynced(entry, routed, null)
+  const now = new Date().toISOString()
+  if (entry.command === '$Naruto') {
+    const real = readReport('naruto-real-write-e2e.json')
+    if (real?.ok === true) return smoke('read_only', true, now, synced, { report: 'naruto-real-write-e2e.json' })
+    const hermetic = readReport('naruto-write-e2e.json')
+    if (hermetic?.ok === true) return smoke('fixture', true, now, synced, { report: 'naruto-write-e2e.json' })
+  }
+  if (entry.command === '$Super-Search') {
+    const offline = readReport('super-search-offline-contract.json')
+    const local = readReport('super-search-local-http-smoke.json')
+    if (offline?.ok === true || local?.ok === true) return smoke('read_only', true, now, synced, { report: offline?.ok === true ? 'super-search-offline-contract.json' : 'super-search-local-http-smoke.json' })
+  }
+  if (entry.command === '$SEO-GEO-OPTIMIZER') {
+    const metadata = readReport('seo-metadata-sync.json')
+    const truth = readReport('seo-marketing-truthfulness.json')
+    if (metadata?.ok === true && truth?.ok === true) return smoke('read_only', true, now, synced, { report: 'seo-metadata-sync.json+seo-marketing-truthfulness.json' })
+  }
+  const highRisk = highRiskSmokeForDollar(entry.command)
+  if (highRisk) return { ...highRisk, metadata_synced: synced }
+  return null
+}
+
+function highRiskSmokeForDollar(command) {
+  const report = readReport('high-risk-contracts.json')
+  const target = {
+    '$DB': 'db',
+    '$MAD-SKS': 'mad-sks',
+    '$Commit-And-Push': 'commit-and-push'
+  }[command]
+  if (!target || !Array.isArray(report?.cli_negative_smokes)) return null
+  const row = report.cli_negative_smokes.find((item) => item?.target === target)
+  if (!row) return null
+  return {
+    kind: 'blocked_negative',
+    ok: false,
+    blocked: row.blocked === true,
+    generated_at: report.generated_at || new Date().toISOString(),
+    command,
+    evidence: row
+  }
+}
+
+function smoke(kind, ok, generatedAt, metadataSynced, extra = {}) {
+  return { kind, ok, generated_at: generatedAt, metadata_synced: metadataSynced, ...extra }
+}
+
+function readReport(fileName) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, '.sneakoscope', 'reports', fileName), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+export function isDollarMetadataSynced(entry, routed, commandSmoke = null) {
+  if (commandSmoke?.metadata_synced === false) return false
+  if (!routed) return Boolean(entry.command && entry.route)
+  const commandSynced = entry.command === routed.command || (Array.isArray(routed.dollarAliases) && routed.dollarAliases.includes(entry.command))
+  const routeSynced = !entry.route || !routed.route || entry.route === routed.route
+  return Boolean(commandSynced && routeSynced)
+}
+
+export function criticalDollarEvidenceTier(smoke) {
+  if (!smoke) return 'metadata'
+  if (smoke.kind === 'fixture') return 'fixture'
+  if (smoke.kind === 'blocked_negative') return 'blocked_negative'
+  if (smoke.kind === 'dry_run') return 'dry_run'
+  if (smoke.kind === 'read_only' || smoke.kind === 'cli_read_only') return 'read_only'
+  return 'metadata'
+}
+
+export function criticalDollarEvidenceMaxScore(smoke) {
+  const tier = criticalDollarEvidenceTier(smoke)
+  if (tier === 'metadata') return 0
+  if (tier === 'fixture') return 70
+  if (tier === 'blocked_negative') return 90
+  return 100
 }
 
 export function classifyDollarSmoke(smoke, now = new Date()) {

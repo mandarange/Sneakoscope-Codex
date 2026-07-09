@@ -9,6 +9,8 @@ export const HIGH_RISK_CONTRACT_TARGETS = [
   'mad-sks'
 ] as const
 
+export const HIGH_RISK_CONTRACT_REPORT_SCHEMA = 'sks.high-risk-contracts.v2'
+
 export function highRiskNegativeFixtures() {
   return [
     {
@@ -84,6 +86,128 @@ export function evaluateHighRiskFixture(fixture: any) {
 
 export function evaluateHighRiskFixtures(fixtures: any[] = highRiskNegativeFixtures()) {
   return fixtures.map((fixture) => evaluateHighRiskFixture(fixture))
+}
+
+export function highRiskCliNegativeSmokeSpecs() {
+  return [
+    {
+      target: 'super-search fetch',
+      argv: ['sks', 'super-search', 'fetch', 'http://127.0.0.1:1', '--json'],
+      expected_blockers: ['direct_url_fetch_ssrf_blocked']
+    },
+    {
+      target: 'commit-and-push',
+      argv: ['sks', 'commit-and-push', '--json'],
+      expected_blockers: ['git_remote_missing']
+    },
+    {
+      target: 'rollback apply',
+      argv: ['sks', 'rollback', 'apply', '--yes', '--json'],
+      expected_blockers: ['rollback_id_required']
+    },
+    {
+      target: 'doctor --fix',
+      argv: ['sks', 'doctor', '--fix', '--json', '--profile', 'fast', '--machine-only'],
+      expected_blockers: ['user_owned_file_without_sks_marker']
+    },
+    {
+      target: 'update now --dry-run',
+      argv: ['sks', 'update', 'now', '--dry-run', '--json'],
+      expected_blockers: ['dry_run_no_install_executed']
+    },
+    {
+      target: 'db',
+      argv: ['sks', 'db', 'check', '--sql', 'DROP TABLE users;', '--json'],
+      expected_blockers: ['destructive_sql_requires_mad_sks']
+    },
+    {
+      target: 'mad-sks',
+      argv: ['sks', 'mad-sks', 'proof', '--json'],
+      expected_blockers: ['mad_sks_read_back_proof_missing']
+    }
+  ]
+}
+
+export function evaluateHighRiskCliSmokeResult(spec: any, run: any) {
+  const parsed = parseCliJson(run.stdout)
+  const text = `${run.stdout || ''}\n${run.stderr || ''}`
+  const blockers = [...new Set([
+    ...extractBlockers(parsed),
+    ...blockersFromCliText(spec.target, text, parsed, run),
+    ...(run.timed_out ? ['cli_smoke_timeout'] : [])
+  ])]
+  const blocked = blockers.some((blocker) => (spec.expected_blockers || []).some((expected: string) => blocker === expected || blocker.startsWith(`${expected}:`)))
+  return {
+    target: spec.target,
+    argv: spec.argv,
+    exit_code: run.exit_code,
+    blocked,
+    blockers,
+    diagnostics: run.diagnostics || null,
+    stdout_excerpt: excerpt(run.stdout),
+    stderr_excerpt: excerpt(run.stderr)
+  }
+}
+
+function parseCliJson(text: any) {
+  const value = String(text || '').trim()
+  if (!value) return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    const start = value.indexOf('{')
+    const end = value.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(value.slice(start, end + 1))
+      } catch {}
+    }
+    return null
+  }
+}
+
+function extractBlockers(value: any): string[] {
+  const out: string[] = []
+  const visit = (node: any) => {
+    if (!node || typeof node !== 'object') return
+    for (const key of ['blockers', 'issues', 'reasons', 'missing']) {
+      if (Array.isArray(node[key])) out.push(...node[key].map((entry: any) => String(entry)))
+    }
+    if (node.reason) out.push(String(node.reason))
+    if (node.status === 'blocked') out.push('status_blocked')
+    if (node.ok === false) out.push('ok_false')
+    for (const child of Object.values(node)) {
+      if (child && typeof child === 'object') visit(child)
+    }
+  }
+  visit(value)
+  return out.filter(Boolean)
+}
+
+function blockersFromCliText(target: string, text: string, parsed: any, run: any) {
+  const blockers: string[] = []
+  if (/SKS project migration blocked|update_migration_lock_held/i.test(text)) blockers.push('update_migration_lock_held')
+  if (target === 'super-search fetch' && /direct_url_fetch_ssrf_blocked/i.test(text)) blockers.push('direct_url_fetch_ssrf_blocked')
+  if (target === 'commit-and-push' && /No configured push destination|No remote configured|fatal:.*remote|git_push_failed/i.test(text)) blockers.push('git_remote_missing')
+  if (target === 'rollback apply' && /Unknown rollback id: (?:missing|--yes)|rollback.*missing/i.test(text)) blockers.push('rollback_id_required')
+  if (target === 'doctor --fix' && /doctor_touched_user_owned_file_without_sks_marker/i.test(text)) blockers.push('doctor_touched_user_owned_file_without_sks_marker')
+  else if (target === 'doctor --fix' && /(?:^|\s)user_owned_file_without_sks_marker(?:\s|$)/i.test(text)) blockers.push('user_owned_file_without_sks_marker')
+  if (target === 'db' && /drop_table|drop_statement|destructive/i.test(text)) blockers.push('destructive_sql_requires_mad_sks')
+  if (target === 'mad-sks' && /mad-sks-proof\.json|status.*missing|proof.*missing/i.test(text)) blockers.push('mad_sks_read_back_proof_missing')
+  if (target === 'update now --dry-run') {
+    const installCode = parsed?.install_code
+    const dryRunStage = Array.isArray(parsed?.stages)
+      && parsed.stages.some((stage: any) => stage?.id === 'npm_install' && stage?.status === 'dry_run')
+    if (parsed?.status === 'dry_run' && installCode == null && dryRunStage) blockers.push('dry_run_no_install_executed')
+    if (installCode !== null && installCode !== undefined) blockers.push('dry_run_attempted_real_install')
+  }
+  if (run.exit_code !== 0 && blockers.length === 0) blockers.push('cli_negative_smoke_failed_closed')
+  return blockers
+}
+
+function excerpt(value: any) {
+  const text = String(value || '').trim().replace(/\s+/g, ' ')
+  return text.length > 300 ? `${text.slice(0, 300)}...` : text
 }
 
 export function highRiskBlockers(target: string, input: any = {}) {

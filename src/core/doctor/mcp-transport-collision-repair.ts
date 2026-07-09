@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
-import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
+import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, tomlTableRange } from '../mcp/mcp-config-preservation.js';
 
 export type McpTransport = 'stdio' | 'url' | null;
@@ -37,6 +37,7 @@ export async function detectAndRepairMcpTransportCollisions(input: { root: strin
   const global = await readGlobalCodexConfigText();
   const distinctConfigs = path.resolve(global.path) !== path.resolve(project.path);
   const serverNames = listMcpServerNames(project.text);
+  const unmanagedProjectConfig = isUnmanagedProjectCodexConfig(root, project.path, project.text);
 
   let workingText = project.text;
   const servers: McpTransportCollisionServerEntry[] = [];
@@ -57,9 +58,15 @@ export async function detectAndRepairMcpTransportCollisions(input: { root: strin
       servers.push({ server, status: 'no_collision', project_transport: projectTransport, global_transport: globalTransport });
       continue;
     }
-    if (!apply) {
+	    if (!apply) {
+	      servers.push({ server, status: 'collision_detected', project_transport: projectTransport, global_transport: globalTransport });
+	      blockers.push(`mcp_transport_collision:${server}`);
+	      continue;
+	    }
+    if (unmanagedProjectConfig) {
       servers.push({ server, status: 'collision_detected', project_transport: projectTransport, global_transport: globalTransport });
-      blockers.push(`mcp_transport_collision:${server}`);
+      blockers.push('user_owned_file_without_sks_marker');
+      warnings.push('unmanaged_project_config_preserved');
       continue;
     }
     const range = tomlTableRange(workingText, `mcp_servers.${server}`, true);
@@ -78,14 +85,21 @@ export async function detectAndRepairMcpTransportCollisions(input: { root: strin
     }
     const before = workingText;
     workingText = nextText;
-    await writeCodexConfigGuarded({
-      root,
-      configPath: project.path,
-      before,
-      cause: `mcp-transport-collision-repair:${server}`,
-      mutate: () => workingText
-    });
-    servers.push({ server, status: 'collision_resolved', project_transport: projectTransport, global_transport: globalTransport });
+	    const write = await writeCodexConfigGuarded({
+	      root,
+	      configPath: project.path,
+	      before,
+	      cause: `mcp-transport-collision-repair:${server}`,
+	      mutate: () => workingText
+	    });
+    if (!write.ok) {
+      workingText = before;
+      servers.push({ server, status: 'collision_detected', project_transport: projectTransport, global_transport: globalTransport });
+      blockers.push(...(write.status === 'blocked_unmanaged_project_config' ? ['user_owned_file_without_sks_marker'] : [`mcp_transport_collision_write_failed:${server}:${write.status}`]));
+      warnings.push('unmanaged_project_config_preserved');
+      continue;
+    }
+	    servers.push({ server, status: 'collision_resolved', project_transport: projectTransport, global_transport: globalTransport });
     warnings.push(`mcp_transport_collision_resolved:${server}`);
   }
 

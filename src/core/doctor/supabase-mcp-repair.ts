@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { nowIso, writeJsonAtomic } from '../fsx.js';
-import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
+import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
 import { mcpServerBlock, mcpServerExplicitlyDisabled, readProjectCodexConfig, replaceOrAppendMcpServerBlock, tomlTableRange } from '../mcp/mcp-config-preservation.js';
 
 export interface SupabaseMcpRepairReport {
@@ -35,6 +35,38 @@ export async function repairSupabaseMcp(input: { root: string; apply?: boolean; 
   const block = mcpServerBlock(config.text, 'supabase') || '';
   const configured = Boolean(block);
   const tokenEnvPresent = Boolean(process.env.SUPABASE_ACCESS_TOKEN);
+  if (input.apply && isUnmanagedProjectCodexConfig(root, config.path, config.text)) {
+    const report: SupabaseMcpRepairReport = {
+      schema: 'sks.doctor-supabase-mcp-repair.v1',
+      generated_at: nowIso(),
+      ok: false,
+      apply: true,
+      configured,
+      disabled,
+      disabled_preserved: disabled,
+      token_env_present: tokenEnvPresent,
+      unsafe_write_access: false,
+      read_only_migrated: false,
+      stdio_url_transport_collision: false,
+      transport_collision_resolved: false,
+      write_scope_requires_confirmation: false,
+      ready_blocking: true,
+      manual_required: true,
+      next_action: 'Project .codex/config.toml has no SKS-managed marker; doctor --fix preserved it without mutation.',
+      blockers: ['user_owned_file_without_sks_marker'],
+      warnings: ['unmanaged_project_config_preserved'],
+      raw_secret_values_recorded: false
+    };
+    if (input.reportPath !== null) {
+      const reportPath = input.reportPath || path.join(root, '.sneakoscope', 'reports', 'doctor-supabase-mcp-repair.json');
+      try {
+        await writeJsonAtomic(reportPath, report);
+      } catch (err: unknown) {
+        return { ...report, report_write_failed: true };
+      }
+    }
+    return report;
+  }
   const readOnlyBefore = /read[_-]?only\s*=\s*true|access_mode\s*=\s*"read-only"|--read-only/.test(block);
   const unsafeWriteAccessBefore = configured && !disabled && !readOnlyBefore && /write|service_role|SUPABASE_ACCESS_TOKEN/.test(block);
   // Codex merges the global (~/.codex) and project (.codex) config per key. When

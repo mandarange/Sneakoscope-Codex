@@ -3,6 +3,7 @@ import { readJson, readText, writeTextAtomic } from '../fsx.js';
 import { CODEX_HOOK_EVENTS } from '../codex-compat/codex-hook-events.js';
 import { codexCommandHookCurrentHash, codexHookStateKey } from './codex-hook-hash.js';
 import { entriesFromInlineHooksToml } from './codex-hook-actual-discovery.js';
+import { isUnmanagedProjectCodexConfig } from '../codex/codex-config-guard.js';
 
 export interface WriteTrustedHashStateInput {
   root?: string;
@@ -41,8 +42,24 @@ export async function writeTrustedHashStateForHooksFile(
       reason: resolved.opts.reason || 'SKS refuses to write trusted_hash values from its own canonicalJson hash unless official Codex hash parity is proven.'
     };
   }
+  const existingState = await readText(resolved.statePath, '');
+  if (isUnmanagedProjectCodexConfig(resolved.root, resolved.statePath, existingState)) {
+    return {
+      schema: 'sks.codex-hook-state-writer.v2',
+      ok: false,
+      hooks_path: resolved.hooksPath,
+      state_path: resolved.statePath,
+      updated: 0,
+      blocks: [],
+      blocked: true,
+      blocker: 'user_owned_file_without_sks_marker',
+      blockers: ['user_owned_file_without_sks_marker'],
+      policy: 'preserve_user_owned_project_codex_config_without_sks_marker',
+      repair_action: 'Add an SKS-managed marker or run SKS setup before doctor --fix can write hook trust state.'
+    };
+  }
   const blocks = await trustedHashBlocksForHooksPath(resolved.hooksPath, isSksManagedHook);
-  const next = upsertTrustBlocks(await readText(resolved.statePath, ''), blocks);
+  const next = upsertTrustBlocks(existingState, blocks);
   await writeTextAtomic(resolved.statePath, next);
   return {
     schema: 'sks.codex-hook-state-writer.v1',

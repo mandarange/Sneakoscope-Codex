@@ -187,7 +187,7 @@ function firstPositional(args: string[]): string | null {
 
 function usage(mode: 'seo' | 'geo', exitCode: number, displayCommand: 'seo' | 'geo' | 'seo-geo-optimizer' = mode) {
   if (displayCommand === 'seo-geo-optimizer') {
-    console.error('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]');
+    console.error('Usage: sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--include-marketing] [--json]');
     console.error('       sks seo-geo-optimizer research [mission|latest] [--offline] [--include-competitors] [--json]');
     console.error('       sks seo-geo-optimizer strategy <mission|latest> [--json]');
     console.error('       sks seo-geo-optimizer apply <mission|latest> --mode seo|geo --apply [--include-marketing] [--include-llms-txt] [--scope <rule-or-path,...>] [--yes] [--json]');
@@ -196,7 +196,7 @@ function usage(mode: 'seo' | 'geo', exitCode: number, displayCommand: 'seo' | 'g
     return { schema: 'sks.search-visibility.usage.v1', ok: false, status: 'blocked', mode, command: displayCommand, reason: 'invalid_subcommand' };
   }
   const applyFlag = mode === 'geo' ? ' [--include-llms-txt]' : '';
-  console.error(`Usage: sks ${mode} doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--json]`);
+  console.error(`Usage: sks ${mode} doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--root <path>] [--url <origin>] [--target auto|website|docs|package] [--framework auto|next-app|next-pages|static] [--offline] [--strict] [--include-marketing] [--json]`);
   console.error(`       sks ${mode} apply <mission|latest> --apply${applyFlag} [--include-marketing] [--scope <rule-or-path,...>] [--yes] [--json]`);
   console.error(`       sks ${mode} rollback <mission|latest> --apply [--yes] [--json]`);
   process.exitCode = exitCode;

@@ -25,7 +25,7 @@ sneakoscope is a proof-first Codex trust layer for bounded agent workflows, sear
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **5.11.0**. New in this release: source-backed SEO marketing research/strategy, marketing truthfulness gates, Naruto write E2E proof, broader high-risk contracts, honest fast doctor semantics, tighter scorecards/perf budgets, and retention long-run smoke. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **5.12.0**. New in this release: operations maturity scorecards, explicit Naruto real-write proof, real CLI negative smokes for high-risk commands, doctor fast/full/fix semantics, upgrade and rollback recovery gates, diagnostics bundles, and stricter SEO metadata/strategy evidence. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 

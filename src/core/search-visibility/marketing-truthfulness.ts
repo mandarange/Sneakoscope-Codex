@@ -9,6 +9,9 @@ export const FORBIDDEN_MARKETING_PHRASES = [
   '100% autonomous',
   'perfectly safe',
   'always correct',
+  'oh-my-codex is worse',
+  'lazycodex is just a wrapper',
+  'SKS beats everything',
   '검색 순위 보장',
   '트래픽 보장',
   'AI 답변 노출 보장',
@@ -116,6 +119,16 @@ function claimsFromStrategy(strategy: MarketingStrategy | null): MarketingClaim[
       source_ids: plan.source_ids,
       publishable: true,
       blockers: packageKeywordBlockers,
+    });
+  }
+  for (const [index, contrast] of (strategy.competitor_contrast || []).entries()) {
+    out.push({
+      id: `strategy-competitor-contrast-${index + 1}`,
+      text: `${contrast.competitor}: ${contrast.their_claim} ${contrast.sks_contrast}`,
+      claim_type: 'competitor',
+      source_ids: contrast.source_ids,
+      publishable: contrast.safe_to_publish,
+      blockers: contrast.safe_to_publish && contrast.source_ids.length ? [] : ['competitor_contrast_not_publishable'],
     });
   }
   return out;

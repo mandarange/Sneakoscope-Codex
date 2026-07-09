@@ -30,6 +30,7 @@ export async function runNativeWorkerBackendRouter(input: {
   guard: any
 }) {
   const root = path.resolve(input.agentRoot)
+  const pathRoot = path.resolve(input.intake?.cwd || input.intake?.projectRoot || input.agentRoot)
   const requestedBackend = String(input.backend || '')
   let backend = normalizeBackend(requestedBackend)
   backend = await maybeAutoSelectOllamaBackend(backend, input)
@@ -149,8 +150,8 @@ export async function runNativeWorkerBackendRouter(input: {
       }
     })
     outputLastMessagePath = sdkTask.workerResultPath
-    const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)
-    patchEnvelopes = normalizeSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], input, sdkTask.sdkThreadId)
+    const sdkWorkerResult = normalizeSdkWorkerResultPaths(await readJson<any>(sdkTask.workerResultPath, null), input, pathRoot)
+    patchEnvelopes = normalizeSdkPatchEnvelopes(sdkWorkerResult?.patch_envelopes || [], input, sdkTask.sdkThreadId, pathRoot)
     proofLevel = sdkTask.ok ? (patchEnvelopes.length ? 'model_authored' : sdkTask.backend === 'local-llm' ? 'local_llm_worker_proven' : 'codex_sdk_thread_proven') : 'blocked'
     const sdkReport = {
       schema: 'sks.codex-sdk-worker-adapter.v1',
@@ -172,6 +173,10 @@ export async function runNativeWorkerBackendRouter(input: {
     childReports = [sdkReport]
     result = validateAgentWorkerResult({
       ...sdkWorkerResult,
+      agent_id: workerOwnerId(input),
+      session_id: input.agent.session_id,
+      persona_id: input.agent.persona_id || input.agent.id,
+      task_slice_id: input.slice?.id || '',
       backend: sdkTask.backend === 'local-llm' ? 'local-llm' : 'codex-sdk',
       patch_envelopes: patchEnvelopes,
       ...(patchEnvelopes.length ? {} : { no_patch_reason: buildNoPatchReason(input, sdkTask.backend || backend) }),
@@ -362,6 +367,9 @@ function buildWorkerPrompt(slice: any) {
       ? `Write-capable slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; include patch_envelopes for write_paths=${JSON.stringify(write)}.`
       : `Read-only slice. Return JSON matching ${CODEX_AGENT_WORKER_RESULT_SCHEMA_ID}; do not report pre-existing repository dirtiness as changed_files.`,
     write.length
+      ? 'Patch envelopes must touch only the listed write_paths. For small file edits, prefer operations like {"op":"write","path":"relative/file","content":"complete final file content"}; use replace only when search text is copied verbatim from the current file.'
+      : '',
+    write.length
       ? 'Quality gates run before queue acceptance: impact-scan requires cochanged callers for exported signature changes, machine-feedback runs type/lint/related tests, diff-quality blocks dead exports, and compiled mistake rules block repeated mistakes.'
       : '',
     write.length
@@ -398,22 +406,137 @@ function writePaths(slice: any, intake: any) {
   ].map(String).filter(Boolean)
 }
 
+function workerOwnerId(input: any) {
+  return String(input.slice?.owner_agent_id || input.slice?.owner || input.agent?.agent_id || input.agent?.id || '')
+}
+
 async function readZellijPaneId(root: string, workerDirRel: string) {
   const pane = await readJson<any>(path.join(root, workerDirRel, 'zellij-worker-pane.json'), null)
   return pane?.pane_id ? String(pane.pane_id) : null
 }
 
-function normalizeSdkPatchEnvelopes(envelopes: AgentPatchEnvelope[], input: any, sdkThreadId: string) {
-  return envelopes.map((envelope) => normalizeAgentPatchEnvelope({
+function normalizeSdkWorkerResultPaths(result: any, input: any, root: string) {
+  if (!result || typeof result !== 'object') return result
+  const normalized = { ...result }
+  if (Array.isArray(result.changed_files)) normalized.changed_files = normalizeWorkerPaths(root, result.changed_files)
+  if (Array.isArray(result.artifacts)) normalized.artifacts = normalizeWorkerPaths(root, result.artifacts)
+  if (Array.isArray(result.writes)) normalized.writes = result.writes.map((write: any) => normalizeWorkerWrite(root, write))
+  if (Array.isArray(result.patch_envelopes)) normalized.patch_envelopes = result.patch_envelopes.map((envelope: any) => normalizeWorkerEnvelopePaths(root, envelope, writePaths(input.slice, input.intake)))
+  return normalized
+}
+
+function normalizeSdkPatchEnvelopes(envelopes: AgentPatchEnvelope[], input: any, sdkThreadId: string, root: string) {
+  const fallbackAllowedPaths = normalizeWorkerPaths(root, writePaths(input.slice, input.intake))
+  return envelopes.map((rawEnvelope) => {
+    const envelope = normalizeWorkerEnvelopePaths(root, rawEnvelope, fallbackAllowedPaths)
+    const leaseProof = envelope.lease_proof && typeof envelope.lease_proof === 'object'
+      ? envelope.lease_proof
+      : {}
+    const allowedPaths = Array.isArray(envelope.allowed_paths) && envelope.allowed_paths.length
+      ? envelope.allowed_paths
+      : fallbackAllowedPaths
+    const leaseAllowedPaths = Array.isArray(leaseProof.allowed_paths) && leaseProof.allowed_paths.length
+      ? leaseProof.allowed_paths
+      : allowedPaths
+    const ownerAgent = workerOwnerId(input)
+    const verificationNodeId = String(envelope.verification_node_id || leaseProof.verification_node_id || input.slice?.verification_node_id || (input.slice?.id ? `verify:${input.slice.id}` : ''))
+    const rollbackNodeId = String(envelope.rollback_node_id || leaseProof.rollback_node_id || input.slice?.rollback_node_id || (input.slice?.id ? `rollback:${input.slice.id}` : ''))
+    const strategyTaskId = String(envelope.strategy_task_id || leaseProof.strategy_task_id || input.slice?.strategy_task_id || input.slice?.id || '')
+    const microWinId = String(envelope.micro_win_id || leaseProof.micro_win_id || input.slice?.micro_win_id || input.slice?.id || '')
+    return normalizeAgentPatchEnvelope({
+      ...envelope,
+      agent_id: ownerAgent,
+      session_id: input.agent.session_id,
+      slot_id: envelope.slot_id || input.agent.slot_id || input.agent.session_id || input.agent.id,
+      task_slice_id: input.slice?.id || envelope.task_slice_id || '',
+      lease_id: envelope.lease_id || input.intake.lease_id || input.slice?.lease_id || input.slice?.id || '',
+      allowed_paths: allowedPaths,
+      ...(strategyTaskId ? { strategy_task_id: strategyTaskId } : {}),
+      ...(microWinId ? { micro_win_id: microWinId } : {}),
+      ...(verificationNodeId ? { verification_node_id: verificationNodeId } : {}),
+      ...(rollbackNodeId ? { rollback_node_id: rollbackNodeId } : {}),
+      ...(verificationNodeId && !envelope.verification_hint ? { verification_hint: { node_id: verificationNodeId, artifact: 'agent-patch-verification-results.json' } } : {}),
+      ...(rollbackNodeId && !envelope.rollback_hint ? { rollback_hint: { node_id: rollbackNodeId, artifact: 'agent-patch-rollback-proof.json' } } : {}),
+      lease_proof: {
+        ...leaseProof,
+        lease_id: leaseProof.lease_id || envelope.lease_id || input.intake.lease_id || input.slice?.lease_id || input.slice?.id || '',
+        owner_agent: ownerAgent,
+        owner_persona: input.agent.persona_id || input.agent.id,
+        allowed_paths: leaseAllowedPaths,
+        ...(strategyTaskId ? { strategy_task_id: strategyTaskId } : {}),
+        ...(microWinId ? { micro_win_id: microWinId } : {}),
+        ...(verificationNodeId ? { verification_node_id: verificationNodeId } : {}),
+        ...(rollbackNodeId ? { rollback_node_id: rollbackNodeId } : {}),
+        protected_path_check: leaseProof.protected_path_check || 'passed'
+      },
+      source: 'model_authored',
+      native_cli_worker_session_id: input.agent.session_id,
+      native_cli_process_id: process.pid,
+      worker_process_id: process.pid,
+      backend_sdk_thread_id: sdkThreadId,
+      fast_mode: input.fastModePolicy.fast_mode,
+      service_tier: input.fastModePolicy.service_tier
+    })
+  })
+}
+
+function normalizeWorkerEnvelopePaths(root: string, envelope: any, fallbackAllowedPaths: string[]) {
+  if (!envelope || typeof envelope !== 'object') return envelope
+  const leaseProof = envelope.lease_proof && typeof envelope.lease_proof === 'object'
+    ? {
+      ...envelope.lease_proof,
+      ...(Array.isArray(envelope.lease_proof.allowed_paths) ? { allowed_paths: normalizeWorkerPaths(root, envelope.lease_proof.allowed_paths) } : {})
+    }
+    : envelope.lease_proof
+  return {
     ...envelope,
-    source: 'model_authored',
-    native_cli_worker_session_id: input.agent.session_id,
-    native_cli_process_id: process.pid,
-    worker_process_id: process.pid,
-    backend_sdk_thread_id: sdkThreadId,
-    fast_mode: input.fastModePolicy.fast_mode,
-    service_tier: input.fastModePolicy.service_tier
-  }))
+    ...(Array.isArray(envelope.allowed_paths) ? { allowed_paths: normalizeWorkerPaths(root, envelope.allowed_paths) } : { allowed_paths: fallbackAllowedPaths }),
+    ...(leaseProof ? { lease_proof: leaseProof } : {}),
+    ...(Array.isArray(envelope.operations) ? { operations: envelope.operations.map((operation: any) => normalizeWorkerPatchOperation(root, operation)) } : {})
+  }
+}
+
+function normalizeWorkerPatchOperation(root: string, operation: any) {
+  if (!operation || typeof operation !== 'object') return operation
+  return {
+    ...operation,
+    path: normalizeWorkerPath(root, operation.path)
+  }
+}
+
+function normalizeWorkerWrite(root: string, write: any) {
+  if (typeof write === 'string') return normalizeWorkerPath(root, write)
+  if (!write || typeof write !== 'object') return write
+  return {
+    ...write,
+    ...(write.path === undefined ? {} : { path: normalizeWorkerPath(root, write.path) })
+  }
+}
+
+function normalizeWorkerPaths(root: string, values: any[]) {
+  return values.map((value) => normalizeWorkerPath(root, value)).filter(Boolean)
+}
+
+function normalizeWorkerPath(root: string, value: any) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+  const normalizedText = text.replace(/\\/g, '/')
+  if (!path.isAbsolute(normalizedText)) return normalizedText
+  const resolvedValue = path.resolve(normalizedText)
+  for (const candidate of equivalentRootPaths(root)) {
+    if (resolvedValue === candidate) return '.'
+    const prefix = candidate.endsWith(path.sep) ? candidate : `${candidate}${path.sep}`
+    if (resolvedValue.startsWith(prefix)) return path.relative(candidate, resolvedValue).split(path.sep).join('/')
+  }
+  return normalizedText
+}
+
+function equivalentRootPaths(root: string) {
+  const resolved = path.resolve(root)
+  const candidates = [resolved]
+  if (resolved.startsWith('/private/')) candidates.push(resolved.replace(/^\/private/, ''))
+  else candidates.push(`/private${resolved}`)
+  return [...new Set(candidates)]
 }
 
 function defaultProcessCommand(input: any) {

@@ -1,7 +1,7 @@
 import path from 'node:path'
 import os from 'node:os'
 import { ensureDir, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
-import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
+import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 
 export const DOCTOR_CONTEXT7_REPAIR_SCHEMA = 'sks.doctor-context7-repair.v1'
 const CONTEXT7_REMOTE_URL = 'https://mcp.context7.com/mcp'
@@ -72,6 +72,14 @@ async function inspectOrRepairContext7Config(root: string, candidate: { scope: '
       present: false,
       status: 'missing',
       warnings: candidate.scope === 'global' ? ['context7_global_config_missing_optional'] : []
+    })
+  }
+  if (fix && isUnmanagedProjectCodexConfig(root, candidate.path, text)) {
+    return baseConfig(candidate, {
+      present: true,
+      status: 'blocked',
+      blockers: ['user_owned_file_without_sks_marker'],
+      warnings: ['unmanaged_project_config_preserved']
     })
   }
   const block = context7Block(text)

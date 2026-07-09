@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const FAST_PACKAGE_VERSION = '5.11.0';
+const FAST_PACKAGE_VERSION = '5.12.0';
 const firstArg = process.argv[2];
 
 if (firstArg === '--version' || firstArg === '-v' || firstArg === 'version') {

@@ -128,8 +128,9 @@ export async function runMarketingStrategy(
   if (!inventory) return blockedStrategy(mission, ['site_inventory_required_for_strategy']);
   const strategy = buildMarketingStrategy(mission.id, inventory, research);
   const truth = evaluateMarketingTruthfulness({ strategy });
-  const blockers = [...strategy.blockers, ...truth.blockers];
-  const finalStrategy: MarketingStrategy = { ...strategy, ok: blockers.length === 0, blockers };
+  const strategy_quality = scoreMarketingStrategy(strategy, truth);
+  const blockers = [...strategy.blockers, ...truth.blockers, ...strategy_quality.blockers];
+  const finalStrategy: MarketingStrategy = { ...strategy, strategy_quality, ok: blockers.length === 0, blockers };
   await writeJsonAtomic(path.join(mission.artifactDir, 'marketing-strategy.json'), finalStrategy);
   await writeJsonAtomic(path.join(mission.artifactDir, 'marketing-truthfulness-gate.json'), {
     ...truth,
@@ -166,10 +167,11 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
   const packageSource = sourceIds.find((id) => id.includes('package-json')) || sourceIds[0] || '';
   const readmeSource = sourceIds.find((id) => id.includes('readme')) || packageSource;
   const perfSource = sourceIds.find((id) => id.includes('perf-budget') || id.includes('perf'));
-  const parallelSource = sourceIds.find((id) => id.includes('parallel') || id.includes('naruto'));
+  const parallelSource = sourceIds.find((id) => id.includes('parallel') || id.includes('naruto')) || sourceIds.find((id) => id.includes('routes'));
   const superSearchSource = sourceIds.find((id) => id.includes('super-search'));
   const oneLiner = `${inventory.package.name || 'Sneakoscope'} is a proof-first Codex trust layer for bounded agent workflows, search visibility, and evidence-backed release gates.`;
   const strategySources = unique([packageSource, readmeSource, superSearchSource, parallelSource, perfSource].filter(Boolean) as string[]);
+  const competitorContrast = buildCompetitorContrast(research, strategySources);
   const keywords = unique([
     'sneakoscope',
     'codex',
@@ -205,6 +207,15 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
       { name: 'agent release integrity', keywords: keywords.slice(7, 14), source_ids: [readmeSource || packageSource].filter(Boolean) },
       { name: 'search visibility', keywords: keywords.slice(7, 11), source_ids: [superSearchSource || packageSource].filter(Boolean) },
     ],
+    strategy_quality: {
+      score: 0,
+      source_backed_claims: 0,
+      unsupported_claims: 0,
+      competitor_contrast_count: competitorContrast.length,
+      keyword_cluster_count: 3,
+      blockers: [],
+    },
+    competitor_contrast: competitorContrast,
     readme_plan: [{
       operation: 'readme-positioning-block-update',
       text: [
@@ -253,6 +264,78 @@ function buildMarketingStrategy(missionId: string, inventory: SiteInventory, res
   }
   if (strategy.positioning.source_ids.length === 0) strategy.blockers.push('positioning_source_missing');
   return strategy;
+}
+
+function buildCompetitorContrast(research: MarketingResearch, strategySources: string[]): MarketingStrategy['competitor_contrast'] {
+  return research.competitor_sources
+    .filter((source) => source.verified)
+    .map((source) => ({
+      competitor: source.title,
+      their_claim: source.summary,
+      sks_contrast: 'SKS positions itself around proof-first release integrity and source-backed search visibility, while workflow-first Codex layers emphasize orchestration convenience.',
+      source_ids: unique([source.id, ...strategySources]),
+      safe_to_publish: true,
+    }));
+}
+
+function scoreMarketingStrategy(strategy: MarketingStrategy, truth: ReturnType<typeof evaluateMarketingTruthfulness>): MarketingStrategy['strategy_quality'] {
+  const blockers: string[] = [];
+  let score = 0;
+  const sourceBackedClaims = countSourceBackedStrategyClaims(strategy);
+
+  if (strategy.positioning.source_ids.length) score += 20;
+  else blockers.push('strategy_quality_source_backed_positioning_missing');
+  if (strategy.message_pillars.length >= 3 && strategy.message_pillars.every((pillar) => pillar.source_ids.length)) score += 20;
+  else blockers.push('strategy_quality_message_pillars_below_threshold');
+  if (strategy.keyword_clusters.length >= 2 && strategy.keyword_clusters.every((cluster) => cluster.source_ids.length)) score += 15;
+  else blockers.push('strategy_quality_keyword_clusters_below_threshold');
+  if (strategy.competitor_contrast.every((contrast) => contrast.safe_to_publish && contrast.source_ids.length)) score += 15;
+  else blockers.push('strategy_quality_competitor_contrast_unsafe');
+  if (truth.forbidden_phrases.length === 0) score += 15;
+  else blockers.push('strategy_quality_forbidden_phrases_present');
+  if (hasSupportedSpecialClaim(strategy, /p95|latency|performance|fast/i, /perf|budget|report/i)
+    && hasSupportedSpecialClaim(strategy, /parallel|worker|clone|naruto/i, /parallel|naruto|agent|report|routes/i)
+    && hasSupportedSpecialClaim(strategy, /super-search|source-backed|source backed/i, /super-search|source|report/i)) {
+    score += 15;
+  } else {
+    blockers.push('strategy_quality_special_claim_sources_missing');
+  }
+  if (score < 80) blockers.push('strategy_quality_score_below_80');
+  if (truth.unsupported_claims.length) blockers.push('strategy_quality_unsupported_claims_present');
+  if (truth.source_less_publishable_claims.length) blockers.push('strategy_quality_source_less_publishable_claims_present');
+
+  return {
+    score,
+    source_backed_claims: sourceBackedClaims,
+    unsupported_claims: truth.unsupported_claims.length,
+    competitor_contrast_count: strategy.competitor_contrast.length,
+    keyword_cluster_count: strategy.keyword_clusters.length,
+    blockers: unique(blockers),
+  };
+}
+
+function countSourceBackedStrategyClaims(strategy: MarketingStrategy): number {
+  return [
+    strategy.positioning,
+    ...strategy.message_pillars,
+    ...strategy.keyword_clusters,
+    ...strategy.readme_plan,
+    ...strategy.package_plan,
+    ...strategy.docs_plan,
+    ...strategy.competitor_contrast,
+  ].filter((item) => item.source_ids.length > 0).length;
+}
+
+function hasSupportedSpecialClaim(strategy: MarketingStrategy, textPattern: RegExp, sourcePattern: RegExp): boolean {
+  const candidates = [
+    ...strategy.message_pillars.map((pillar) => ({ text: pillar.claim, source_ids: pillar.source_ids })),
+    ...strategy.readme_plan.map((plan) => ({ text: plan.text, source_ids: plan.source_ids })),
+    ...strategy.package_plan.map((plan) => ({
+      text: plan.operation === 'package-description-update' ? plan.description : plan.keywords.join(', '),
+      source_ids: plan.source_ids,
+    })),
+  ];
+  return candidates.some((candidate) => textPattern.test(candidate.text) && candidate.source_ids.some((id) => sourcePattern.test(id)));
 }
 
 async function resolveOrCreateMarketingMission(

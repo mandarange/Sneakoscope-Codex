@@ -5,6 +5,10 @@ import {
   runRealCodexWriteE2e,
   validateNarutoWriteE2eContract
 } from '../naruto-write-e2e.js'
+import {
+  realisticNarutoRealWriteProofFixture,
+  validateNarutoRealWriteProof
+} from '../naruto-real-write-proof.js'
 import { buildNarutoWorkGraph } from '../naruto-work-graph.js'
 import { extractNarutoPromptPaths } from '../naruto-task-hints.js'
 
@@ -102,6 +106,34 @@ test('write E2E contract rejects read-only smoke evidence and incomplete write p
   assert.equal(oneWorkerPatch.ok, false)
   assert.ok(oneWorkerPatch.blockers.includes('worker_id_diversity_below_2'))
   assert.ok(oneWorkerPatch.blockers.includes('patch_envelope_count_below_2'))
+})
+
+test('explicit Naruto real write proof schema accepts realistic write proof', () => {
+  const proof = realisticNarutoRealWriteProofFixture()
+  const validation = validateNarutoRealWriteProof(proof)
+
+  assert.equal(proof.schema, 'sks.naruto-real-write-proof.v1')
+  assert.equal(validation.ok, true, validation.blockers.join(', '))
+})
+
+test('explicit Naruto real write proof schema blocks missing or inferred broad mission evidence', () => {
+  const missing = validateNarutoRealWriteProof(null)
+  assert.equal(missing.ok, false)
+  assert.ok(missing.blockers.includes('naruto_real_write_proof_invalid_json'))
+
+  const broadMissionJson = {
+    schema: 'sks.naruto-gate.v1',
+    passed: true,
+    mission_id: 'M-wide-json-scan',
+    worker_ids: ['worker-a', 'worker-b'],
+    patch_envelopes: [{ agent_id: 'worker-a' }]
+  }
+  const validation = validateNarutoRealWriteProof(broadMissionJson)
+
+  assert.equal(validation.ok, false)
+  assert.ok(validation.blockers.includes('naruto_real_write_proof_schema_invalid'))
+  assert.ok(validation.blockers.includes('backend_codex_sdk_required'))
+  assert.ok(validation.blockers.includes('real_write_changed_files_missing'))
 })
 
 function restoreEnv(name: string, value: string | undefined): void {

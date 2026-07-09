@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { exists, listFilesRecursive, readJson, runProcess } from '../fsx.js';
 import { runCompiledRules } from './mistake-rule-compiler.js';
 
@@ -51,13 +52,21 @@ async function runTypecheck(root: string, changedFiles: string[], timeoutMs: num
   const script = scriptNamed(pkg, 'typecheck');
   const tsconfig = await exists(path.join(root, 'tsconfig.json'));
   if (!script && !tsconfig) return { ok: true, errors: [], skipped_reason: 'tool_not_found' };
-  const command = script ? ['npm', ['run', 'typecheck', '--silent']] as const : ['npx', ['tsc', '--noEmit', '-p', 'tsconfig.json']] as const;
+  const command = script ? ['npm', ['run', 'typecheck', '--silent']] as const : await resolveTypeScriptCommand(root);
   const result = await runProcess(command[0], command[1], { cwd: root, timeoutMs, maxOutputBytes: 512 * 1024 });
   if (result.timedOut) return { ok: true, errors: [], skipped_reason: 'timeout' };
   return {
     ok: result.code === 0,
     errors: result.code === 0 ? [] : summarizeErrors(result.stderr || result.stdout)
   };
+}
+
+async function resolveTypeScriptCommand(root: string): Promise<readonly [string, string[]]> {
+  const localTsc = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
+  if (await exists(localTsc)) return [process.execPath, [localTsc, '--noEmit', '-p', 'tsconfig.json']];
+  const bundledTsc = path.join(repoRootFromImportMeta(), 'node_modules', 'typescript', 'bin', 'tsc');
+  if (await exists(bundledTsc)) return [process.execPath, [bundledTsc, '--noEmit', '-p', 'tsconfig.json']];
+  return ['npx', ['tsc', '--noEmit', '-p', 'tsconfig.json']];
 }
 
 async function runLint(root: string, changedFiles: string[], timeoutMs: number): Promise<FeedbackAxis> {
@@ -159,4 +168,8 @@ function normalizePath(value: string): string {
 
 function singleLine(value: string): string {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 240);
+}
+
+function repoRootFromImportMeta(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 }

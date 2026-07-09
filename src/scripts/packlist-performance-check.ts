@@ -21,8 +21,10 @@ const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 10
 // budget. 5.11.0 adds package-referenced integrity gates for SEO marketing,
 // Naruto write E2E, high-risk contracts, scorecards, and retention long-run
 // checks; keep those scripts publishable because package contract validation
-// rejects scripts that point at files absent from the tarball.
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2385 * 1024);
+// rejects scripts that point at files absent from the tarball. 5.12.0 adds ops
+// maturity diagnostics, migration/recovery smokes, and their package-referenced
+// gates, pushing the packed tarball to ~2400 KiB.
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2410 * 1024);
 const SURFACE_MAX_PACKED = Number(process.env.SKS_PACKAGE_SURFACE_MAX_PACK_BYTES || 25_000_000);
 const SURFACE_MAX_FILES = Number(process.env.SKS_PACKAGE_SURFACE_MAX_FILES || 2500);
 
@@ -92,6 +94,9 @@ assertGate(info.entryCount <= SURFACE_MAX_FILES, 'package_surface_file_count_ove
 assertGate(info.size <= SURFACE_MAX_PACKED, 'package_surface_tarball_over_limit', { size: info.size, max_tarball_bytes: SURFACE_MAX_PACKED });
 
 const report = {
+  schema: 'sks.packlist-performance.v1',
+  ok: true,
+  generated_at: new Date().toISOString(),
   entryCount: info.entryCount,
   size: info.size,
   unpackedSize: info.unpackedSize,
@@ -100,7 +105,8 @@ const report = {
   max_files: MAX_FILES,
   max_packed: MAX_PACKED,
   max_unpacked: MAX_UNPACKED,
-  forbidden: []
+  forbidden: [],
+  blockers: []
 };
 const out = path.join(root, '.sneakoscope', 'reports', 'packlist-performance.json');
 fs.mkdirSync(path.dirname(out), { recursive: true });

@@ -235,12 +235,12 @@ export async function runNativeCliWorker(input: any = {}) {
     heartbeatRel,
     ...(patchEnvelopes.length ? [patchRel] : [])
   ]
-  const result = validateAgentWorkerResult({
-    ...routed.result,
-    mission_id: String(intake.mission_id || input.missionId || ''),
-    agent_id: String(agent.id || agent.slot_id || 'worker'),
-    session_id: String(agent.session_id || ''),
-    persona_id: String(agent.persona_id || agent.id || 'worker'),
+	  const result = validateAgentWorkerResult({
+	    ...routed.result,
+	    mission_id: String(intake.mission_id || input.missionId || ''),
+	    agent_id: workerOwnerId(agent, slice),
+	    session_id: String(agent.session_id || ''),
+	    persona_id: String(agent.persona_id || agent.id || 'worker'),
     task_slice_id: String(slice.id || ''),
     status: guard.ok && routed.result.status === 'done' ? 'done' : routed.result.status === 'failed' ? 'failed' : 'blocked',
     backend,
@@ -422,6 +422,10 @@ async function workerTelemetry(agentRoot: string, intake: any, agent: any, slice
     log_tail: input.logTail || '',
     blockers: input.blockers || []
   }).catch(() => undefined)
+}
+
+function workerOwnerId(agent: any, slice: any) {
+  return String(slice?.owner_agent_id || slice?.owner || agent?.agent_id || agent?.id || agent?.slot_id || 'worker')
 }
 
 function firstString(values: unknown[]) {

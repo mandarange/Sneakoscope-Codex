@@ -3,6 +3,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyNarutoPatchEnvelopes } from './naruto-parallel-patch-apply.js'
+import {
+  realisticNarutoRealWriteProofFixture,
+  validateNarutoRealWriteProof,
+  type NarutoRealWriteProof
+} from './naruto-real-write-proof.js'
 import { ensureDir, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 
 export type NarutoWriteE2eMode = 'hermetic' | 'real-codex'
@@ -26,6 +31,7 @@ export interface NarutoWriteE2eReport {
     mock_or_readonly_rejected: boolean
     blockers: string[]
   }
+  diagnostics?: Record<string, unknown> | null
   blockers: string[]
 }
 
@@ -73,6 +79,21 @@ export async function runHermeticWriteE2e(): Promise<NarutoWriteE2eReport> {
       }))
     })
     const typecheck = await runTempTypecheck(tempRoot)
+    const explicitProof = realisticNarutoRealWriteProofFixture({
+      mission_id: 'M-hermetic-naruto-write-e2e',
+      changed_files: changedFiles,
+      worker_ids: workerIds,
+      patch_envelopes: apply.results.map((row, index) => ({
+        envelope_id: row.envelope_id,
+        agent_id: envelopes[index]?.agent_id || `naruto-write-worker-${index + 1}`,
+        changed_files: row.changed_files,
+        applied: row.ok === true
+      })),
+      parent_merge_artifact: path.relative(tempRoot, mergeArtifactPath),
+      typecheck: { ok: typecheck.ok, command: typecheck.command || 'typecheck_unavailable' },
+      cleanup: { ok: true }
+    })
+    const explicitProofValidation = validateNarutoRealWriteProof(explicitProof)
     const contract = validateNarutoWriteE2eContract({
       mode: 'hermetic',
       changed_files: changedFiles,
@@ -83,7 +104,7 @@ export async function runHermeticWriteE2e(): Promise<NarutoWriteE2eReport> {
       cleanup: { ok: true },
       runtime_evidence: { real_codex: false, backend: 'hermetic', mock_or_readonly_rejected: true }
     })
-    blockers.push(...apply.blockers, ...(typecheck.ok ? [] : ['typecheck_failed']), ...contract.blockers)
+    blockers.push(...apply.blockers, ...(typecheck.ok ? [] : ['typecheck_failed']), ...explicitProofValidation.blockers, ...contract.blockers)
     cleanup = await cleanupTempRoot(tempRoot)
     blockers.push(...cleanup.blockers)
     return buildReport({
@@ -194,6 +215,7 @@ function buildReport(input: {
   typecheck: NarutoWriteE2eReport['typecheck']
   cleanup: NarutoWriteE2eReport['cleanup']
   runtimeEvidence: NarutoWriteE2eReport['runtime_evidence']
+  diagnostics?: Record<string, unknown> | null
   blockers: string[]
 }): NarutoWriteE2eReport {
   const uniqueBlockers = [...new Set(input.blockers)]
@@ -212,6 +234,7 @@ function buildReport(input: {
     typecheck: input.typecheck,
     cleanup: input.cleanup,
     runtime_evidence: input.runtimeEvidence,
+    diagnostics: input.diagnostics || null,
     blockers: uniqueBlockers
   }
 }
@@ -317,10 +340,10 @@ async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
     const beforeB = await fs.readFile(path.join(tempRoot, 'src', 'b.ts'), 'utf8')
     const sksBin = path.join(repoRootFromImportMeta(), 'dist', 'bin', 'sks.js')
     const run = await runProcess(process.execPath, [
-      sksBin,
-      'naruto',
-      'run',
-      'modify src/a.ts and src/b.ts independently for the real write E2E; keep TypeScript valid',
+	      sksBin,
+	      'naruto',
+	      'run',
+	      'modify src/a.ts and src/b.ts independently for the real write E2E; keep TypeScript valid; each worker must only touch its assigned write_path and must use patch_envelopes with op "write" containing the complete final file content',
       '--json',
       '--write-mode',
       'parallel',
@@ -343,18 +366,25 @@ async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
         SKS_DISABLE_UPDATE_CHECK: '1'
       }
     })
-    const parsed = parseJsonObjectFromStdout(run.stdout)
     const afterA = await fs.readFile(path.join(tempRoot, 'src', 'a.ts'), 'utf8').catch(() => beforeA)
     const afterB = await fs.readFile(path.join(tempRoot, 'src', 'b.ts'), 'utf8').catch(() => beforeB)
-    const changedFiles = [
+    const observedChangedFiles = [
       ...(afterA !== beforeA ? ['src/a.ts'] : []),
       ...(afterB !== beforeB ? ['src/b.ts'] : [])
     ]
+    const parsed = parseJsonObjectFromStdout(run.stdout)
     const missionId = String(parsed?.mission_id || '')
-    const evidence = missionId ? await collectRealWriteEvidence(tempRoot, missionId) : { workerIds: [], patchEnvelopeCount: 0 }
+    const explicitProof = missionId ? await readNarutoRealWriteProof(tempRoot, missionId) : null
+    const missionDir = missionId ? path.join(tempRoot, '.sneakoscope', 'missions', missionId) : null
+    const queue = missionDir ? await readJsonMaybe(path.join(missionDir, 'agents', 'agent-patch-queue.json')) : null
+    const applyResults = missionDir ? await readJsonMaybe(path.join(missionDir, 'agents', 'agent-patch-apply-results.json')) : null
+    const explicitProofValidation = explicitProof ? validateNarutoRealWriteProof(explicitProof) : { ok: false, blockers: ['naruto_real_write_proof_missing'] }
+    const changedFiles = explicitProof?.changed_files || []
+    const workerIds = explicitProof?.worker_ids || []
+    const patchEnvelopeCount = explicitProof?.patch_envelopes?.length || 0
     const parentMergeArtifact = {
-      ok: run.code === 0 && changedFiles.length > 0 && evidence.patchEnvelopeCount > 0,
-      path: mergeArtifactPath,
+      ok: explicitProofValidation.ok,
+      path: explicitProof ? path.join(tempRoot, '.sneakoscope', 'missions', missionId, 'naruto-real-write-proof.json') : null,
       changed_files: changedFiles
     }
     await writeJsonAtomic(mergeArtifactPath, {
@@ -363,36 +393,61 @@ async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
       mission_id: missionId || null,
       command_exit_code: run.code,
       changed_files: changedFiles,
-      worker_ids: evidence.workerIds,
-      patch_envelope_count: evidence.patchEnvelopeCount,
+      observed_changed_files: observedChangedFiles,
+      worker_ids: workerIds,
+      patch_envelope_count: patchEnvelopeCount,
       stdout_tail: tail(run.stdout),
       stderr_tail: tail(run.stderr)
     })
+    const diagnostics = {
+      command_exit_code: run.code,
+      mission_id: missionId || null,
+      parsed_ok: parsed?.ok ?? null,
+      parsed_status: parsed?.status || null,
+      parsed_blockers: Array.isArray(parsed?.blockers) ? parsed.blockers : [],
+      queue_entries: Array.isArray(queue?.entries) ? queue.entries.map((entry: any) => ({
+        id: entry.id || null,
+        status: entry.status || null,
+        agent_id: entry.agent_id || entry.envelope?.agent_id || null,
+        write_paths: entry.write_paths || entry.envelope?.operations?.map((operation: any) => operation.path) || []
+      })) : [],
+      apply_results: Array.isArray(applyResults?.results) ? applyResults.results.map((row: any) => ({
+        entry_id: row.entry_id || row.envelope_id || null,
+        ok: row.ok === true,
+        changed_files: row.changed_files || [],
+        blockers: row.blockers || []
+      })) : [],
+      stdout_tail: tail(run.stdout),
+      stderr_tail: tail(run.stderr)
+    }
     const typecheck = await runTempTypecheck(tempRoot)
     const contract = validateNarutoWriteE2eContract({
       mode: 'real-codex',
       changed_files: changedFiles,
-      worker_ids: evidence.workerIds,
-      patch_envelope_count: evidence.patchEnvelopeCount,
+      worker_ids: workerIds,
+      patch_envelope_count: patchEnvelopeCount,
       parent_merge_artifact: parentMergeArtifact,
       typecheck,
       cleanup: { ok: true },
       runtime_evidence: { real_codex: true, backend: 'codex-sdk', mock_or_readonly_rejected: true }
     })
     if (run.code !== 0) blockers.push(`real_naruto_command_exit_${run.code}`)
-    blockers.push(...(typecheck.ok ? [] : ['typecheck_failed']), ...contract.blockers)
+    if (missionId.length === 0) blockers.push('naruto_real_write_mission_id_missing')
+    if (changedFiles.some((file) => !observedChangedFiles.includes(file))) blockers.push('naruto_real_write_proof_changed_file_not_observed')
+    blockers.push(...explicitProofValidation.blockers, ...(typecheck.ok ? [] : ['typecheck_failed']), ...contract.blockers)
     cleanup = await cleanupTempRoot(tempRoot)
     blockers.push(...cleanup.blockers)
     return buildReport({
       mode: 'real-codex',
       tempRoot,
       changedFiles,
-      workerIds: evidence.workerIds,
-      patchEnvelopeCount: evidence.patchEnvelopeCount,
+      workerIds,
+      patchEnvelopeCount,
       parentMergeArtifact,
       typecheck,
       cleanup,
       runtimeEvidence: { real_codex: true, backend: 'codex-sdk', mock_or_readonly_rejected: true, blockers: [] },
+      diagnostics,
       blockers
     })
   } catch (error: unknown) {
@@ -409,47 +464,31 @@ async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
       typecheck: { ok: false, command: null, stdout_tail: '', stderr_tail: '' },
       cleanup,
       runtimeEvidence: { real_codex: true, backend: 'codex-sdk', mock_or_readonly_rejected: true, blockers: [] },
+      diagnostics: null,
       blockers
     })
   }
 }
 
-async function collectRealWriteEvidence(root: string, missionId: string): Promise<{ workerIds: string[]; patchEnvelopeCount: number }> {
-  const missionRoot = path.join(root, '.sneakoscope', 'missions', missionId)
-  const files = await listJsonFiles(missionRoot, 7)
-  const workerIds = new Set<string>()
-  let patchEnvelopeCount = 0
-  for (const file of files) {
-    const text = await fs.readFile(file, 'utf8').catch(() => '')
-    if (!text.includes('patch_envelope') && !text.includes('agent_id')) continue
-    const parsed = parseJsonObjectFromStdout(text)
-    const stack = [parsed]
-    while (stack.length) {
-      const value = stack.pop()
-      if (!value || typeof value !== 'object') continue
-      if (Array.isArray(value)) {
-        stack.push(...value)
-        continue
-      }
-      if (value.agent_id) workerIds.add(String(value.agent_id))
-      if (Array.isArray(value.patch_envelopes)) patchEnvelopeCount += value.patch_envelopes.length
-      if (value.schema === 'sks.agent-patch-envelope.v1') patchEnvelopeCount += 1
-      stack.push(...Object.values(value))
-    }
+async function readNarutoRealWriteProof(root: string, missionId: string): Promise<NarutoRealWriteProof | null> {
+  const proofPath = path.join(root, '.sneakoscope', 'missions', missionId, 'naruto-real-write-proof.json')
+  const text = await fs.readFile(proofPath, 'utf8').catch(() => '')
+  if (!text.trim()) return null
+  try {
+    return JSON.parse(text) as NarutoRealWriteProof
+  } catch {
+    return null
   }
-  return { workerIds: [...workerIds], patchEnvelopeCount }
 }
 
-async function listJsonFiles(dir: string, depth: number): Promise<string[]> {
-  if (depth < 0 || !(await pathExists(dir))) return []
-  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
-  const out: string[] = []
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...await listJsonFiles(full, depth - 1))
-    else if (entry.isFile() && entry.name.endsWith('.json')) out.push(full)
+async function readJsonMaybe(file: string): Promise<any | null> {
+  const text = await fs.readFile(file, 'utf8').catch(() => '')
+  if (!text.trim()) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
   }
-  return out
 }
 
 function repoRootFromImportMeta(): string {

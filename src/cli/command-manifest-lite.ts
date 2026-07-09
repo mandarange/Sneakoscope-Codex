@@ -92,7 +92,7 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'aliases', summary: 'Show command aliases', maturity: 'stable' },
   { name: 'selftest', summary: 'Run local mock selftest', maturity: 'stable' },
   { name: 'goal', summary: 'Manage Goal bridge workflow', maturity: 'beta', mutatesRouteState: true },
-  { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/plan/apply/verify on the search-visibility kernel', maturity: 'beta' },
+  { name: 'seo-geo-optimizer', summary: 'Run unified SEO/GEO optimizer audit/research/strategy/plan/apply/verify with optional --include-marketing on the search-visibility kernel', maturity: 'beta' },
   { name: 'hook', summary: 'Codex hook entrypoint', maturity: 'beta', skipMigrationGate: true },
   { name: 'profile', summary: 'Inspect/set profile', maturity: 'labs' },
   { name: 'hproof', summary: 'Evaluate H-Proof gate', maturity: 'beta' },

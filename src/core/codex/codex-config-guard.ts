@@ -34,6 +34,18 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
   const root = path.resolve(input.root || process.cwd())
   const cause = input.cause || 'codex-config'
   const before = input.before === undefined ? String(await readText(configPath, '')) : String(input.before || '')
+  if (isUnmanagedProjectCodexConfig(root, configPath, before)) {
+    const result = { ok: false, status: 'blocked_unmanaged_project_config', config_path: configPath, backup_path: null, changed: false }
+    await recordCodexConfigGuard(root, input.reportPath, {
+      cause,
+      config_path: configPath,
+      ok: false,
+      status: result.status,
+      blocker: 'user_owned_file_without_sks_marker',
+      changed: false
+    })
+    return result
+  }
   const beforeSmoke = codexConfigParseSmoke(before)
   const beforeValidation = validateCodexConfigRoundTrip(before)
   if (before.trim() && (!beforeSmoke.ok || beforeValidation.parse_error)) {
@@ -157,6 +169,20 @@ export function codexConfigParseSmoke(text: string = '') {
 export function ensureTrailingNewline(text: unknown = '') {
   const value = String(text || '').trimEnd()
   return value ? `${value}\n` : ''
+}
+
+export function isProjectCodexConfig(root: string, configPath: string): boolean {
+  return path.resolve(configPath) === path.resolve(root, '.codex', 'config.toml')
+}
+
+export function hasSksManagedCodexConfigMarker(text: string): boolean {
+  return /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(String(text || ''))
+}
+
+export function isUnmanagedProjectCodexConfig(root: string, configPath: string, text: string): boolean {
+  return isProjectCodexConfig(root, configPath)
+    && String(text || '').trim().length > 0
+    && !hasSksManagedCodexConfigMarker(text)
 }
 
 export function removeLegacyTopLevelCodexModeLocks(text: string = '') {

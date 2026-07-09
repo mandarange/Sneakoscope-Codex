@@ -24,6 +24,7 @@ import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
 import { checkPromptPlaceholders } from '../prompt/prompt-placeholder-guard.js'
 import { evaluateGitWorktreeCapability } from '../git/git-worktree-capability.js'
+import { buildNarutoRealWriteProof, type NarutoRealWriteProof } from '../naruto/naruto-real-write-proof.js'
 import { buildRuntimeProofSummary, renderRuntimeProofSummary } from '../agents/runtime-proof-summary.js'
 import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-capability.js'
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js'
@@ -405,6 +406,7 @@ async function narutoRun(parsed: NarutoArgs) {
     narutoRebalancePolicy: rebalancePolicy,
     json: parsed.json
   })
+  const realWriteProof = await maybeWriteNarutoRealWriteProof(mission.dir, mission.id, parsed, result)
   const parallelRuntime = result.parallel_runtime_proof || null
   const nativeProofOk = result.proof?.ok === true || result.proof?.status === 'passed'
   const finalAccepted = result.proof?.status === 'passed' || result.proof?.gpt_final_status === 'approved'
@@ -415,8 +417,8 @@ async function narutoRun(parsed: NarutoArgs) {
   const regressionProof = summarizeRegressionProof(workGraph, result)
   await writeJsonAtomic(path.join(mission.dir, 'regression-proof-summary.json'), regressionProof)
   const tddOk = !regressionProof.required || (regressionProof.regression_test_added && regressionProof.regression_test_failed_before_fix && regressionProof.regression_test_passed_after_fix)
-  const narutoGateFullPassed = result.ok === true && nativeProofOk && finalAccepted && parallelRuntimeOk && tddOk && workGraph.ok === true && allocationPolicy.ok === true
-  const narutoGateFullBlockers = [...(result.proof?.blockers || []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing']), ...(workGraph.blockers || []), ...(allocationPolicy.blockers || [])]
+  const narutoGateFullPassed = result.ok === true && nativeProofOk && finalAccepted && (realWriteProof ? realWriteProof.ok === true : true) && parallelRuntimeOk && tddOk && workGraph.ok === true && allocationPolicy.ok === true
+  const narutoGateFullBlockers = [...(result.proof?.blockers || []), ...(realWriteProof && !realWriteProof.ok ? realWriteProof.blockers : []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing']), ...(workGraph.blockers || []), ...(allocationPolicy.blockers || [])]
   await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
     schema: 'sks.naruto-gate.v1',
     passed: narutoGateFullPassed,
@@ -433,6 +435,7 @@ async function narutoRun(parsed: NarutoArgs) {
     gpt_final_pack_ready: Boolean(gptFinalPack?.schema),
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: nativeProofOk,
+    naruto_real_write_proof: realWriteProof ? 'naruto-real-write-proof.json' : null,
     parallel_runtime_proof: parallelRuntimeOk,
     regression_test_added: regressionProof.regression_test_added,
     regression_test_failed_before_fix: regressionProof.regression_test_failed_before_fix,
@@ -589,6 +592,61 @@ async function narutoRun(parsed: NarutoArgs) {
     if (summary.zellij?.ok && summary.zellij.capability?.status === 'ok') console.log('Zellij: prepared ' + zellijVisiblePanes + ' visible active clone lane(s) in ' + summary.zellij.session_name + '; dashboard tracks ' + Math.max(0, activeSlots - zellijVisiblePanes) + ' headless active worker(s)')
     else if (summary.zellij?.ok) console.log('Zellij: optional live panes unavailable (' + ((summary.zellij.warnings || []).join('; ') || summary.zellij.capability?.status || 'unknown') + ')')
   })
+}
+
+async function maybeWriteNarutoRealWriteProof(missionDir: string, missionId: string, parsed: NarutoArgs, result: any): Promise<NarutoRealWriteProof | null> {
+  const enabled = parsed.backend === 'codex-sdk'
+    && parsed.readonly !== true
+    && parsed.applyPatches === true
+    && (parsed.writeMode || 'parallel') === 'parallel'
+  if (!enabled) return null
+  const ledgerRoot = path.join(missionDir, 'agents')
+  const [queue, applyResults, proofEvidence] = await Promise.all([
+    readJson<any>(path.join(ledgerRoot, 'agent-patch-queue.json'), null),
+    readJson<any>(path.join(ledgerRoot, 'agent-patch-apply-results.json'), null),
+    readJson<any>(path.join(ledgerRoot, 'agent-proof-evidence.json'), null)
+  ])
+  const applyRows = Array.isArray(applyResults?.results) ? applyResults.results : []
+  const entries = Array.isArray(queue?.entries) ? queue.entries : []
+  const applyByEntry = new Map<string, any>(applyRows.map((row: any) => [String(row.entry_id || row.envelope_id || ''), row]))
+  const patchEnvelopes = entries.map((entry: any) => {
+    const applied = applyByEntry.get(String(entry.id || '')) || applyByEntry.get(String(entry.envelope?.envelope_id || '')) || null
+    return {
+      envelope_id: String(entry.id || entry.envelope?.envelope_id || ''),
+      agent_id: String(entry.agent_id || entry.envelope?.agent_id || ''),
+      changed_files: uniqueRelValues(applied?.changed_files?.length ? applied.changed_files : entry.write_paths || entry.envelope?.operations?.map((operation: any) => operation.path) || []),
+      applied: applied ? applied.ok !== false && String(entry.status || '') !== 'conflicted' && String(entry.status || '') !== 'rejected' : false
+    }
+  })
+  const changedFiles = uniqueRelValues([
+    ...applyRows.flatMap((row: any) => row.changed_files || []),
+    ...patchEnvelopes.flatMap((envelope: any) => envelope.applied ? envelope.changed_files : [])
+  ])
+  const proof = buildNarutoRealWriteProof({
+	    missionId,
+	    changedFiles,
+	    workerIds: uniqueRelValues(entries.map((entry: any) => entry.slot_id || entry.session_id || entry.agent_id || entry.envelope?.slot_id || entry.envelope?.session_id || entry.envelope?.agent_id)),
+	    patchEnvelopes,
+    parentMergeArtifact: 'agents/agent-patch-swarm-runtime.json',
+    typecheck: {
+      ok: proofEvidence?.patch_verification_ok === true,
+      command: 'agents/agent-patch-verification-results.json'
+    },
+    cleanup: {
+      ok: result?.cleanup?.ok === true || result?.proof?.all_sessions_closed === true
+    },
+    blockers: [
+      ...(entries.length ? [] : ['patch_queue_entries_missing']),
+      ...(applyRows.length ? [] : ['patch_apply_results_missing']),
+      ...((result?.patch_swarm?.blockers || []) as string[])
+    ]
+  })
+  await writeJsonAtomic(path.join(missionDir, 'naruto-real-write-proof.json'), proof)
+  return proof
+}
+
+function uniqueRelValues(values: unknown): string[] {
+  return [...new Set((Array.isArray(values) ? values : []).map((value) => String(value || '').replace(/\\/g, '/').replace(/^\.\/+/, '').trim()).filter(Boolean))].sort()
 }
 
 function compactNarutoRunResult(result: any) {

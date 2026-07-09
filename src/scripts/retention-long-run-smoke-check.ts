@@ -11,8 +11,9 @@ const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-retention-long-run-'))
 const projectRoot = path.join(tmp, 'project')
 const sksRoot = path.join(projectRoot, '.sneakoscope')
 const userFile = path.join(projectRoot, 'user-notes.md')
-const latestMissionId = 'M-20260708-010029-longrun'
-const latestSuperSearchId = 'M-20260708-010032-super-search-02'
+const latestMissionId = 'M-20260708-010099-longrun'
+const latestSuperSearchId = 'M-20260708-010109-super-search-09'
+const latestSeoId = 'M-20260708-010114-seo-04'
 
 try {
   await seedFixtureProject()
@@ -24,8 +25,14 @@ try {
     pruneReportLogs: true,
     policy: smokePolicy()
   })
+  const stablePlanned = await enforceRetention(projectRoot, {
+    dryRun: true,
+    rotateLargeJsonl: true,
+    pruneReportLogs: true,
+    policy: smokePolicy()
+  })
   const applied = await applyRetentionPlan(projectRoot, {
-    planHash: planned.plan.plan_hash,
+    planHash: stablePlanned.plan.plan_hash,
     rotateLargeJsonl: true,
     pruneReportLogs: true,
     policy: smokePolicy()
@@ -35,33 +42,59 @@ try {
   const status = runJson(['status', '--json'])
   const routeStatus = runJson(['route', 'status', '--json'])
   const sources = runSuperSearchSourcesLatest()
+  const seoStatus = runJson(['seo-geo-optimizer', 'status', 'latest', '--json'])
 
   const artifacts = [
     path.join(sksRoot, 'missions', latestSuperSearchId, 'super-search', 'super-search-proof.json'),
     path.join(sksRoot, 'missions', latestSuperSearchId, 'super-search', 'super-search-gate.json'),
     path.join(sksRoot, 'missions', latestSuperSearchId, 'super-search', 'source-ledger.json'),
-    path.join(sksRoot, 'missions', latestSuperSearchId, 'super-search', 'claim-ledger.json')
+    path.join(sksRoot, 'missions', latestSuperSearchId, 'super-search', 'claim-ledger.json'),
+    path.join(sksRoot, 'missions', latestSeoId, 'seo-gate.json'),
+    path.join(sksRoot, 'missions', latestSeoId, 'search-visibility', 'verification-report.json')
   ]
-  for (const artifact of artifacts) assertGate(fs.existsSync(artifact), 'retention long-run smoke must preserve Super-Search proof/gate/ledgers', { artifact })
+  for (const artifact of artifacts) assertGate(fs.existsSync(artifact), 'retention long-run smoke must preserve proof/gate/ledger artifacts', { artifact })
 
   const largeJsonlFiles = listFiles(sksRoot).filter((file) => file.endsWith('.jsonl') && fs.statSync(file).size > smokePolicy().max_event_log_bytes)
 
-  assertGate(planned.plan?.mission_index?.mission_count === 33, 'retention long-run smoke must plan with all fixture missions indexed', planned.plan?.mission_index)
+  assertGate(planned.plan?.mission_index?.mission_count >= 115, 'retention long-run smoke must plan with 100+ fixture missions indexed', planned.plan?.mission_index)
   assertGate(applied.ok === true, 'retention long-run smoke apply must accept matching plan hash', applied)
-  assertGate(refreshedIndex.latest_mission_id === latestSuperSearchId, 'retention long-run smoke must preserve latest mission lookup after compact/apply', refreshedIndex)
-  assertGate(retention.mission_index?.latest_mission_id === latestSuperSearchId, 'retention status must report latest mission after compact/apply', retention)
+  assertGate(refreshedIndex.mission_count >= 115, 'retention long-run smoke must rebuild corrupted index with all missions', refreshedIndex)
+  assertGate(refreshedIndex.latest_mission_id === latestSeoId, 'retention long-run smoke must preserve latest mission lookup after compact/apply', refreshedIndex)
+  assertGate(retention.mission_index?.latest_mission_id === latestSeoId, 'retention status must report latest mission after compact/apply', retention)
   assertGate(status.active_mission === latestMissionId, 'sks status must preserve active route mission after compact/apply', status)
   assertGate(routeStatus.active === true && routeStatus.mission_id === latestMissionId && routeStatus.route === '$Naruto', 'sks route status must preserve route state after compact/apply', routeStatus)
   assertGate(sources.ok === true && Array.isArray(sources.sources) && sources.sources.length >= 2, 'sks super-search sources latest must resolve latest Super-Search mission after compact/apply', sources)
+  assertGate(seoStatus.ok === true && seoStatus.mission_id === latestSeoId, 'sks seo-geo-optimizer status latest must resolve latest SEO mission after compact/apply', seoStatus)
   assertGate(largeJsonlFiles.length === 0, 'retention long-run smoke must rotate large JSONL files under budget', { largeJsonlFiles: largeJsonlFiles.map((file) => path.relative(projectRoot, file)) })
   assertGate(fs.existsSync(userFile), 'retention long-run smoke must not delete user files outside .sneakoscope', { userFile })
   assertGate(fs.readFileSync(userFile, 'utf8') === 'preserve me\n', 'retention long-run smoke must preserve user file contents', { userFile })
 
-  emitGate('retention:long-run-smoke', {
+  const report = {
+    schema: 'sks.retention-long-run-smoke.v1',
+    ok: true,
+    generated_at: new Date().toISOString(),
     mission_count: refreshedIndex.mission_count,
     latest_mission_id: refreshedIndex.latest_mission_id,
+    active_mission_id: latestMissionId,
     action_count: applied.action_count || 0,
-    super_search_sources: sources.sources.length
+    super_search_mission_count: 10,
+    seo_marketing_mission_count: 5,
+    corrupted_index_rebuilt: refreshedIndex.mission_count >= 115,
+    super_search_sources: sources.sources.length,
+    seo_mission_id: seoStatus.mission_id,
+    user_files_untouched: true,
+    blockers: []
+  }
+  const reportPath = path.join(root, '.sneakoscope', 'reports', 'retention-long-run-smoke.json')
+  await writeJson(reportPath, report)
+
+  emitGate('retention:long-run-smoke', {
+    mission_count: report.mission_count,
+    latest_mission_id: report.latest_mission_id,
+    action_count: report.action_count,
+    super_search_sources: report.super_search_sources,
+    seo_mission_id: report.seo_mission_id,
+    report: '.sneakoscope/reports/retention-long-run-smoke.json'
   })
 } finally {
   await fsp.rm(tmp, { recursive: true, force: true }).catch(() => undefined)
@@ -86,8 +119,8 @@ async function seedFixtureProject() {
   await fsp.writeFile(path.join(projectRoot, 'package.json'), '{"name":"retention-long-run-fixture","private":true}\n')
   await fsp.writeFile(userFile, 'preserve me\n')
 
-  for (let index = 0; index < 30; index++) {
-    const id = index === 29 ? latestMissionId : `M-20260708-0100${String(index).padStart(2, '0')}-mission`
+  for (let index = 0; index < 100; index++) {
+    const id = index === 99 ? latestMissionId : `M-20260708-0100${String(index).padStart(2, '0')}-mission`
     const missionDir = path.join(sksRoot, 'missions', id)
     await fsp.mkdir(missionDir, { recursive: true })
     await writeJson(path.join(missionDir, 'mission.json'), {
@@ -95,15 +128,15 @@ async function seedFixtureProject() {
       mode: index % 3 === 0 ? 'naruto' : 'team',
       prompt: `retention long-run fixture ${index}`,
       created_at: `2026-07-08T01:00:${String(index).padStart(2, '0')}.000Z`,
-      phase: index === 29 ? 'RUNNING' : 'DONE'
+      phase: index === 99 ? 'RUNNING' : 'DONE'
     })
     await fsp.writeFile(path.join(missionDir, 'events.jsonl'), largeJsonl(index))
     await writeJson(path.join(missionDir, 'completion-proof.json'), completionProof(id))
     await writeJson(path.join(missionDir, 'naruto-gate.json'), { schema: 'sks.naruto-gate.v1', ok: true, route: '$Naruto', mission_id: id })
   }
 
-  for (let index = 0; index < 3; index++) {
-    const id = index === 2 ? latestSuperSearchId : `M-20260708-01003${index}-super-search`
+  for (let index = 0; index < 10; index++) {
+    const id = index === 9 ? latestSuperSearchId : `M-20260708-01010${index}-super-search`
     const missionDir = path.join(sksRoot, 'missions', id)
     const artifactDir = path.join(missionDir, 'super-search')
     await fsp.mkdir(artifactDir, { recursive: true })
@@ -126,6 +159,27 @@ async function seedFixtureProject() {
     await writeJson(path.join(artifactDir, 'super-search-result.json'), { schema: 'sks.super-search-result.v1', ok: true, mode: 'fast', sources, claims, proof: { mode: 'fast', verified_source_count: sources.length } })
     await writeJson(path.join(artifactDir, 'super-search-gate.json'), { schema: 'sks.super-search-gate.v1', ok: true, route: '$Super-Search', mission_id: id })
   }
+
+  for (let index = 0; index < 5; index++) {
+    const id = index === 4 ? latestSeoId : `M-20260708-01011${index}-seo`
+    const missionDir = path.join(sksRoot, 'missions', id)
+    const artifactDir = path.join(missionDir, 'search-visibility')
+    await fsp.mkdir(artifactDir, { recursive: true })
+    await writeJson(path.join(missionDir, 'mission.json'), {
+      id,
+      mode: 'seo',
+      prompt: `retention SEO marketing fixture ${index}`,
+      created_at: `2026-07-08T01:01:1${index}.000Z`,
+      phase: 'DONE'
+    })
+    await fsp.writeFile(path.join(missionDir, 'events.jsonl'), largeJsonl(index + 40))
+    await writeJson(path.join(artifactDir, 'intake.json'), { schema: 'sks.search-visibility.intake.v1', ok: true, mission_id: id, route: '$SEO-GEO-OPTIMIZER', blockers: [] })
+    await writeJson(path.join(artifactDir, 'verification-report.json'), { schema: 'sks.search-visibility.verification.v1', ok: true, status: 'verified_partial', blockers: [] })
+    await writeJson(path.join(missionDir, 'seo-gate.json'), { schema: 'sks.search-visibility.gate.v1', ok: true, passed: true, mission_id: id, blockers: [] })
+    await writeJson(path.join(missionDir, 'completion-proof.json'), completionProof(id))
+  }
+
+  await fsp.writeFile(path.join(sksRoot, 'missions', 'index.json'), '{"schema":"sks.mission-index.v1","mission_count":"corrupted","missions":null}\n')
 
   await writeJson(path.join(sksRoot, 'state', 'current.json'), {
     mission_id: latestMissionId,

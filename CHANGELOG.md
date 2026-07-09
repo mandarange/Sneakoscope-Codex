@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 
+## [5.12.0] - 2026-07-08
+
+### Added
+
+- Add operations maturity scorecards for install, upgrade, recovery, real runtime evidence, high-risk command safety, long-run state health, package surface, and actionable diagnostics.
+- Add upgrade migration matrix fixtures covering 5.8.0 through 5.11.0 state shapes, legacy Team/MadDB routes, Super-Search missions, SEO marketing missions, and corrupted mission indexes.
+- Add rollback and crash-recovery smoke checks for SEO marketing apply, doctor fix, GC apply, Super-Search fetch artifacts, and Naruto patch apply.
+- Add explicit Naruto real write proof schema so real Codex write E2E no longer infers patch evidence from broad mission JSON scans.
+- Add high-risk command CLI negative smokes for commit-and-push, rollback apply, doctor fix, update dry-run, DB, MAD-SKS, and Super-Search fetch.
+
+### Fixed
+
+- Synchronize `$SEO-GEO-OPTIMIZER` route metadata, help text, dollar manifest, and command manifest with the implemented `research`, `strategy`, and `--include-marketing` flow.
+- Strengthen SEO marketing strategy quality scoring while keeping the public surface minimal.
+- Prevent critical command and dollar scorecards from awarding production-level scores for metadata-only or fixture-only evidence.
+- Clarify doctor fast/full/fix semantics so fast diagnostics are never counted as full operational readiness.
+
+### Changed
+
+- Shift the 5.12 release gate from feature breadth toward real operational maturity: upgrade safety, recovery safety, long-run state health, high-risk negative smokes, and actionable diagnostics.
+
 ## [5.11.0] - 2026-07-08
 
 ### Added

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import { managedAgentRoleConfigForFile, managedAgentRoleConfigForRole } from '../agents/agent-role-config.js';
-import { writeCodexConfigGuarded } from './codex-config-guard.js';
+import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from './codex-config-guard.js';
 import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js';
 
 export interface AgentConfigFileRepairReport {
@@ -24,6 +24,23 @@ export async function repairAgentConfigFileReferences(input: { root: string; app
   const configPath = path.join(root, '.codex', 'config.toml');
   const configExists = await fs.stat(configPath).then((stat) => stat.isFile()).catch(() => false);
   const original = configExists ? await fs.readFile(configPath, 'utf8').catch(() => '') : minimalManagedConfigToml();
+  if (input.apply && configExists && isUnmanagedProjectCodexConfig(root, configPath, original)) {
+    const report: AgentConfigFileRepairReport = {
+      schema: 'sks.agent-config-file-repair.v1',
+      generated_at: nowIso(),
+      ok: false,
+      apply: true,
+      config_path: configPath,
+      repaired_paths: [],
+      created_files: [],
+      removed_unsupported_fields: [],
+      skipped_unmanaged_paths: [],
+      manual_required: true,
+      blockers: ['user_owned_file_without_sks_marker']
+    };
+    if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json'), report).catch(() => undefined);
+    return report;
+  }
   const createdFiles: string[] = [];
   const repairedPaths: string[] = [];
   const removedUnsupportedFields: string[] = [];

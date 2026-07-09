@@ -456,12 +456,12 @@ export const ROUTES = [
     route: 'search visibility optimization audit/apply/verify',
     description: 'Unified SEO/GEO optimizer route for Search Engine Optimization and Generative Engine Optimization. Uses one shared kernel with mode-specific evidence, gates, safe apply, rollback, and Completion Proof. Not a ranking, traffic, or AI citation guarantee.',
     requiredSkills: ['seo-geo-optimizer', 'search-visibility-core', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['doctor', 'read_only_audit', 'mode_specific_evidence', 'mutation_plan', 'explicit_apply_only', 'rollback_manifest', 'source_verify', 'seo_or_geo_gate', 'completion_proof', 'honest_mode'],
+    lifecycle: ['doctor', 'read_only_audit', 'mode_specific_evidence', 'marketing_research', 'source_backed_strategy', 'marketing_truthfulness_gate', 'mutation_plan', 'marketing_mutation_plan', 'explicit_apply_only', 'rollback_manifest', 'source_verify', 'seo_or_geo_gate', 'completion_proof', 'honest_mode'],
     context7Policy: 'if_external_docs',
     reasoningPolicy: 'high',
     stopGate: 'seo-gate.json|geo-gate.json',
-    cliEntrypoint: 'sks seo-geo-optimizer doctor|audit|plan|apply|verify|status|rollback|fixture --mode seo|geo',
-    examples: ['$SEO-GEO-OPTIMIZER audit this site', 'sks seo-geo-optimizer audit --mode seo --target package --json', 'sks seo-geo-optimizer apply latest --mode geo --include-llms-txt --apply']
+    cliEntrypoint: 'sks seo-geo-optimizer doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture --mode seo|geo [--include-marketing]',
+    examples: ['$SEO-GEO-OPTIMIZER audit this site', 'sks seo-geo-optimizer audit --mode seo --target package --json', 'sks seo-geo-optimizer research --offline --json', 'sks seo-geo-optimizer strategy latest --json', 'sks seo-geo-optimizer plan latest --mode seo --include-marketing --json', 'sks seo-geo-optimizer apply latest --mode seo --include-marketing --apply --json', 'sks seo-geo-optimizer apply latest --mode geo --include-llms-txt --apply']
   },
   {
     id: 'AutoResearch',
@@ -671,7 +671,7 @@ export const COMMAND_CATALOG = [
   { name: 'init', usage: 'sks init [--force] [--local-only] [--install-scope global|project]', description: 'Initialize the local SKS control surface.' },
   { name: 'selftest', usage: 'sks selftest [--mock]', description: 'Run local smoke tests without calling a model.' },
   { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
-  { name: 'seo-geo-optimizer', usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--json]', description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates and proof.' },
+  { name: 'seo-geo-optimizer', usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--include-marketing] [--json]', description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates, marketing research/strategy, safe apply, and proof.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh agent Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },

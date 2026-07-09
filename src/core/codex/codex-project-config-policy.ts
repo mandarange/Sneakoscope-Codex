@@ -96,6 +96,33 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
     return report
   }
+  if (opts.apply && isCodexConfigToml(configPath) && !hasSksManagedCodexMarker(String(original))) {
+    const report = {
+      schema: CODEX_PROJECT_CONFIG_POLICY_SCHEMA,
+      generated_at: nowIso(),
+      root,
+      config_path: configPath,
+      codex_home: codexHome,
+      ok: false,
+      status: 'blocked_unmanaged_project_config',
+      changed: false,
+      applied: false,
+      backup_path: null,
+      user_config_path: null,
+      profile_config_path: null,
+      profile_name: null,
+      migration_artifact: { moved: [], removed: [], kept: [] },
+      moved_keys: [],
+      moved_tables: [],
+      removed_legacy_profiles: false,
+      deprecated_approval_policy_fixed: false,
+      actions: [],
+      parse_smoke: { ok: true, blocker: null },
+      blockers: ['user_owned_file_without_sks_marker']
+    }
+    if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
+    return report
+  }
 
   const split = splitProjectToml(String(original))
   const profileName = split.profile_name || opts.profileName || null
@@ -185,6 +212,18 @@ export async function repairCodexConfigStructure(configPathInput: string, opts: 
   if (original === null) {
     return { config_path: configPath, ok: true, status: 'config_missing', changed: false, applied: false, hoisted_keys: [], backup_path: null }
   }
+  if (opts.apply && isCodexConfigToml(configPath) && !hasSksManagedCodexMarker(String(original))) {
+    return {
+      config_path: configPath,
+      ok: false,
+      status: 'blocked_unmanaged_project_config',
+      changed: false,
+      applied: false,
+      hoisted_keys: [],
+      backup_path: null,
+      blockers: ['user_owned_file_without_sks_marker']
+    }
+  }
   const hoist = hoistMisplacedMachineLocalKeys(String(original))
   let backupPath: string | null = null
   if (opts.apply && hoist.changed) {
@@ -210,6 +249,14 @@ export async function repairCodexConfigStructure(configPathInput: string, opts: 
     backup_path: backupPath,
     parse_smoke: parseSmoke
   }
+}
+
+function isCodexConfigToml(file: string): boolean {
+  return path.basename(file) === 'config.toml' && path.basename(path.dirname(file)) === '.codex'
+}
+
+function hasSksManagedCodexMarker(text: string): boolean {
+  return /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(text)
 }
 
 function hoistMisplacedMachineLocalKeys(text: string) {

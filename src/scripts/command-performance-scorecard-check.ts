@@ -87,7 +87,7 @@ export function scoreEntry(entry, timing, options = {}) {
   const critical = CRITICAL_COMMANDS.has(entry.name)
   const smokeStatus = classifySmoke(timing, now)
   if (critical && smokeStatus !== 'pass') {
-    return { name: entry.name, maturity: entry.maturity, critical, score: 0, p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), smoke_status: smokeStatus, summary: entry.summary }
+    return { name: entry.name, maturity: entry.maturity, critical, score: 0, p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), smoke_status: smokeStatus, evidence_tier: criticalCommandEvidenceTier(timing), summary: entry.summary }
   }
   const hasRunnableSurface = Boolean(timing || entry.summary || entry.readonly || entry.diagnostic || entry.skipMigrationGate || entry.mutatesRouteState)
   const p95Ok = timing ? (timing.kind === 'blocked_negative' ? timing.blocked === true : timing.ok === true) : true
@@ -104,7 +104,24 @@ export function scoreEntry(entry, timing, options = {}) {
     (failureSummary ? 15 : 0) +
     (installedReady ? 20 : 0) -
     lifecyclePenalty
-  return { name: entry.name, maturity: entry.maturity, critical, score: Math.max(0, score), p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), smoke_status: smokeStatus, summary: entry.summary }
+  const cappedScore = critical ? Math.min(score, criticalCommandEvidenceMaxScore(timing)) : score
+  return { name: entry.name, maturity: entry.maturity, critical, score: Math.max(0, cappedScore), p95_ms: timing?.p95_ms ?? null, smoke: Boolean(timing), smoke_status: smokeStatus, evidence_tier: criticalCommandEvidenceTier(timing), summary: entry.summary }
+}
+
+export function criticalCommandEvidenceTier(timing) {
+  if (!timing) return 'metadata'
+  if (timing.kind === 'fixture') return 'fixture'
+  if (timing.kind === 'blocked_negative') return 'blocked_negative'
+  if (timing.kind === 'dry_run') return 'dry_run'
+  return 'read_only'
+}
+
+export function criticalCommandEvidenceMaxScore(timing) {
+  const tier = criticalCommandEvidenceTier(timing)
+  if (tier === 'metadata') return 0
+  if (tier === 'fixture') return 70
+  if (tier === 'blocked_negative') return 90
+  return 100
 }
 
 export function classifySmoke(timing, now = new Date()) {

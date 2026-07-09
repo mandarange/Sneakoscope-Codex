@@ -1026,10 +1026,16 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
+  const resultOk = ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false;
   const result = {
-    schema: 'sks.doctor-status.v2',
+    schema: 'sks.doctor-status.v3',
     elapsed_ms: Date.now() - startedAtMs,
-    ok: ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false,
+    ok: resultOk,
+    status: resultOk ? (doctorFix ? 'fix_ok' : deepDiagnostics ? 'full_ok' : 'fast_ok') : 'blocked',
+    diagnostic_depth: deepDiagnostics ? 'full' : doctorFix ? 'fix' : 'fast',
+    deep_diagnostics_skipped: !deepDiagnostics,
+    deep_ok: deepDiagnostics ? Boolean(ready.ready) : null,
+    not_counted_as_full_doctor: !deepDiagnostics,
     root,
     arg_warnings: argWarnings,
     node: { ok: Number(process.versions.node.split('.')[0]) >= 20, version: process.version },

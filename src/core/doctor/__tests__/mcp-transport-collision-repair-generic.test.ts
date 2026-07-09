@@ -18,6 +18,7 @@ const STDIO_BLOCK = (name: string) => [
 const URL_BLOCK = (name: string) => `[mcp_servers.${name}]\nurl = "https://mcp.example.com/${name}"\n`;
 
 const DISABLED_BLOCK = (name: string) => `[mcp_servers.${name}]\ndisabled = true\ncommand = "npx"\n`;
+const MANAGED_MARKER = '# SKS managed test fixture\n';
 
 async function scenario(projectText: string, globalText: string): Promise<{ root: string; codexHome: string; projectConfig: string; restore: () => void }> {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-mcp-transport-collision-'));
@@ -26,7 +27,7 @@ async function scenario(projectText: string, globalText: string): Promise<{ root
   await fs.mkdir(path.join(root, '.codex'), { recursive: true });
   await fs.mkdir(codexHome, { recursive: true });
   const projectConfig = path.join(root, '.codex', 'config.toml');
-  await fs.writeFile(projectConfig, projectText);
+  await fs.writeFile(projectConfig, `${MANAGED_MARKER}${projectText}`);
   await fs.writeFile(path.join(codexHome, 'config.toml'), globalText);
   const savedHome = process.env.CODEX_HOME;
   process.env.CODEX_HOME = codexHome;

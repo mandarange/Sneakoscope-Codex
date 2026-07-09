@@ -16,6 +16,7 @@ const STDIO_SUPABASE = [
 ].join('\n');
 
 const URL_SUPABASE = '[mcp_servers.supabase]\nurl = "https://mcp.supabase.com/mcp?project_ref=abc"\n';
+const MANAGED_MARKER = '# SKS managed test fixture\n';
 
 async function scenario(): Promise<{ root: string; codexHome: string; projectConfig: string; restore: () => void }> {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-supabase-collision-'));
@@ -24,7 +25,7 @@ async function scenario(): Promise<{ root: string; codexHome: string; projectCon
   await fs.mkdir(path.join(root, '.codex'), { recursive: true });
   await fs.mkdir(codexHome, { recursive: true });
   const projectConfig = path.join(root, '.codex', 'config.toml');
-  await fs.writeFile(projectConfig, STDIO_SUPABASE);
+  await fs.writeFile(projectConfig, `${MANAGED_MARKER}${STDIO_SUPABASE}`);
   await fs.writeFile(path.join(codexHome, 'config.toml'), URL_SUPABASE);
   const savedHome = process.env.CODEX_HOME;
   process.env.CODEX_HOME = codexHome;

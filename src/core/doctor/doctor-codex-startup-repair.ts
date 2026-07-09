@@ -3,7 +3,7 @@ import path from 'node:path'
 import os from 'node:os'
 import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 import { ensureDir, exists, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
-import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
+import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 
 export const DOCTOR_CODEX_STARTUP_REPAIR_SCHEMA = 'sks.doctor-codex-startup-repair.v1'
 
@@ -131,6 +131,22 @@ async function inspectOrRepairConfig(root: string, candidate: { scope: Scope; pa
       optional_mcp_blocks_ignored: [],
       blockers: [],
       warnings: candidate.scope === 'global' ? ['codex_home_config_missing_optional'] : [],
+      duplicate_toml_blocks_removed: []
+    }
+  }
+  if (fix && isUnmanagedProjectCodexConfig(root, candidate.path, text)) {
+    return {
+      scope: candidate.scope,
+      path: candidate.path,
+      present: true,
+      changed: false,
+      backup_path: null,
+      agent_config_files_repaired: [],
+      stale_mcp_blocks_removed: [],
+      mcp_blocks_repaired: [],
+      optional_mcp_blocks_ignored: [],
+      blockers: ['user_owned_file_without_sks_marker'],
+      warnings: ['unmanaged_project_config_preserved'],
       duplicate_toml_blocks_removed: []
     }
   }

@@ -17,6 +17,11 @@ test('seo-geo-optimizer research and strategy actions are wired through the CLI 
   const strategy: any = await runSearchVisibilityCommand('seo', ['strategy', research.mission_id, '--root', root, '--offline', '--json'], 'seo-geo-optimizer');
   assert.equal(strategy.ok, true);
   assert.equal(process.exitCode, undefined);
+  const strategyArtifact = JSON.parse(await fsp.readFile(path.join(root, '.sneakoscope', 'missions', research.mission_id, 'search-visibility', 'marketing-strategy.json'), 'utf8'));
+  assert.ok(strategyArtifact.strategy_quality.score >= 80);
+  assert.equal(strategyArtifact.strategy_quality.unsupported_claims, 0);
+  assert.equal(strategyArtifact.strategy_quality.blockers.length, 0);
+  assert.ok(Array.isArray(strategyArtifact.competitor_contrast));
   process.exitCode = previousExit;
 });
 

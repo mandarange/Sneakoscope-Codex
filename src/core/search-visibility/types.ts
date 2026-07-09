@@ -243,6 +243,21 @@ export interface MarketingStrategy {
   };
   message_pillars: Array<{ title: string; claim: string; source_ids: string[] }>;
   keyword_clusters: Array<{ name: string; keywords: string[]; source_ids: string[] }>;
+  strategy_quality: {
+    score: number;
+    source_backed_claims: number;
+    unsupported_claims: number;
+    competitor_contrast_count: number;
+    keyword_cluster_count: number;
+    blockers: string[];
+  };
+  competitor_contrast: Array<{
+    competitor: string;
+    their_claim: string;
+    sks_contrast: string;
+    source_ids: string[];
+    safe_to_publish: boolean;
+  }>;
   readme_plan: Array<{ operation: 'readme-positioning-block-update'; text: string; source_ids: string[] }>;
   package_plan: Array<
     | { operation: 'package-description-update'; description: string; source_ids: string[] }
