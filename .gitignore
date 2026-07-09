@@ -146,6 +146,7 @@ id_ed25519
 
 # Mission outputs must live under .sneakoscope/missions/<id>/, not repo root.
 /SNEAKOSCOPE-개선-작업지시서*.md
+/docs/archive/work-orders/*.md
 /naruto-gate.json
 /reflection-gate.json
 /reflection.md
