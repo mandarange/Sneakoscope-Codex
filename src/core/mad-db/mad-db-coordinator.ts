@@ -166,6 +166,8 @@ export async function runMadDbCycle(input: {
   migrationName?: string | null;
   migrationFile?: string | null;
   verifySql?: string | null;
+  verifyExpectedRowCount?: number | null;
+  verifyExpectedResultDigest?: string | null;
   ttlMs?: number | undefined;
   args?: string[];
   missionId?: string | null;
@@ -243,7 +245,10 @@ export async function runMadDbCycle(input: {
         root: input.root,
         missionId: prepared.mission_id,
         executor,
-        checks: [readBackCheck('operator_verify_sql', input.verifySql)]
+        checks: [readBackCheck('operator_verify_sql', input.verifySql, {
+          expectedRowCount: input.verifyExpectedRowCount ?? null,
+          expectedResultDigest: input.verifyExpectedResultDigest ?? null
+        })]
       });
       timings.verification_ms = Date.now() - verifyStart;
       if (!readBack.ok) blockers.push('mad_db_read_back_verification_failed');

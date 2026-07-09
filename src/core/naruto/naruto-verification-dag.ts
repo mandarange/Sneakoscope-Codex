@@ -20,6 +20,8 @@ export interface NarutoVerificationDag extends VerificationDag {
   naruto_schema: 'sks.naruto-verification-dag.v1'
   node_kinds: NarutoVerificationNodeKind[]
   starts_when_dependencies_ready: true
+  configured: boolean
+  unconfigured_reason: string | null
 }
 
 const NODE_KIND_CYCLE: NarutoVerificationNodeKind[] = [
@@ -37,8 +39,19 @@ const NODE_KIND_CYCLE: NarutoVerificationNodeKind[] = [
 ]
 
 export function buildNarutoVerificationDag(graph: NarutoWorkGraph, input: { command?: string; cwd?: string } = {}): NarutoVerificationDag {
-  const command = input.command || 'node -e "process.exit(0)"'
+  const command = input.command || ''
   const verifiableItems = graph.work_items.filter((item) => item.verification_required)
+  if (!command) {
+    return {
+      schema: 'sks.verification-dag.v1',
+      tasks: [],
+      naruto_schema: 'sks.naruto-verification-dag.v1',
+      node_kinds: NODE_KIND_CYCLE,
+      starts_when_dependencies_ready: true,
+      configured: false,
+      unconfigured_reason: 'no_verification_command_resolved_for_project'
+    }
+  }
   const taskIdByWorkItemId = new Map(verifiableItems.map((item, index) => [item.id, `NV-${String(index + 1).padStart(6, '0')}`]))
   const tasks: VerificationTask[] = verifiableItems
     .map((item, index) => {
@@ -60,6 +73,8 @@ export function buildNarutoVerificationDag(graph: NarutoWorkGraph, input: { comm
     ...dag,
     naruto_schema: 'sks.naruto-verification-dag.v1',
     node_kinds: NODE_KIND_CYCLE,
-    starts_when_dependencies_ready: true
+    starts_when_dependencies_ready: true,
+    configured: true,
+    unconfigured_reason: null
   }
 }

@@ -9,6 +9,8 @@ import { decideNarutoConcurrency } from '../core/naruto/naruto-concurrency-gover
 import { runNarutoRealActivePool } from '../core/naruto/naruto-active-pool.js'
 import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../core/naruto/naruto-real-worker-runtime.js'
 
+// Simulation harness (fake Codex SDK adapter) for near-cap active-pool
+// lifecycle behavior, not a real-backend proof — see 20차 P0-6.
 process.env.SKS_CODEX_SDK_FAKE = '1'
 
 const graph = buildNarutoWorkGraph({ requestedClones: 100, totalWorkItems: 48, writeCapable: true, maxActiveWorkers: 12 })
@@ -41,4 +43,4 @@ const report = await runNarutoRealActivePool({
 const actualArtifacts = report.worker_lifecycle.every((row) => row.pid && row.worker_artifact_dir && fs.existsSync(path.join(row.worker_artifact_dir, 'worker-result.json')))
 const ok = report.ok && report.max_observed_active_workers >= Math.ceil(target.safe_active_workers * 0.8) && report.active_pool_utilization >= 0.8 && report.headless_workers > 0 && report.visible_workers <= graph.total_work_items && actualArtifacts
 assertGate(ok, 'Naruto extreme parallelism must use actual child process active-pool lifecycle near cap with headless overflow', { report, target, actualArtifacts, tempRoot })
-emitGate('naruto:extreme-parallelism-real', report)
+emitGate('naruto:extreme-parallelism-sim', report)

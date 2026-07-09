@@ -1,5 +1,14 @@
 export const NARUTO_REAL_WRITE_PROOF_SCHEMA = 'sks.naruto-real-write-proof.v1'
 
+// Exact blocker values that legitimately record "work could not be safely
+// split across ≥2 workers" — matched by strict equality only. A substring
+// match here would let any unrelated blocker text mentioning this word
+// silently waive the worker-diversity requirement.
+const UNSPLITTABLE_BLOCKER_VALUES = new Set([
+  'native_session_unsplittable_evidence_recorded',
+  'unsplittable_write_scope_explicit'
+])
+
 export interface NarutoRealWriteProof {
   schema: typeof NARUTO_REAL_WRITE_PROOF_SCHEMA
   ok: boolean
@@ -46,7 +55,7 @@ export function validateNarutoRealWriteProof(input: unknown): NarutoRealWritePro
   const workerIds = uniqueStrings(proof.worker_ids)
   const patchEnvelopes = Array.isArray(proof.patch_envelopes) ? proof.patch_envelopes : []
   const explicitUnsplittableBlock = Array.isArray(proof.blockers)
-    && proof.blockers.some((blocker) => String(blocker).includes('unsplittable'))
+    && proof.blockers.some((blocker) => UNSPLITTABLE_BLOCKER_VALUES.has(String(blocker)))
   if (changedFiles.length < 1) blockers.push('real_write_changed_files_missing')
   if (workerIds.length < 2 && !explicitUnsplittableBlock) blockers.push('worker_id_diversity_below_2')
   if (patchEnvelopes.length < 1) blockers.push('patch_envelope_count_below_1')

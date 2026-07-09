@@ -110,7 +110,11 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   }
   const result: CodexTaskResult & Record<string, unknown> = {
     ok: finalBlockers.length === 0,
-    backend: 'codex-sdk',
+    // Must match backend_family below: a fake-adapter run self-reporting
+    // 'codex-sdk' here defeated every downstream `backend === 'fake'` check
+    // (fake-real-proof-policy, agent-proof-evidence, naruto-real-write-proof,
+    // etc.) that already exists specifically to disclaim fixture-only runs.
+    backend: fakeAllowed ? 'fake' : 'codex-sdk',
     backend_family: fakeAllowed ? 'fake' : 'remote-gpt',
     sdkThreadId: String(adapterResult?.sdkThreadId || ''),
     sdkRunId: adapterResult?.sdkRunId ? String(adapterResult.sdkRunId) : null,

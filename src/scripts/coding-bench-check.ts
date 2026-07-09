@@ -20,7 +20,7 @@ for (const task of tasks) {
     perTask.push({
       id: task.id,
       kind: task.kind,
-      ok: true,
+      ok: null,
       status: 'skipped',
       skipped_reason: backend.reason
     });
@@ -35,11 +35,17 @@ const fail = executed.filter((task) => !task.ok).length;
 const skipped = perTask.length - executed.length;
 const passRate = executed.length ? pass / executed.length : 0;
 const baselineRate = Number(baseline.pass_rate ?? baseline.min_pass_rate ?? 0);
-const ok = fail === 0 && passRate >= baselineRate;
+// A bench run with zero executed tasks proves nothing and must not be
+// reported as ok:true just because there were no failures to count (20차
+// P0-5) — an empty pass rate trivially clears any baseline >= 0.
+const allSkipped = perTask.length > 0 && executed.length === 0;
+const status = allSkipped ? 'not_run' : 'completed';
+const ok = !allSkipped && fail === 0 && passRate >= baselineRate;
 const report = {
   schema: 'sks.coding-bench-report.v1',
   generated_at: nowIso(),
   ok,
+  status,
   pass,
   fail,
   skipped,

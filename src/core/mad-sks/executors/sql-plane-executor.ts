@@ -9,6 +9,7 @@ import { runMadSksGuardMiddleware } from '../guard-middleware.js';
 import { madSksAuditAction } from '../audit-ledger.js';
 import {
   resultFromEvidence,
+  snapshotProtectedCoreBefore,
   type MadSksExecutor,
   type MadSksExecutorContext,
   type MadSksExecutorInput,
@@ -31,6 +32,10 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
   const migrationFile = input.migration_file || input.migration_path ? String(input.migration_file || input.migration_path) : '';
   const sql = await resolveSqlPlaneSql(input, context, migrationFile);
   const verifySql = String(input.verify_sql || input.verifySql || '').trim();
+  const verifyExpectedRowCount = input.verify_expected_row_count === undefined || input.verify_expected_row_count === null
+    ? null
+    : Number(input.verify_expected_row_count);
+  const verifyExpectedResultDigest = input.verify_expected_result_digest ? String(input.verify_expected_result_digest) : null;
   const rollbackSql = String(input.rollback_sql || '').trim();
   const toolName = String(input.tool_name || (action === 'apply-migration' ? 'apply_migration' : 'execute_sql'));
   const userIntent = String(input.user_intent || context.permission_model?.user_intent || 'MAD-SKS SQL-plane execution');
@@ -116,6 +121,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
     });
   }
 
+  const protectedCoreBefore = await snapshotProtectedCoreBefore(context, sqlPlaneExecutor.id);
   const result = await runSqlPlaneCycle(input, context, {
     root: context.target_root,
     missionId: String(input.mission_id || input.missionId || ''),
@@ -127,6 +133,8 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
     migrationName: String(input.migration_name || input.name || `mad_sks_${Date.now()}`),
     migrationFile: migrationFile || null,
     verifySql: verifySql || null,
+    verifyExpectedRowCount,
+    verifyExpectedResultDigest,
     ttlMs: Number(input.ttl_ms || 10 * 60 * 1000),
     args: Array.isArray(input.args) ? input.args.map(String) : []
   });
@@ -145,6 +153,7 @@ async function runSqlPlane(input: MadSksExecutorInput, context: MadSksExecutorCo
     context,
     executor: sqlPlaneExecutor.id,
     actionType: 'db_write',
+    beforeSnapshot: protectedCoreBefore,
     dbRollbacks: rollbackSql ? [{ rollback_kind: 'compensating_sql', sql: rollbackSql }] : [],
     rollbackUnavailable: rollbackKind === 'not_rollbackable' ? ['not_rollbackable_sql_plane_operation'] : [],
     auditActions: [madSksAuditAction({ type: 'db_write', command: '[SQL_PLANE_EXECUTED]', rollback_available: rollbackKind === 'compensating_sql', risk_level: 'critical', notes: [`cycle:${result.cycle_id}`] })],

@@ -9,6 +9,7 @@ import {
   pathExists,
   resolveTargetPath,
   resultFromEvidence,
+  snapshotProtectedCoreBefore,
   writeExecutorEvidence,
   writeRollbackSnapshot,
   type MadSksExecutor,
@@ -90,6 +91,7 @@ export async function runFileWrite(input: MadSksExecutorInput, context: MadSksEx
   }
   const beforeHash = before.content_hash;
   let afterHash = beforeHash;
+  const protectedCoreBefore = dryRun ? undefined : await snapshotProtectedCoreBefore(context, fileWriteExecutor.id);
   if (!dryRun) {
     if (operation === 'delete') {
       await fsp.rm(target, { recursive: true, force: true });
@@ -113,6 +115,7 @@ export async function runFileWrite(input: MadSksExecutorInput, context: MadSksEx
     context,
     executor: fileWriteExecutor.id,
     actionType,
+    ...(protectedCoreBefore ? { beforeSnapshot: protectedCoreBefore } : {}),
     changedFiles: dryRun ? [] : [target],
     fileRollbacks: [{
       type: 'restore_file',

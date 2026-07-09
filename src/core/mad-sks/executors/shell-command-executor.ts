@@ -6,6 +6,7 @@ import { redactMadSksSecrets } from '../write-guard.js';
 import {
   redactedCommand,
   resultFromEvidence,
+  snapshotProtectedCoreBefore,
   writeExecutorEvidence,
   type MadSksExecutor,
   type MadSksExecutorContext,
@@ -85,6 +86,7 @@ export async function runShellCommand(input: MadSksExecutorInput, context: MadSk
       blockedActions: [classification]
     });
   }
+  const protectedCoreBefore = await snapshotProtectedCoreBefore(context, shellCommandExecutor.id);
   const started = Date.now();
   const run = await spawnArgv(argv, cwd);
   const duration = Date.now() - started;
@@ -93,6 +95,7 @@ export async function runShellCommand(input: MadSksExecutorInput, context: MadSk
     context,
     executor: shellCommandExecutor.id,
     actionType: 'shell_command',
+    beforeSnapshot: protectedCoreBefore,
     rollbackUnavailable: ['shell_command_rollback_unavailable'],
     auditActions: [madSksAuditAction({
       type: 'shell_command',

@@ -22,10 +22,6 @@ export interface PerfBudgetReport {
     runs: number
     p50_ms: number
     p95_ms: number
-    raw_p50_ms?: number
-    raw_p95_ms?: number
-    node_baseline_p50_ms?: number
-    node_baseline_p95_ms?: number
     budget_p50_ms?: number
     budget_p95_ms: number
     ok: boolean
@@ -36,10 +32,6 @@ export interface PerfBudgetReport {
       attempt: number
       p50_ms: number
       p95_ms: number
-      raw_p50_ms?: number
-      raw_p95_ms?: number
-      node_baseline_p50_ms?: number
-      node_baseline_p95_ms?: number
       ok: boolean
       exit_codes: Array<number | null>
       blockers: string[]
@@ -80,7 +72,7 @@ export async function runPerfBudgets(root: string, budgets: PerfCommandBudget[],
       }
       if (measurement.ok) break
     }
-    const { p50, p95, rawP50, rawP95, nodeBaselineP50, nodeBaselineP95, exitCodes, ok } = measurement
+    const { p50, p95, exitCodes, ok } = measurement
     blockers.push(...measurement.blockers.map((blocker) => `${budget.name}:${blocker}`))
     commands.push({
       name: budget.name,
@@ -88,10 +80,6 @@ export async function runPerfBudgets(root: string, budgets: PerfCommandBudget[],
       runs: measuredRuns,
       p50_ms: p50,
       p95_ms: p95,
-      ...(rawP50 !== undefined ? { raw_p50_ms: rawP50 } : {}),
-      ...(rawP95 !== undefined ? { raw_p95_ms: rawP95 } : {}),
-      ...(nodeBaselineP50 !== undefined ? { node_baseline_p50_ms: nodeBaselineP50 } : {}),
-      ...(nodeBaselineP95 !== undefined ? { node_baseline_p95_ms: nodeBaselineP95 } : {}),
       ...(budget.budget_p50_ms !== undefined ? { budget_p50_ms: budget.budget_p50_ms } : {}),
       budget_p95_ms: budget.budget_p95_ms,
       ok,
@@ -121,15 +109,16 @@ export async function writePerfBudgetReport(root: string, budgets: PerfCommandBu
   return report
 }
 
+// p50_ms/p95_ms are the numbers the budget is judged against, and they must
+// be the user-experienced raw wall time. This used to subtract a measured
+// node startup baseline, which let a real 171ms command report as 3ms
+// (20차 P0-11) — that deduction is gone; these are plain percentiles of the
+// measured process wall-clock durations, nothing else.
 async function measureCommand(root: string, budget: PerfCommandBudget, measuredRuns: number, timeoutMs: number): Promise<{
   p50: number
   p95: number
   p50Ok: boolean
   p95Ok: boolean
-  rawP50?: number
-  rawP95?: number
-  nodeBaselineP50?: number
-  nodeBaselineP95?: number
   exitOk: boolean
   ok: boolean
   exitCodes: Array<number | null>
@@ -145,14 +134,8 @@ async function measureCommand(root: string, budget: PerfCommandBudget, measuredR
     if (result.code !== 0) blockers.push(`exit_${result.code}`)
   }
   durations.sort((a, b) => a - b)
-  const rawP50 = percentile(durations, 0.5)
-  const rawP95 = percentile(durations, 0.95)
-  const baseline = await measureNodeStartupBaseline(root, budget.argv, measuredRuns, timeoutMs)
-  const effectiveDurations = baseline
-    ? durations.map((duration) => Math.max(0, duration - baseline.p50)).sort((a, b) => a - b)
-    : durations
-  const p50 = percentile(effectiveDurations, 0.5)
-  const p95 = percentile(effectiveDurations, 0.95)
+  const p50 = percentile(durations, 0.5)
+  const p95 = percentile(durations, 0.95)
   const p50Ok = budget.budget_p50_ms === undefined || p50 <= budget.budget_p50_ms
   const p95Ok = p95 <= budget.budget_p95_ms
   const exitOk = exitCodes.every((code) => code === 0)
@@ -163,7 +146,6 @@ async function measureCommand(root: string, budget: PerfCommandBudget, measuredR
   return {
     p50,
     p95,
-    ...(baseline ? { rawP50, rawP95, nodeBaselineP50: baseline.p50, nodeBaselineP95: baseline.p95 } : {}),
     p50Ok,
     p95Ok,
     exitOk,
@@ -178,10 +160,6 @@ function commandAttempt(attempt: number, measurement: Awaited<ReturnType<typeof 
     attempt,
     p50_ms: measurement.p50,
     p95_ms: measurement.p95,
-    ...(measurement.rawP50 !== undefined ? { raw_p50_ms: measurement.rawP50 } : {}),
-    ...(measurement.rawP95 !== undefined ? { raw_p95_ms: measurement.rawP95 } : {}),
-    ...(measurement.nodeBaselineP50 !== undefined ? { node_baseline_p50_ms: measurement.nodeBaselineP50 } : {}),
-    ...(measurement.nodeBaselineP95 !== undefined ? { node_baseline_p95_ms: measurement.nodeBaselineP95 } : {}),
     ok: measurement.ok,
     exit_codes: measurement.exitCodes,
     blockers: measurement.blockers
@@ -207,19 +185,6 @@ function timingOverage(measurement: Awaited<ReturnType<typeof measureCommand>>, 
   const p50Overage = budget.budget_p50_ms === undefined ? 0 : Math.max(0, measurement.p50 - budget.budget_p50_ms)
   const p95Overage = Math.max(0, measurement.p95 - budget.budget_p95_ms)
   return p50Overage + p95Overage
-}
-
-async function measureNodeStartupBaseline(root: string, argv: readonly string[], measuredRuns: number, timeoutMs: number): Promise<{ p50: number; p95: number } | null> {
-  const command = argv[0]
-  if (command !== 'node' || !String(argv[1] || '').endsWith('dist/bin/sks.js')) return null
-  const durations: number[] = []
-  for (let index = 0; index < measuredRuns; index++) {
-    const result = await runTimed(root, ['node', '-e', ''], timeoutMs)
-    if (result.code !== 0) return null
-    durations.push(result.duration_ms)
-  }
-  durations.sort((a, b) => a - b)
-  return { p50: percentile(durations, 0.5), p95: percentile(durations, 0.95) }
 }
 
 async function runTimed(root: string, argv: string[], timeoutMs: number): Promise<{ code: number | null; duration_ms: number }> {

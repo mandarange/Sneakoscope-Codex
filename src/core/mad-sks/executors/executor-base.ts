@@ -122,10 +122,22 @@ export function executorBlocker({
   };
 }
 
+// Capture the protected-core snapshot BEFORE an executor performs any
+// mutation. writeExecutorEvidence() runs after the mutation is already done
+// (it needs the resulting changedFiles/hashes), so it cannot itself take an
+// honest "before" snapshot — doing so there always compared post-mutation
+// state against post-mutation state, structurally guaranteeing
+// protected_core_unchanged: true regardless of what actually happened
+// (20차 P0-7). Call this first, then pass the result to writeExecutorEvidence.
+export async function snapshotProtectedCoreBefore(context: MadSksExecutorContext, executor: string) {
+  return snapshotProtectedCore(context.package_root, `${executor}-before`);
+}
+
 export async function writeExecutorEvidence({
   context,
   executor,
   actionType,
+  beforeSnapshot,
   changedFiles = [],
   blockedActions = [],
   fileRollbacks = [],
@@ -140,6 +152,7 @@ export async function writeExecutorEvidence({
   context: MadSksExecutorContext;
   executor: string;
   actionType: MadSksActionType;
+  beforeSnapshot?: Awaited<ReturnType<typeof snapshotProtectedCore>>;
   changedFiles?: string[];
   blockedActions?: unknown[];
   fileRollbacks?: unknown[];
@@ -152,7 +165,10 @@ export async function writeExecutorEvidence({
   forceProtectedCoreChanged?: boolean;
 }) {
   await ensureDir(context.artifact_dir);
-  const before = await snapshotProtectedCore(context.package_root, `${executor}-before`);
+  // Falls back to a call-time snapshot only when the caller didn't capture
+  // one before mutating (e.g. blocked/dry-run paths where nothing changed) —
+  // callers that perform a real mutation must pass beforeSnapshot.
+  const before = beforeSnapshot || await snapshotProtectedCore(context.package_root, `${executor}-before`);
   const after = await snapshotProtectedCore(context.package_root, `${executor}-after`);
   const comparison = forceProtectedCoreChanged && (process.env.NODE_ENV === 'test' || process.env.SKS_TEST_FORCE_PROTECTED_CORE_CHANGED === '1')
     ? {

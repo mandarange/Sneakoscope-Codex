@@ -3,6 +3,7 @@ import {
   fileContentSnapshot,
   hashFileIfExists,
   resultFromEvidence,
+  snapshotProtectedCoreBefore,
   type MadSksExecutor,
   type MadSksExecutorContext,
   type MadSksExecutorInput,
@@ -55,6 +56,7 @@ export async function runPackageInstall(input: MadSksExecutorInput, context: Mad
     snapshot,
     snapshot_path: snapshot.content === null ? null : await writeRollbackSnapshot(context, snapshot)
   })));
+  const protectedCoreBefore = dryRun ? undefined : await snapshotProtectedCoreBefore(context, packageInstallExecutor.id);
   const shell = await runShellCommand({ ...input, argv, cwd, command: argv, dry_run: dryRun }, context, dryRun);
   const after = await Promise.all(manifests.map(async (file) => ({ path: file, hash: await hashFileIfExists(file) })));
   const changed = after.filter((entry, index) => entry.hash !== before[index]?.hash).map((entry) => entry.path);
@@ -63,6 +65,7 @@ export async function runPackageInstall(input: MadSksExecutorInput, context: Mad
     context,
     executor: packageInstallExecutor.id,
     actionType: 'package_install',
+    ...(protectedCoreBefore ? { beforeSnapshot: protectedCoreBefore } : {}),
     changedFiles: changed,
     packageRollbacks: rollbackSnapshots
       .filter((entry) => entry.snapshot.content_hash)

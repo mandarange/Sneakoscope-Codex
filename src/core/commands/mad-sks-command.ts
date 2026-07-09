@@ -960,10 +960,15 @@ async function madSksSubcommand(subcommand: string, args: any[] = []) {
   const targetRoot = path.resolve(readOption(args, '--target-root', process.cwd()));
   const userIntent = readOption(args, '--intent', 'MAD-SKS user-authorized maintenance');
   const sqlPlaneSubcommand = subcommand === 'sql' || subcommand === 'apply-migration';
+  // --allow-db-write scope is implied by choosing the sql/apply-migration
+  // subcommand itself, but --yes (explicit destructive-action confirmation)
+  // must come from the caller's actual args — auto-injecting it here used to
+  // silently satisfy guard-middleware's high_risk_confirmation_required check
+  // for every sql/apply-migration call regardless of user intent (20차 P0-10).
   const flags = parseMadSksFlags([
     '--mad-sks',
     subcommand === 'plan' ? '--plan-only' : '',
-    ...(sqlPlaneSubcommand ? ['--allow-db-write', '--yes'] : []),
+    ...(sqlPlaneSubcommand ? ['--allow-db-write'] : []),
     ...args
   ].filter(Boolean));
   const permission = buildMadSksPermissionModel({ targetRoot, userIntent, flags });
@@ -1198,6 +1203,8 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
   const sql = opts.sql || readOption(args, '--sql', null);
   const rollbackSql = opts.rollbackSql || readOption(args, '--rollback-sql', null);
   const verifySql = opts.verifySql || readOption(args, '--verify-sql', null);
+  const verifyExpectedRowCount = readOption(args, '--expect-row-count', null);
+  const verifyExpectedResultDigest = readOption(args, '--expect-result-digest', null);
   const migrationFile = opts.migrationFile || readOption(args, '--migration-file', null) || readOption(args, '--file', null);
   const migrationName = opts.migrationName || readOption(args, '--name', null);
   const sqlAction = opts.sqlAction || null;
@@ -1207,6 +1214,8 @@ async function materializeMadSksRun(root: string, targetRoot: string, permission
   if (sql) executorInput.sql = sql;
   if (rollbackSql) executorInput.rollback_sql = rollbackSql;
   if (verifySql) executorInput.verify_sql = verifySql;
+  if (verifyExpectedRowCount !== null) executorInput.verify_expected_row_count = Number(verifyExpectedRowCount);
+  if (verifyExpectedResultDigest) executorInput.verify_expected_result_digest = verifyExpectedResultDigest;
   if (migrationFile) executorInput.migration_file = migrationFile;
   if (migrationName) executorInput.migration_name = migrationName;
   if (sqlAction) executorInput.action = sqlAction;
@@ -1416,6 +1425,8 @@ function positionalText(args: any[] = []) {
   const valueFlags = new Set([
     '--sql',
     '--verify-sql',
+    '--expect-row-count',
+    '--expect-result-digest',
     '--rollback-sql',
     '--target-root',
     '--intent',

@@ -9,6 +9,11 @@ import { decideNarutoConcurrency } from '../core/naruto/naruto-concurrency-gover
 import { runNarutoRealActivePool } from '../core/naruto/naruto-active-pool.js'
 import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../core/naruto/naruto-real-worker-runtime.js'
 
+// This gate exercises the active-pool scheduler/lifecycle machinery with the
+// fake Codex SDK adapter (real child processes and heartbeats, fake model
+// calls) — it is a simulation harness, not a real-backend proof. Its emitted
+// gate name is prefixed `sim-` accordingly (20차 P0-6); real-backend proof is
+// out of scope here (needs live Codex auth) and belongs in the P4 E2E suite.
 process.env.SKS_CODEX_SDK_FAKE = '1'
 const graph = buildNarutoWorkGraph({ requestedClones: 12, totalWorkItems: 24, writeCapable: false, maxActiveWorkers: 6 })
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-real-runtime-'))
@@ -77,4 +82,4 @@ const timeoutEvidence = timeoutReport.completed_count === 1
 const ok = report.ok && spawned === graph.total_work_items && collected === graph.total_work_items && report.max_observed_active_workers >= target.safe_active_workers && report.active_pool_utilization >= 0.8 && processEvidence && artifactEvidence
 assertGate(ok, 'Naruto real active pool runtime must include actual child process, heartbeat, and result evidence', { report, spawned, collected, processEvidence, artifactEvidence, tempRoot })
 assertGate(timeoutEvidence, 'Naruto real active pool must force-collect hung workers as timed-out results', { timeoutReport })
-emitGate('naruto:real-active-pool-runtime', { ...report, timeout_force_collect_checked: true })
+emitGate('naruto:sim-active-pool-runtime', { ...report, timeout_force_collect_checked: true })

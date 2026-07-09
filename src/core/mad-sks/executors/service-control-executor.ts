@@ -1,7 +1,7 @@
 import { runMadSksGuardMiddleware } from '../guard-middleware.js';
 import { madSksAuditAction } from '../audit-ledger.js';
 import { classifyMadSksShellArgv } from '../shell-argv-classifier.js';
-import { resultFromEvidence, type MadSksExecutor, type MadSksExecutorContext, type MadSksExecutorInput, writeExecutorEvidence } from './executor-base.js';
+import { resultFromEvidence, snapshotProtectedCoreBefore, type MadSksExecutor, type MadSksExecutorContext, type MadSksExecutorInput, writeExecutorEvidence } from './executor-base.js';
 import { runShellCommand } from './shell-command-executor.js';
 
 export const serviceControlExecutor: MadSksExecutor = {
@@ -39,6 +39,7 @@ export async function runServiceControl(input: MadSksExecutorInput, context: Mad
     return resultFromEvidence({ executor: serviceControlExecutor.id, actionType: 'service_control', context, status: 'blocked', blockedActions: [guard], blockers: guard.issues });
   }
   const previousState = { captured: true, state: dryRun ? 'dry_run_previous_state' : 'unknown_previous_state' };
+  const protectedCoreBefore = dryRun ? undefined : await snapshotProtectedCoreBefore(context, serviceControlExecutor.id);
   const shell = await runShellCommand({ ...input, argv, cwd: input.cwd || context.target_root, command: argv, dry_run: dryRun }, context, dryRun);
   const newState = { captured: true, state: dryRun ? 'dry_run_new_state' : shell.ok ? 'command_completed' : 'command_failed' };
   const verification = [{ kind: 'service_command', ok: dryRun || shell.ok, argv, previous_state: previousState, new_state: newState }];
@@ -46,6 +47,7 @@ export async function runServiceControl(input: MadSksExecutorInput, context: Mad
     context,
     executor: serviceControlExecutor.id,
     actionType: 'service_control',
+    ...(protectedCoreBefore ? { beforeSnapshot: protectedCoreBefore } : {}),
     serviceRollbacks: [{ type: 'restore_previous_service_state', previous_state: previousState, command: argv }],
     auditActions: [madSksAuditAction({ type: 'service_control', command: argv.join(' '), rollback_available: true, risk_level: 'high' })],
     verification

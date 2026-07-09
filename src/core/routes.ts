@@ -206,7 +206,13 @@ export const ROUTES = [
     command: '$Plan',
     mode: 'PLAN',
     route: 'planning-only frontdoor',
-    description: 'Decision-complete planning only. Writes .sneakoscope/plans/<slug>.md and keeps implementation disallowed until $Work runs the plan.',
+    // 20차 P0-8: $Plan currently writes a fixed template (goal/scope/steps
+    // headings) with no task-specific agent reasoning behind it — it is a
+    // scaffold to fill in, not the "decision-complete planning" this used to
+    // claim. Retracted rather than reimplemented as a real planning agent
+    // (out of scope for this pass); implementation remains disallowed until
+    // $Work runs the plan.
+    description: 'Plan scaffold only: writes a fixed-template .sneakoscope/plans/<slug>.md (goal/scope/steps headings to fill in), not project-specific decision-complete planning. Keeps implementation disallowed until $Work runs the plan.',
     requiredSkills: ['plan', 'honest-mode'],
     lifecycle: ['plan_intake', 'scope_and_acceptance', 'write_plan_artifact', 'implementation_allowed_false', 'honest_mode'],
     context7Policy: 'if_external_docs',

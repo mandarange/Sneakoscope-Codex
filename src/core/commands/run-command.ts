@@ -384,13 +384,30 @@ async function executeRouteCommand(
     });
   }
   const commandArgs = safeRouteExecutionArgs(route, prompt, { auto });
-  // safeRouteExecutionArgs() falls back to `team <prompt> --mock` for any route it
-  // doesn't have a dedicated safe live command for, and several dedicated branches
-  // (DB/Wiki/Fast-Mode/with-local-llm-on/Commit/Commit-And-Push) run a fixed
-  // command that never references the prompt at all. Both must be labeled
-  // honestly rather than as a live-route completion: a --mock invocation cannot
-  // claim a real completion (14차 honest-mock principle), and a fixed command
-  // that never saw the prompt cannot claim to have addressed it.
+  // safeRouteExecutionArgs() returns null for any route it doesn't have a
+  // dedicated safe live command for. Routes without a dedicated branch cannot
+  // be executed by `run --execute` at all — no silent `team --mock` fallback
+  // (20차 P0-1): a route with no real execution path must fail explicitly,
+  // not report a mock run as if it were progress on that route.
+  if (!commandArgs) {
+    return {
+      schema: 'sks.run-route-execution.v1',
+      ok: false,
+      status: 'blocked',
+      execution_kind: 'blocked',
+      route: route.command,
+      command: '',
+      exit_code: null,
+      nested_mission_id: null,
+      blockers: [`route_not_executable:${route.command}`],
+      unverified: [],
+      next_action: `${route.command} has no dedicated run --execute branch; run it directly via its own sks command instead.`,
+    };
+  }
+  // Several dedicated branches (DB/Wiki/Fast-Mode/with-local-llm-on/Commit/
+  // Commit-And-Push) run a fixed command that never references the prompt at
+  // all; that must be labeled honestly rather than as a completion that
+  // addressed the prompt.
   const isMockFallback = commandArgs.includes('--mock');
   const promptDelivered = Boolean(prompt) && commandArgs.includes(prompt);
   const deterministicRoute = isSafeDeterministicRoute(route.command);
@@ -521,7 +538,7 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
   return `continue ${route.command} mission ${id} through the selected SKS route`;
 }
 
-function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] {
+function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] | null {
   if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
   if (route.command === '$Super-Search') return superSearchExecutionArgs(prompt);
   if (route.command === '$SEO-GEO-OPTIMIZER') return ['seo-geo-optimizer', searchVisibilityActionFromPrompt(prompt), '--mode', searchVisibilityModeFromPrompt(prompt), '--target', searchVisibilityTargetFromPrompt(prompt), '--offline', '--json'];
@@ -530,7 +547,11 @@ function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = 
   if (route.command === '$with-local-llm-on') return ['with-local-llm', localModelActionFromPrompt(prompt), '--json'];
   if (route.command === '$Commit') return ['commit', '--json'];
   if (route.command === '$Commit-And-Push') return ['commit-and-push', '--json'];
-  return ['team', prompt, '--mock', '--json', ...(auto ? ['--no-open-zellij'] : [])];
+  // No silent fallback: $Team/$SKS and any other route without a dedicated
+  // safe live-execution branch above must fail explicitly (20차 P0-1) rather
+  // than proxy through `team --mock`, which used to reach the fake Codex SDK
+  // adapter for a route the caller believed was executing for real.
+  return null;
 }
 
 function superSearchExecutionArgs(prompt = ''): string[] {

@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { ui as cliUi } from '../../cli/cli-theme.js'
 import { createMission, findLatestMission, loadMission, setCurrent } from '../mission.js'
@@ -19,6 +20,7 @@ import { collectActualNarutoWorker, spawnActualNarutoWorker } from '../naruto/na
 import { allocateNarutoTasksToWorkers } from '../naruto/naruto-allocation-policy.js'
 import { rebalanceNarutoReadyWork } from '../naruto/naruto-rebalance-policy.js'
 import { buildNarutoVerificationDag } from '../naruto/naruto-verification-dag.js'
+import { runNarutoVerificationPool } from '../naruto/naruto-verification-pool.js'
 import { evaluateNarutoFinalizer } from '../naruto/naruto-finalizer.js'
 import { buildNarutoGptFinalPack } from '../naruto/naruto-gpt-final-pack.js'
 import { planNarutoZellijDashboard } from '../zellij/zellij-naruto-dashboard.js'
@@ -64,6 +66,15 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
 }
 
 async function narutoRun(parsed: NarutoArgs) {
+  // 20차 P0-2: a real (non---mock) run must never be silently downgraded to
+  // the fake Codex SDK adapter by a stray inherited env var (leaked shell
+  // export, leftover CI job config, etc). Clear the escape hatches for this
+  // process before any codex task executes; --mock runs and NODE_ENV=test
+  // are unaffected since they set/rely on these independently downstream.
+  if (!parsed.mock && process.env.NODE_ENV !== 'test') {
+    delete process.env.SKS_CODEX_SDK_FAKE
+    delete process.env.SKS_CODEX_SDK_FIXTURE
+  }
   const root = await sksRoot()
   const writeCapable = parsed.readonly !== true && parsed.writeMode !== 'off'
   const patchEnvelopeBasePath = '.sneakoscope/naruto/patch-envelopes'
@@ -223,7 +234,7 @@ async function narutoRun(parsed: NarutoArgs) {
     })
     : {
       schema: 'sks.naruto-active-pool.v1',
-      ok: true,
+      ok: false,
       status: 'skipped',
       runtime_source_of_truth: 'agent-orchestrator-scheduler',
       production_runtime_source_of_truth: 'agent-orchestrator-scheduler',
@@ -239,7 +250,11 @@ async function narutoRun(parsed: NarutoArgs) {
       worker_lifecycle: [],
       smoke_graph_total_work_items: 0
     }
-  const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root })
+  const verificationCommand = resolveNarutoVerificationCommand(root)
+  const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root, command: verificationCommand })
+  const verificationDagRunPromise = verificationDag.configured && verificationDag.tasks.length > 0
+    ? runNarutoVerificationPool(verificationDag, governor, { cwd: root, logDir: path.join(mission.dir, 'agents', 'verification-logs') })
+    : Promise.resolve(null)
   const gptFinalPack = buildNarutoGptFinalPack({
     missionId: mission.id,
     graph: workGraph,
@@ -283,7 +298,9 @@ async function narutoRun(parsed: NarutoArgs) {
     rebalance_ready: rebalancePolicy.ok === true,
     concurrency_governor_ready: true,
     active_pool_simulated: activePool.ok === true,
-    verification_dag_ready: Array.isArray(verificationDag?.tasks),
+    verification_dag_ready: verificationDag.configured,
+    verification_dag_unconfigured_reason: verificationDag.unconfigured_reason,
+    verification_dag_executed: false,
     gpt_final_pack_ready: Boolean(gptFinalPack?.schema),
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: false,
@@ -410,15 +427,22 @@ async function narutoRun(parsed: NarutoArgs) {
   const parallelRuntime = result.parallel_runtime_proof || null
   const nativeProofOk = result.proof?.ok === true || result.proof?.status === 'passed'
   const finalAccepted = result.proof?.status === 'passed' || result.proof?.gpt_final_status === 'approved'
-  const parallelRuntimeOk = !parsed.mock || roster.agent_count < 16 || (
+  // Real backends must actually prove parallel runtime; mock backends (no real
+  // process fan-out to observe) and small rosters below the 16-worker proof
+  // threshold are exempt. Previously this was inverted (`!parsed.mock`), which
+  // skipped the proof precisely when it mattered most — real execution.
+  const parallelRuntimeOk = parsed.mock || roster.agent_count < 16 || (
     parallelRuntime?.passed === true
     && Number(parallelRuntime.max_observed_active_workers || 0) >= Math.min(16, activeSlots)
   )
+  const verificationDagResult = await verificationDagRunPromise
+  if (verificationDagResult) await writeJsonAtomic(path.join(mission.dir, 'naruto-verification-dag-result.json'), verificationDagResult)
+  const verificationDagOk = !verificationDag.configured || verificationDagResult === null ? true : verificationDagResult.ok === true
   const regressionProof = summarizeRegressionProof(workGraph, result)
   await writeJsonAtomic(path.join(mission.dir, 'regression-proof-summary.json'), regressionProof)
   const tddOk = !regressionProof.required || (regressionProof.regression_test_added && regressionProof.regression_test_failed_before_fix && regressionProof.regression_test_passed_after_fix)
-  const narutoGateFullPassed = result.ok === true && nativeProofOk && finalAccepted && (realWriteProof ? realWriteProof.ok === true : true) && parallelRuntimeOk && tddOk && workGraph.ok === true && allocationPolicy.ok === true
-  const narutoGateFullBlockers = [...(result.proof?.blockers || []), ...(realWriteProof && !realWriteProof.ok ? realWriteProof.blockers : []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing']), ...(workGraph.blockers || []), ...(allocationPolicy.blockers || [])]
+  const narutoGateFullPassed = result.ok === true && nativeProofOk && finalAccepted && (realWriteProof ? realWriteProof.ok === true : true) && parallelRuntimeOk && tddOk && workGraph.ok === true && allocationPolicy.ok === true && verificationDagOk
+  const narutoGateFullBlockers = [...(result.proof?.blockers || []), ...(realWriteProof && !realWriteProof.ok ? realWriteProof.blockers : []), ...(parallelRuntimeOk ? [] : ['naruto_parallel_runtime_proof_below_gate']), ...(tddOk ? [] : ['tdd_evidence_missing']), ...(verificationDagOk ? [] : ['naruto_verification_dag_failed']), ...(workGraph.blockers || []), ...(allocationPolicy.blockers || [])]
   await writeJsonAtomic(path.join(mission.dir, 'naruto-gate.json'), {
     schema: 'sks.naruto-gate.v1',
     passed: narutoGateFullPassed,
@@ -431,7 +455,11 @@ async function narutoRun(parsed: NarutoArgs) {
     rebalance_ready: rebalancePolicy.ok === true,
     concurrency_governor_ready: true,
     active_pool_simulated: activePool.ok === true,
-    verification_dag_ready: Array.isArray(verificationDag?.tasks),
+    verification_dag_ready: verificationDagOk,
+    verification_dag_configured: verificationDag.configured,
+    verification_dag_unconfigured_reason: verificationDag.unconfigured_reason,
+    verification_dag_executed: verificationDagResult !== null,
+    verification_dag_result: verificationDagResult ? 'naruto-verification-dag-result.json' : null,
     gpt_final_pack_ready: Boolean(gptFinalPack?.schema),
     zellij_dashboard_ready: zellijDashboard.ok === true,
     native_agent_proof: nativeProofOk,
@@ -779,6 +807,16 @@ function summarizeNarutoLocalWorkerResult(localWorker: any, result: any) {
     selected_worker_count: (backendCounts['local-llm'] || 0) + (backendCounts.ollama || 0),
     backend_counts: backendCounts
   }
+}
+
+// Resolves the project's real verification command for the Naruto
+// verification DAG. Returns '' (unconfigured) rather than a fabricated
+// no-op when the project type can't be detected — see naruto-verification-dag.ts.
+function resolveNarutoVerificationCommand(root: string): string {
+  if (fs.existsSync(path.join(root, 'tsconfig.json'))) {
+    return 'node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit --incremental'
+  }
+  return ''
 }
 
 function summarizeRegressionProof(workGraph: any, result: any) {

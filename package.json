@@ -129,7 +129,7 @@
     "feature:check": "node ./dist/bin/sks.js features check --json",
     "feature-quality:check": "node ./dist/scripts/check-feature-quality.js --release",
     "all-features:selftest": "node ./dist/bin/sks.js all-features selftest --mock --json",
-    "naruto:real-active-pool-runtime": "node ./dist/scripts/naruto-real-active-pool-runtime-check.js",
+    "naruto:sim-active-pool-runtime": "node ./dist/scripts/naruto-real-active-pool-runtime-check.js",
     "core-skill:no-drift": "node ./dist/scripts/core-skill-no-drift-check.js",
     "skill:dedupe-blackbox": "node ./dist/scripts/project-skill-dedupe-blackbox.js",
     "release:check:affected": "npm run build:incremental --silent && node ./dist/scripts/release-gate-dag-runner.js --preset affected --changed-since auto --sla 5m && node ./dist/scripts/release-check-stamp.js write",
