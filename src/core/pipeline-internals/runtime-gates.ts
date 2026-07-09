@@ -512,7 +512,7 @@ function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
       'allocation_ready',
       'rebalance_ready',
       'concurrency_governor_ready',
-      'active_pool_simulated',
+      'active_pool_ready',
       'verification_dag_ready',
       'gpt_final_pack_ready',
       'zellij_dashboard_ready',

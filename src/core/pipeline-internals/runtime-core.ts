@@ -999,7 +999,7 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     allocation_ready: false,
     rebalance_ready: false,
     concurrency_governor_ready: false,
-    active_pool_simulated: false,
+    active_pool_ready: false,
     verification_dag_ready: false,
     gpt_final_pack_ready: false,
     zellij_dashboard_ready: false,

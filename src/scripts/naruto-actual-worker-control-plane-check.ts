@@ -48,7 +48,7 @@ const ok = collected.ok === true
   && result.ok === true
   && result.control_plane_result?.worker_result_path
   && result.control_plane_result?.structured_output_valid === true
-  && fullRoute.active_pool?.real_runtime?.runtime_source_of_truth === 'pre_run_smoke_only'
+  && fullRoute.active_pool?.runtime_source_of_truth === 'pre_run_smoke_only'
   && fullRoute.runtime_source_of_truth === 'agent-orchestrator-scheduler'
   && fullWorkerResults.length >= 1
   && fullWorkerResults.every((row) => row.control_plane_result?.structured_output_valid === true)

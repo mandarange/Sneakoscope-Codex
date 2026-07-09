@@ -15,7 +15,7 @@ import { maybePromptZellijUpdateForLaunch } from '../zellij/zellij-update.js'
 import { buildNarutoWorkGraph } from '../naruto/naruto-work-graph.js'
 import { buildNarutoRoleDistribution } from '../naruto/naruto-role-policy.js'
 import { decideNarutoConcurrency } from '../naruto/naruto-concurrency-governor.js'
-import { runNarutoActivePool, runNarutoRealActivePool } from '../naruto/naruto-active-pool.js'
+import { runNarutoRealActivePool } from '../naruto/naruto-active-pool.js'
 import { collectActualNarutoWorker, killAllActiveNarutoWorkers, spawnActualNarutoWorker } from '../naruto/naruto-real-worker-runtime.js'
 import { runZellij } from '../zellij/zellij-command.js'
 import { allocateNarutoTasksToWorkers } from '../naruto/naruto-allocation-policy.js'
@@ -218,7 +218,6 @@ async function narutoRun(parsed: NarutoArgs) {
   const activeCap = parsed.parallelism === 'safe' ? safe.cap : MAX_NARUTO_AGENT_COUNT
   const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), activeCap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
-  const activePool = await runNarutoActivePool({ graph: workGraph, governor: { ...governor, safe_active_workers: activeSlots } })
   const runPreRunSmoke = parsed.smoke === true || process.env.SKS_NARUTO_PRE_RUN_SMOKE === '1'
   const realActivePoolSmoke = runPreRunSmoke
     ? await runNarutoControlPlaneSmoke({
@@ -277,7 +276,6 @@ async function narutoRun(parsed: NarutoArgs) {
     workGraph,
     roleDistribution,
     governor,
-    activePool,
     realActivePool: realActivePoolSmoke,
     allocationPolicy,
     rebalancePolicy,
@@ -298,7 +296,7 @@ async function narutoRun(parsed: NarutoArgs) {
     allocation_ready: allocationPolicy.ok === true,
     rebalance_ready: rebalancePolicy.ok === true,
     concurrency_governor_ready: true,
-    active_pool_simulated: activePool.ok === true,
+    active_pool_ready: true,
     verification_dag_ready: verificationDag.configured,
     verification_dag_unconfigured_reason: verificationDag.unconfigured_reason,
     verification_dag_executed: false,
@@ -455,7 +453,7 @@ async function narutoRun(parsed: NarutoArgs) {
     allocation_ready: allocationPolicy.ok === true,
     rebalance_ready: rebalancePolicy.ok === true,
     concurrency_governor_ready: true,
-    active_pool_simulated: activePool.ok === true,
+    active_pool_ready: true,
     verification_dag_ready: verificationDagOk,
     verification_dag_configured: verificationDag.configured,
     verification_dag_unconfigured_reason: verificationDag.unconfigured_reason,
@@ -558,24 +556,18 @@ async function narutoRun(parsed: NarutoArgs) {
     rebalance_policy: rebalancePolicy,
     concurrency_governor: governor,
     active_pool: {
-      ok: activePool.ok,
-      max_observed_active_workers: activePool.max_observed_active_workers,
-      refill_events: activePool.refill_events,
-      completed_count: activePool.completed_count,
-      real_runtime: {
-        ok: realActivePoolSmoke.ok,
-        runtime_source_of_truth: realActivePoolSmoke.runtime_source_of_truth,
-        production_runtime_source_of_truth: realActivePoolSmoke.production_runtime_source_of_truth,
-        active_cap: realActivePoolSmoke.active_cap,
-        max_observed_active_workers: realActivePoolSmoke.max_observed_active_workers,
-        average_active_workers: realActivePoolSmoke.average_active_workers,
-        active_pool_utilization: realActivePoolSmoke.active_pool_utilization,
-        refill_latency_ms_p95: realActivePoolSmoke.refill_latency_ms_p95,
-        visible_workers: realActivePoolSmoke.visible_workers,
-        headless_workers: realActivePoolSmoke.headless_workers,
-        worker_lifecycle_count: realActivePoolSmoke.worker_lifecycle.length,
-        worker_lifecycle_sample: realActivePoolSmoke.worker_lifecycle.slice(0, 5)
-      }
+      ok: realActivePoolSmoke.ok,
+      runtime_source_of_truth: realActivePoolSmoke.runtime_source_of_truth,
+      production_runtime_source_of_truth: realActivePoolSmoke.production_runtime_source_of_truth,
+      active_cap: realActivePoolSmoke.active_cap,
+      max_observed_active_workers: realActivePoolSmoke.max_observed_active_workers,
+      average_active_workers: realActivePoolSmoke.average_active_workers,
+      active_pool_utilization: realActivePoolSmoke.active_pool_utilization,
+      refill_latency_ms_p95: realActivePoolSmoke.refill_latency_ms_p95,
+      visible_workers: realActivePoolSmoke.visible_workers,
+      headless_workers: realActivePoolSmoke.headless_workers,
+      worker_lifecycle_count: realActivePoolSmoke.worker_lifecycle.length,
+      worker_lifecycle_sample: realActivePoolSmoke.worker_lifecycle.slice(0, 5)
     },
     parallel_runtime: parallelRuntime ? {
       proof_path: path.join(result.ledger_root || '', 'parallel-runtime-proof.json'),
@@ -1133,7 +1125,6 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   workGraph: any
   roleDistribution: any
   governor: any
-  activePool: any
   realActivePool?: any
   allocationPolicy?: any
   rebalancePolicy?: any
@@ -1146,7 +1137,14 @@ async function writeNarutoArtifacts(ledgerRoot: string, artifacts: {
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-work-graph.json'), artifacts.workGraph)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-role-distribution.json'), artifacts.roleDistribution)
   await writeJsonAtomic(path.join(ledgerRoot, 'naruto-concurrency-governor.json'), artifacts.governor)
-  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-active-pool.json'), artifacts.activePool)
+  await writeJsonAtomic(path.join(ledgerRoot, 'naruto-active-pool.json'), {
+    schema: 'sks.naruto-active-pool.v1',
+    ok: null,
+    status: 'not_computed',
+    reason: 'simulated_active_pool_removed_from_production_path_20cha_p3_5',
+    runtime_source_of_truth: 'agent-orchestrator-scheduler',
+    see: 'naruto-real-active-pool.json'
+  })
   if (artifacts.realActivePool) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-real-active-pool.json'), artifacts.realActivePool)
   if (artifacts.allocationPolicy) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-allocation-policy.json'), artifacts.allocationPolicy)
   if (artifacts.rebalancePolicy) await writeJsonAtomic(path.join(ledgerRoot, 'naruto-rebalance-policy.json'), artifacts.rebalancePolicy)
