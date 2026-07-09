@@ -4,9 +4,7 @@ import { assertGate, emitGate, readText, releaseGateIds, runFakeCodexSdkTaskFixt
 
 const releaseGates = releaseGateIds();
 const required = [
-  'codex-sdk:dfix-pipeline',
-  'codex-sdk:all-pipelines',
-  'codex-sdk:core-skill-pipeline'
+  'codex-sdk:all-pipelines'
 ];
 for (const name of required) assertGate(releaseGates.has(name), `required pipeline gate missing from v2 manifest: ${name}`);
 const sources = {

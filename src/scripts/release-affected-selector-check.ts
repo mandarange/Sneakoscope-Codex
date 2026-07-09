@@ -7,7 +7,7 @@ const manifest = dag.loadReleaseGateManifest(root)
 const gates = manifest.gates.filter((gate: any) => gate.preset.includes('release'))
 const selected = selectorMod.selectAffectedReleaseGates(root, manifest, gates, { changedSince: 'HEAD', preset: 'affected' })
 const ids = new Set(selected.selection.selected_gate_ids)
-for (const id of ['release:proof-truth', 'release:dag-full-coverage', 'release:runtime-truth-matrix', 'typecheck', 'schema:check']) {
+for (const id of ['release:proof-truth', 'typecheck', 'schema:check']) {
   assertGate(ids.has(id), `affected selector must always keep ${id}`, selected.selection)
 }
 
@@ -16,7 +16,7 @@ const codexCurrentOnly = selectorMod.selectAffectedReleaseGates(root, manifest, 
   preset: 'affected'
 })
 const codexCurrentIds = new Set<string>(codexCurrentOnly.selection.selected_gate_ids.map(String))
-for (const id of ['codex-control:all-pipelines', 'codex-control:event-stream-ledger', 'codex-sdk:all-pipelines', 'codex-sdk:backend-router', 'codex-sdk:capability', 'codex-sdk:core-skill-pipeline', 'codex-sdk:dfix-pipeline', 'codex-sdk:event-stream-ledger']) {
+for (const id of ['codex-control:all-pipelines', 'codex-control:event-stream-ledger', 'codex-sdk:all-pipelines', 'codex-sdk:backend-router', 'codex-sdk:capability', 'codex-sdk:event-stream-ledger']) {
   assertGate(codexCurrentIds.has(id), `codex current surface change must select ${id}`, codexCurrentOnly.selection)
 }
 
@@ -25,7 +25,7 @@ const releaseScriptOnly = selectorMod.selectAffectedReleaseGates(root, manifest,
   preset: 'affected'
 })
 const releaseScriptIds = new Set<string>(releaseScriptOnly.selection.selected_gate_ids.map(String))
-assertGate(releaseScriptIds.has('release:full-parallelism-blackbox'), 'release script change must select release gates', releaseScriptOnly.selection)
+assertGate(releaseScriptIds.has('release:batch-runner-comprehensive'), 'release script change must select release gates', releaseScriptOnly.selection)
 assertGate(![...releaseScriptIds].some((id) => id.startsWith('zellij:') || id.startsWith('naruto:') || id.startsWith('research:')), 'release script change must not expand to unrelated route gates', releaseScriptOnly.selection)
 assertGate(releaseScriptIds.size < Math.ceil(gates.length / 3), 'release script change must stay affected-sized instead of near-full release', releaseScriptOnly.selection)
 

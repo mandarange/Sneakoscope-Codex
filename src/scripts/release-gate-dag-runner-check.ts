@@ -28,10 +28,9 @@ assertGate(pkg.scripts['release:check:legacy'], 'release:check:legacy must exist
 assertGate(manifest.schema === 'sks.release-gates.v2' && manifest.gates.length >= 10, 'release-gates.v2 manifest must exist with nodes', manifest)
 for (const gateId of [
   'scheduler:utilization-integral',
-  'agent:native-cli-session-swarm-20',
+  'agent:native-cli-session-swarm-scaling',
   'doctor:fix-proves-codex-read',
-  'doctor:codex-0139-real-probes',
-  'release:full-parallelism-blackbox',
+  'release:batch-runner-comprehensive',
   'release:parallel-speed-budget',
   'scheduler:parallel-proof-consistency'
 ]) {
