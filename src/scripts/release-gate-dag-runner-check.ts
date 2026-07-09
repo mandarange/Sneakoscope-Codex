@@ -27,12 +27,11 @@ assertGate(!/&&\s*npm run\s+\w/.test(effectiveReleaseCheck.replace('npm run buil
 assertGate(pkg.scripts['release:check:legacy'], 'release:check:legacy must exist for explicit debugging')
 assertGate(manifest.schema === 'sks.release-gates.v2' && manifest.gates.length >= 10, 'release-gates.v2 manifest must exist with nodes', manifest)
 for (const gateId of [
-  'scheduler:utilization-integral',
+  'scheduler:comprehensive',
   'agent:native-cli-session-swarm-scaling',
   'doctor:fix-proves-codex-read',
   'release:batch-runner-comprehensive',
-  'release:parallel-speed-budget',
-  'scheduler:parallel-proof-consistency'
+  'release:parallel-speed-budget'
 ]) {
   const gate = manifest.gates.find((row: any) => row.id === gateId)
   assertGate(gate?.resource?.includes('timing-sensitive'), `${gateId} must run in timing-sensitive isolation`, gate)

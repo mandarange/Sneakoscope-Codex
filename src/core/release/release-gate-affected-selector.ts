@@ -79,7 +79,7 @@ function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], pres
   if (changedFiles.some((file) => isCodexCurrentFile(file))) {
     if (gate.id.startsWith('codex:0142') || gate.id === 'release:codex-current' || gate.id.startsWith('codex-control:') || gate.id.startsWith('codex-sdk:')) return 'codex_current_surface_changed'
   }
-  const matchingReleaseScript = changedFiles.some((file) => releaseScriptGateCandidates(file).includes(gate.id))
+  const matchingReleaseScript = changedFiles.some((file) => releaseScriptGateCandidates(file).includes(gate.id) || (file.startsWith('src/scripts/release-') && gateCommandReferencesScript(gate, file)))
   if (matchingReleaseScript) return 'release_script_changed'
   if (changedFiles.some((file) => file.startsWith('src/scripts/prepublish-') || file.startsWith('src/scripts/publish-'))) {
     if (releaseGate && gate.id === 'release:proof-truth') return 'publish_or_prepublish_script_changed'
@@ -135,6 +135,12 @@ function resolveChangedFiles(root: string, changedSince: string) {
     ...String(status.stdout || '').split(/\n/).map((line) => line.slice(3))
   ].map((file) => file.trim()).filter(Boolean)
   return [...new Set(files)].sort()
+}
+
+function gateCommandReferencesScript(gate: ReleaseGateNode, file: string): boolean {
+  const base = file.replace(/\\/g, '/').split('/').pop()?.replace(/\.(ts|tsx)$/, '') || ''
+  if (!base) return false
+  return gate.command.includes(`/${base}.js`)
 }
 
 function matchesGlobish(file: string, pattern: string) {

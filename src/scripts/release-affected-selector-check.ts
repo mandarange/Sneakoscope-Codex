@@ -16,7 +16,7 @@ const codexCurrentOnly = selectorMod.selectAffectedReleaseGates(root, manifest, 
   preset: 'affected'
 })
 const codexCurrentIds = new Set<string>(codexCurrentOnly.selection.selected_gate_ids.map(String))
-for (const id of ['codex-control:all-pipelines', 'codex-control:event-stream-ledger', 'codex-sdk:all-pipelines', 'codex-sdk:backend-router', 'codex-sdk:capability', 'codex-sdk:event-stream-ledger']) {
+for (const id of ['codex-control:all-pipelines', 'codex-control:event-stream-ledger', 'codex-sdk:all-pipelines', 'codex-sdk:integration-comprehensive']) {
   assertGate(codexCurrentIds.has(id), `codex current surface change must select ${id}`, codexCurrentOnly.selection)
 }
 
@@ -34,7 +34,7 @@ const schedulerScriptOnly = selectorMod.selectAffectedReleaseGates(root, manifes
   preset: 'affected'
 })
 const schedulerScriptIds = new Set<string>(schedulerScriptOnly.selection.selected_gate_ids.map(String))
-assertGate(schedulerScriptIds.has('scheduler:utilization-integral'), 'scheduler script change must select scheduler gates', schedulerScriptOnly.selection)
+assertGate(schedulerScriptIds.has('scheduler:comprehensive'), 'scheduler script change must select scheduler gates', schedulerScriptOnly.selection)
 assertGate(![...schedulerScriptIds].some((id) => id.startsWith('research:') || id.startsWith('zellij:')), 'scheduler script change must not expand to unrelated route gates', schedulerScriptOnly.selection)
 
 emitGate('release:affected-selector', {

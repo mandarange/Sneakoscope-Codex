@@ -182,68 +182,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "codex-lb:fast-ui-preservation",
-      "command": "node ./dist/scripts/codex-lb-fast-ui-preservation-check.js",
-      "deps": [
-        "codex-app:fast-ui-preservation"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-lb:gpt55-fast-profile",
-      "command": "node ./dist/scripts/codex-lb-gpt55-fast-profile-check.js",
-      "deps": [
-        "codex-lb:fast-ui-preservation"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "hooks:concurrent-session-collision",
       "command": "node ./dist/scripts/concurrent-session-collision-check.js",
       "deps": [],
@@ -467,93 +405,6 @@
       ],
       "side_effect": "hermetic",
       "timeout_ms": 180000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-sdk:backend-router",
-      "command": "node ./dist/scripts/codex-sdk-backend-router-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-sdk:capability",
-      "command": "node ./dist/scripts/codex-sdk-capability-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex-sdk:event-stream-ledger",
-      "command": "node ./dist/scripts/codex-sdk-event-stream-ledger-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -1028,93 +879,6 @@
     {
       "id": "fast:codex-service-tier-proof",
       "command": "node ./dist/scripts/fast-codex-service-tier-proof-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "geo:claim-evidence",
-      "command": "node ./dist/scripts/geo-claim-evidence-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "geo:cli-blackbox",
-      "command": "node ./dist/scripts/geo-cli-blackbox-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "geo:crawler-purpose-policy",
-      "command": "node ./dist/scripts/geo-crawler-policy-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -2219,9 +1983,7 @@
         "appshots:thread-attachment-discovery",
         "codex-control:all-pipelines",
         "codex-sdk:all-pipelines",
-        "codex-sdk:backend-router",
-        "codex-sdk:capability",
-        "codex-sdk:event-stream-ledger",
+        "codex-sdk:integration-comprehensive",
         "codex:0.134-runner-truth",
         "codex:0.137-compat",
         "core-skill:card-schema-deployment-snapshot",
@@ -2416,82 +2178,6 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "scheduler:batch-dispatch",
-      "command": "node ./dist/scripts/scheduler-batch-dispatch-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "scheduler:parallel-proof-consistency",
-      "command": "node ./dist/scripts/scheduler-parallel-proof-consistency-check.js",
-      "deps": [
-        "scheduler:utilization-integral"
-      ],
-      "resource": [
-        "cpu-light",
-        "fs-read",
-        "timing-sensitive"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "scheduler:utilization-integral",
-      "command": "node ./dist/scripts/scheduler-utilization-integral-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read",
-        "timing-sensitive"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 60000,
-      "cache": {
-        "enabled": false,
-        "inputs": []
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "schema:check",
       "command": "node ./dist/scripts/check-runtime-schemas.js",
       "deps": [],
@@ -2552,153 +2238,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "seo-geo:geo-disambiguation",
-      "command": "node ./dist/scripts/seo-geo-geo-disambiguation-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "seo-geo:route-identity",
-      "command": "node ./dist/scripts/seo-geo-route-identity-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
       "id": "seo-geo:skill-rich-content",
       "command": "node ./dist/scripts/seo-geo-skill-rich-content-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "seo:audit-fixture",
-      "command": "node ./dist/scripts/seo-audit-fixture-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "seo:cli-blackbox",
-      "command": "node ./dist/scripts/seo-cli-blackbox-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "seo:no-mutation-by-default",
-      "command": "node ./dist/scripts/seo-no-mutation-by-default-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -2848,99 +2389,6 @@
     {
       "id": "triwiki:cache-key",
       "command": "node ./dist/scripts/triwiki-cache-key-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "triwiki:proof-bank",
-      "command": "node ./dist/scripts/triwiki-proof-bank-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 120000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "triwiki:proof-bank-blackbox",
-      "command": "node ./dist/scripts/triwiki-proof-bank-blackbox.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 300000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "docs/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "triwiki:proof-card",
-      "command": "node ./dist/scripts/triwiki-proof-card-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -3782,6 +3230,209 @@
       ],
       "side_effect": "hermetic",
       "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "seo-geo:route-identity-comprehensive",
+      "command": "node ./dist/scripts/seo-geo-geo-disambiguation-check.js && node ./dist/scripts/seo-geo-route-identity-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "seo:comprehensive",
+      "command": "node ./dist/scripts/seo-audit-fixture-check.js && node ./dist/scripts/seo-cli-blackbox-check.js && node ./dist/scripts/seo-no-mutation-by-default-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 420000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "triwiki:proof-comprehensive",
+      "command": "node ./dist/scripts/triwiki-proof-card-check.js && node ./dist/scripts/triwiki-proof-bank-check.js && node ./dist/scripts/triwiki-proof-bank-blackbox.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 650000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/**",
+          "docs/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex-lb:comprehensive",
+      "command": "node ./dist/scripts/codex-lb-fast-ui-preservation-check.js && node ./dist/scripts/codex-lb-gpt55-fast-profile-check.js",
+      "deps": [
+        "codex-app:fast-ui-preservation"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "geo:comprehensive",
+      "command": "node ./dist/scripts/geo-claim-evidence-check.js && node ./dist/scripts/geo-cli-blackbox-check.js && node ./dist/scripts/geo-crawler-policy-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 420000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/**",
+          "schemas/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "scheduler:comprehensive",
+      "command": "node ./dist/scripts/scheduler-batch-dispatch-check.js && node ./dist/scripts/scheduler-utilization-integral-check.js && node ./dist/scripts/scheduler-parallel-proof-consistency-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read",
+        "timing-sensitive"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 420000,
+      "cache": {
+        "enabled": false,
+        "inputs": []
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex-sdk:integration-comprehensive",
+      "command": "node ./dist/scripts/codex-sdk-backend-router-check.js && node ./dist/scripts/codex-sdk-capability-check.js && node ./dist/scripts/codex-sdk-event-stream-ledger-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 420000,
       "cache": {
         "enabled": true,
         "inputs": [
