@@ -1,12 +1,16 @@
 {
   "schema": "sks.perf-budgets.v1",
-  "_note": "budget_p50_ms/budget_p95_ms are judged against raw wall-clock time (no node-startup-baseline deduction, 20차 P0-11). Calibrated from raw measurement on a warm dev machine (2026-07-09: version/root/commands/super-search-doctor ~40-70ms, dollar-commands ~50-130ms, doctor --json fast-mode ~40ms) with headroom for slower/CI hosts; retighten once real CI raw numbers are collected (see P2-6).",
+  "_note": "budget_p50_ms/budget_p95_ms are judged against raw wall-clock time (no node-startup-baseline deduction, 20차 P0-11). Calibrated from raw measurement on a warm dev machine (2026-07-09: version/root/commands/super-search-doctor ~40-70ms, dollar-commands ~50-130ms, doctor --json fast-mode ~40ms, plan --help/status --json/commands/mad-sks --help added after P2-2/P2-5d verification ~45-167ms) with headroom for slower/CI hosts; retighten once real CI raw numbers are collected. Gate-runtime and $Swarm-overhead budgets from the 20차 P2-6 table are NOT covered here — the former needs the P3 gate consolidation (207->~30) done first, the latter needs a real-backend E2E run (P4 E2E-1) to measure against plain `codex exec`, neither of which this repo state has yet.",
   "commands": [
     { "name": "version", "argv": ["node", "./dist/bin/sks.js", "--version"], "budget_p50_ms": 100, "budget_p95_ms": 150 },
     { "name": "commands-json", "argv": ["node", "./dist/bin/sks.js", "commands", "--json"], "budget_p50_ms": 150, "budget_p95_ms": 220 },
+    { "name": "commands", "argv": ["node", "./dist/bin/sks.js", "commands"], "budget_p50_ms": 250, "budget_p95_ms": 300 },
     { "name": "root-json", "argv": ["node", "./dist/bin/sks.js", "root", "--json"], "budget_p50_ms": 150, "budget_p95_ms": 220 },
     { "name": "dollar-commands-json", "argv": ["node", "./dist/bin/sks.js", "dollar-commands", "--json"], "budget_p50_ms": 200, "budget_p95_ms": 300 },
     { "name": "super-search-doctor-json", "argv": ["node", "./dist/bin/sks.js", "super-search", "doctor", "--json"], "budget_p50_ms": 150, "budget_p95_ms": 220 },
-    { "name": "doctor-json", "argv": ["node", "./dist/bin/sks.js", "doctor", "--json"], "budget_p50_ms": 200, "budget_p95_ms": 300 }
+    { "name": "doctor-json", "argv": ["node", "./dist/bin/sks.js", "doctor", "--json"], "budget_p50_ms": 200, "budget_p95_ms": 300 },
+    { "name": "status-json", "argv": ["node", "./dist/bin/sks.js", "status", "--json"], "budget_p50_ms": 220, "budget_p95_ms": 300 },
+    { "name": "plan-help", "argv": ["node", "./dist/bin/sks.js", "plan", "--help"], "budget_p50_ms": 100, "budget_p95_ms": 150 },
+    { "name": "mad-sks-help", "argv": ["node", "./dist/bin/sks.js", "mad-sks", "--help"], "budget_p50_ms": 100, "budget_p95_ms": 150 }
   ]
 }
