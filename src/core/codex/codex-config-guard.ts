@@ -2,7 +2,7 @@ import path from 'node:path'
 import { appendJsonl, ensureDir, nowIso, readText, sha256, writeTextAtomic } from '../fsx.js'
 import { diffCodexAppUiSnapshots, snapshotCodexAppUiState } from '../codex-app/codex-app-ui-state-snapshot.js'
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from './codex-config-toml.js'
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
+import { GPT55_CODEX_MODEL, REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export interface WriteCodexConfigGuardedInput {
   root?: string
@@ -190,7 +190,9 @@ export function removeLegacyTopLevelCodexModeLocks(text: string = '') {
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x))
   const end = firstTable === -1 ? lines.length : firstTable
   const topLevelModel = topLevelTomlString(text, 'model')
-  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL
+  // Current default stamp OR the legacy gpt-5.5 stamp older SKS versions wrote,
+  // so upgrades keep cleaning locks written before the 5.6-terra default bump.
+  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL || topLevelModel === GPT55_CODEX_MODEL
   return ensureTrailingNewline(lines.filter((line, index) => {
     if (index >= end) return true
     if (!removeSksOwnedModeLock) return true

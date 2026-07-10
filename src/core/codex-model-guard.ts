@@ -1,11 +1,14 @@
-export const REQUIRED_CODEX_MODEL = 'gpt-5.5';
+// Default model/effort for every SKS-managed Codex surface. gpt-5.6-terra is
+// served by the patched codex-lb (v1.20.1-r3, upstream PR #1173 port) with a
+// 6-level low~ultra reasoning range. Keys still LB-pinned to enforced_model=
+// gpt-5.5 will have the model rewritten server-side; unpin a key in the LB
+// dashboard (:1455) to actually receive 5.6 responses on it.
+export const REQUIRED_CODEX_MODEL = 'gpt-5.6-terra';
+export const DEFAULT_CODEX_REASONING_EFFORT = 'high';
+export const GPT55_CODEX_MODEL = 'gpt-5.5';
 export const GPT54_MINI_CODEX_MODEL = 'gpt-5.4-mini';
-// gpt-5.6 variants served by the patched codex-lb (v1.20.1-r3, upstream PR #1173
-// port). Selectable opt-in only: the LB still pins fleet agent keys to
-// enforced_model=gpt-5.5, so SKS keeps gpt-5.5 as the forced default and only
-// passes a 5.6 model through when the caller asks for it explicitly.
 export const GPT56_CODEX_MODELS = ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'] as const;
-export const SUPPORTED_CODEX_MODELS = [REQUIRED_CODEX_MODEL, GPT54_MINI_CODEX_MODEL, ...GPT56_CODEX_MODELS] as const;
+export const SUPPORTED_CODEX_MODELS = [REQUIRED_CODEX_MODEL, GPT55_CODEX_MODEL, GPT54_MINI_CODEX_MODEL, 'gpt-5.6-sol', 'gpt-5.6-luna'] as const;
 
 const MODEL_VALUE_FLAGS = new Set(['--model', '-m']);
 const CONFIG_VALUE_FLAGS = new Set(['-c', '--config']);
@@ -47,10 +50,10 @@ function isSupportedCodexModel(value: any = '') {
   return SUPPORTED_CODEX_MODELS.includes(String(value || '').trim().toLowerCase() as any);
 }
 
-// The forced model is gpt-5.5 unless the caller explicitly requested another
-// SUPPORTED model (via --model/-m/-c model=... args, or SKS_CODEX_MODEL when no
-// arg is present). Unsupported/forbidden requests are still stripped and
-// rewritten to gpt-5.5, same as before — only the supported allowlist widened.
+// The forced model is REQUIRED_CODEX_MODEL unless the caller explicitly
+// requested another SUPPORTED model (via --model/-m/-c model=... args, or
+// SKS_CODEX_MODEL when no arg is present). Unsupported/forbidden requests are
+// stripped and rewritten to the required default.
 function resolveForcedCodexModel(args: any = []) {
   const requested = requestedCodexModelFromArgs(args);
   if (isSupportedCodexModel(requested)) return String(requested).trim().toLowerCase();
@@ -77,11 +80,11 @@ function requestedCodexModelFromArgs(args: any = []) {
   return '';
 }
 
-export function forceGpt55CodexArgs(args: any = []) {
+export function forceRequiredCodexModelArgs(args: any = []) {
   return ['--model', resolveForcedCodexModel(args), ...stripCodexModelOverrides(args)];
 }
 
-export function forceGpt55CodexConfigArgs(args: any = []) {
+export function forceRequiredCodexModelConfigArgs(args: any = []) {
   return ['-c', `model="${resolveForcedCodexModel(args)}"`, ...stripCodexModelOverrides(args)];
 }
 

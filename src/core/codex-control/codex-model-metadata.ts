@@ -1,5 +1,6 @@
 import { findCodexBinary } from '../codex-adapter.js'
 import { runProcess } from '../fsx.js'
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 const FALLBACK_EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh']
 
@@ -15,9 +16,9 @@ export interface CodexModelMetadata {
 export async function collectCodexModelMetadata(input: { model?: string | null } = {}): Promise<CodexModelMetadata> {
   if (process.env.SKS_CODEX_MODEL_METADATA_FAKE === '1') {
     const advertised = normalizeAdvertisedEfforts(process.env.SKS_CODEX_MODEL_EFFORTS || 'low,medium,high,xhigh')
-    return metadata(String(input.model || process.env.SKS_CODEX_MODEL || 'gpt-5.5'), advertised, 'medium', 'app-server', [])
+    return metadata(String(input.model || process.env.SKS_CODEX_MODEL || REQUIRED_CODEX_MODEL), advertised, 'medium', 'app-server', [])
   }
-  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5')
+  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || REQUIRED_CODEX_MODEL)
   const appServer = await readAppServerMetadata(model)
   if (appServer) return appServer
   const cli = await readCodexCliMetadata(model)

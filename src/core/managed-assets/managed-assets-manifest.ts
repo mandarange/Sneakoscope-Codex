@@ -1,4 +1,4 @@
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
+import { REQUIRED_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT } from '../codex-model-guard.js'
 
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
 export const MANAGED_ASSET_VERSION = '4.8.1'
@@ -101,7 +101,7 @@ export function managedAgentRoleContent(role: ManagedAgentRole): string {
     `name = "${role.codex_name}"`,
     `description = "${role.description}"`,
     `model = "${REQUIRED_CODEX_MODEL}"`,
-    'model_reasoning_effort = "medium"',
+    `model_reasoning_effort = "${DEFAULT_CODEX_REASONING_EFFORT}"`,
     `sandbox_mode = "${role.sandbox}"`,
     `permission_profile = "${role.permission_profile}"`,
     `legacy_sandbox_projection = "${role.legacy_sandbox_projection}"`,

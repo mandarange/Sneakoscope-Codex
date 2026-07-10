@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { writeJsonAtomic } from '../fsx.js'
 import { collectCodexModelMetadata, type CodexModelMetadata } from './codex-model-metadata.js'
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export interface CodexModelEffortCapability {
   model: string
@@ -20,7 +21,7 @@ export function codexModelEffortCapability(input: { model?: string | null; adver
   const requestedDefault = input.metadata?.default_effort || input.defaultEffort
   const defaultEffort = order.includes(String(requestedDefault || '')) ? String(requestedDefault) : order.includes('medium') ? 'medium' : order[0] || 'medium'
   return {
-    model: String(input.metadata?.model || input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || 'gpt-5.5'),
+    model: String(input.metadata?.model || input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || REQUIRED_CODEX_MODEL),
     advertised_efforts: order,
     default_effort: defaultEffort,
     order_source: advertised.length ? 'model-advertised' : 'sks-fallback',

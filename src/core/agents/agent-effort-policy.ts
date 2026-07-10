@@ -5,7 +5,7 @@ import { GLM_52_OPENROUTER_MODEL, type Glm52ReasoningEffort } from '../providers
 
 export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
 export type AgentModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
-export type AgentWorkerModelTier = 'gpt-5.4-mini' | 'gpt-5.5-low' | 'gpt-5.5-high' | 'glm-5.2-minimal' | 'glm-5.2-low' | 'glm-5.2-high' | 'glm-5.2-xhigh'
+export type AgentWorkerModelTier = 'gpt-5.4-mini' | `${typeof REQUIRED_CODEX_MODEL}-low` | `${typeof REQUIRED_CODEX_MODEL}-high` | 'glm-5.2-minimal' | 'glm-5.2-low' | 'glm-5.2-high' | 'glm-5.2-xhigh'
 
 export interface AgentEffortDecision {
   schema: 'sks.agent-effort-decision.v1'
@@ -160,14 +160,14 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     dynamic: true,
     service_tier: 'fast',
     allowed_models: [GPT54_MINI_CODEX_MODEL, REQUIRED_CODEX_MODEL, GLM_52_OPENROUTER_MODEL],
-    model_tiers: ['gpt-5.4-mini', 'gpt-5.5-low', 'gpt-5.5-high', 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
+    model_tiers: ['gpt-5.4-mini', `${REQUIRED_CODEX_MODEL}-low`, `${REQUIRED_CODEX_MODEL}-high`, 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
     allowed_efforts: codexModelEffortCapability().advertised_efforts,
     model_effort_capability: codexModelEffortCapability(),
     max_agents: roster.max_agents || 20,
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
-    rule: 'Parent orchestration assigns per-agent model tiers from prompt risk, persona role, lease ownership, and proof state: simple bounded GPT workers can downshift to gpt-5.4-mini; ordinary GPT workers use gpt-5.5 low; risky GPT lanes use gpt-5.5 high. In GLM mode, native workers stay on z-ai/glm-5.2 and receive GLM effort tiers.'
+    rule: `Parent orchestration assigns per-agent model tiers from prompt risk, persona role, lease ownership, and proof state: simple bounded GPT workers can downshift to gpt-5.4-mini; ordinary GPT workers use ${REQUIRED_CODEX_MODEL} low; risky GPT lanes use ${REQUIRED_CODEX_MODEL} high. In GLM mode, native workers stay on z-ai/glm-5.2 and receive GLM effort tiers.`
   }
 }
 
@@ -227,8 +227,8 @@ export function decideAgentWorkerModel(input: {
     return {
       model: REQUIRED_CODEX_MODEL,
       model_reasoning_effort: 'high',
-      model_tier: 'gpt-5.5-high',
-      model_profile: 'sks-agent-gpt-5.5-high-fast',
+      model_tier: `${REQUIRED_CODEX_MODEL}-high`,
+      model_profile: `sks-agent-${REQUIRED_CODEX_MODEL}-high-fast`,
       reason: 'risk_signal_worker'
     }
   }
@@ -245,17 +245,17 @@ export function decideAgentWorkerModel(input: {
     return {
       model: REQUIRED_CODEX_MODEL,
       model_reasoning_effort: 'high',
-      model_tier: 'gpt-5.5-high',
-      model_profile: 'sks-agent-gpt-5.5-high-fast',
+      model_tier: `${REQUIRED_CODEX_MODEL}-high`,
+      model_profile: `sks-agent-${REQUIRED_CODEX_MODEL}-high-fast`,
       reason: 'risk_or_high_effort_worker'
     }
   }
   return {
     model: gptMain ? REQUIRED_CODEX_MODEL : mainModel || REQUIRED_CODEX_MODEL,
     model_reasoning_effort: 'low',
-    model_tier: 'gpt-5.5-low',
-    model_profile: 'sks-agent-gpt-5.5-low-fast',
-    reason: gptMain ? 'ordinary_worker_gpt55_low' : 'non_gpt_main_model_preserved'
+    model_tier: `${REQUIRED_CODEX_MODEL}-low`,
+    model_profile: `sks-agent-${REQUIRED_CODEX_MODEL}-low-fast`,
+    reason: gptMain ? 'ordinary_worker_main_gpt_low' : 'non_gpt_main_model_preserved'
   }
 }
 

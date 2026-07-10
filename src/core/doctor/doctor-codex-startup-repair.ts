@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
+import { REQUIRED_CODEX_MODEL, DEFAULT_CODEX_REASONING_EFFORT } from '../codex-model-guard.js'
 import { ensureDir, exists, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 
@@ -544,7 +544,7 @@ function roleConfigToml(name: string, description: string, sandbox: 'read-only' 
     `name = "${name}"`,
     `description = "${description}"`,
     `model = "${REQUIRED_CODEX_MODEL}"`,
-    'model_reasoning_effort = "medium"',
+    `model_reasoning_effort = "${DEFAULT_CODEX_REASONING_EFFORT}"`,
     `sandbox_mode = "${sandbox}"`,
     'approval_policy = "never"',
     'developer_instructions = """',

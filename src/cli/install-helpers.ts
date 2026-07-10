@@ -34,7 +34,7 @@ import { extractTomlTable, writeCodexConfigGuarded } from '../core/codex/codex-c
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js';
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 import { repairCodexImagegen } from '../core/doctor/imagegen-repair.js';
-import { REQUIRED_CODEX_MODEL } from '../core/codex-model-guard.js';
+import { GPT55_CODEX_MODEL, REQUIRED_CODEX_MODEL } from '../core/codex-model-guard.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -1929,7 +1929,9 @@ function removeLegacyTopLevelCodexModeLocks(text: any = '') {
   const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const end = firstTable === -1 ? lines.length : firstTable;
   const topLevelModel = topLevelTomlString(text, 'model');
-  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL;
+  // Recognize both the current default stamp and the legacy gpt-5.5 stamp older
+  // SKS versions wrote, so upgrades keep cleaning locks written before the 5.6 bump.
+  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL || topLevelModel === GPT55_CODEX_MODEL;
   return lines.filter((line: any, index: any) => {
     if (index >= end) return true;
     if (!removeSksOwnedModeLock) return true;

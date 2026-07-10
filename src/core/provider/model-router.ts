@@ -1,3 +1,4 @@
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js';
 export type TaskCategory = 'quick' | 'standard' | 'agentic' | 'ultrabrain' | 'verify' | 'review';
 export type ModelReasoning = 'low' | 'medium' | 'high' | 'xhigh';
 export type ModelServiceTier = 'fast' | 'standard';
@@ -17,23 +18,23 @@ export interface LbHealth {
 const CHAINS: Record<TaskCategory, ModelChoice[]> = {
   quick: [
     { model: 'gpt-5.4-mini', reasoning: 'low', serviceTier: 'fast' },
-    { model: 'gpt-5.5', reasoning: 'low', serviceTier: 'fast' }
+    { model: REQUIRED_CODEX_MODEL, reasoning: 'low', serviceTier: 'fast' }
   ],
   standard: [
-    { model: 'gpt-5.5', reasoning: 'medium', serviceTier: 'fast' }
+    { model: REQUIRED_CODEX_MODEL, reasoning: 'medium', serviceTier: 'fast' }
   ],
   agentic: [
     { model: 'gpt-5.3-codex', reasoning: 'high', serviceTier: 'fast' },
-    { model: 'gpt-5.5', reasoning: 'high', serviceTier: 'fast' }
+    { model: REQUIRED_CODEX_MODEL, reasoning: 'high', serviceTier: 'fast' }
   ],
   ultrabrain: [
-    { model: 'gpt-5.5', reasoning: 'xhigh', serviceTier: 'standard' }
+    { model: REQUIRED_CODEX_MODEL, reasoning: 'xhigh', serviceTier: 'standard' }
   ],
   verify: [
     { model: 'gpt-5.4-mini', reasoning: 'medium', serviceTier: 'fast' }
   ],
   review: [
-    { model: 'gpt-5.5', reasoning: 'high', serviceTier: 'fast' }
+    { model: REQUIRED_CODEX_MODEL, reasoning: 'high', serviceTier: 'fast' }
   ]
 };
 

@@ -2,6 +2,7 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
+import { REQUIRED_CODEX_MODEL } from './codex-model-guard.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
 import { repairSksGeneratedArtifacts } from './harness-conflicts.js';
@@ -569,7 +570,7 @@ export async function initProject(root: any, opts: any = {}) {
         block_other_codex_harnesses: true,
         hard_blockers: ['OMX', 'DCodex'],
         cleanup_prompt_command: `${commandPrefix} conflicts prompt`,
-        cleanup_model: 'gpt-5.5',
+        cleanup_model: REQUIRED_CODEX_MODEL,
         cleanup_reasoning_effort: 'high',
         human_approval_required: true
       },

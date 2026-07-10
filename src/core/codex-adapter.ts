@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { runProcess, type RunProcessResult } from './fsx.js';
-import { forceGpt55CodexArgs } from './codex-model-guard.js';
+import { forceRequiredCodexModelArgs } from './codex-model-guard.js';
 import { managedProxyEnvForChild } from './codex/managed-proxy-env.js';
 import { resolveCodexRuntime } from './codex-runtime/resolve-codex-runtime.js';
 
@@ -43,7 +43,7 @@ export function buildCodexExecArgs({ root, prompt, outputFile, json = true, prof
   if (profile) args.push('--profile', profile);
   if (json) args.push('--json');
   if (outputFile) args.push('--output-last-message', outputFile);
-  args.push(...forceGpt55CodexArgs(extraArgs));
+  args.push(...forceRequiredCodexModelArgs(extraArgs));
   args.push(prompt);
   return args;
 }

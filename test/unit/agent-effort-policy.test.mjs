@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { REQUIRED_CODEX_MODEL } from '../../dist/core/codex-model-guard.js';
 import { buildAgentRoster } from '../../dist/core/agents/agent-roster.js';
 import { decideAgentEffort, decideAgentWorkerModel } from '../../dist/core/agents/agent-effort-policy.js';
 
@@ -15,9 +16,9 @@ test('native agent effort policy assigns high effort to safety and release lanes
 
   assert.equal(safety.reasoning_effort, 'high');
   assert.equal(release.reasoning_effort, 'high');
-  assert.equal(safety.model, 'gpt-5.5');
+  assert.equal(safety.model, REQUIRED_CODEX_MODEL);
   assert.equal(safety.model_reasoning_effort, 'high');
-  assert.equal(safety.model_tier, 'gpt-5.5-high');
+  assert.equal(safety.model_tier, `${REQUIRED_CODEX_MODEL}-high`);
   assert.equal(safety.dynamic, true);
   assert.ok(safety.escalation_triggers.some((trigger) => trigger.includes('DB/security/release')));
 });
@@ -35,9 +36,9 @@ test('native agent effort policy downshifts simple bounded code work to gpt-5.4-
   assert.equal(simple.model, 'gpt-5.4-mini');
   assert.equal(simple.model_reasoning_effort, 'low');
   assert.equal(simple.model_tier, 'gpt-5.4-mini');
-  assert.equal(ordinary.model, 'gpt-5.5');
+  assert.equal(ordinary.model, REQUIRED_CODEX_MODEL);
   assert.equal(ordinary.model_reasoning_effort, 'low');
-  assert.equal(ordinary.model_tier, 'gpt-5.5-low');
+  assert.equal(ordinary.model_tier, `${REQUIRED_CODEX_MODEL}-low`);
 });
 
 test('native agent roster records per-agent dynamic effort policy', () => {
@@ -51,7 +52,7 @@ test('native agent roster records per-agent dynamic effort policy', () => {
   assert.ok(roster.roster.every((agent) => agent.model && agent.model_tier && agent.model_profile));
   assert.ok(roster.roster.every((agent) => ['low', 'high'].includes(agent.model_reasoning_effort)));
   assert.ok(roster.roster.some((agent) => agent.reasoning_effort === 'high'));
-  assert.ok(roster.roster.some((agent) => agent.model_tier === 'gpt-5.5-high'));
+  assert.ok(roster.roster.some((agent) => agent.model_tier === `${REQUIRED_CODEX_MODEL}-high`));
   assert.ok(roster.roster.every((agent) => agent.dynamic_effort_policy.escalation_triggers.length > 0));
 });
 

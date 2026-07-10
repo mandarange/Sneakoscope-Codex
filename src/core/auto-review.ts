@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
+import { REQUIRED_CODEX_MODEL } from './codex-model-guard.js';
 
 export const AUTO_REVIEW_REVIEWER = 'auto_review';
 export const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
@@ -127,7 +128,7 @@ export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; blo
 
 function sksProfileFileBlock(opts: any = {}) {
   return [
-    'model = "gpt-5.5"',
+    `model = "${REQUIRED_CODEX_MODEL}"`,
     `service_tier = "${opts.serviceTier || 'fast'}"`,
     `approval_policy = "${opts.approvalPolicy || 'on-request'}"`,
     ...(opts.reviewer ? [`approvals_reviewer = "${opts.reviewer}"`] : []),
@@ -327,7 +328,7 @@ function profileConfigBlock(opts: any = {}) {
   const approvalPolicy = opts.approvalPolicy || 'on-request';
   const sandboxMode = opts.sandboxMode || 'workspace-write';
   return [
-    'model = "gpt-5.5"',
+    `model = "${REQUIRED_CODEX_MODEL}"`,
     'service_tier = "fast"',
     `approval_policy = "${approvalPolicy}"`,
     `approvals_reviewer = "${reviewer}"`,

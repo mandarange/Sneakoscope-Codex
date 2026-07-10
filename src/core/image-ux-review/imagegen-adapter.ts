@@ -9,6 +9,7 @@ import { withResponsesRetry } from '../responses-retry-policy.js';
 import { discoverCodexAppGeneratedImage } from './codex-app-generated-image-discovery.js';
 import { writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 import { registerImageArtifact } from '../image/image-artifact-registry.js';
+import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 const DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits';
 
@@ -675,7 +676,7 @@ function responsesEndpoint(baseUrl: any = '') {
 }
 
 function responsesImagegenModel(opts: any = {}) {
-  return String(opts.responsesModel || process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || 'gpt-5.5');
+  return String(opts.responsesModel || process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || REQUIRED_CODEX_MODEL);
 }
 
 function imagegenFetchTimeoutMs(opts: any = {}) {
