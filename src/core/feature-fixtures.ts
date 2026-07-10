@@ -219,8 +219,8 @@ const FIXTURES = Object.freeze({
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass', {
     reason: 'Dollar-command alias of cli-commit-and-push; dispatches to the same simpleGitCommitCommand() that performs a real commit and `git push` with no working --dry-run mode. Left as documented mock alongside cli-commit-and-push.'
   }),
-  'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
-  'route-native-agent-intake': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 5 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
+  'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 4 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
+  'route-native-agent-intake': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 4 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
   'proof-agent-evidence': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'agents/agent-proof-evidence.json'], 'pass', { timeout_ms: 240000 })
 });
 

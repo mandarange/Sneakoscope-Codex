@@ -7,7 +7,7 @@ import { writeJsonAtomic } from '../core/fsx.js'
 const args = process.argv.slice(2)
 const skipReleaseCheck = args.includes('--skip-release-check') || process.env.SKS_RELEASE_REAL_CHECK_SKIP_RELEASE_CHECK === '1'
 const root = process.cwd()
-const concurrency = Math.max(1, Math.floor(Number(process.env.SKS_RELEASE_REAL_CHECK_CONCURRENCY || 4)))
+const concurrency = Math.max(1, Math.min(4, Math.floor(Number(process.env.SKS_RELEASE_REAL_CHECK_CONCURRENCY || 2))))
 
 const report = {
   schema: 'sks.release-real-check.v1',

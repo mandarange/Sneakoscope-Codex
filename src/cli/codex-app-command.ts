@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
 import { codexRemoteControlStatus, formatCodexRemoteControlStatus } from '../core/codex-app.js';
-import { forceRequiredCodexModelConfigArgs } from '../core/codex-model-guard.js';
 
 export async function codexAppRemoteControlCommand(args: any = [], opts: any = {}) {
   const controlArgs = argsBeforeSeparator(args);
@@ -28,7 +27,7 @@ export async function codexAppRemoteControlCommand(args: any = [], opts: any = {
     return;
   }
 
-  const passthrough = forceRequiredCodexModelConfigArgs(stripSeparator(args));
+  const passthrough = stripSeparator(args).map((arg: unknown) => String(arg));
   const spawnFn = opts.spawn || spawn;
   const code = await spawnInherited(spawnFn, status.codex_cli.bin, ['remote-control', ...passthrough], {
     cwd: process.cwd(),

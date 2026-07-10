@@ -12,10 +12,10 @@ const tmp = makeTempPatchProject('sks-strategy-lease-');
 const files = Array.from({ length: 10 }, (_, index) => `file-${index + 1}.txt`);
 const prompt = files.map((file) => `\`${file}\``).join(' ');
 const compiled = strategy.compileStrategy({ prompt, route: '$Agent', agentCount: 5 });
-const roster = rosterMod.buildAgentRoster({ agents: 5, concurrency: 5, prompt });
+const roster = rosterMod.buildAgentRoster({ agents: 5, concurrency: 4, prompt });
 const partition = await partitionMod.buildAgentWorkPartition(tmp, roster, prompt, {
   route: '$Agent',
-  targetActiveSlots: 5,
+  targetActiveSlots: 4,
   desiredWorkItemCount: 10,
   minimumWorkItems: 10,
   strategyOwnershipPlan: compiled.file_ownership_plan,

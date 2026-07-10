@@ -15,8 +15,8 @@ const lock = readJson('package-lock.json');
 checkJson('package-lock.json', 'version', lock.version);
 checkJson('package-lock.json', 'packages[""].version', lock.packages?.['']?.version);
 checkRegex('src/core/version.ts', /PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/, 'PACKAGE_VERSION');
-checkRegex('src/core/fsx.ts', /PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/, 'PACKAGE_VERSION');
-checkRegex('src/bin/sks.ts', /FAST_PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/, 'FAST_PACKAGE_VERSION');
+checkReExportOrRegex('src/core/fsx.ts', /PACKAGE_VERSION\s*}\s*from\s*['"]\.\/version(?:\.js)?['"]/, /PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/, 'PACKAGE_VERSION');
+checkReExportOrRegex('src/bin/sks.ts', /PACKAGE_VERSION\s*}\s*from\s*['"]\.\.\/core\/version(?:\.js)?['"]/, /FAST_PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/, 'FAST_PACKAGE_VERSION');
 checkRegex('crates/sks-core/Cargo.toml', /^version\s*=\s*"([^"]+)"/m, 'package.version');
 checkCargoLock('crates/sks-core/Cargo.lock', 'sks-core');
 const dist = readJson('dist/build-manifest.json', null);
@@ -52,6 +52,12 @@ function checkRegex(file, re, field) {
   const match = text.match(re);
   if (!match) mismatch(file, field, null);
   else if (match[1] !== expected) mismatch(file, field, match[1]);
+}
+
+function checkReExportOrRegex(file, reExportRe, literalRe, field) {
+  const text = readText(file);
+  if (reExportRe.test(text)) return;
+  checkRegex(file, literalRe, field);
 }
 
 function checkCargoLock(file, name) {

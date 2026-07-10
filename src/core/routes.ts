@@ -323,7 +323,7 @@ export const ROUTES = [
     reasoningPolicy: 'high',
     stopGate: 'release-readiness-report.json',
     cliEntrypoint: 'sks agent run "release audit" --route "$Release-Review" --agents <n> --concurrency <n> --mock --json',
-    examples: ['$Release-Review agents:10 concurrency:5 release audit', 'sks agent run "wide release audit" --route "$Release-Review" --agents 10 --concurrency 5 --mock --json']
+    examples: ['$Release-Review agents:10 concurrency:4 release audit', 'sks agent run "wide release audit" --route "$Release-Review" --agents 10 --concurrency 4 --mock --json']
   },
   {
     id: 'QALoop',

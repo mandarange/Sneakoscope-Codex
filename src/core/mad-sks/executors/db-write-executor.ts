@@ -30,30 +30,33 @@ export async function runDbWrite(input: MadSksExecutorInput, context: MadSksExec
     root: context.package_root
   });
   if (!guard.ok) blockers.push(...guard.issues);
+  // db-write-executor has no execution engine — it never calls runMadDbCycle (or any
+  // adapter) to actually run SQL against a database. It can only produce a preview
+  // plan. A real apply must therefore always be blocked here rather than fabricate
+  // an 'applied' result; the actual execution route is the sql-plane executor.
+  if (!dryRun) blockers.push('db_write_executor_no_execution_engine_use_sql_plane_executor');
   if (blockers.length) {
     return resultFromEvidence({ executor: dbWriteExecutor.id, actionType: 'db_write', context, status: 'blocked', blockedActions: [guard, sqlClassification], blockers });
   }
   const verification = [{ kind: 'db_write_plan', ok: true, dry_run: dryRun, transaction_required: true, transaction_wrapper: 'required_when_supported_by_adapter', row_counts_redacted: true, migration_file: migrationFile, migration_hash: migrationHash }];
-  const rollbackUnavailable = input.rollback_sql || input.down_migration ? [] : ['db_snapshot_or_rollback_sql_required_for_apply'];
-  const status = !dryRun && rollbackUnavailable.length ? 'blocked' : dryRun ? 'dry_run' : 'applied';
   const evidence = await writeExecutorEvidence({
     context,
     executor: dbWriteExecutor.id,
     actionType: 'db_write',
     dbRollbacks: input.rollback_sql || input.down_migration ? [{ type: input.rollback_sql ? 'rollback_sql' : 'down_migration', sql: input.rollback_sql || input.down_migration }] : [],
-    rollbackUnavailable,
-    auditActions: [madSksAuditAction({ type: 'db_write', command: '[REDACTED_DB_WRITE]', rollback_available: rollbackUnavailable.length === 0, risk_level: 'high' })],
+    rollbackUnavailable: [],
+    auditActions: [madSksAuditAction({ type: 'db_write', command: '[REDACTED_DB_WRITE_PLAN]', rollback_available: Boolean(input.rollback_sql || input.down_migration), risk_level: 'high' })],
     verification
   });
   return resultFromEvidence({
     executor: dbWriteExecutor.id,
     actionType: 'db_write',
     context,
-    status,
+    status: 'dry_run',
     evidence,
     verification,
-    blockers: status === 'blocked' ? rollbackUnavailable : [],
-    writesPerformed: status === 'applied',
+    blockers: [],
+    writesPerformed: false,
     extra: { guard, sql_classification: sqlClassification, migration_file: migrationFile, migration_hash: migrationHash, affected_tables: input.affected_tables || [] }
   });
 }

@@ -357,11 +357,11 @@ assertGate(/^\d+\.\d+\.\d+$/.test(RELEASE_VERSION), 'package.json version must b
 assertGate(lock.version === RELEASE_VERSION, `package-lock version must be ${RELEASE_VERSION}`, { version: lock.version });
 assertGate(lock.packages?.['']?.version === RELEASE_VERSION, `package-lock root version must be ${RELEASE_VERSION}`, { version: lock.packages?.['']?.version });
 assertVersionSurface('src/core/version.ts', `PACKAGE_VERSION = '${RELEASE_VERSION}'`);
-assertVersionSurface('src/core/fsx.ts', `PACKAGE_VERSION = '${RELEASE_VERSION}'`);
-assertVersionSurface('src/bin/sks.ts', `FAST_PACKAGE_VERSION = '${RELEASE_VERSION}'`);
+assertVersionSurface('src/core/fsx.ts', "PACKAGE_VERSION } from './version.js'");
+assertVersionSurface('src/bin/sks.ts', "PACKAGE_VERSION } from '../core/version.js'");
 assertVersionSurface('crates/sks-core/Cargo.toml', `version = "${RELEASE_VERSION}"`);
 assertVersionSurface('crates/sks-core/Cargo.lock', `version = "${RELEASE_VERSION}"`);
-assertVersionSurface('crates/sks-core/src/main.rs', `sks-rs ${RELEASE_VERSION}`);
+assertVersionSurface('crates/sks-core/src/main.rs', 'sks-rs {}", env!("CARGO_PKG_VERSION")');
 assertGate(distManifest?.version === RELEASE_VERSION, `dist/build-manifest version must be ${RELEASE_VERSION}`, { version: distManifest?.version || null });
 assertGate(distManifest?.package_version === RELEASE_VERSION, `dist/build-manifest package_version must be ${RELEASE_VERSION}`, { package_version: distManifest?.package_version || null });
 assertGate(typeof distManifest?.source_digest === 'string' && distManifest.source_digest.length >= 32, 'dist/build-manifest must include source_digest', { source_digest: distManifest?.source_digest || null });

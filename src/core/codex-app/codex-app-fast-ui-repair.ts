@@ -12,9 +12,8 @@ import { codexProviderModelUiStatus } from '../codex-app.js'
 export const CODEX_APP_FAST_UI_REPAIR_SCHEMA = 'sks.codex-app-fast-ui-repair.v1'
 
 const FAST_UI_TOP_LEVEL_RE = /^\s*(?:model|model_reasoning_effort|service_tier)\s*=/
-const CODEX_APP_MODE_LOCK_TOP_LEVEL_RE = /^\s*(?:model|model_reasoning_effort)\s*=/
 const FAST_UI_FEATURE_LINE_RE = /^\s*fast_mode\s*=/
-const FAST_UI_USER_TABLE_LINE_RE = /^\s*(enabled|visible|locked|hidden|disabled)\s*=/
+const FAST_UI_LEGACY_TABLES = new Set(['user.fast_mode', 'profiles.sks-fast-high'])
 const SKS_CAUSED_RE = /(?:SKS|Sneakoscope|codex-lb|sks-mad|sks fast)/i
 
 export async function repairCodexAppFastUi(root: string = process.cwd(), input: {
@@ -144,13 +143,18 @@ function stripProjectLocalForbiddenKeys(text: string) {
 }
 
 function stripSksCausedHostOwnedLines(text: string) {
-  return stripMatchingLines(text, (line, table, previous, next) => {
-    const isCodexAppModeLock = !table && CODEX_APP_MODE_LOCK_TOP_LEVEL_RE.test(line)
+  const topLevel = String(text || '').split(/\n\s*\[/)[0] || ''
+  const sksManagedTopLevel = SKS_CAUSED_RE.test(topLevel)
+  const sksManagedDocument = SKS_CAUSED_RE.test(String(text || ''))
+  const stripped = stripMatchingLines(text, (line, table, previous, next) => {
+    const isLegacyFastTable = table ? FAST_UI_LEGACY_TABLES.has(table) : false
     const isFastUiLine = FAST_UI_TOP_LEVEL_RE.test(line)
       || (table === 'features' && FAST_UI_FEATURE_LINE_RE.test(line))
-      || (table === 'user.fast_mode' && FAST_UI_USER_TABLE_LINE_RE.test(line))
-    return isCodexAppModeLock || (isFastUiLine && (SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(previous) || SKS_CAUSED_RE.test(next)))
+      || isLegacyFastTable
+    const sksMarked = (!table && sksManagedTopLevel) || (isLegacyFastTable && sksManagedDocument) || SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(previous) || SKS_CAUSED_RE.test(next)
+    return isFastUiLine && sksMarked
   })
+  return stripped
 }
 
 function stripMatchingLines(text: string, shouldRemove: (line: string, table: string | null, previous: string, next: string) => boolean) {

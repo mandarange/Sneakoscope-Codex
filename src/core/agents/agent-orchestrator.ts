@@ -13,7 +13,7 @@ import { writeAgentProofEvidence } from './agent-proof-evidence.js'
 import { selectRouteSkill, skillProofRecord } from '../skills/core-skill-runtime.js'
 import { routeSkillId } from '../skills/core-skill-card.js'
 import { loadTriWikiRuntimeContext, writeTriWikiContextArtifact } from '../triwiki-runtime.js'
-import { MAX_AGENT_COUNT, normalizeAgentBackend } from './agent-schema.js'
+import { DEFAULT_AGENT_CONCURRENCY, MAX_AGENT_COUNT, normalizeAgentBackend } from './agent-schema.js'
 import type { AgentRunOptions } from './agent-schema.js'
 import { PersistentAgentPatchQueueStore } from './agent-patch-queue-store.js'
 import { applyAgentPatchQueueEntry, rollbackAgentPatchApply } from './agent-patch-apply-worker.js'
@@ -113,7 +113,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     })
   }))
   const targetActiveSlots = normalizeTargetActiveSlots(opts.targetActiveSlots ?? opts.agents ?? roster.agent_count, maxAgentCount)
-  const visualLaneCount = normalizeVisualLaneCount(opts.visualLaneCount ?? opts.clones ?? opts.agents ?? roster.agent_count, roster.agent_count, maxAgentCount)
+  const visualLaneCount = normalizeVisualLaneCount(opts.visualLaneCount ?? opts.clones ?? opts.agents ?? roster.agent_count, roster.agent_count, Math.min(maxAgentCount, DEFAULT_AGENT_CONCURRENCY))
   const desiredWorkItemCount = normalizeDesiredWorkItemCount(opts.desiredWorkItemCount, opts.minimumWorkItems, targetActiveSlots)
   const minimumWorkItems = normalizeMinimumWorkItems(opts.minimumWorkItems, targetActiveSlots)
   const sourceIntelligence = await runSourceIntelligence({ root, missionDir: dir, route, query: prompt, offline: true, context7Available: true })

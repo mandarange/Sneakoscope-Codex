@@ -7,6 +7,7 @@ import { detectAgentLeaseConflicts } from './work-partition/conflict-detector.js
 import { buildNoOverlapProof } from './work-partition/no-overlap-proof.js'
 import { buildAgentTaskGraph } from './agent-task-graph.js'
 import { buildIntelligentWorkGraph, enhanceTaskGraphWithIntelligence } from './intelligent-work-graph.js'
+import { DEFAULT_AGENT_CONCURRENCY } from './agent-schema.js'
 
 export async function buildAgentWorkPartition(root: string, roster: any, prompt = '', opts: {
   route?: string
@@ -23,7 +24,10 @@ export async function buildAgentWorkPartition(root: string, roster: any, prompt 
   const dependency_graph = buildDependencyGraph(inventory)
   const semantic_domain_graph = buildSemanticDomainGraph(inventory)
   const sessions = Object.fromEntries((roster.roster || []).map((agent: any) => [agent.id, agent.session_id]))
-  const targetActiveSlots = Number(opts.targetActiveSlots || roster.agent_count || roster.concurrency || 5)
+  const targetActiveSlots = Math.max(1, Math.min(
+    DEFAULT_AGENT_CONCURRENCY,
+    Number(opts.targetActiveSlots || roster.concurrency || roster.agent_count || DEFAULT_AGENT_CONCURRENCY)
+  ))
   const intelligent_work_graph = await buildIntelligentWorkGraph({
     root,
     inventory,

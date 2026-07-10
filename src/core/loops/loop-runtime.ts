@@ -20,9 +20,9 @@ export async function runLoopPlan(input: {
   noMutation?: boolean;
 }): Promise<SksLoopGraphResult> {
   const started = Date.now();
-  const concurrencyBudget = computeLoopConcurrencyBudget({ plan: input.plan, parallelism: input.parallelism || 'balanced' });
+  const concurrencyBudget = computeLoopConcurrencyBudget({ plan: input.plan, parallelism: input.parallelism || 'safe' });
   await writeLoopConcurrencyBudget(input.root, concurrencyBudget);
-  const schedule = scheduleLoopGraph(input.plan.graph.nodes, input.parallelism || 'balanced', concurrencyBudget);
+  const schedule = scheduleLoopGraph(input.plan.graph.nodes, input.parallelism || 'safe', concurrencyBudget);
   const proofs: SksLoopProof[] = [];
   for (const batch of schedule.batches) {
     if (await shouldKillLoop(input.root, input.plan.mission_id, 'all')) break;

@@ -12,7 +12,7 @@ test('enableMadHighProfile migrates legacy profile table to Codex 0.134 profile 
   const configPath = path.join(codexHome, 'config.toml');
   await fs.writeFile(configPath, [
     'profile = "sks-mad-high"',
-    'model = "gpt-5.5"',
+    'model = "future-codex-model"',
     '',
     '[profiles.sks-mad-high]',
     'model_reasoning_effort = "high"',
@@ -30,10 +30,12 @@ test('enableMadHighProfile migrates legacy profile table to Codex 0.134 profile 
   assert.doesNotMatch(config, /^profile\s*=\s*"sks-mad-high"/m);
   assert.doesNotMatch(config, /^\[profiles\.sks-mad-high\]/m);
   assert.match(config, /^\[features\]/m);
+  assert.match(config, /^model\s*=\s*"future-codex-model"/m);
   assert.match(profile, /^sandbox_mode\s*=\s*"danger-full-access"/m);
   assert.match(profile, /^approval_policy\s*=\s*"never"/m);
   assert.match(profile, /^approvals_reviewer\s*=\s*"auto_review"/m);
   assert.match(profile, /^model_reasoning_effort\s*=\s*"xhigh"/m);
+  assert.doesNotMatch(profile, /^model\s*=/m);
   assert.ok(result.launch_args.includes('-c'));
   assert.ok(result.launch_args.includes('service_tier=fast'));
   assert.ok(result.launch_args.includes('model_reasoning_effort=xhigh'));
@@ -68,6 +70,8 @@ test('enableAutoReview writes profile files instead of legacy profile tables', a
   assert.doesNotMatch(config, /^\[profiles\.sks-auto-review\]/m);
   assert.match(profile, /^model_reasoning_effort\s*=\s*"medium"/m);
   assert.match(highProfile, /^model_reasoning_effort\s*=\s*"high"/m);
+  assert.doesNotMatch(profile, /^model\s*=/m);
+  assert.doesNotMatch(highProfile, /^model\s*=/m);
 });
 
 test('sks-fast-high profile is sandbox-neutral so Codex App permissions selector wins', async () => {
@@ -76,12 +80,44 @@ test('sks-fast-high profile is sandbox-neutral so Codex App permissions selector
   const codexHome = path.join(home, '.codex');
   await fs.mkdir(codexHome, { recursive: true });
   const configPath = path.join(codexHome, 'config.toml');
-  await fs.writeFile(configPath, 'model = "gpt-5.5"\n');
+  await fs.writeFile(configPath, [
+    'model = "future-codex-model"',
+    '',
+    '[profiles.sks-fast-high]',
+    'service_tier = "fast"',
+    ''
+  ].join('\n'));
 
-  await mod.migrateSksProfilesToPerFile({ env: { HOME: home }, configPath });
+  const result = await mod.migrateSksProfilesToPerFile({ env: { HOME: home }, configPath });
+  const config = await fs.readFile(configPath, 'utf8');
   const fastProfile = await fs.readFile(path.join(codexHome, 'sks-fast-high.config.toml'), 'utf8');
 
+  assert.ok(result.tables_stripped.includes('sks-fast-high'));
+  assert.doesNotMatch(config, /^\[profiles\.sks-fast-high\]/m);
+  assert.match(config, /^model\s*=\s*"future-codex-model"/m);
   assert.match(fastProfile, /^service_tier\s*=\s*"fast"/m);
   assert.match(fastProfile, /^model_reasoning_effort\s*=\s*"high"/m);
   assert.doesNotMatch(fastProfile, /^sandbox_mode\s*=/m);
+  assert.doesNotMatch(fastProfile, /^model\s*=/m);
+});
+
+test('profile migration removes stale model and provider pins from every SKS overlay', async () => {
+  const mod = await import('../../dist/core/auto-review.js');
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-profile-catalog-pass-through-'));
+  const codexHome = path.join(home, '.codex');
+  await fs.mkdir(codexHome, { recursive: true });
+  const configPath = path.join(codexHome, 'config.toml');
+  await fs.writeFile(configPath, '[features]\nfast_mode = true\n');
+  await fs.writeFile(path.join(codexHome, 'sks-team.config.toml'), [
+    'model = "stale-pinned-model"',
+    'model_provider = "stale-provider"',
+    'model_reasoning_effort = "medium"',
+    ''
+  ].join('\n'));
+
+  await mod.migrateSksProfilesToPerFile({ env: { HOME: home }, configPath });
+  const profile = await fs.readFile(path.join(codexHome, 'sks-team.config.toml'), 'utf8');
+
+  assert.doesNotMatch(profile, /^(?:model|model_provider)\s*=/m);
+  assert.match(profile, /^model_reasoning_effort\s*=\s*"medium"/m);
 });

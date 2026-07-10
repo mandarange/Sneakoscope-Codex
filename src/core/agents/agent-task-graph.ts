@@ -62,7 +62,7 @@ export function buildAgentTaskGraph(input: {
   microWins?: AgentTaskGraphMicroWin[]
 }): AgentTaskGraph {
   const routeType = normalizeRouteType(input.routeType || '$Agent')
-  const targetActiveSlots = Math.max(1, Math.floor(Number(input.targetActiveSlots || 5)))
+  const targetActiveSlots = Math.max(1, Math.min(4, Math.floor(Number(input.targetActiveSlots || 4))))
   const minimumWorkItems = Math.max(1, Math.floor(Number(input.minimumWorkItems || targetActiveSlots)))
   const desiredWorkItems = Math.max(minimumWorkItems, Math.floor(Number(input.desiredWorkItems || minimumWorkItems)))
   const domainTemplates = routeTemplates(routeType)

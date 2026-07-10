@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "5.12.0",
+  "version": "6.0.2",
   "description": "Proof-first Codex trust layer for bounded agent workflows, search visibility evidence, and release integrity gates.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
@@ -139,7 +139,8 @@
     "release:check:full": "npm run build:clean --silent && node ./dist/bin/sks.js doctor --fix --yes --json >/tmp/sks-release-check-full-doctor.json && node ./dist/scripts/release-gate-dag-runner.js --preset release --full && node ./dist/scripts/release-gate-dag-runner.js --preset bench --full && node ./dist/scripts/release-check-stamp.js write",
     "publish:packlist-performance": "node ./dist/scripts/packlist-performance-check.js",
     "publish:dry": "npm run publish:prep-ignore-scripts && npm publish --dry-run --ignore-scripts --json",
-    "publish:prep-ignore-scripts": "npm run build:incremental --silent && npm run release:version-truth --silent && npm run publish:packlist-performance --silent && node ./dist/scripts/package-published-contract-check.js && node ./dist/scripts/release-registry-check.js --require-unpublished --require-publish-auth && npm run publish-tag:check --silent",
+    "publish:verify-ignore-scripts": "npm run build:clean --silent && npm run typecheck --silent && npm test --silent && npm run release:version-truth --silent && npm run release:dist-freshness --silent && npm run publish:packlist-performance --silent && node ./dist/scripts/package-published-contract-check.js && npm run publish-tag:check --silent && npm pack --dry-run --ignore-scripts --json",
+    "publish:prep-ignore-scripts": "npm run publish:verify-ignore-scripts --silent && node ./dist/scripts/release-registry-check.js --require-unpublished --require-publish-auth",
     "publish:ignore-scripts": "npm run publish:prep-ignore-scripts && npm publish --ignore-scripts",
     "gates:run": "node ./dist/scripts/release-gate-dag-runner.js",
     "policy:gate-audit": "node ./dist/scripts/gate-policy-audit-check.js",

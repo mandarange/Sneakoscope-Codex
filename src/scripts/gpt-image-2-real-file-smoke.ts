@@ -358,7 +358,7 @@ async function run() {
         n: 1
       }
     : {
-        model: process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || 'gpt-5.5',
+        model: process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || '',
         input: prompt,
         tools: [{
           type: 'image_generation',
@@ -369,6 +369,16 @@ async function run() {
         }],
         tool_choice: { type: 'image_generation' }
       };
+  if (auth.provider !== 'openai_images_api' && !request.model) {
+    return writeReport({
+      schema: 'sks.gpt-image-2-real-file-smoke.v1',
+      ok: false,
+      status: 'blocked',
+      blocker: 'imagegen_responses_model_missing',
+      live_generation_attempted: false,
+      setup_guidance: 'Set SKS_IMAGEGEN_RESPONSES_MODEL to a model available through the configured Responses provider.'
+    });
+  }
   let response;
   let payload;
   let text;

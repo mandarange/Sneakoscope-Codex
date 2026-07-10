@@ -41,10 +41,10 @@ export function splitActiveWorkerBudget(plan: SksLoopPlan, parallelism: 'safe' |
   per_loop: Array<{ loop_id: string; maker_checker_workers: number }>;
   headroom: number;
 } {
-  const cap = parallelism === 'safe' ? 8 : parallelism === 'extreme' ? 32 : 16;
-  const integrationReserved = 2;
+  const cap = parallelism === 'safe' ? 2 : parallelism === 'extreme' ? 4 : 3;
+  const integrationReserved = 1;
   const nonIntegration = plan.graph.nodes.filter((node) => node.route !== '$Integration');
-  const perLoopCap = Math.max(2, Math.floor((cap - integrationReserved) / Math.max(1, nonIntegration.length)));
+  const perLoopCap = Math.max(1, Math.floor((cap - integrationReserved) / Math.max(1, nonIntegration.length)));
   const perLoop = nonIntegration.map((node) => ({
     loop_id: node.loop_id,
     maker_checker_workers: Math.min(perLoopCap, node.maker.worker_count + node.checker.worker_count)

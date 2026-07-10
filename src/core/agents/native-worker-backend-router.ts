@@ -290,7 +290,7 @@ async function resolveWorkerModelRouting(input: {
         reasoning: explicitReasoning || normalizeModelReasoning(input.agent?.model_reasoning_effort) || 'medium',
         serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
       } satisfies ModelChoice
-    : await routeModel(category, { lbHealth })
+    : await routeModel(category, { lbHealth, model: input.agent?.model || null })
   return {
     category,
     choice: routed,

@@ -20,13 +20,13 @@ const clean = await evaluateCodexAppFastUiPreservation(tmp, { before, after, cod
 const badRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-fast-ui-preservation-bad-'))
 await fs.mkdir(path.join(badRoot, '.codex'), { recursive: true })
 await fs.mkdir(path.join(badRoot, 'home', '.codex'), { recursive: true })
-await fs.writeFile(path.join(badRoot, '.codex', 'config.toml'), 'model_provider = "codex-lb"\n')
+await fs.writeFile(path.join(badRoot, '.codex', 'config.toml'), 'openai_base_url = "https://override.invalid"\n')
 await fs.writeFile(path.join(badRoot, 'home', '.codex', 'config.toml'), '')
 const bad = await evaluateCodexAppFastUiPreservation(badRoot, { codexHome: path.join(badRoot, 'home', '.codex') })
 
 const serialized = JSON.stringify({ clean, bad })
 const secretSafe = !serialized.includes('secret-should-not-leak')
-const ok = clean.ok && !bad.ok && bad.project_local_forbidden_keys.includes('model_provider') && secretSafe
+const ok = clean.ok && !bad.ok && bad.project_local_forbidden_keys.includes('openai_base_url') && secretSafe
 emit({ schema: 'sks.codex-app-fast-ui-preservation-check.v1', ok, clean, bad, secret_safe: secretSafe, blockers: ok ? [] : ['codex_app_fast_ui_preservation_check_failed'] })
 
 function emit(report: Record<string, unknown>) {

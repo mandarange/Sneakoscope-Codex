@@ -2,7 +2,6 @@ import path from 'node:path'
 import { appendJsonl, ensureDir, nowIso, readText, sha256, writeTextAtomic } from '../fsx.js'
 import { diffCodexAppUiSnapshots, snapshotCodexAppUiState } from '../codex-app/codex-app-ui-state-snapshot.js'
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from './codex-config-toml.js'
-import { GPT55_CODEX_MODEL, REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export interface WriteCodexConfigGuardedInput {
   root?: string
@@ -27,7 +26,8 @@ export interface WriteCodexConfigGuardedResult {
   report_path?: string
 }
 
-const FAST_FEATURE_KEYS = ['fast_mode', 'fast_mode_ui']
+// fast_mode_ui was removed from the [features] schema in the 2026-07 renewal.
+const FAST_FEATURE_KEYS = ['fast_mode']
 
 export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInput): Promise<WriteCodexConfigGuardedResult> {
   const configPath = path.resolve(input.configPath)
@@ -186,28 +186,29 @@ export function isUnmanagedProjectCodexConfig(root: string, configPath: string, 
 }
 
 export function removeLegacyTopLevelCodexModeLocks(text: string = '') {
-  const lines = String(text || '').split('\n')
+  const lines = String(ensureTrailingNewline(text) || '').split('\n')
   const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x))
   const end = firstTable === -1 ? lines.length : firstTable
-  const topLevelModel = topLevelTomlString(text, 'model')
-  // Current default stamp OR the legacy gpt-5.5 stamp older SKS versions wrote,
-  // so upgrades keep cleaning locks written before the 5.6-terra default bump.
-  const removeSksOwnedModeLock = topLevelModel === REQUIRED_CODEX_MODEL || topLevelModel === GPT55_CODEX_MODEL
   return ensureTrailingNewline(lines.filter((line, index) => {
     if (index >= end) return true
-    if (!removeSksOwnedModeLock) return true
-    return !/^\s*(?:model|model_reasoning_effort)\s*=/.test(line)
+    if (!/^\s*(?:model|model_reasoning_effort)\s*=/.test(line)) return true
+    return !isSksProvenanceLine(line, lines[index - 1] || '')
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n'))
+}
+
+function isSksProvenanceLine(...lines: string[]) {
+  return lines.some((line) => {
+    const trimmed = String(line || '').trim()
+    const comment = trimmed.startsWith('#') ? trimmed : trimmed.includes('#') ? trimmed.slice(trimmed.indexOf('#')) : ''
+    return /(?:SKS|Sneakoscope|codex-lb|sks fast)/i.test(comment)
+  })
 }
 
 function mergeLostFastUiKeys(before: string, nextInput: string) {
   let next = String(nextInput || '')
   const keys: string[] = []
-  const userFastMode = extractTomlTable(before, 'user.fast_mode')
-  if (userFastMode && !extractTomlTable(next, 'user.fast_mode')) {
-    next = upsertTomlTable(next, 'user.fast_mode', userFastMode)
-    keys.push('user.fast_mode')
-  }
+  // [user.fast_mode] left the config schema in the 2026-07 renewal — it is no
+  // longer restored when lost; SKS strips it everywhere else.
   for (const key of FAST_FEATURE_KEYS) {
     const line = tomlTableKeyLine(before, 'features', key)
     if (line && !hasTomlTableKey(next, 'features', key)) {
@@ -224,7 +225,7 @@ function mergeLostFastUiKeys(before: string, nextInput: string) {
 }
 
 function topLevelModeLocks(text: string) {
-  return ['model', 'model_reasoning_effort'].filter((key) => hasTopLevelTomlKey(text, key))
+  return ['model_reasoning_effort'].filter((key) => hasTopLevelTomlKey(text, key))
 }
 
 function topLevelTomlKeyLine(text: string, key: string) {

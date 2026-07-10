@@ -49,7 +49,7 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
     route: opts.route,
     prompt: opts.prompt || routeKey + ' native collaboration fixture',
     agents: opts.agents || 5,
-    concurrency: opts.concurrency || 5,
+    concurrency: opts.concurrency || 4,
     backend,
     mock: backend === 'fake',
     readonly: true
@@ -75,7 +75,7 @@ export async function writeRouteCollaborationArtifacts(root: string, opts: {
     fake_backend_fixture: backend === 'fake',
     real_mode_codex_sdk_backend: {
       supported: true,
-      command_pattern: 'sks agent run "<task>" --backend codex-sdk --real --agents <1-20> --concurrency <1-20> --json',
+      command_pattern: 'sks agent run "<task>" --backend codex-sdk --real --agents <1-20> --concurrency <1-4> --json',
       requires_user_runtime: true
     },
     route_specific_personas: ROUTE_PERSONAS[routeKey] || [],

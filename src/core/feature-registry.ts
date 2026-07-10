@@ -684,7 +684,7 @@ function routeFeature(route: any) {
 function nativeAgentIntakeFeature() {
   return baseFeature({
     id: 'route-native-agent-intake',
-    commands: ['sks agent run "task" --route "$Team" --agents 5 --concurrency 5 --mock --json'],
+    commands: ['sks agent run "task" --route "$Team" --agents 5 --concurrency 4 --mock --json'],
     aliases: ['sks team "task" [executor:5 reviewer:6 user:1]'],
     category: 'proof-route',
     maturity: 'stable',

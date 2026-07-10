@@ -254,10 +254,9 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       global_skills: installScope === 'global' && !flag(args, '--local-only')
         ? deepDiagnostics ? await (await import('../cli/install-helpers.js')).ensureGlobalCodexSkillsDuringInstall({ force: true }) : { status: 'skipped', reason: 'default_doctor_no_global_skill_regeneration' }
         : { status: 'skipped', reason: 'project or local-only repair' },
-      // Re-seed the Codex App Fast-mode UI table ([user.fast_mode] visible/enabled/
-      // default_profile) in the global ~/.codex/config.toml so existing installs whose
-      // config predates the Fast-mode UI keys get the App speed selector back. Safe:
-      // backs up + parse-validates before writing, no-op when already present.
+      // Normalize global Codex fast-mode config to the 2026-07 schema: preserve
+      // service_tier="fast" when requested, strip legacy [user.fast_mode] and
+      // [profiles.sks-fast-high] stamps, and parse-validate before writing.
       codex_app_fast_mode: flag(args, '--local-only')
         ? { status: 'skipped', reason: 'local-only repair' }
         : await (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall().catch((err: any) => ({ status: 'failed', error: err?.message || String(err) }))

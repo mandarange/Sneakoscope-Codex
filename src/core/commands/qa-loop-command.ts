@@ -149,7 +149,7 @@ async function qaLoopRun(args: any) {
   const fallbackCycles = Number.parseInt(contract.answers?.MAX_QA_CYCLES, 10) || DEFAULT_QA_MAX_CYCLES;
   const maxCycles = readMaxCycles(args, fallbackCycles);
   const requestedAgents = readBoundedIntegerFlag(args, '--agents', 3, 1, 20);
-  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', requestedAgents, 1, 20);
+  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', Math.min(requestedAgents, 4), 1, 4);
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
@@ -306,7 +306,7 @@ async function qaLoopRun(args: any) {
   if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.run.started', max_cycles: maxCycles, mock });
   const nativeAgentPlan = await readJson(path.join(dir, 'qa-agent-plan.json'), null);
   const nativeRoster = requestedAgents === 3 ? nativeAgentPlan : null;
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command', env: { SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown', SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role' } });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: '$QA-LOOP', prompt: mission.prompt || 'QA-LOOP run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 4), readonly: !(applyPatches && writeMode !== 'off'), profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: nativeRoster, routeCommand: 'sks qa-loop run', routeBlackboxKind: 'actual_qa_command', env: { SKS_CODEX_APP_EXECUTION_PROFILE: executionProfile?.mode || 'unknown', SKS_CODEX_AGENT_ROLE_STRATEGY: executionProfile?.agent_role_strategy || 'message-role' } });
   await writeJsonAtomic(path.join(dir, 'qa-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (stream) emitStreamEvent('progress', { mission_id: id, type: 'qaloop.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });

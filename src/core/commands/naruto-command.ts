@@ -214,9 +214,8 @@ async function narutoRun(parsed: NarutoArgs) {
     backend: schedulerBackend,
     parallelismMode: parsed.parallelism
   })
-  const backendMinimum = schedulerBackend === 'fake' ? roster.agent_count : Math.min(roster.agent_count, 2)
-  const activeCap = parsed.parallelism === 'safe' ? safe.cap : MAX_NARUTO_AGENT_COUNT
-  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || Math.max(governor.safe_active_workers, backendMinimum), activeCap))
+  const activeCap = Math.min(safe.cap, governor.safe_active_workers)
+  const activeSlots = Math.max(1, Math.min(roster.agent_count, parsed.concurrency || activeCap, activeCap))
   const zellijVisiblePanes = Math.max(1, Math.min(activeSlots, governor.safe_zellij_visible_panes))
   const runPreRunSmoke = parsed.smoke === true || process.env.SKS_NARUTO_PRE_RUN_SMOKE === '1'
   const realActivePoolSmoke = runPreRunSmoke
@@ -252,9 +251,6 @@ async function narutoRun(parsed: NarutoArgs) {
     }
   const verificationCommand = resolveNarutoVerificationCommand(root)
   const verificationDag = buildNarutoVerificationDag(workGraph, { cwd: root, command: verificationCommand })
-  const verificationDagRunPromise = verificationDag.configured && verificationDag.tasks.length > 0
-    ? runNarutoVerificationPool(verificationDag, governor, { cwd: root, logDir: path.join(mission.dir, 'agents', 'verification-logs') })
-    : Promise.resolve(null)
   const gptFinalPack = buildNarutoGptFinalPack({
     missionId: mission.id,
     graph: workGraph,
@@ -434,7 +430,11 @@ async function narutoRun(parsed: NarutoArgs) {
     parallelRuntime?.passed === true
     && Number(parallelRuntime.max_observed_active_workers || 0) >= Math.min(16, activeSlots)
   )
-  const verificationDagResult = await verificationDagRunPromise
+  // Verification starts only after clone workers finish so two process pools do
+  // not compete for CPU, memory, and disk at the same time.
+  const verificationDagResult = verificationDag.configured && verificationDag.tasks.length > 0
+    ? await runNarutoVerificationPool(verificationDag, governor, { cwd: root, logDir: path.join(mission.dir, 'agents', 'verification-logs') })
+    : null
   if (verificationDagResult) await writeJsonAtomic(path.join(mission.dir, 'naruto-verification-dag-result.json'), verificationDagResult)
   const verificationDagOk = !verificationDag.configured || verificationDagResult === null ? true : verificationDagResult.ok === true
   const regressionProof = summarizeRegressionProof(workGraph, result)
@@ -1044,7 +1044,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   // Computed early (normally derived further down) so an explicit --clones/
   // --agents can still override this exactly as before, but the *default*
   // scales with apparent task size instead of unconditionally requesting
-  // DEFAULT_NARUTO_CLONES (32) for every run, including a one-line typo fix
+  // DEFAULT_NARUTO_CLONES for every run, including a one-line typo fix
   // (20차 P2-3). --work-items defaults to clones*2 below, so this alone
   // scales that down proportionally too.
   const promptSizingValueFlags = new Set(['--clones', '--agents', '--work-items', '--concurrency', '--target-active-slots', '--backend', '--write-mode', '--max-write-agents', '--service-tier', '--mission', '--mission-id', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url', '--parallelism', '--messages', '--tournament'])
@@ -1097,7 +1097,7 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
   const noOpenZellij = hasFlag(args, '--no-open-zellij') || hasFlag(args, '--no-zellij')
   const attach = hasFlag(args, '--attach')
   const smoke = hasFlag(args, '--smoke')
-  const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'extreme'))
+  const parallelism = normalizeParallelism(readOption(args, '--parallelism', 'safe'))
   const messages = normalizeMessages(readOption(args, '--messages', '8'))
   const tournament = normalizeTournament(readOption(args, '--tournament', '0'))
   const prompt = promptForSizing || 'Naruto shadow clone swarm run'
@@ -1105,9 +1105,9 @@ function parseNarutoArgs(args: string[] = []): NarutoArgs {
 }
 
 function normalizeParallelism(value: unknown): 'extreme' | 'balanced' | 'safe' {
-  const text = String(value || 'extreme').toLowerCase()
+  const text = String(value || 'safe').toLowerCase()
   if (text === 'safe' || text === 'balanced' || text === 'extreme') return text
-  return 'extreme'
+  return 'safe'
 }
 
 function normalizeMessages(value: unknown): number {

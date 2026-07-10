@@ -49,7 +49,7 @@ export interface CodexAgentTypeProbe {
   ok: boolean
   supported: boolean
   source: 'codex-tool-schema' | 'codex-doctor-json' | 'codex-help' | 'env' | 'fixture' | 'unknown'
-  spawn_tool_name: 'spawn_agent' | 'multi_agent_v2' | 'unknown'
+  spawn_tool_name: 'spawn_agent' | 'unknown'
   schema_path: string | null
   evidence: string[]
   blockers: string[]
@@ -143,4 +143,3 @@ export function isCodexAppHarnessMatrix(value: unknown): value is CodexAppHarnes
     && Array.isArray(value.blockers)
     && Array.isArray(value.warnings)
 }
-

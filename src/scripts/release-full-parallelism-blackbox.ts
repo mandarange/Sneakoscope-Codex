@@ -15,7 +15,8 @@ const completedDurations = result.results
   .filter((duration) => Number.isFinite(duration) && duration > 0)
 const observedSequentialMs = completedDurations.reduce((total, duration) => total + duration, 0)
 const slowestGateMs = Math.max(1, ...completedDurations)
-const expectedWaves = Math.ceil(gates.length / 40)
+const safeConcurrency = 4
+const expectedWaves = Math.ceil(gates.length / safeConcurrency)
 const dynamicWallBudgetMs = Math.max(20_000, Math.ceil((slowestGateMs * expectedWaves) + 12_000))
 const gain = Number((observedSequentialMs / Math.max(1, wallMs)).toFixed(2))
 assertGate(result.ok === true, 'synthetic release gates failed', result)
@@ -28,13 +29,13 @@ assertGate(wallMs <= dynamicWallBudgetMs, 'release full parallelism wall time to
   expectedWaves,
   result
 })
-assertGate(gain >= 8, 'release full parallelism gain below 8x', { gain, wallMs, observedSequentialMs })
+assertGate(gain >= 3, 'release bounded parallelism gain below 3x', { gain, wallMs, observedSequentialMs })
 emitGate('release:full-parallelism-blackbox', {
   wall_ms: wallMs,
   parallelism_gain: gain,
   observed_sequential_ms: observedSequentialMs,
   dynamic_wall_budget_ms: dynamicWallBudgetMs,
   slowest_gate_ms: slowestGateMs,
-  max_running: 40,
+  max_running: safeConcurrency,
   slowest_gates: result.results.sort((a, b) => b.duration_ms - a.duration_ms).slice(0, 5)
 })

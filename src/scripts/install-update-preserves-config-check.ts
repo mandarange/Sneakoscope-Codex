@@ -26,7 +26,7 @@ const results = [];
   const cfg = path.join(codexDir, 'config.toml');
   const userConfig = [
     '# my hand-tuned Codex config',
-    'model = "gpt-5.1-codex"',
+    'model = "future-codex-model"',
     'service_tier = "standard"',
     'model_reasoning_effort = "high"',
     '',
@@ -40,15 +40,16 @@ const results = [];
   const backups = (await fs.readdir(codexDir)).filter((f) => f.startsWith('config.toml.sks-'));
   const ok =
     res.status === 'updated' &&
-    /^model = "gpt-5\.1-codex"/m.test(after) &&        // user model preserved
+    /^model = "future-codex-model"/m.test(after) &&     // arbitrary user model preserved
     /^service_tier = "standard"/m.test(after) &&        // user tier preserved
     /^model_reasoning_effort = "high"/m.test(after) &&  // user effort NOT stripped
     /# my hand-tuned Codex config/.test(after) &&       // user comment preserved
     /\[mcp_servers\.custom\]/.test(after) &&            // user table preserved
-    /\[profiles\.sks-fast-high\]/.test(after) &&        // SKS-managed table added
+    !/\[profiles\.sks-fast-high\]/.test(after) &&       // legacy profile table stripped
+    !/\[user\.fast_mode\]/.test(after) &&               // legacy fast UI table stripped
     backups.length >= 1 &&                              // backup created
     Boolean(res.backup_path);
-  results.push({ case: 'preserves_user_config', ok, status: res.status, backups, model_preserved: /gpt-5\.1-codex/.test(after) });
+  results.push({ case: 'preserves_user_config', ok, status: res.status, backups, model_preserved: /future-codex-model/.test(after) });
 }
 
 // --- Case 2: fresh/empty config gets SKS defaults without forcing fast service tier ---
@@ -59,7 +60,11 @@ const results = [];
   const res = await helpers.ensureGlobalCodexFastModeDuringInstall({ home: dir, configPath: cfg });
   const after = await fs.readFile(cfg, 'utf8');
   const topLevel = String(after).split(/\n\s*\[/)[0] || '';
-  const ok = res.status === 'updated' && /^model = "gpt-5\.5"/m.test(topLevel) && !/^service_tier = "fast"/m.test(topLevel) && /\[features\]/.test(after);
+  const ok = res.status === 'updated'
+    && !/^model\s*=/m.test(topLevel)
+    && !/^model_reasoning_effort\s*=/m.test(topLevel)
+    && !/^service_tier = "fast"/m.test(topLevel)
+    && /\[features\]/.test(after);
   results.push({ case: 'fresh_config_seeds_defaults', ok, status: res.status });
 }
 

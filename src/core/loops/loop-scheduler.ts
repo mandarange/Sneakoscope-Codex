@@ -9,7 +9,7 @@ export interface SksLoopSchedule {
   blockers: string[];
 }
 
-export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced', budget?: LoopConcurrencyBudget): SksLoopSchedule {
+export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'safe', budget?: LoopConcurrencyBudget): SksLoopSchedule {
   const pending = new Map(nodes.map((node) => [node.loop_id, node]));
   const completed = new Set<string>();
   const batches: SksLoopNode[][] = [];
@@ -32,19 +32,19 @@ export function scheduleLoopGraph(nodes: SksLoopNode[], parallelism: 'safe' | 'b
   return { ok: blockers.length === 0, batches, max_active_loops: Math.max(0, ...batches.map((batch) => batch.length)), blockers };
 }
 
-export function maxConcurrentLoops(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'balanced'): number {
+export function maxConcurrentLoops(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme' = 'safe'): number {
   const cores = Math.max(1, os.cpus().length || 1);
-  const base = parallelism === 'safe' ? 2 : parallelism === 'extreme' ? Math.min(16, cores) : Math.min(8, cores);
+  const base = parallelism === 'safe' ? 1 : parallelism === 'extreme' ? Math.min(4, cores) : Math.min(2, cores);
   return Math.max(1, Math.min(base, riskAwareLoopCap(nodes, parallelism, cores)));
 }
 
 function riskAwareLoopCap(nodes: SksLoopNode[], parallelism: 'safe' | 'balanced' | 'extreme', cores: number): number {
-  if (parallelism === 'extreme') return Math.min(16, cores);
+  if (parallelism === 'extreme') return Math.min(4, cores);
   const hasCritical = nodes.some((node) => node.risk.level === 'critical');
   const hasHigh = nodes.some((node) => node.risk.level === 'high');
-  if (hasCritical) return parallelism === 'safe' ? 1 : Math.max(2, Math.floor(cores / 4));
-  if (hasHigh) return parallelism === 'safe' ? 2 : Math.max(4, Math.floor(cores / 2));
-  return parallelism === 'safe' ? 2 : Math.min(8, cores);
+  if (hasCritical) return 1;
+  if (hasHigh) return parallelism === 'safe' ? 1 : Math.min(2, cores);
+  return parallelism === 'safe' ? 1 : parallelism === 'balanced' ? Math.min(2, cores) : Math.min(4, cores);
 }
 
 export function graphProofFromLoopProofs(input: {

@@ -16,7 +16,7 @@ export async function planLoopsFromRequest(input: {
   maxLoops?: number;
   parallelism?: 'safe' | 'balanced' | 'extreme';
 }): Promise<SksLoopPlan> {
-  const parallelism = input.parallelism || 'balanced';
+  const parallelism = input.parallelism || 'safe';
   const maxLoops = Math.max(1, Math.min(32, input.maxLoops || 8));
   const allDomains = decomposeRequestIntoLoopDomains(input.request);
   const domains = allDomains.slice(0, maxLoops);

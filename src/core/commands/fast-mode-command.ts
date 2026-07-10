@@ -89,7 +89,7 @@ export async function fastModeCommand(args: string[] = []) {
   cliUi.ok(`project workers ${result.fast_mode ? 'fast' : 'standard'}`)
   console.log('SKS Fast Mode')
   console.log(`Root: ${root}`)
-  console.log(`Global (desktop): ${globalStatus.on ? 'on' : 'off'} (default_profile=${globalStatus.default_profile || 'none'}, top-level ${globalStatus.top_level_default_profile ? 'OK' : 'none'})`)
+  console.log(`Global (desktop): ${globalStatus.on ? 'on' : 'off'} (service_tier=${globalStatus.service_tier || 'default'})`)
   console.log(`Project (sks workers): ${result.fast_mode ? 'fast' : 'standard'} (service_tier=${result.service_tier})`)
   console.log(`Project state: ${path.relative(root, statePath)}`)
   if (action === 'on') console.log('Saved: fast mode on')

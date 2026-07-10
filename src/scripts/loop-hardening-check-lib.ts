@@ -131,7 +131,7 @@ export async function runLoopHardeningCheck(id) {
   } else if (id === 'loop:concurrency-budget' || id === 'loop:concurrency-budget-runtime' || id === 'loop:concurrency-oversubscription-blackbox') {
     const plan = samplePlan('M-check-budget', Array.from({ length: 10 }, (_, i) => sampleNode(`loop-${i}`, 'M-check-budget', 8, 8)));
     const budget = computeLoopConcurrencyBudget({ plan, parallelism: 'extreme', env: { SKS_LOOP_MAX_ACTIVE_WORKERS: '16', SKS_LOOP_MAX_ACTIVE_LOOPS: '4', SKS_LOOP_MAX_MODEL_CALLS: '8' } });
-    assert(budget.max_active_workers === 16 && budget.max_active_loops === 4, 'env concurrency budget overrides apply', budget);
+    assert(budget.max_active_workers === 4 && budget.max_active_loops === 4, 'env concurrency requests cannot raise the desktop-safe loop budget', budget);
     assert(budget.per_loop_worker_budget.reduce((sum, row) => sum + row.maker_workers + row.checker_workers, 0) <= 16, 'per-loop worker budget does not oversubscribe');
   } else if (id === 'loop:mesh-production-e2e-blackbox') {
     const fixture = await gitFixture('mesh-e2e');

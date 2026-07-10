@@ -157,7 +157,7 @@ async function researchRun(args: any) {
   }
   const maxCycles = readMaxCycles(args, RESEARCH_DEFAULT_MAX_CYCLES);
   const requestedAgents = readBoundedIntegerFlag(args, '--agents', plan.native_agent_plan?.session_count || 5, 1, 20);
-  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', requestedAgents, 1, 20);
+  const targetActiveSlots = readBoundedIntegerFlag(args, '--target-active-slots', Math.min(requestedAgents, 4), 1, 4);
   const desiredWorkItemCount = readBoundedIntegerFlag(args, '--work-items', targetActiveSlots, 1, 200);
   const minimumWorkItems = readBoundedIntegerFlag(args, '--minimum-work-items', targetActiveSlots, 1, 200);
   const maxQueueExpansion = readBoundedIntegerFlag(args, '--max-queue-expansion', 10, 0, 200);
@@ -183,7 +183,7 @@ async function researchRun(args: any) {
   await runResearchCycle(dir, researchWorkGraph, { cycle: 0, status: mock ? 'mock_native_orchestrator_planned' : 'native_orchestrator_planned' });
   await setCurrent(root, { mission_id: id, mode: 'RESEARCH', phase: 'RESEARCH_RUNNING_NO_QUESTIONS', questions_allowed: false, implementation_allowed: false, research_real_run_required: !mock, research_cycle_timeout_minutes: cycleTimeoutMinutes });
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.run.started', maxCycles, mock, cycleTimeoutMinutes, real_run_required: !mock });
-  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount: effectiveDesiredWorkItemCount, minimumWorkItems: effectiveMinimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 5), readonly: !applyPatches, profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command', narutoWorkGraph: researchWorkGraph });
+  const nativeAgentRun = await runNativeAgentOrchestrator({ root, missionId: id, route: flag(args, '--autoresearch') ? '$AutoResearch' : '$Research', prompt: mission.prompt || plan.prompt || 'Research run', backend: mock ? 'fake' : 'codex-sdk', mock, agents: requestedAgents, targetActiveSlots, desiredWorkItemCount: effectiveDesiredWorkItemCount, minimumWorkItems: effectiveMinimumWorkItems, maxQueueExpansion, concurrency: Math.min(requestedAgents, 4), readonly: !applyPatches, profile, writeMode: writeMode as any, applyPatches, dryRunPatches, maxWriteAgents, roster: plan.native_agent_plan, routeCommand: 'sks research run', routeBlackboxKind: 'actual_research_command', narutoWorkGraph: researchWorkGraph });
   await writeJsonAtomic(path.join(dir, 'research-native-agent-run.json'), nativeAgentRun);
   await appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'research.native_agents.completed', backend: nativeAgentRun.backend, ok: nativeAgentRun.ok, proof: nativeAgentRun.proof?.status });
   if (!nativeAgentRun.ok) {

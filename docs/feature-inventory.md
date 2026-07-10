@@ -136,7 +136,7 @@ Generated from `sks commands --json`, `src/cli/main.js`, `src/core/routes.js`, d
 | `route-wiki` | route | stable | $Wiki<br>$wiki | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
 | `route-help` | route | stable | $Help<br>$help | mock:pass | runtime_mock_verified | none recorded |
 | `route-team` | route | beta | Deprecated alias: `$Team`, `$team`, and `$From-Chat-IMG` route new execution to Naruto and validate `team-alias-to-naruto.json` | execute_and_validate_artifacts:pass | runtime_verified | none recorded |
-| `route-native-agent-intake` | proof-route | stable | sks agent run "task" --route "$Team" --agents 5 --concurrency 5 --mock --json<br>sks naruto run "task" --clones 5 --work-items 8 --mock --json | mock:pass | runtime_mock_verified | real speedup claims require runtime timing/eval evidence; mock/static timing is not enough |
+| `route-native-agent-intake` | proof-route | stable | sks agent run "task" --route "$Team" --agents 5 --concurrency 4 --mock --json<br>sks naruto run "task" --clones 5 --work-items 8 --mock --json | mock:pass | runtime_mock_verified | real speedup claims require runtime timing/eval evidence; mock/static timing is not enough |
 | `proof-agent-evidence` | proof-route | stable | completion-proof.json evidence.agents | mock:pass | runtime_mock_verified | disabled native agents must be recorded as not_verified_for_parallel_speed |
 | `skill-autoresearch-loop` | skill | labs | $autoresearch-loop | static:pass | static_contract | runtime fixtures owned by route |
 | `skill-computer-use` | skill | labs | $computer-use | static:pass | static_contract | runtime fixtures owned by route |

@@ -8,7 +8,6 @@ import { COMMANDS } from '../../cli/command-registry.js';
 import { reconcileSkills } from '../init/skills.js';
 import { codexHookTrustDoctor } from '../codex-hooks/codex-hook-trust-doctor.js';
 import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -605,32 +604,49 @@ function insertTopLevelTomlKey(text: string, line: string): string {
 }
 
 function normalizeLegacyFastModeConfigForUpdate(text: string): { text: string; actions: string[]; defaultProfile: string | null } {
+  // 2026-07 ChatGPT desktop merge: default_profile, [user.fast_mode], and
+  // [profiles.<name>] tables left the Codex config schema. This migration now
+  // STRIPS the stamps older SKS versions wrote instead of normalizing them, and
+  // preserves a legacy "fast default" semantically by writing the documented
+  // top-level service_tier = "fast" in their place.
   let next = String(text || '');
   const actions: string[] = [];
   const misplaced = tomlTableString(next, 'user.fast_mode', 'default_profile');
   const topLevel = topLevelTomlString(next, 'default_profile');
-  if (misplaced) {
-    next = removeTomlTableKeyLocal(next, 'user.fast_mode', 'default_profile');
-    actions.push('normalized_fastmode_default_profile_location');
+  const legacyFastDefault = misplaced === 'sks-fast-high' || topLevel === 'sks-fast-high';
+  const before = next;
+  next = removeTopLevelTomlKeyLocal(next, 'default_profile');
+  next = removeTomlTableLocal(next, 'user.fast_mode');
+  next = removeTomlTableLocal(next, 'profiles.sks-fast-high');
+  next = removeTomlTableKeyLocal(next, 'notice', 'fast_default_opt_out');
+  if (next !== before) actions.push('stripped_removed_fastmode_config_schema_keys');
+  if (legacyFastDefault && !topLevelTomlString(next, 'service_tier')) {
+    next = insertTopLevelTomlKey(next, 'service_tier = "fast"');
+    actions.push('migrated_legacy_fast_default_to_service_tier');
   }
-  if (topLevel && topLevel !== 'sks-fast-high' && !tomlTableBlock(next, `profiles.${topLevel}`)) {
-    next = upsertTopLevelTomlStringLocal(next, 'default_profile', 'sks-fast-high');
-    actions.push('retargeted_missing_fastmode_default_profile_target');
-  } else if (!topLevel && misplaced === 'sks-fast-high') {
-    next = insertTopLevelTomlKey(next, `default_profile = ${JSON.stringify(misplaced)}`);
-    actions.push('restored_fastmode_top_level_default_profile');
-  }
-  const beforeUi = next;
-  next = upsertTomlTableKeyIfAbsentLocal(next, 'user.fast_mode', 'visible = true');
-  next = upsertTomlTableKeyIfAbsentLocal(next, 'user.fast_mode', 'enabled = true');
-  if (next !== beforeUi) actions.push('ensured_fastmode_ui_visibility');
-  const beforeProfile = next;
-  next = upsertTomlTableKeyLocal(next, 'profiles.sks-fast-high', `model = "${REQUIRED_CODEX_MODEL}"`);
-  next = upsertTomlTableKeyLocal(next, 'profiles.sks-fast-high', 'service_tier = "fast"');
-  if (next !== beforeProfile) actions.push('normalized_sks_fast_high_profile');
   return { text: ensureTrailingNewline(next), actions, defaultProfile: misplaced || topLevel };
 }
 
+function removeTopLevelTomlKeyLocal(text: string, key: string): string {
+  const lines = String(text || '').split('\n');
+  const firstTable = lines.findIndex((x) => /^\s*\[.+\]\s*$/.test(x));
+  const end = firstTable === -1 ? lines.length : firstTable;
+  const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
+  return lines.filter((line, index) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
+
+function removeTomlTableLocal(text: string, table: string): string {
+  const lines = String(text || '').trimEnd().split('\n');
+  const header = `[${table}]`;
+  const start = lines.findIndex((x) => x.trim() === header);
+  if (start === -1) return String(text || '');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const ln = lines[i];
+    if (ln !== undefined && /^\s*\[.+\]\s*$/.test(ln)) { end = i; break; }
+  }
+  return lines.filter((_, index) => index < start || index >= end).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+}
 function tomlTableString(text: string, table: string, key: string): string | null {
   const block = tomlTableBlock(text, table);
   const match = block?.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, 'm'));
@@ -638,7 +654,9 @@ function tomlTableString(text: string, table: string, key: string): string | nul
 }
 
 function topLevelTomlString(text: string, key: string): string | null {
-  const top = String(text || '').slice(0, Math.max(0, String(text || '').search(/^\s*\[/m)));
+  const source = String(text || '');
+  const firstTable = source.search(/^\s*\[/m);
+  const top = firstTable < 0 ? source : source.slice(0, firstTable);
   const match = top.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"\\s*$`, 'm'));
   return match?.[1] || null;
 }
@@ -698,21 +716,6 @@ function upsertTomlTableKeyLocal(text: string, table: string, line: string): str
   }
   lines.splice(end, 0, line);
   return `${lines.join('\n')}\n`;
-}
-
-function upsertTopLevelTomlStringLocal(text: string, key: string, value: string): string {
-  const raw = String(text || '').trimEnd();
-  const line = `${key} = ${JSON.stringify(value)}`;
-  const lines = raw ? raw.split(/\r?\n/) : [];
-  const firstTable = lines.findIndex((candidate) => /^\s*\[[^\]]+\]\s*$/.test(candidate || ''));
-  const end = firstTable < 0 ? lines.length : firstTable;
-  for (let index = 0; index < end; index += 1) {
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(lines[index] || '')) {
-      lines[index] = line;
-      return `${lines.join('\n')}\n`;
-    }
-  }
-  return insertTopLevelTomlKey(raw, line);
 }
 
 function tomlTableHasKey(text: string, table: string, key: string): boolean {

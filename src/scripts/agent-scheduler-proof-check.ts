@@ -3,7 +3,7 @@
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js';
 import { runDynamicPoolFixture } from './agent-dynamic-pool-fixture.js';
 
-const fixture = await runDynamicPoolFixture({ target: 5, total: 8 });
+const fixture = await runDynamicPoolFixture({ target: 4, total: 8 });
 const state = fixture.result.state;
 for (const key of ['target_active_slots', 'max_observed_active_slots', 'pending_queue_drained', 'backfill_count', 'expected_backfill_count', 'slot_count', 'generation_count']) {
   assertGate(Object.prototype.hasOwnProperty.call(state, key) || key === 'slot_count' || key === 'generation_count', `scheduler state/proof missing ${key}`, state);

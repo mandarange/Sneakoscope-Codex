@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { REQUIRED_CODEX_MODEL } from '../../dist/core/codex-model-guard.js';
 import { buildAgentRoster } from '../../dist/core/agents/agent-roster.js';
 import { decideAgentEffort, decideAgentWorkerModel } from '../../dist/core/agents/agent-effort-policy.js';
 
@@ -16,14 +15,14 @@ test('native agent effort policy assigns high effort to safety and release lanes
 
   assert.equal(safety.reasoning_effort, 'high');
   assert.equal(release.reasoning_effort, 'high');
-  assert.equal(safety.model, REQUIRED_CODEX_MODEL);
+  assert.equal(safety.model, '');
   assert.equal(safety.model_reasoning_effort, 'high');
-  assert.equal(safety.model_tier, `${REQUIRED_CODEX_MODEL}-high`);
+  assert.equal(safety.model_tier, 'codex-selected-high');
   assert.equal(safety.dynamic, true);
   assert.ok(safety.escalation_triggers.some((trigger) => trigger.includes('DB/security/release')));
 });
 
-test('native agent effort policy downshifts simple bounded code work to gpt-5.4-mini', () => {
+test('native agent effort policy changes effort without changing the Codex-selected model', () => {
   const simple = decideAgentEffort({
     persona: { id: 'agent_simple', role: 'implementer', stable_id: 'simple', write_policy: 'bounded patch lease' },
     prompt: 'simple one-line typo fix'
@@ -33,12 +32,12 @@ test('native agent effort policy downshifts simple bounded code work to gpt-5.4-
     prompt: 'add a feature to the route parser'
   });
 
-  assert.equal(simple.model, 'gpt-5.4-mini');
+  assert.equal(simple.model, '');
   assert.equal(simple.model_reasoning_effort, 'low');
-  assert.equal(simple.model_tier, 'gpt-5.4-mini');
-  assert.equal(ordinary.model, REQUIRED_CODEX_MODEL);
-  assert.equal(ordinary.model_reasoning_effort, 'low');
-  assert.equal(ordinary.model_tier, `${REQUIRED_CODEX_MODEL}-low`);
+  assert.equal(simple.model_tier, 'codex-selected-low');
+  assert.equal(ordinary.model, '');
+  assert.equal(ordinary.model_reasoning_effort, 'medium');
+  assert.equal(ordinary.model_tier, 'codex-selected-medium');
 });
 
 test('native agent roster records per-agent dynamic effort policy', () => {
@@ -49,11 +48,24 @@ test('native agent roster records per-agent dynamic effort policy', () => {
   assert.equal(roster.roster.length, 5);
   assert.equal(roster.concurrency, 2);
   assert.ok(roster.roster.every((agent) => agent.reasoning_effort && agent.reasoning_profile));
-  assert.ok(roster.roster.every((agent) => agent.model && agent.model_tier && agent.model_profile));
-  assert.ok(roster.roster.every((agent) => ['low', 'high'].includes(agent.model_reasoning_effort)));
+  assert.ok(roster.roster.every((agent) => agent.model === '' && agent.model_tier && agent.model_profile));
+  assert.ok(roster.roster.every((agent) => ['low', 'medium', 'high'].includes(agent.model_reasoning_effort)));
   assert.ok(roster.roster.some((agent) => agent.reasoning_effort === 'high'));
-  assert.ok(roster.roster.some((agent) => agent.model_tier === `${REQUIRED_CODEX_MODEL}-high`));
+  assert.ok(roster.roster.some((agent) => agent.model_tier === 'codex-selected-high'));
   assert.ok(roster.roster.every((agent) => agent.dynamic_effort_policy.escalation_triggers.length > 0));
+});
+
+test('native agent model policy preserves an arbitrary future Codex model identifier', () => {
+  const decision = decideAgentWorkerModel({
+    mainModel: 'future-codex-model',
+    effort: 'high',
+    prompt: 'release architecture review',
+    role: 'release'
+  });
+  assert.equal(decision.model, 'future-codex-model');
+  assert.equal(decision.model_reasoning_effort, 'high');
+  assert.equal(decision.model_tier, 'future-codex-model-high');
+  assert.equal(decision.reason, 'explicit_model_preserved');
 });
 
 test('native agent model policy keeps GLM mode on GLM 5.2 with GLM efforts', () => {

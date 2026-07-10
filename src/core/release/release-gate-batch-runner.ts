@@ -24,7 +24,8 @@ export function isReleaseGateBatchable(gate: ReleaseGateNode): boolean {
 }
 
 export async function runReleaseGateBatch(root: string, gates: ReleaseGateNode[], input: { concurrency?: number; reportRoot?: string } = {}): Promise<ReleaseGateBatchResult> {
-  const concurrency = Math.max(1, Math.floor(Number(input.concurrency || process.env.SKS_RELEASE_BATCH_CONCURRENCY || 4)))
+  const requestedConcurrency = Math.max(1, Math.floor(Number(input.concurrency || process.env.SKS_RELEASE_BATCH_CONCURRENCY || 2)))
+  const concurrency = Math.min(requestedConcurrency, 4)
   const runId = `rgb-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
   const reportRoot = input.reportRoot || path.join(root, '.sneakoscope', 'reports', 'release-gate-batches', runId)
   const nonBatchable = gates.filter((gate) => !isReleaseGateBatchable(gate))

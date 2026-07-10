@@ -5,8 +5,8 @@ process.env.SKS_RELEASE_MAX_CPU_LIGHT = '7'
 process.env.SKS_RELEASE_MAX_TOTAL = '2'
 const governor = await importDist('core/release/release-gate-resource-governor.js')
 const budget = governor.defaultReleaseGateBudget()
-assertGate(budget['cpu-light'] === 7, 'resource governor must honor SKS_RELEASE_MAX_CPU_LIGHT', budget)
-assertGate(governor.defaultReleaseGateMaxTotal() >= 8 && governor.defaultReleaseGateMaxTotal() <= 32, 'resource governor default total cap must be bounded by host capacity', { max_total: governor.defaultReleaseGateMaxTotal() })
+assertGate(budget['cpu-light'] >= 1 && budget['cpu-light'] <= 4, 'resource governor env requests must not raise the desktop-safe cpu-light cap', budget)
+assertGate(governor.defaultReleaseGateMaxTotal() >= 1 && governor.defaultReleaseGateMaxTotal() <= 4, 'resource governor default total cap must stay desktop-safe', { max_total: governor.defaultReleaseGateMaxTotal() })
 const gate = (id: string) => ({ id, resource: ['cpu-light'], deps: [], command: 'true', side_effect: 'hermetic', timeout_ms: 1000, cache: { enabled: false, inputs: [] }, isolation: { report_dir: 'per-gate' }, preset: ['release'] })
 const fsGate = (id: string) => ({ ...gate(id), resource: ['fs-read'] })
 const timingGate = (id: string) => ({ ...gate(id), resource: ['timing-sensitive'] })

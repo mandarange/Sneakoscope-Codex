@@ -7,7 +7,7 @@ import { ensureDistFresh, root } from './lib/ensure-dist-fresh.js';
 const freshness = ensureDistFresh({ rebuild: true });
 if (!freshness.ok) fail('dist_not_fresh', { freshness });
 const proof = await import(pathToFileURL(path.join(root, 'dist', 'core', 'agents', 'agent-slot-pane-binding-proof.js')).href);
-const targetActiveSlots = 5;
+const targetActiveSlots = 4;
 const workItems = 10;
 const records = Array.from({ length: workItems }, (_, index) => {
   const slotIndex = (index % targetActiveSlots) + 1;

@@ -13,7 +13,10 @@ const currentBranch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
 const currentCommit = git(['rev-parse', 'HEAD']);
 const dist = readJson('dist/build-manifest.json', null);
 const srcVersion = readVersionFrom('src/core/version.ts', /PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/);
-const fsxVersion = readVersionFrom('src/core/fsx.ts', /PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/);
+const fsxReExportsVersion = /PACKAGE_VERSION\s*}\s*from\s*['"]\.\/version(?:\.js)?['"]/.test(readText('src/core/fsx.ts'));
+const fsxVersion = fsxReExportsVersion
+  ? srcVersion
+  : readVersionFrom('src/core/fsx.ts', /PACKAGE_VERSION\s*=\s*['"]([^'"]+)['"]/);
 const cargoVersion = readVersionFrom('crates/sks-core/Cargo.toml', /^version\s*=\s*"([^"]+)"/m);
 const latestChangelog = latestVersionedChangelogSection(readText('CHANGELOG.md'));
 const tag = tagStatus(version, currentCommit);

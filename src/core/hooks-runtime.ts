@@ -10,7 +10,6 @@ import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
 import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
-import { REQUIRED_CODEX_MODEL, SUPPORTED_CODEX_MODELS, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { leanEngineeringCompactText } from './lean-engineering-policy.js';
 import { appendMissionStatus } from './recallpulse.js';
@@ -188,8 +187,6 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   const state = { ...loadedState, _session_key: loadedState?._session_key || sessionKey };
   const noQuestion = isNoQuestionRunning(state);
   if (name === 'user-prompt-submit') {
-    const modelBlock = blockForbiddenClientModel(payload);
-    if (modelBlock) return modelBlock;
     return hookUserPrompt(root, state, payload, noQuestion, sessionKey);
   }
   if (name === 'pre-tool') return hookPreTool(root, state, payload, noQuestion, sessionKey);
@@ -203,18 +200,13 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
 async function hookSubagentStart(root: any, state: any, sessionKey: any = null) {
   void sessionKey;
   const active = await activeRouteContext(root, state).catch(() => '');
-  const additionalContext = [leanEngineeringCompactText(), active].filter(Boolean).join('\n\n');
+  const resourceGuard = [
+    'SKS resource guard: keep at most 4 active subagents in this session.',
+    'Subagents must not spawn nested subagents or duplicate an already assigned audit lane.',
+    'Queue additional independent work instead of increasing active fan-out.'
+  ].join(' ');
+  const additionalContext = [leanEngineeringCompactText(), resourceGuard, active].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext };
-}
-
-function blockForbiddenClientModel(payload: any = {}) {
-  const model = forbiddenClientModelFromPayload(payload);
-  if (!model || !isForbiddenCodexModel(model)) return null;
-  if (looksLikeCodexUiSettingsEvent(payload)) return null;
-  return {
-    decision: 'block',
-    reason: `SKS requires one of [${SUPPORTED_CODEX_MODELS.join(', ')}]; client payload requested ${model}. Switch the Codex client/session model to ${REQUIRED_CODEX_MODEL} (default) or another supported model and retry.`
-  };
 }
 
 function looksLikeCodexUiSettingsEvent(payload: any = {}) {
@@ -241,34 +233,6 @@ function looksLikeCodexUiSettingsEvent(payload: any = {}) {
     payload.session?.surface
   ].filter(Boolean).join(' ');
   return !prompt && /\b(?:settings|preferences|profile|speed|fast[_\s-]*mode|reasoning|model[_\s-]*select|codex[_\s-]*app)\b/i.test(haystack);
-}
-
-function forbiddenClientModelFromPayload(payload: any = {}) {
-  const candidates = [
-    payload.model,
-    payload.model_id,
-    payload.modelId,
-    payload.client_model,
-    payload.clientModel,
-    ...clientModelCandidates(payload.client),
-    ...clientModelCandidates(payload.metadata),
-    ...clientModelCandidates(payload.context),
-    ...clientModelCandidates(payload.thread),
-    ...clientModelCandidates(payload.session)
-  ];
-  return candidates.find((value: any) => typeof value === 'string' && isForbiddenCodexModel(value)) || '';
-}
-
-function clientModelCandidates(value: any, depth: any = 0) {
-  if (!value || typeof value !== 'object' || depth > 4) return [];
-  const out: any[] = [];
-  for (const key of ['model', 'model_id', 'modelId', 'client_model', 'clientModel']) {
-    if (typeof value[key] === 'string') out.push(value[key]);
-  }
-  for (const key of ['client', 'metadata', 'context', 'thread', 'session']) {
-    out.push(...clientModelCandidates(value[key], depth + 1));
-  }
-  return out;
 }
 
 async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
@@ -1066,7 +1030,7 @@ export async function selftestCodexCommitHooks() {
   const metadataLightStop = await runHook('stop', { conversation_id: metadataLightId, last_assistant_message: 'Commit and push complete.' });
   if (metadataLightStop.code !== 0) throw new Error(`selftest failed: metadata-light commit-push stop ${metadataLightStop.code}: ${metadataLightStop.stderr}`);
   if (JSON.parse(metadataLightStop.stdout).decision === 'block') throw new Error('selftest failed: metadata-light commit-push stop bypass');
-  const settingsHook = await runHook('user-prompt-submit', { model: 'gpt-5.0-forbidden', metadata: { source: 'codex_app_settings', feature: 'speed profile' } });
+  const settingsHook = await runHook('user-prompt-submit', { model: 'future-codex-catalog-model', metadata: { source: 'codex_app_settings', feature: 'speed profile' } });
   if (settingsHook.code !== 0) throw new Error(`selftest failed: settings hook ${settingsHook.code}: ${settingsHook.stderr}`);
   const settingsJson = JSON.parse(settingsHook.stdout);
   if (settingsJson.decision === 'block' || settingsJson.hookSpecificOutput?.additionalContext || !String(settingsJson.systemMessage || '').includes('settings/profile event ignored')) throw new Error('selftest failed: settings/profile event should not route or block');
@@ -1081,4 +1045,3 @@ export async function selftestCodexCommitHooks() {
   if (userCommitPushStop.code !== 0) throw new Error(`selftest failed: user commit-push stop ${userCommitPushStop.code}: ${userCommitPushStop.stderr}`);
   if (JSON.parse(userCommitPushStop.stdout).decision === 'block') throw new Error('selftest failed: user commit-push stop bypass');
 }
-

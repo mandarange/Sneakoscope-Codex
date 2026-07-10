@@ -1,11 +1,10 @@
 import type { AgentPersona } from './agent-schema.js'
 import { codexModelEffortCapability, type CodexModelEffortCapability } from '../codex-control/codex-model-capabilities.js'
-import { GPT54_MINI_CODEX_MODEL, REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 import { GLM_52_OPENROUTER_MODEL, type Glm52ReasoningEffort } from '../providers/glm/glm-52-settings.js'
 
 export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
 export type AgentModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
-export type AgentWorkerModelTier = 'gpt-5.4-mini' | `${typeof REQUIRED_CODEX_MODEL}-low` | `${typeof REQUIRED_CODEX_MODEL}-high` | 'glm-5.2-minimal' | 'glm-5.2-low' | 'glm-5.2-high' | 'glm-5.2-xhigh'
+export type AgentWorkerModelTier = string
 
 export interface AgentEffortDecision {
   schema: 'sks.agent-effort-decision.v1'
@@ -159,15 +158,16 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     policy_version: 1,
     dynamic: true,
     service_tier: 'fast',
-    allowed_models: [GPT54_MINI_CODEX_MODEL, REQUIRED_CODEX_MODEL, GLM_52_OPENROUTER_MODEL],
-    model_tiers: ['gpt-5.4-mini', `${REQUIRED_CODEX_MODEL}-low`, `${REQUIRED_CODEX_MODEL}-high`, 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
+    model_catalog_policy: 'codex_catalog_passthrough',
+    model_constraint: null,
+    model_tiers: ['codex-selected-low', 'codex-selected-medium', 'codex-selected-high', 'codex-selected-xhigh', 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
     allowed_efforts: codexModelEffortCapability().advertised_efforts,
     model_effort_capability: codexModelEffortCapability(),
     max_agents: roster.max_agents || 20,
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
-    rule: `Parent orchestration assigns per-agent model tiers from prompt risk, persona role, lease ownership, and proof state: simple bounded GPT workers can downshift to gpt-5.4-mini; ordinary GPT workers use ${REQUIRED_CODEX_MODEL} low; risky GPT lanes use ${REQUIRED_CODEX_MODEL} high. In GLM mode, native workers stay on z-ai/glm-5.2 and receive GLM effort tiers.`
+    rule: 'Codex/OpenAI workers inherit the current Codex-selected model, including future catalog entries; SKS changes only advertised reasoning effort. Explicit non-Codex provider modes retain their provider model.'
   }
 }
 
@@ -205,9 +205,8 @@ export function decideAgentWorkerModel(input: {
   model_profile: string
   reason: string
 } {
-  const mainModel = String(input.mainModel || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || REQUIRED_CODEX_MODEL).trim()
+  const mainModel = String(input.mainModel || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || '').trim()
   const glmMain = isGlmWorkerMode(mainModel)
-  const gptMain = !glmMain && (!mainModel || /^gpt-/i.test(mainModel))
   const effort = String(input.effort || 'medium')
   const text = [input.prompt, input.role, input.agentId, input.writePolicy].map((item) => String(item || '')).join(' ')
   const simpleText = [input.prompt, input.role, input.agentId].map((item) => String(item || '')).join(' ')
@@ -223,40 +222,23 @@ export function decideAgentWorkerModel(input: {
       reason: `glm_52_${glmEffort}_worker`
     }
   }
-  if (gptMain && risky) {
-    return {
-      model: REQUIRED_CODEX_MODEL,
-      model_reasoning_effort: 'high',
-      model_tier: `${REQUIRED_CODEX_MODEL}-high`,
-      model_profile: `sks-agent-${REQUIRED_CODEX_MODEL}-high-fast`,
-      reason: 'risk_signal_worker'
-    }
-  }
-  if (gptMain && (simple || effort === 'low')) {
-    return {
-      model: GPT54_MINI_CODEX_MODEL,
-      model_reasoning_effort: 'low',
-      model_tier: 'gpt-5.4-mini',
-      model_profile: 'sks-agent-gpt-5.4-mini-fast',
-      reason: simple ? 'simple_code_or_docs_slice_downshift' : 'low_effort_worker_downshift'
-    }
-  }
-  if (gptMain && (effort === 'high' || effort === 'xhigh')) {
-    return {
-      model: REQUIRED_CODEX_MODEL,
-      model_reasoning_effort: 'high',
-      model_tier: `${REQUIRED_CODEX_MODEL}-high`,
-      model_profile: `sks-agent-${REQUIRED_CODEX_MODEL}-high-fast`,
-      reason: 'risk_or_high_effort_worker'
-    }
-  }
+  const modelEffort: AgentModelReasoningEffort = risky || effort === 'high' || effort === 'xhigh'
+    ? 'high'
+    : simple || effort === 'low'
+      ? 'low'
+      : 'medium'
+  const modelLabel = mainModel || 'codex-selected'
   return {
-    model: gptMain ? REQUIRED_CODEX_MODEL : mainModel || REQUIRED_CODEX_MODEL,
-    model_reasoning_effort: 'low',
-    model_tier: `${REQUIRED_CODEX_MODEL}-low`,
-    model_profile: `sks-agent-${REQUIRED_CODEX_MODEL}-low-fast`,
-    reason: gptMain ? 'ordinary_worker_main_gpt_low' : 'non_gpt_main_model_preserved'
+    model: mainModel,
+    model_reasoning_effort: modelEffort,
+    model_tier: `${modelLabel}-${modelEffort}`,
+    model_profile: `sks-agent-${safeProfileSegment(modelLabel)}-${modelEffort}-fast`,
+    reason: mainModel ? 'explicit_model_preserved' : 'codex_catalog_model_inherited'
   }
+}
+
+function safeProfileSegment(value: string): string {
+  return String(value || 'codex-selected').toLowerCase().replace(/[^a-z0-9.-]+/g, '-').replace(/^-+|-+$/g, '') || 'codex-selected'
 }
 
 function isGlmWorkerMode(mainModel: string): boolean {

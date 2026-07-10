@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // @ts-nocheck
 // $Naruto Shadow Clone Swarm gate.
-// Proves the high-scale mode lifts the standard 20-agent ceiling to 100 clones WITHOUT
-// changing it for any other route, and that an end-to-end `sks naruto run` actually
-// schedules >20 concurrent clone sessions to completion with proof.
+// Proves Naruto can queue a 100-clone roster while active work stays bounded by
+// the desktop-safe resource governor.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,11 +18,11 @@ const effortPolicy = await importDist('core/agents/agent-effort-policy.js');
 assertGate(schema.MAX_NARUTO_AGENT_COUNT === 100, 'MAX_NARUTO_AGENT_COUNT must be 100', { value: schema.MAX_NARUTO_AGENT_COUNT });
 assertGate(schema.MAX_AGENT_COUNT === 20, 'MAX_AGENT_COUNT must remain 20 (standard ceiling)', { value: schema.MAX_AGENT_COUNT });
 
-// 2) Cap is lifted ONLY when the naruto max is passed; default callers still clamp to 20.
+// 2) Roster size can reach 100, but every scheduler caller stays desktop-safe.
 const narutoSlots = scheduler.normalizeTargetActiveSlots(100, schema.MAX_NARUTO_AGENT_COUNT);
 const defaultSlots = scheduler.normalizeTargetActiveSlots(100);
-assertGate(narutoSlots === 100, 'normalizeTargetActiveSlots(100, naruto-max) must be 100', { narutoSlots });
-assertGate(defaultSlots === 20, 'normalizeTargetActiveSlots(100) default must stay clamped to 20', { defaultSlots });
+assertGate(narutoSlots === 4, 'normalizeTargetActiveSlots(100, naruto-max) must retain the desktop-safe cap', { narutoSlots });
+assertGate(defaultSlots === 4, 'normalizeTargetActiveSlots(100) must stay desktop-safe', { defaultSlots });
 
 // 3) A 100-clone roster builds 100 unique clones (no unique-persona ceiling).
 const fullRoster = roster.buildNarutoCloneRoster({ clones: 100, maxAgentCount: schema.MAX_NARUTO_AGENT_COUNT });
@@ -46,9 +45,9 @@ const tiers = new Set(effortRoster.roster.map((row) => row.service_tier));
 const fastFlags = new Set(effortRoster.roster.map((row) => row.fast_mode));
 assertGate([...efforts].every((e) => e === 'low' || e === 'medium'), 'naruto clone efforts must be only low/medium (never high/xhigh)', { efforts: [...efforts] });
 assertGate(efforts.has('low') && efforts.has('medium'), 'naruto effort must be dynamic: a no-tool prompt must yield both low and medium clones', { efforts: [...efforts] });
-assertGate([...modelTiers].every((tier) => tier === 'gpt-5.4-mini' || tier === 'gpt-5.5-low'), 'ordinary naruto clone model tiers must be mini or gpt-5.5-low', { modelTiers: [...modelTiers] });
-assertGate(modelTiers.has('gpt-5.4-mini') && modelTiers.has('gpt-5.5-low'), 'naruto model allocation must dynamically mix gpt-5.4-mini and gpt-5.5-low', { modelTiers: [...modelTiers] });
-assertGate([...modelEfforts].length === 1 && modelEfforts.has('low'), 'ordinary naruto clone model reasoning must stay at low', { modelEfforts: [...modelEfforts] });
+assertGate([...modelTiers].every((tier) => tier === 'codex-selected-low' || tier === 'codex-selected-medium'), 'Naruto must inherit the Codex-selected model and vary only reasoning effort', { modelTiers: [...modelTiers] });
+assertGate(modelTiers.has('codex-selected-low') && modelTiers.has('codex-selected-medium'), 'Naruto effort allocation must dynamically mix low and medium without changing model IDs', { modelTiers: [...modelTiers] });
+assertGate([...modelEfforts].every((effort) => effort === 'low' || effort === 'medium'), 'ordinary Naruto clone model reasoning must stay low/medium', { modelEfforts: [...modelEfforts] });
 assertGate([...tiers].length === 1 && tiers.has('fast'), 'every naruto clone must be fast service tier', { tiers: [...tiers] });
 assertGate([...fastFlags].length === 1 && fastFlags.has(true), 'every naruto clone must have fast_mode=true', { fastFlags: [...fastFlags] });
 
@@ -58,9 +57,9 @@ const toolWrite = effortPolicy.decideNarutoCloneEffort({ readonly: false, prompt
 const toolReadCmd = effortPolicy.decideNarutoCloneEffort({ readonly: true, prompt: 'run the build and apply the migration' });
 const simpleWrite = effortPolicy.decideNarutoCloneEffort({ readonly: false, prompt: 'simple one-line typo fix' });
 assertGate(simple.reasoning_effort === 'low' && simple.service_tier === 'fast', 'no-tool read-only work must be low + fast', { simple });
-assertGate(simple.model === 'gpt-5.4-mini' && simple.model_reasoning_effort === 'low', 'no-tool read-only work must downshift to gpt-5.4-mini', { simple });
-assertGate(toolWrite.reasoning_effort === 'medium' && toolWrite.service_tier === 'fast' && toolWrite.model === 'gpt-5.5' && toolWrite.model_reasoning_effort === 'low', 'writing clone (tool use) must be medium + gpt-5.5 low', { toolWrite });
-assertGate(simpleWrite.model === 'gpt-5.4-mini' && simpleWrite.model_reasoning_effort === 'low', 'simple write work must downshift native workers to gpt-5.4-mini', { simpleWrite });
+assertGate(simple.model === '' && simple.model_reasoning_effort === 'low', 'no-tool read-only work must inherit the Codex model at low effort', { simple });
+assertGate(toolWrite.reasoning_effort === 'medium' && toolWrite.service_tier === 'fast' && toolWrite.model === '' && toolWrite.model_reasoning_effort === 'medium', 'writing clone must inherit the Codex model at medium effort', { toolWrite });
+assertGate(simpleWrite.model === '' && simpleWrite.model_reasoning_effort === 'low', 'simple write work must inherit the Codex model at low effort', { simpleWrite });
 assertGate(toolReadCmd.reasoning_effort === 'medium' && toolReadCmd.service_tier === 'fast' && toolReadCmd.model_reasoning_effort === 'high', 'risky read-only command/migration work must escalate model reasoning to high', { toolReadCmd });
 
 // 5) System-safe concurrency: never spawn the whole count at once; throttle to host capacity.
@@ -72,23 +71,19 @@ const lowFreeButCapable = roster.systemSafeNarutoConcurrency({
   freeBytes: 512 * 1024 * 1024,
   totalBytes: 16 * 1024 * 1024 * 1024
 });
-assertGate(fakeSafe.cap >= 1 && fakeSafe.cap <= schema.MAX_NARUTO_AGENT_COUNT, 'fake-backend concurrency cap must be in [1, 100]', { fakeSafe });
-// codex-sdk workers are network-bound (each mostly idle awaiting the Codex API),
-// so concurrency is bounded by MEMORY + the 100-clone ceiling, NOT by CPU cores: a
-// capable host may run up to MAX_NARUTO_AGENT_COUNT in parallel.
-assertGate(heavySafe.cap >= 1 && heavySafe.cap <= schema.MAX_NARUTO_AGENT_COUNT, 'heavy-backend concurrency cap must be in [1, 100]', { heavySafe });
+assertGate(fakeSafe.cap >= 1 && fakeSafe.cap <= 4, 'fake-backend active concurrency cap must stay in [1, 4]', { fakeSafe });
+assertGate(heavySafe.cap >= 1 && heavySafe.cap <= 4, 'heavy-backend active concurrency cap must stay in [1, 4]', { heavySafe });
 assertGate(heavySafe.cap <= fakeSafe.cap, 'heavy backend must throttle no looser than the light backend', { heavySafe, fakeSafe });
 assertGate(heavySafe.cores >= 1, 'must detect at least one core', { cores: heavySafe.cores });
-assertGate(lowFreeButCapable.cap >= 4, 'capable hosts must not collapse Naruto codex-sdk concurrency to 1 just because free memory is low', { lowFreeButCapable });
-// A big-memory host is NOT throttled by core count: simulate 64 GB and assert the
-// heavy backend scales well past the old 16-core-derived ceiling toward 100.
+assertGate(lowFreeButCapable.cap === 1, 'low free memory must collapse active Codex concurrency to one worker', { lowFreeButCapable });
 const bigMemoryHost = roster.systemSafeNarutoConcurrency({ backend: 'codex-sdk', cores: 4, freeBytes: 48 * 1024 * 1024 * 1024, totalBytes: 64 * 1024 * 1024 * 1024 });
-assertGate(bigMemoryHost.cap >= 64, 'a 64 GB host must allow >= 64 parallel codex-sdk workers regardless of core count (network-bound, memory-budgeted)', { bigMemoryHost });
+assertGate(bigMemoryHost.cap >= 1 && bigMemoryHost.cap <= 4, 'large memory must not bypass the interactive CPU cap', { bigMemoryHost });
 
-// 6) End-to-end run: 24 clones (> standard 20 -> ceiling lifted) all complete, while
-//    release verification keeps live slots bounded so the gate stays hermetic under DAG load.
-const proofClones = 24;
-const proofConcurrency = 6;
+// 6) A small end-to-end run proves the same queue/drain path. The direct roster
+//    assertions above cover the 100-clone ceiling without making this release
+//    gate create dozens of unnecessary worker processes.
+const proofClones = 6;
+const proofConcurrency = 4;
 const cli = path.join(root, 'dist', 'bin', 'sks.js');
 const isolatedWorktreeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-naruto-shadow-wt-'));
 const childEnv = { ...process.env, SKS_WORKTREE_ROOT: isolatedWorktreeRoot, SKS_DISABLE_GIT_WORKTREE: '1' };
@@ -111,13 +106,13 @@ const parsed = parseJson(run.stdout);
 assertGate(parsed !== null, 'sks naruto run must emit JSON', { stdout: tail(run.stdout) });
 assertGate(parsed.ok === true, 'naruto run must be ok', { ok: parsed.ok });
 assertGate(parsed.mode === 'NARUTO' && parsed.jutsu === 'kage_bunshin_no_jutsu', 'naruto run must report NARUTO mode', { mode: parsed.mode, jutsu: parsed.jutsu });
-assertGate(parsed.clones === proofClones, 'clone fan-out must use the requested count (> standard 20 ceiling)', { clones: parsed.clones });
+assertGate(parsed.clones === proofClones, 'clone fan-out must use the requested queued count', { clones: parsed.clones });
 assertGate(parsed.max_clones === 100, 'naruto run must advertise the 100 ceiling', { max_clones: parsed.max_clones });
 assertGate(parsed.proof === 'passed', 'naruto run proof must pass', { proof: parsed.proof });
 // Throttle invariant: active concurrency never exceeds the requested count nor the host cap.
 assertGate(parsed.target_active_slots >= 1 && parsed.target_active_slots <= proofClones, 'active slots must be in [1, clones]', { target_active_slots: parsed.target_active_slots });
 assertGate(parsed.target_active_slots <= fakeSafe.cap, 'active slots must be throttled to the system-safe cap', { target_active_slots: parsed.target_active_slots, cap: fakeSafe.cap });
-assertGate(parsed.target_active_slots === proofConcurrency, 'release proof must keep Naruto live slots bounded while fan-out stays >20', { target_active_slots: parsed.target_active_slots, proofConcurrency });
+assertGate(parsed.target_active_slots <= proofConcurrency && parsed.target_active_slots <= 4, 'release proof must keep Naruto live slots desktop-safe while queued fan-out remains larger', { target_active_slots: parsed.target_active_slots, proofConcurrency });
 
 // Task 9.1: fan-out (clones) and live concurrency (target_active_slots) are reported
 // distinctly, and concurrency_capped truthfully reflects "N clones, running M at a time".
@@ -138,14 +133,12 @@ assertGate(commandGraph.active_waves.some((wave) => wave.write_paths.length > 1)
 const state = parsed.run?.scheduler?.state || parsed.run?.scheduler || {};
 assertGate(Number(state.completed_count) === Number(parsed.work_graph?.total_work_items || 0) && Number(state.completed_count) >= proofClones, 'all clone work items must complete despite throttling', { completed_count: state.completed_count, total_work_items: parsed.work_graph?.total_work_items, proofClones });
 
-const explicitConcurrency = spawnSync(process.execPath, [cli, 'naruto', 'run', 'explicit concurrency', '--clones', '6', '--backend', 'fake', '--work-items', '6', '--concurrency', '6', '--json', '--no-open-zellij'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
-const explicitParsed = parseJson(explicitConcurrency.stdout);
-assertGate(explicitConcurrency.status === 0 && explicitParsed?.target_active_slots === 6, 'explicit --concurrency must let Naruto use the requested parallel slot count', { status: explicitConcurrency.status, target_active_slots: explicitParsed?.target_active_slots });
+assertGate(parsed.target_active_slots <= 4, 'explicit --concurrency cannot bypass the desktop-safe cap', { target_active_slots: parsed.target_active_slots });
 
-// 7) A small request is NOT throttled below what was asked (cap only ever reduces, never inflates).
+// 7) A small request is never inflated; live pressure may still reduce it.
 const small = spawnSync(process.execPath, [cli, 'naruto', 'run', 'tiny', '--clones', '2', '--backend', 'fake', '--work-items', '2', '--json', '--no-open-zellij'], { cwd: root, env: childEnv, encoding: 'utf8', timeout: 600000, maxBuffer: 4 * 1024 * 1024 });
 const smallParsed = parseJson(small.stdout);
-assertGate(small.status === 0 && smallParsed?.target_active_slots === 2, 'a 2-clone run must run 2 concurrently (no over-throttle)', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
+assertGate(small.status === 0 && smallParsed?.target_active_slots >= 1 && smallParsed?.target_active_slots <= 2, 'a 2-clone run must stay within [1, 2] active workers', { status: small.status, target_active_slots: smallParsed?.target_active_slots });
 
 // 8) Naruto clones always run fast. Per-route --no-fast / standard-tier requests
 //    are intentionally not honored for shadow clones.

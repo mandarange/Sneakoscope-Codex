@@ -29,13 +29,16 @@ export function monitorNarutoResourcePressure(probe: HardwareCapacityProbe, inpu
   const fdPressure = Math.min(1, (activeWorkers * 6 + probe.process_count) / Math.max(1, probe.file_descriptor_limit))
   const zellijPressure = Math.min(1, probe.zellij_pane_count / zellijCap)
   const diskIoPressure = Number(probe.disk_io_pressure || 0)
-  const sample = movingAveragePressure({
+  const current = {
     memory: memoryPressure,
     cpu: cpuPressure,
     fd: fdPressure,
     zellij: zellijPressure,
     disk: diskIoPressure
-  })
+  }
+  const average = movingAveragePressure(current)
+  const pressureKeys = Object.keys(current) as Array<keyof typeof current>
+  const sample = Object.fromEntries(pressureKeys.map((key) => [key, Math.max(current[key] || 0, average[key] || 0)])) as typeof current
   const entries = Object.entries(sample).sort((a, b) => b[1] - a[1])
   const [dominantMetric = 'unknown', dominantPressure = 0] = entries[0] || []
   const reasons = entries

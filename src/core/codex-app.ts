@@ -834,14 +834,14 @@ async function codexFastModeConfigStatus(opts: any = {}) {
   for (const config of configs) {
     if (!config.text) continue;
     const topLevel = topLevelToml(config.text);
-    if (/(^|\n)\s*model\s*=/.test(topLevel)) blockers.push(`${config.scope}:top_level_model`);
     if (/(^|\n)\s*model_reasoning_effort\s*=/.test(topLevel)) blockers.push(`${config.scope}:top_level_model_reasoning_effort`);
     if (/(^|\n)\s*fast_default_opt_out\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(tomlTable(config.text, 'notice'))) blockers.push(`${config.scope}:fast_default_opt_out`);
   }
+  // 2026-07 renewal: [user.fast_mode] left the config schema. Its PRESENCE is now
+  // the defect (a stale legacy stamp), not its absence — the old visible/enabled
+  // "missing" blockers inverted into a single legacy-residue blocker.
   const merged = configs.map((config: any) => config.text).join('\n');
-  const fastMode = tomlTable(merged, 'user.fast_mode');
-  if (!/(^|\n)\s*visible\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.visible_missing');
-  if (!/(^|\n)\s*enabled\s*=\s*true\s*(?:#.*)?(?=\n|$)/.test(fastMode)) blockers.push('user.fast_mode.enabled_missing');
+  if (tomlTable(merged, 'user.fast_mode').trim()) blockers.push('user.fast_mode.legacy_table_present');
   return {
     ok: blockers.length === 0,
     checked: true,

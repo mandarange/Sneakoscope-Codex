@@ -54,9 +54,23 @@ export function ensureStrictObjectSchema(schema: Record<string, unknown>) {
 }
 
 export async function runOpenAIStructuredOutput(request: StructuredOutputAdapterRequest): Promise<StructuredOutputAdapterResult> {
-  const model = request.model || process.env.OPENAI_STRUCTURED_OUTPUT_MODEL || 'gpt-5.4-mini';
+  const model = String(request.model || process.env.OPENAI_STRUCTURED_OUTPUT_MODEL || '').trim();
   const apiKey = request.apiKey || process.env.OPENAI_API_KEY || null;
   const sourceSha = request.imagePath ? sha256(await fsp.readFile(path.resolve(request.imagePath))) : null;
+  if (!model) {
+    return {
+      schema: 'sks.structured-output-adapter-result.v1',
+      ok: false,
+      status: 'integration_optional',
+      provider: 'openai_responses_text_format',
+      model: '',
+      parsed_json: null,
+      validation: { ok: false, issues: ['openai_structured_output_model_missing'] },
+      blocker: structuredOutputBlocker('openai_structured_output_model_missing', 'Pass request.model or set OPENAI_STRUCTURED_OUTPUT_MODEL; SKS does not invent a model identifier.'),
+      setup_guidance: 'Choose any model available to your OpenAI account and pass it explicitly, or use Codex structured output so the current Codex selection is inherited.',
+      source_sha256: sourceSha
+    };
+  }
   if (!apiKey) {
     return {
       schema: 'sks.structured-output-adapter-result.v1',

@@ -40,29 +40,33 @@ export async function repairAgentRoleConfigs(input: {
   const created: string[] = []
   const repaired: string[] = []
   const existing: string[] = []
+  const projectAgentsDir = path.join(root, '.codex', 'agents')
   for (const role of MANAGED_AGENT_ROLES) {
     const file = role.filename
     const content = managedAgentRoleContent(role)
-    const found = candidates.find((dir) => fs.existsSync(path.join(dir, file)))
-    if (found) {
-      const foundPath = path.join(found, file)
+    const foundPaths = candidates.map((dir) => path.join(dir, file)).filter((filePath) => fs.existsSync(filePath))
+    let managedCopyFound = false
+    for (const foundPath of foundPaths) {
       const text = fs.readFileSync(foundPath, 'utf8')
       if (isValidRoleConfig(text, role)) {
+        managedCopyFound = true
         existing.push(path.relative(root, foundPath) || foundPath)
         continue
       }
+      const projectOwnedByFilename = foundPath.startsWith(`${projectAgentsDir}${path.sep}`)
+      if (!projectOwnedByFilename && !managedAgentRoleOwnsText(text, role)) continue
+      managedCopyFound = true
       stale.push(file)
       if (input.apply) {
-        const target = foundPath.startsWith(path.join(root, '.codex', 'agents')) ? foundPath : path.join(root, '.codex', 'agents', file)
-        await ensureDir(path.dirname(target))
-        await writeTextAtomic(target, content)
-        repaired.push(path.relative(root, target))
+        await ensureDir(path.dirname(foundPath))
+        await writeTextAtomic(foundPath, content)
+        repaired.push(path.relative(root, foundPath) || foundPath)
       }
-      continue
     }
+    if (managedCopyFound) continue
     missing.push(file)
     if (input.apply) {
-      const target = path.join(root, '.codex', 'agents', file)
+      const target = path.join(projectAgentsDir, file)
       await ensureDir(path.dirname(target))
       await writeTextAtomic(target, content)
       created.push(path.relative(root, target))
@@ -92,4 +96,5 @@ function isValidRoleConfig(text: string, role: { id: string; codex_name: string;
   return managedAgentRoleOwnsText(text, role as any)
     && text.includes('description = "')
     && text.includes('developer_instructions = """')
+    && !/^\s*(?:model|model_reasoning_effort)\s*=/m.test(text)
 }

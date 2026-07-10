@@ -1,6 +1,5 @@
 import { findCodexBinary } from '../codex-adapter.js'
 import { runProcess } from '../fsx.js'
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 const FALLBACK_EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh']
 
@@ -16,9 +15,9 @@ export interface CodexModelMetadata {
 export async function collectCodexModelMetadata(input: { model?: string | null } = {}): Promise<CodexModelMetadata> {
   if (process.env.SKS_CODEX_MODEL_METADATA_FAKE === '1') {
     const advertised = normalizeAdvertisedEfforts(process.env.SKS_CODEX_MODEL_EFFORTS || 'low,medium,high,xhigh')
-    return metadata(String(input.model || process.env.SKS_CODEX_MODEL || REQUIRED_CODEX_MODEL), advertised, 'medium', 'app-server', [])
+    return metadata(String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || ''), advertised, 'medium', 'app-server', [])
   }
-  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || REQUIRED_CODEX_MODEL)
+  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || '').trim()
   const appServer = await readAppServerMetadata(model)
   if (appServer) return appServer
   const cli = await readCodexCliMetadata(model)
@@ -62,11 +61,25 @@ async function readCodexCliMetadata(model: string): Promise<CodexModelMetadata |
 }
 
 function normalizePayload(payload: any, fallbackModel: string, source: 'app-server' | 'codex-cli'): CodexModelMetadata {
-  const row = Array.isArray(payload?.models)
-    ? payload.models.find((candidate: any) => String(candidate?.id || candidate?.model || candidate?.name || '') === fallbackModel) || payload.models[0]
+  const catalog = Array.isArray(payload?.models) ? payload.models : null
+  const reportedSelection = String(payload?.selected_model || payload?.current_model || payload?.active_model || '').trim()
+  const requestedModel = String(fallbackModel || reportedSelection).trim()
+  const row = catalog
+    ? requestedModel
+      ? catalog.find((candidate: any) => String(candidate?.id || candidate?.model || candidate?.name || '') === requestedModel) || null
+      : null
     : payload?.model_metadata || payload?.metadata || payload
+  if (!row) {
+    return metadata(
+      requestedModel,
+      [],
+      'medium',
+      source,
+      [requestedModel ? 'codex_model_not_found_in_advertised_catalog' : 'codex_model_selection_unknown']
+    )
+  }
   const efforts = normalizeAdvertisedEfforts(row?.advertised_efforts || row?.advertisedEfforts || row?.reasoning_efforts || row?.reasoningEfforts || payload?.advertised_efforts)
-  return metadata(String(row?.model || row?.id || row?.name || fallbackModel), efforts, row?.default_effort || row?.defaultEffort || payload?.default_effort || 'medium', source, efforts.length ? [] : ['codex_model_metadata_efforts_missing'])
+  return metadata(String(row?.model || row?.id || row?.name || requestedModel), efforts, row?.default_effort || row?.defaultEffort || payload?.default_effort || 'medium', source, efforts.length ? [] : ['codex_model_metadata_efforts_missing'])
 }
 
 function metadata(model: string, efforts: string[], defaultEffort: string, source: CodexModelMetadata['source'], blockers: string[]): CodexModelMetadata {

@@ -33,7 +33,7 @@ export interface NarutoConcurrencyGovernorDecision {
 }
 
 export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = {}): NarutoConcurrencyGovernorDecision {
-  const requestedClones = normalizePositiveInt(input.requestedClones, 12)
+  const requestedClones = normalizePositiveInt(input.requestedClones, 8)
   const totalWorkItems = normalizePositiveInt(input.totalWorkItems, requestedClones)
   const pending = normalizeNonNegativeInt(input.pendingWorkQueueSize, totalWorkItems)
   const leaseConflicts = normalizeNonNegativeInt(input.activeLeaseConflicts, 0)
@@ -43,34 +43,37 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
   const parallelismMode = normalizeParallelismMode(input.parallelismMode)
   const freeGb = hardware.free_memory_bytes / (1024 * 1024 * 1024)
   const totalGb = hardware.total_memory_bytes / (1024 * 1024 * 1024)
-  const reclaimableFloorGb = totalGb >= 32 ? 16 : totalGb >= 16 ? 8 : totalGb >= 8 ? 4 : Math.max(1, freeGb)
-  const memoryBudgetGb = Math.max(freeGb, reclaimableFloorGb)
+  const reservedInteractiveGb = Math.max(2, totalGb * 0.2)
+  const memoryBudgetGb = Math.max(0.5, freeGb - reservedInteractiveGb)
   const heavy = backend === 'codex-sdk' || backend === 'zellij' || backend === 'process' || backend === 'ollama'
-  const gbPerWorker = heavy ? Number(process.env.SKS_NARUTO_GB_PER_WORKER || 0.25) : Number(process.env.SKS_NARUTO_LIGHT_GB_PER_WORKER || 0.1)
-  const memoryCap = Math.max(1, Math.floor(memoryBudgetGb / Math.max(0.05, gbPerWorker)))
+  const gbPerWorker = heavy ? Number(process.env.SKS_NARUTO_GB_PER_WORKER || 1.5) : Number(process.env.SKS_NARUTO_LIGHT_GB_PER_WORKER || 0.5)
+  const memoryCap = Math.max(1, Math.floor(memoryBudgetGb / Math.max(0.25, gbPerWorker)))
   const fdCap = Math.max(1, Math.floor((hardware.file_descriptor_limit - hardware.process_count) / 6))
-  const cpuCap = Math.max(1, hardware.cpu_core_count * (heavy ? 2 : 4))
-  const ioCap = Math.max(2, Math.floor(hardware.cpu_core_count / 2))
-  const processCap = Math.max(1, Number(process.env.SKS_NARUTO_HEADLESS_PROCESS_CAP || cpuCap + ioCap))
+  const cpuCap = Math.max(1, Math.min(4, Math.floor(hardware.cpu_core_count * (heavy ? 0.4 : 0.5))))
+  const ioCap = Math.max(1, Math.min(2, Math.floor(hardware.cpu_core_count / 4)))
+  const configuredProcessCap = Math.max(1, Number(process.env.SKS_NARUTO_HEADLESS_PROCESS_CAP || 4))
+  const processCap = Math.min(configuredProcessCap, cpuCap, 4)
   const gitWorktreeCap = Math.max(1, Number(process.env.SKS_NARUTO_GIT_WORKTREE_CAP || Math.min(requestedClones, processCap)))
   const localLlmParallel = Math.max(1, Math.min(4, hardware.local_llm_max_parallel_requests))
   const remoteCodexParallel = Math.max(1, Math.min(hardware.remote_api_rate_limit_budget, requestedClones))
   const backendBudget = backend === 'ollama' || backend === 'local-llm'
     ? localLlmParallel
     : backend === 'codex-sdk' || backend === 'zellij'
-      ? Math.max(remoteCodexParallel, Math.min(requestedClones, processCap))
+      ? Math.min(remoteCodexParallel, processCap)
       : processCap
   const queueCap = Math.max(1, Math.min(requestedClones, pending || totalWorkItems))
   const leaseCap = Math.max(1, requestedClones - leaseConflicts)
-  const rawSafe = Math.max(1, Math.min(requestedClones, totalWorkItems, memoryCap, fdCap, cpuCap + ioCap, gitWorktreeCap + processCap, backendBudget, queueCap, leaseCap, 100))
+  const rawSafe = Math.max(1, Math.min(requestedClones, totalWorkItems, memoryCap, fdCap, cpuCap, ioCap + 1, gitWorktreeCap, processCap, backendBudget, queueCap, leaseCap, 4))
   const pressure = monitorNarutoResourcePressure(hardware, { activeWorkers: rawSafe, zellijVisiblePaneCap })
   const backpressure = applyNarutoBackpressure(rawSafe, pressure)
   const currentSafeActiveWorkers = Math.max(1, Math.min(rawSafe, backpressure.adjusted_active_workers))
-  const safeActiveWorkers = parallelismMode === 'extreme'
-    ? rawSafe
+  // Every mode respects live backpressure. Modes only lower the bounded cap.
+  const modeCap = parallelismMode === 'safe'
+    ? Math.max(1, Math.ceil(rawSafe * 0.5))
     : parallelismMode === 'balanced'
-      ? Math.max(1, Math.min(rawSafe, Math.max(16, Math.floor(rawSafe * 0.75))))
-      : currentSafeActiveWorkers
+      ? Math.max(1, Math.ceil(rawSafe * 0.75))
+      : rawSafe
+  const safeActiveWorkers = Math.max(1, Math.min(modeCap, currentSafeActiveWorkers))
   const safeVisible = Math.min(safeActiveWorkers, zellijVisiblePaneCap)
   const reasons = [
     ...(memoryCap < requestedClones ? ['memory_cap'] : []),
@@ -96,7 +99,7 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
     process_parallel: processCap,
     git_worktree_parallel: gitWorktreeCap,
     cpu_io_parallel: cpuCap + ioCap,
-    verification_parallel: Math.max(1, Math.min(hardware.cpu_core_count * 2, safeActiveWorkers, 16)),
+    verification_parallel: Math.max(1, Math.min(2, safeActiveWorkers)),
     parallelism_mode: parallelismMode,
     reasons: [...new Set(reasons)],
     backpressure: backpressure.backpressure,
@@ -105,9 +108,9 @@ export function decideNarutoConcurrency(input: NarutoConcurrencyGovernorInput = 
 }
 
 function normalizeParallelismMode(value: unknown): 'extreme' | 'balanced' | 'safe' {
-  const text = String(value || process.env.SKS_NARUTO_PARALLELISM || 'extreme').toLowerCase()
+  const text = String(value || process.env.SKS_NARUTO_PARALLELISM || 'safe').toLowerCase()
   if (text === 'safe' || text === 'balanced' || text === 'extreme') return text
-  return 'extreme'
+  return 'safe'
 }
 
 function normalizePositiveInt(value: unknown, fallback: number): number {

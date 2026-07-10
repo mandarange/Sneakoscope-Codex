@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { REQUIRED_CODEX_MODEL } from '../../dist/core/codex-model-guard.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const distCli = path.join(repoRoot, 'dist', 'bin', 'sks.js');
@@ -121,7 +120,7 @@ test('sks fast-mode on repairs Codex fast-mode UI when explicitly disabled', asy
   const configPath = path.join(codexDir, 'config.toml');
   await fs.mkdir(codexDir, { recursive: true });
   await fs.writeFile(configPath, [
-    `model = "${REQUIRED_CODEX_MODEL}"`,
+    'model = "future-codex-model"',
     'service_tier = "standard"',
     '',
     '[user.fast_mode]',
@@ -141,11 +140,10 @@ test('sks fast-mode on repairs Codex fast-mode UI when explicitly disabled', asy
   assert.equal(parsed.codex_fast_mode_repair.status, 'updated');
   const config = await fs.readFile(configPath, 'utf8');
   assert.match(config, /^service_tier = "fast"/m);
-  assert.match(config, /^default_profile = "sks-fast-high"/m);
-  assert.match(config, /\[user\.fast_mode\][\s\S]*visible = true/);
-  assert.match(config, /\[user\.fast_mode\][\s\S]*enabled = true/);
-  assert.doesNotMatch(config, /\[user\.fast_mode\][\s\S]*default_profile = /);
-  assert.match(config, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
+  assert.match(config, /^model = "future-codex-model"/m);
+  assert.doesNotMatch(config, /^default_profile\s*=/m);
+  assert.doesNotMatch(config, /\[user\.fast_mode\]/);
+  assert.doesNotMatch(config, /\[profiles\.sks-fast-high\]/);
 });
 
 test('sks fast-mode off repairs Codex Desktop config without hiding the UI', async () => {
@@ -155,7 +153,7 @@ test('sks fast-mode off repairs Codex Desktop config without hiding the UI', asy
   const configPath = path.join(codexDir, 'config.toml');
   await fs.mkdir(codexDir, { recursive: true });
   await fs.writeFile(configPath, [
-    `model = "${REQUIRED_CODEX_MODEL}"`,
+    'model = "future-codex-model"',
     'service_tier = "fast"',
     '',
     '[user.fast_mode]',
@@ -164,7 +162,7 @@ test('sks fast-mode off repairs Codex Desktop config without hiding the UI', asy
     'default_profile = "sks-fast-high"',
     '',
     '[profiles.sks-fast-high]',
-    `model = "${REQUIRED_CODEX_MODEL}"`,
+    'model = "profile-fixture-model"',
     'service_tier = "fast"'
   ].join('\n') + '\n');
 
@@ -179,11 +177,11 @@ test('sks fast-mode off repairs Codex Desktop config without hiding the UI', asy
   assert.equal(parsed.service_tier, 'standard');
   assert.equal(parsed.codex_fast_mode_repair.status, 'updated');
   const config = await fs.readFile(configPath, 'utf8');
-  assert.match(config, /^service_tier = "default"/m);
-  assert.match(config, /\[user\.fast_mode\][\s\S]*visible = true/);
-  assert.match(config, /\[user\.fast_mode\][\s\S]*enabled = true/);
-  assert.doesNotMatch(config, /\[user\.fast_mode\][\s\S]*default_profile = /);
-  assert.match(config, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
+  assert.doesNotMatch(config, /^service_tier\s*=/m);
+  assert.match(config, /^model = "future-codex-model"/m);
+  assert.doesNotMatch(config, /^default_profile\s*=/m);
+  assert.doesNotMatch(config, /\[user\.fast_mode\]/);
+  assert.doesNotMatch(config, /\[profiles\.sks-fast-high\]/);
 });
 
 test('$Fast-Mode status questions do not toggle project preference', async () => {

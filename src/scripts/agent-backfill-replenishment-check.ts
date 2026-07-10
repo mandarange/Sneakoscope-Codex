@@ -3,7 +3,7 @@
 import { assertGate, emitGate } from './sks-1-18-gate-lib.js';
 import { runDynamicPoolFixture } from './agent-dynamic-pool-fixture.js';
 
-const fixture = await runDynamicPoolFixture({ target: 5, total: 8 });
+const fixture = await runDynamicPoolFixture({ target: 4, total: 8 });
 const backfills = fixture.events.filter((event) => event.event_type === 'backfill_event');
 const firstSlowCompletionIndex = fixture.events.findIndex((event) => event.event_type === 'session_completed' && /work-00[3-5]/.test(String(event.work_item_id || '')));
 const secondBackfillIndex = fixture.events.findIndex((event, index) => index > fixture.events.findIndex((row) => row.event_type === 'backfill_event') && event.event_type === 'backfill_event');

@@ -20,11 +20,11 @@ export function computeResourceClassBudget(env: NodeJS.ProcessEnv = process.env)
   const cpus = Math.max(2, os.cpus().length || 2);
   return {
     schema: RESOURCE_CLASS_BUDGET_SCHEMA,
-    cpu_light: readEnvInt(env, 'SKS_RESOURCE_CPU_LIGHT', Math.max(2, cpus - 1)),
-    cpu_heavy: readEnvInt(env, 'SKS_RESOURCE_CPU_HEAVY', Math.max(1, Math.floor(cpus / 2))),
-    io_light: readEnvInt(env, 'SKS_RESOURCE_IO_LIGHT', 8),
+    cpu_light: readEnvInt(env, 'SKS_RESOURCE_CPU_LIGHT', Math.max(1, Math.min(4, Math.floor(cpus / 2)))),
+    cpu_heavy: readEnvInt(env, 'SKS_RESOURCE_CPU_HEAVY', Math.max(1, Math.min(2, Math.floor(cpus / 4)))),
+    io_light: readEnvInt(env, 'SKS_RESOURCE_IO_LIGHT', 4),
     io_heavy: readEnvInt(env, 'SKS_RESOURCE_IO_HEAVY', 2),
-    fs_read: readEnvInt(env, 'SKS_RESOURCE_FS_READ', 8),
+    fs_read: readEnvInt(env, 'SKS_RESOURCE_FS_READ', 4),
     network: readEnvInt(env, 'SKS_RESOURCE_NETWORK', 2),
     remote_model_real: readEnvInt(env, 'SKS_RESOURCE_REMOTE_MODEL_REAL', 1),
     zellij_real: readEnvInt(env, 'SKS_RESOURCE_ZELLIJ_REAL', 1),
@@ -35,5 +35,5 @@ export function computeResourceClassBudget(env: NodeJS.ProcessEnv = process.env)
 
 function readEnvInt(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
   const value = Number(env[key]);
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+  return Number.isFinite(value) && value > 0 ? Math.min(Math.floor(value), fallback) : fallback;
 }

@@ -115,7 +115,6 @@ function roleToml(role: string, payload: CodexAgentRolePayload | undefined): str
   return [
     `name = "${role}"`,
     `description = "SKS managed ${PACKAGE_VERSION} directive role: ${role}"`,
-    'model_reasoning_effort = "medium"',
     role.includes('implementer') ? 'sandbox_mode = "workspace-write"' : 'sandbox_mode = "read-only"',
     'approval_policy = "never"',
     'developer_instructions = """',

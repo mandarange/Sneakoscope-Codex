@@ -9,7 +9,6 @@ import { withResponsesRetry } from '../responses-retry-policy.js';
 import { discoverCodexAppGeneratedImage } from './codex-app-generated-image-discovery.js';
 import { writeImageArtifactPathContract } from '../image/image-artifact-path-contract.js';
 import { registerImageArtifact } from '../image/image-artifact-registry.js';
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 const DEFAULT_OPENAI_IMAGE_EDITS_ENDPOINT = 'https://api.openai.com/v1/images/edits';
 
@@ -413,6 +412,22 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
         await writeJsonAtomic(responseArtifact, blocked);
         return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker: auth.blocker, provider: 'openai_images_api', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
       }
+      if (useResponsesImageTool && !responsesImagegenModel(opts)) {
+        const blocker = 'imagegen_responses_model_missing';
+        await writeJsonAtomic(responseArtifact, {
+          schema: 'sks.image-ux-gpt-image-2-response.v1',
+          created_at: nowIso(),
+          provider: 'openai_responses_image_generation',
+          evidence_class: 'non_codex_api_fallback',
+          model: 'gpt-image-2',
+          ok: false,
+          status: 'blocked',
+          blocker,
+          setup_guidance: 'Set SKS_IMAGEGEN_RESPONSES_MODEL to a model available through the configured Responses provider; SKS does not hardcode a text model.',
+          local_only: true
+        });
+        return { ok: false, status: 'blocked', generated_image_path: null, output_id: null, blocker, provider: 'openai_responses_image_generation', request_artifact: requestArtifact, response_artifact: responseArtifact, latency_ms: Date.now() - started };
+      }
       try {
         if (useResponsesImageTool) {
           const imageDataUrl = `data:${mimeForPath(sourcePath)};base64,${await fsp.readFile(sourcePath, 'base64')}`;
@@ -676,7 +691,7 @@ function responsesEndpoint(baseUrl: any = '') {
 }
 
 function responsesImagegenModel(opts: any = {}) {
-  return String(opts.responsesModel || process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || REQUIRED_CODEX_MODEL);
+  return String(opts.responsesModel || process.env.SKS_IMAGEGEN_RESPONSES_MODEL || process.env.OPENAI_MODEL || '').trim();
 }
 
 function imagegenFetchTimeoutMs(opts: any = {}) {

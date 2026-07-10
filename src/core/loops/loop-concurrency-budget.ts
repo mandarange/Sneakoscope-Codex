@@ -41,13 +41,15 @@ export function computeLoopConcurrencyBudget(input: {
     ? 'codex-0140-usage'
     : 'sks-local-estimate';
   const cores = Math.max(1, os.cpus().length || 1);
-  const requestedLoops = input.parallelism === 'safe' ? 2 : input.parallelism === 'extreme' ? Math.min(16, cores) : Math.min(8, cores);
+  const requestedLoops = input.parallelism === 'safe' ? 1 : input.parallelism === 'extreme' ? Math.min(4, cores) : Math.min(2, cores);
   const envLoops = positiveInt(env.SKS_LOOP_MAX_ACTIVE_LOOPS);
   const envWorkers = positiveInt(env.SKS_LOOP_MAX_ACTIVE_WORKERS);
   const envModelCalls = positiveInt(env.SKS_LOOP_MAX_MODEL_CALLS);
-  const maxActiveLoops = envLoops || requestedLoops;
-  const maxActiveWorkers = envWorkers || (input.parallelism === 'safe' ? Math.min(8, cores) : input.parallelism === 'extreme' ? Math.min(32, Math.max(4, cores * 2)) : Math.min(16, Math.max(4, cores)));
-  const maxModelCalls = envModelCalls || Math.max(1, Math.min(maxActiveWorkers, input.plan.global_budget.max_model_calls || maxActiveWorkers));
+  const maxActiveLoops = Math.min(requestedLoops, envLoops || requestedLoops);
+  const requestedWorkers = input.parallelism === 'safe' ? Math.min(2, cores) : input.parallelism === 'extreme' ? Math.min(4, cores) : Math.min(3, cores);
+  const maxActiveWorkers = Math.min(requestedWorkers, envWorkers || requestedWorkers);
+  const requestedModelCalls = Math.max(1, Math.min(maxActiveWorkers, input.plan.global_budget.max_model_calls || maxActiveWorkers));
+  const maxModelCalls = Math.min(requestedModelCalls, envModelCalls || requestedModelCalls);
   let remainingWorkers = maxActiveWorkers;
   let remainingModelCalls = maxModelCalls;
   const perLoop = input.plan.graph.nodes.map((node) => {

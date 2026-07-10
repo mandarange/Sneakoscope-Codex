@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildVerificationDag, type VerificationDag } from '../core/verification/verification-dag.js';
@@ -309,7 +308,7 @@ tasks.push(
 const dag: VerificationDag = buildVerificationDag(tasks);
 const result: ParallelVerificationResult = await runVerificationDag(dag, {
   cwd: root,
-  concurrency: Number(process.env.SKS_VERIFY_CONCURRENCY || os.cpus().length || 2),
+  concurrency: Math.min(4, Number(process.env.SKS_VERIFY_CONCURRENCY || 2)),
   logDir,
   failFast: false
 });

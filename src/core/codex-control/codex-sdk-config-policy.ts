@@ -1,5 +1,4 @@
 import type { CodexTaskInput } from './codex-control-plane.js'
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export interface CodexExecutionPolicy {
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -11,10 +10,9 @@ export interface CodexExecutionPolicy {
 }
 
 export function buildCodexSdkConfig(input: CodexTaskInput) {
-  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || REQUIRED_CODEX_MODEL)
+  const model = String(input.model || process.env.SKS_CODEX_MODEL || process.env.CODEX_MODEL || '').trim()
   const serviceTier = String(input.serviceTier || process.env.SKS_SERVICE_TIER || 'fast')
   const config: Record<string, unknown> = {
-    model,
     service_tier: serviceTier === 'standard' ? 'standard' : 'fast',
     model_reasoning_effort: String(input.modelReasoningEffort || input.reasoningEffort || process.env.SKS_CODEX_REASONING || process.env.CODEX_MODEL_REASONING_EFFORT || 'medium'),
     mcp_servers: {},
@@ -26,6 +24,7 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
       generation_index: Number(input.generationIndex || 0)
     }
   }
+  if (model) config.model = model
   if (input.requestedScopeContract?.no_mcp === true) {
     config.mcp_servers = {}
     config.sks = { ...(config.sks as Record<string, unknown>), no_mcp: true }

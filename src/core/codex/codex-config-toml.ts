@@ -7,15 +7,16 @@ export interface CodexConfigRoundTripValidation {
   parsed?: Record<string, any> | null
   blockers: string[]
   parse_error?: string
-  default_profile?: string | null
-  top_level_default_profile?: boolean
-  user_fast_mode_default_profile?: unknown
-  profile_exists?: boolean | null
-  sks_fast_high_profile?: {
-    exists: boolean
-    model?: unknown
-    service_tier?: unknown
-  }
+  // Top-level keys that actually drive Codex behavior after the 2026-07 ChatGPT
+  // desktop merge. service_tier === 'fast' IS the fast-mode-on signal now.
+  service_tier?: string | null
+  model?: string | null
+  model_reasoning_effort?: string | null
+  // Keys the 2026-07 config schema removed (default_profile, [user.fast_mode],
+  // [profiles.<name>] tables, notice.fast_default_opt_out). Codex ignores them;
+  // SKS strips them on the next normalize pass. Their presence is reported here
+  // for migration/diagnostics but is NOT a validation blocker.
+  legacy_keys: string[]
 }
 
 export function parseCodexConfigToml(text: string = ''): Record<string, any> {
@@ -31,42 +32,25 @@ export function validateCodexConfigRoundTrip(text: string = ''): CodexConfigRoun
       ok: false,
       parsed: null,
       blockers: ['toml_parse_failed'],
-      parse_error: messageOf(err)
+      parse_error: messageOf(err),
+      legacy_keys: []
     }
   }
 
-  const blockers: string[] = []
-  const defaultProfile = parsed.default_profile
-  const userFastModeDefault = parsed.user?.fast_mode?.default_profile
-  if (defaultProfile !== undefined && typeof defaultProfile !== 'string') blockers.push('default_profile_not_top_level_string')
-  if (userFastModeDefault !== undefined) blockers.push('user_fast_mode_default_profile_misplaced')
-  const defaultProfileName = typeof defaultProfile === 'string' ? defaultProfile : null
-  const profile = defaultProfileName ? parsed.profiles?.[defaultProfileName] : null
-  if (defaultProfileName && (!profile || typeof profile !== 'object' || Array.isArray(profile))) blockers.push('default_profile_target_missing')
-
-  const sksFastHigh = parsed.profiles?.['sks-fast-high']
-  if (sksFastHigh !== undefined) {
-    if (!sksFastHigh || typeof sksFastHigh !== 'object' || Array.isArray(sksFastHigh)) {
-      blockers.push('profiles_sks_fast_high_not_table')
-    } else {
-      if (!('model' in sksFastHigh)) blockers.push('profiles_sks_fast_high_model_missing')
-      if (!('service_tier' in sksFastHigh)) blockers.push('profiles_sks_fast_high_service_tier_missing')
-    }
-  }
+  const legacyKeys: string[] = []
+  if (parsed.default_profile !== undefined) legacyKeys.push('default_profile')
+  if (parsed.user?.fast_mode !== undefined) legacyKeys.push('user.fast_mode')
+  if (parsed.profiles !== undefined) legacyKeys.push('profiles')
+  if (parsed.notice?.fast_default_opt_out !== undefined) legacyKeys.push('notice.fast_default_opt_out')
 
   return {
-    ok: blockers.length === 0,
+    ok: true,
     parsed,
-    blockers,
-    default_profile: defaultProfileName,
-    top_level_default_profile: defaultProfileName !== null,
-    user_fast_mode_default_profile: userFastModeDefault,
-    profile_exists: defaultProfileName ? !blockers.includes('default_profile_target_missing') : null,
-    sks_fast_high_profile: {
-      exists: sksFastHigh !== undefined,
-      model: sksFastHigh && typeof sksFastHigh === 'object' ? sksFastHigh.model : undefined,
-      service_tier: sksFastHigh && typeof sksFastHigh === 'object' ? sksFastHigh.service_tier : undefined
-    }
+    blockers: [],
+    service_tier: typeof parsed.service_tier === 'string' ? parsed.service_tier : null,
+    model: typeof parsed.model === 'string' ? parsed.model : null,
+    model_reasoning_effort: typeof parsed.model_reasoning_effort === 'string' ? parsed.model_reasoning_effort : null,
+    legacy_keys: legacyKeys
   }
 }
 

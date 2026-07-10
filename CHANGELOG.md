@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [6.0.2] - 2026-07-10
+
+### Changed
+
+- Delegate model availability to the Codex catalog. SKS-managed CLI, SDK, Desktop remote-control, role, profile, hook, and update paths now inherit the Codex-selected model unless the caller explicitly supplies any model ID.
+- Keep GPT-5.6 optimization capability-driven: SKS varies only advertised reasoning effort and service tier, so new GPT-5.6 variants and future Codex models work without source changes.
+- Reduce the default Naruto roster from 32 to 8 and cap active agent, loop, verification, and release pools at four, with immediate backpressure from CPU load, free memory, file descriptors, panes, and disk pressure.
+- Add `npm run publish:verify-ignore-scripts` for a clean build, sequential test suite, version/dist/package checks, and an `npm pack --dry-run --ignore-scripts` inspection before raw publication.
+
+### Fixed
+
+- Remove the finite model allowlist, client-hook model rejection, forced `--model`/`-c model=...` rewriting, seeded top-level model defaults, and model pins in managed agent/profile files.
+- Remove stale `gpt-5.5`, GLM, and provider pins from existing global SKS agent/profile overlays as well as newly generated files, so project and user-level Codex layers both inherit the active catalog selection.
+- Preserve arbitrary explicit model IDs, provider configuration, and reasoning choices through install, update, Codex LB, Fast mode, doctor, and auto-review migrations; only provenance-marked SKS legacy locks are removed.
+- Fix top-level TOML lookup when a config has no table header, which previously made valid top-level values appear absent.
+- Prevent extreme Naruto mode from bypassing live backpressure, stop verification pools from overlapping clone pools, and clamp accidental global/project agent limits such as 1000 to four unless explicitly opted out.
+- Apply the same four-worker active cap to the central agent scheduler, Research, QA, route review, Zellij panes, and real parallelism gates; larger rosters remain queued and refill bounded slots.
+- Eliminate the stale hardcoded CLI help version and synchronize npm, TypeScript, Rust, README, and changelog release metadata at 6.0.2.
+
+## [6.0.1] - 2026-07-10
+
+### Changed
+
+- Align Codex App setup, doctor, fast-mode, codex-lb, and project-config repair with the 2026-07 ChatGPT desktop/Codex App config renewal.
+- Default Codex App and SKS-managed Codex launches to the official `gpt-5.6` alias while still allowing the full Sol/Terra/Luna model family.
+- Stop treating legacy `multi_agent_v2` as a supported team-agent surface; SKS now detects it only as stale evidence and uses the current `spawn_agent`/subagent path.
+- Keep `sks-fast-high` as a per-file Codex profile overlay only; legacy `[profiles.sks-fast-high]`, `[user.fast_mode]`, and `default_profile` config are stripped instead of regenerated.
+
+### Fixed
+
+- Persist Codex Fast mode through documented `service_tier = "fast"` plus `[features].fast_mode`, and make `sks fast-mode off` intentionally remove the global fast tier instead of having the config guard restore it.
+- Strip removed Codex App feature flags such as `remote_control`, `fast_mode_ui`, `codex_git_commit`, `browser_use*`, `image_generation`, `guardian_approval`, `tool_suggest`, and `plugins` when SKS owns the stale stamp.
+- Prevent fallback agent-config repair from recreating top-level model/reasoning locks or the removed `remote_control` feature flag.
+- Keep menu bar, install/update, codex-lb fast checks, auto-review profile migration, and doctor Codex App UI repair gates aligned with the renewed schema.
+- Migrate old SKS-owned `gpt-5.5` and internal `gpt-5.6-*` model stamps to `gpt-5.6` so the Codex desktop app model selector exposes the expected 5.6 entry.
+- Prepare 6.0.1 release metadata for the `npm publish --ignore-scripts` path.
 
 ## [5.12.0] - 2026-07-08
 

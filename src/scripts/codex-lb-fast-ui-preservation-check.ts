@@ -26,7 +26,7 @@ const oauthAuth = JSON.stringify({
 }, null, 2)
 
 await fs.writeFile(configPath, [
-  'model = "gpt-5.5"',
+  'model = "future-codex-model"',
   'model_reasoning_effort = "low"',
   'model_provider = "codex-lb"',
   'service_tier = "fast"',
@@ -60,10 +60,10 @@ const release = await releaseCodexLbAuthHold({ home, configPath, authPath, backu
 const releasedConfig = await fs.readFile(configPath, 'utf8')
 const releaseAssert = {
   label: 'use_oauth',
-  ok: !topLevelKey(releasedConfig, 'model_provider') && hasUserFastMode(releasedConfig),
+  ok: !topLevelKey(releasedConfig, 'model_provider') && !hasLegacyFastModeTables(releasedConfig),
   blockers: [
     ...(topLevelKey(releasedConfig, 'model_provider') ? ['model_provider_still_selected_after_use_oauth'] : []),
-    ...(hasUserFastMode(releasedConfig) ? [] : ['user_fast_mode_missing_after_use_oauth'])
+    ...(hasLegacyFastModeTables(releasedConfig) ? ['legacy_fast_mode_tables_survived_use_oauth'] : [])
   ]
 }
 
@@ -87,20 +87,19 @@ if (!report.ok) process.exitCode = 1
 
 function assertConfig(text: string, label: string) {
   const blockers = [
-    ...(hasUserFastMode(text) ? [] : ['user_fast_mode_visible_enabled_missing']),
+    ...(hasLegacyFastModeTables(text) ? ['legacy_fast_mode_tables_present'] : []),
     ...(tableKey(text, 'features', 'fast_mode') === 'true' ? [] : ['features_fast_mode_not_true']),
-    ...(tableKey(text, 'features', 'fast_mode_ui') === 'true' ? [] : ['features_fast_mode_ui_not_true']),
+    ...(tableKey(text, 'features', 'fast_mode_ui') ? ['features_fast_mode_ui_legacy_flag_present'] : []),
     ...(hasTable(text, 'model_providers.codex-lb') ? [] : ['codex_lb_provider_table_missing']),
     ...(tableKey(text, 'model_providers.codex-lb', 'requires_openai_auth') === 'true' ? [] : ['requires_openai_auth_not_true']),
-    ...(topLevelKey(text, 'model') ? ['top_level_model_forbidden'] : []),
-    ...(topLevelKey(text, 'model_reasoning_effort') ? ['top_level_model_reasoning_effort_forbidden'] : [])
+    ...(topLevelKey(text, 'model') === 'future-codex-model' ? [] : ['user_model_not_preserved']),
+    ...(topLevelKey(text, 'model_reasoning_effort') === 'low' ? [] : ['user_reasoning_effort_not_preserved'])
   ]
   return { label, ok: blockers.length === 0, blockers }
 }
 
-function hasUserFastMode(text: string) {
-  return tableKey(text, 'user.fast_mode', 'visible') === 'true'
-    && tableKey(text, 'user.fast_mode', 'enabled') === 'true'
+function hasLegacyFastModeTables(text: string) {
+  return hasTable(text, 'user.fast_mode') || hasTable(text, 'profiles.sks-fast-high')
 }
 
 function hasTable(text: string, table: string) {
@@ -115,7 +114,7 @@ function tableKey(text: string, table: string, key: string) {
 
 function topLevelKey(text: string, key: string) {
   const top = text.split(/\n\s*\[/)[0] || ''
-  return new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=`).test(top)
+  return top.match(new RegExp(`(^|\\n)\\s*${escapeRegExp(key)}\\s*=\\s*([^\\n#]+)`))?.[2]?.trim().replace(/^"|"$/g, '') || ''
 }
 
 function escapeRegExp(value: string) {

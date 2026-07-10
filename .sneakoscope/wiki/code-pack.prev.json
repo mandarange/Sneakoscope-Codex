@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-08T09:30:18.008Z",
-  "git_head_sha": "b01376caa9924a15f96339b87e243a56c288c502",
-  "source_file_count": 3382,
+  "generated_at": "2026-07-08T10:12:05.260Z",
+  "git_head_sha": "eabe6ff610d5e5ad67bf23f36215bf48970c309b",
+  "source_file_count": 3385,
   "index_digest": "7f81a771edf3f14c8f22c8b3849ba14aaf3931074b9538e07b5164c4f0d60b7a",
   "entries": [
     {
@@ -187,7 +187,7 @@
     },
     {
       "id": "code:core-commands",
-      "text": "core-commands is a command module at src/core/commands (72 files, 12145 loc, high risk). Key exports: async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []); async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 99 more. It has no detected cross-module dependencies.",
+      "text": "core-commands is a command module at src/core/commands (73 files, 12222 loc, high risk). Key exports: async function agentBridgeCommand(subcommand: string, args: readonly string[] = []): Promise<unknown>; async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []); async function autoresearchCommand(sub: any, args: any = []); async function helpCommand(args: string[] = []): Promise<void | unknown>; function commandsCommand(args: string[] = []): unknown, and 99 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/commands"
@@ -757,7 +757,7 @@
     },
     {
       "id": "code:core-search-visibility",
-      "text": "core-search-visibility is a core module at src/core/search-visibility (14 files, 2937 loc, low risk). Key exports: function adapterForDetection(_detection: DetectionResult): SearchVisibilityAdapter; function searchVisibilityAdapters(): SearchVisibilityAdapter[]; const NEXT_APP_SEARCH_VISIBILITY_ADAPTER_ID = 'next-app';; const NEXT_APP_SEARCH_VISIBILITY_SUPPORT =; const NEXT_PAGES_SEARCH_VISIBILITY_ADAPTER_ID = 'next-pages';, and 64 more. It has no detected cross-module dependencies.",
+      "text": "core-search-visibility is a core module at src/core/search-visibility (15 files, 3072 loc, medium risk). Key exports: function adapterForDetection(_detection: DetectionResult): SearchVisibilityAdapter; function searchVisibilityAdapters(): SearchVisibilityAdapter[]; const NEXT_APP_SEARCH_VISIBILITY_ADAPTER_ID = 'next-app';; const NEXT_APP_SEARCH_VISIBILITY_SUPPORT =; const NEXT_PAGES_SEARCH_VISIBILITY_ADAPTER_ID = 'next-pages';, and 64 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/search-visibility"
@@ -766,9 +766,9 @@
           "path": "src/core/search-visibility/index.ts"
         }
       ],
-      "trust_score": 1,
+      "trust_score": 0.9,
       "freshness": "unknown",
-      "token_cost": 122
+      "token_cost": 123
     },
     {
       "id": "code:core-security",
@@ -979,7 +979,7 @@
     },
     {
       "id": "code:scripts",
-      "text": "scripts is a module at src/scripts (1008 files, 42953 loc, high risk). Key exports: async function runDynamicPoolFixture(opts = {}); function writeReport(name, report); function readJson(file); function makeTempPatchProject(prefix = 'sks-patch-swarm-'); async function runPatchSwarmRouteBlackbox({ gate, route, routeCommand, reportName }), and 94 more. It has no detected cross-module dependencies.",
+      "text": "scripts is a module at src/scripts (1009 files, 43033 loc, high risk). Key exports: async function runDynamicPoolFixture(opts = {}); function writeReport(name, report); function readJson(file); function makeTempPatchProject(prefix = 'sks-patch-swarm-'); async function runPatchSwarmRouteBlackbox({ gate, route, routeCommand, reportName }), and 94 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/scripts"
@@ -1015,5 +1015,5 @@
     }
   ],
   "token_budget": 20000,
-  "total_token_cost": 9022
+  "total_token_cost": 9023
 }

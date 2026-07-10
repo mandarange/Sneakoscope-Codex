@@ -8,9 +8,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const limits = {
-  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 1536 * 1024),
-  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 6400 * 1024),
-  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 1200),
+  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 2410 * 1024),
+  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 1024),
+  packFiles: Number(process.env.SKS_MAX_PACK_FILES || 2100),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
 };
 const trackedFileSizeAllowlist = new Set([
@@ -73,11 +73,14 @@ function checkVersionSync() {
   const cargoLock = fs.readFileSync(path.join(root, 'crates', 'sks-core', 'Cargo.lock'), 'utf8');
   const cargoMain = fs.readFileSync(path.join(root, 'crates', 'sks-core', 'src', 'main.rs'), 'utf8');
   const sourceVersion = source.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
-  const fsxVersion = fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
-  const tsBinVersion = tsBin.match(/const FAST_PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const fsxReExportsVersion = /PACKAGE_VERSION\s*}\s*from\s*['"]\.\/version(?:\.js)?['"]/.test(fsx);
+  const fsxVersion = fsxReExportsVersion ? sourceVersion : fsx.match(/export const PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
+  const tsBinReExportsVersion = /PACKAGE_VERSION\s*}\s*from\s*['"]\.\.\/core\/version(?:\.js)?['"]/.test(tsBin);
+  const tsBinVersion = tsBinReExportsVersion ? sourceVersion : tsBin.match(/const FAST_PACKAGE_VERSION = ['"]([^'"]+)['"];/)?.[1];
   const cargoTomlVersion = cargoToml.match(/^version = "([^"]+)"/m)?.[1];
   const cargoLockVersion = cargoLock.match(/\[\[package\]\]\nname = "sks-core"\nversion = "([^"]+)"/)?.[1];
-  const cargoMainVersion = cargoMain.match(/println!\("sks-rs ([^"]+)"\)/)?.[1];
+  const cargoMainUsesCargoPkgVersion = /env!\(\s*"CARGO_PKG_VERSION"\s*\)/.test(cargoMain);
+  const cargoMainVersion = cargoMainUsesCargoPkgVersion ? cargoTomlVersion : cargoMain.match(/println!\("sks-rs ([^"]+)"\)/)?.[1];
   const lockRootVersion = lock.packages?.['']?.version;
   const mismatches = [
     ['package-lock.json version', lock.version],

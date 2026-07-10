@@ -7,23 +7,23 @@ const EXCLUSIVE_RESOURCES = new Set<ReleaseGateResourceClass>(['timing-sensitive
 export function defaultReleaseGateBudget(): ReleaseGateBudget {
   const cores = Math.max(1, os.cpus().length || 1)
   const base: ReleaseGateBudget = {
-    'cpu-light': Math.min(24, cores * 3),
-    'cpu-heavy': Math.max(1, cores),
-    'io-light': Math.min(96, cores * 10),
-    'io-heavy': Math.min(12, Math.max(1, cores)),
-    git: Math.min(12, Math.max(1, cores)),
-    'git-worktree': Math.min(8, Math.max(1, cores)),
-    python: Math.min(12, Math.max(1, cores)),
-    network: 12,
+    'cpu-light': Math.max(1, Math.min(4, Math.floor(cores / 2))),
+    'cpu-heavy': Math.max(1, Math.min(2, Math.floor(cores / 4))),
+    'io-light': 4,
+    'io-heavy': 2,
+    git: 2,
+    'git-worktree': 1,
+    python: 2,
+    network: 2,
     'zellij-real': 1,
     'browser-real': 1,
     'secret-sensitive': 1,
     'local-llm-real': Math.max(1, Number(process.env.SKS_LOCAL_LLM_MAX_PARALLEL || 1)),
-    'remote-model-real': 6,
+    'remote-model-real': 2,
     'global-config': 1,
     publish: 1,
-    'fs-read': Math.min(96, cores * 10),
-    'fs-write': Math.min(12, Math.max(1, cores)),
+    'fs-read': 4,
+    'fs-write': 2,
     'timing-sensitive': 1
   }
   for (const key of Object.keys(base) as ReleaseGateResourceClass[]) {
@@ -70,7 +70,7 @@ export function pickLaunchableReleaseGates(input: {
 
 export function defaultReleaseGateMaxTotal(): number {
   const cores = Math.max(1, os.cpus().length || 1)
-  return Math.max(8, Math.min(32, cores * 3))
+  return Math.max(1, Math.min(4, Math.floor(cores / 2)))
 }
 
 function envInt(name: string, fallback: number, opts: { max?: number } = {}) {

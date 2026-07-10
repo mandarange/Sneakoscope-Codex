@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { appendJsonl, appendJsonlMany, nowIso, writeJsonAtomic } from '../fsx.js'
-import { MAX_AGENT_COUNT } from './agent-schema.js'
+import { DEFAULT_AGENT_CONCURRENCY, MAX_AGENT_COUNT } from './agent-schema.js'
 import {
   appendAgentWorkQueueEvent,
   completeWorkItem,
@@ -113,7 +113,7 @@ export async function runAgentScheduler(input: {
   onSchedulerEvent?: (ctx: AgentSchedulerEventContext) => Promise<void>
 }) {
   const maxActiveSlots = Number.isFinite(Number(input.maxActiveSlots)) && Number(input.maxActiveSlots) >= 1 ? Math.floor(Number(input.maxActiveSlots)) : MAX_AGENT_COUNT
-  const targetActiveSlots = normalizeTargetActiveSlots(input.targetActiveSlots ?? input.roster?.agent_count ?? input.roster?.concurrency ?? 5, maxActiveSlots)
+  const targetActiveSlots = normalizeTargetActiveSlots(input.targetActiveSlots ?? input.roster?.concurrency ?? input.roster?.agent_count ?? DEFAULT_AGENT_CONCURRENCY, maxActiveSlots)
   let slots = createAgentWorkerSlots(input.roster, targetActiveSlots)
   const queue = createAgentWorkQueue({
     slices: input.partition?.slices || [],
@@ -440,9 +440,10 @@ export async function runAgentScheduler(input: {
 }
 
 export function normalizeTargetActiveSlots(value: unknown, maxActiveSlots: number = MAX_AGENT_COUNT) {
-  const cap = Number.isFinite(Number(maxActiveSlots)) && Number(maxActiveSlots) >= 1 ? Math.floor(Number(maxActiveSlots)) : MAX_AGENT_COUNT
-  const parsed = Number(value ?? 5)
-  if (!Number.isFinite(parsed) || parsed < 1) return Math.min(cap, 5)
+  const configuredCap = Number.isFinite(Number(maxActiveSlots)) && Number(maxActiveSlots) >= 1 ? Math.floor(Number(maxActiveSlots)) : MAX_AGENT_COUNT
+  const cap = Math.max(1, Math.min(configuredCap, DEFAULT_AGENT_CONCURRENCY))
+  const parsed = Number(value ?? DEFAULT_AGENT_CONCURRENCY)
+  if (!Number.isFinite(parsed) || parsed < 1) return cap
   return Math.min(cap, Math.floor(parsed))
 }
 

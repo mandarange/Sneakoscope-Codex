@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const PROMPT = 'route truth dynamic scheduler fixture';
-const ROUTE_ARGS = ['--agents', '5', '--work-items', '8', '--target-active-slots', '5', '--minimum-work-items', '5', '--max-queue-expansion', '10', '--mock', '--json'];
+const ROUTE_ARGS = ['--agents', '5', '--work-items', '8', '--target-active-slots', '4', '--minimum-work-items', '5', '--max-queue-expansion', '10', '--mock', '--json'];
 
 export function runRouteBackfillBlackbox(route, gate) {
   if (String(route).toLowerCase().includes('team')) return runActualTeamBackfillBlackbox(gate);
@@ -59,11 +59,11 @@ export function validateNativeRun(json, gate, expected = {}) {
   const supervisor = readJson(path.join(ledgerRoot, 'agent-zellij-lane-supervisor.json'));
   assertGate(json.ok === true, `${gate} proof must pass`, proof);
   assertGate(graph.schema === 'sks.agent-task-graph.v1', `${gate} task graph schema missing`, graph);
-  assertGate(graph.target_active_slots === 5 && graph.total_work_items === 8, `${gate} task graph must split active slots and work items`, graph.route_work_count_summary);
+  assertGate(graph.target_active_slots === 4 && graph.total_work_items === 8, `${gate} task graph must split desktop-safe active slots and work items`, graph.route_work_count_summary);
   assertGate(queue.total_work_items === graph.total_work_items, `${gate} work queue must match task graph`, { queue: queue.total_work_items, graph: graph.total_work_items });
-  assertGate(state.target_active_slots === 5, `${gate} target active slots must be 5`, state);
+  assertGate(state.target_active_slots === 4, `${gate} target active slots must be 4`, state);
   assertGate(state.total_work_items === queue.total_work_items, `${gate} scheduler must match work queue`, { scheduler: state.total_work_items, queue: queue.total_work_items });
-  assertGate(state.max_observed_active_slots === 5, `${gate} must observe 5 active slots`, state);
+  assertGate(state.max_observed_active_slots === 4, `${gate} must observe 4 active slots`, state);
   assertGate(state.expected_backfill_count >= 2, `${gate} expected backfill count must be at least 2`, state);
   assertGate(state.backfill_count >= state.expected_backfill_count, `${gate} backfills must satisfy expectation`, state);
   assertGate(backfills.length >= 2, `${gate} must emit at least two backfill events`, { backfills });

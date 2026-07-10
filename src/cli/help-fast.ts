@@ -1,10 +1,9 @@
 import { COMMAND_MANIFEST_LITE } from './command-manifest-lite.js';
-
-const FAST_PACKAGE_VERSION = '5.10.0';
+import { PACKAGE_VERSION } from '../core/version.js';
 
 export function helpFast() {
   console.log(`SKS
-SNEAKOSCOPE CODEX v${FAST_PACKAGE_VERSION}
+SNEAKOSCOPE CODEX v${PACKAGE_VERSION}
 
 3-pillar frontdoor
 

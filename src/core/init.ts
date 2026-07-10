@@ -2,7 +2,6 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { ensureDir, readJson, readText, writeJsonAtomic, writeTextAtomic, mergeManagedBlock, nowIso, PACKAGE_VERSION, exists } from './fsx.js';
 import { DEFAULT_RETENTION_POLICY } from './retention.js';
-import { REQUIRED_CODEX_MODEL } from './codex-model-guard.js';
 import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
 import { repairSksGeneratedArtifacts } from './harness-conflicts.js';
@@ -55,27 +54,16 @@ const GENERATED_PRUNE_POLICY = 'remove_previous_sks_generated_paths_absent_from_
 
 export const REQUIRED_GENERATED_CODEX_APP_FEATURE_FLAGS = [
   'hooks',
-  'remote_control',
   'multi_agent',
   'fast_mode',
-  'fast_mode_ui',
-  'codex_git_commit',
-  'computer_use',
-  'browser_use',
-  'browser_use_external',
-  'image_generation',
-  'in_app_browser',
-  'guardian_approval',
-  'tool_suggest',
-  'apps',
-  'plugins'
+  'apps'
 ];
 
 export function hasTopLevelCodexModeLock(text: any = '') {
   const lines = String(text || '').split('\n');
   const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
   const top = (firstTable === -1 ? lines : lines.slice(0, firstTable)).join('\n');
-  return /^model\s*=/.test(top) || /^model_reasoning_effort\s*=/m.test(top);
+  return /^model_reasoning_effort\s*=/m.test(top);
 }
 
 export function hasDeprecatedCodexHooksFeatureFlag(text: any = '') {
@@ -570,7 +558,7 @@ export async function initProject(root: any, opts: any = {}) {
         block_other_codex_harnesses: true,
         hard_blockers: ['OMX', 'DCodex'],
         cleanup_prompt_command: `${commandPrefix} conflicts prompt`,
-        cleanup_model: REQUIRED_CODEX_MODEL,
+        cleanup_model_policy: 'inherit_codex_selection',
         cleanup_reasoning_effort: 'high',
         human_approval_required: true
       },
@@ -595,28 +583,37 @@ function installPolicy(scope: any, commandPrefix: any) {
 // NEVER force-re-enabled on upgrade: force-writing these reverted a user's
 // `enabled = false` and blanked/broke the Codex App UI (same rationale as the
 // install-helpers path). All are SET-IF-ABSENT below.
-const MANAGED_CODEX_FEATURE_FLAGS = [
-  'hooks', 'remote_control', 'multi_agent', 'fast_mode', 'fast_mode_ui',
-  'codex_git_commit', 'computer_use', 'browser_use', 'browser_use_external',
-  'image_generation', 'in_app_browser', 'guardian_approval', 'tool_suggest',
-  'apps', 'plugins'
+// Only flags present in the current official [features] reference. Flags SKS
+// wrote before the 2026-07 renewal that no longer exist (remote_control,
+// fast_mode_ui, codex_git_commit, computer_use, browser_use, browser_use_external,
+// image_generation, in_app_browser, guardian_approval, tool_suggest, plugins) are
+// stripped below instead.
+const MANAGED_CODEX_FEATURE_FLAGS = ['hooks', 'multi_agent', 'fast_mode', 'apps'];
+const REMOVED_CODEX_FEATURE_FLAGS = [
+  'remote_control', 'fast_mode_ui', 'codex_git_commit', 'computer_use', 'browser_use',
+  'browser_use_external', 'image_generation', 'in_app_browser', 'guardian_approval',
+  'tool_suggest', 'plugins', 'codex_hooks'
 ];
 
 function mergeManagedCodexConfigToml(existingContent: any = '') {
-  let next = removeLegacyTopLevelCodexModeLocks(String(existingContent || '').trimEnd());
+  let next = String(existingContent || '').trimEnd();
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
-  // Model/reasoning defaults live in profiles. Leaving them out of top-level config
-  // keeps Codex Desktop's native model and speed selectors available.
   next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
-  // Codex App feature flags: SET-IF-ABSENT only (see note above).
+  // Codex App feature flags: SET-IF-ABSENT only (see note above); flags the
+  // 2026-07 renewal removed from the schema are stripped.
   for (const flag of MANAGED_CODEX_FEATURE_FLAGS) {
     next = upsertTomlTableKeyIfAbsent(next, 'features', `${flag} = true`);
   }
-  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'visible = true');
-  next = upsertTomlTableKeyIfAbsent(next, 'user.fast_mode', 'enabled = true');
-  next = removeTomlTableKey(next, 'user.fast_mode', 'default_profile');
-  next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_threads = 6');
+  for (const flag of REMOVED_CODEX_FEATURE_FLAGS) {
+    next = removeTomlTableKey(next, 'features', flag);
+  }
+  next = removeWholeTomlTable(next, 'user.fast_mode');
+  next = removeWholeTomlTable(next, 'profiles.sks-fast-high');
+  if (process.env.SKS_ALLOW_HIGH_AGENT_CONCURRENCY !== '1') {
+    next = upsertTomlTableKey(next, 'agents', 'max_threads = 4');
+  }
+  next = removeWholeTomlTable(next, 'features.multi_agent_v2');
   next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_depth = 1');
   for (const block of managedCodexConfigBlocks()) {
     if (block.preserveExisting === true && hasTomlTable(next, block.table)) continue;
@@ -705,14 +702,17 @@ function mergeGlobalCodexAppRuntimeTables(configText: any = '', globalConfig: an
   return next;
 }
 
-function removeLegacyTopLevelCodexModeLocks(text: any = '') {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  return lines.filter((line: any, index: any) => {
-    if (index >= end) return true;
-    return !/^\s*(?:model|model_reasoning_effort)\s*=/.test(line);
-  }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
+function removeWholeTomlTable(text: any = '', table: any = '') {
+  const lines = String(text || '').trimEnd().split('\n');
+  const header = `[${table}]`;
+  const start = lines.findIndex((x: any) => x.trim() === header);
+  if (start === -1) return String(text || '');
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i += 1) {
+    const ln = lines[i];
+    if (ln !== undefined && /^\s*\[.+\]\s*$/.test(ln)) { end = i; break; }
+  }
+  return lines.filter((_: any, index: any) => index < start || index >= end).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
 }
 
 function removeTopLevelTomlKeyIfValue(text: any = '', key: any = '', value: any = '') {
@@ -760,10 +760,6 @@ function hasTopLevelTomlKey(text: any, key: any): boolean {
   const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
   for (let i = 0; i < end; i += 1) if (re.test(lines[i] || '')) return true;
   return false;
-}
-
-function upsertTopLevelTomlStringIfAbsent(text: any, key: any, value: any) {
-  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlString(text, key, value);
 }
 
 function upsertTopLevelTomlBooleanIfAbsent(text: any, key: any, value: any) {

@@ -75,7 +75,7 @@ export const PERMISSION_PROFILES = Object.freeze({
 });
 
 export const DEFAULT_MULTIAGENT_V2 = Object.freeze({
-  max_threads: 6,
+  max_threads: 4,
   max_depth: 1,
   job_max_runtime_seconds: 1800,
   wait_control: 'bounded_wait_then_structured_summary',

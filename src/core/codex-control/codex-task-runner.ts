@@ -19,7 +19,6 @@ import { readLocalModelConfig } from '../agents/ollama-worker-config.js'
 import { runLocalLlmTask } from '../local-llm/local-llm-control-adapter.js'
 import { detectPythonCodexSdkCapability, runPythonCodexSdkTask } from './python-codex-sdk-adapter.js'
 import { defaultModelCallBudget, withModelCallSlot } from './model-call-concurrency.js'
-import { REQUIRED_CODEX_MODEL } from '../codex-model-guard.js'
 
 export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResult & Record<string, unknown>> {
   const root = path.resolve(input.mutationLedgerRoot)
@@ -472,9 +471,9 @@ async function ensurePythonCodexLbConfig(env: Record<string, string>, config: Re
   const codexHome = env.CODEX_HOME
   const lbBaseUrl = normalizeCodexLbBaseUrl(env.CODEX_LB_BASE_URL)
   if (!codexHome || !lbBaseUrl || !env.CODEX_LB_API_KEY) return
-  const model = String(config.model || env.SKS_CODEX_MODEL || env.CODEX_MODEL || REQUIRED_CODEX_MODEL)
+  const model = String(config.model || env.SKS_CODEX_MODEL || env.CODEX_MODEL || '').trim()
   const text = [
-    `model = ${tomlQuote(model)}`,
+    ...(model ? [`model = ${tomlQuote(model)}`] : []),
     'model_provider = "codex-lb"',
     'service_tier = "fast"',
     `model_reasoning_effort = ${tomlQuote(String(config.model_reasoning_effort || env.SKS_CODEX_REASONING || env.CODEX_MODEL_REASONING_EFFORT || 'minimal'))}`,

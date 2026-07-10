@@ -6,7 +6,7 @@ import path from 'node:path';
 import { importDist } from './sks-1-18-gate-lib.js';
 
 export async function runDynamicPoolFixture(opts = {}) {
-  const target = opts.target || 5;
+  const target = opts.target || 4;
   const total = opts.total || 8;
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-dynamic-pool-'));
   const scheduler = await importDist('core/agents/agent-scheduler.js');

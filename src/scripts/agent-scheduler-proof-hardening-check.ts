@@ -16,7 +16,7 @@ for (const token of [
 ]) {
   assertGate(proofSource.includes(token), `scheduler proof hardening missing ${token}`);
 }
-const fixture = await runDynamicPoolFixture({ target: 5, total: 8 });
+const fixture = await runDynamicPoolFixture({ target: 4, total: 8 });
 assertGate(fixture.result.state.pending_queue_drained === true, 'positive scheduler fixture must drain', fixture.result.state);
 assertGate(fixture.result.state.backfill_count >= fixture.result.state.expected_backfill_count, 'positive scheduler fixture must satisfy backfill invariant', fixture.result.state);
 emitGate('agent:scheduler-proof-hardening', { checked_blockers: 8, backfill_count: fixture.result.state.backfill_count });

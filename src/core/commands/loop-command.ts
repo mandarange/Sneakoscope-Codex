@@ -70,7 +70,7 @@ async function loopRun(args: string[]): Promise<void> {
     console.log(`Loop plan blocked: ${plan.blockers.join(', ')}`);
     return;
   }
-  const parallelism = normalizeParallelism(readFlagValue(args, '--parallelism', 'balanced'));
+  const parallelism = normalizeParallelism(readFlagValue(args, '--parallelism', 'safe'));
   const result = await runLoopPlan({ root, plan, parallelism });
   await setCurrent(root, { mission_id: missionId, mode: 'LOOP', route: 'Loop', route_command: '$Loop', phase: result.ok ? 'LOOP_COMPLETED' : 'LOOP_BLOCKED', stop_gate: 'loop-graph-proof.json' });
   if (flag(args, '--json')) return printJson({ schema: 'sks.loop-run-command.v1', ...result });
@@ -148,7 +148,7 @@ async function loopResume(args: string[]): Promise<void> {
   const existingProofs = await Promise.all(plan.graph.nodes.map((node) => readJson<SksLoopProof | null>(loopProofPath(root, missionId, node.loop_id), null)));
   const completed = new Set(existingProofs.filter((proof): proof is SksLoopProof => proof !== null && proof.status === 'completed').map((proof) => proof.loop_id));
   const runnable = rerunCompleted ? plan.graph.nodes : plan.graph.nodes.filter((node) => !completed.has(node.loop_id));
-  const schedule = scheduleLoopGraph(runnable, normalizeParallelism(readFlagValue(args, '--parallelism', 'balanced')));
+  const schedule = scheduleLoopGraph(runnable, normalizeParallelism(readFlagValue(args, '--parallelism', 'safe')));
   const started = Date.now();
   const resumedProofs: SksLoopProof[] = [];
   for (const batch of schedule.batches) {

@@ -185,6 +185,7 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
 }
 
 export async function setupCommand(args: any = []) {
+  if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['setup']);
   const root = await projectRoot();
   const installScope = installScopeFromArgs(args);
   let res: any = null;
@@ -218,10 +219,12 @@ export async function setupCommand(args: any = []) {
 }
 
 export async function bootstrapCommand(args: any = []) {
+  if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['bootstrap']);
   return setupCommand(['--local-only', ...args]);
 }
 
 export async function initCommand(args: any = []) {
+  if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['init']);
   return setupCommand(args);
 }
 

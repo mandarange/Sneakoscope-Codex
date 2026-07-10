@@ -5,19 +5,10 @@ import { defaultAgentPersonas, validatePersonaUniqueness } from './agent-persona
 import { buildAgentEffortPolicy, decideAgentEffort, decideNarutoCloneEffort } from './agent-effort-policy.js'
 import { mapNarutoRoleToAgentRole, narutoRoleAllowsWrite, type NarutoWorkerRole } from '../naruto/naruto-role-policy.js'
 
-// $Naruto must never blindly spawn the full clone count at once, but the live
-// CONCURRENCY ceiling is NOT a function of CPU cores. Each clone is a separate CLI
-// worker process that spends ~all of its wall-clock awaiting the Codex API
-// (network-bound, mostly idle), so the local CPU is never the bottleneck —
-// oversubscribing cores is exactly the point. The real local limit is MEMORY
-// (resident set of N node+codex child processes) plus an absolute clone ceiling
-// (MAX_NARUTO_AGENT_COUNT = 100); the provider rate limit is handled separately by
-// the responses retry/backoff policy. So a capable host can run up to 100 in
-// parallel regardless of core count. Tunables:
-//   SKS_NARUTO_MAX_CONCURRENCY   hard cap (1..100), wins over everything
-//   SKS_NARUTO_GB_PER_WORKER     memory budget per heavy worker (default 0.25 GB)
-//   SKS_NARUTO_MIN_CONCURRENCY   floor so low-free-memory hosts still parallelize
-export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: number; freeBytes?: number; totalBytes?: number } = {}) {
+// The roster may contain many queued clones, but active Codex workers are real
+// Node/Codex processes. Reserve interactive CPU and memory so the desktop stays
+// responsive; environment overrides can lower this cap, never raise it.
+export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: number; freeBytes?: number; totalBytes?: number; loadAverage?: number } = {}) {
   const cores = Math.max(1, Number(opts.cores ?? os.cpus()?.length) || 4)
   let freeBytes = 2 * 1024 * 1024 * 1024
   let totalBytes = 8 * 1024 * 1024 * 1024
@@ -27,38 +18,27 @@ export function systemSafeNarutoConcurrency(opts: { backend?: string; cores?: nu
   const totalGb = totalBytes / (1024 * 1024 * 1024)
   const backend = String(opts.backend || 'codex-sdk')
   const heavy = backend === 'codex-sdk' || backend === 'zellij' || backend === 'process' || backend === 'ollama'
-  const ceiling = MAX_NARUTO_AGENT_COUNT
-  // macOS reports very low freemem while reclaimable memory is still available, so
-  // budget against a total-memory-derived floor rather than the instantaneous free.
-  const reclaimableFloorGb = totalGb >= 32 ? 16 : totalGb >= 16 ? 8 : totalGb >= 8 ? 4 : totalGb >= 4 ? 2 : Math.max(freeGb, 1)
-  const budgetGb = Math.max(freeGb, reclaimableFloorGb)
-  let cap: number
-  if (heavy) {
-    // Memory-bound, NOT core-bound. ~0.25 GB per mostly-idle Codex SDK worker.
-    const gbPerWorker = positiveEnvNumber('SKS_NARUTO_GB_PER_WORKER', 0.25)
-    const byMem = Math.max(1, Math.floor(budgetGb / gbPerWorker))
-    const minParallelDefault = totalGb >= 16 ? 16 : totalGb >= 8 ? 8 : totalGb >= 4 ? 4 : 2
-    const minParallel = Math.floor(positiveEnvNumber('SKS_NARUTO_MIN_CONCURRENCY', minParallelDefault))
-    cap = Math.min(Math.max(byMem, minParallel), ceiling)
-  } else {
-    // In-process / light workers are even cheaper; pack toward the ceiling, and never
-    // throttle tighter than the heavy backend (invariant: heavy.cap <= fake.cap).
-    const gbPerWorker = positiveEnvNumber('SKS_NARUTO_LIGHT_GB_PER_WORKER', 0.1)
-    const byMem = Math.max(2, Math.floor(budgetGb / gbPerWorker))
-    cap = Math.min(byMem, ceiling)
-  }
+  const reserveGb = Math.max(2, totalGb * 0.2)
+  const budgetGb = Math.max(0.5, freeGb - reserveGb)
+  const gbPerWorker = positiveEnvNumber(heavy ? 'SKS_NARUTO_GB_PER_WORKER' : 'SKS_NARUTO_LIGHT_GB_PER_WORKER', heavy ? 1.5 : 0.5)
+  const byMem = Math.max(1, Math.floor(budgetGb / gbPerWorker))
+  const byCpu = Math.max(1, Math.min(4, Math.floor(cores * (heavy ? 0.4 : 0.5))))
+  const load = Math.max(0, Number(opts.loadAverage ?? os.loadavg()[0]) || 0)
+  const byLoad = load >= cores ? 1 : load >= cores * 0.75 ? Math.min(2, byCpu) : byCpu
+  let cap = Math.min(byMem, byCpu, byLoad, 4)
   const override = Number(process.env.SKS_NARUTO_MAX_CONCURRENCY)
-  if (Number.isFinite(override) && override >= 1) cap = Math.min(Math.floor(override), MAX_NARUTO_AGENT_COUNT)
-  cap = Math.max(1, Math.min(cap, MAX_NARUTO_AGENT_COUNT))
+  if (Number.isFinite(override) && override >= 1) cap = Math.min(cap, Math.floor(override))
+  cap = Math.max(1, Math.min(cap, 4))
   return {
     cap,
     cores,
     free_gb: Math.round(freeGb * 10) / 10,
     total_gb: Math.round(totalGb * 10) / 10,
+    load_average: Math.round(load * 100) / 100,
     backend,
     heavy,
     override_applied: Number.isFinite(override) && override >= 1,
-    memory_model: heavy ? 'memory_budget_network_bound' : 'light_worker_memory_bound'
+    memory_model: heavy ? 'reserved_interactive_memory_heavy_worker' : 'reserved_interactive_memory_light_worker'
   }
 }
 
@@ -82,10 +62,11 @@ export function normalizeAgentCount(value: unknown, fallback = DEFAULT_AGENT_COU
 }
 
 export function normalizeAgentConcurrency(value: unknown, agents: number, maxAgentCount: number = MAX_AGENT_COUNT): number {
-  const parsed = Number(value ?? Math.min(agents, DEFAULT_AGENT_CONCURRENCY))
-  if (!Number.isFinite(parsed) || parsed < 1) return Math.min(agents, DEFAULT_AGENT_CONCURRENCY)
+  const desktopSafeCap = Math.max(1, Math.min(agents, maxAgentCount, DEFAULT_AGENT_CONCURRENCY))
+  const parsed = Number(value ?? desktopSafeCap)
+  if (!Number.isFinite(parsed) || parsed < 1) return desktopSafeCap
   if (parsed > maxAgentCount) throw new Error('Agent concurrency ' + parsed + ' exceeds max ' + maxAgentCount)
-  return Math.min(Math.floor(parsed), agents)
+  return Math.min(Math.floor(parsed), desktopSafeCap)
 }
 
 export function buildAgentRoster(opts: { agents?: unknown; concurrency?: unknown; prompt?: string; readonly?: boolean; maxAgentCount?: number } = {}) {

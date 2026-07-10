@@ -2,7 +2,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { ensureDir, exists, readText, writeTextAtomic } from './fsx.js';
 import { writeCodexConfigGuarded } from './codex/codex-config-guard.js';
-import { REQUIRED_CODEX_MODEL } from './codex-model-guard.js';
 
 export const AUTO_REVIEW_REVIEWER = 'auto_review';
 export const LEGACY_AUTO_REVIEW_REVIEWER = 'guardian_subagent';
@@ -37,7 +36,7 @@ export const REVIEW_NATIVE_AGENT_PLAN = Object.freeze({
     }
   ],
   safety_personas_read_only_by_default: true,
-  manual_agent_count_syntax: 'sks auto-review fixture --json and sks agent run "<review task>" --route $Review --agents 5 --concurrency 5 --mock --json',
+  manual_agent_count_syntax: 'sks auto-review fixture --json and sks agent run "<review task>" --route $Review --agents 5 --concurrency 4 --mock --json',
   dynamic_effort: 'parent assigns high effort to safety/integrator lanes and medium or higher to verification lanes when proof risk is present'
 });
 
@@ -110,15 +109,14 @@ export async function enableAutoReview(opts: any = {}) {
 // `[profiles.*]` tables / top-level `profile=` selector (warns at startup) in favor of
 // per-file `$CODEX_HOME/<name>.config.toml` overlays loaded by `--profile <name>`.
 // `stripTable: true` => remove the legacy `[profiles.<name>]` table from the home
-// config during migration. sks-fast-high keeps its table because the Codex App
-// fast-mode (`[user.fast_mode] default_profile = "sks-fast-high"`) and the
-// codex-app:ui-preservation gate still expect it; its per-file overlay is also written
-// so CLI `--profile sks-fast-high` works too.
+// config during migration. Fast mode now persists through top-level
+// `service_tier = "fast"` and per-file overlays; `[user.fast_mode]`,
+// `default_profile`, and `[profiles.sks-fast-high]` are stripped as legacy schema.
 export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; block: string }> = [
   { name: 'sks-task-low', stripTable: true, block: sksProfileFileBlock({ effort: 'low' }) },
   { name: 'sks-task-medium', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
   { name: 'sks-logic-high', stripTable: true, block: sksProfileFileBlock({ effort: 'high' }) },
-  { name: 'sks-fast-high', stripTable: false, block: sksProfileFileBlock({ effort: 'high', serviceTier: 'fast', inheritSandbox: true }) },
+  { name: 'sks-fast-high', stripTable: true, block: sksProfileFileBlock({ effort: 'high', serviceTier: 'fast', inheritSandbox: true }) },
   { name: 'sks-research-xhigh', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh' }) },
   { name: 'sks-research', stripTable: true, block: sksProfileFileBlock({ effort: 'xhigh', approvalPolicy: 'never' }) },
   { name: 'sks-team', stripTable: true, block: sksProfileFileBlock({ effort: 'medium' }) },
@@ -128,7 +126,6 @@ export const SKS_CONFIG_PROFILES: Array<{ name: string; stripTable: boolean; blo
 
 function sksProfileFileBlock(opts: any = {}) {
   return [
-    `model = "${REQUIRED_CODEX_MODEL}"`,
     `service_tier = "${opts.serviceTier || 'fast'}"`,
     `approval_policy = "${opts.approvalPolicy || 'on-request'}"`,
     ...(opts.reviewer ? [`approvals_reviewer = "${opts.reviewer}"`] : []),
@@ -328,7 +325,6 @@ function profileConfigBlock(opts: any = {}) {
   const approvalPolicy = opts.approvalPolicy || 'on-request';
   const sandboxMode = opts.sandboxMode || 'workspace-write';
   return [
-    `model = "${REQUIRED_CODEX_MODEL}"`,
     'service_tier = "fast"',
     `approval_policy = "${approvalPolicy}"`,
     `approvals_reviewer = "${reviewer}"`,

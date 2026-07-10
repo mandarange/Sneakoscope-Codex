@@ -2,47 +2,44 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_CODEX_REASONING_EFFORT,
-  GPT55_CODEX_MODEL,
-  GPT56_CODEX_MODELS,
-  REQUIRED_CODEX_MODEL,
-  SUPPORTED_CODEX_MODELS,
   forceRequiredCodexModelArgs,
   forceRequiredCodexModelConfigArgs,
-  isForbiddenCodexModel
+  isForbiddenCodexModel,
+  preserveCodexModelArgs
 } from '../../dist/core/codex-model-guard.js';
+import { buildCodexExecArgs } from '../../dist/core/codex-adapter.js';
 
-test('codex model guard defaults to gpt-5.6-terra high and supports 5.5/5.4-mini/5.6 trio', () => {
-  assert.equal(REQUIRED_CODEX_MODEL, 'gpt-5.6-terra');
+test('SKS keeps reasoning guidance without owning a finite Codex model catalog', () => {
   assert.equal(DEFAULT_CODEX_REASONING_EFFORT, 'high');
-  assert.equal(GPT55_CODEX_MODEL, 'gpt-5.5');
-  assert.deepEqual(GPT56_CODEX_MODELS, ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
-  assert.deepEqual(SUPPORTED_CODEX_MODELS, ['gpt-5.6-terra', 'gpt-5.5', 'gpt-5.4-mini', 'gpt-5.6-sol', 'gpt-5.6-luna']);
-  for (const model of SUPPORTED_CODEX_MODELS) assert.equal(isForbiddenCodexModel(model), false, model);
-  assert.equal(isForbiddenCodexModel('gpt-5.6'), true);
-  assert.equal(isForbiddenCodexModel('gpt-5.4'), true);
-  assert.equal(isForbiddenCodexModel('gpt-5.4 mini'), true);
+  for (const model of ['future-codex-model', 'custom/provider-model', 'gpt-next', '']) {
+    assert.equal(isForbiddenCodexModel(model), false, model);
+  }
 });
 
-test('codex model guard preserves explicit supported model requests and rewrites everything else to the default', () => {
-  assert.deepEqual(forceRequiredCodexModelArgs(['exec']), ['--model', 'gpt-5.6-terra', 'exec']);
-  assert.deepEqual(forceRequiredCodexModelArgs(['--model', 'gpt-5.5', 'exec']), ['--model', 'gpt-5.5', 'exec']);
-  assert.deepEqual(forceRequiredCodexModelArgs(['--model', 'gpt-5.4-mini', 'exec']), ['--model', 'gpt-5.4-mini', 'exec']);
-  assert.deepEqual(forceRequiredCodexModelArgs(['--model', 'gpt-5.6-sol', 'exec']), ['--model', 'gpt-5.6-sol', 'exec']);
-  assert.deepEqual(forceRequiredCodexModelArgs(['--model', 'gpt-5.4', 'exec']), ['--model', 'gpt-5.6-terra', 'exec']);
-  assert.deepEqual(forceRequiredCodexModelConfigArgs(['-c', 'model="gpt-5.6-luna"', 'exec']), ['-c', 'model="gpt-5.6-luna"', 'exec']);
-  assert.deepEqual(forceRequiredCodexModelConfigArgs(['-c', 'model="gpt-4o"', 'exec']), ['-c', 'model="gpt-5.6-terra"', 'exec']);
+test('Codex model arguments pass through byte-for-byte instead of being injected or rewritten', () => {
+  const future = ['--model', 'future-codex-model', '-c', 'model="custom/provider-model"', 'exec'];
+  assert.deepEqual(preserveCodexModelArgs([]), []);
+  assert.deepEqual(preserveCodexModelArgs(future), future);
+  assert.deepEqual(forceRequiredCodexModelArgs(['exec']), ['exec']);
+  assert.deepEqual(forceRequiredCodexModelArgs(future), future);
+  assert.deepEqual(forceRequiredCodexModelConfigArgs(future), future);
 });
 
-test('codex model guard honors SKS_CODEX_MODEL env only when supported and no explicit arg is present', () => {
+test('environment model values are not silently injected into unrelated argument lists', () => {
   const saved = process.env.SKS_CODEX_MODEL;
   try {
-    process.env.SKS_CODEX_MODEL = 'gpt-5.5';
-    assert.deepEqual(forceRequiredCodexModelArgs(['exec']), ['--model', 'gpt-5.5', 'exec']);
-    assert.deepEqual(forceRequiredCodexModelArgs(['--model', 'gpt-5.6-terra', 'exec']), ['--model', 'gpt-5.6-terra', 'exec']);
-    process.env.SKS_CODEX_MODEL = 'gpt-4o';
-    assert.deepEqual(forceRequiredCodexModelArgs(['exec']), ['--model', 'gpt-5.6-terra', 'exec']);
+    process.env.SKS_CODEX_MODEL = 'future-codex-model';
+    assert.deepEqual(forceRequiredCodexModelArgs(['exec']), ['exec']);
+    assert.deepEqual(forceRequiredCodexModelArgs(['--model', 'explicit-model', 'exec']), ['--model', 'explicit-model', 'exec']);
   } finally {
     if (saved === undefined) delete process.env.SKS_CODEX_MODEL;
     else process.env.SKS_CODEX_MODEL = saved;
   }
+});
+
+test('Codex exec inherits the current Codex selection unless a caller explicitly supplies a model', () => {
+  const inherited = buildCodexExecArgs({ root: '/tmp/project', prompt: 'test', json: false });
+  assert.equal(inherited.includes('--model'), false);
+  const explicit = buildCodexExecArgs({ root: '/tmp/project', prompt: 'test', json: false, extraArgs: ['--model', 'future-codex-model'] });
+  assert.deepEqual(explicit.slice(-3), ['--model', 'future-codex-model', 'test']);
 });

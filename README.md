@@ -25,7 +25,7 @@ sneakoscope is a proof-first Codex trust layer for bounded agent workflows, sear
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **5.12.0**. New in this release: operations maturity scorecards, explicit Naruto real-write proof, real CLI negative smokes for high-risk commands, doctor fast/full/fix semantics, upgrade and rollback recovery gates, diagnostics bundles, and stricter SEO metadata/strategy evidence. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **6.0.2**. This release lets Codex own the complete model catalog—including current and future GPT-5.6 options—without SKS allowlists or silent model replacement. It also bounds agent, loop, and release concurrency to keep Codex Desktop responsive, preserves explicit user model/provider choices during repair and updates, and adds a clean-build verification path for `npm publish --ignore-scripts`. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -96,6 +96,7 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - Native capability repair: `sks doctor --fix` (imagegen/Computer Use/Browser Use), `.sneakoscope/reports/native-capability-readiness.json`
 - Agent bridge for any agent system: `sks mcp-server`, `sks agent-bridge setup`, `SKS_AGENT_MODE=1` — see [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)
 - Release gates: `node ./dist/scripts/release-gate-dag-runner.js --preset release --full`
+- Lifecycle-disabled npm release: run `npm run publish:verify-ignore-scripts` first, then `npm publish --ignore-scripts`; the raw publish command intentionally cannot run build or validation hooks.
 - Release readiness notes: [docs/release-readiness.md](docs/release-readiness.md) and [CHANGELOG.md](CHANGELOG.md)
 - Image generation review routes require Codex App `$imagegen`/`gpt-image-2` evidence with recorded output hashes; direct API fallback and mock fixtures do not satisfy full route gates.
 

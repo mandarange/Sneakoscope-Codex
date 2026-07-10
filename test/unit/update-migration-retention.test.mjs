@@ -52,7 +52,6 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
   try {
     const { writeProjectUpdateMigrationReceipt } = await import('../../dist/core/update/update-migration-state.js');
     const { packageRoot } = await import('../../dist/core/fsx.js');
-    const { REQUIRED_CODEX_MODEL } = await import('../../dist/core/codex-model-guard.js');
     const actionScript = path.join(home, '.codex', 'sks-menubar', 'sks-menubar-action.sh');
     const configPath = path.join(home, '.codex', 'config.toml');
     await writeText(actionScript, [
@@ -63,6 +62,9 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     ].join('\n'));
     await fs.chmod(actionScript, 0o644);
     await writeText(configPath, [
+      'model = "future-codex-model"',
+      'model_reasoning_effort = "high"',
+      '',
       '[user.fast_mode]',
       'visible = true',
       'default_profile = "sks-fast-high"',
@@ -88,8 +90,8 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     assert.ok(stages.get('menubar-retarget')?.actions.includes('retargeted_menubar_action_script'));
     assert.ok(stages.get('menubar-retarget')?.actions.includes('restored_menubar_action_executable_bit'));
     assert.equal(stages.get('config-fastmode-normalize')?.ok, true);
-    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('normalized_fastmode_default_profile_location'));
-    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('normalized_sks_fast_high_profile'));
+    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('stripped_removed_fastmode_config_schema_keys'));
+    assert.ok(stages.get('config-fastmode-normalize')?.actions.includes('migrated_legacy_fast_default_to_service_tier'));
 
     const expectedEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
     const scriptAfter = await fs.readFile(actionScript, 'utf8');
@@ -98,11 +100,12 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     assert.notEqual(statAfter.mode & 0o111, 0);
 
     const configAfter = await fs.readFile(configPath, 'utf8');
-    const userFastModeBlock = configAfter.match(/(^|\n)\[user\.fast_mode\][\s\S]*?(?=\n\[|$)/)?.[0] || '';
-    assert.doesNotMatch(userFastModeBlock, /^\s*default_profile\s*=/m);
-    assert.match(configAfter, /^default_profile = "sks-fast-high"$/m);
-    assert.match(configAfter, new RegExp(`\\[profiles\\.sks-fast-high\\][\\s\\S]*model = "${escapeRegExp(REQUIRED_CODEX_MODEL)}"`));
-    assert.match(configAfter, /\[profiles\.sks-fast-high\][\s\S]*service_tier = "fast"/);
+    assert.match(configAfter, /^model = "future-codex-model"$/m);
+    assert.match(configAfter, /^model_reasoning_effort = "high"$/m);
+    assert.match(configAfter, /^service_tier = "fast"$/m);
+    assert.doesNotMatch(configAfter, /^default_profile\s*=/m);
+    assert.doesNotMatch(configAfter, /\[user\.fast_mode\]/);
+    assert.doesNotMatch(configAfter, /\[profiles\.sks-fast-high\]/);
   } finally {
     if (previousHome === undefined) delete process.env.HOME;
     else process.env.HOME = previousHome;

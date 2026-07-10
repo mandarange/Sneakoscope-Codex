@@ -6,16 +6,10 @@ import { exists, nowIso, readText, sha256, writeJsonAtomic } from '../fsx.js'
 export const CODEX_APP_UI_STATE_SNAPSHOT_SCHEMA = 'sks.codex-app-ui-state-snapshot.v1'
 
 export const PROJECT_LOCAL_FORBIDDEN_CODEX_KEYS = [
-  'model',
-  'model_reasoning_effort',
   'openai_base_url',
   'chatgpt_base_url',
   'apps_mcp_product_sku',
-  'model_provider',
-  'model_providers',
   'notify',
-  'profile',
-  'profiles',
   'experimental_realtime_ws_base_url',
   'otel'
 ] as const
@@ -90,7 +84,7 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
   const fastSelectorLocked = baseConfigHostOwnedSignals.some((signal) => {
     if (signal.key_path === 'features.fast_mode' && signal.value_preview === 'false') return true
     if (signal.key_path.startsWith('user.fast_mode') && /hidden|fixed|disabled|false/i.test(signal.value_preview)) return true
-    if (signal.key_path === 'model' || signal.key_path === 'model_reasoning_effort') return true
+    if ((signal.key_path === 'model' || signal.key_path === 'model_reasoning_effort') && signal.sks_related) return true
     if (signal.key_path === 'service_tier' && signal.sks_related) return true
     return false
   })

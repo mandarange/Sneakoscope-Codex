@@ -36,10 +36,14 @@ const MACHINE_LOCAL_TABLE_PREFIXES = [
 // at startup. So these are NO LONGER machine-local-and-moved-to-home — they are
 // DROPPED from the project config entirely. The per-file profiles are owned by
 // migrateSksProfilesToPerFile (src/core/auto-review.ts), which runs on `sks --mad`.
-const DEPRECATED_LEGACY_PROFILE_TOP_LEVEL_KEYS = new Set(['profile', 'profiles'])
-const DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES = ['profiles']
-const FAST_MODE_GLOBAL_TOP_LEVEL_KEYS = new Set(['default_profile', 'service_tier'])
-const FAST_MODE_GLOBAL_TABLES = new Set(['user.fast_mode', 'profiles.sks-fast-high'])
+// 2026-07 ChatGPT desktop merge: `default_profile` and `[user.fast_mode]` left the
+// config schema entirely (alongside the already-removed [profiles.*] tables), so
+// they are DROPPED from project configs, not relocated to the home config.
+// `service_tier` remains a real, machine-local top-level key and still moves home.
+const DEPRECATED_LEGACY_PROFILE_TOP_LEVEL_KEYS = new Set(['profile', 'profiles', 'default_profile'])
+const DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES = ['profiles', 'user.fast_mode']
+const FAST_MODE_GLOBAL_TOP_LEVEL_KEYS = new Set(['service_tier'])
+const FAST_MODE_GLOBAL_TABLES = new Set<string>([])
 
 function isDeprecatedLegacyProfileTable(table: string) {
   return DEPRECATED_LEGACY_PROFILE_TABLE_PREFIXES.some((prefix) => table === prefix || table.startsWith(`${prefix}.`))
