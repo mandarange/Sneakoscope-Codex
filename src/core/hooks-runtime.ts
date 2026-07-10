@@ -10,7 +10,7 @@ import { classifyMadSksShellCommand } from './mad-sks/write-guard.js';
 import { activeRouteContext, evaluateStop, prepareRoute, promptPipelineContext as routePipelineContext, recordContext7Evidence, recordSubagentEvidence, routePrompt } from './pipeline.js';
 import { localizedFinalizationReason } from './language-preference.js';
 import { classifyToolError } from './evaluation.js';
-import { REQUIRED_CODEX_MODEL, isForbiddenCodexModel } from './codex-model-guard.js';
+import { REQUIRED_CODEX_MODEL, SUPPORTED_CODEX_MODELS, isForbiddenCodexModel } from './codex-model-guard.js';
 import { dollarCommand, routeRequiresSubagents, stripVisibleDecisionAnswerBlocks } from './routes.js';
 import { leanEngineeringCompactText } from './lean-engineering-policy.js';
 import { appendMissionStatus } from './recallpulse.js';
@@ -213,7 +213,7 @@ function blockForbiddenClientModel(payload: any = {}) {
   if (looksLikeCodexUiSettingsEvent(payload)) return null;
   return {
     decision: 'block',
-    reason: `SKS requires ${REQUIRED_CODEX_MODEL}; client payload requested ${model}. Switch the Codex client/session model to ${REQUIRED_CODEX_MODEL} and retry.`
+    reason: `SKS requires one of [${SUPPORTED_CODEX_MODELS.join(', ')}]; client payload requested ${model}. Switch the Codex client/session model to ${REQUIRED_CODEX_MODEL} (default) or another supported model and retry.`
   };
 }
 

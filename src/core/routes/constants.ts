@@ -49,4 +49,8 @@ export const RECOMMENDED_SKILLS = [
   'honest-mode'
 ];
 
-export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
+// 'ultra' is gpt-5.6's top reasoning level (codex-lb v1.20.1-r3 exposes the
+// 5.6 trio with a 6-level low~ultra range). Whether a given model actually
+// advertises it still comes from runtime metadata (codex-model-metadata.ts);
+// this set only gates what values SKS accepts as user/route input.
+export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'ultra']);
