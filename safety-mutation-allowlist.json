@@ -2810,6 +2810,12 @@
       "reason": "src/scripts/seo-canonical-locale-check.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
+      "file": "src/scripts/seo-geo-route-identity-check.ts",
+      "symbol": "cleanupFixture",
+      "token": "rmSync",
+      "reason": "SEO/GEO route identity cleanup removes only the run-unique mkdtemp fixture created by the same process; the fixture is also bounded by its own .sneakoscope project marker."
+    },
+    {
       "file": "src/scripts/seo-marketing-truthfulness-check.ts",
       "symbol": "module",
       "token": "rmSync",

@@ -39,7 +39,7 @@ export function makeSearchVisibilityFixture(name = 'search-visibility', options 
 
 export function runSks(args, options = {}) {
   const result = spawnSync(process.execPath, [path.join(root, 'dist', 'bin', 'sks.js'), ...args], {
-    cwd: root,
+    cwd: options.cwd || root,
     encoding: 'utf8',
     stdio: 'pipe',
     env: {
