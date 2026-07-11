@@ -46,14 +46,21 @@ const report = await repairCodexImagegen({
 const reportFile = JSON.parse(await fs.readFile(reportPath, 'utf8'));
 const ok = report.schema === 'sks.doctor-imagegen-repair.v1'
   && report.attempted === true
-  && report.recovered === true
+  && report.recovered === false
+  && report.capability_ready === true
+  && report.configuration_recovered === true
+  && report.route_ready === false
+  && report.real_generation_verified === false
   && report.after?.core_ready === true
   && report.steps?.some((step) => step.id === 'image_generation_feature_enable' && step.ok === true)
   && report.communication_test?.level === 'flag_level'
-  && report.communication_test?.ok === true
+  && report.communication_test?.ok === false
   && report.communication_test?.real_generation_round_trip_performed === false
-  && reportFile.recovered === true
-  && reportFile.communication_test?.level === 'flag_level';
+  && report.blockers?.includes('codex_imagegen_real_output_unverified')
+  && reportFile.recovered === false
+  && reportFile.route_ready === false
+  && reportFile.communication_test?.level === 'flag_level'
+  && reportFile.communication_test?.ok === false;
 
 console.log(JSON.stringify({
   schema: 'sks.doctor-imagegen-repair-check.v1',
@@ -61,6 +68,9 @@ console.log(JSON.stringify({
   repair_schema: report.schema,
   attempted: report.attempted,
   recovered: report.recovered,
+  capability_ready: report.capability_ready,
+  route_ready: report.route_ready,
+  real_generation_verified: report.real_generation_verified,
   after_core_ready: report.after?.core_ready === true,
   communication_test_level: report.communication_test?.level,
   report_path: reportPath

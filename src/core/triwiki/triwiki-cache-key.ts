@@ -41,7 +41,11 @@ const DEFAULT_EXCLUDED_DIRS = new Set([
   '.sneakoscope/reports',
   '.sneakoscope/missions',
   '.sneakoscope/quarantine',
-  'dist'
+  'dist',
+  '.claude',
+  '.cache',
+  'coverage',
+  'build'
 ]);
 
 export function computeTriWikiCacheKey(input: TriWikiCacheKeyInput): TriWikiCacheKey {
@@ -105,7 +109,12 @@ export function collectInputFiles(root: string, patterns: string[]): { records: 
       unsupported.push(`unsupported_brace_glob:${pattern}`);
       continue;
     }
-    const matches = expandInputPattern(root, pattern);
+    const normalized = normalizePattern(pattern);
+    if (!isSafeRelativePattern(root, normalized)) {
+      unsupported.push(`outside_root_or_unsafe_input:${pattern}`);
+      continue;
+    }
+    const matches = expandInputPattern(root, normalized);
     if (!matches.length) {
       const literal = path.resolve(root, pattern);
       if (fs.existsSync(literal)) files.add(relativeUnix(root, literal));
@@ -118,20 +127,23 @@ export function collectInputFiles(root: string, patterns: string[]): { records: 
   for (const rel of [...files].sort()) {
     const hashed = hashPathIfPresent(root, rel);
     if (hashed.missing.length) missing.push(rel);
+    else if (hashed.unsupported?.length) unsupported.push(...hashed.unsupported);
     else if (hashed.record) records.push(hashed.record);
   }
   return { records, missing: [...new Set(missing)].sort(), unsupported: [...new Set(unsupported)].sort() };
 }
 
-function expandInputPattern(root: string, pattern: string): string[] {
-  const normalized = normalizePattern(pattern);
+function expandInputPattern(root: string, normalized: string): string[] {
   if (!normalized.includes('*')) {
     const absolute = path.resolve(root, normalized);
-    if (!fs.existsSync(absolute)) return [];
+    if (!fs.existsSync(absolute) || !safeInputPath(root, absolute, true)) return [];
     return listFiles(root, absolute);
   }
   const regex = globToRegex(normalized);
-  return listFiles(root, root).filter((rel) => regex.test(rel));
+  const prefix = staticGlobPrefix(normalized);
+  const start = path.resolve(root, prefix || '.');
+  if (!isWithinRoot(root, start) || !safeInputPath(root, start, false)) return [];
+  return listFiles(root, start).filter((rel) => regex.test(rel));
 }
 
 function normalizePattern(pattern: string): string {
@@ -139,23 +151,50 @@ function normalizePattern(pattern: string): string {
 }
 
 function globToRegex(pattern: string): RegExp {
-  const escaped = pattern
-    .split('')
-    .map((char) => {
-      if (char === '*') return '*';
-      return /[\\^$+?.()|{}[\]]/.test(char) ? `\\${char}` : char;
-    })
-    .join('');
-  const regex = escaped
-    .replace(/\*\*\//g, '(?:.*/)?')
-    .replace(/\*\*/g, '.*')
-    .replace(/\*/g, '[^/]*');
-  return new RegExp(`^${regex}$`);
+  let regex = '^';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index] || '';
+    if (char === '*' && pattern[index + 1] === '*') {
+      if (pattern[index + 2] === '/') {
+        regex += '(?:.*/)?';
+        index += 2;
+      } else {
+        regex += '.*';
+        index += 1;
+      }
+      continue;
+    }
+    if (char === '*') {
+      regex += '[^/]*';
+      continue;
+    }
+    regex += /[\\^$+?.()|{}[\]]/.test(char) ? `\\${char}` : char;
+  }
+  return new RegExp(`${regex}$`);
+}
+
+function staticGlobPrefix(pattern: string): string {
+  const segments = pattern.split('/');
+  const fixed = segments.slice(0, segments.findIndex((segment) => segment.includes('*')) < 0
+    ? segments.length
+    : segments.findIndex((segment) => segment.includes('*')));
+  return fixed.join('/');
+}
+
+function isSafeRelativePattern(root: string, pattern: string): boolean {
+  if (!pattern || path.isAbsolute(pattern) || pattern === '..' || pattern.startsWith('../')) return false;
+  return isWithinRoot(root, path.resolve(root, pattern.replace(/\*.*$/, '')));
+}
+
+function isWithinRoot(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 function listFiles(root: string, start: string): string[] {
   const out: string[] = [];
   if (!fs.existsSync(start)) return out;
+  if (!safeInputPath(root, start, true)) return out;
   let stat: fs.Stats;
   try {
     stat = fs.lstatSync(start);
@@ -196,15 +235,19 @@ function isMissingOrInaccessible(error: unknown): boolean {
 }
 
 function isExcluded(rel: string): boolean {
+  const segments = normalizePattern(rel).split('/');
+  if (segments.some((segment) => segment === 'node_modules' || segment === '.git' || segment === '.claude' || segment === '.cache')) return true;
   for (const dir of DEFAULT_EXCLUDED_DIRS) {
     if (rel === dir || rel.startsWith(`${dir}/`)) return true;
   }
   return false;
 }
 
-function hashPathIfPresent(root: string, rel: string): { hash: string; missing: string[]; record?: { path: string; hash: string; size: number; mode: string } } {
+function hashPathIfPresent(root: string, rel: string): { hash: string; missing: string[]; unsupported?: string[]; record?: { path: string; hash: string; size: number; mode: string } } {
   const absolute = path.resolve(root, rel);
+  if (!isWithinRoot(root, absolute)) return { hash: 'unsupported', missing: [], unsupported: [`outside_root:${rel}`] };
   if (!fs.existsSync(absolute)) return { hash: 'missing', missing: [rel] };
+  if (!safeInputPath(root, absolute, true)) return { hash: 'unsupported', missing: [], unsupported: [`symlink_escape_or_unsafe_input:${rel}`] };
   const stat = fs.lstatSync(absolute);
   const mode = stat.isSymbolicLink() ? 'symlink' : stat.isDirectory() ? 'dir' : 'file';
   if (stat.isDirectory()) {
@@ -219,8 +262,37 @@ function hashPathIfPresent(root: string, rel: string): { hash: string; missing: 
     const hash = hashJson({ rel, target, mode, outside_root: outsideRoot });
     return { hash, missing: [], record: { path: normalizePattern(rel), hash, size: target.length, mode } };
   }
+  if (!stat.isFile()) return { hash: 'unsupported', missing: [], unsupported: [`non_regular_input:${rel}`] };
   const hash = hashFileChunked(absolute, stat.size);
   return { hash, missing: [], record: { path: normalizePattern(rel), hash, size: stat.size, mode } };
+}
+
+function safeInputPath(root: string, candidate: string, allowFinalSymlink: boolean): boolean {
+  const resolvedRoot = path.resolve(root);
+  const resolvedCandidate = path.resolve(candidate);
+  if (!isWithinRoot(resolvedRoot, resolvedCandidate)) return false;
+  const relative = path.relative(resolvedRoot, resolvedCandidate);
+  const segments = relative ? relative.split(path.sep).filter(Boolean) : [];
+  let cursor = resolvedRoot;
+  for (let index = 0; index < segments.length; index += 1) {
+    cursor = path.join(cursor, segments[index] as string);
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(cursor);
+    } catch (error) {
+      return false;
+    }
+    if (stat.isSymbolicLink() && !(allowFinalSymlink && index === segments.length - 1)) return false;
+  }
+  try {
+    const finalStat = fs.lstatSync(resolvedCandidate);
+    if (finalStat.isSymbolicLink() && allowFinalSymlink) return true;
+    const realRoot = fs.realpathSync(resolvedRoot);
+    const realCandidate = fs.realpathSync(resolvedCandidate);
+    return isWithinRoot(realRoot, realCandidate);
+  } catch (error) {
+    return false;
+  }
 }
 
 function hashFileChunked(file: string, size: number): string {
@@ -229,15 +301,13 @@ function hashFileChunked(file: string, size: number): string {
   const chunk = 256 * 1024;
   const fd = fs.openSync(file, 'r');
   try {
-    if (size <= chunk * 3) {
-      h.update(fs.readFileSync(file));
-    } else {
-      for (const offset of [0, Math.max(0, Math.floor(size / 2) - Math.floor(chunk / 2)), Math.max(0, size - chunk)]) {
-        const buffer = Buffer.alloc(chunk);
-        const read = fs.readSync(fd, buffer, 0, chunk, offset);
-        h.update(`@${offset}:`);
-        h.update(buffer.subarray(0, read));
-      }
+    const buffer = Buffer.allocUnsafe(chunk);
+    let offset = 0;
+    while (offset < size) {
+      const read = fs.readSync(fd, buffer, 0, Math.min(buffer.length, size - offset), offset);
+      if (read <= 0) break;
+      h.update(buffer.subarray(0, read));
+      offset += read;
     }
   } finally {
     fs.closeSync(fd);

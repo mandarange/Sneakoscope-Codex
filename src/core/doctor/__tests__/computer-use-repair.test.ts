@@ -17,6 +17,14 @@ function fakeCodexBin(root: string): string {
   return path.join(root, 'no-such-codex-binary');
 }
 
+const blockedPluginRepair = async () => ({
+  ok: false,
+  changed: false,
+  installs: [],
+  blockers: ['codex_plugin_not_ready_after_recheck:computer-use@openai-bundled'],
+  next_actions: []
+});
+
 test('repairComputerUse detect-only (apply=false) does not attempt the feature-enable step', async () => {
   const { root, cleanup } = await scratchRoot();
   try {
@@ -25,7 +33,7 @@ test('repairComputerUse detect-only (apply=false) does not attempt the feature-e
       calls += 1;
       return { ok: false, status: 'codex_app_capability_missing', blockers: ['codex_app_capability_missing'] };
     };
-    const report = await repairComputerUse({ root, apply: false, reportPath: null, probe, codexBin: fakeCodexBin(root) });
+    const report = await repairComputerUse({ root, apply: false, reportPath: null, probe, codexBin: fakeCodexBin(root), pluginRepair: blockedPluginRepair as any });
     assert.equal(report.schema, DOCTOR_COMPUTER_USE_REPAIR_SCHEMA);
     assert.equal(report.apply, false);
     assert.equal(report.ok, false);
@@ -56,7 +64,8 @@ test('repairComputerUse apply=true runs codex features enable computer_use and r
       // A guaranteed-nonexistent "codex" binary path so the repair function's own
       // `codex --version` / `features enable` runProcess calls exercise real spawn
       // handling (ENOENT) without ever touching a real machine-wide codex install.
-      codexBin: fakeCodexBin(root)
+      codexBin: fakeCodexBin(root),
+      pluginRepair: async () => ({ ok: true, changed: true, requires_new_task: true, installs: [{ ok: true }], blockers: [], next_actions: ['Start a new Codex/Work task.'] }) as any
     });
     assert.equal(report.ok, true);
     assert.equal(report.recovered, true);
@@ -71,36 +80,50 @@ test('repairComputerUse apply=true runs codex features enable computer_use and r
   }
 });
 
-test('repairComputerUse attempts a real (sandboxed, nonexistent-binary) plugin --help lookup but never fabricates an install subcommand', async () => {
+test('repairComputerUse records the official plugin add repair and post-install task refresh contract', async () => {
   const { root, cleanup } = await scratchRoot();
   try {
     const probe = async () => ({ ok: false, status: 'codex_app_missing', blockers: ['codex_app_missing'] });
-    const report = await repairComputerUse({ root, apply: true, reportPath: null, probe, codexBin: fakeCodexBin(root) });
+    const report = await repairComputerUse({
+      root,
+      apply: true,
+      reportPath: null,
+      probe,
+      codexBin: fakeCodexBin(root),
+      pluginRepair: async () => ({
+        ok: true,
+        changed: true,
+        requires_new_task: true,
+        installs: [{ plugin_id: 'computer-use@openai-bundled', ok: true }],
+        blockers: [],
+        next_actions: ['Start a new Codex/Work task.']
+      }) as any
+    });
     assert.equal(report.recovered, false);
-    const pluginStep = report.steps.find((s: any) => s.id === 'computer_use_plugin_install_lookup');
-    // The lookup is attempted (spawn is real, but against a guaranteed-nonexistent binary path
-    // so it can never reach a real codex install); it must fail closed, not guess a subcommand.
+    const pluginStep = report.steps.find((s: any) => s.id === 'computer_use_plugin_repair');
     assert.equal(pluginStep.attempted, true);
-    assert.equal(pluginStep.ok, false);
-    assert.equal(pluginStep.blocker, 'codex_plugin_help_did_not_reveal_install_subcommand');
-    assert.ok(report.next_actions.some((line: string) => /codex plugin --help/.test(line)));
+    assert.equal(pluginStep.ok, true);
+    assert.equal(pluginStep.blocker, null);
+    assert.match(pluginStep.command, /plugin add computer-use@openai-bundled --json/);
+    assert.equal(report.requires_new_task, true);
+    assert.ok(report.next_actions.some((line: string) => /new Codex\/Work task/.test(line)));
   } finally {
     await cleanup();
   }
 });
 
-test('repairComputerUse without any codex binary leaves the plugin lookup unattempted and blocked', async () => {
+test('repairComputerUse without any codex binary leaves plugin installation unattempted and blocked', async () => {
   const { root, cleanup } = await scratchRoot();
   const previousPath = process.env.PATH;
   try {
     // Empty PATH guarantees `which('codex')` cannot resolve a real, machine-wide binary.
     process.env.PATH = '';
     const probe = async () => ({ ok: false, status: 'codex_app_missing', blockers: ['codex_app_missing'] });
-    const report = await repairComputerUse({ root, apply: true, reportPath: null, probe, codexBin: null });
+    const report = await repairComputerUse({ root, apply: true, reportPath: null, probe, codexBin: null, pluginRepair: blockedPluginRepair as any });
     assert.equal(report.recovered, false);
-    const pluginStep = report.steps.find((s: any) => s.id === 'computer_use_plugin_install_lookup');
-    assert.equal(pluginStep.attempted, false, 'no codex binary available, so the plugin --help lookup cannot run');
-    assert.equal(pluginStep.blocker, 'codex_plugin_install_subcommand_unverified');
+    const pluginStep = report.steps.find((s: any) => s.id === 'computer_use_plugin_repair');
+    assert.equal(pluginStep.attempted, false, 'no codex binary available, so plugin installation cannot run');
+    assert.match(pluginStep.blocker, /codex_plugin_not_ready_after_recheck/);
   } finally {
     process.env.PATH = previousPath;
     await cleanup();

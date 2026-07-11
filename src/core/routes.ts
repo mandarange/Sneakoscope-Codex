@@ -642,7 +642,7 @@ export const COMMAND_CATALOG = [
   { name: 'update', usage: 'sks update [check|now] [--version <version>] [--json] [--dry-run]', description: 'Check npm for the latest SKS release and update the global package by default; use `check` for status-only.' },
   { name: 'uninstall', usage: 'sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json]', description: 'Remove SKS global skills, hooks, menu bar, state, temp files, and optional project residue while preserving user-owned content by default.' },
   { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm, Codex CLI, and Zellij readiness; pass --yes to repair missing Codex CLI/Zellij tooling when supported.' },
-  { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema|0.142 [--json]', description: 'Check Codex CLI rust-v0.142.0 compatibility, installed version, 0.142 manifest/capability evidence, inherited legacy baselines, and vendored hook schema snapshot freshness.' },
+  { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema|0.144 [--json]', description: 'Check Codex CLI rust-v0.144.1 compatibility, installed version, current manifest/capability evidence, inherited historical baselines, and vendored hook schema snapshot freshness.' },
   { name: 'codex-app', usage: 'sks codex-app [check|glm-profile install|set-openrouter-key --api-key-stdin|product-design|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, GLM/OpenRouter model profile visibility, codex-lb key-entry guidance, Product Design plugin readiness, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
   { name: 'codex-native', usage: 'sks codex-native status|feature-broker|invocation-plan|init-deep [--json]', description: 'Inspect Codex Native feature broker readiness, invocation routing, pattern evidence, and managed memory setup.' },
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
@@ -667,7 +667,7 @@ export const COMMAND_CATALOG = [
   { name: 'recallpulse', usage: 'sks recallpulse run|status|eval|governance|checklist <mission-id|latest>', description: 'Run report-only RecallPulse active recall, durable status, proof capsule, evidence envelope, and governance checks.' },
   { name: 'pipeline', usage: 'sks pipeline status|resume|plan|answer ...', description: 'Inspect the active skill-first route, materialized execution plan, ambiguity gates, and completion gates.' },
   { name: 'guard', usage: 'sks guard check [--json]', description: 'Check SKS harness self-protection lock, fingerprints, and source-repo exception state.' },
-  { name: 'conflicts', usage: 'sks conflicts check|prompt [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex and print the GPT-5.5 high cleanup prompt.' },
+  { name: 'conflicts', usage: 'sks conflicts check|prompt [--json]', description: 'Detect other Codex harnesses such as OMX/DCodex and print the GPT-5.6 high cleanup prompt.' },
   { name: 'versioning', usage: 'sks versioning status|bump|disable [--json]', description: 'Manage explicit project version syncs; SKS does not install Git pre-commit hooks.' },
   { name: 'features', usage: 'sks features list|check|inventory [--json] [--write-docs]', description: 'Build and validate the feature registry that maps CLI commands, hidden handlers, dollar routes, app skill aliases, and skills.' },
   { name: 'all-features', usage: 'sks all-features selftest --mock [--json]', description: 'Run the mock all-features contract selftest for feature registry, proof, Voxel TriWiki, and failure-contract coverage.' },
@@ -686,7 +686,7 @@ export const COMMAND_CATALOG = [
   { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
   { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Zellij views.' },
-  { name: 'perf', usage: 'sks perf run|workflow|cold-start [--json] [--iterations N]', description: 'Measure structured GPT-5.5/SKS performance budgets, including cold-start, Proof Field workflow decisions, and fast-lane evidence.' },
+  { name: 'perf', usage: 'sks perf run|workflow|cold-start [--json] [--iterations N]', description: 'Measure structured GPT-5.6/SKS performance budgets, including cold-start, Proof Field workflow decisions, and fast-lane evidence.' },
   { name: 'bench', usage: 'sks bench core|route-fixtures|blackbox|trust-kernel [--json]', description: 'Measure core trust-kernel hot paths and write performance budget artifacts.' },
   { name: 'proof', usage: 'sks proof show|latest|validate|export|smoke [--json|--md]', description: 'Show, validate, export, or smoke-write the unified Completion Proof Engine surface.' },
   { name: 'trust', usage: 'sks trust report|validate|status|explain [latest|mission-id] [--json]', description: 'Validate route contracts, evidence indexes, stale/mock evidence, and trust report blockers.' },
@@ -1112,6 +1112,7 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
     'Native multi-session policy: REQUIRED for code-changing or execution work in this route.',
 	    'The selected SKS route itself authorizes route-owned worker/reviewer native sessions; the user does not need to separately ask for helper sessions when the default Naruto pipeline is active.',
     'Before editing, the parent orchestrator must visibly state the SKS route, split independent write scopes, and run worker/reviewer native sessions whenever the route can be split safely.',
+    'Determine native tool availability from the callable tool manifest in the current turn and from actual call results. If functions.exec or functions.collaboration.spawn_agent is exposed, use it; never report those tools unavailable because an obsolete CLI alias is missing.',
     'Run workers in parallel only with disjoint ownership. The parent owns integration, verification, and final evidence.',
     'If native sessions are unavailable or the work cannot be safely split, record explicit unavailable/unsplittable native-session evidence before editing.',
     noUnrequestedFallbackCodePolicyText()
@@ -1136,15 +1137,14 @@ export function routeReasoning(route: any, prompt: any = '') {
 }
 
 function narutoRouteReasoning(text: any = '') {
-  if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|가설|포렌식)/i.test(text)) return reasoning('xhigh', 'naruto_research_or_forensic_signal');
-  if (/(research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬)/i.test(text)) return reasoning('high', 'naruto_knowledge_safety_or_release_signal');
-  if (/(tmux|zellij|terminal|cli|cmd|warp|tool(?:\s|-)?call|hook|router|routing|pipeline|multi[-\s]?pane|pane|process|config|터미널|라우팅|파이프라인|훅|도구|툴)/i.test(text)) return reasoning('medium', 'naruto_tooling_or_runtime_signal');
-  if (/(tiny|simple|small|one[-\s]?line|typo|copy|label|spacing|rename|text|readme|docs?|간단|단순|오타|문구|라벨|간격|색상)/i.test(text)) return reasoning('low', 'naruto_simple_bounded_work_signal');
-  return reasoning('medium', 'naruto_default_balanced_reasoning');
+  if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|strategy|planning|integration|refactor|가설|포렌식|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬|전략|기획|통합|리팩터)/i.test(text)) return reasoning('max', 'naruto_complex_or_high_risk_signal');
+  return reasoning('xhigh', 'naruto_gpt56_baseline');
 }
 
 export function reasoningProfileName(effort: any) {
   if (effort === 'low') return 'sks-task-low';
+  if (effort === 'ultra') return 'sks-research-ultra';
+  if (effort === 'max') return 'sks-research-max';
   if (effort === 'xhigh') return 'sks-research-xhigh';
   if (effort === 'high') return 'sks-logic-high';
   return 'sks-task-medium';

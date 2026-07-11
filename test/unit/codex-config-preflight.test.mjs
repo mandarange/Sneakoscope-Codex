@@ -9,7 +9,7 @@ test('codex config readability proves node and spawned child can read project co
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-config-readable-'));
   await fs.mkdir(path.join(root, '.codex'), { recursive: true });
   await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
-  await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
+  await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.6-terra"\nservice_tier = "fast"\n');
 
   const report = await mod.inspectCodexConfigReadability(root);
   assert.equal(report.ok, true);
@@ -24,6 +24,7 @@ test('project config policy splitter moves machine-local config with backup', as
   const codexHome = path.join(root, 'home', '.codex');
   await fs.mkdir(path.join(root, '.codex'), { recursive: true });
   await fs.writeFile(path.join(root, '.codex', 'config.toml'), [
+    '# SKS managed project config',
     'profile = "sks-mad-high"',
     'approval_policy = "on-failure"',
     'sandbox_mode = "workspace-write"',
@@ -67,7 +68,7 @@ test('MAD launch preflight records fast service tier CLI proof', async () => {
   const codexHome = path.join(root, 'home', '.codex');
   await fs.mkdir(path.join(root, '.codex'), { recursive: true });
   await fs.mkdir(path.join(root, '.sneakoscope', 'reports'), { recursive: true });
-  await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.5"\nservice_tier = "fast"\n');
+  await fs.writeFile(path.join(root, '.codex', 'config.toml'), 'model = "gpt-5.6-terra"\nservice_tier = "fast"\n');
 
   const report = await mod.runCodexLaunchPreflight(root, { codexHome, profile: 'sks-mad-high', sandbox: 'danger-full-access', serviceTier: 'fast', fix: false, actualCodex: false, tmuxSmoke: false });
   assert.equal(report.ok, true);

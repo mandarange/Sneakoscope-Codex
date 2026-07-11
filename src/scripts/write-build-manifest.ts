@@ -5,6 +5,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { writeTextAtomic } from '../core/fsx.js';
 import { writeDistFreshStamp, sourceSnapshot } from './lib/ensure-dist-fresh.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -27,7 +28,7 @@ const source = sourceSnapshot();
 const distStamp = writeDistFreshStamp();
 const srcMjsRuntimeFiles = await collectSrcMjsRuntimeFiles();
 
-await fsp.writeFile(
+await writeTextAtomic(
   path.join(distRoot, 'build-manifest.json'),
   `${JSON.stringify(
     {

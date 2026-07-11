@@ -99,6 +99,13 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
   if (!helpRequest) {
     const commandGate = await ensureActiveRouteCommandGate(command, rest);
     if (!commandGate.ok) {
+      if ('command_result' in commandGate && commandGate.command_result) {
+        process.exitCode = 1;
+        if (argv.includes('--json')) console.log(JSON.stringify(commandGate.command_result, null, 2));
+        else printHandledCommandBlock(commandGate.command_result);
+        return commandGate.command_result;
+      }
+      if (argv.includes('--json')) console.log(JSON.stringify(commandGate, null, 2));
       console.error(commandGate.message);
       process.exitCode = 1;
       return commandGate;
@@ -111,7 +118,7 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     const migrationGate = await ensureCurrentMigrationBeforeCommand({
       command,
       args: rest,
-      skipMigrationGate: entry.skipMigrationGate === true || entry.readonly === true
+      skipMigrationGate: entry.skipMigrationGate === true || entry.readonly === true || safeActiveRouteVisualQuery(command, rest)
     });
     if (!migrationGate.ok) {
       console.error('SKS project migration blocked.');
@@ -122,6 +129,7 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
       for (const warning of migrationGate.warnings) console.error(`Optional warning: ${warning}`);
       console.error(`Receipt: ${migrationGate.receipt_path}`);
       console.error('Remedies: run `sks doctor --fix --yes`, then retry; diagnostics that must bypass this gate are marked skipMigrationGate in the command registry.');
+      if (argv.includes('--json')) console.log(JSON.stringify(migrationGate, null, 2));
       process.exitCode = 1;
       return migrationGate;
     }
@@ -151,9 +159,8 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
   }
   if (entry.mutatesRouteState !== true) return { ok: true, status: 'allowed' };
   if (safeReadOnlySubcommand(args)) return { ok: true, status: 'allowed_status_subcommand' };
-  if (process.env.SKS_TEST_ISOLATION === '1' && process.env.SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS === '1') {
-    return { ok: true, status: 'allowed_release_fixture_isolation' };
-  }
+  if (safeActiveRouteVisualQuery(command, args)) return { ok: true, status: 'allowed_visual_query' };
+  if (safeActiveRouteRecoverySubcommand(command, args)) return { ok: true, status: 'allowed_active_route_recovery' };
   const [{ projectRoot, readJson }, { stateFile }] = await Promise.all([
     import('../core/fsx.js'),
     import('../core/mission.js')
@@ -161,6 +168,14 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
   const root = await projectRoot(process.cwd()).catch(() => process.cwd());
   const state = await readJson(stateFile(root), {}).catch(() => ({}));
   if (!activeRouteStateBlocksCommand(state)) return { ok: true, status: 'allowed' };
+  const visualPreflight = await blockedVisualSourcePreflight(command, args);
+  if (visualPreflight) {
+    return {
+      ok: false,
+      status: 'handled_non_mutating_visual_preflight',
+      command_result: visualPreflight
+    };
+  }
   return {
     schema: 'sks.command-gate-active-route.v1',
     ok: false,
@@ -173,10 +188,36 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
   };
 }
 
+function safeActiveRouteVisualQuery(command: CommandNameLite, args: readonly string[]) {
+  if (command !== 'computer-use') return false;
+  const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
+  if (sub !== 'require') return false;
+  return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+}
+
+async function blockedVisualSourcePreflight(command: CommandNameLite, args: readonly string[]) {
+  if (command !== 'image-ux-review' || String(args[0] || '').toLowerCase() !== 'run') return null;
+  if (!args.includes('--from-chrome-extension') && !args.includes('--from-computer-use')) return null;
+  const { imageUxReviewSourcePreflight } = await import('../core/commands/image-ux-review-command.js');
+  const preflight = await imageUxReviewSourcePreflight([...args.slice(1)]);
+  return preflight.result;
+}
+
+function printHandledCommandBlock(result: any) {
+  console.error(`SKS command blocked: ${result?.blocker || result?.status || 'preflight_failed'}`);
+  for (const line of Array.isArray(result?.guidance) ? result.guidance : []) console.error(`- ${line}`);
+}
+
 function safeReadOnlySubcommand(args: readonly string[]) {
   const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
   if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;
   return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+}
+
+function safeActiveRouteRecoverySubcommand(command: CommandNameLite, args: readonly string[]) {
+  if (command !== 'agent') return false;
+  const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
+  return ['close', 'cleanup', 'rollback-patches'].includes(sub);
 }
 
 function activeRouteStateBlocksCommand(state: any = {}) {

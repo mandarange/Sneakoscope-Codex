@@ -207,9 +207,10 @@ async function collectChangedScope(root: string, opts: any) {
 async function listSourceFiles(root: any, dir: any = root, out: any = []) {
   const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
-    if (entry.name.startsWith('.') && !['.agents'].includes(entry.name)) {
-      if (SKIP_DIRS.has(entry.name)) continue;
-    }
+    // Hidden runtime/worktree directories can contain complete repository copies.
+    // Only .agents is a source-bearing project directory; all other hidden trees
+    // are state, caches, or external workspaces and must stay outside this scan.
+    if (entry.name.startsWith('.') && entry.name !== '.agents') continue;
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name)) await listSourceFiles(root, full, out);

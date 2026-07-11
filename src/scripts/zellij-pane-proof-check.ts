@@ -41,13 +41,47 @@ const codexLbOnlyMain = mod.evaluateZellijPaneProofRows(mod.normalizeZellijPaneR
   { pane_id: '1', name: 'orchestrator', command: 'sh -lc model_provider="codex-lb"', cwd: root, exited: false },
   { pane_id: '2', name: 'slot-001', command: 'sks zellij-lane --mission M --slot slot-001', cwd: root, exited: false }
 ]), { expectedLaneCount: 1, expectedCwd: root, expectedMainCommandIncludes: 'codex' });
+const zellij044Rows = [
+  ...Array.from({ length: 120 }, (_, index) => ({
+    id: index + 10,
+    is_plugin: true,
+    title: `zellij:fixture-${String(index).padStart(3, '0')}`,
+    terminal_command: null,
+    plugin_url: 'zellij:fixture',
+    tab_name: 'SKS fixture'
+  })),
+  {
+    id: 0,
+    is_plugin: false,
+    title: 'orchestrator',
+    exited: false,
+    exit_status: null,
+    pane_x: 0,
+    pane_y: 1,
+    pane_columns: 80,
+    pane_rows: 24,
+    terminal_command: "sh -lc exec 'codex' '--no-alt-screen'",
+    pane_command: `${path.join(root, 'node_modules', '.bin', 'codex')} --no-alt-screen`,
+    pane_cwd: root,
+    tab_name: 'SKS fixture'
+  }
+];
+const zellij044Json = JSON.stringify(zellij044Rows);
+const zellij044Parsed = mod.parseZellijPaneRows(zellij044Json);
+const zellij044Evaluation = mod.evaluateZellijPaneProofRows(
+  mod.normalizeZellijPaneRows(zellij044Parsed),
+  { expectedLaneCount: 0, expectedCwd: root, expectedMainCommandIncludes: 'codex' }
+);
 const fixtureOk = positive.blockers.length === 0
   && missingLane.blockers.includes('zellij_lane_pane_missing')
   && exitedLane.blockers.some((blocker) => blocker.startsWith('zellij_lane_pane_exited'))
   && madCodexMain.blockers.length === 0
   && madShellMain.blockers.includes('zellij_main_pane_unexpected_command:codex')
-  && codexLbOnlyMain.blockers.includes('zellij_main_pane_unexpected_command:codex');
-emit({ ...report, fixture_ok: fixtureOk, fixture_results: { positive, missingLane, exitedLane, madCodexMain, madShellMain, codexLbOnlyMain }, ok: report.ok && fixtureOk });
+  && codexLbOnlyMain.blockers.includes('zellij_main_pane_unexpected_command:codex')
+  && zellij044Json.length > 8192
+  && zellij044Parsed.length === zellij044Rows.length
+  && zellij044Evaluation.blockers.length === 0;
+emit({ ...report, fixture_ok: fixtureOk, fixture_results: { positive, missingLane, exitedLane, madCodexMain, madShellMain, codexLbOnlyMain, zellij044: { json_bytes: Buffer.byteLength(zellij044Json), parsed_rows: zellij044Parsed.length, evaluation: zellij044Evaluation } }, ok: report.ok && fixtureOk });
 function emit(report) { console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }
 function fail(blocker, detail) { emit({ schema: 'sks.zellij-pane-proof-check.v1', ok: false, blockers: [blocker], detail }); process.exit(1); }
 function readArg(args, name) {

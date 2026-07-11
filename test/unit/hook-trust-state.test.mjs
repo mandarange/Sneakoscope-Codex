@@ -8,7 +8,7 @@ test('managed Codex hooks write trust state hashes for current hook syntax', () 
   const root = path.join(os.tmpdir(), 'sks-hook-trust-state');
   const hooks = JSON.parse(mergeManagedHooksJson('', 'sks'));
   assert.equal(hooks.hooks.UserPromptSubmit[0].hooks[0].statusMessage, 'SKS routing prompt and context');
-  const config = mergeManagedHookTrustStateToml('model = "gpt-5.5"\n', root, 'sks');
+  const config = mergeManagedHookTrustStateToml('model = "gpt-5.6-terra"\n', root, 'sks');
   assert.match(config, new RegExp(`\\[hooks\\.state\\."${escapeRegExp(path.join(root, '.codex', 'hooks.json'))}:user_prompt_submit:0:0"\\]`));
   assert.match(config, /trusted_hash = "sha256:[a-f0-9]{64}"/);
   assert.match(config, /pre_tool_use:0:0/);
@@ -18,4 +18,3 @@ test('managed Codex hooks write trust state hashes for current hook syntax', () 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
-

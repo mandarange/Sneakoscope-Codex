@@ -25,7 +25,7 @@ sks computer-use require --route '$QA-LOOP' --json
 sks computer-use smoke --json
 ```
 
-Web/browser/webapp verification uses the official Codex Chrome Extension path first: https://developers.openai.com/codex/app/chrome-extension. If the extension is not installed/enabled, QA-LOOP, UX review, and browser verification must halt rapidly and ask the user to set it up before continuing. Computer Use is reserved for native Mac, desktop-app, OS-settings, and non-web visual targets. MAD-SKS can explicitly authorize these target-project scopes (`computer_use`, `browser_use`, `generated_assets`, and file permission changes), but it cannot fake host capability availability.
+Web/browser/webapp verification uses the official Codex Chrome Extension path first: https://learn.chatgpt.com/docs/chrome-extension. If the extension is not installed/enabled, QA-LOOP, UX review, and browser verification must halt rapidly and ask the user to set it up before continuing. Computer Use is reserved for native Mac, desktop-app, OS-settings, and non-web visual targets. MAD-SKS can explicitly authorize these target-project scopes (`computer_use`, `browser_use`, `generated_assets`, and file permission changes), but it cannot fake host capability availability.
 
 The generated `sks-fast-high` profile intentionally omits `sandbox_mode`. Codex App and IDE permission settings own the sandbox choice, including Full Access vs workspace-write, while SKS supplies the model, Fast service tier, approval, and reasoning defaults. High-power MAD launches continue to use the explicit `sks-mad-high` profile and `danger-full-access` launch arguments after the user opens the MAD-SKS permission gate.
 

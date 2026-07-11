@@ -14,11 +14,29 @@ const AGENT_ACTION_SCHEMA = 'sks.agent-command-result.v1'
 
 export async function agentCommand(commandOrArgs: string | string[] = 'agent', maybeArgs: string[] = []) {
   const args = Array.isArray(commandOrArgs) ? commandOrArgs : maybeArgs
+  if (args.includes('--help') || args.includes('-h') || args[0] === 'help') return agentHelp(args.includes('--json'))
   const parsed = parseAgentCommandArgs('agent', args)
   if (parsed.action === 'worker') return runNativeCliWorkerFromArgs(args.slice(args[0] === 'worker' ? 1 : 0))
   if (parsed.action === 'run' || parsed.action === 'spawn') return agentRun(parsed)
   if (parsed.action === 'plan') return agentPlan(parsed)
   return agentMissionAction(parsed)
+}
+
+function agentHelp(json = false) {
+  const result = {
+    schema: 'sks.agent-help.v1',
+    ok: true,
+    action: 'help',
+    read_only: true,
+    usage: 'sks agent run <prompt> [--mission <id>] [--agents <n>] [--concurrency <n>] [--readonly] [--json]',
+    actions: ['run', 'plan', 'status', 'watch', 'dashboard', 'cockpit', 'lane', 'board', 'ledger', 'collect', 'consensus', 'close', 'cleanup', 'proof', 'explain', 'rollback-patches']
+  }
+  if (json) console.log(JSON.stringify(result, null, 2))
+  else {
+    console.log(result.usage)
+    console.log('Actions: ' + result.actions.join(', '))
+  }
+  return result
 }
 
 async function agentRun(parsed: any) {

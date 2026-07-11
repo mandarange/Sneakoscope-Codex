@@ -13,15 +13,24 @@ export async function wrongnessContextForRoute(root: string, opts: {
   const records = await readCombinedWrongnessRecords(root, missionId);
   const active = records.filter((record) => record.status === 'active');
   const routeRelevant = active.filter((record) => !route || !record.route || record.route === route || record.avoidance_rule.applies_to.includes(route));
-  const selected = [...routeRelevant, ...active.filter((record) => !routeRelevant.some((candidate) => candidate.id === record.id))]
+  const routeRelevantIds = new Set(routeRelevant.map((record) => record.id));
+  const selected = [...routeRelevant, ...active.filter((record) => !routeRelevantIds.has(record.id))]
     .sort(sortWrongnessForRecall)
     .slice(0, limit);
+  const summary = summarizeWrongnessRecords(records);
   return {
     schema: WRONGNESS_CONTEXT_SCHEMA,
     generated_at: nowIso(),
     mission_id: missionId,
     route,
-    summary: summarizeWrongnessRecords(records),
+    summary: {
+      ...summary,
+      active_ids: selected.map((record) => record.id),
+      avoidance_rules: selected.map((record) => record.avoidance_rule).filter((rule) => rule.text),
+      context_limit: limit,
+      omitted_active_records: Math.max(0, Number(summary.active || 0) - selected.length),
+      bounded: true
+    },
     active_records: selected.map(recordToContextRow),
     active_avoidance_rules: selected.map((record) => record.avoidance_rule),
     retrieval_policy: 'negative_evidence_first_for_related_claims; do not let active wrongness upgrade trust without correction evidence'

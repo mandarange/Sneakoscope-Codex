@@ -23,7 +23,9 @@ test('stored disabled local model is default off but explicit run activation can
 
     const explicit = await resolveOllamaWorkerConfig({ backend: 'ollama' });
     assert.equal(explicit.enabled, true);
-    assert.equal(explicit.ok, true);
+    assert.equal(explicit.ok, false);
+    assert.equal(explicit.status, 'enabled_unverified');
+    assert.match(explicit.blockers.join('\n'), /local_llm_enabled_unverified/);
     assert.equal(explicit.model, 'local:test');
   } finally {
     restoreEnv(old);

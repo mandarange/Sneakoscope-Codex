@@ -77,7 +77,7 @@ function gateSelectionReason(gate: ReleaseGateNode, changedFiles: string[], pres
     if (releaseGate) return 'release_gate_system_changed'
   }
   if (changedFiles.some((file) => isCodexCurrentFile(file))) {
-    if (gate.id.startsWith('codex:0142') || gate.id === 'release:codex-current' || gate.id.startsWith('codex-control:') || gate.id.startsWith('codex-sdk:')) return 'codex_current_surface_changed'
+    if (gate.id.startsWith('codex:0144') || gate.id.startsWith('codex-control:') || gate.id.startsWith('codex-sdk:')) return 'codex_current_surface_changed'
   }
   const matchingReleaseScript = changedFiles.some((file) => releaseScriptGateCandidates(file).includes(gate.id) || (file.startsWith('src/scripts/release-') && gateCommandReferencesScript(gate, file)))
   if (matchingReleaseScript) return 'release_script_changed'

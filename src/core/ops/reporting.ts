@@ -16,6 +16,9 @@ export async function writeOpsReport(root: string, fileName: string, report: Ops
   if (report.ok === true && report.blockers.length > 0) {
     throw new Error(`invalid ops report: ok true with blockers in ${fileName}`);
   }
+  if (!/^[A-Za-z0-9._-]+\.json$/.test(fileName) || path.basename(fileName) !== fileName) {
+    throw new Error(`invalid ops report file name: ${fileName}`);
+  }
   const reportPath = path.join(root, '.sneakoscope', 'reports', fileName);
   await fs.mkdir(path.dirname(reportPath), { recursive: true });
   await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');

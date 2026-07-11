@@ -12,9 +12,11 @@ import { resolveCodexAppExecutionProfile } from '../core/codex-app/codex-app-exe
 import { repairCodexNativeManagedAssets } from '../core/codex-native/codex-native-repair-transaction.js';
 import { doctorCodexAppGlmProfile, installCodexAppGlmProfile } from '../core/codex-app/glm-profile-installer.js';
 import { promptForOpenRouterKeyHidden, writeStoredOpenRouterKey } from '../core/providers/openrouter/openrouter-secret-store.js';
+import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'check';
+  if (action === 'restart') return printCodexAppResult(args, await restartCodexApp());
   if (action === 'remote-control' || action === 'remote') return codexAppRemoteControlCommand(args.slice(1));
   if (action === 'harness-matrix') {
     const root = await sksRoot();
@@ -42,15 +44,17 @@ export async function run(_command: any, args: any = []) {
     }
     const record = await writeStoredOpenRouterKey(key);
     const profile = await installCodexAppGlmProfile({ root, apply: true });
+    const restart = await restartCodexApp({ enabled: flag(args, '--restart-app') || flag(args, '--restart') });
     const result = {
       schema: 'sks.codex-app-openrouter-key.v1',
-      ok: profile.ok,
-      status: profile.ok ? 'stored' : 'stored_profile_blocked',
+      ok: Boolean(profile.ok && restart.ok),
+      status: !profile.ok ? 'stored_profile_blocked' : restart.ok ? 'stored' : 'stored_restart_blocked',
       key_preview: record.key_preview,
       raw_key_recorded: false,
       secret_store: 'sks-openrouter-secret-store',
       glm_profile: profile,
-      blockers: profile.blockers || [],
+      restart_app: restart,
+      blockers: [...(profile.blockers || []), ...(restart.blockers || [])],
       warnings: profile.warnings || []
     };
     return printCodexAppResult(args, result);

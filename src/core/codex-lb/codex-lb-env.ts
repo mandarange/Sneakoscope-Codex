@@ -26,6 +26,16 @@ export type CodexLbEnvLoadResult = {
   };
 };
 
+export type CodexLbModelCatalogResult = {
+  schema: 'sks.codex-lb-model-catalog.v1';
+  ok: boolean;
+  status: 'ready' | 'blocked';
+  models: string[];
+  model_efforts: Record<string, string[]>;
+  http_status: number | null;
+  blockers: string[];
+};
+
 export function codexLbEnvPath(home: unknown = process.env.HOME || os.homedir()): string {
   return path.join(String(home || os.homedir()), '.codex', 'sks-codex-lb.env');
 }
@@ -58,12 +68,121 @@ export async function readLbHealth(home: unknown = process.env.HOME || os.homedi
   };
 }
 
+export async function readCodexLbModelCatalog(opts: {
+  loadedEnv?: CodexLbEnvLoadResult;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+} = {}): Promise<CodexLbModelCatalogResult> {
+  const loaded = opts.loadedEnv || await loadCodexLbEnv();
+  if (!loaded.configured || !loaded.base_url || !loaded.secret_api_key) {
+    return {
+      schema: 'sks.codex-lb-model-catalog.v1',
+      ok: false,
+      status: 'blocked',
+      models: [],
+      model_efforts: {},
+      http_status: null,
+      blockers: loaded.missing.length ? loaded.missing.map((item) => `codex_lb_missing:${item}`) : ['codex_lb_not_configured']
+    };
+  }
+  const transportBlocker = codexLbBaseUrlSecurityBlocker(loaded.base_url);
+  if (transportBlocker) {
+    return {
+      schema: 'sks.codex-lb-model-catalog.v1',
+      ok: false,
+      status: 'blocked',
+      models: [],
+      model_efforts: {},
+      http_status: null,
+      blockers: [transportBlocker]
+    };
+  }
+  const fetchImpl = opts.fetchImpl || fetch;
+  try {
+    const response = await fetchImpl(`${loaded.base_url}/models`, {
+      headers: { Authorization: `Bearer ${loaded.secret_api_key}` },
+      signal: AbortSignal.timeout(Math.max(250, Number(opts.timeoutMs || 5000)))
+    });
+    const payload = await response.json().catch(() => null);
+    const models = normalizeCodexLbModelCatalogPayload(payload);
+    const apiEfforts = normalizeCodexModelEffortCatalogPayload(payload);
+    const cachePath = path.join(String(process.env.CODEX_HOME || path.join(os.homedir(), '.codex')), 'models_cache.json');
+    const cachePayload = await readJson<any>(cachePath, null).catch(() => null);
+    const cachedEfforts = normalizeCodexModelEffortCatalogPayload(cachePayload);
+    const modelEfforts = Object.fromEntries(models.map((model) => [model, apiEfforts[model] || cachedEfforts[model] || []]));
+    const ok = response.ok && models.length > 0;
+    return {
+      schema: 'sks.codex-lb-model-catalog.v1',
+      ok,
+      status: ok ? 'ready' : 'blocked',
+      models,
+      model_efforts: modelEfforts,
+      http_status: response.status,
+      blockers: [
+        ...(response.ok ? [] : [`codex_lb_models_http_${response.status}`]),
+        ...(models.length ? [] : ['codex_lb_model_catalog_empty'])
+      ]
+    };
+  } catch {
+    return {
+      schema: 'sks.codex-lb-model-catalog.v1',
+      ok: false,
+      status: 'blocked',
+      models: [],
+      model_efforts: {},
+      http_status: null,
+      blockers: ['codex_lb_model_catalog_unavailable']
+    };
+  }
+}
+
+export function normalizeCodexModelEffortCatalogPayload(payload: any): Record<string, string[]> {
+  const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [];
+  const result: Record<string, string[]> = {};
+  for (const row of rows) {
+    const model = String(row?.id || row?.model || row?.slug || row?.name || '').trim();
+    if (!model) continue;
+    const effortRows = row?.supportedReasoningEfforts
+      || row?.supported_reasoning_levels
+      || row?.supported_reasoning_efforts
+      || row?.reasoning_efforts
+      || [];
+    const efforts = (Array.isArray(effortRows) ? effortRows : [])
+      .map((entry: any) => String(entry?.reasoningEffort || entry?.effort || entry || '').trim().toLowerCase())
+      .filter(Boolean);
+    result[model] = [...new Set<string>(efforts)];
+  }
+  return result;
+}
+
+export function normalizeCodexLbModelCatalogPayload(payload: any): string[] {
+  const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : [];
+  const models: string[] = rows
+    .map((row: any) => String(row?.id || row?.model || row?.slug || row?.name || '').trim())
+    .filter(Boolean);
+  return [...new Set<string>(models)];
+}
+
 export function normalizeCodexLbBaseUrl(input: unknown = ''): string {
   let host = String(input || '').trim();
   if (!host) return '';
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) host = `https://${host}`;
   host = host.replace(/\/+$/, '');
   return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`;
+}
+
+export function codexLbBaseUrlSecurityBlocker(input: unknown): string | null {
+  try {
+    const url = new URL(String(input || ''));
+    if (url.username || url.password) return 'codex_lb_base_url_userinfo_forbidden';
+    if (url.protocol === 'https:') return null;
+    const host = url.hostname.toLowerCase();
+    const loopback = host === 'localhost' || host === '::1' || host === '[::1]' || /^127(?:\.\d{1,3}){3}$/.test(host);
+    if (url.protocol === 'http:' && loopback) return null;
+    return 'codex_lb_insecure_base_url';
+  } catch {
+    return 'codex_lb_invalid_base_url';
+  }
 }
 
 export async function loadCodexLbEnv(opts: any = {}): Promise<CodexLbEnvLoadResult> {

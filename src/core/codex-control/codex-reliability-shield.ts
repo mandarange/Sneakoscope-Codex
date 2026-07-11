@@ -58,9 +58,19 @@ export interface CodexReliabilityAttemptReport {
   blockers: string[]
 }
 
+export function codexTimeoutClassForRoute(
+  route: unknown,
+  fallback: CodexReliabilityPolicy['timeoutClass'] = 'standard'
+): CodexReliabilityPolicy['timeoutClass'] {
+  return /^\$?naruto$/i.test(String(route || '').trim()) ? 'long' : fallback
+}
+
 export function normalizeCodexReliabilityPolicy(input: CodexTaskInput): CodexReliabilityPolicy {
   const policy = input.reliabilityPolicy || {}
-  const timeoutClass = policy.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
+  const timeoutClass = codexTimeoutClassForRoute(
+    input.route,
+    policy.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
+  )
   const fallbackIdle = timeoutClass === 'short' ? 20_000 : timeoutClass === 'long' ? 180_000 : 60_000
   return {
     maxEmptyResultRetries: clampInt(policy.maxEmptyResultRetries, 1, 0, 3),

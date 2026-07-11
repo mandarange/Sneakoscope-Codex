@@ -55,7 +55,7 @@ await fs.mkdir(path.join(c7Fixture, '.codex'), { recursive: true });
 await fs.mkdir(c7Home, { recursive: true });
 await fs.writeFile(
   path.join(c7Fixture, '.codex', 'config.toml'),
-  '[mcp_servers.context7]\ncommand = "npx"\nargs = ["-y", "@upstash/context7-mcp@latest"]\n'
+  '# Sneakoscope managed fixture\n[mcp_servers.context7]\ncommand = "npx"\nargs = ["-y", "@upstash/context7-mcp@latest"]\n'
 );
 const c7Run = runDoctorFix(c7Fixture, c7Home, { SKS_FAKE_CODEX_CONFIG_CONTEXT7_STDIO_CONFLICT: '1' });
 const c7Parsed = parseLastJson(c7Run.stdout || '{}');

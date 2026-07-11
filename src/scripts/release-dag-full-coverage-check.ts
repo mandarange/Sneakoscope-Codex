@@ -36,14 +36,14 @@ const requiredReleasePresetIds = [
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',
   'naruto:canonical-stop-gate',
-  'agent:native-cli-session-swarm',
-  'agent:native-cli-session-proof',
-  'agent:fast-mode-worker-propagation',
-  'release:dag-full-coverage',
+  'agent:native-cli-session-swarm-scaling',
+  'agent:fast-mode-policy',
+  'codex-control:event-stream-ledger',
+  'release:dag-runner',
   'release:gate-budget',
-  'release:gate-planner',
+  'release:gate-selection-comprehensive',
   'policy:gate-audit',
-  'runtime:no-tmux',
+  'runtime:proof-summary',
   'typecheck'
 ]
 const requiredHarnessPresetIds = [
@@ -65,7 +65,7 @@ const schemaComplete = [...releaseManifest.gates, ...harnessManifest.gates].ever
 const report = {
   schema: 'sks.release-dag-full-coverage-check.v2',
   ok: schemaComplete
-    && releasePreset.length <= 220
+    && releasePreset.length <= 200
     && missingRequiredReleasePreset.length === 0
     && missingRequiredHarnessPreset.length === 0
     && duplicateAcrossManifests.length === 0

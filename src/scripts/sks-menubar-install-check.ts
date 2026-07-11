@@ -129,6 +129,11 @@ const hasActionFallbacks = actionScript.includes('command -v sks')
   && actionScript.includes('/bin/zsh -lc')
   && actionScript.includes('exit 127')
   && actionScript.includes('display notification');
+const pinnedEntryIndex = actionScript.indexOf('run_node_entry "$SKS_ENTRY" "$@"');
+const hasPinnedEntryPriority = pinnedEntryIndex >= 0
+  && pinnedEntryIndex < actionScript.indexOf('command -v sks')
+  && pinnedEntryIndex < actionScript.indexOf('npm root -g')
+  && actionScript.lastIndexOf('run_node_entry "$SKS_ENTRY" "$@"') === pinnedEntryIndex;
 const hasEntryWarning = result.warnings.includes('sks_entry_project_local');
 const hasBuildStamp = buildStampExists
   && result.build_stamp?.package_version === PACKAGE_VERSION
@@ -206,6 +211,7 @@ const darwinOk = cltMissing
     && hasInteractiveProcessType
     && hasPackagePlistVersion
     && hasActionFallbacks
+    && hasPinnedEntryPriority
     && hasEntryWarning
     && hasBuildStamp
     && swiftParse.ok === true
@@ -253,6 +259,7 @@ const report = {
   has_interactive_process_type: hasInteractiveProcessType,
   has_package_plist_version: hasPackagePlistVersion,
   has_action_fallbacks: hasActionFallbacks,
+  has_pinned_entry_priority: hasPinnedEntryPriority,
   has_entry_warning: hasEntryWarning,
   has_build_stamp: hasBuildStamp,
   swift_parse: swiftParse,

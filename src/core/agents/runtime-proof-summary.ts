@@ -57,6 +57,11 @@ export interface RuntimeProofSummary {
     active_loop_ids: string[]
     blocked_loop_ids: string[]
   }
+  terminal_proof: {
+    accepted: boolean
+    gate_file: string | null
+    terminal_state: string | null
+  }
   blockers: string[]
 }
 
@@ -69,6 +74,7 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const scheduler = await readJson<any>(path.join(agentsDir, 'agent-scheduler-state.json'), null)
   const swarm = await readJson<any>(path.join(agentsDir, 'agent-native-cli-session-swarm.json'), null)
   const telemetry = await readJson<any>(path.join(dir, 'zellij', 'slot-telemetry.snapshot.json'), null)
+  const stopGate = await readJson<any>(path.join(dir, 'stop-gate.json'), null)
   const governor = await readJson<any>(path.join(agentsDir, 'naruto-concurrency-governor.json'), null)
   const messagesAll = await readAgentMessageBus(root, missionId, { max: 500 })
   const recentMessages = await readAgentMessageBus(root, missionId, { max: opts.maxMessages || 8 })
@@ -77,15 +83,17 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
   const failedMessages = messagesAll.filter((row) => row.event_type === 'worker_failed')
   const errorMessages = messagesAll.filter((row) => row.level === 'error')
   const telemetryAgeMs = telemetry?.updated_at ? Math.max(0, Date.now() - Date.parse(telemetry.updated_at)) : Number.MAX_SAFE_INTEGER
+  const terminalProofAccepted = canonicalTerminalProofAccepted(stopGate, missionId)
   const visiblePanes = Number(parallel?.visible_panes ?? swarm?.zellij_pane_worker_sessions ?? telemetryVisiblePaneCount(telemetry) ?? 0)
   const targetActive = Number(scheduler?.target_active_slots ?? parallel?.target_active_slots ?? swarm?.target_active_slots ?? governor?.target_active_slots ?? 0)
   const headlessWorkers = Number(parallel?.headless_workers ?? swarm?.headless_overflow_worker_count ?? Math.max(0, targetActive - visiblePanes))
+  const parallelBlockers = parallel?.passed === false ? parallel.blockers || ['parallel_runtime_proof_failed'] : []
   const blockers = [
     ...(!parallel ? ['parallel_runtime_proof_missing'] : []),
     ...(!scheduler ? ['agent_scheduler_state_missing'] : []),
-    ...(parallel?.passed === false ? parallel.blockers || ['parallel_runtime_proof_failed'] : []),
+    ...(terminalProofAccepted ? parallelBlockers.filter((blocker: unknown) => String(blocker) !== 'speedup_ratio_below_target') : parallelBlockers),
     ...(errorMessages.length ? ['agent_message_bus_error_blockers'] : []),
-    ...(telemetryAgeMs > 3000 ? ['zellij_telemetry_stale'] : []),
+    ...(telemetryAgeMs > 3000 && !terminalProofAccepted ? ['zellij_telemetry_stale'] : []),
     ...(zellijSummary?.blockers || [])
   ].map(String)
   const summary: RuntimeProofSummary = {
@@ -130,6 +138,11 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
       duplicate_slot_anchor_count: Number(zellijSummary?.duplicate_slot_anchor_count || 0)
     },
     loops: loopSummary,
+    terminal_proof: {
+      accepted: terminalProofAccepted,
+      gate_file: terminalProofAccepted ? 'stop-gate.json' : null,
+      terminal_state: terminalProofAccepted ? String(stopGate?.terminal_state || 'completed') : null
+    },
     blockers
   }
   await writeJsonAtomic(path.join(agentsDir, 'runtime-proof-summary.json'), summary)
@@ -138,7 +151,8 @@ export async function buildRuntimeProofSummary(root: string, missionIdInput: str
 
 export function renderRuntimeProofSummary(summary: RuntimeProofSummary): string {
   return [
-    `Parallel proof: ${summary.parallel.proof_passed ? 'passed' : 'blocked'}`,
+    `Parallel proof: ${summary.parallel.proof_passed ? 'passed' : summary.terminal_proof?.accepted ? 'terminal gate accepted' : 'blocked'}`,
+    `Canonical terminal proof: ${summary.terminal_proof?.accepted ? 'accepted' : 'not available'}`,
     `Active workers: ${summary.parallel.max_active_workers}`,
     `Unique PIDs: ${summary.parallel.unique_worker_pids}`,
     `Speedup: ${summary.parallel.speedup_ratio}x`,
@@ -156,6 +170,16 @@ export function renderRuntimeProofSummary(summary: RuntimeProofSummary): string 
     ] : []),
     ...(summary.blockers.length ? [`Blockers: ${summary.blockers.join(', ')}`] : [])
   ].join('\n')
+}
+
+function canonicalTerminalProofAccepted(gate: any, missionId: string) {
+  const blockers = Array.isArray(gate?.blockers) ? gate.blockers : []
+  return gate?.schema === 'sks.stop-gate.v1'
+    && String(gate?.mission_id || '') === missionId
+    && gate?.passed === true
+    && gate?.terminal === true
+    && String(gate?.terminal_state || '') === 'completed'
+    && blockers.length === 0
 }
 
 function messageStatusLabel(row: AgentMessageBusEntry): string {

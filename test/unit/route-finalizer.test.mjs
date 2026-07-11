@@ -17,7 +17,7 @@ test('route finalizer writes completion proof and visual image anchors', async (
   });
   assert.equal(result.ok, true);
   assert.equal(result.proof.route, '$Image-UX-Review');
-  assert.equal(result.proof.status, 'verified_partial');
+  assert.equal(result.proof.status, 'mock_only');
   assert.equal(result.proof.evidence.image_voxels.anchor_count, 1);
   assert.equal(result.proof.evidence.image_voxels.relations, 1);
   assert.equal(result.proof.evidence.lean_engineering.schema, 'sks.lean-change-evidence.v1');

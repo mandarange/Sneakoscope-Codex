@@ -18,14 +18,13 @@ const requiredRelease = [
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',
   'naruto:canonical-stop-gate',
-  'agent:native-cli-session-swarm',
-  'agent:native-cli-session-proof',
-  'agent:fast-mode-worker-propagation',
-  'runtime:no-tmux',
-  'runtime:no-mjs-scripts',
-  'release:dag-full-coverage',
+  'agent:native-cli-session-swarm-scaling',
+  'agent:fast-mode-policy',
+  'codex-control:event-stream-ledger',
+  'runtime:proof-summary',
+  'release:dag-runner',
   'release:gate-budget',
-  'release:gate-planner',
+  'release:gate-selection-comprehensive',
   'policy:gate-audit',
   'typecheck'
 ];
@@ -45,8 +44,8 @@ const releaseCheckTarget = releaseCheck.includes('release:check:affected')
   ? String(scripts['release:check:affected'] || '')
   : releaseCheck;
 assertGate(releaseCheckTarget.includes('release-gate-dag-runner') && /--preset\s+(?:release|affected)/.test(releaseCheckTarget), 'release:check must use the v2 DAG release/affected preset', { release_check: scripts['release:check'], resolved_release_check: releaseCheckTarget });
-assertGate(releaseGates.length > 0 && releaseGates.length <= 220, 'release v2 manifest must include 1..220 release gates', { gate_count: releaseGates.length });
-const PACKAGE_SCRIPT_BUDGET = 150;
+assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { gate_count: releaseGates.length });
+const PACKAGE_SCRIPT_BUDGET = 100;
 assertGate(Object.keys(scripts).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(scripts).length, limit: PACKAGE_SCRIPT_BUDGET });
 
 for (const id of requiredRelease) assertGate(releaseIds.has(id), `critical release gate missing from release v2 manifest: ${id}`, { id });

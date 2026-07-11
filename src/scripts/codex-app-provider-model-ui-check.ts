@@ -21,19 +21,46 @@ await fs.writeFile(
   "export CODEX_LB_BASE_URL='https://lb.example.test/backend-api/codex'\nexport CODEX_LB_API_KEY='sk-codex-lb-fixture'\n",
   'utf8'
 );
+const readyCatalog = {
+  schema: 'sks.codex-lb-model-catalog.v1',
+  ok: true,
+  status: 'ready',
+  models: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
+  model_efforts: {
+    'gpt-5.6-sol': ['xhigh', 'max', 'ultra'],
+    'gpt-5.6-terra': ['xhigh', 'max', 'ultra'],
+    'gpt-5.6-luna': ['xhigh', 'max']
+  },
+  blockers: []
+};
 const ready = await codexProviderModelUiStatus({
   home,
   cwd,
-  env: { HOME: home, OPENROUTER_API_KEY: 'sk-or-fixture' } as any
+  env: { HOME: home, OPENROUTER_API_KEY: 'sk-or-fixture' } as any,
+  codexLbModelCatalog: readyCatalog
 });
 const readyText = formatCodexAppStatus(statusFixture(ready));
 
-const ok = missing.ok === false
+await fs.writeFile(path.join(home, '.codex', 'config.toml'), codexLbOnlyConfig(), 'utf8');
+const selectedCodexLb = await codexProviderModelUiStatus({
+  home,
+  cwd,
+  env: { HOME: home } as any,
+  codexLbModelCatalog: readyCatalog
+});
+
+const ok = missing.ok === true
+  && missing.status === 'ready'
+  && missing.selected_provider === 'oauth'
+  && missing.blockers.length === 0
+  && missing.optional_provider_status === 'setup_available'
+  && missing.optional_provider_blockers.includes('glm_openrouter_provider_missing')
+  && missing.optional_provider_blockers.includes('codex_lb_provider_missing')
   && missing.glm.exposed === false
   && missing.codex_lb.key_entry_visible === true
   && missing.ui_actions.includes('sks codex-app set-openrouter-key --api-key-stdin')
   && missing.ui_actions.includes('sks codex-lb setup --host <domain> --api-key-stdin --yes')
-  && /Provider UI:\s*setup/.test(missingText)
+  && /Provider UI:\s*oauth ready, optional providers can be configured/.test(missingText)
   && /GLM Model:\s*setup/.test(missingText)
   && /codex-lb Key:\s*missing \(input: sks codex-lb setup/.test(missingText)
   && ready.ok === true
@@ -42,17 +69,27 @@ const ok = missing.ok === false
   && ready.glm.profiles_present.length === GLM_CODEX_CONFIG_REASONING_PROFILES.length
   && ready.codex_lb.provider_present === true
   && ready.codex_lb.key_present === true
-  && /Provider UI:\s*ok/.test(readyText)
+  && ready.codex_lb.model_catalog_ok === true
+  && ready.codex_lb.expected_models_present === true
+  && /Provider UI:\s*oauth ready/.test(readyText)
+  && ready.desktop_picker_verified === false
   && readyText.includes(`GLM Model:  ok ${GLM_52_OPENROUTER_MODEL}`)
   && /codex-lb Key:\s*configured/.test(readyText)
-  && !JSON.stringify({ missing, ready, missingText, readyText }).includes('sk-codex-lb-fixture');
+  && selectedCodexLb.ok === true
+  && selectedCodexLb.status === 'ready'
+  && selectedCodexLb.selected_provider === 'codex-lb'
+  && selectedCodexLb.selected_provider_blockers.length === 0
+  && selectedCodexLb.blockers.length === 0
+  && selectedCodexLb.optional_provider_blockers.includes('glm_openrouter_provider_missing')
+  && !JSON.stringify({ missing, ready, selectedCodexLb, missingText, readyText }).includes('sk-codex-lb-fixture');
 
 emit({
   schema: 'sks.codex-app-provider-model-ui-check.v1',
   ok,
   missing,
   ready,
-  secret_safe: !JSON.stringify({ missing, ready, missingText, readyText }).includes('sk-codex-lb-fixture'),
+  selected_codex_lb: selectedCodexLb,
+  secret_safe: !JSON.stringify({ missing, ready, selectedCodexLb, missingText, readyText }).includes('sk-codex-lb-fixture'),
   blockers: ok ? [] : ['codex_app_provider_model_ui_check_failed']
 });
 
@@ -85,12 +122,26 @@ function readyConfig() {
   ].join('\n');
 }
 
+function codexLbOnlyConfig() {
+  return [
+    'model_provider = "codex-lb"',
+    '[model_providers.codex-lb]',
+    'name = "openai"',
+    'base_url = "https://lb.example.test/backend-api/codex"',
+    'wire_api = "responses"',
+    'env_key = "CODEX_LB_API_KEY"',
+    'supports_websockets = true',
+    'requires_openai_auth = true',
+    ''
+  ].join('\n');
+}
+
 function statusFixture(providerModelUi: any) {
   return {
     ok: providerModelUi.ok,
     app: { installed: true, path: '/Applications/Codex.app' },
-    codex_cli: { ok: true, version: '0.142.0' },
-    remote_control: { ok: true, min_version: '0.130.0', codex_cli: { version_number: '0.142.0' } },
+    codex_cli: { ok: true, version: '0.144.1' },
+    remote_control: { ok: true, min_version: '0.130.0', codex_cli: { version_number: '0.144.1' } },
     features: {
       checked: true,
       required_flags_ok: true,

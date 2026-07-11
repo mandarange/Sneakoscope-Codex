@@ -48,6 +48,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     const command = buildCodexExecAgentArgs(agent, opts.prompt || slice?.description || '', opts)
     const proxyEnv = managedProxyEnvForChild({ ...process.env, ...(opts.env || {}) })
     const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
+      project_hash: opts.projectHash || agent.project_hash || agent.root_hash || null,
       command: [opts.codexBin || 'codex', ...command.args],
       profile: opts.profile || null,
       result_file: command.resultFile,
@@ -78,6 +79,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   const proxyEnv = managedProxyEnvForChild({ ...process.env, ...(opts.env || {}) })
   const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...proxyEnv, ...fastModeEnv(fastPolicy), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
   const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
+    project_hash: opts.projectHash || agent.project_hash || agent.root_hash || null,
     command: [opts.codexBin || 'codex', ...command.args],
     profile: opts.profile || null,
     result_file: command.resultFile,

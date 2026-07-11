@@ -96,7 +96,7 @@ test('project update migration repairs legacy menubar and fast-mode config', asy
     const expectedEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
     const scriptAfter = await fs.readFile(actionScript, 'utf8');
     const statAfter = await fs.stat(actionScript);
-    assert.match(scriptAfter, new RegExp(`^SKS_ENTRY=${escapeRegExp(JSON.stringify(expectedEntry))}$`, 'm'));
+    assert.match(scriptAfter, new RegExp(`^SKS_ENTRY='${escapeRegExp(expectedEntry)}'$`, 'm'));
     assert.notEqual(statAfter.mode & 0o111, 0);
 
     const configAfter = await fs.readFile(configPath, 'utf8');

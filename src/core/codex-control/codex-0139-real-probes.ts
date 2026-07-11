@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { CURRENT_CODEX_RELEASE_MANIFEST } from '../codex-compat/codex-release-manifest.js'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 
 export type Codex0139ProbeName =
@@ -8,9 +9,9 @@ export type Codex0139ProbeName =
   | 'marketplace_source_json'
   | 'plugin_catalog_cache'
   | 'sandbox_profile_alias'
-  | 'interrupt_agent_event'
+  | 'collab_agent_tool_schema'
   | 'image_referenced_path'
-  | 'sandbox_proxy_preservation'
+  | 'sandbox_proxy_environment'
 
 export const CODEX_0139_REAL_PROBE_NAMES: Codex0139ProbeName[] = [
   'code_mode_web_search',
@@ -19,22 +20,37 @@ export const CODEX_0139_REAL_PROBE_NAMES: Codex0139ProbeName[] = [
   'marketplace_source_json',
   'plugin_catalog_cache',
   'sandbox_profile_alias',
-  'interrupt_agent_event',
+  'collab_agent_tool_schema',
   'image_referenced_path',
-  'sandbox_proxy_preservation'
+  'sandbox_proxy_environment'
 ]
 
 export interface Codex0139RealProbeResult {
   schema: 'sks.codex-0139-real-probe-result.v1'
+  target_version: string
+  compatibility_origin: 'codex-0139-real-probe-result-v1'
+  compatibility_authority: 'deprecated_non_authoritative_lineage_only'
   generated_at: string
   codex_bin: string | null
   version_text: string | null
   parsed_version: string | null
   require_real: boolean
+  release_authorizing: boolean
   overall_ok: boolean
   probe_timeout_ms: number
+  requested_probes: Codex0139ProbeName[]
   probes: Record<Codex0139ProbeName, Codex0139SingleProbe>
   skipped: string[]
+  warnings: string[]
+  external_integration_status: {
+    mcp_auth: 'authentication_required' | 'not_observed'
+    release_authorization_scope: 'codex_core_compatibility_only'
+  }
+  temp_cleanup: {
+    root: string
+    ok: boolean
+    remaining_entries: string[]
+  }
   blockers: string[]
 }
 
@@ -47,6 +63,7 @@ export interface Codex0139SingleProbe {
   stderr_tail?: string
   artifact_paths: string[]
   evidence: Record<string, unknown>
+  warnings?: string[]
   blockers: string[]
 }
 
@@ -105,26 +122,43 @@ export function buildCodex0139RealProbeResult(input: {
   requireReal: boolean
   timeoutMs: number
   probes: Record<Codex0139ProbeName, Codex0139SingleProbe>
+  requiredProbeNames?: Codex0139ProbeName[]
+  releaseAuthorizing?: boolean
+  tempCleanup?: { root: string; ok: boolean; remaining_entries: string[] }
   extraBlockers?: string[]
 }): Codex0139RealProbeResult {
-  const skipped = CODEX_0139_REAL_PROBE_NAMES.filter((name) => input.probes[name]?.mode === 'skipped')
-  const failed = CODEX_0139_REAL_PROBE_NAMES.filter((name) => input.probes[name] && input.probes[name].ok !== true && input.probes[name].mode !== 'skipped')
+  const requiredProbeNames = input.requiredProbeNames ? [...new Set(input.requiredProbeNames)] : [...CODEX_0139_REAL_PROBE_NAMES]
+  const skipped = requiredProbeNames.filter((name) => input.probes[name]?.mode === 'skipped')
+  const failed = requiredProbeNames.filter((name) => input.probes[name] && input.probes[name].ok !== true && input.probes[name].mode !== 'skipped')
   const blockers = [
     ...(input.extraBlockers || []),
-    ...CODEX_0139_REAL_PROBE_NAMES.flatMap((name) => input.probes[name]?.blockers || []),
+    ...requiredProbeNames.flatMap((name) => input.probes[name]?.blockers || []),
     ...(input.requireReal && skipped.length ? skipped.map((name) => `require_real_skipped:${name}`) : [])
   ]
+  const warnings = requiredProbeNames.flatMap((name) => input.probes[name]?.warnings || [])
+  const overallOk = input.requireReal ? blockers.length === 0 && failed.length === 0 && skipped.length === 0 : failed.length === 0
   return {
     schema: 'sks.codex-0139-real-probe-result.v1',
+    target_version: CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion,
+    compatibility_origin: 'codex-0139-real-probe-result-v1',
+    compatibility_authority: 'deprecated_non_authoritative_lineage_only',
     generated_at: nowIso(),
     codex_bin: input.codexBin,
     version_text: input.versionText,
     parsed_version: input.parsedVersion,
     require_real: input.requireReal,
-    overall_ok: input.requireReal ? blockers.length === 0 && failed.length === 0 && skipped.length === 0 : failed.length === 0,
+    release_authorizing: Boolean(input.releaseAuthorizing && overallOk),
+    overall_ok: overallOk,
     probe_timeout_ms: input.timeoutMs,
+    requested_probes: requiredProbeNames,
     probes: input.probes,
     skipped,
+    warnings: [...new Set(warnings)],
+    external_integration_status: {
+      mcp_auth: warnings.includes('codex_real_probe_external_mcp_auth_required') ? 'authentication_required' : 'not_observed',
+      release_authorization_scope: 'codex_core_compatibility_only'
+    },
+    temp_cleanup: input.tempCleanup || { root: '', ok: false, remaining_entries: [] },
     blockers: [...new Set(blockers)]
   }
 }

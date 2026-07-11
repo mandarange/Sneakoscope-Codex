@@ -1,7 +1,9 @@
+import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { ensureDir, exists, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { findLatestMission, missionDir, missionsDir } from '../mission.js';
+import { withFileLock } from '../locks/file-lock.js';
+import { findLatestMission, missionsDir } from '../mission.js';
 import { codexSchemaPath, runCodexExecResumeWithOutputSchema } from '../codex-exec-output-schema.js';
 import {
   WRONGNESS_INDEX_SCHEMA,
@@ -21,36 +23,39 @@ import {
 } from './wrongness-schema.js';
 
 type JsonRecord = Record<string, unknown>;
+const CANONICAL_MISSION_ID_RE = /^M-[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export function projectWrongnessLedgerPath(root: string): string {
-  return path.join(root, '.sneakoscope', 'wiki', 'wrongness-ledger.json');
+  return path.join(safeWrongnessWikiDir(root), 'wrongness-ledger.json');
 }
 
 export function wrongnessIndexPath(root: string): string {
-  return path.join(root, '.sneakoscope', 'wiki', 'wrongness-index.json');
+  return path.join(safeWrongnessWikiDir(root), 'wrongness-index.json');
 }
 
 export function wrongnessSummaryPath(root: string): string {
-  return path.join(root, '.sneakoscope', 'wiki', 'wrongness-summary.md');
+  return path.join(safeWrongnessWikiDir(root), 'wrongness-summary.md');
 }
 
 export function missionWrongnessLedgerPath(root: string, missionId: string): string {
-  return path.join(missionDir(root, missionId), 'wrongness-ledger.json');
+  return path.join(safeWrongnessMissionDir(root, missionId), 'wrongness-ledger.json');
 }
 
 export function missionWrongnessSummaryPath(root: string, missionId: string): string {
-  return path.join(missionDir(root, missionId), 'wrongness-summary.md');
+  return path.join(safeWrongnessMissionDir(root, missionId), 'wrongness-summary.md');
 }
 
 export function missionWrongnessLinksPath(root: string, missionId: string): string {
-  return path.join(missionDir(root, missionId), 'wrongness-triwiki-links.json');
+  return path.join(safeWrongnessMissionDir(root, missionId), 'wrongness-triwiki-links.json');
 }
 
 export async function resolveWrongnessMissionId(root: string, missionArg: unknown = null): Promise<string | null> {
   const raw = typeof missionArg === 'string' && missionArg.trim() ? missionArg.trim() : null;
   if (!raw || raw === 'project') return null;
-  if (raw === 'latest') return findLatestMission(root);
-  return raw;
+  const resolved = raw === 'latest' ? await findLatestMission(root) : raw;
+  if (!resolved) return null;
+  assertCanonicalMissionId(resolved);
+  return resolved;
 }
 
 export async function readWrongnessLedger(root: string, missionId: string | null = null): Promise<WrongnessLedger> {
@@ -71,6 +76,10 @@ async function readBaseWrongnessLedger(root: string, missionId: string | null = 
 }
 
 export async function writeWrongnessLedger(root: string, ledger: WrongnessLedger): Promise<WrongnessLedger> {
+  return withWrongnessMutationLock(root, () => writeWrongnessLedgerUnlocked(root, ledger));
+}
+
+async function writeWrongnessLedgerUnlocked(root: string, ledger: WrongnessLedger): Promise<WrongnessLedger> {
   const file = ledger.mission_id ? missionWrongnessLedgerPath(root, ledger.mission_id) : projectWrongnessLedgerPath(root);
   const normalized = normalizeWrongnessLedger({ ...ledger, generated_at: nowIso() }, ledger.scope, ledger.mission_id);
   await ensureDir(path.dirname(file));
@@ -91,11 +100,14 @@ export async function addWrongnessRecord(root: string, input: unknown = {}, opts
     : typeof row.mission_id === 'string'
       ? row.mission_id
       : null;
+  if (missionId) assertCanonicalMissionId(missionId);
   const record = createWrongnessRecord({ ...row, mission_id: missionId });
-  const project = await upsertIntoScope(root, null, record);
-  const mission = missionId ? await upsertIntoScope(root, missionId, record) : null;
-  await writeWrongnessSummaries(root, missionId);
-  return { record, project, mission };
+  return withWrongnessMutationLock(root, async () => {
+    const project = await upsertIntoScopeUnlocked(root, null, record);
+    const mission = missionId ? await upsertIntoScopeUnlocked(root, missionId, record) : null;
+    await writeWrongnessSummariesUnlocked(root, missionId);
+    return { record, project, mission };
+  });
 }
 
 export async function extractWrongnessWithOutputSchema(root: string, {
@@ -121,34 +133,44 @@ export async function extractWrongnessWithOutputSchema(root: string, {
 }
 
 export async function resolveWrongnessRecord(root: string, id: string, reason = 'Resolved after corrective action', status: 'resolved' | 'false_alarm' = 'resolved'): Promise<{ updated: number; records: WrongnessRecord[] }> {
-  const scopes = await discoverWrongnessScopes(root);
-  const updatedRecords: WrongnessRecord[] = [];
-  let updated = 0;
-  for (const missionId of scopes) {
-    const ledger = await readWrongnessLedger(root, missionId);
-    let changed = false;
-    const records = ledger.records.map((record) => {
-      if (record.id !== id) return record;
-      changed = true;
-      updated += 1;
-      const next: WrongnessRecord = {
-        ...record,
-        updated_at: nowIso(),
-        status,
-        truth_status: status === 'false_alarm' ? 'uncertain' : 'corrected',
-        corrective_action: {
-          ...record.corrective_action,
-          patch_status: status,
-          summary: reason || record.corrective_action.summary
-        }
-      };
-      updatedRecords.push(next);
-      return next;
-    });
-    if (changed) await writeWrongnessLedger(root, { ...ledger, records });
-  }
-  await writeWrongnessSummaries(root, null);
-  return { updated, records: updatedRecords };
+  return withWrongnessMutationLock(root, async () => {
+    const scopes = await discoverWrongnessScopes(root);
+    const updatedRecords: WrongnessRecord[] = [];
+    const changedMissions = new Set<string>();
+    let updated = 0;
+    for (const missionId of scopes) {
+      // Mutations must start from the writable base ledger. The project reader also
+      // overlays shared shards, and writing that combined view would duplicate every
+      // shared record into the project ledger.
+      const ledger = await readBaseWrongnessLedger(root, missionId);
+      let changed = false;
+      const records = ledger.records.map((record) => {
+        if (record.id !== id) return record;
+        changed = true;
+        updated += 1;
+        const next: WrongnessRecord = {
+          ...record,
+          updated_at: nowIso(),
+          status,
+          truth_status: status === 'false_alarm' ? 'uncertain' : 'corrected',
+          corrective_action: {
+            ...record.corrective_action,
+            patch_status: status,
+            summary: reason || record.corrective_action.summary
+          }
+        };
+        updatedRecords.push(next);
+        return next;
+      });
+      if (changed) {
+        await writeWrongnessLedgerUnlocked(root, { ...ledger, records });
+        if (missionId) changedMissions.add(missionId);
+      }
+    }
+    await writeWrongnessSummariesUnlocked(root, null);
+    for (const missionId of changedMissions) await writeMissionWrongnessSummaryUnlocked(root, missionId);
+    return { updated, records: updatedRecords };
+  });
 }
 
 export async function findWrongnessRecord(root: string, id: string): Promise<WrongnessRecord | null> {
@@ -202,20 +224,26 @@ export function summarizeWrongnessRecords(records: readonly WrongnessRecord[]): 
 }
 
 export async function writeWrongnessSummaries(root: string, missionId: string | null = null): Promise<void> {
+  return withWrongnessMutationLock(root, () => writeWrongnessSummariesUnlocked(root, missionId));
+}
+
+async function writeWrongnessSummariesUnlocked(root: string, missionId: string | null = null): Promise<void> {
   await writeProjectWrongnessIndex(root);
   await writeTextAtomic(wrongnessSummaryPath(root), renderWrongnessSummaryMarkdown(await readWrongnessLedger(root, null), 'Project Wrongness Memory'));
-  if (missionId) {
-    const ledger = await readWrongnessLedger(root, missionId);
-    await writeTextAtomic(missionWrongnessSummaryPath(root, missionId), renderWrongnessSummaryMarkdown(ledger, `Mission ${missionId} Wrongness Memory`));
-    await writeJsonAtomic(missionWrongnessLinksPath(root, missionId), {
-      schema: 'sks.triwiki-wrongness-links.v1',
-      generated_at: nowIso(),
-      mission_id: missionId,
-      project_ledger: '.sneakoscope/wiki/wrongness-ledger.json',
-      mission_ledger: `.sneakoscope/missions/${missionId}/wrongness-ledger.json`,
-      active_ids: ledger.records.filter((record) => record.status === 'active').map((record) => record.id)
-    });
-  }
+  if (missionId) await writeMissionWrongnessSummaryUnlocked(root, missionId);
+}
+
+async function writeMissionWrongnessSummaryUnlocked(root: string, missionId: string): Promise<void> {
+  const ledger = await readBaseWrongnessLedger(root, missionId);
+  await writeTextAtomic(missionWrongnessSummaryPath(root, missionId), renderWrongnessSummaryMarkdown(ledger, `Mission ${missionId} Wrongness Memory`));
+  await writeJsonAtomic(missionWrongnessLinksPath(root, missionId), {
+    schema: 'sks.triwiki-wrongness-links.v1',
+    generated_at: nowIso(),
+    mission_id: missionId,
+    project_ledger: '.sneakoscope/wiki/wrongness-ledger.json',
+    mission_ledger: `.sneakoscope/missions/${missionId}/wrongness-ledger.json`,
+    active_ids: ledger.records.filter((record) => record.status === 'active').map((record) => record.id)
+  });
 }
 
 export async function recordWrongnessFromTrustReport(root: string, report: unknown): Promise<{ created: number; records: WrongnessRecord[] }> {
@@ -356,10 +384,19 @@ function normalizeWrongnessLedger(value: unknown, scope: 'project' | 'mission', 
   };
 }
 
-async function upsertIntoScope(root: string, missionId: string | null, record: WrongnessRecord): Promise<WrongnessLedger> {
+async function upsertIntoScopeUnlocked(root: string, missionId: string | null, record: WrongnessRecord): Promise<WrongnessLedger> {
   const ledger = await readBaseWrongnessLedger(root, missionId);
   const nextRecords = upsertRecord(ledger.records, record);
-  return writeWrongnessLedger(root, { ...ledger, records: nextRecords });
+  return writeWrongnessLedgerUnlocked(root, { ...ledger, records: nextRecords });
+}
+
+function withWrongnessMutationLock<T>(root: string, fn: () => Promise<T>): Promise<T> {
+  const lockDir = safeWrongnessLockDir(root);
+  return withFileLock({
+    lockPath: path.join(lockDir, 'triwiki-wrongness.lock'),
+    timeoutMs: 60_000,
+    staleMs: 120_000
+  }, fn);
 }
 
 function upsertRecord(records: readonly WrongnessRecord[], record: WrongnessRecord): WrongnessRecord[] {
@@ -390,10 +427,86 @@ async function discoverWrongnessScopes(root: string): Promise<Array<string | nul
     return scopes;
   }
   for (const name of entries) {
-    if (!name.startsWith('M-')) continue;
+    if (!CANONICAL_MISSION_ID_RE.test(name)) continue;
     if (await exists(missionWrongnessLedgerPath(root, name))) scopes.push(name);
   }
   return scopes;
+}
+
+function assertCanonicalMissionId(missionId: string) {
+  if (!CANONICAL_MISSION_ID_RE.test(String(missionId || ''))) throw new Error(`invalid_mission_id:${missionId}`);
+}
+
+function safeWrongnessMissionDir(root: string, missionId: string) {
+  assertCanonicalMissionId(missionId);
+  const resolvedRoot = path.resolve(root);
+  const stateRoot = assertSafeSneakoscopeRoot(resolvedRoot);
+  const base = path.resolve(missionsDir(resolvedRoot));
+  const candidate = path.resolve(base, missionId);
+  const relative = path.relative(base, candidate);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`mission_path_outside_root:${missionId}`);
+  const baseStat = lstatIfPresent(base);
+  if (baseStat && (!baseStat.isDirectory() || baseStat.isSymbolicLink())) throw new Error('unsafe_missions_root_symlink');
+  const candidateStat = lstatIfPresent(candidate);
+  if (candidateStat && (!candidateStat.isDirectory() || candidateStat.isSymbolicLink())) throw new Error(`unsafe_mission_directory:${missionId}`);
+  if (baseStat && candidateStat) {
+    const realBase = fs.realpathSync(base);
+    const realCandidate = fs.realpathSync(candidate);
+    const realRelative = path.relative(realBase, realCandidate);
+    if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) throw new Error(`mission_realpath_outside_root:${missionId}`);
+  }
+  return candidate;
+}
+
+function safeWrongnessWikiDir(root: string) {
+  const stateRoot = assertSafeSneakoscopeRoot(root);
+  const wiki = path.join(stateRoot, 'wiki');
+  const wikiStat = lstatIfPresent(wiki);
+  if (wikiStat && (!wikiStat.isDirectory() || wikiStat.isSymbolicLink())) throw new Error('unsafe_wrongness_wiki_symlink');
+  if (wikiStat) {
+    const realState = fs.realpathSync(stateRoot);
+    const realWiki = fs.realpathSync(wiki);
+    const relative = path.relative(realState, realWiki);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('wrongness_wiki_realpath_outside_root');
+  }
+  return wiki;
+}
+
+function safeWrongnessLockDir(root: string) {
+  const stateRoot = assertSafeSneakoscopeRoot(root);
+  const locks = path.join(stateRoot, 'locks');
+  const lockStat = lstatIfPresent(locks);
+  if (lockStat && (!lockStat.isDirectory() || lockStat.isSymbolicLink())) throw new Error('unsafe_wrongness_lock_symlink');
+  if (lockStat) {
+    const realState = fs.realpathSync(stateRoot);
+    const realLocks = fs.realpathSync(locks);
+    const relative = path.relative(realState, realLocks);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('wrongness_lock_realpath_outside_root');
+  }
+  return locks;
+}
+
+function assertSafeSneakoscopeRoot(root: string) {
+  const resolvedRoot = path.resolve(root);
+  const stateRoot = path.join(resolvedRoot, '.sneakoscope');
+  const stateStat = lstatIfPresent(stateRoot);
+  if (stateStat && (!stateStat.isDirectory() || stateStat.isSymbolicLink())) throw new Error('unsafe_sneakoscope_root_symlink');
+  if (stateStat) {
+    const realRoot = fs.realpathSync(resolvedRoot);
+    const realState = fs.realpathSync(stateRoot);
+    const relative = path.relative(realRoot, realState);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('sneakoscope_realpath_outside_root');
+  }
+  return stateRoot;
+}
+
+function lstatIfPresent(file: string): fs.Stats | null {
+  try {
+    return fs.lstatSync(file);
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
 }
 
 function dedupeRecords(records: readonly WrongnessRecord[]): WrongnessRecord[] {

@@ -231,7 +231,9 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   }
   if (agentIntakeRequired && !completionProofExists) {
     if (!agentGate.ok) {
-      return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot continue to implementation/finalization: native agent intake gate is missing or blocked. Run: sks agent run latest --mock --json`, { gate: AGENT_INTAKE_STAGE_ID, missing: agentGate.missing || ['agents/agent-proof-evidence.json'] });
+      const missionArg = String(state.mission_id || '').trim() || '<mission-id>';
+      const routeArg = String(state.route_command || state.route || state.mode || '$Agent');
+      return complianceBlock(root, state, `SKS ${routeArg} route cannot continue to implementation/finalization: native agent intake gate is missing or blocked. Run: sks agent run --mission ${shellQuote(missionArg)} --route ${shellQuote(routeArg)} --agents 5 --json`, { gate: AGENT_INTAKE_STAGE_ID, missing: agentGate.missing || ['agents/agent-proof-evidence.json'] });
     }
   }
   if (!mistakeRecall.ok) {
@@ -314,6 +316,10 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
   fireAndForgetProjectMemory(root, state);
   return null;
+}
+
+function shellQuote(value: unknown) {
+  return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
 }
 
 function fireAndForgetProjectMemory(root: any, state: any = {}) {

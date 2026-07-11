@@ -39,6 +39,7 @@ export async function pipelineCommand(args: any = []) {
         route,
         task: routeContext.task || mission.prompt || state.prompt || '',
         required: Boolean(routeContext.context7_required || state.context7_required),
+        ambiguity: { required: true, auto_sealed: true, status: 'auto_sealed' },
         agents
       });
       if (flag(args, '--json')) return console.log(JSON.stringify({ schema: 'sks.pipeline-plan.v1', ok: true, mission_id: id, plan }, null, 2));

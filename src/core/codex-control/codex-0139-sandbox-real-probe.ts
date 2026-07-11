@@ -21,7 +21,8 @@ export async function runCodex0139SandboxProfileAliasProbe(input: {
   const dryArgs = sandboxHelpMentionsAlias ? ['sandbox', '-P', ':read-only', '--', 'true'] : ['-P', ':read-only', '--version']
   const dry = await runProcess(codexBin, dryArgs, { timeoutMs: input.timeoutMs || 30000, maxOutputBytes: 64 * 1024 }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }))
   const dryAccepted = (dry as any).code === 0
-  const ok = topLevelHelpMentionsAlias || sandboxHelpMentionsAlias
+  const helpMentionsAlias = topLevelHelpMentionsAlias || sandboxHelpMentionsAlias
+  const ok = helpMentionsAlias && dryAccepted
   return {
     ok,
     mode: 'actual-cli',
@@ -31,15 +32,18 @@ export async function runCodex0139SandboxProfileAliasProbe(input: {
     stderr_tail: codex0139ProbeTail(`${(help as any).stderr || ''}\n${(sandboxHelp as any).stderr || ''}\n${(dry as any).stderr || ''}`),
     artifact_paths: [],
     evidence: {
-      help_mentions_P: topLevelHelpMentionsAlias || sandboxHelpMentionsAlias,
+      help_mentions_P: helpMentionsAlias,
       top_level_help_mentions_P: topLevelHelpMentionsAlias,
       sandbox_help_mentions_P: sandboxHelpMentionsAlias,
       dry_command_attempted: true,
       dry_command_line: [codexBin, ...dryArgs],
       dry_command_accepted: dryAccepted,
-      dry_command_warning: dryAccepted ? null : 'help proof accepted; dry no-op unsupported in this CLI shape'
+      dry_command_warning: dryAccepted ? null : 'permissions-profile alias was advertised but the real sandbox no-op failed'
     },
-    blockers: ok ? [] : ['codex_sandbox_profile_alias_help_missing']
+    blockers: ok ? [] : [
+      ...(helpMentionsAlias ? [] : ['codex_sandbox_profile_alias_help_missing']),
+      ...(dryAccepted ? [] : ['codex_sandbox_profile_alias_real_command_failed'])
+    ]
   }
 }
 
@@ -54,16 +58,23 @@ export async function runCodex0139SandboxProxyPreservationProbe(input: {
   if (!codexBin) return skippedCodex0139Probe('codex_cli_missing')
   const tempDir = path.join(input.root, '.sneakoscope', 'tmp', 'codex-0139-real-probes', `sandbox-proxy-${Date.now()}`)
   await ensureDir(tempDir)
-  const args = ['sandbox', '-P', ':read-only', '-C', tempDir, '--', 'true']
+  const proxyState = {
+    HTTPS_PROXY: Boolean(process.env.HTTPS_PROXY),
+    HTTP_PROXY: Boolean(process.env.HTTP_PROXY),
+    ALL_PROXY: Boolean(process.env.ALL_PROXY)
+  }
+  const probeScript = 'process.stdout.write(JSON.stringify({HTTPS_PROXY:Boolean(process.env.HTTPS_PROXY),HTTP_PROXY:Boolean(process.env.HTTP_PROXY),ALL_PROXY:Boolean(process.env.ALL_PROXY)}))'
+  const args = ['sandbox', '-P', ':read-only', '-C', tempDir, '--', process.execPath, '-e', probeScript]
   const result = await runProcess(codexBin, args, {
     cwd: tempDir,
     timeoutMs: input.timeoutMs || 30000,
     maxOutputBytes: 64 * 1024
   }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }))
   const safeNoopRan = (result as any).code === 0
-  const proxyMarkerAvailable = Boolean(process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY)
-  const approvedEscalationPreservationScriptable = process.env.SKS_CODEX_0139_SANDBOX_PROXY_APPROVED_ESCALATION_RETRY === '1'
-  const ok = safeNoopRan && (!input.requireReal || approvedEscalationPreservationScriptable)
+  const observedProxyState = parseProxyState((result as any).stdout)
+  const proxyEnvironmentPreserved = observedProxyState !== null
+    && Object.entries(proxyState).every(([key, value]) => observedProxyState[key] === value)
+  const ok = safeNoopRan && proxyEnvironmentPreserved
   return {
     ok,
     mode: 'actual-cli',
@@ -74,15 +85,29 @@ export async function runCodex0139SandboxProxyPreservationProbe(input: {
     artifact_paths: [tempDir],
     evidence: {
       safe_noop_ran: safeNoopRan,
-      proxy_marker_available: proxyMarkerAvailable,
-      proxy_marker_checked: proxyMarkerAvailable,
-      approved_escalation_preservation_scriptable: approvedEscalationPreservationScriptable,
-      approved_escalation_retry_env: 'SKS_CODEX_0139_SANDBOX_PROXY_APPROVED_ESCALATION_RETRY=1',
+      host_proxy_presence: proxyState,
+      sandbox_proxy_presence: observedProxyState,
+      proxy_marker_checked: true,
+      proxy_environment_preserved: proxyEnvironmentPreserved,
       permissions_profile: ':read-only'
     },
     blockers: ok ? [] : [
       ...(safeNoopRan ? [] : ['codex_sandbox_proxy_safe_noop_failed']),
-      ...(input.requireReal && !approvedEscalationPreservationScriptable ? ['codex_sandbox_proxy_escalation_preservation_not_safely_scriptable'] : [])
+      ...(proxyEnvironmentPreserved ? [] : ['codex_sandbox_proxy_environment_not_preserved'])
     ]
+  }
+}
+
+function parseProxyState(text: unknown): Record<string, boolean> | null {
+  try {
+    const parsed = JSON.parse(String(text || ''))
+    if (!parsed || typeof parsed !== 'object') return null
+    return {
+      HTTPS_PROXY: parsed.HTTPS_PROXY === true,
+      HTTP_PROXY: parsed.HTTP_PROXY === true,
+      ALL_PROXY: parsed.ALL_PROXY === true
+    }
+  } catch {
+    return null
   }
 }

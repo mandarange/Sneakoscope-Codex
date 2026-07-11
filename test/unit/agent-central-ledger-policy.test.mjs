@@ -33,7 +33,7 @@ test('central ledger events redact secret-looking payloads', async () => {
   assert.equal(text.includes('[redacted]'), true);
 });
 
-test('lifecycle timeout killer marks stale open session as killed', async () => {
+test('lifecycle timeout reaper marks stale open session as timed out', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-timeout-'));
   await fs.mkdir(path.join(root, 'sessions'), { recursive: true });
   await fs.writeFile(path.join(root, 'agent-events.jsonl'), '');
@@ -54,8 +54,9 @@ test('lifecycle timeout killer marks stale open session as killed', async () => 
   assert.equal(report.ok, false);
   assert.equal(report.hard_timeout_ms, 30 * 60 * 1000);
   assert.deepEqual(report.killed_sessions, ['agent_a-session']);
-  const session = JSON.parse(await fs.readFile(path.join(root, 'sessions', 'agent_a.json'), 'utf8'));
-  assert.equal(session.status, 'killed');
+  assert.deepEqual(report.timed_out_sessions, ['agent_a-session']);
+  const session = JSON.parse(await fs.readFile(path.join(root, 'sessions', 'agent_a-session.json'), 'utf8'));
+  assert.equal(session.status, 'timed_out');
   assert.equal(session.kill_reason, 'hard_timeout');
 });
 

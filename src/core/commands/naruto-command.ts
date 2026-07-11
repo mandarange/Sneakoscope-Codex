@@ -44,10 +44,24 @@ const NARUTO_ROUTE = '$Naruto'
 // writes). The standard 20-agent ceiling is lifted only for this route.
 export async function narutoCommand(commandOrArgs: string | string[] = 'naruto', maybeArgs: string[] = []) {
   const args = Array.isArray(commandOrArgs) ? commandOrArgs : maybeArgs
-  // 4.0.9: `sks naruto --glm` delegates to GLM Naruto before legacy Naruto starts.
+  // Normal Naruto is a GPT-5.6-family-only route. Keep the historical GLM
+  // implementation reachable only through the explicitly separate
+  // `sks --mad --glm --naruto` global mode; a command-local --glm flag must
+  // never bypass the Luna/Terra/Sol catalog and backend guards below.
   if (args.includes('--glm')) {
-    const { glmNarutoCommand } = await import('../providers/glm/naruto/glm-naruto-command.js')
-    return glmNarutoCommand(args.filter((arg) => arg !== '--glm'))
+    const result = {
+      schema: 'sks.naruto-command-result.v1',
+      ok: false,
+      mode: 'NARUTO',
+      status: 'blocked',
+      reason: 'naruto_gpt_5_6_family_only_glm_override_forbidden',
+      blockers: ['naruto_gpt_5_6_family_only_glm_override_forbidden'],
+      hint: 'Use normal sks naruto for Luna/Terra/Sol. The separate legacy GLM route requires: sks --mad --glm --naruto.'
+    }
+    process.exitCode = 1
+    if (args.includes('--json')) console.log(JSON.stringify(result, null, 2))
+    else console.error(`$Naruto blocked: ${result.reason}. ${result.hint}`)
+    return result
   }
   const parsed = parseNarutoArgs(args)
   if (!parsed.json) cliUi.banner(parsed.action === 'run' ? 'swarm' : `naruto ${parsed.action}`)
@@ -79,14 +93,23 @@ async function narutoRun(parsed: NarutoArgs) {
   const root = await sksRoot()
   const writeCapable = parsed.readonly !== true && parsed.writeMode !== 'off'
   const patchEnvelopeBasePath = '.sneakoscope/naruto/patch-envelopes'
-  const explicitPromptPaths = writeCapable ? extractNarutoPromptPaths(parsed.prompt) : []
-  const targetPaths = explicitPromptPaths.length ? explicitPromptPaths : [patchEnvelopeBasePath]
+  const explicitPromptPaths = extractNarutoPromptPaths(parsed.prompt)
+  // Keep an empty target list when the prompt does not name a concrete file.
+  // buildNarutoWorkGraph then derives one patch-envelope path per work item;
+  // passing the base directory as a target would collapse every write lease
+  // onto the same path and force an avoidable serial merge bottleneck.
+  const targetPaths = writeCapable ? explicitPromptPaths : []
+  const readonlyPaths = writeCapable ? [] : explicitPromptPaths
+  const fixtureLeaseTargetsAllowed = parsed.backend === 'fake' || parsed.mock
   const placeholderGuard = checkPromptPlaceholders({
     prompt: parsed.prompt,
     writeCapable,
-    targetPaths: writeCapable ? targetPaths : []
+    targetPaths: writeCapable
+      ? (targetPaths.length ? targetPaths : fixtureLeaseTargetsAllowed ? [patchEnvelopeBasePath] : [])
+      : []
   })
   if (!placeholderGuard.ok) {
+    process.exitCode = 1
     return emit(parsed, {
       schema: NARUTO_RESULT_SCHEMA,
       ok: false,
@@ -94,7 +117,10 @@ async function narutoRun(parsed: NarutoArgs) {
       action: 'run',
       status: 'blocked',
       prompt_placeholder_guard: placeholderGuard,
-      blockers: placeholderGuard.blockers
+      blockers: placeholderGuard.blockers,
+      hint: placeholderGuard.blockers.includes('write_capable_prompt_target_paths_empty')
+        ? 'Name the target source path(s), or run Naruto read-only discovery before starting a write-capable worker swarm.'
+        : null
     }, () => {
       console.log('$Naruto blocked before work graph creation: unresolved prompt placeholder or empty write target path.')
       for (const blocker of placeholderGuard.blockers) console.log('- ' + blocker)
@@ -132,7 +158,7 @@ async function narutoRun(parsed: NarutoArgs) {
   // system-safe number so naruto never spawns the whole count at once unless an
   // explicit operator override asks for a higher target.
   const localWorker = await resolveNarutoLocalWorkerMode(parsed)
-  const schedulerBackend = localWorker.auto_select_eligible ? 'local-llm' : parsed.backend
+  const schedulerBackend = parsed.backend
   const safe = systemSafeNarutoConcurrency({ backend: schedulerBackend })
   const baseWorkGraph = buildNarutoWorkGraph({
     prompt: parsed.prompt,
@@ -142,6 +168,7 @@ async function narutoRun(parsed: NarutoArgs) {
     readonly: parsed.readonly,
     writeCapable,
     targetPaths,
+    readonlyPaths,
     leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap,
     worktreePolicy,
@@ -158,6 +185,7 @@ async function narutoRun(parsed: NarutoArgs) {
     readonly: parsed.readonly,
     writeCapable,
     targetPaths,
+    readonlyPaths,
     leaseBasePath: patchEnvelopeBasePath,
     maxActiveWorkers: parsed.concurrency || safe.cap,
     worktreePolicy,
@@ -1223,7 +1251,7 @@ async function resolveNarutoLocalWorkerMode(parsed: NarutoArgs) {
     description: parsed.prompt,
     write_paths: parsed.readonly ? [] : ['<lease-scoped-worker-path>']
   }, { route: NARUTO_ROUTE, agent: { role: parsed.readonly ? 'collector' : 'implementer' } })
-  const autoSelectEligible = parsed.backend === 'codex-sdk'
+  const localAutoSelectCandidate = parsed.backend === 'codex-sdk'
     && parsed.backendExplicit !== true
     && parsed.noOllama !== true
     && config?.ok === true
@@ -1236,13 +1264,14 @@ async function resolveNarutoLocalWorkerMode(parsed: NarutoArgs) {
     model: config?.model || null,
     requested_backend: parsed.backend,
     backend_explicit: parsed.backendExplicit,
-    auto_select_eligible: autoSelectEligible,
+    auto_select_eligible: false,
     worker_only: true,
     no_strategy_planning_design: true,
     policy,
     blockers: [
       ...(config?.blockers || (config ? [] : ['ollama_worker_config_unavailable'])),
       ...(policy.blockers || []),
+      ...(localAutoSelectCandidate ? ['naruto_gpt_5_6_family_only_local_auto_select_forbidden'] : []),
       ...(parsed.backendExplicit ? ['backend_explicit'] : []),
       ...(parsed.noOllama ? ['no_ollama_requested'] : [])
     ]

@@ -15,7 +15,9 @@ interface LegacyAllowlist {
 
 const gates = (readJson('release-gates.v2.json').gates || []) as ReleaseGate[];
 const migration = readText('docs/sks-4-migration.md');
-const allowlist = parseAllowlist(migration);
+const currentVersion = String(readJson('package.json').version || '');
+assertGate(/^\d+\.\d+\.\d+(?:[-+].*)?$/.test(currentVersion), 'package version must be valid before evaluating legacy allowlist expiry', { currentVersion });
+const allowlist = parseAllowlist(migration, currentVersion);
 const legacy = gates
   .filter((gate) => gate.preset?.includes('release'))
   .filter((gate) => removableLegacy(gate.id, gate.command))
@@ -35,7 +37,7 @@ function removableLegacy(id: string, command: string): boolean {
     || /codex-0139/.test(command);
 }
 
-function parseAllowlist(text: string): LegacyAllowlist[] {
+function parseAllowlist(text: string, currentVersion: string): LegacyAllowlist[] {
   return [...text.matchAll(/<!--\s*sks-legacy-allowlist\s*([\s\S]*?)-->/g)].map((match) => {
     const body = match[1] || '';
     return {
@@ -44,7 +46,7 @@ function parseAllowlist(text: string): LegacyAllowlist[] {
       owner: field(body, 'owner'),
       expires: field(body, 'expires')
     };
-  }).filter((row) => row.id && row.reason && row.owner && compareVersion(row.expires, '4.0.2') > 0);
+  }).filter((row) => row.id && row.reason && row.owner && compareVersion(row.expires, currentVersion) > 0);
 }
 
 function isAllowed(id: string, allowlist: LegacyAllowlist[]): boolean {
@@ -56,8 +58,8 @@ function field(body: string, name: string): string {
 }
 
 function compareVersion(a: string, b: string): number {
-  const left = a.split('.').map(Number);
-  const right = b.split('.').map(Number);
+  const left = (a.split(/[+-]/, 1)[0] || '').split('.').map(Number);
+  const right = (b.split(/[+-]/, 1)[0] || '').split('.').map(Number);
   for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
     const delta = (left[i] || 0) - (right[i] || 0);
     if (delta !== 0) return delta;

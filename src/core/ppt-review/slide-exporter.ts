@@ -5,6 +5,7 @@ import { sha256File, imageDimensions } from '../wiki-image/image-hash.js';
 
 export const PPT_DECK_INVENTORY_ARTIFACT = 'ppt-deck-inventory.json';
 export const PPT_SLIDE_EXPORT_LEDGER_ARTIFACT = 'ppt-slide-export-ledger.json';
+const MAX_MOCK_SLIDE_EXPORTS = 256;
 
 export function splitList(value: any = '') {
   if (Array.isArray(value)) return value.map((item: any) => String(item || '').trim()).filter(Boolean);
@@ -77,20 +78,26 @@ export async function exportSlidesToImages({ root, dir, deckPath = null, deckInv
     });
   }
   if (mock && exportedSlides.length === 0) {
-    const fixture = await writeFixturePng(dir, 'slide-1.png');
-    const rel = path.relative(root, fixture).split(path.sep).join('/');
-    exportedSlides.push({
-      slide_id: 'slide-1',
-      slide_index: 1,
-      image_path: rel,
-      sha256: await sha256File(fixture),
-      width: 1,
-      height: 1,
-      format: 'png',
-      fidelity: 'mock_fixture_one_by_one_png',
-      source: deckPath ? 'fake_export' : 'mock_fixture',
-      local_only: true
-    });
+    const inventorySlideCount = Number(inventory?.slide_count);
+    const requestedMockSlides = Number.isInteger(inventorySlideCount) && inventorySlideCount > 0 ? inventorySlideCount : 1;
+    const mockSlideCount = Math.min(MAX_MOCK_SLIDE_EXPORTS, requestedMockSlides);
+    if (requestedMockSlides > MAX_MOCK_SLIDE_EXPORTS) blockers.push('mock_slide_export_limit_exceeded');
+    for (let index = 0; index < mockSlideCount; index += 1) {
+      const fixture = await writeFixturePng(dir, `slide-${index + 1}.png`);
+      const rel = path.relative(root, fixture).split(path.sep).join('/');
+      exportedSlides.push({
+        slide_id: `slide-${index + 1}`,
+        slide_index: index + 1,
+        image_path: rel,
+        sha256: await sha256File(fixture),
+        width: 1,
+        height: 1,
+        format: 'png',
+        fidelity: 'mock_fixture_one_by_one_png',
+        source: deckPath ? 'fake_export' : 'mock_fixture',
+        local_only: true
+      });
+    }
   }
   const exportAdapter = manualImages.length ? 'manual_slide_image_attach' : mock ? (deckPath ? 'fake_export' : 'mock_fixture') : await detectSlideExportAdapter();
   if (!manualImages.length && !mock && inventory?.passed === true) {
@@ -100,8 +107,7 @@ export async function exportSlidesToImages({ root, dir, deckPath = null, deckInv
   }
   const deckSlideCount = Number(inventory?.slide_count || 0);
   if (manualImages.length === 0 && !mock && exportedSlides.length === 0) blockers.push('slide_export_unavailable');
-  if (manualImages.length > 0 && deckSlideCount > 0 && exportedSlides.length < deckSlideCount) blockers.push('partial_export');
-  if (manualImages.length === 0 && !mock && deckSlideCount > 0 && exportedSlides.length > 0 && exportedSlides.length < deckSlideCount) blockers.push('partial_export');
+  if (deckSlideCount > 0 && exportedSlides.length < deckSlideCount) blockers.push('partial_export');
   if (inventory?.passed !== true) blockers.push(...(inventory?.blockers || []));
   const exportLedger = {
     schema: 'sks.ppt-slide-export-ledger.v1',

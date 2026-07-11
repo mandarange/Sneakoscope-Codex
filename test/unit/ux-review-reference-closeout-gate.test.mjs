@@ -68,6 +68,7 @@ test('completion proof accepts Image UX reference-only partial closeout with act
     generated_at: new Date().toISOString(),
     mission_id: missionId,
     route: '$Image-UX-Review',
+    execution_class: 'real',
     status: 'verified_partial',
     summary: {
       files_changed: 0,
@@ -101,6 +102,12 @@ test('completion proof accepts Image UX reference-only partial closeout with act
     claims: [],
     unverified: ['Generated annotated review image is missing; closeout is reference-only.'],
     blockers: [],
+    failure_analysis: {
+      status: 'complete',
+      root_cause: 'The fixture intentionally has no generated gpt-image-2 annotated review output.',
+      corrective_action: 'Cap the result at reference-only verified_partial and retain the missing generated-image fact.',
+      evidence: ['image-ux-screen-inventory.json']
+    },
     next_human_actions: []
   }, null, 2));
 

@@ -13,9 +13,11 @@ test('model mode resolves MAD without GLM as GPT/MAD preserved', () => {
 test('model mode resolves explicit GLM routes only from --glm', () => {
   assert.equal(resolveSksModelMode(['--mad', '--glm']).mode, 'glm-direct');
   assert.equal(resolveSksModelMode(['--mad', '--glm', '--naruto']).mode, 'glm-naruto');
-  assert.equal(resolveSksModelMode(['naruto', '--glm']).mode, 'glm-naruto');
+  assert.equal(resolveSksModelMode(['naruto', '--glm']).mode, 'classic-naruto');
+  assert.equal(resolveSksModelMode(['naruto', '--glm']).glm_enabled, false);
+  assert.equal(resolveSksModelMode(['naruto', '--glm']).reason, 'naruto_command_glm_override_forbidden');
   assert.equal(resolveSksModelMode(['naruto']).mode, 'classic-naruto');
-  assert.doesNotThrow(() => assertGlmRoute(['sks', 'naruto', '--glm']));
+  assert.throws(() => assertGlmRoute(['sks', 'naruto', '--glm']), /sks_glm_route_required/);
 });
 
 test('saved OpenRouter environment cannot change non-GLM MAD mode', () => {

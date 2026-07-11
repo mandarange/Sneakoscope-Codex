@@ -64,7 +64,8 @@ test('retention preserves durable old mission proof while compacting disposable 
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-old-unit-'));
   await writeJson(path.join(root, '.sneakoscope', 'state', 'current.json'), { mission_id: 'M-active' });
   const oldMission = path.join(root, '.sneakoscope', 'missions', 'M-old');
-  await writeJson(path.join(oldMission, 'completion-proof.json'), { status: 'verified', blockers: [] });
+  const originalCompletion = { schema: 'fixture.completion.v1', status: 'verified', blockers: [], payload: 'proof'.repeat(12000) };
+  await writeJson(path.join(oldMission, 'completion-proof.json'), originalCompletion);
   await writeJson(path.join(oldMission, 'trust-report.json'), { status: 'verified' });
   await writeJson(path.join(oldMission, 'evidence-index.json'), { evidence: [] });
   await writeText(path.join(oldMission, 'reflection.md'), 'old reflection');
@@ -75,14 +76,31 @@ test('retention preserves durable old mission proof while compacting disposable 
 
   const result = await enforceRetention(root, { policy: { max_tmp_age_hours: 999, max_mission_age_days: 0, max_missions: 999 } });
   assert.ok(result.actions.some((row) => row.action === 'retain_mission_durable_context' && row.mission === 'M-old'));
-  assert.ok(result.actions.some((row) => row.action === 'remove_old_mission_workdir' && row.rel === 'agents/sessions'));
+  assert.ok(result.actions.some((row) => row.action === 'compact_old_mission_context' && row.mission === 'M-old'));
   await assertExists(path.join(oldMission, 'completion-proof.json'));
+  await assertMissing(path.join(oldMission, 'completion-proof.json.gz'));
+  const retainedCompletion = JSON.parse(await fs.readFile(path.join(oldMission, 'completion-proof.json'), 'utf8'));
+  assert.deepEqual(retainedCompletion, originalCompletion);
   await assertExists(path.join(oldMission, 'trust-report.json'));
   await assertExists(path.join(oldMission, 'evidence-index.json'));
   await assertExists(path.join(oldMission, 'reflection.md'));
+  await assertExists(path.join(oldMission, 'retention-archive-manifest.json'));
   await assertMissing(path.join(oldMission, 'team-inbox', 'worker.md'));
   await assertMissing(path.join(oldMission, 'scout.stdout.log'));
   await assertMissing(path.join(oldMission, 'agents', 'sessions', 'session-1', 'gen-1', 'worker', 'codex-sdk-home', 'codex', 'cache.bin'));
+});
+
+test('retention budget treats an explicit zero total limit as unlimited consistently', async () => {
+  const { runRetentionBudget } = await import('../../dist/core/retention/retention-budget.js');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-unlimited-budget-'));
+  await writeJson(path.join(root, '.sneakoscope', 'policy.json'), { retention: { max_sneakoscope_bytes: 0 } });
+  await writeText(path.join(root, '.sneakoscope', 'memory', 'durable.bin'), 'durable proof');
+  const report = await runRetentionBudget(root);
+  const total = report.budgets.find((row) => row.path === '.sneakoscope');
+  assert.equal(total.max_bytes, 0);
+  assert.equal(total.ok, true);
+  assert.equal(report.ok, true);
+  await fs.rm(root, { recursive: true, force: true });
 });
 
 test('post-route cleanup does not compact blocked active mission diagnostics', async () => {

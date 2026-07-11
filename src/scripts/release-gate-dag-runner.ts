@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { runReleaseGateDag } from '../core/release/release-gate-dag.js'
+import { runReleaseGateDag, type ReleaseGateDagRunResult } from '../core/release/release-gate-dag.js'
 import { ensureDistFresh } from './lib/ensure-dist-fresh.js'
 import { ensureCurrentMigrationBeforeCommand } from '../core/update/update-migration-state.js'
 
@@ -30,22 +30,28 @@ const presetIndex = args.indexOf('--preset')
 const preset = presetIndex >= 0 ? args[presetIndex + 1] : 'release'
 const gateIndex = args.indexOf('--gate')
 const gate = gateIndex >= 0 ? args[gateIndex + 1] : null
+if (gateIndex >= 0 && (!gate || gate.startsWith('--'))) failRunner('release_gate_only_selection_id_missing')
 const changedSinceIndex = args.indexOf('--changed-since')
 const changedSince = changedSinceIndex >= 0 ? (args[changedSinceIndex + 1] || null) : null
 const slaIndex = args.indexOf('--sla')
 const slaMs = slaIndex >= 0 ? parseDurationMs(args[slaIndex + 1] || '') : null
 
-const result = await runReleaseGateDag({
-  root,
-  ...(gate ? { onlyGateIds: [gate] } : preset === undefined ? {} : { preset }),
-  changedSince,
-  slaMs,
-  full: args.includes('--full'),
-  explain: args.includes('--explain'),
-  noCache: args.includes('--no-cache'),
-  failFast: args.includes('--fail-fast'),
-  useGatePacks: args.includes('--use-gate-packs')
-})
+let result: ReleaseGateDagRunResult
+try {
+  result = await runReleaseGateDag({
+    root,
+    ...(gate ? { onlyGateIds: [gate] } : preset === undefined ? {} : { preset }),
+    changedSince,
+    slaMs,
+    full: args.includes('--full'),
+    explain: args.includes('--explain'),
+    noCache: args.includes('--no-cache'),
+    failFast: args.includes('--fail-fast'),
+    useGatePacks: args.includes('--use-gate-packs')
+  })
+} catch (error) {
+  failRunner(error instanceof Error ? error.message : String(error || 'release_gate_dag_failed'))
+}
 
 console.log(`SKS Release DAG
   gates: ${result.total_gates} total, ${result.selected_gates} selected, ${result.cached} cached
@@ -79,6 +85,12 @@ if (!result.ok) {
   for (const failure of result.failures) {
     console.error(`[fail] ${failure.id} exit=${failure.exit_code}\n${failure.stderr_tail}`)
   }
+  process.exit(1)
+}
+
+function failRunner(blocker: string): never {
+  console.error(`SKS Release DAG blocked: ${blocker}`)
+  console.log(JSON.stringify({ schema: 'sks.gate-result.v1', ok: false, blockers: [blocker] }))
   process.exit(1)
 }
 

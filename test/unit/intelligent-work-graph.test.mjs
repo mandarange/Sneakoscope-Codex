@@ -26,3 +26,39 @@ test('intelligent work graph computes ownership, critical path, and score', asyn
   assert.ok(graph.critical_path.length >= 2);
   assert.ok(graph.work_graph_quality_score > 0);
 });
+
+test('repo inventory keeps representative roots ahead of large hidden caches', async (t) => {
+  const { collectRepoInventory } = await import('../../dist/core/agents/work-partition/repo-inventory.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-repo-inventory-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const files = {
+    'src/a.ts': 'export const a = 1;\n',
+    'test/a.test.mjs': 'export {};\n',
+    'docs/guide.md': '# guide\n',
+    'schemas/a.schema.json': '{}\n',
+    'scripts/tool.js': 'export {};\n',
+    'crates/core/src/lib.rs': 'pub fn a() {}\n',
+    'bin/tool.ts': 'export {};\n',
+    '.domain/feature.ts': 'export const feature = true;\n',
+    'package.json': '{"name":"fixture"}\n',
+    'README.md': '# fixture\n'
+  };
+  for (const [file, content] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), content);
+  }
+  for (const cacheRoot of ['.claude/worktrees/cache', '.cache/generated']) {
+    fs.mkdirSync(path.join(root, cacheRoot), { recursive: true });
+    for (let index = 0; index < 50; index += 1) fs.writeFileSync(path.join(root, cacheRoot, `${String(index).padStart(3, '0')}.txt`), 'noise\n');
+  }
+
+  const first = await collectRepoInventory(root, { maxFiles: 10 });
+  const second = await collectRepoInventory(root, { maxFiles: 10 });
+  assert.deepEqual(first.files, second.files);
+  assert.deepEqual(first.files.slice(0, 3), ['src/a.ts', 'test/a.test.mjs', 'docs/guide.md']);
+  assert.ok(first.source_files.includes('src/a.ts'));
+  assert.ok(first.tests.includes('test/a.test.mjs'));
+  assert.ok(first.docs.includes('docs/guide.md'));
+  assert.ok(first.files.includes('.domain/feature.ts'));
+  assert.equal(first.files.some((file) => file.startsWith('.claude/') || file.startsWith('.cache/')), false);
+});

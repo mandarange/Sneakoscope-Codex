@@ -18,23 +18,16 @@ await fs.mkdir(path.join(tmp, '.codex', 'agents'), { recursive: true })
 await fs.mkdir(path.join(codexHome, 'agents'), { recursive: true })
 
 const staleConfig = [
-  'model = "gpt-5.5"',
+  '# SKS managed Codex config fixture',
+  'model = "gpt-5.6-terra"',
   '',
   '[agents.analysis_scout]',
   'description = "Read-only SKS scout."',
   'config_file = "/Users/alfredo/.codex/agents/analysis-scout.toml"',
   'nickname_candidates = ["Scout", "Mapper"]',
   '',
-  '[agents.analysis_scout]',
-  'description = "SKS scout with bounded write capability."',
-  'config_file = "./agents/analysis-scout.toml"',
-  'nickname_candidates = ["Scout", "Mapper"]',
-  '',
   '[mcp_servers.context7]',
   'url = "https://custom.context7.example/mcp"',
-  '',
-  '[mcp_servers.context7]',
-  'url = "https://mcp.context7.com/mcp"',
   '',
   '[mcp_servers.node_repl]',
   'command = "/definitely/missing/node_repl"',
@@ -98,7 +91,39 @@ assertGate(repaired.ok === true, 'startup repair must pass when only optional sa
 assertGate(repaired.configs.every((entry) => entry.changed === true && entry.backup_path), 'startup repair must back up changed configs', repaired)
 assertGate(repaired.agent_role_files.created.length >= 10, 'startup repair must create missing project/global role configs', repaired)
 assertGate(repaired.configs.every((entry) => !entry.warnings.some((warning) => warning.includes('agent_config_file_stale'))), 'startup repair must not keep stale agent config warnings after repair', repaired)
-assertGate(repaired.configs.every((entry) => entry.duplicate_toml_blocks_removed.includes('agents.analysis_scout') && entry.duplicate_toml_blocks_removed.includes('mcp_servers.context7')), 'startup repair must record duplicate managed/external table dedupe without rewriting preserved MCP values', repaired)
+assertGate(repaired.configs.every((entry) => entry.duplicate_toml_blocks_removed.length === 0), 'valid startup repair fixture must not claim duplicate-invalid TOML repair', repaired)
+
+const tmpInvalid = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-startup-invalid-'))
+const codexHomeInvalid = path.join(tmpInvalid, 'codex-home')
+await fs.mkdir(path.join(tmpInvalid, '.codex'), { recursive: true })
+await fs.mkdir(codexHomeInvalid, { recursive: true })
+const duplicateInvalidConfig = [
+  '# SKS managed Codex config fixture',
+  '[agents.analysis_scout]',
+  'description = "Read-only SKS scout."',
+  'config_file = "/Users/alfredo/.codex/agents/analysis-scout.toml"',
+  '',
+  '[agents.analysis_scout]',
+  'description = "SKS scout with bounded write capability."',
+  'config_file = "./agents/analysis-scout.toml"',
+  ''
+].join('\n')
+const invalidConfigPath = path.join(tmpInvalid, '.codex', 'config.toml')
+await writeTextAtomic(invalidConfigPath, duplicateInvalidConfig)
+const invalidRepair = await mod.runDoctorCodexStartupRepair({
+  root: tmpInvalid,
+  codexHome: codexHomeInvalid,
+  fix: true,
+  includeDefaultNodeReplCandidates: false
+})
+const invalidEntry = invalidRepair.configs.find((entry) => entry.scope === 'project')
+const invalidAfter = await fs.readFile(invalidConfigPath, 'utf8')
+assertGate(invalidRepair.ok === false, 'duplicate-invalid TOML must fail closed instead of being reported repaired', invalidRepair)
+assertGate(invalidAfter === duplicateInvalidConfig, 'duplicate-invalid TOML must remain byte-for-byte unchanged', { before: duplicateInvalidConfig, after: invalidAfter })
+assertGate(invalidEntry?.changed === false, 'guarded refusal must not report the invalid config as changed', invalidEntry)
+assertGate(Boolean(invalidEntry?.backup_path), 'guarded refusal must back up duplicate-invalid TOML', invalidEntry)
+assertGate(invalidEntry?.blockers.includes('config_write_guard:unparseable_config_preserved'), 'guarded refusal status must be a startup repair blocker', invalidEntry)
+assertGate(invalidEntry?.duplicate_toml_blocks_removed.length === 0, 'guarded refusal must not claim duplicate table removal', invalidEntry)
 
 const tmpCandidate = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-startup-node-repl-'))
 const codexHomeCandidate = path.join(tmpCandidate, 'codex-home')
@@ -108,6 +133,7 @@ await writeTextAtomic(fakeNodeRepl, '#!/bin/sh\n')
 await fs.mkdir(path.join(tmpCandidate, '.codex'), { recursive: true })
 await fs.mkdir(codexHomeCandidate, { recursive: true })
 const missingNodeReplConfig = [
+  '# SKS managed Codex config fixture',
   '[mcp_servers.node_repl]',
   'command = "/definitely/missing/node_repl"',
   'args = []',

@@ -107,6 +107,29 @@ test('validateCodePack reports entries with no citations and token budget overru
   assert.ok(result.issues.some((issue) => issue.includes('exceeds token_budget')));
 });
 
+test('buildCodePack enforces its token budget instead of emitting an invalid oversized pack', async () => {
+  const root = makeFixtureRoot();
+  fs.mkdirSync(path.join(root, 'src', 'b'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src', 'b', 'index.ts'), 'export const CONST_B = 2;\n');
+  const index = makeFixtureIndex(root);
+  index.modules.push({
+    module_id: 'b',
+    paths: ['src/b'],
+    entry_points: ['src/b/index.ts'],
+    exports_summary: ['export const CONST_B = 2;'],
+    dependency_edges: [],
+    file_count: 1,
+    loc: 1,
+    risk: 'low'
+  });
+  const full = buildCodePack(root, index, 10_000);
+  const budget = full.entries[0]!.token_cost;
+  const bounded = buildCodePack(root, index, budget);
+  assert.equal(bounded.entries.length, 1);
+  assert.ok(bounded.total_token_cost <= bounded.token_budget);
+  assert.equal((await validateCodePack(bounded, root)).ok, true);
+});
+
 test('writeCodePackAtomic preserves the previous pack as code-pack.prev.json on second write', async () => {
   const root = makeFixtureRoot();
   const index = makeFixtureIndex(root);

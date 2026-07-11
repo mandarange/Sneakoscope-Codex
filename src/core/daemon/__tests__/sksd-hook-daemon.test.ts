@@ -1,22 +1,31 @@
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { callSksdHookDaemon, sksdSocketPath, startSksdHookDaemon } from '../sksd-hook-daemon.js';
 
-async function tempRoot() {
-  return fsp.mkdtemp(path.join(os.tmpdir(), 'sksd-hook-test-'));
+async function tempRoot(t: TestContext) {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sksd-hook-test-'));
+  const socketPath = sksdSocketPath(root);
+  const pidFilePath = socketPath.replace(/\.sock$/, '.pid.json');
+  t.after(async () => {
+    await fsp.rm(socketPath, { force: true }).catch(() => undefined);
+    await fsp.rm(pidFilePath, { force: true }).catch(() => undefined);
+    await fsp.rm(root, { recursive: true, force: true });
+    await fsp.rmdir(path.dirname(socketPath)).catch(() => undefined);
+  });
+  return root;
 }
 
-test('callSksdHookDaemon: returns null (fail open) when no daemon is listening', async () => {
-  const root = await tempRoot();
+test('callSksdHookDaemon: returns null (fail open) when no daemon is listening', async (t) => {
+  const root = await tempRoot(t);
   const response = await callSksdHookDaemon(root, 'pre-tool', { cwd: root });
   assert.equal(response, null);
 });
 
-test('sksd hook daemon: real socket round-trip returns the handler result', async () => {
-  const root = await tempRoot();
+test('sksd hook daemon: real socket round-trip returns the handler result', async (t) => {
+  const root = await tempRoot(t);
   const calls: Array<{ name: string; payload: unknown }> = [];
   const daemon = await startSksdHookDaemon(root, async (name, payload) => {
     calls.push({ name, payload });
@@ -35,8 +44,8 @@ test('sksd hook daemon: real socket round-trip returns the handler result', asyn
   }
 });
 
-test('sksd hook daemon: multiple sequential requests over the same warm daemon', async () => {
-  const root = await tempRoot();
+test('sksd hook daemon: multiple sequential requests over the same warm daemon', async (t) => {
+  const root = await tempRoot(t);
   let count = 0;
   const daemon = await startSksdHookDaemon(root, async () => {
     count += 1;
@@ -53,8 +62,8 @@ test('sksd hook daemon: multiple sequential requests over the same warm daemon',
   }
 });
 
-test('sksd hook daemon: a second startSksdHookDaemon for the same root is a no-op while the first is alive', async () => {
-  const root = await tempRoot();
+test('sksd hook daemon: a second startSksdHookDaemon for the same root is a no-op while the first is alive', async (t) => {
+  const root = await tempRoot(t);
   const first = await startSksdHookDaemon(root, async () => ({ continue: true, who: 'first' }));
   assert.ok(first);
   try {
@@ -67,8 +76,8 @@ test('sksd hook daemon: a second startSksdHookDaemon for the same root is a no-o
   }
 });
 
-test('callSksdHookDaemon: a stale socket file with nothing listening fails open, not hangs', async () => {
-  const root = await tempRoot();
+test('callSksdHookDaemon: a stale socket file with nothing listening fails open, not hangs', async (t) => {
+  const root = await tempRoot(t);
   const socketPath = sksdSocketPath(root);
   await fsp.mkdir(path.dirname(socketPath), { recursive: true });
   // A leftover socket path with no listener behind it (simulating a daemon
@@ -82,8 +91,21 @@ test('callSksdHookDaemon: a stale socket file with nothing listening fails open,
   await fsp.rm(socketPath, { force: true });
 });
 
-test('sksd hook daemon: after close(), a fresh daemon can start again for the same root', async () => {
-  const root = await tempRoot();
+test('callSksdHookDaemon: refuses a symlinked socket path without touching its target', async (t) => {
+  const root = await tempRoot(t);
+  const socketPath = sksdSocketPath(root);
+  const victim = path.join(root, 'socket-victim.txt');
+  await fsp.mkdir(path.dirname(socketPath), { recursive: true, mode: 0o700 });
+  await fsp.writeFile(victim, 'preserve\n');
+  await fsp.symlink(victim, socketPath);
+
+  assert.equal(await callSksdHookDaemon(root, 'pre-tool', {}), null);
+  assert.equal(await fsp.readFile(victim, 'utf8'), 'preserve\n');
+  assert.equal((await fsp.lstat(socketPath)).isSymbolicLink(), true);
+});
+
+test('sksd hook daemon: after close(), a fresh daemon can start again for the same root', async (t) => {
+  const root = await tempRoot(t);
   const first = await startSksdHookDaemon(root, async () => ({ continue: true, who: 'first' }));
   assert.ok(first);
   await first!.close();
@@ -95,4 +117,55 @@ test('sksd hook daemon: after close(), a fresh daemon can start again for the sa
   } finally {
     await second!.close();
   }
+});
+
+test('sksd hook daemon: long hermetic TMPDIR still uses a short private socket path and cleans endpoints', async (t) => {
+  const outer = await fsp.mkdtemp(path.join(os.tmpdir(), 'sksd-long-tmp-'));
+  const longTmp = path.join(outer, ...Array.from({ length: 6 }, (_, index) => `nested-${index}-${'x'.repeat(32)}`));
+  await fsp.mkdir(longTmp, { recursive: true });
+  t.after(() => fsp.rm(outer, { recursive: true, force: true }));
+  const previousTmpdir = process.env.TMPDIR;
+  process.env.TMPDIR = longTmp;
+  try {
+    const root = await tempRoot(t);
+    const socketPath = sksdSocketPath(root);
+    const pidFilePath = socketPath.replace(/\.sock$/, '.pid.json');
+    assert.ok(Buffer.byteLength(socketPath) < 100, `socket path is too long: ${socketPath}`);
+    assert.equal(socketPath.startsWith(longTmp), false);
+
+    const daemon = await startSksdHookDaemon(root, async () => ({ continue: true }));
+    assert.ok(daemon);
+    try {
+      const response = await callSksdHookDaemon(root, 'pre-tool', {});
+      assert.deepEqual(response?.result, { continue: true });
+      assert.equal((await fsp.lstat(path.dirname(socketPath))).mode & 0o777, 0o700);
+      assert.equal((await fsp.lstat(socketPath)).mode & 0o777, 0o600);
+      assert.equal((await fsp.lstat(pidFilePath)).mode & 0o777, 0o600);
+    } finally {
+      await daemon!.close();
+    }
+    assert.equal(await fsp.access(socketPath).then(() => true, () => false), false);
+    assert.equal(await fsp.access(pidFilePath).then(() => true, () => false), false);
+  } finally {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+  }
+});
+
+test('sksd hook daemon: refuses a symlinked PID claim without touching its target', async (t) => {
+  const root = await tempRoot(t);
+  const socketPath = sksdSocketPath(root);
+  const pidFilePath = socketPath.replace(/\.sock$/, '.pid.json');
+  const victim = path.join(root, 'victim.json');
+  const original = '{"preserve":true}\n';
+  await fsp.mkdir(path.dirname(pidFilePath), { recursive: true, mode: 0o700 });
+  await fsp.writeFile(victim, original);
+  await fsp.symlink(victim, pidFilePath);
+
+  await assert.rejects(
+    startSksdHookDaemon(root, async () => ({ continue: true })),
+    /unsafe_sksd_pid_file/
+  );
+  assert.equal(await fsp.readFile(victim, 'utf8'), original);
+  assert.equal((await fsp.lstat(pidFilePath)).isSymbolicLink(), true);
 });

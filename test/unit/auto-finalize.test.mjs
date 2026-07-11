@@ -38,5 +38,7 @@ test('maybeFinalizeRoute records native agent fixture artifacts without legacy f
 
   const trust = await latestTrustReport(root, missionId);
   assert.equal(trust.issues.some((issue) => issue.includes('legacy-agent-engine-unavailable.json')), false);
-  assert.equal(trust.status, 'verified_partial');
+  assert.equal(trust.status, 'blocked');
+  assert.equal(trust.ok, false);
+  assert.ok(trust.blockers.includes('agent_gate_not_passed'));
 });

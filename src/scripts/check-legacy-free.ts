@@ -24,7 +24,7 @@ for (const file of await listFiles(path.join(root, 'src'))) {
 const bin = await read('src/bin/sks.ts');
 const main = await read('src/cli/main.ts');
 const router = await read('src/cli/router.ts');
-if (!bin.includes('../cli/main.js')) issues.push('bin_entrypoint');
+if (!bin.includes('./sks-dispatch.js')) issues.push('bin_entrypoint');
 if (!main.includes('./router.js')) issues.push('main_router');
 if (!router.includes('command-registry.js')) issues.push('router_registry');
 if (router.includes(oldMainModule)) issues.push('router_legacy_main');

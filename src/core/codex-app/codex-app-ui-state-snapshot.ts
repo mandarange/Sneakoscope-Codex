@@ -15,7 +15,7 @@ export const PROJECT_LOCAL_FORBIDDEN_CODEX_KEYS = [
 ] as const
 
 const HOST_OWNED_KEY_RE = /^(?:model|model_reasoning_effort|openai_base_url|chatgpt_base_url|apps_mcp_product_sku|model_provider|model_providers(?:\.|$)|notify|profile|profiles(?:\.|$)|experimental_realtime_ws_base_url|otel(?:\.|$)|features\.fast_mode|service_tier|user\.fast_mode(?:\.|$))/
-const SECRET_KEY_RE = /(?:key|token|secret|password|credential|cookie|authorization|bearer|refresh|access)/i
+const SECRET_KEY_RE = /(?:key|token|secret|password|credential|cookie|authorization|auth|bearer|refresh|access|headers?|env)/i
 
 export interface CodexAppConfigSignal {
   key_path: string
@@ -85,7 +85,6 @@ export async function snapshotCodexAppUiState(root: string = process.cwd(), inpu
     if (signal.key_path === 'features.fast_mode' && signal.value_preview === 'false') return true
     if (signal.key_path.startsWith('user.fast_mode') && /hidden|fixed|disabled|false/i.test(signal.value_preview)) return true
     if ((signal.key_path === 'model' || signal.key_path === 'model_reasoning_effort') && signal.sks_related) return true
-    if (signal.key_path === 'service_tier' && signal.sks_related) return true
     return false
   })
   return {
@@ -144,6 +143,9 @@ export function scanTomlSignals(text: string): { signals: CodexAppConfigSignal[]
   const tables: string[] = []
   let table: string | null = null
   const lines = text.split(/\r?\n/)
+  const firstTableIndex = lines.findIndex((line) => /^\s*\[/.test(line))
+  const topLevelLines = firstTableIndex === -1 ? lines : lines.slice(0, firstTableIndex)
+  const sksManagedTopLevel = topLevelLines.some((line) => /(?:SKS|Sneakoscope|codex-lb|sks fast)/i.test(line))
   lines.forEach((lineText, index) => {
     const tableMatch = lineText.match(/^\s*\[([^\]]+)\]\s*(?:#.*)?$/)
     if (tableMatch?.[1]) {
@@ -169,6 +171,7 @@ export function scanTomlSignals(text: string): { signals: CodexAppConfigSignal[]
       fast_ui_related: /(?:fast_mode|service_tier|model_reasoning_effort|^model$)/i.test(keyPath) || /(?:fast|priority|default)/i.test(value),
       provider_related: /(?:provider|base_url|auth|profile|openai|chatgpt|codex-lb)/i.test(lowerPath),
       sks_related: /(?:sks|sneakoscope|codex-lb)/i.test(lineText)
+        || (table == null && sksManagedTopLevel && (key === 'model' || key === 'model_reasoning_effort'))
     })
   })
   return { signals, tables: [...new Set(tables)] }
@@ -298,7 +301,10 @@ function hostOwnedFingerprint(snapshot: CodexAppUiStateSnapshot) {
 
 function redactValuePreview(keyPath: string, value: string) {
   if (SECRET_KEY_RE.test(keyPath)) return '<redacted>'
+  if (/^\s*\{/.test(value)) return '<redacted-object>'
+  if (/^\s*\[/.test(value)) return '<redacted-array>'
   const normalized = value.replace(/^['"]|['"]$/g, '')
+  if (/^[a-z][a-z0-9+.-]*:\/\/[^/@\s]+@/i.test(normalized)) return '<redacted-url-credentials>'
   if (SECRET_KEY_RE.test(normalized)) return '<redacted>'
   return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized
 }

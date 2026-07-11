@@ -8,6 +8,7 @@ import { codexLbMetrics, readCodexLbCircuit, recordCodexLbHealthEvent, resetCode
 import { checkCodexLbResponseChain, codexLbStatus, configureCodexLb, formatCodexLbStatusText, releaseCodexLbAuthHold, repairCodexLbAuth, unselectCodexLbProvider } from '../cli/install-helpers.js';
 import { buildCodexLbSetupPlan, codexLbPersistenceSummary, renderCodexLbSetupPlan } from '../core/codex-lb/codex-lb-setup.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
+import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
 
 export async function run(command: any, args: any = []) {
   const root = await projectRoot();
@@ -47,17 +48,21 @@ export async function run(command: any, args: any = []) {
   if (action === 'fast-check' || action === 'fast' || action === 'verify-fast') {
     const status = await codexLbStatus();
     const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : !status.provider_contract_ok ? 'provider_contract_drift' : 'not_configured';
-    const chain = status.env_key_configured && status.base_url
-      ? await checkCodexLbResponseChain(status, { force: true, cache: false, root, fastMode: true })
-      : { ok: false, status: blocker, codex_lb: status };
+    const modelSelection = await resolveCodexLbFastCheckModel(status);
+    const chain = status.env_key_configured && status.base_url && modelSelection.model
+      ? await checkCodexLbResponseChain(status, { force: true, cache: false, root, fastMode: true, model: modelSelection.model })
+      : { ok: false, status: modelSelection.model ? blocker : 'model_unselected', codex_lb: status };
     const evidence = await fastEvidenceFromChain(chain, readOption(args, '--request-log', readOption(args, '--request-log-json', null)));
     const providerReady = status.provider_contract_ok === true;
+    const chainVerified = isCodexLbFastChainVerified(chain);
     const result = {
       schema: 'sks.codex-lb-fast-check.v1',
-      ok: Boolean(providerReady && chain.ok && evidence.fast_requested && evidence.fast_actual),
+      ok: Boolean(providerReady && chainVerified && evidence.fast_requested && evidence.fast_actual),
       status: !providerReady
         ? 'provider_contract_drift'
-        : chain.ok
+        : chain.skipped === true
+          ? 'fast_check_chain_skipped'
+        : chainVerified
         ? evidence.fast_actual
           ? 'fast_verified'
           : evidence.fast_requested
@@ -65,16 +70,20 @@ export async function run(command: any, args: any = []) {
             : 'fast_not_requested'
         : chain.status,
       codex_lb: status,
+      model_selection: modelSelection,
       chain,
       evidence,
       degraded_models: Array.isArray((chain as any).degraded_models) ? (chain as any).degraded_models : [],
       quota_low: Boolean((chain as any).quota_low),
       blockers: [
         ...(providerReady ? [] : ['codex_lb_provider_contract_drift']),
-        ...(chain.ok
+        ...modelSelection.blockers,
+        ...(chain.skipped === true
+          ? ['codex_lb_fast_check_chain_skipped']
+          : chainVerified
           ? evidence.fast_actual
             ? []
-            : ['codex_lb_actual_fast_service_tier_unverified']
+            : [evidence.fast_requested ? 'codex_lb_actual_fast_service_tier_unverified' : 'codex_lb_fast_service_tier_not_requested']
           : [chain.status || blocker])
       ]
     };
@@ -88,9 +97,11 @@ export async function run(command: any, args: any = []) {
   }
   if (action === 'repair' || action === 'resync' || action === 'login') {
     const result = await repairCodexLbAuth();
-    if (flag(args, '--json')) return printJson(result);
-    console.log(`codex-lb repair: ${result.ok ? 'ok' : result.status}`);
-    if (!result.ok) process.exitCode = 1;
+    const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
+    const shaped = { ...result, ok: Boolean(result.ok && fastUi.ok), codex_app_fast_ui: fastUi };
+    if (!shaped.ok) process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(shaped);
+    console.log(`codex-lb repair: ${shaped.ok ? 'ok' : result.ok ? 'fast_ui_repair_failed' : result.status}`);
     return;
   }
   if (action === 'release') {
@@ -113,7 +124,10 @@ export async function run(command: any, args: any = []) {
     const host = status.base_url;
     if (!host) {
       const result = { schema: 'sks.codex-lb-set-key.v1', ok: false, status: 'not_configured' };
-      if (flag(args, '--json')) return printJson(result);
+      if (flag(args, '--json')) {
+        process.exitCode = 1;
+        return printJson(result);
+      }
       console.error('codex-lb is not configured yet. Run: sks codex-lb setup --host <domain> --api-key-stdin');
       process.exitCode = 1;
       return;
@@ -121,35 +135,50 @@ export async function run(command: any, args: any = []) {
     const newKey = await resolveNewApiKey(args);
     if (!newKey) {
       const result = { schema: 'sks.codex-lb-set-key.v1', ok: false, status: 'missing_api_key' };
-      if (flag(args, '--json')) return printJson(result);
+      if (flag(args, '--json')) {
+        process.exitCode = 1;
+        return printJson(result);
+      }
       console.error('No new API key provided. Run: sks codex-lb set-key --api-key-stdin   (or --api-key <key>)');
       process.exitCode = 1;
       return;
     }
     const result = await configureCodexLb({ host, apiKey: newKey, authMode: flag(args, '--preserve-auth') ? 'preserve' : 'codex-lb', forceCodexLbApiKeyAuth: !flag(args, '--preserve-auth') });
-    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok));
-    const output = { ...result, action: 'set-key', restart_app: restart };
+    const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok));
+    const ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false);
+    const output = { ...result, ok, action: 'set-key', codex_app_fast_ui: fastUi, restart_app: restart };
+    if (!ok) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(output);
     console.log(result.ok ? `codex-lb API key updated (${result.base_url || host}).` : `codex-lb key update failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
     if (restart?.status === 'restarted') console.log('Codex App restarted for the new codex-lb auth mode.');
-    if (!result.ok) process.exitCode = 1;
+    if (!ok) process.exitCode = 1;
     return;
   }
   if (action === 'use-codex-lb' || action === 'use-lb') {
     // Switch auth mode -> codex-lb (API key). Re-selects the provider and re-syncs auth.
     const result = await repairCodexLbAuth({ forceCodexLbApiKeyAuth: true, authMode: 'codex-lb', forceFastMode: !flag(args, '--no-fast') });
-    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok));
-    if (flag(args, '--json')) return printJson({ ...result, mode: 'codex-lb', restart_app: restart });
+    const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok));
+    const ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false);
+    const shaped = { ...result, ok, mode: 'codex-lb', codex_app_fast_ui: fastUi, restart_app: restart };
+    if (!ok) process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(shaped);
     console.log(result.ok ? 'Auth mode: codex-lb selected (API key).' : `Switch to codex-lb failed: ${result.status}${result.error ? `: ${result.error}` : ''}`);
     if (restart?.status === 'restarted') console.log('Codex App restarted for codex-lb auth.');
-    if (!result.ok) process.exitCode = 1;
+    if (!ok) process.exitCode = 1;
     return;
   }
   if (action === 'use-oauth' || action === 'use-chatgpt') {
     // Switch auth mode -> ChatGPT OAuth. Restores the saved OAuth login if present.
     const result = await releaseCodexLbAuthHold({ force: flag(args, '--force') });
-    const restart = await maybeRestartCodexAppForAuthSwitch(args, !['no_backup', 'auth_in_use', 'failed'].includes(result.status));
-    if (flag(args, '--json')) return printJson({ ...result, mode: 'oauth', restart_app: restart });
+    const authOk = !['no_backup', 'auth_in_use', 'failed'].includes(result.status);
+    const fastUi = await repairCodexAppFastUiAfterMutation(root, authOk);
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(authOk && fastUi.ok));
+    const ok = Boolean(authOk && fastUi.ok && restart?.ok !== false);
+    const shaped = { ...result, ok, mode: 'oauth', codex_app_fast_ui: fastUi, restart_app: restart };
+    if (!ok) process.exitCode = 1;
+    if (flag(args, '--json')) return printJson(shaped);
     if (result.status === 'no_backup') {
       console.log('No saved ChatGPT OAuth credentials to restore. Switch to OAuth by logging in:');
       console.log('  codex login');
@@ -186,7 +215,10 @@ export async function run(command: any, args: any = []) {
           'Or: sks codex-lb setup --host <domain> --api-key-stdin --yes'
         ]
       };
-      if (flag(args, '--json')) return printJson(result);
+      if (flag(args, '--json')) {
+        process.exitCode = 1;
+        return printJson(result);
+      }
       console.error('codex-lb API key is not configured.');
       console.error('Run:');
       console.error('  sks codex-lb setup');
@@ -197,6 +229,7 @@ export async function run(command: any, args: any = []) {
     }
     if (flag(args, '--plan')) {
       const result = { schema: 'sks.codex-lb-setup-plan-result.v1', ok: plan.blockers.length === 0, plan, writes: false, expected_actions: plan.expected_actions, persistence: plan.persistence };
+      if (!result.ok) process.exitCode = 1;
       if (flag(args, '--json')) return printJson(result);
       process.stdout.write(renderCodexLbSetupPlan(plan));
       if (!result.ok) process.exitCode = 1;
@@ -208,7 +241,10 @@ export async function run(command: any, args: any = []) {
       const confirm = (await ask('Apply this codex-lb setup plan? [y/N] ')).trim();
       if (!/^(y|yes|예|네|응)$/i.test(confirm)) {
         const result = { schema: 'sks.codex-lb-setup.v1', ok: false, status: 'cancelled', plan, applied_actions: [] };
-        if (flag(args, '--json')) return printJson(result);
+        if (flag(args, '--json')) {
+          process.exitCode = 1;
+          return printJson(result);
+        }
         console.log('codex-lb setup cancelled.');
         process.exitCode = 1;
         return;
@@ -262,15 +298,18 @@ export async function run(command: any, args: any = []) {
       apiKeySource: options.apiKeySource,
       allowInsecureHttp: options.allowInsecureLocalhost
     });
-    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok) && !flag(args, '--preserve-auth'));
-    const shaped: any = { schema: 'sks.codex-lb-setup.v1', ...result, api_key: { present: Boolean(options.apiKey), redacted: true }, env_file_chmod: '0600' };
+    const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
+    const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok) && !flag(args, '--preserve-auth'));
+    const shaped: any = { schema: 'sks.codex-lb-setup.v1', ...result, api_key: { present: Boolean(options.apiKey), redacted: true }, env_file_chmod: '0600', codex_app_fast_ui: fastUi };
     shaped.restart_app = restart;
     if (options.health) shaped.applied_actions = [...(shaped.applied_actions || []), { type: 'run_health_check', target: 'codex-lb response chain', ok: true }];
     if (options.health) shaped.chain_health = result.ok ? await checkCodexLbResponseChain(result, { force: true, root }) : null;
+    shaped.ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false);
+    if (!shaped.ok) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(shaped);
     console.log(`codex-lb configured: ${result.base_url || result.status}`);
     if (shaped.persistence?.warning) console.log(`warning: ${shaped.persistence.warning}`);
-    if (!result.ok) process.exitCode = 1;
+    if (!shaped.ok) process.exitCode = 1;
     return;
   }
   if (action === 'circuit' && args[1] === 'reset') {
@@ -308,13 +347,92 @@ export async function run(command: any, args: any = []) {
 }
 
 async function maybeRestartCodexAppForAuthSwitch(args: any[] = [], enabled: boolean) {
-  if (!enabled) return { schema: 'sks.codex-app-restart.v1', ok: true, status: 'skipped', skipped: true, reason: 'previous_step_failed', app_name: 'Codex', blockers: [] };
+  if (!enabled) return { schema: 'sks.codex-app-restart.v1', ok: true, status: 'skipped', skipped: true, reason: 'previous_step_failed', app_name: 'ChatGPT', bundle_id: 'com.openai.codex', blockers: [] };
   const requested = flag(args, '--restart-app') || flag(args, '--restart');
   const shouldRestart = requested || (!flag(args, '--json') && !flag(args, '--no-restart-app') && !flag(args, '--no-restart'));
   return restartCodexApp({ enabled: shouldRestart });
 }
 
-async function fastEvidenceFromChain(chain: any = {}, requestLogPath: any = null) {
+async function repairCodexAppFastUiAfterMutation(root: string, enabled: boolean) {
+  if (!enabled) {
+    return {
+      schema: 'sks.codex-app-fast-ui-repair.v1',
+      ok: true,
+      status: 'skipped',
+      skipped: true,
+      reason: 'previous_step_failed',
+      actions: [],
+      blockers: []
+    };
+  }
+  try {
+    return await repairCodexAppFastUi(root, { apply: true });
+  } catch (err: any) {
+    return {
+      schema: 'sks.codex-app-fast-ui-repair.v1',
+      ok: false,
+      status: 'failed',
+      actions: [],
+      blockers: ['codex_app_fast_ui_repair_failed'],
+      error: String(err?.message || err)
+    };
+  }
+}
+
+export function isCodexLbFastChainVerified(chain: any = {}) {
+  return chain.ok === true && chain.skipped !== true;
+}
+
+export async function resolveCodexLbFastCheckModel(status: any = {}, env: NodeJS.ProcessEnv = process.env) {
+  const explicit = String(env.SKS_CODEX_MODEL || env.CODEX_MODEL || '').trim();
+  if (explicit) return { model: explicit, source: env.SKS_CODEX_MODEL ? 'SKS_CODEX_MODEL' : 'CODEX_MODEL', blockers: [] };
+
+  const configPath = String(status.config_path || '').trim();
+  const config = configPath ? await readText(configPath, '').catch(() => '') : '';
+  const configured = topLevelTomlString(config, 'model');
+  if (configured) return { model: configured, source: 'global_config', blockers: [] };
+
+  const configuredCatalogPath = topLevelTomlString(config, 'model_catalog_json');
+  if (!configuredCatalogPath) return { model: null, source: null, blockers: ['codex_lb_fast_check_model_unselected'] };
+  const home = String(env.HOME || '').trim();
+  const expandedCatalogPath = configuredCatalogPath.startsWith('~/') && home
+    ? path.join(home, configuredCatalogPath.slice(2))
+    : configuredCatalogPath;
+  const catalogPath = path.isAbsolute(expandedCatalogPath)
+    ? expandedCatalogPath
+    : path.resolve(path.dirname(configPath), expandedCatalogPath);
+  try {
+    const payload = JSON.parse(await readText(catalogPath, ''));
+    const model = selectPriorityCapableCatalogModel(payload);
+    return model
+      ? { model, source: 'model_catalog_json', blockers: [] }
+      : { model: null, source: 'model_catalog_json', blockers: ['codex_lb_fast_check_priority_model_unavailable'] };
+  } catch {
+    return { model: null, source: 'model_catalog_json', blockers: ['codex_lb_fast_check_catalog_invalid'] };
+  }
+}
+
+function topLevelTomlString(text: string, key: string) {
+  const topLevel = String(text || '').split(/\n\s*\[/)[0] || '';
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return (topLevel.match(new RegExp(`(?:^|\\n)\\s*${escaped}\\s*=\\s*"([^"]+)"`))?.[1] || '').trim();
+}
+
+function selectPriorityCapableCatalogModel(payload: any = {}) {
+  const models = Array.isArray(payload?.models) ? payload.models : Array.isArray(payload?.data) ? payload.data : [];
+  return models
+    .filter((row: any) => {
+      if (!row || typeof row !== 'object' || row.supported_in_api !== true || typeof row.slug !== 'string' || !row.slug.trim()) return false;
+      const serviceTiers = Array.isArray(row.service_tiers) ? row.service_tiers : [];
+      const speedTiers = Array.isArray(row.additional_speed_tiers) ? row.additional_speed_tiers : [];
+      return serviceTiers.some((tier: any) => normalizeTier(typeof tier === 'string' ? tier : tier?.id) === 'priority')
+        || speedTiers.some((tier: any) => normalizeTier(tier) === 'priority');
+    })
+    .sort((left: any, right: any) => Number(left.priority ?? Number.MAX_SAFE_INTEGER) - Number(right.priority ?? Number.MAX_SAFE_INTEGER)
+      || String(left.slug).localeCompare(String(right.slug)))[0]?.slug || null;
+}
+
+export async function fastEvidenceFromChain(chain: any = {}, requestLogPath: any = null) {
   const chainEvidence = chain.service_tier_evidence || {};
   const logRows = requestLogPath ? await readRequestLogRows(String(requestLogPath)) : [];
   const logEvidence = serviceTierEvidenceFromRows(logRows);
@@ -354,14 +472,14 @@ async function readRequestLogRows(file: string) {
   return rows;
 }
 
-function serviceTierEvidenceFromRows(rows: any[] = []) {
+export function serviceTierEvidenceFromRows(rows: any[] = []) {
   let requested: string | null = null;
   let actual: string | null = null;
   let effective: string | null = null;
   for (const row of rows) {
     requested ||= normalizeTier(row?.requestedServiceTier || row?.requested_service_tier || row?.request?.service_tier || row?.body?.service_tier);
-    actual ||= normalizeTier(row?.actualServiceTier || row?.actual_service_tier || row?.response?.actualServiceTier);
-    effective ||= normalizeTier(row?.serviceTier || row?.service_tier || row?.response?.serviceTier);
+    actual ||= normalizeTier(row?.actualServiceTier || row?.actual_service_tier || row?.response?.actualServiceTier || row?.response?.actual_service_tier);
+    effective ||= responseServiceTier(row);
   }
   return {
     requested_service_tier: requested,
@@ -369,6 +487,17 @@ function serviceTierEvidenceFromRows(rows: any[] = []) {
     effective_service_tier: effective,
     fast_actual: actual === 'priority' || effective === 'priority'
   };
+}
+
+function responseServiceTier(row: any) {
+  const nested = normalizeTier(row?.response?.serviceTier || row?.response?.service_tier || row?.event?.response?.serviceTier || row?.event?.response?.service_tier);
+  if (nested) return nested;
+  const responseKind = String(row?.direction || row?.phase || row?.kind || row?.type || '').trim().toLowerCase();
+  const responseBody = row?.object === 'response' || /^resp[_-]/i.test(String(row?.id || '')) || Array.isArray(row?.output);
+  if (responseBody || responseKind === 'response' || responseKind === 'inbound' || responseKind.startsWith('response.')) {
+    return normalizeTier(row?.serviceTier || row?.service_tier);
+  }
+  return null;
 }
 
 function normalizeTier(value: unknown) {

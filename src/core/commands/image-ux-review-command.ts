@@ -82,31 +82,13 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   const generatedImage = readOption(args, '--generated-image', null);
   const shouldGenerateCallouts = flag(args, '--generate-callouts') || flag(args, '--fix');
   if (missionId) return rebuildExistingMission(root, command, [missionId, ...args], { fixRequested: flag(args, '--fix') });
-  const fromChromeExtension = flag(args, '--from-chrome-extension') || Boolean(readOption(args, '--from-chrome-extension', null));
-  const fromComputerUse = flag(args, '--from-computer-use') || Boolean(readOption(args, '--from-computer-use', null));
-  const chromePreflight = fromChromeExtension ? await codexChromeExtensionStatus() : null;
-  if (chromePreflight && !chromePreflight.ok) {
-    const result = {
-      schema: 'sks.image-ux-review-run.v1',
-      ok: false,
-      status: 'blocked',
-      blocker: 'codex_chrome_extension_setup_required',
-      chrome_extension: chromePreflight,
-      guidance: [
-        'Install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming web UX review.'
-      ]
-    };
+  const sourcePreflight = await imageUxReviewSourcePreflight(args);
+  const { fromChromeExtension, fromComputerUse, chromePreflight } = sourcePreflight;
+  if (sourcePreflight.result) {
+    const result = sourcePreflight.result;
     process.exitCode = 1;
     if (flag(args, '--json')) return printJson(result);
-    console.error('UX Review blocked: install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming.');
-    console.error(chromePreflight.docs_url);
-    return result;
-  }
-  if (fromComputerUse && !flag(args, '--native') && !flag(args, '--non-web')) {
-    const result = { schema: 'sks.image-ux-review-run.v1', ok: false, status: 'blocked', blocker: 'web_ux_review_requires_codex_chrome_extension_not_computer_use' };
-    process.exitCode = 1;
-    if (flag(args, '--json')) return printJson(result);
-    console.error('UX Review blocked: web/browser UX review requires Codex Chrome Extension, not Computer Use. Use --from-chrome-extension after setup, or provide a screenshot with --image.');
+    printImageUxReviewSourcePreflightBlock(result);
     return result;
   }
   if (!imagePath && !fromChromeExtension && !fromComputerUse) {
@@ -218,6 +200,57 @@ async function runImageUxReview(root: string, command: string, args: any[] = [])
   if (flag(args, '--json')) return printJson(result);
   console.log(`Image UX review: ${result.ok ? 'ok' : 'blocked'} ${id}`);
   return result;
+}
+
+/**
+ * Read-only source validation shared with the active-route dispatcher. A
+ * blocked result is terminal and guarantees that the run cannot create a
+ * mission or write route evidence.
+ */
+export async function imageUxReviewSourcePreflight(args: any[] = []) {
+  const fromChromeExtension = flag(args, '--from-chrome-extension') || Boolean(readOption(args, '--from-chrome-extension', null));
+  const fromComputerUse = flag(args, '--from-computer-use') || Boolean(readOption(args, '--from-computer-use', null));
+  const chromePreflight = fromChromeExtension ? await codexChromeExtensionStatus() : null;
+  if (chromePreflight && !chromePreflight.ok) {
+    return {
+      fromChromeExtension,
+      fromComputerUse,
+      chromePreflight,
+      result: {
+        schema: 'sks.image-ux-review-run.v1',
+        ok: false,
+        status: 'blocked',
+        blocker: 'codex_chrome_extension_setup_required',
+        chrome_extension: chromePreflight,
+        guidance: [
+          'Install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming web UX review.'
+        ]
+      }
+    };
+  }
+  if (fromComputerUse && !flag(args, '--native') && !flag(args, '--non-web')) {
+    return {
+      fromChromeExtension,
+      fromComputerUse,
+      chromePreflight,
+      result: {
+        schema: 'sks.image-ux-review-run.v1',
+        ok: false,
+        status: 'blocked',
+        blocker: 'web_ux_review_requires_codex_chrome_extension_not_computer_use'
+      }
+    };
+  }
+  return { fromChromeExtension, fromComputerUse, chromePreflight, result: null };
+}
+
+function printImageUxReviewSourcePreflightBlock(result: any) {
+  if (result.blocker === 'codex_chrome_extension_setup_required') {
+    console.error('UX Review blocked: install/enable the Codex Chrome Extension first, then tell SKS installation is complete before resuming.');
+    if (result.chrome_extension?.docs_url) console.error(result.chrome_extension.docs_url);
+    return;
+  }
+  console.error('UX Review blocked: web/browser UX review requires Codex Chrome Extension, not Computer Use. Use --from-chrome-extension after setup, or provide a screenshot with --image.');
 }
 
 async function calloutsImageUxReview(root: string, command: string, args: any[] = []) {

@@ -22,6 +22,7 @@ import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-w
 import { publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 import { scanCodebaseIndex } from '../triwiki/code-index-scanner.js';
 import { buildCodePack, validateCodePack, writeCodePackAtomic } from '../triwiki/code-pack.js';
+import { sealTriWikiContextPack, validateTriWikiContextPackProvenance } from '../triwiki-provenance.js';
 import { flag, positionalArgs, readFlagValue, readOption, resolveMissionId } from './command-utils.js';
 
 export async function wikiCommand(sub: any, args: any = []) {
@@ -46,9 +47,11 @@ export async function wikiCommand(sub: any, args: any = []) {
   }
   if (sub === 'pack') {
     const root = await sksRoot();
-    const { pack, file } = await writeWikiContextPack(root, args);
-    if (flag(args, '--json')) return console.log(JSON.stringify({ ...pack, path: file }, null, 2));
+    const { pack, file, written, validation } = await writeWikiContextPack(root, args);
+    process.exitCode = validation.result.ok ? 0 : 2;
+    if (flag(args, '--json')) return console.log(JSON.stringify({ ...pack, path: file, written, validation }, null, 2));
     printWikiPackSummary(root, file, pack);
+    console.log(`Validation: ${validation.result.ok ? 'ok' : 'failed'} (${validation.result.checked} anchors)`);
     return;
   }
   if (sub === 'publish') {
@@ -100,14 +103,14 @@ export async function wikiCommand(sub: any, args: any = []) {
   if (sub === 'refresh') {
     const root = await sksRoot();
     const dryRun = flag(args, '--dry-run');
-    const { pack, file } = await writeWikiContextPack(root, args, { dryRun });
-    const validation = wikiValidationResult(pack);
+    const { pack, file, written, validation } = await writeWikiContextPack(root, args, { dryRun });
     const exitCode = validation.result.ok ? 0 : 2;
     const pruneRequested = flag(args, '--prune');
     const pruneResult = pruneRequested ? await pruneWikiArtifacts(root, { dryRun }) : null;
     if (!dryRun) {
       const { id, dir } = await createMission(root, { mode: 'wiki', prompt: 'sks wiki refresh' });
-      const gate = { schema_version: 1, passed: validation.result.ok, ok: validation.result.ok, context_pack: '.sneakoscope/wiki/context-pack.json', anchors: wikiAnchorCount(pack.wiki), voxels: wikiVoxelRowCount(pack.wiki) };
+      const gateBlockers = wikiGateBlockers(validation.result.ok, validation.result.issues, 'wiki_context_pack_validation_failed');
+      const gate = { schema_version: 1, passed: validation.result.ok, ok: validation.result.ok, blockers: gateBlockers, context_pack: '.sneakoscope/wiki/context-pack.json', anchors: wikiAnchorCount(pack.wiki), voxels: wikiVoxelRowCount(pack.wiki) };
       await writeJsonAtomic(path.join(dir, 'wiki-gate.json'), gate);
       await maybeFinalizeRoute(root, {
         missionId: id,
@@ -116,7 +119,7 @@ export async function wikiCommand(sub: any, args: any = []) {
         gate,
         artifacts: ['wiki-gate.json', 'completion-proof.json'],
         statusHint: validation.result.ok ? 'verified_partial' : 'blocked',
-        blockers: validation.result.ok ? [] : validation.result.issues,
+        blockers: gateBlockers,
         command: { cmd: 'sks wiki refresh', status: exitCode },
         failureAnalysis: wikiRefreshFailureAnalysis(validation.result, gate)
       });
@@ -126,7 +129,7 @@ export async function wikiCommand(sub: any, args: any = []) {
       return console.log(JSON.stringify({
         path: file,
         dryRun,
-        written: !dryRun,
+        written,
         claims: pack.claims.length,
         anchors: wikiAnchorCount(pack.wiki),
         attention: wikiAttentionSummary(pack),
@@ -177,15 +180,15 @@ export async function wikiCommand(sub: any, args: any = []) {
     const root = await sksRoot();
     const target = positionalArgs(args)[0] || path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
     const pack = await readJson(path.resolve(target));
-    const { result, trustAnchors } = wikiValidationResult(pack);
+    const { result, trustAnchors } = wikiValidationResult(pack, root);
     const codePack = await codePackFreshness(root);
+    process.exitCode = result.ok ? 0 : 2;
     if (flag(args, '--json')) return console.log(JSON.stringify({ ...result, code_pack: codePack }, null, 2));
     console.log(`Wiki coordinate index: ${result.ok ? 'ok' : 'failed'}`);
     console.log(`Anchors checked: ${result.checked}`);
     console.log(`Trust anchors: ${trustAnchors}/${result.checked}`);
     for (const issue of result.issues) console.log(`- ${issue.severity}: ${issue.id}${issue.anchor ? ` ${issue.anchor}` : ''}`);
     console.log(`Code pack: ${codePack.status}${codePack.status === 'stale' ? ' — run `sks wiki refresh --code`' : ''}`);
-    process.exitCode = result.ok ? 0 : 2;
     return;
   }
   console.error('Usage: sks wiki coords|pack|refresh|publish|rebuild-index|rebuild-summary|validate|validate-shared|wrongness|image-ingest|anchor-add|relation-add|image-validate|image-summary');
@@ -264,14 +267,15 @@ function wikiRefreshFailureAnalysis(validationResult: any, gate: any = {}) {
       ]
     };
   }
+  const blockers = wikiGateBlockers(false, validationResult?.issues, 'wiki_context_pack_validation_failed');
   return {
     status: 'complete',
-    root_cause: `Wiki context-pack validation failed during refresh: ${(validationResult?.issues || []).join(', ') || 'unknown validation issue'}.`,
+    root_cause: `Wiki context-pack validation failed during refresh: ${blockers.join(', ')}.`,
     corrective_action: 'The Wiki route finalized as blocked and preserved validation issues in the completion proof so the context pack can be corrected before any completion claim.',
     evidence: [
       '.sneakoscope/wiki/context-pack.json',
       'wiki-gate.json',
-      ...(validationResult?.issues || [])
+      ...blockers
     ]
   };
 }
@@ -281,10 +285,11 @@ async function wikiImageIngest(args: any = []) {
   const imagePath = args.find((arg: any, i: any) => i >= 0 && !String(arg).startsWith('--'));
   const { id, dir } = await createMission(root, { mode: 'wiki', prompt: `sks wiki image-ingest ${imagePath || ''}`.trim() });
   const result = await ingestImage(root, imagePath, { source: readOption(args, '--source', 'manual'), missionId: readOption(args, '--mission-id', id) || id });
-  const gate = { schema_version: 1, passed: result.ok, ok: result.ok, image_id: result.image.id, image_voxel_ledger: 'image-voxel-ledger.json' };
+  const gateBlockers = wikiGateBlockers(result.ok, result.validation?.issues, 'wiki_image_ingest_validation_failed');
+  const gate = { schema_version: 1, passed: result.ok, ok: result.ok, blockers: gateBlockers, image_id: result.image.id, image_voxel_ledger: 'image-voxel-ledger.json' };
   await writeJsonAtomic(path.join(dir, 'wiki-image-gate.json'), gate);
   const fixtureMode = flag(args, '--mock') || String(imagePath || '').includes('test/fixtures/images/');
-  const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Wiki', gateFile: 'wiki-image-gate.json', gate, visual: true, mock: fixtureMode, artifacts: ['image-voxel-ledger.json', 'visual-anchors.json', 'completion-proof.json'], statusHint: result.ok ? 'verified_partial' : 'blocked', command: { cmd: `sks wiki image-ingest ${imagePath}`, status: result.ok ? 0 : 1 } });
+  const proof = await maybeFinalizeRoute(root, { missionId: id, route: '$Wiki', gateFile: 'wiki-image-gate.json', gate, visual: true, mock: fixtureMode, artifacts: ['image-voxel-ledger.json', 'visual-anchors.json', 'completion-proof.json'], statusHint: result.ok ? 'verified_partial' : 'blocked', blockers: gateBlockers, command: { cmd: `sks wiki image-ingest ${imagePath}`, status: result.ok ? 0 : 1 } });
   const output = { ...result, mission_id: id, completion_proof: { ok: proof.ok, validation: proof.validation } };
   if (flag(args, '--json')) return console.log(JSON.stringify(output, null, 2));
   console.log(`Image ingested: ${result.image.id}`);
@@ -366,7 +371,9 @@ export async function writeWikiContextPack(root: any, args: any = [], opts: any 
   const role = readFlagValue(args, '--role', 'worker');
   const maxAnchors = Number(readFlagValue(args, '--max-anchors', role.includes('verifier') ? 48 : 32));
   const codePackData = await readJson<any>(path.join(root, '.sneakoscope', 'wiki', 'code-pack.json'), null).catch(() => null);
-  const codePackEntries = Array.isArray(codePackData?.entries) ? codePackData.entries : [];
+  const codePackEntries = Array.isArray(codePackData?.entries)
+    ? codePackData.entries.filter((entry: any) => entry && typeof entry.id === 'string' && typeof entry.text === 'string')
+    : [];
   const wrongnessByModule = await buildWrongnessByModule(root);
   const pack = contextCapsule({
     mission: { id: 'project-wiki', coord: { rgba: { r: 48, g: 132, b: 212, a: 240 } } },
@@ -384,24 +391,39 @@ export async function writeWikiContextPack(root: any, args: any = [], opts: any 
   // never routed through selectClaims (no fabricated RGBA coordinate for them — see
   // codePackAttentionRows), so append their real summary text here or a recallpulse
   // consumer resolving pack.claims by id would only see the bare id string.
-  const codePackClaimRows = codePackEntries.map((entry: any) => ({
-    id: entry.id,
-    text: `${entry.text}${Array.isArray(entry.citations) && entry.citations.length ? ` (source: ${entry.citations.map((c: any) => c?.path).filter(Boolean).join(', ')})` : ''}`,
-    source: 'code-pack',
-    trust: entry.trust_score
-  }));
-  const enrichedPack = {
+  const attentionCodeIds = new Set([
+    ...(pack.attention?.use_first || []),
+    ...(pack.attention?.hydrate_first || [])
+  ].map((row: any) => Array.isArray(row) ? row[0] : row?.id).filter((id: any) => typeof id === 'string' && id.startsWith('code:')));
+  const selectedClaimIds = new Set((pack.claims || []).map((claim: any) => claim?.id).filter(Boolean));
+  const codePackClaimRows = codePackEntries
+    .filter((entry: any) => attentionCodeIds.has(entry.id) && !selectedClaimIds.has(entry.id))
+    .map((entry: any) => ({
+      id: entry.id,
+      text: `${entry.text}${Array.isArray(entry.citations) && entry.citations.length ? ` (source: ${entry.citations.map((c: any) => c?.path).filter(Boolean).join(', ')})` : ''}`,
+      source: 'code-pack',
+      source_paths: Array.isArray(entry.citations) ? entry.citations.map((citation: any) => citation?.path).filter(Boolean) : [],
+      trust_score: entry.trust_score
+    }));
+  const enrichedPack = sealTriWikiContextPack({
     ...pack,
     claims: [...(pack.claims || []), ...codePackClaimRows],
     wrongness_context: wrongnessContext,
     q3: Array.from(new Set([...(pack.q3 || []), 'wrongness-memory', 'negative-evidence']))
-  };
+  }, { root });
   const file = path.join(root, '.sneakoscope', 'wiki', 'context-pack.json');
-  if (!opts.dryRun) {
-    await ensureDir(path.dirname(file));
-    await writeJsonAtomic(file, enrichedPack);
-  }
-  return { pack: enrichedPack, file, role, maxAnchors };
+  const persistence = opts.dryRun
+    ? { written: false, validation: wikiValidationResult(enrichedPack, root) }
+    : await writeValidatedWikiContextPack(file, enrichedPack, root);
+  return { pack: enrichedPack, file, role, maxAnchors, ...persistence };
+}
+
+export async function writeValidatedWikiContextPack(file: string, pack: any, root: string) {
+  const validation = wikiValidationResult(pack, root);
+  if (!validation.result.ok) return { written: false, validation };
+  await ensureDir(path.dirname(file));
+  await writeJsonAtomic(file, pack);
+  return { written: true, validation };
 }
 
 function wikiAnchorCount(wiki: any = {}) {
@@ -413,10 +435,33 @@ export function wikiVoxelRowCount(wiki: any = {}) {
   return (overlay.rows || overlay.v || []).length;
 }
 
-function wikiValidationResult(pack: any = {}) {
+function wikiValidationResult(pack: any = {}, root: string | null = null) {
   const wikiIndex = pack.wiki || pack;
-  const result = validateWikiCoordinateIndex(wikiIndex);
+  const coordinate = validateWikiCoordinateIndex(wikiIndex, { root, claims: pack.claims });
+  const provenance = validateTriWikiContextPackProvenance(pack, { root });
+  const structureIssues = [
+    ...(!Array.isArray(pack.claims) ? [{ id: 'context_pack_claims_missing', severity: 'error' }] : []),
+    ...(!pack.attention || !Array.isArray(pack.attention.use_first) || !Array.isArray(pack.attention.hydrate_first)
+      ? [{ id: 'context_pack_attention_missing', severity: 'error' }]
+      : [])
+  ];
+  const issues = [...coordinate.issues, ...provenance.issues, ...structureIssues];
+  const result = { ok: issues.length === 0, checked: coordinate.checked, issues };
   return { result, trustAnchors: countTrustAnchors(wikiIndex) };
+}
+
+export function wikiGateBlockers(ok: any, issues: any = [], fallback = 'wiki_validation_failed') {
+  if (ok === true) return [];
+  const normalized = (Array.isArray(issues) ? issues : [issues])
+    .map((issue: any) => {
+      if (typeof issue === 'string') return issue.trim();
+      if (!issue || typeof issue !== 'object') return String(issue || '').trim();
+      const id = String(issue.id || issue.code || issue.message || '').trim();
+      const detail = String(issue.anchor || issue.path || issue.image_id || '').trim();
+      return id && detail ? `${id}:${detail}` : id;
+    })
+    .filter(Boolean);
+  return normalized.length ? [...new Set(normalized)] : [fallback];
 }
 
 function printWikiPackSummary(root: any, file: any, pack: any) {
@@ -447,70 +492,115 @@ function countTrustAnchors(wiki: any = {}) {
   return rows.filter((row: any) => row?.[9] != null && row?.[10]).length;
 }
 
+function projectPathIsInside(root: string, candidate: string) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+interface ProjectCitationRoot {
+  resolved: string;
+  real: string;
+  cache: Map<string, string | null>;
+}
+
+async function projectCitationRoot(root: string): Promise<ProjectCitationRoot | null> {
+  const resolvedRoot = path.resolve(root);
+  const realRoot = await fsp.realpath(resolvedRoot).catch(() => null);
+  return realRoot ? { resolved: resolvedRoot, real: realRoot, cache: new Map() } : null;
+}
+
+async function firstHydratableProjectCitation(root: ProjectCitationRoot | null, candidates: string[]) {
+  if (!root) return null;
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || !candidate.trim() || /^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) continue;
+    if (root.cache.has(candidate)) {
+      const cached = root.cache.get(candidate);
+      if (cached) return cached;
+      continue;
+    }
+    const resolvedCandidate = path.isAbsolute(candidate) ? path.resolve(candidate) : path.resolve(root.resolved, candidate);
+    let citation: string | null = null;
+    if (projectPathIsInside(root.resolved, resolvedCandidate)) {
+      const realCandidate = await fsp.realpath(resolvedCandidate).catch(() => null);
+      if (realCandidate && projectPathIsInside(root.real, realCandidate)) citation = path.relative(root.resolved, resolvedCandidate) || '.';
+    }
+    root.cache.set(candidate, citation);
+    if (citation) return citation;
+  }
+  return null;
+}
+
 export async function projectWikiClaims(root: any) {
+  const citationRoot = await projectCitationRoot(root);
+  if (!citationRoot) return [];
   const claims = [
-    ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', '.codex/hooks.json', 'code', 'high'],
-    ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', '.codex/config.toml', 'code', 'high'],
-    ['wiki-skills', '.agents/skills provides official repo-local routes plus support skills for dfix, team, goal, research, autoresearch, db, gx, wiki, reflection, evaluation, design-system/UI editing, and imagegen workflows.', '.agents/skills', 'code', 'medium'],
-    ['wiki-agents', '.codex/agents defines Team native analysis, planning, implementation, DB safety, and QA reviewer roles.', '.codex/agents', 'code', 'medium'],
-    ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', '.sneakoscope/policy.json', 'contract', 'high'],
-    ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', '.sneakoscope/memory', 'wiki', 'high'],
-    ['wiki-gx', 'GX cartridges keep vgraph.json and beta.json as deterministic visual context sources with render, validation, drift, and snapshot outputs.', '.sneakoscope/gx/cartridges', 'vgraph', 'medium'],
-    ['wiki-db', 'Database safety blocks destructive SQL, risky Supabase commands, unsafe MCP writes, and production data mutation.', '.sneakoscope/db-safety.json', 'code', 'critical'],
-    ['wiki-hproof', 'H-Proof blocks completion when unsupported critical claims, DB safety issues, missing tests, or high visual/wiki drift remain.', '.sneakoscope/hproof', 'test', 'critical'],
-    ['wiki-eval', 'sks eval run measures token savings, evidence-weighted accuracy proxy, required recall, unsupported critical filtering, and build runtime.', 'src/core/evaluation.js', 'test', 'medium'],
-    ['wiki-trig', 'TriWiki maps RGBA channels to domain angle, layer radius, phase, and concentration using deterministic trigonometric coordinates.', 'src/core/wiki-coordinate.js', 'code', 'high']
+    ['wiki-hooks', '.codex/hooks.json routes UserPromptSubmit, tool, permission, and Stop events through SKS guards.', ['.codex/hooks.json'], 'code', 'high'],
+    ['wiki-config', '.codex/config.toml enables Codex App profiles, multi-agent support, and Team agent limits.', ['.codex/config.toml'], 'code', 'high'],
+    ['wiki-skills', '.agents/skills provides official repo-local routes plus support skills for dfix, team, goal, research, autoresearch, db, gx, wiki, reflection, evaluation, design-system/UI editing, and imagegen workflows.', ['.agents/skills'], 'code', 'medium'],
+    ['wiki-agents', '.codex/agents defines Team native analysis, planning, implementation, DB safety, and QA reviewer roles.', ['.codex/agents'], 'code', 'medium'],
+    ['wiki-policy', '.sneakoscope/policy.json stores update-check, honest-mode, retention, database, performance, and prompt-pipeline policy.', ['.sneakoscope/policy.json'], 'contract', 'high'],
+    ['wiki-memory', '.sneakoscope/memory stores Q0 raw, Q1 evidence, Q2 facts, Q3 tags, and Q4 control bits for hydratable context.', ['.sneakoscope/memory'], 'wiki', 'high'],
+    ['wiki-gx', 'GX cartridges keep vgraph.json and beta.json as deterministic visual context sources with render, validation, drift, and snapshot outputs.', ['.sneakoscope/gx/cartridges'], 'vgraph', 'medium'],
+    ['wiki-db', 'Database safety blocks destructive SQL, risky Supabase commands, unsafe MCP writes, and production data mutation.', ['.sneakoscope/db-safety.json'], 'code', 'critical'],
+    ['wiki-hproof', 'H-Proof blocks completion when unsupported critical claims, DB safety issues, missing tests, or high visual/wiki drift remain.', ['.sneakoscope/hproof'], 'test', 'critical'],
+    ['wiki-eval', 'sks eval run measures token savings, evidence-weighted accuracy proxy, required recall, unsupported critical filtering, and build runtime.', ['src/core/evaluation.ts', '.agents/skills/performance-evaluator/SKILL.md'], 'test', 'medium'],
+    ['wiki-trig', 'TriWiki maps RGBA channels to domain angle, layer radius, phase, and concentration using deterministic trigonometric coordinates.', ['src/core/wiki-coordinate.ts', 'docs/voxel-triwiki.md'], 'code', 'high']
   ];
   const out: any[] = [];
-  for (const [id, text, file, authority, risk] of claims as Array<[string, string, string, string, string]>) {
-    out.push({ id, text, authority, risk, status: await exists(path.join(root, file)) ? 'supported' : 'unknown', freshness: 'fresh', source: file, file, evidence_count: await exists(path.join(root, file)) ? 1 : 0 });
+  for (const [id, text, candidates, authority, risk] of claims as Array<[string, string, string[], string, string]>) {
+    const citation = await firstHydratableProjectCitation(citationRoot, candidates);
+    if (!citation) continue;
+    out.push({ id, text, authority, risk, status: 'supported', freshness: 'fresh', source: citation, file: citation, evidence_count: 1 });
   }
   const stackPolicy = stackCurrentDocsPolicy();
-  out.push({
+  const wrongnessCitation = await firstHydratableProjectCitation(citationRoot, ['src/core/triwiki-wrongness', '.sneakoscope/wiki/wrongness-ledger.json', 'AGENTS.md']);
+  if (wrongnessCitation) out.push({
     id: 'wiki-wrongness-memory',
     text: 'TriWiki wrongness memory stores negative evidence, failed assumptions, stale proof, mock-real confusion, visual anchor errors, DB safety mismatches, hook policy mismatch, and trust overclaim as project and mission ledgers that retrieval and trust gates must consult before verification claims.',
     authority: 'code',
     risk: 'critical',
-    status: await exists(path.join(root, '.sneakoscope/wiki/wrongness-ledger.json')) ? 'supported' : 'unknown',
+    status: 'supported',
     freshness: 'fresh',
-    source: 'src/core/triwiki-wrongness',
-    file: 'src/core/triwiki-wrongness',
-    evidence_count: await exists(path.join(root, 'src/core/triwiki-wrongness/wrongness-schema.ts')) ? 2 : 0,
+    source: wrongnessCitation,
+    file: wrongnessCitation,
+    evidence_count: 2,
     required_weight: 1.4,
     trust_score: 0.9
   });
-  out.push({
+  const stackPolicyCitation = await firstHydratableProjectCitation(citationRoot, ['src/core/routes.ts', '.agents/skills/context7-docs/SKILL.md', '.codex/SNEAKOSCOPE.md', 'AGENTS.md']);
+  if (stackPolicyCitation) out.push({
     id: 'wiki-stack-current-docs-policy',
     text: `When project tech stack, framework, package, runtime, SDK, MCP, or deployment-platform versions change, use Context7 or official vendor docs, write current syntax/security/limit guidance to ${stackPolicy.memory_path}, refresh TriWiki, validate it, and prefer those claims over stale model defaults before coding.`,
     authority: 'contract',
     risk: 'critical',
     status: 'supported',
     freshness: 'fresh',
-    source: 'src/core/routes.js',
-    file: 'src/core/routes.js',
+    source: stackPolicyCitation,
+    file: stackPolicyCitation,
     evidence_count: 3,
     required_weight: 1.35,
     trust_score: 0.95
   });
-  out.push({
+  const attentionCitation = await firstHydratableProjectCitation(citationRoot, ['src/core/triwiki-attention.ts', '.agents/skills/wiki/SKILL.md', '.codex/SNEAKOSCOPE.md', 'AGENTS.md']);
+  if (attentionCitation) out.push({
     id: 'wiki-aggressive-active-recall',
     text: 'TriWiki should be used aggressively for performance and accuracy: route prompts and worker handoffs should consume attention.use_first for compact high-trust recall and attention.hydrate_first for source hydration of risky or lower-trust claims before decisions.',
     authority: 'code',
     risk: 'high',
     status: 'supported',
     freshness: 'fresh',
-    source: 'src/core/triwiki-attention.js',
-    file: 'src/core/triwiki-attention.js',
+    source: attentionCitation,
+    file: attentionCitation,
     evidence_count: 3,
     required_weight: 1.45,
     trust_score: 0.95
   });
-  out.push(...(await memoryWikiClaims(root)));
+  out.push(...(await memoryWikiClaims(root, citationRoot)));
   out.push(...(await userRequestSignalWikiClaims(root)));
   return out;
 }
 
-async function memoryWikiClaims(root: any) {
+async function memoryWikiClaims(root: any, citationRoot: ProjectCitationRoot) {
   const base = path.join(root, '.sneakoscope', 'memory');
   const files = await listMemoryClaimFiles(base);
   const claims: any[] = [];
@@ -521,17 +611,19 @@ async function memoryWikiClaims(root: any) {
     if (!text.trim()) continue;
     for (const row of selectMemoryClaimRows(parseMemoryClaimRows(text, relFile), 48)) {
       const source = row.source || relFile;
-      const sourceExists = source && (await exists(path.join(root, source)));
+      const sourceCitation = await firstHydratableProjectCitation(citationRoot, [source]);
+      const hydrationCitation = sourceCitation || await firstHydratableProjectCitation(citationRoot, [relFile]);
+      if (!hydrationCitation) continue;
       claims.push({
         id: row.id || `memory-${slugifyClaimId(relFile)}-${claims.length + 1}`,
         text: row.text,
         source,
-        file: source,
+        file: hydrationCitation,
         authority: row.authority || 'wiki',
         risk: row.risk || 'high',
-        status: row.status || (sourceExists || source === relFile ? 'supported' : 'unknown'),
+        status: row.status || (sourceCitation || source === relFile ? 'supported' : 'unknown'),
         freshness: row.freshness || 'fresh',
-        evidence_count: row.evidence_count ?? (sourceExists ? 2 : 1),
+        evidence_count: row.evidence_count ?? (sourceCitation ? 2 : 1),
         required_weight: row.required_weight ?? 0.85,
         trust_score: row.trust_score
       });

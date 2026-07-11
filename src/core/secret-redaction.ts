@@ -18,6 +18,9 @@ const SECRET_PATTERNS = [
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
   /\bghp_[A-Za-z0-9_]{20,}\b/g,
   /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/gi,
+  /\bAuthorization\s*:\s*[^\r\n,}]+/gi,
+  /\b(?:Cookie|Set-Cookie)\s*:\s*[^\r\n,}]+/gi,
+  /\b[A-Za-z0-9-]+-Auth\s*:\s*[^\r\n,}]+/gi,
   /\b(?:access[_-]?token|api[_-]?key|secret|password|token)\s*[:=]\s*["']?[A-Za-z0-9._~+/=-]{12,}["']?/gi
 ];
 
@@ -62,6 +65,7 @@ export function containsPlaintextSecret(value: any, env: any = process.env) {
 
 function secretKeyName(key: any = '') {
   return /(?:access[_-]?token|api[_-]?key|secret|password|token)$/i.test(String(key || ''))
+    || /(?:^|[_-])(?:auth|authorization|headers?|cookies?|bearer|credentials?|env)$/i.test(String(key || ''))
     || SECRET_ENV_NAMES.includes(String(key || '').toUpperCase());
 }
 

@@ -4,8 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from '../core/fsx.js';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const fixtureMissionRoots = new Map();
+const fixtureRoots = new Set();
+let fixtureCleanupRegistered = false;
 
 export function assertGate(condition, message, detail = {}) {
   if (condition) return;
@@ -17,14 +21,15 @@ export function emitGate(name, detail = {}) {
   console.log(JSON.stringify({ schema: 'sks.release-gate.v1', ok: true, gate: name, ...detail }, null, 2));
 }
 
-export function runSksJson(args) {
+export function runSksJson(args, options = {}) {
   const entrypoint = path.join(root, 'dist', 'bin', 'sks.js');
   assertGate(fs.existsSync(entrypoint), 'dist entrypoint missing; run npm run build first', { entrypoint });
+  const mappedMissionRoot = args.map((arg) => fixtureMissionRoots.get(String(arg))).find(Boolean);
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
-    cwd: root,
+    cwd: options.cwd || mappedMissionRoot || root,
     encoding: 'utf8',
     timeout: Number(process.env.SKS_GATE_TIMEOUT_MS || 120_000),
-    env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
+    env: { ...process.env, SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true', ...(options.env || {}) }
   });
   let parsed = null;
   try {
@@ -39,7 +44,10 @@ export function runSksJson(args) {
 }
 
 export function runPptReview(action = 'review') {
-  const json = runSksJson(['ppt', 'fixture', '--mock', '--json']);
+  const json = runHermeticRouteFixture('ppt', ['ppt', 'fixture', '--mock', '--json'], {
+    SKS_TEST_FAKE_IMAGEGEN: '1',
+    SKS_TEST_FAKE_EXTRACTOR: '1'
+  });
   const proof = readMissionJson(json.mission_id, 'completion-proof.json');
   const review = json.artifacts || json.imagegen_review || {};
   json.proof_evidence = proof.evidence?.ppt_review || json.artifacts?.proof_evidence || {};
@@ -58,7 +66,7 @@ export function runPptReview(action = 'review') {
 }
 
 export function runDfixFixture() {
-  const json = runSksJson(['dfix', 'fixture', '--json']);
+  const json = runHermeticRouteFixture('dfix', ['dfix', 'fixture', '--json']);
   json.gate = json.gate || json.artifacts?.gate;
   assertGate(json.ok === true, 'dfix fixture blocked', json);
   assertGate(json.gate?.passed === true, 'dfix gate did not pass', json.gate);
@@ -72,7 +80,8 @@ export function runUxFixture() {
 }
 
 export function missionFile(missionId, file) {
-  return path.join(root, '.sneakoscope', 'missions', missionId, file);
+  const missionRoot = fixtureMissionRoots.get(missionId) || root;
+  return path.join(missionRoot, '.sneakoscope', 'missions', missionId, file);
 }
 
 export function readMissionJson(missionId, file) {
@@ -84,4 +93,42 @@ export function readMissionJson(missionId, file) {
 export function hasRelationType(missionId, type) {
   const ledger = readMissionJson(missionId, 'image-voxel-ledger.json');
   return (ledger.relations || []).some((relation) => relation.type === type);
+}
+
+function createHermeticRouteFixtureRoot(label) {
+  const fixtureRoot = tmpdir(`${label}-release-fixture-`);
+  fs.writeFileSync(path.join(fixtureRoot, 'package.json'), `${JSON.stringify({ name: `sks-${label}-release-fixture`, private: true })}\n`);
+  fixtureRoots.add(fixtureRoot);
+  if (!fixtureCleanupRegistered) {
+    fixtureCleanupRegistered = true;
+    process.once('exit', () => {
+      for (const candidate of fixtureRoots) fs.rmSync(candidate, { recursive: true, force: true });
+    });
+  }
+  return fixtureRoot;
+}
+
+function runHermeticRouteFixture(label, args, env = {}) {
+  const fixtureRoot = createHermeticRouteFixtureRoot(label);
+  const fixtureHome = path.join(fixtureRoot, 'home');
+  const json = runSksJson(args, {
+    cwd: fixtureRoot,
+    env: {
+      HOME: fixtureHome,
+      CODEX_HOME: path.join(fixtureHome, '.codex'),
+      SKS_GLOBAL_ROOT: path.join(fixtureHome, '.sneakoscope-global'),
+      TMPDIR: fixtureRoot,
+      TMP: fixtureRoot,
+      TEMP: fixtureRoot,
+      PWD: fixtureRoot,
+      SKS_TEST_ISOLATION: '1',
+      SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+      NODE_ENV: 'test',
+      CI: 'true',
+      ...env
+    }
+  });
+  if (json.mission_id) fixtureMissionRoots.set(json.mission_id, fixtureRoot);
+  json.fixture_root = fixtureRoot;
+  return json;
 }

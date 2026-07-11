@@ -3,10 +3,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2410 * 1024);
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYTES);
 const BUDGET_MS = Number(process.env.SKS_PACK_BUDGET_MS || 30000);
 
 function runNpmPack() {

@@ -53,9 +53,11 @@ export async function extractSlideIssues(input: any = {}) {
     validation: { ok: true, issues: [] as string[] },
     passed: blockers.length === 0
   };
+  const validation = validateJsonSchemaRecursive(ledgerBase, jsonSchema);
   const ledger = {
     ...ledgerBase,
-    validation: validateJsonSchemaRecursive(ledgerBase, jsonSchema)
+    validation,
+    passed: ledgerBase.passed && validation.ok
   };
   await writeJsonAtomic(path.join(dir, PPT_SLIDE_ISSUE_LEDGER_ARTIFACT), ledger);
   const extractionReport = {
@@ -69,7 +71,7 @@ export async function extractSlideIssues(input: any = {}) {
     blockers: [...new Set(blockers)],
     fallback_used: !mock && !input.sessionId,
     validation_status: ledger.validation.ok ? 'valid' : 'blocked',
-    passed: blockers.length === 0 && reports.every((report: any) => report.passed !== false)
+    passed: ledger.passed && reports.every((report: any) => report.passed !== false)
   };
   await writeJsonAtomic(path.join(dir, PPT_SLIDE_EXTRACTION_REPORT_ARTIFACT), extractionReport);
   const deckLedger = buildDeckIssueLedger(ledger, calloutLedger);

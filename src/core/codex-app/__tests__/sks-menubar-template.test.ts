@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { swiftMenuSource } from '../sks-menubar.js';
+import { actionScriptSource, evaluateActionScriptIntegrity, swiftMenuSource } from '../sks-menubar.js';
+import { sha256 } from '../../fsx.js';
 
 function source(codexBundleId: string | null) {
   return swiftMenuSource({
@@ -154,9 +155,11 @@ test('SKS menu bar template exposes Fast Mode on/off controls and status checkma
   assert.match(swift, /runSksBackground\(\["fast-mode", "off", "--json"\], title: "Fast Mode Off"\)/);
   assert.match(swift, /func updateFastModeChecks\(\) \{/);
   assert.match(swift, /runSksSilent\(\["fast-mode", "status", "--json"\]\)/);
-  assert.match(swift, /json\?\["fast_mode"\] as\? Bool == true/);
-  assert.match(swift, /self\.fastModeOnItem\.state = fastActive \? \.on : \.off/);
-  assert.match(swift, /self\.fastModeOffItem\.state = fastActive \? \.off : \.on/);
+  assert.match(swift, /json\["global"\] as\? \[String: Any\]/);
+  assert.match(swift, /global\["on"\] as\? Bool/);
+  assert.match(swift, /json\["fast_mode"\] as\? Bool == true/);
+  assert.match(swift, /self\.fastModeOnItem\.state = projectFast && desktopFast \? \.on : \.off/);
+  assert.match(swift, /self\.fastModeOffItem\.state = !projectFast && !desktopFast \? \.on : \.off/);
 });
 
 test('SKS menu bar template shows codex-lb as active only when selected/provider mode says so', () => {
@@ -165,8 +168,64 @@ test('SKS menu bar template shows codex-lb as active only when selected/provider
   assert.ok(checkMatch, 'expected to find updateAuthModeChecks body');
   const body = checkMatch[0];
   assert.match(body, /runSksSilent\(\["codex-lb", "status", "--json"\]\)/);
-  assert.match(body, /json\?\["selected"\] as\? Bool == true/);
-  assert.match(body, /json\?\["model_provider"\] as\? String/);
-  assert.match(body, /json\?\["mode"\] as\? String/);
+  assert.match(body, /guard code == 0, let json = json else/);
+  assert.match(body, /json\["selected"\] as\? Bool == true/);
+  assert.match(body, /json\["provider_contract_ok"\] as\? Bool == true/);
+  assert.match(body, /json\["auth_mode"\] as\? String/);
+  assert.match(body, /self\.oauthItem\.state = oauthActive \? \.on : \.off/);
   assert.doesNotMatch(body, /"configured": true/);
+});
+
+test('SKS menu bar auth-changing actions restart Codex App after applying configuration', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /runSksBackground\(\["codex-lb", "use-codex-lb", "--restart-app", "--json"\], title: "Use codex-lb"\)/);
+  assert.match(swift, /runSksBackground\(\["codex-lb", "use-oauth", "--restart-app", "--json"\], title: "Use ChatGPT OAuth"\)/);
+  assert.match(swift, /runSksBackground\(\["codex-lb", "setup", "--host", domain, "--api-key-stdin", "--yes", "--restart-app", "--json"\], title: "Set codex-lb"/);
+});
+
+test('SKS menu bar reports unknown status as unchecked and delegates verified restarts', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /guard code == 0, let json = json else \{\s*self\.codexLbItem\.state = \.off\s*self\.oauthItem\.state = \.off/);
+  assert.match(swift, /guard code == 0, let json = json else \{\s*self\.fastModeOnItem\.state = \.off\s*self\.fastModeOffItem\.state = \.off/);
+  assert.match(swift, /runSksBackground\(\["codex-app", "restart", "--json"\], title: "Restart Codex"\)/);
+  assert.match(swift, /set-openrouter-key", "--api-key-stdin", "--restart-app", "--json"/);
+});
+
+test('SKS menu bar waits for dashboard readiness and surfaces settings-open failures', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /func waitForDashboard\(_ urlString: String, attempts: Int\)/);
+  assert.match(swift, /waitForDashboard\(urlString, attempts: 20\)/);
+  assert.match(swift, /Dashboard did not become ready/);
+  assert.match(swift, /showAlert\("Open Codex Settings failed"/);
+});
+
+test('SKS menu bar update badge prefers version comparison over a stale boolean cache', () => {
+  const swift = source('com.openai.codex');
+  const body = swift.match(/func updateAvailable\(\) -> Bool \{[\s\S]*?\n    \}/)?.[0] || '';
+  assert.ok(body.indexOf('latest_version') >= 0);
+  assert.ok(body.indexOf('latest_version') < body.indexOf('update_available'));
+  assert.match(body, /latest\.compare\(packageVersion, options: \.numeric\) == \.orderedDescending/);
+});
+
+test('SKS menu bar action script prefers its pinned package entry over stale PATH/global copies', () => {
+  const script = actionScriptSource({ nodeBin: '/usr/bin/node', sksEntry: '/opt/sneakoscope/dist/bin/sks.js' });
+  const pinned = script.indexOf('run_node_entry "$SKS_ENTRY" "$@"');
+  const pathLookup = script.indexOf("command -v sks");
+  const npmLookup = script.indexOf("npm root -g");
+  assert.ok(pinned >= 0);
+  assert.ok(pinned < pathLookup);
+  assert.ok(pinned < npmLookup);
+  assert.equal(script.lastIndexOf('run_node_entry "$SKS_ENTRY" "$@"'), pinned);
+});
+
+test('SKS menu bar action integrity detects content drift even when the pinned version can still run', () => {
+  const script = actionScriptSource({ nodeBin: '/usr/bin/node', sksEntry: '/opt/sneakoscope/dist/bin/sks.js' });
+  const expected = sha256(script);
+  assert.deepEqual(evaluateActionScriptIntegrity(script, { action_script_sha256: expected }), {
+    script_sha256: expected,
+    expected_script_sha256: expected,
+    script_hash_matches_stamp: true
+  });
+  assert.equal(evaluateActionScriptIntegrity(`${script}# drift\n`, { action_script_sha256: expected }).script_hash_matches_stamp, false);
+  assert.equal(evaluateActionScriptIntegrity(script, null).script_hash_matches_stamp, false);
 });

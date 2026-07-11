@@ -269,23 +269,28 @@ async function runTypecheck(repoRoot: string): Promise<CommandRecord> {
 }
 
 async function cleanupWorktreesAndBranches(repoRoot: string, tmpRoot: string, workers: WorkerSpec[], before: string, keepTmp: boolean): Promise<CleanupProof> {
+  const removeResults: CommandRecord[] = []
   for (const worker of workers) {
-    await runCommand(['git', 'worktree', 'remove', '--force', path.join(tmpRoot, 'worktrees', worker.id)], repoRoot)
+    removeResults.push(await runCommand(['git', 'worktree', 'remove', '--force', path.join(tmpRoot, 'worktrees', worker.id)], repoRoot))
   }
-  await runCommand(['git', 'worktree', 'prune'], repoRoot)
+  const prune = await runCommand(['git', 'worktree', 'prune'], repoRoot)
+  const branchResults: CommandRecord[] = []
   for (const worker of workers) {
-    await runCommand(['git', 'branch', '-D', worker.branch], repoRoot)
+    branchResults.push(await runCommand(['git', 'branch', '-D', worker.branch], repoRoot))
   }
   const after = await runCommand(['git', 'worktree', 'list', '--porcelain'], repoRoot)
+  const branches = await runCommand(['git', 'branch', '--list', ...workers.map((worker) => worker.branch)], repoRoot)
   const status = await runCommand(['git', 'status', '--short'], repoRoot)
-  if (!keepTmp) await fsp.rm(tmpRoot, { recursive: true, force: true })
+  if (!keepTmp) await fsp.rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   const tmpRemoved = keepTmp ? false : !(await exists(tmpRoot))
+  const workerWorktreesRemoved = after.ok && workers.every((worker) => !after.stdout_tail.includes(worker.id))
+  const workerBranchesRemoved = branches.ok && branches.stdout_tail.trim().length === 0
   return {
-    ok: workers.every((worker) => !after.stdout_tail.includes(worker.id) && !after.stdout_tail.includes(worker.branch)) && status.stdout_tail.trim().length === 0 && tmpRemoved,
+    ok: removeResults.every((result) => result.ok) && prune.ok && branchResults.every((result) => result.ok) && workerWorktreesRemoved && workerBranchesRemoved && status.ok && status.stdout_tail.trim().length === 0 && tmpRemoved,
     worktree_list_before_cleanup: before,
     worktree_list_after_cleanup: after.stdout_tail,
-    worker_worktrees_removed: workers.every((worker) => !after.stdout_tail.includes(worker.id)),
-    worker_branches_removed: workers.every((worker) => !after.stdout_tail.includes(worker.branch)),
+    worker_worktrees_removed: workerWorktreesRemoved,
+    worker_branches_removed: workerBranchesRemoved,
     parent_dirty_after_cleanup: status.stdout_tail.trim().length > 0,
     tmp_removed: tmpRemoved
   }
@@ -293,12 +298,12 @@ async function cleanupWorktreesAndBranches(repoRoot: string, tmpRoot: string, wo
 
 async function bestEffortCleanup(repoRoot: string, tmpRoot: string, keepTmp: boolean): Promise<CleanupProof> {
   const before = await runCommand(['git', 'worktree', 'list', '--porcelain'], repoRoot)
-  if (!keepTmp) await fsp.rm(tmpRoot, { recursive: true, force: true })
+  if (!keepTmp) await fsp.rm(tmpRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   return {
-    ok: !keepTmp && !(await exists(tmpRoot)),
+    ok: false,
     worktree_list_before_cleanup: before.stdout_tail,
     worktree_list_after_cleanup: '',
-    worker_worktrees_removed: true,
+    worker_worktrees_removed: false,
     worker_branches_removed: false,
     parent_dirty_after_cleanup: false,
     tmp_removed: !keepTmp && !(await exists(tmpRoot))

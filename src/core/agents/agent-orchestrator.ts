@@ -54,6 +54,7 @@ import { writeNativeCliSessionProof } from './native-cli-session-proof.js'
 import { writeNoSubagentScalingPolicy } from './no-subagent-scaling-policy.js'
 import { writeOfficialSubagentHelperPolicy } from './official-subagent-helper-policy.js'
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
+import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { resolveLocalCollaborationPolicy, localCollaborationParticipated } from '../local-llm/local-collaboration-policy.js'
 import { runFinalGptReviewStage } from '../pipeline/final-gpt-review-stage.js'
@@ -75,7 +76,7 @@ import { APPROACHES, rank, scoreCandidate, summarizeTournament, type TournamentC
 export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Promise<any> {
   const root = path.resolve(opts.root || process.cwd())
   const sessionKey = opts.sessionKey || null
-  const prompt = String(opts.prompt || 'Native agent run')
+  const prompt = await resolveAgentMissionPrompt(root, opts)
   const route = opts.route || '$Agent'
   const routeCommand = String(opts.routeCommand || defaultRouteCommand(route))
   const routeBlackboxKind = String(opts.routeBlackboxKind || defaultRouteBlackboxKind(route))
@@ -410,7 +411,7 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
         generationIndex: agent.generation_index,
         requireGeneration: true
       })
-      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: workerWorktree?.context.path || root, projectRoot: root, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier, ...(workerWorktree ? { worktree: workerWorktree.context } : {}) }
+      const backendOpts = { ...opts, missionId, agentRoot: ledgerRoot, cwd: workerWorktree?.context.path || root, projectRoot: root, projectHash: namespace.root_hash, route, prompt, fastMode: fastModePolicy.fast_mode, serviceTier: fastModePolicy.service_tier, ...(workerWorktree ? { worktree: workerWorktree.context } : {}) }
       const result = opts.nativeCliSwarm === false
         ? await runAgentByBackend(backend, runtimeAgent, runtimeSlice, backendOpts)
         : await nativeCliSwarm.launchWorker({ agent: runtimeAgent, slice: runtimeSlice, opts: backendOpts })
@@ -676,6 +677,28 @@ export async function runNativeAgentOrchestrator(opts: AgentRunOptions = {}): Pr
     parallel_runtime_proof: parallelRuntimeProof,
     proof
   }
+}
+
+export async function resolveAgentMissionPrompt(root: string, opts: AgentRunOptions) {
+  const direct = String(opts.prompt || '').trim()
+  if (opts.promptExplicit === true || (direct && direct !== 'Native agent run')) return direct || 'Native agent run'
+  const missionId = String(opts.missionId || '').trim()
+  if (!missionId) return direct || 'Native agent run'
+  const dir = missionDir(root, missionId)
+  const [intake, routeContext, mission] = await Promise.all([
+    readJson(path.join(dir, 'request-intake.json'), null),
+    readJson(path.join(dir, 'route-context.json'), null),
+    readJson(path.join(dir, 'mission.json'), null)
+  ])
+  return String(
+    intake?.transformed_prompt
+      || routeContext?.transformed_prompt
+      || routeContext?.task
+      || routeContext?.prompt
+      || mission?.prompt
+      || direct
+      || 'Native agent run'
+  ).trim()
 }
 
 function normalizeMissionHardTimeoutMs(opts: any = {}, route = '') {
@@ -1903,7 +1926,7 @@ function buildProvidedAgentRoster(input: any, opts: any = {}) {
       writePolicy: String(entry.write_policy || '')
     })
     const suppliedModelEffort = String(entry.model_reasoning_effort || '')
-    const modelReasoningEffort = suppliedModelEffort === 'low' || suppliedModelEffort === 'high'
+    const modelReasoningEffort = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(suppliedModelEffort)
       ? suppliedModelEffort
       : modelDecision.model_reasoning_effort
     return {
@@ -1986,7 +2009,7 @@ async function runAgentByBackend(backend: string, agent: any, slice: any, opts: 
       zellijPaneId: null,
       reliabilityPolicy: {
         maxEmptyResultRetries: writePaths.length ? 1 : 2,
-        timeoutClass: writePaths.length ? 'standard' : 'short'
+        timeoutClass: codexTimeoutClassForRoute(opts.route, writePaths.length ? 'standard' : 'short')
       }
     })
     const sdkWorkerResult = await readJson<any>(sdkTask.workerResultPath, null)

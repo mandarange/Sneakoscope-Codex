@@ -77,6 +77,8 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
   const basePath = normalizeNarutoPath(input.leaseBasePath || '.sneakoscope/naruto/patch-envelopes')
   const targetPaths = normalizePaths(input.targetPaths || [])
   const readonlyPaths = normalizePaths(input.readonlyPaths || [])
+  const readonlyPathPool = normalizePaths([...readonlyPaths, ...targetPaths])
+  const promptScopes = writeCapable ? [] : extractNarutoPromptScopes(input.prompt || '', totalWorkItems)
   const worktreePolicy = input.worktreePolicy || {
     mode: 'patch-envelope-only' as const,
     required: false,
@@ -99,9 +101,13 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
       ? deliveryKind
       : baseKind
     const kindWrites = writeCapable && isNarutoWriteKind(kind)
-    const selectedTarget = targetPaths.length ? targetPaths[index % targetPaths.length] || targetPaths[0] || '' : `${basePath}/${id}.json`
+    const selectedTarget = writeCapable
+      ? targetPaths.length ? targetPaths[index % targetPaths.length] || targetPaths[0] || '' : `${basePath}/${id}.json`
+      : ''
     const writePaths = kindWrites ? [selectedTarget].filter(Boolean) : []
-    const readPaths = readonlyPaths.length ? readonlyPaths : targetPaths.filter((item) => !writePaths.includes(item))
+    const readPaths = writeCapable
+      ? readonlyPaths.length ? readonlyPaths : targetPaths.filter((item) => !writePaths.includes(item))
+      : distributeReadonlyPaths(readonlyPathPool, index, totalWorkItems)
     const leaseRequirements: NarutoLeaseRequirement[] = [
       ...writePaths.map((file) => ({ path: file, kind: 'write' as const })),
       ...readPaths.map((file) => ({ path: file, kind: 'read' as const }))
@@ -111,8 +117,10 @@ export function buildNarutoWorkGraph(input: BuildNarutoWorkGraphInput = {}): Nar
     workItems.push({
       id,
       kind,
-      title: titleForKind(kind, id),
-      target_paths: [...new Set([...(writePaths.length ? writePaths : [selectedTarget].filter(Boolean)), ...readPaths])],
+      title: promptScopes[index] ? titleForScope(promptScopes[index] as string, index) : titleForKind(kind, id),
+      target_paths: writeCapable
+        ? [...new Set([...(writePaths.length ? writePaths : [selectedTarget].filter(Boolean)), ...readPaths])]
+        : readPaths,
       readonly_paths: readPaths,
       write_paths: writePaths,
       required_role: mapWorkKindToNarutoRole(kind),
@@ -263,6 +271,55 @@ function titleForKind(kind: NarutoWorkKind, id: string): string {
   return `${id} ${kind.replace(/_/g, ' ')}`
 }
 
+function titleForScope(scope: string, index: number): string {
+  const compact = String(scope || '').replace(/\s+/g, ' ').trim().slice(0, 220)
+  return `Scope ${index + 1}: ${compact}`
+}
+
+export function extractNarutoPromptScopes(prompt: string, maxItems: number): string[] {
+  const limit = Math.max(1, normalizePositiveInt(maxItems, 1))
+  const text = String(prompt || '').replace(/\r/g, '').trim()
+  if (!text) return []
+  const label = /(?:^|\s)(?:(?:five|\d+)\s+(?:independent\s+)?slices?|다섯\s*(?:개(?:의)?)?\s*(?:독립\s*)?(?:슬라이스|영역|항목))\s*:\s*/i.exec(text)
+  let source = label ? text.slice((label.index || 0) + label[0].length) : text
+  const numbered = (source.match(/(?:^|[\s;])\d{1,2}[.):]\s+/g) || []).length >= 2
+  const bulleted = (source.match(/^\s*[-*•]\s+/gm) || []).length >= 2
+  const semicolonDelimited = source.includes(';')
+  if (!label && !numbered && !bulleted && !semicolonDelimited) return []
+  if (!label && numbered) {
+    const firstMarker = /(?:^|[\s;])\d{1,2}[.):]\s+/.exec(source)
+    if (firstMarker) source = source.slice(firstMarker.index)
+  } else if (!label && bulleted) {
+    const firstBullet = /^\s*[-*•]\s+/m.exec(source)
+    if (firstBullet) source = source.slice(firstBullet.index)
+  }
+
+  const normalized = source.replace(/\s+(?=\d{1,2}[.):]\s+)/g, '\n')
+  const scopes: string[] = []
+  const seen = new Set<string>()
+  for (const raw of normalized.split(/[;\n]+/)) {
+    const scope = stripNarutoScopeInstructionTail(raw
+      .replace(/^\s*(?:[-*•]\s+|\d{1,2}[.):]\s*)/, '')
+      .replace(/[;\s]+$/, '')
+      .replace(/\s+/g, ' ')
+      .trim())
+      .replace(/[.!?。！？]+$/, '')
+      .trim()
+    const key = scope.toLowerCase()
+    if (!scope || seen.has(key)) continue
+    seen.add(key)
+    scopes.push(scope)
+    if (scopes.length >= limit) break
+  }
+  return scopes
+}
+
+function stripNarutoScopeInstructionTail(text: string): string {
+  const sentences = String(text || '').split(/(?<=[.!?。！？])\s+/).map((part) => part.trim()).filter(Boolean)
+  const instructionIndex = sentences.findIndex((sentence, index) => index > 0 && /^(?:inspect|review|check|verify|use|do\s+not|never|return|report|limit|only|검사|검토|확인|검증|사용|수정하지|실행하지|반환|보고|제한)/i.test(sentence))
+  return (instructionIndex < 0 ? text : sentences.slice(0, instructionIndex).join(' ')).trim()
+}
+
 function normalizePositiveInt(value: unknown, fallback: number): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, Math.floor(fallback))
@@ -271,4 +328,10 @@ function normalizePositiveInt(value: unknown, fallback: number): number {
 
 function normalizePaths(paths: string[]): string[] {
   return [...new Set(paths.map(normalizeNarutoPath).filter(Boolean))]
+}
+
+function distributeReadonlyPaths(paths: string[], index: number, totalItems: number): string[] {
+  if (!paths.length) return []
+  const assigned = paths.filter((_path, pathIndex) => pathIndex % Math.max(1, totalItems) === index)
+  return assigned.length ? assigned : [paths[index % paths.length] as string]
 }

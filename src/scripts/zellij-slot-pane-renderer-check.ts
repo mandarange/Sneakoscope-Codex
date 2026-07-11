@@ -16,7 +16,7 @@ const text = renderer.renderZellijSlotPane({
   serviceTier: 'fast',
   provider: 'codex-lb',
   authMode: 'codex_lb_key',
-  model: 'gpt-5.5',
+  model: 'gpt-5.6-terra',
   reasoningEffort: 'medium',
   currentFile: 'src/core/foo.ts',
   currentTask: 'Editing Zellij slot pane renderer',
@@ -57,7 +57,7 @@ await fs.writeFile(path.join(artifactDir, 'zellij-worker-pane.json'), JSON.strin
 }, null, 2))
 await fs.writeFile(path.join(artifactDir, 'codex-control-proof.json'), JSON.stringify({
   config: {
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-terra',
     model_provider: 'codex-lb',
     service_tier: 'fast',
     model_reasoning_effort: 'medium'
@@ -135,10 +135,10 @@ const report = {
   max_compact_lines: 14,
   contains_slot: /┌─ slot-003/.test(text) && /slot-003/.test(text),
   contains_status: /coding/.test(text),
-  contains_runtime: /gpt-5\.5·fast/.test(text),
+  contains_runtime: /gpt-5\.6-terra·fast/.test(text),
   contains_files: /src\/core\/foo\.ts/.test(text),
   contains_live_event: /renderer updated live pane output/.test(text),
-  artifact_hydrates_runtime: /gpt-5\.5·fast/.test(hydrated),
+  artifact_hydrates_runtime: /gpt-5\.6-terra·fast/.test(hydrated),
   artifact_hydrates_live_event: /renderer stdout tail/.test(hydrated),
   artifact_hydrates_planned_file: /zellij-slot-pane-renderer\.ts/.test(hydrated),
   mission_live_telemetry_wins: /mission telemetry stale fixture/.test(missionHydrated) && /renderer stdout tail/.test(missionHydrated),

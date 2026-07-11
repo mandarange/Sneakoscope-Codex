@@ -15,6 +15,7 @@ test('codex-lb launchctl failure is structured and redacted', async () => {
     host: 'lb.example.test',
     apiKey: 'sk-launchctl-secret',
     forceLaunchEnv: true,
+    syncLaunchctl: true,
     launchctlBin: fakeLaunchctl,
     syncCodexLogin: false
   });

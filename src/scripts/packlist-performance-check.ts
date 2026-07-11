@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
@@ -23,8 +24,10 @@ const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 10
 // checks; keep those scripts publishable because package contract validation
 // rejects scripts that point at files absent from the tarball. 5.12.0 adds ops
 // maturity diagnostics, migration/recovery smokes, and their package-referenced
-// gates, pushing the packed tarball to ~2400 KiB.
-const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || 2410 * 1024);
+// gates, pushing the packed tarball to ~2400 KiB. 6.0.3 adds the menu restart
+// lifecycle and Naruto GPT-5.6 routing enforcement, bringing the measured
+// packed size to ~2411 KiB; keep the next 1 KiB boundary as the narrow cap.
+const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYTES);
 const SURFACE_MAX_PACKED = Number(process.env.SKS_PACKAGE_SURFACE_MAX_PACK_BYTES || 25_000_000);
 const SURFACE_MAX_FILES = Number(process.env.SKS_PACKAGE_SURFACE_MAX_FILES || 2500);
 

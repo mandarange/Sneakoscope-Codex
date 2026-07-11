@@ -4,10 +4,20 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+const packageVersion = JSON.parse(await fs.readFile('package.json', 'utf8')).version;
+const fakeNpmTimeoutMs = 5_000;
+
+function npmFixtureEnv(overrides = {}) {
+  const env = { ...process.env, ...overrides };
+  delete env.SKS_NPM_VIEW_SNEAKOSCOPE_VERSION;
+  return env;
+}
+
 test('SKS update check is a function-only npm freshness check', async () => {
   const { runSksUpdateCheck, comparePackageVersions } = await import('../../dist/core/update-check.js');
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-update-check-'));
   const log = path.join(tmp, 'npm-log.jsonl');
+  const cacheRoot = path.join(tmp, 'update-cache');
   const fakeNpm = path.join(tmp, 'npm-fake.mjs');
   await fs.writeFile(fakeNpm, `#!/usr/bin/env node
 import fs from 'node:fs';
@@ -34,7 +44,13 @@ process.exit(1);
   const result = await runSksUpdateCheck({
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_FAKE_LATEST: '99.99.99', SKS_FAKE_GLOBAL: '1.10.0' }
+    timeoutMs: fakeNpmTimeoutMs,
+    env: npmFixtureEnv({
+      SKS_FAKE_NPM_LOG: log,
+      SKS_FAKE_LATEST: '99.99.99',
+      SKS_FAKE_GLOBAL: '1.10.0',
+      SKS_UPDATE_CHECK_CACHE_ROOT: cacheRoot
+    })
   });
 
   assert.equal(result.schema, 'sks.update-check.v2');
@@ -47,6 +63,9 @@ process.exit(1);
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.ok(calls.some((args) => JSON.stringify(args) === JSON.stringify(['view', 'sneakoscope', 'version', '--silent', '--registry', 'https://registry.npmjs.org/'])));
   assert.ok(calls.some((args) => args[0] === 'list' && args[1] === '-g' && args[2] === 'sneakoscope'));
+  const cacheFiles = await fs.readdir(cacheRoot);
+  assert.equal(cacheFiles.length, 1);
+  assert.match(await fs.readFile(path.join(cacheRoot, cacheFiles[0]), 'utf8'), /"latest": "99\.99\.99"/);
   assert.equal(comparePackageVersions('1.10.0', '1.9.9'), 1);
 });
 
@@ -69,10 +88,10 @@ if (args[0] === 'root' && (args[1] === '-g' || args[1] === '--global')) {
   process.exit(0);
 }
 if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'version') {
-  console.log('99.99.99');
+  console.log('${packageVersion}');
   process.exit(0);
 }
-if (args[0] === 'install' && args[1] === '--global' && args[2] === 'sneakoscope@99.99.99') {
+if (args[0] === 'install' && args[1] === '--global' && args[2] === 'sneakoscope@${packageVersion}') {
   console.log('globally installed');
   process.exit(0);
 }
@@ -84,13 +103,22 @@ process.exit(1);
   const result = await runSksUpdateNow({
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp, SKS_UPDATE_SKIP_SKS_MENUBAR: '1' }
+    timeoutMs: fakeNpmTimeoutMs,
+    env: npmFixtureEnv({
+      HOME: tmp,
+      SKS_GLOBAL_ROOT: path.join(tmp, 'global'),
+      SKS_FAKE_NPM_LOG: log,
+      SKS_MUTATION_LEDGER_ROOT: tmp,
+      SKS_TEST_DOCTOR_OK: '1',
+      SKS_UPDATE_CHECK_CACHE_ROOT: path.join(tmp, 'update-cache'),
+      SKS_UPDATE_SKIP_SKS_MENUBAR: '1'
+    })
   });
 
   assert.equal(result.schema, 'sks.update-now.v2');
   assert.equal(result.ok, true);
   assert.equal(result.status, 'updated');
-  assert.deepEqual(result.npm_args, ['install', '--global', 'sneakoscope@99.99.99', '--registry', 'https://registry.npmjs.org/']);
+  assert.deepEqual(result.npm_args, ['install', '--global', `sneakoscope@${packageVersion}`, '--registry', 'https://registry.npmjs.org/']);
   const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.ok(calls.some((call) => call.args[0] === 'root' && call.args[1] === '--global'));
   assert.ok(calls.some((call) => call.args[0] === 'install' && call.args[1] === '--global'));
@@ -134,7 +162,13 @@ process.exit(1);
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
     dryRun: true,
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log, SKS_MUTATION_LEDGER_ROOT: tmp, SKS_UPDATE_SKIP_SKS_MENUBAR: '1' }
+    timeoutMs: fakeNpmTimeoutMs,
+    env: npmFixtureEnv({
+      SKS_FAKE_NPM_LOG: log,
+      SKS_MUTATION_LEDGER_ROOT: tmp,
+      SKS_UPDATE_CHECK_CACHE_ROOT: path.join(tmp, 'update-cache'),
+      SKS_UPDATE_SKIP_SKS_MENUBAR: '1'
+    })
   });
 
   assert.equal(result.schema, 'sks.update-now.v2');
@@ -175,7 +209,8 @@ process.exit(1);
   const result = await runSksUpdateCheck({
     npmBin: fakeNpm,
     currentVersion: '1.10.0',
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log }
+    timeoutMs: fakeNpmTimeoutMs,
+    env: npmFixtureEnv({ SKS_FAKE_NPM_LOG: log, SKS_UPDATE_CHECK_CACHE_ROOT: path.join(tmp, 'update-cache') })
   });
   assert.equal(result.current, '9.9.9');
   assert.equal(result.npm_global_current, '9.9.9');
@@ -212,7 +247,8 @@ process.exit(1);
   const result = await runSksUpdateCheck({
     npmBin: fakeNpm,
     currentVersion: '4.6.3',
-    env: { ...process.env, SKS_FAKE_NPM_LOG: log }
+    timeoutMs: fakeNpmTimeoutMs,
+    env: npmFixtureEnv({ SKS_FAKE_NPM_LOG: log, SKS_UPDATE_CHECK_CACHE_ROOT: path.join(tmp, 'update-cache') })
   });
   const packageVersion = JSON.parse(await fs.readFile(path.join(process.cwd(), 'package.json'), 'utf8')).version;
   assert.equal(result.current, '4.6.1');

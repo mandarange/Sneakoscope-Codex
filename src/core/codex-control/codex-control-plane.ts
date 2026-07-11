@@ -4,6 +4,7 @@ export interface RequestedScopeContract {
   id?: string
   route?: string
   read_only?: boolean
+  sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access'
   allowed_paths?: string[]
   write_paths?: string[]
   user_confirmed_full_access?: boolean

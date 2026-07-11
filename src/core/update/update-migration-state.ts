@@ -469,7 +469,7 @@ async function runMenubarRetargetStage(root: string): Promise<Omit<LegacyMigrati
   const text = await readText(actionScript, null);
   if (typeof text !== 'string') return { ok: true, status: 'ok', actions: ['menubar_action_script_absent'], blockers: [], warnings: [] };
   const desired = path.join(packageRoot(), 'dist', 'bin', 'sks.js');
-  const line = `SKS_ENTRY=${JSON.stringify(desired)}`;
+  const line = `SKS_ENTRY='${desired.replace(/'/g, `'\\''`)}'`;
   const actions: string[] = [];
   const next = /^\s*SKS_ENTRY\s*=.*$/m.test(text)
     ? text.replace(/^\s*SKS_ENTRY\s*=.*$/m, line)

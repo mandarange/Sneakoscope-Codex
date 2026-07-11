@@ -62,8 +62,9 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const lane = String(readOption(args, '--agent', readOption(args, '--lane', '')))
   const patchEntryId = String(readOption(args, '--patch-entry-id', readOption(args, '--patch-entry', '')))
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
+  const promptExplicit = promptPositionals.length > 0
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, backendExplicit, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, zellijSessionName, zellijPaneWorker, workerPlacement, zellijVisiblePaneCap, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
+  return { command, action, prompt, promptExplicit, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, backendExplicit, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, zellijSessionName, zellijPaneWorker, workerPlacement, zellijVisiblePaneCap, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
 }
 
 export function resolveZellijVisiblePaneCap(value: unknown = '', explicit = false) {

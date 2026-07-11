@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import fs from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -55,18 +56,26 @@ const layoutPath = path.join(tmp, 'layout.kdl');
 await fs.writeFile(layoutPath, built.layout_kdl, 'utf8');
 const requireReal = process.env.SKS_REQUIRE_ZELLIJ === '1' || process.argv.includes('--require-real');
 const capability = await capabilityMod.checkZellijCapability({ root, require: requireReal, writeReport: true });
-const sessionName = 'sks-layout-check';
-if (capability.status === 'ok') await commandMod.runZellij(['kill-session', sessionName], { cwd: root, timeoutMs: 2500, optional: true });
+const runId = `${process.pid}-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`;
+const sessionName = `sks-layout-check-${runId}`;
+const socketDir = path.join('/tmp', `sks-zj-layout-${runId}`);
+const zellijEnv = { ZELLIJ_SOCKET_DIR: socketDir };
 const realRun = capability.status === 'ok'
   ? {
-      create_background: await commandMod.runZellij(['attach', '--create-background', sessionName, 'options', '--default-layout', layoutPath], { cwd: root, timeoutMs: 5000, optional: !requireReal }),
+      create_background: await commandMod.runZellij(['attach', '--create-background', sessionName, 'options', '--default-layout', layoutPath], { cwd: root, env: zellijEnv, timeoutMs: 5000, optional: !requireReal }),
       cleanup: null,
+      session_removed: false,
+      socket_dir_removed: false,
       ok: false
     }
   : null;
 if (realRun) {
-  realRun.cleanup = await commandMod.runZellij(['kill-session', sessionName], { cwd: root, timeoutMs: 5000, optional: true });
-  realRun.ok = realRun.create_background.ok === true;
+  realRun.cleanup = await commandMod.runZellij(['kill-session', sessionName], { cwd: root, env: zellijEnv, timeoutMs: 5000, optional: true });
+  const remaining = await waitForSocketEntriesToClear(socketDir, 2000);
+  realRun.session_removed = !remaining.includes(sessionName);
+  if (remaining.length === 0) await fs.rm(socketDir, { recursive: true, force: true });
+  realRun.socket_dir_removed = !(await exists(socketDir));
+  realRun.ok = realRun.create_background.ok === true && realRun.session_removed && realRun.socket_dir_removed;
 }
 const ok = staticValidation.ok
   && viewportLayoutOk
@@ -76,6 +85,7 @@ const ok = staticValidation.ok
   && invalidValidation.ok === false
   && capability.ok
   && (requireReal ? realRun?.ok === true : true);
+await fs.rm(tmp, { recursive: true, force: true });
 emit({
   schema: 'sks.zellij-layout-valid-check.v1',
   ok,
@@ -87,8 +97,24 @@ emit({
   invalid_fixture: invalidValidation,
   capability,
   real_run: realRun,
+  isolated_session: true,
+  socket_dir: socketDir,
+  temporary_layout_removed: !(await exists(tmp)),
   integration_optional: !requireReal,
   blockers: ok ? [] : ['zellij_layout_valid_check_failed']
 });
 function emit(report) { console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }
 function fail(blocker, detail) { emit({ schema: 'sks.zellij-layout-valid-check.v1', ok: false, blockers: [blocker], detail }); process.exit(1); }
+
+async function waitForSocketEntriesToClear(socketDir, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const entries = await fs.readdir(path.join(socketDir, 'contract_version_1')).catch(() => []);
+    if (entries.length === 0 || Date.now() >= deadline) return entries;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+async function exists(value) {
+  return fs.access(value).then(() => true).catch(() => false);
+}

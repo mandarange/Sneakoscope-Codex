@@ -1,0 +1,1 @@
+export const DEFAULT_MAX_PACK_BYTES = 2414 * 1024

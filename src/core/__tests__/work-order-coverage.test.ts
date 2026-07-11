@@ -61,7 +61,12 @@ test('evaluateWorkOrderCoverage blocks while any item is pending, passes once ev
   assert.ok(pending.blockers.some((b) => b.startsWith('work_order_uncovered:WO-001')));
   assert.ok(pending.blockers.some((b) => b.startsWith('work_order_uncovered:WO-002')));
 
-  ledger = updateWorkOrderItem(ledger, 'WO-001', { status: 'verified', implementation_tasks: ['did the thing'] });
+  ledger = updateWorkOrderItem(ledger, 'WO-001', {
+    status: 'verified',
+    implementation_tasks: ['did the thing'],
+    implementation_evidence: ['implementation.json'],
+    verification_evidence: ['verification.json']
+  });
   const halfDone = evaluateWorkOrderCoverage(ledger);
   assert.equal(halfDone.ok, false);
   assert.equal(halfDone.uncovered_count, 1);
@@ -80,7 +85,12 @@ test('evaluateWorkOrderCoverage blocks on a truncated source inventory even if e
     requests: [{ verbatim: 'only item we kept' }],
     sourcesComplete: false, // parser signaled it dropped items beyond its ceiling
   });
-  ledger = updateWorkOrderItem(ledger, 'WO-001', { status: 'verified', implementation_tasks: ['done'] });
+  ledger = updateWorkOrderItem(ledger, 'WO-001', {
+    status: 'verified',
+    implementation_tasks: ['done'],
+    implementation_evidence: ['implementation.json'],
+    verification_evidence: ['verification.json']
+  });
   const result = evaluateWorkOrderCoverage(ledger);
   assert.equal(result.ok, false);
   assert.ok(result.blockers.includes('work_order_inventory_truncated'));
@@ -106,6 +116,86 @@ test('createAndWriteWorkOrderLedgerForPrompt persists one ledger item per number
   assert.equal(ledger.source_inventory_complete, true);
 });
 
+test('createAndWriteWorkOrderLedgerForPrompt splits explicit semantic slices without turning the instruction tail into work', async () => {
+  const root = await makeTempRoot();
+  const dir = path.join(root, 'mission');
+  await fsp.mkdir(dir, { recursive: true });
+  const prompt = '6.1.0 final independent release audit across five slices: Voxel TriWiki integrity; Codex Desktop fast-mode and codex-lb UI/tool compatibility; native Computer Use Browser Chrome ImageGen self-healing; retention and temporary-file lifecycle; package publish readiness. Inspect only the assigned slice with at most 10 read-only shell commands, never edit or run builds/tests/publish, and return findings, blockers, and evidence paths.';
+  const ledger = await createAndWriteWorkOrderLedgerForPrompt(dir, { missionId: 'M-wo-slices', route: 'Naruto', prompt });
+
+  assert.deepEqual(ledger.items.map((item: any) => item.source.verbatim), [
+    'Voxel TriWiki integrity',
+    'Codex Desktop fast-mode and codex-lb UI/tool compatibility',
+    'native Computer Use Browser Chrome ImageGen self-healing',
+    'retention and temporary-file lifecycle',
+    'package publish readiness'
+  ]);
+  assert.ok(ledger.items.every((item: any) => item.acceptance_criteria.length === 1));
+  assert.ok(ledger.items.every((item: any) => item.acceptance_criteria[0].startsWith('Inspect only the assigned slice')));
+  assert.ok(ledger.items.every((item: any) => item.normalized_requirement.startsWith('6.1.0 final independent release audit across five:')));
+});
+
+test('createAndWriteWorkOrderLedgerForPrompt keeps an ordinary single requirement whole', async () => {
+  const root = await makeTempRoot();
+  const dir = path.join(root, 'mission');
+  await fsp.mkdir(dir, { recursive: true });
+  const prompt = 'Voxel TriWiki integrity and temporary-file lifecycle를 함께 감사해줘.';
+  const ledger = await createAndWriteWorkOrderLedgerForPrompt(dir, { missionId: 'M-wo-single', route: 'Naruto', prompt });
+  assert.equal(ledger.items.length, 1);
+  assert.equal(ledger.items[0].source.verbatim, prompt);
+});
+
+test('semantic slice parsing also respects numbered and sentence boundaries', async () => {
+  const root = await makeTempRoot();
+  const numberedDir = path.join(root, 'numbered');
+  const sentenceDir = path.join(root, 'sentences');
+  await fsp.mkdir(numberedDir, { recursive: true });
+  await fsp.mkdir(sentenceDir, { recursive: true });
+
+  const numbered = await createAndWriteWorkOrderLedgerForPrompt(numberedDir, {
+    missionId: 'M-wo-numbered-slices', route: 'Naruto',
+    prompt: 'Audit slices: 1. wiki integrity 2. Fast UI compatibility 3. publish readiness. Verify each assigned slice and report evidence.'
+  });
+  assert.deepEqual(numbered.items.map((item: any) => item.source.verbatim), ['wiki integrity', 'Fast UI compatibility', 'publish readiness']);
+  assert.ok(numbered.items.every((item: any) => item.acceptance_criteria[0].startsWith('Verify each assigned slice')));
+
+  const sentences = await createAndWriteWorkOrderLedgerForPrompt(sentenceDir, {
+    missionId: 'M-wo-sentence-slices', route: 'Naruto',
+    prompt: 'Audit slices: wiki integrity. Fast UI compatibility. publish readiness. Inspect only the assigned slice and report evidence.'
+  });
+  assert.deepEqual(sentences.items.map((item: any) => item.source.verbatim), ['wiki integrity', 'Fast UI compatibility', 'publish readiness']);
+  assert.ok(sentences.items.every((item: any) => item.acceptance_criteria[0].startsWith('Inspect only the assigned slice')));
+});
+
+test('semantic slice parsing recognizes repeated Scope N markers without a scopes colon', async () => {
+  const root = await makeTempRoot();
+  const dir = path.join(root, 'repeated-scopes');
+  await fsp.mkdir(dir, { recursive: true });
+  const ledger = await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: 'M-wo-repeated-scopes',
+    route: 'Naruto',
+    prompt: 'Final audit across exactly three assigned scopes. Scope 1: TriWiki integrity. Scope 2: Fast UI compatibility. Scope 3: publish readiness. Inspect only the assigned Scope and report evidence.'
+  });
+  assert.deepEqual(ledger.items.map((item: any) => item.source.verbatim), [
+    'TriWiki integrity',
+    'Fast UI compatibility',
+    'publish readiness'
+  ]);
+  assert.ok(ledger.items.every((item: any) => item.acceptance_criteria[0].startsWith('Inspect only the assigned Scope')));
+});
+
+test('semantic slice parsing recognizes Korean 영역 markers without affecting ordinary prompts', async () => {
+  const root = await makeTempRoot();
+  const dir = path.join(root, 'korean-marker');
+  await fsp.mkdir(dir, { recursive: true });
+  const ledger = await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: 'M-wo-korean-slices', route: 'Naruto',
+    prompt: '6.1.0 최종 감사 영역: 복셀 트라이위키 무결성; 빠른 모드 UI 호환성; 배포 준비 상태. 검사 시 할당된 영역만 읽고 증거 경로를 보고한다.'
+  });
+  assert.deepEqual(ledger.items.map((item: any) => item.source.verbatim), ['복셀 트라이위키 무결성', '빠른 모드 UI 호환성', '배포 준비 상태']);
+  assert.ok(ledger.items.every((item: any) => item.acceptance_criteria[0].startsWith('검사 시 할당된 영역')));
+});
+
 test('closeWorkOrderLedgerForRouteResult resolves every item to verified on success and to blocked with the real reason on failure', async () => {
   const root = await makeTempRoot();
   const dir = path.join(root, 'mission');
@@ -124,10 +214,28 @@ test('closeWorkOrderLedgerForRouteResult resolves every item to verified on succ
   assert.ok(closed.items.every((item: any) => item.blocker.reason === 'some_real_blocker'));
   assert.equal(evaluateWorkOrderCoverage(closed).ok, true, 'an honestly blocked ledger is a passing coverage check');
 
+  await fsp.writeFile(path.join(dir, 'completion-proof.json'), '{"ok":true}\n');
   await closeWorkOrderLedgerForRouteResult(dir, { ok: true, blockers: [] });
   closed = await readWorkOrderLedger(dir);
   assert.ok(closed.items.every((item: any) => item.status === 'verified'));
+  assert.ok(closed.items.every((item: any) => item.implementation_evidence.includes('completion-proof.json')));
+  assert.ok(closed.items.every((item: any) => item.verification_evidence.includes('completion-proof.json')));
   assert.equal(evaluateWorkOrderCoverage(closed).ok, true);
+});
+
+test('closeWorkOrderLedgerForRouteResult never verifies success without a persisted route proof', async () => {
+  const root = await makeTempRoot();
+  const dir = path.join(root, 'mission-without-proof');
+  await fsp.mkdir(dir, { recursive: true });
+  await writeWorkOrderLedger(dir, createWorkOrderLedger({
+    missionId: 'M-wo-no-proof',
+    route: 'Naruto',
+    requests: [{ verbatim: 'audit item' }],
+    sourcesComplete: true
+  }));
+  const closed = await closeWorkOrderLedgerForRouteResult(dir, { ok: true });
+  assert.equal(closed.items[0].status, 'blocked');
+  assert.equal(closed.items[0].blocker.reason, 'route_completion_evidence_missing');
 });
 
 test('closeWorkOrderLedgerForRouteResult is a no-op when there is no ledger to close', async () => {
@@ -167,7 +275,12 @@ test('evaluateStop allows a Naruto mission to stop once every work-order-ledger 
     requests: [{ verbatim: 'finished item' }],
     sourcesComplete: true,
   });
-  ledger = updateWorkOrderItem(ledger, 'WO-001', { status: 'verified', implementation_tasks: ['done'] });
+  ledger = updateWorkOrderItem(ledger, 'WO-001', {
+    status: 'verified',
+    implementation_tasks: ['done'],
+    implementation_evidence: ['naruto-gate.json'],
+    verification_evidence: ['naruto-gate.json']
+  });
   await writeWorkOrderLedger(dir, ledger);
   await writeCurrent(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false });
 

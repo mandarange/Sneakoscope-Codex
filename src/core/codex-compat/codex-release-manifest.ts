@@ -21,13 +21,13 @@ export interface CodexReleaseManifest {
 
 export const CURRENT_CODEX_RELEASE_MANIFEST: CodexReleaseManifest = {
   schema: CODEX_RELEASE_MANIFEST_SCHEMA,
-  targetTag: 'rust-v0.142.0',
-  requiredCliVersion: '0.142.0',
-  sdkVersion: '0.142.0',
-  minimumSupportedVersion: '0.142.0',
+  targetTag: 'rust-v0.144.1',
+  requiredCliVersion: '0.144.1',
+  sdkVersion: '0.144.1',
+  minimumSupportedVersion: '0.144.1',
   protocolMode: 'app-server-v2',
-  generatedSchemaSha256: 'fc3c48943de51865e81c8320876fd5310e9d96bd066fc63b74616d26c0e6dd12',
-  upstreamCommit: 'rust-v0.142.0',
+  generatedSchemaSha256: '2b3f14fa2e728f77a16385ff39f3a1d85ab255c1020498a85c1c0fb24f3d2f3c',
+  upstreamCommit: 'rust-v0.144.1',
   featurePolicies: {
     multiAgentMode: 'probe',
     indexedWebSearch: 'probe',

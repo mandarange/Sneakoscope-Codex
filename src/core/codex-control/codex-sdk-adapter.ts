@@ -1,3 +1,4 @@
+import os from 'node:os'
 import path from 'node:path'
 import { appendJsonlBounded } from '../fsx.js'
 import type { CodexTaskInput } from './codex-control-plane.js'
@@ -5,7 +6,13 @@ import { buildCodexExecutionPolicy, buildCodexSdkConfig } from './codex-sdk-conf
 import { buildCodexSdkEnv } from './codex-sdk-env-policy.js'
 import { translateCodexSdkEvent } from './codex-event-translator.js'
 import type { CodexSdkSandboxMode } from './codex-sdk-sandbox-policy.js'
+import { codexTimeoutClassForRoute } from './codex-reliability-shield.js'
 import { resolveCodexRuntime } from '../codex-runtime/resolve-codex-runtime.js'
+import {
+  codexLbToolCatalogPath,
+  ensureCodexLbToolCatalog,
+  isCodexLbGpt56Model
+} from '../codex-lb/codex-lb-tool-catalog.js'
 
 export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   sandboxMode: CodexSdkSandboxMode
@@ -20,11 +27,30 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     requestedBy: 'codex-sdk-adapter'
   })
   if (!runtime.identity) throw new Error(`Codex runtime not found: ${runtime.blockers.join(',')}`)
+  const toolCatalog = await prepareCodexLbToolCatalog(input, policy)
+  if (toolCatalog.required && !toolCatalog.ok) {
+    return {
+      ok: false,
+      sdkThreadId: '',
+      sdkRunId: null,
+      events: [],
+      finalResponse: '',
+      structuredOutput: null,
+      blockers: [...new Set(['codex_lb_gpt56_tool_catalog_unavailable', ...(toolCatalog.blockers || [])])],
+      liveEventsWritten: false,
+      runtimeIdentity: runtime.identity,
+      executionPolicy: buildCodexExecutionPolicy(input),
+      raw: { tool_catalog: toolCatalog }
+    }
+  }
   const executionPolicy = buildCodexExecutionPolicy(input)
+  const runtimeConfig = toolCatalog.ok && toolCatalog.path
+    ? { ...policy.config, model_catalog_json: toolCatalog.path }
+    : policy.config
   const codex = new Codex({
     codexPathOverride: runtime.identity.realpath,
     env: policy.env,
-    config: policy.config
+    config: runtimeConfig
   })
   const threadOptions = {
     workingDirectory: input.cwd,
@@ -73,7 +99,7 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
       liveEventsWritten,
       runtimeIdentity: runtime.identity,
       executionPolicy,
-      raw: { timeout_ms: timeoutMs, aborted: true }
+      raw: { timeout_ms: timeoutMs, aborted: true, tool_catalog: toolCatalog }
     }
   } finally {
     clearTimeout(timer)
@@ -91,7 +117,7 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
       liveEventsWritten,
       runtimeIdentity: runtime.identity,
       executionPolicy,
-      raw: { failed_event: failed }
+      raw: { failed_event: failed, tool_catalog: toolCatalog }
     }
   }
   const structuredOutput = parseStructuredOutput(finalResponse, Boolean(input.outputSchema))
@@ -106,7 +132,7 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
     runtimeIdentity: runtime.identity,
     executionPolicy,
     liveEventsWritten,
-    raw: { item_count: events.filter((event) => String(event?.type || '').startsWith('item.')).length }
+    raw: { item_count: events.filter((event) => String(event?.type || '').startsWith('item.')).length, tool_catalog: toolCatalog }
   }
 }
 
@@ -116,10 +142,42 @@ export function codexSdkRuntimePolicies(input: CodexTaskInput) {
   return { env, config }
 }
 
-function codexSdkTurnTimeoutMs(input: CodexTaskInput) {
+async function prepareCodexLbToolCatalog(input: CodexTaskInput, policy: {
+  env: Record<string, string>
+  config: Record<string, unknown>
+}) {
+  const provider = String(policy.config.model_provider || '')
+  const model = String(policy.config.model || input.model || '')
+  if (provider !== 'codex-lb' || !isCodexLbGpt56Model(model)) {
+    return { schema: 'sks.codex-lb-tool-catalog.v1', ok: true, required: false, status: 'not_required', path: null, blockers: [] as string[] }
+  }
+  const providers = policy.config.model_providers as Record<string, any> | undefined
+  const baseUrl = String(providers?.['codex-lb']?.base_url || policy.env.CODEX_LB_BASE_URL || '')
+  const apiKey = String(policy.env.CODEX_LB_API_KEY || '')
+  const isolatedCodexHome = String(policy.env.CODEX_HOME || '')
+  if (!isolatedCodexHome) {
+    return { schema: 'sks.codex-lb-tool-catalog.v1', ok: false, required: true, status: 'blocked', path: null, blockers: ['codex_sdk_isolated_codex_home_missing'] }
+  }
+  // Model catalogs contain no bearer secret and are identity-bound, owner-only
+  // files. Keep one validated global cache so isolated worker CODEX_HOME roots do
+  // not each spend a model-call slot fetching the same catalog.
+  const sharedCodexHome = String(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'))
+  return ensureCodexLbToolCatalog({
+    codexHome: isolatedCodexHome,
+    outputPath: codexLbToolCatalogPath(sharedCodexHome),
+    baseUrl,
+    apiKey,
+    timeoutMs: 5000
+  })
+}
+
+export function codexSdkTurnTimeoutMs(input: CodexTaskInput) {
   const explicit = Number(process.env.SKS_CODEX_SDK_TURN_TIMEOUT_MS)
   if (Number.isFinite(explicit) && explicit > 0) return Math.max(1000, Math.floor(explicit))
-  const timeoutClass = input.reliabilityPolicy?.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
+  const timeoutClass = codexTimeoutClassForRoute(
+    input.route,
+    input.reliabilityPolicy?.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
+  )
   if (timeoutClass === 'short') return 45_000
   if (timeoutClass === 'long') return 300_000
   return 120_000

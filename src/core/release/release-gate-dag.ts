@@ -108,6 +108,34 @@ export function loadReleaseGateManifest(root: string, file = 'release-gates.v2.j
   return validation.manifest
 }
 
+export function selectReleaseGateClosure(manifest: ReleaseGateManifestV2, requestedGateIds: Iterable<string>): ReleaseGateNode[] {
+  const requested = [...new Set([...requestedGateIds].map(String).filter(Boolean))]
+  const byId = new Map(manifest.gates.map((gate) => [gate.id, gate]))
+  const unknown = requested.filter((id) => !byId.has(id)).sort()
+  if (unknown.length) throw new Error(`release_gate_only_selection_unknown:${unknown.join(',')}`)
+  const selected = new Set<string>()
+  const visiting = new Set<string>()
+  const stack: string[] = []
+  const visit = (id: string) => {
+    if (selected.has(id)) return
+    if (visiting.has(id)) {
+      const cycleStart = stack.indexOf(id)
+      const cycle = [...stack.slice(Math.max(0, cycleStart)), id]
+      throw new Error(`release_gate_only_selection_dependency_cycle:${cycle.join('->')}`)
+    }
+    const gate = byId.get(id)
+    if (!gate) throw new Error(`release_gate_only_selection_missing_dependency:${stack.at(-1) || 'requested'}:${id}`)
+    visiting.add(id)
+    stack.push(id)
+    for (const dep of gate.deps || []) visit(dep)
+    stack.pop()
+    visiting.delete(id)
+    selected.add(id)
+  }
+  for (const id of requested) visit(id)
+  return manifest.gates.filter((gate) => selected.has(gate.id))
+}
+
 export async function runReleaseGateDag(input: {
   root: string
   preset?: string
@@ -128,7 +156,7 @@ export async function runReleaseGateDag(input: {
   const manifest = loadReleaseGateManifest(root)
   const onlyGateIds = new Set((input.onlyGateIds || []).map(String).filter(Boolean))
   const presetGates = onlyGateIds.size
-    ? manifest.gates.filter((gate) => onlyGateIds.has(gate.id))
+    ? selectReleaseGateClosure(manifest, onlyGateIds)
     : selectReleaseGatePreset(manifest, preset)
   const forceFullSelection = input.full === true || onlyGateIds.size > 0
   const affected = (preset === 'affected' || preset === 'fast' || preset === 'confidence') && !forceFullSelection
@@ -155,6 +183,10 @@ export async function runReleaseGateDag(input: {
   const affectedExternalSatisfiedDeps = affected.selection.mode === 'affected'
     ? new Set(selected.flatMap((gate) => gate.deps || []).filter((dep) => !selectedIds.has(dep)))
     : new Set<string>()
+  const missingSelectedDeps = selected.flatMap((gate) => (gate.deps || [])
+    .filter((dep) => !selectedIds.has(dep) && !affectedExternalSatisfiedDeps.has(dep))
+    .map((dep) => `${gate.id}->${dep}`))
+  if (missingSelectedDeps.length) throw new Error(`release_gate_selection_missing_dependencies:${[...new Set(missingSelectedDeps)].sort().join(',')}`)
   const runId = `rg-${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}`
   const retentionBefore = await pruneOldReleaseGateRunDirs(root)
   await sweepSksTempDirs(root, { maxAgeHours: 24 }).catch(() => null)
@@ -363,7 +395,9 @@ export async function runReleaseGateDag(input: {
 
 export function selectReleaseGatePreset(manifest: ReleaseGateManifestV2, preset: string): ReleaseGateNode[] {
   const effectivePreset = preset === 'affected' || preset === 'fast' || preset === 'confidence' ? 'release' : preset
-  return manifest.gates.filter((gate) => gate.preset.includes(effectivePreset))
+  const selected = manifest.gates.filter((gate) => gate.preset.includes(effectivePreset))
+  if (!selected.length) throw new Error(`release_gate_preset_empty_or_unknown:${preset}`)
+  return selected
 }
 
 interface GateRunResult {
@@ -530,7 +564,7 @@ function tail(value: string, limit = 1200): string {
 }
 
 export async function pruneOldReleaseGateRunDirs(root: string, opts: { keep?: number; preserveRunId?: string | null } = {}): Promise<ReleaseGateRunRetention> {
-  const keep = Math.max(1, Math.floor(Number(opts.keep ?? process.env.SKS_RELEASE_GATE_RUN_RETENTION ?? 20) || 20))
+  const keep = Math.max(1, Math.floor(Number(opts.keep ?? process.env.SKS_RELEASE_GATE_RUN_RETENTION ?? 5) || 5))
   const preserveRunId = opts.preserveRunId || null
   const base = path.join(root, '.sneakoscope', 'reports', 'release-gates')
   const report: ReleaseGateRunRetention = {

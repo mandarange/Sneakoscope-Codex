@@ -168,7 +168,7 @@ export function formatHarnessConflictReport(scan: any, opts: any = {}) {
 
 export function llmHarnessCleanupPrompt(scan: any) {
   const paths = (scan?.conflicts || []).map((x: any) => `- ${x.scope}: ${x.path} (${x.reason})`).join('\n') || '- No paths supplied. Re-run `sks doctor --json` first.';
-  return `Use GPT-5.5 with reasoning effort high.
+  return `Use GPT-5.6 with reasoning effort high.
 
 Goal: completely remove the conflicting Codex harnesses before installing Sneakoscope Codex.
 

@@ -2,7 +2,7 @@
 
 Computer Use evidence is real-dependency evidence when Codex Computer Use is available for a native macOS/non-web target and mock evidence when loaded from fixtures. Mock evidence must stay labeled `mock`, `fixture`, or `verified_partial`.
 
-Computer Use is a macOS Codex App capability check with an optional live evidence surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy. Web, browser, localhost, website, webapp, and web-based app verification must use the official Codex Chrome Extension path first: https://developers.openai.com/codex/app/chrome-extension. If the extension is not installed/enabled, SKS must halt the web QA/UX pipeline and ask the user to set it up before resuming. Computer Use is only for native Mac, desktop-app, OS-settings, and non-web visual targets.
+Computer Use is a macOS Codex App capability check with an optional live evidence surface. It is independent from MAD-SKS, DB safety, and generic SKS safety policy. SKS must not describe Computer Use as blocked by MAD-SKS or by an SKS safety policy. Web, browser, localhost, website, webapp, and web-based app verification must use the official Codex Chrome Extension path first: https://learn.chatgpt.com/docs/chrome-extension. If the extension is not installed/enabled, SKS must halt the web QA/UX pipeline and ask the user to set it up before resuming. Computer Use is only for native Mac, desktop-app, OS-settings, and non-web visual targets.
 
 Status commands:
 

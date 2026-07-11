@@ -17,8 +17,12 @@ export async function buildDfixVerificationSelection(root: string, input: any = 
   const hasPyproject = await existsFile(path.join(root, 'pyproject.toml'));
   const candidates: Array<{ command: string; reason: string; confidence: number; expected_duration_budget_ms: number }> = [];
   if (changedFiles.some((file) => /(?:^|\/)test\/.*\.(?:test|spec)\.(?:mjs|js|ts)$/.test(file)) && scripts['test:unit']) candidates.push({ command: 'npm run test:unit', reason: 'test_file_changed', confidence: 0.82, expected_duration_budget_ms: 15000 });
-  if (changedFiles.some((file) => /^src\/core\/dfix/.test(file)) && scripts['dfix:fixture']) candidates.push({ command: 'npm run dfix:fixture', reason: 'dfix_source_changed', confidence: 0.9, expected_duration_budget_ms: 3000 });
-  if (changedFiles.some((file) => /^src\/core\/dfix/.test(file)) && scripts['dfix:verification']) candidates.push({ command: 'npm run dfix:verification', reason: 'dfix_source_changed', confidence: 0.88, expected_duration_budget_ms: 3000 });
+  if (changedFiles.some((file) => /^src\/core\/dfix/.test(file)) && await existsFile(path.join(root, 'dist', 'scripts', 'dfix-fixture-check.js'))) {
+    candidates.push({ command: 'node ./dist/scripts/dfix-fixture-check.js', reason: 'dfix_source_changed', confidence: 0.9, expected_duration_budget_ms: 3000 });
+  }
+  if (changedFiles.some((file) => /^src\/core\/dfix/.test(file)) && await existsFile(path.join(root, 'dist', 'scripts', 'dfix-verification-check.js'))) {
+    candidates.push({ command: 'node ./dist/scripts/dfix-verification-check.js', reason: 'dfix_source_changed', confidence: 0.88, expected_duration_budget_ms: 3000 });
+  }
   if (changedFiles.some((file) => /\.(?:json|schema\.json)$/.test(file)) && scripts['schema:check']) candidates.push({ command: 'npm run schema:check', reason: 'schema_file_changed', confidence: 0.76, expected_duration_budget_ms: 10000 });
   if (changedFiles.some((file) => /^docs\/|\.md$/.test(file)) && scripts.packcheck) candidates.push({ command: 'npm run packcheck', reason: 'docs_or_script_light_check', confidence: 0.68, expected_duration_budget_ms: 5000 });
   if (hasTsconfig && scripts.typecheck) candidates.push({ command: 'npm run typecheck', reason: 'typescript_project', confidence: 0.72, expected_duration_budget_ms: 30000 });

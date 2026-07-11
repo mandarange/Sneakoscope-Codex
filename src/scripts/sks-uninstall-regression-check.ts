@@ -19,7 +19,7 @@ await writeText(path.join(home, '.codex', 'config.toml'), [
   'default_profile = "sks-fast-high"',
   'service_tier = "fast"',
   '[profiles.sks-fast-high]',
-  'model = "gpt-5.5"',
+  'model = "gpt-5.6-terra"',
   '[user.fast_mode]',
   'enabled = true',
   '[mcp_servers.user]',

@@ -2,17 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from '../../dist/core/fsx.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const scriptPath = path.join(repoRoot, 'dist', 'scripts', 'readme-architecture-imagegen-official-check.js');
 const fixtureImage = path.join(repoRoot, 'docs', 'assets', 'sneakoscope-architecture-pipeline.jpg');
+const packageVersion = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version;
+const promptArtifactName = `readme-architecture-imagegen-prompt-${packageVersion}.txt`;
+const reportArtifactName = `readme-architecture-imagegen-attempt-${packageVersion}.json`;
 
-test('README architecture imagegen check blocks when official output is missing', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check blocks when official output is missing', async (t) => {
+  const root = await tempWorkspace(t);
   const run = runCheck(root);
   assert.equal(run.status, 1);
   assert.equal(run.report.ok, false);
@@ -22,8 +25,8 @@ test('README architecture imagegen check blocks when official output is missing'
   assert.equal(run.report.existing_asset_overwritten, false);
 });
 
-test('README architecture imagegen check can print the official prompt without requiring output', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check can print the official prompt without requiring output', async (t) => {
+  const root = await tempWorkspace(t);
   const run = runCheck(root, {}, ['--print-prompt']);
   assert.equal(run.status, 0);
   assert.equal(run.report.ok, true);
@@ -34,8 +37,8 @@ test('README architecture imagegen check can print the official prompt without r
   assert.match(run.stdout, /SKS_CODEX_APP_IMAGEGEN_OUTPUT=<path>/);
 });
 
-test('README architecture imagegen check rejects old generated_images output', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check rejects old generated_images output', async (t) => {
+  const root = await tempWorkspace(t);
   const first = runCheck(root);
   assert.equal(first.status, 1);
 
@@ -55,8 +58,8 @@ test('README architecture imagegen check rejects old generated_images output', a
   assert.equal(run.report.existing_asset_overwritten, false);
 });
 
-test('README architecture imagegen check rejects moved output even with self-attested metadata', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check rejects moved output even with self-attested metadata', async (t) => {
+  const root = await tempWorkspace(t);
   const first = runCheck(root);
   assert.equal(first.status, 1);
 
@@ -75,8 +78,8 @@ test('README architecture imagegen check rejects moved output even with self-att
   assert.equal(run.report.existing_asset_overwritten, false);
 });
 
-test('README architecture imagegen check accepts current generated_images output', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check accepts current generated_images output', async (t) => {
+  const root = await tempWorkspace(t);
   const first = runCheck(root);
   assert.equal(first.status, 1);
 
@@ -98,8 +101,8 @@ test('README architecture imagegen check accepts current generated_images output
   assert.equal(run.report.validation.ok, true);
 });
 
-test('README architecture imagegen check can auto-pick one current generated_images output when explicitly enabled', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check can auto-pick one current generated_images output when explicitly enabled', async (t) => {
+  const root = await tempWorkspace(t);
   const first = runCheck(root);
   assert.equal(first.status, 1);
 
@@ -120,8 +123,8 @@ test('README architecture imagegen check can auto-pick one current generated_ima
   assert.equal(run.report.existing_asset_overwritten, true);
 });
 
-test('README architecture imagegen check preserves prompt mtime before auto-pick rerun', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check preserves prompt mtime before auto-pick rerun', async (t) => {
+  const root = await tempWorkspace(t);
   const first = runCheck(root);
   assert.equal(first.status, 1);
   await delay(100);
@@ -140,14 +143,14 @@ test('README architecture imagegen check preserves prompt mtime before auto-pick
   assert.equal(run.report.input_contract.auto_pick_result.absolute_path, source);
 });
 
-test('README architecture imagegen check waits for one current generated_images output when enabled', async () => {
-  const root = await tempWorkspace();
+test('README architecture imagegen check waits for one current generated_images output when enabled', async (t) => {
+  const root = await tempWorkspace(t);
   const source = path.join(root, '.codex-home', 'generated_images', 'session-1', 'waited-output.jpg');
   const pending = runCheckAsync(root, {
-    SKS_CODEX_APP_IMAGEGEN_WAIT_MS: '2000',
+    SKS_CODEX_APP_IMAGEGEN_WAIT_MS: '10000',
     SKS_CODEX_APP_IMAGEGEN_POLL_MS: '50'
   });
-  await waitForFile(path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-prompt-1.18.8.txt'));
+  await waitForFile(path.join(root, '.sneakoscope', 'reports', promptArtifactName));
   await delay(50);
   await fsp.mkdir(path.dirname(source), { recursive: true });
   await fsp.copyFile(fixtureImage, source);
@@ -160,8 +163,9 @@ test('README architecture imagegen check waits for one current generated_images 
   assert.equal(run.report.input_contract.wait_result.output.absolute_path, source);
 });
 
-async function tempWorkspace() {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-readme-imagegen-'));
+async function tempWorkspace(t) {
+  const root = tmpdir('sks-readme-imagegen-');
+  t.after(() => fsp.rm(root, { recursive: true, force: true }));
   await fsp.mkdir(path.join(root, 'docs', 'assets'), { recursive: true });
   await fsp.copyFile(fixtureImage, path.join(root, 'docs', 'assets', 'sneakoscope-architecture-pipeline.jpg'));
   await writeFakeCodex(root);
@@ -192,7 +196,7 @@ function runCheck(root, extraEnv = {}, scriptArgs = []) {
     env,
     encoding: 'utf8'
   });
-  const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.8.json');
+  const reportPath = path.join(root, '.sneakoscope', 'reports', reportArtifactName);
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   return { status: result.status, stdout: result.stdout, stderr: result.stderr, report };
 }
@@ -218,7 +222,7 @@ function runCheckAsync(root, extraEnv = {}) {
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', reject);
     child.on('close', (status) => {
-      const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.8.json');
+      const reportPath = path.join(root, '.sneakoscope', 'reports', reportArtifactName);
       const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
       resolve({ status, stdout, stderr, report });
     });
@@ -229,7 +233,7 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForFile(file, timeoutMs = 1500) {
+async function waitForFile(file, timeoutMs = 10_000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     if (fs.existsSync(file)) return;

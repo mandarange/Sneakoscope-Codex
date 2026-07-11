@@ -4,7 +4,7 @@ import { assertGate, emitGate, importDist } from './sks-1-18-gate-lib.js'
 process.env.SKS_CODEX_MODEL_METADATA_FAKE = '1'
 process.env.SKS_CODEX_MODEL_EFFORTS = 'low,medium,high,xhigh'
 const mod = await importDist('core/codex-control/codex-model-capabilities.js')
-const capability = await mod.resolveCodexModelEffortCapability({ model: 'gpt-5.5' })
+const capability = await mod.resolveCodexModelEffortCapability({ model: 'gpt-5.6-terra' })
 assertGate(capability.metadata_source === 'app-server' && capability.advertised_efforts.join(',') === 'low,medium,high,xhigh', 'effort capability must auto-discover model advertised effort order')
 delete process.env.SKS_CODEX_MODEL_METADATA_FAKE
 delete process.env.SKS_CODEX_MODEL_EFFORTS

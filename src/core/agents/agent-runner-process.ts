@@ -49,6 +49,7 @@ export async function runProcessAgent(agent: any, slice: any, opts: any = {}) {
   }
   const result = await runProcess(opts.command[0], opts.command.slice(1), { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...fastModeEnv(fastPolicy) }, timeoutMs: opts.timeoutMs || 30000, maxOutputBytes: 128 * 1024 })
   const report = await writeAgentProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, 'process', {
+    project_hash: opts.projectHash || agent.project_hash || agent.root_hash || null,
     command: opts.command,
     service_tier: fastPolicy.service_tier,
     fast_mode: fastPolicy.fast_mode,

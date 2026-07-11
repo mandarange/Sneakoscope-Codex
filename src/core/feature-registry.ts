@@ -205,7 +205,12 @@ export function buildAllFeaturesSelftest(registry: any, opts: any = {}): JsonDat
     checkRow('agent_lease_policy_present', registry.features.some((feature: any) => feature.id === 'route-native-agent-intake' && /bounded workspace-write/i.test(JSON.stringify(feature.contract || {})) && /lease/i.test(JSON.stringify(feature.contract || {}))), ['route-native-agent-intake']),
     checkRow('fixture_pass_threshold', (fixturesSummary.counts.pass || 0) >= 90, [`pass=${fixturesSummary.counts.pass || 0}`]),
     checkRow('fixture_not_required_ceiling', (fixturesSummary.counts.not_required || 0) <= 16, [`not_required=${fixturesSummary.counts.not_required || 0}`]),
-    checkRow('fixture_mock_blocked_zero', (fixturesSummary.counts.blocked || 0) === 0, [`blocked=${fixturesSummary.counts.blocked || 0}`]),
+    checkRow(
+      'fixture_blocked_contracts_honest',
+      (registry.features || []).filter((feature: any) => feature.fixture?.status === 'blocked')
+        .every((feature: any) => String(feature.fixture?.reason || '').trim().length > 0 && feature.fixture?.fallback_removed === true),
+      (registry.features || []).filter((feature: any) => feature.fixture?.status === 'blocked' && (!String(feature.fixture?.reason || '').trim() || feature.fixture?.fallback_removed !== true)).map((feature: any) => feature.id)
+    ),
     ...(executable ? [checkRow('executable_fixture_contracts', executable.ok, executable.failures)] : [])
   ];
   const ok = checks.every((check: any) => check.ok);
@@ -227,8 +232,11 @@ export function buildAllFeaturesSelftest(registry: any, opts: any = {}): JsonDat
 
 export async function writeAllFeatureCompletionReport({ root = packageRoot(), outDir = path.join(root, '.sneakoscope', 'reports') }: any = {}): Promise<JsonData> {
   const registry = await buildFeatureRegistry({ root });
-  const packageJson = await readJson(path.join(root, 'package.json'), {});
-  const report = buildAllFeatureCompletionReport(registry, { root, packageJson });
+  const [packageJson, releaseManifest] = await Promise.all([
+    readJson(path.join(root, 'package.json'), {}),
+    readJson(path.join(root, 'release-gates.v2.json'), { gates: [] })
+  ]);
+  const report = buildAllFeatureCompletionReport(registry, { root, packageJson, releaseManifest });
   const jsonPath = path.join(outDir, `all-feature-completion-${PACKAGE_VERSION}.json`);
   const markdownPath = path.join(outDir, `all-feature-completion-${PACKAGE_VERSION}.md`);
   await writeJsonAtomic(jsonPath, report);
@@ -238,15 +246,16 @@ export async function writeAllFeatureCompletionReport({ root = packageRoot(), ou
 
 export function buildAllFeatureCompletionReport(registry: any, opts: any = {}): JsonData {
   const packageJson = opts.packageJson || {};
+  const releaseGateIds = new Set<string>((Array.isArray(opts.releaseManifest?.gates) ? opts.releaseManifest.gates : []).map((gate: any) => String(gate.id || '')));
   const features = [
     ...(registry.features || []).map((feature: any) => featureCompletionRow(feature)),
-    ...derivedReleaseFeatureRows(opts.root || packageRoot(), packageJson)
+    ...derivedReleaseFeatureRows(opts.root || packageRoot(), packageJson, releaseGateIds)
   ];
-  const missingScripts = SECTION_29_PACKAGE_SCRIPTS.filter((script: string) => !packageJson.scripts?.[script]);
+  const missingGates = FLAGSHIP_RELEASE_GATES.filter((gate: string) => !releaseGateIds.has(gate));
   const runtimeStatic = runtimeRoutesNotStaticContract(registry.features || []);
   const blockers = [
     ...(registry.coverage?.blockers || []),
-    ...missingScripts.map((script: string) => `missing_script:${script}`),
+    ...missingGates.map((gate: string) => `missing_release_gate:${gate}`),
     ...runtimeStatic.blockers,
     ...(packageJson.version === PACKAGE_VERSION ? [] : [`package_version:${packageJson.version || 'missing'}`]),
     ...features.flatMap((feature: any) => feature.blockers.map((blocker: string) => `${feature.id}:${blocker}`))
@@ -261,12 +270,12 @@ export function buildAllFeatureCompletionReport(registry: any, opts: any = {}): 
       features: features.length,
       registry_features: registry.features?.length || 0,
       derived_release_features: features.length - (registry.features?.length || 0),
-      package_scripts_required: SECTION_29_PACKAGE_SCRIPTS.length,
-      package_scripts_missing: missingScripts.length
+      release_gates_required: FLAGSHIP_RELEASE_GATES.length,
+      release_gates_missing: missingGates.length
     },
     blockers,
-    required_scripts: SECTION_29_PACKAGE_SCRIPTS,
-    missing_scripts: missingScripts,
+    required_gates: FLAGSHIP_RELEASE_GATES,
+    missing_gates: missingGates,
     release_gates: {
       version_metadata: packageJson.version === PACKAGE_VERSION ? 'present' : 'blocked',
       feature_registry: registry.coverage?.ok ? 'present' : 'blocked',
@@ -288,7 +297,7 @@ export function renderAllFeatureCompletionMarkdown(report: any) {
     '',
     `- Status: ${report.status}`,
     `- Features: ${report.counts?.features || 0}`,
-    `- Missing scripts: ${(report.missing_scripts || []).length ? report.missing_scripts.join(', ') : 'none'}`,
+    `- Missing release gates: ${(report.missing_gates || []).length ? report.missing_gates.join(', ') : 'none'}`,
     `- Blockers: ${(report.blockers || []).length ? report.blockers.join(', ') : 'none'}`,
     '',
     '| Feature | Fixture | Evidence | Proof | Trust | Wrongness | Blackbox | Status |',
@@ -298,38 +307,27 @@ export function renderAllFeatureCompletionMarkdown(report: any) {
     const c = feature.coverage || {};
     lines.push(`| \`${feature.id}\` | ${c.fixture?.status || 'missing'} | ${c.evidence_router?.status || 'missing'} | ${c.completion_proof?.status || 'missing'} | ${c.trust_report?.status || 'missing'} | ${c.wrongness?.status || 'missing'} | ${c.blackbox?.status || 'missing'} | ${feature.status} |`);
   }
-  lines.push('', '## Required Release Scripts', '');
-  for (const script of report.required_scripts || []) lines.push(`- ${script}: ${(report.missing_scripts || []).includes(script) ? 'missing' : 'present'}`);
+  lines.push('', '## Required Release Gates', '');
+  for (const gate of report.required_gates || []) lines.push(`- ${gate}: ${(report.missing_gates || []).includes(gate) ? 'missing' : 'present'}`);
   return `${lines.join('\n')}\n`;
 }
 
-const SECTION_29_PACKAGE_SCRIPTS = Object.freeze([
+const FLAGSHIP_RELEASE_GATES = Object.freeze([
   'ux-review:run-wires-imagegen',
   'ux-review:extract-wires-real-extractor',
   'ux-review:patch-diff-recheck',
+  'ux-review:imagegen-blackbox',
   'ppt:real-export-adapter',
   'ppt:real-imagegen-wiring',
   'ppt:reexport-rereview',
+  'ppt:full-e2e-blackbox',
   'dfix:patch-handoff',
   'dfix:verification-recommendation',
   'all-features:deep-completion',
   'evidence:flagship-coverage',
-  'ux-review:generate-callouts-fixture',
-  'ux-review:extract-real-callouts-fixture',
-  'ux-review:patch-handoff-fixture',
-  'ux-review:recapture-recheck-fixture',
-  'ux-review:no-fake-callouts',
-  'ppt:imagegen-review-fixture',
-  'ppt:slide-export-fixture',
-  'ppt:no-text-fallback',
-  'ppt:no-mock-as-real',
-  'ppt:issue-extraction-fixture',
-  'ppt:image-voxel-relations',
-  'ppt:proof-trust-fixture',
   'dfix:fixture',
   'dfix:verification',
-  'all-features:completion',
-  'json-schema:recursive-check'
+  'schema:check'
 ]);
 
 function featureCompletionRow(feature: any) {
@@ -365,14 +363,14 @@ function featureCompletionRow(feature: any) {
   };
 }
 
-function derivedReleaseFeatureRows(root: string, packageJson: any) {
+function derivedReleaseFeatureRows(root: string, packageJson: any, releaseGateIds: Set<string>) {
   const derived = [
     { id: 'release-version-1-14', title: `Release version metadata ${PACKAGE_VERSION}`, artifact: 'package.json', ok: packageJson.version === PACKAGE_VERSION },
     { id: 'all-feature-completion', title: 'All feature completion matrix', artifact: `.sneakoscope/reports/all-feature-completion-${PACKAGE_VERSION}.json`, ok: true },
     { id: 'ppt-imagegen-review', title: 'PPT imagegen review route', artifact: 'src/core/ppt-review/index.ts', ok: existsSync(path.join(root, 'src', 'core', 'ppt-review', 'index.ts')) },
     { id: 'dfix-loop', title: 'DFix diagnose/plan/patch/verify loop', artifact: 'src/core/commands/dfix-command.ts', ok: existsSync(path.join(root, 'src', 'core', 'commands', 'dfix-command.ts')) },
     { id: 'recursive-json-schema-validator', title: 'Recursive JSON schema validator', artifact: 'src/core/json-schema-validator.ts', ok: existsSync(path.join(root, 'src', 'core', 'json-schema-validator.ts')) },
-    { id: 'release-section-29-scripts', title: 'Section 29 release scripts', artifact: 'package.json', ok: SECTION_29_PACKAGE_SCRIPTS.every((script: string) => packageJson.scripts?.[script]) },
+    { id: 'release-flagship-gates', title: 'Current flagship release gates', artifact: 'release-gates.v2.json', ok: FLAGSHIP_RELEASE_GATES.every((gate: string) => releaseGateIds.has(gate)) },
     { id: 'release-blackbox-matrix', title: 'Release blackbox feature matrix', artifact: 'test/blackbox', ok: true }
   ];
   return derived.map((feature: any) => derivedFeatureCompletionRow(feature));

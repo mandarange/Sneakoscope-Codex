@@ -2,7 +2,7 @@ import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { reconcileZellijLaneSupervisorPaneIds } from '../agents/zellij-lane-supervisor.js'
 import { checkZellijCapability } from './zellij-capability.js'
-import { runZellij } from './zellij-command.js'
+import { runZellij, zellijCommandStdout, type ZellijCommandResult } from './zellij-command.js'
 
 export const ZELLIJ_PANE_PROOF_SCHEMA = 'sks.zellij-pane-proof.v1'
 
@@ -26,10 +26,30 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
   const command = sessionName
     ? ['--session', sessionName, 'action', 'list-panes', '--json', '--all']
     : ['action', 'list-panes', '--json', '--all']
-  const paneRun = capability.status === 'ok'
-    ? await runZellij(command, { cwd: root, timeoutMs: 5000, optional: opts.require !== true })
-    : null
-  const rawRows = parsePaneRows(paneRun?.stdout_tail || '')
+  let paneRun: ZellijCommandResult | null = null
+  let rawRows: any[] = []
+  const probeAttempts: Array<{ attempt: number; ok: boolean; pane_count: number; duration_ms: number; output_truncated: boolean }> = []
+  const maxProbeAttempts = opts.phase === 'post_launch' && opts.require === true ? 8 : 1
+  if (capability.status === 'ok') {
+    for (let attempt = 1; attempt <= maxProbeAttempts; attempt += 1) {
+      paneRun = await runZellij(command, {
+        cwd: root,
+        timeoutMs: 5000,
+        maxOutputBytes: 1024 * 1024,
+        optional: opts.require !== true
+      })
+      rawRows = parseZellijPaneRows(zellijCommandStdout(paneRun))
+      probeAttempts.push({
+        attempt,
+        ok: paneRun.ok,
+        pane_count: rawRows.length,
+        duration_ms: paneRun.duration_ms,
+        output_truncated: paneRun.output_truncated
+      })
+      if (rawRows.length > 0 || !paneRun.ok || attempt === maxProbeAttempts) break
+      await delay(Math.min(400, 75 * attempt))
+    }
+  }
   const paneRows = normalizeZellijPaneRows(rawRows)
   const evaluationOpts: { expectedLaneCount?: number; expectedCwd?: string; expectedMainCommandIncludes?: string } = { expectedCwd: opts.expectedCwd || root }
   if (opts.expectedLaneCount !== undefined) evaluationOpts.expectedLaneCount = opts.expectedLaneCount
@@ -48,6 +68,7 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
   const blockers = [
     ...capability.blockers,
     ...(opts.require === true && paneRun && !paneRun.ok ? paneRun.blockers.map((blocker) => `zellij_pane_${blocker}`) : []),
+    ...(opts.require === true && paneRun?.output_truncated ? ['zellij_pane_output_truncated'] : []),
     ...(opts.require === true && capability.status === 'ok' && paneRows.length === 0 ? ['zellij_no_panes_listed'] : []),
     ...(opts.require === true ? evaluation.blockers : [])
   ]
@@ -69,6 +90,7 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
     geometry_distinct: evaluation.geometry_distinct,
     pane_id_reconciliation: paneIdReconciliation,
     panes: paneRows,
+    probe_attempts: probeAttempts,
     command: ['zellij', ...command],
     command_result: paneRun,
     blockers,
@@ -86,7 +108,7 @@ export async function readZellijPaneProof(root: string) {
   return readJson<any>(path.join(root, 'zellij-pane-proof.json'), null)
 }
 
-function parsePaneRows(text: string): any[] {
+export function parseZellijPaneRows(text: string): any[] {
   if (!text.trim()) return []
   try {
     const parsed = JSON.parse(text)
@@ -96,6 +118,10 @@ function parsePaneRows(text: string): any[] {
   } catch {
     return []
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export function normalizeZellijPaneRows(rows: any[]): any[] {

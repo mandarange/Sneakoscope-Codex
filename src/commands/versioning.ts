@@ -3,6 +3,12 @@ import { bumpProjectVersion, disableVersionGitHook, versioningStatus } from '../
 import { flag } from '../cli/args.js';
 import { printJson } from '../cli/output.js';
 export async function run(_command: any, args: any = []) {
+  if (flag(args, '--help') || flag(args, '-h')) {
+    const usage = 'Usage: sks versioning status|bump [major|minor|patch]|disable [--json]';
+    if (flag(args, '--json')) return printJson({ ok: true, command: 'versioning', usage, mutated: false });
+    console.log(usage);
+    return;
+  }
   const root = await projectRoot();
   const action = args[0] || 'status';
   const bump = ['major', 'minor', 'patch'].includes(String(args[1] || '')) ? String(args[1]) : null;

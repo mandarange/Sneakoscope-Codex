@@ -566,6 +566,7 @@ export function createOpenAIImagesApiAdapter(opts: any = {}): ImageUxReviewImage
 
 async function writeGeneratedImagePathContract(input: ImageUxReviewImagegenRequest, outputPath: string, provider: string) {
   const root = await resolveImageArtifactRoot(input);
+  const skipNativeInvocationPlan = provider !== 'codex_app_imagegen';
   if (input.mission_id) {
     await registerImageArtifact(root, {
       missionId: input.mission_id,
@@ -573,7 +574,8 @@ async function writeGeneratedImagePathContract(input: ImageUxReviewImagegenReque
       kind: 'generated_image',
       filePath: outputPath,
       route: '$Image-UX-Review',
-      stage: provider
+      stage: provider,
+      skipNativeInvocationPlan
     });
   }
   return writeImageArtifactPathContract(root, {
@@ -585,7 +587,8 @@ async function writeGeneratedImagePathContract(input: ImageUxReviewImagegenReque
       route: '$Image-UX-Review',
       stage: provider
     }],
-    artifactPath: path.join(input.output_dir, 'image-artifact-path-contract.json')
+    artifactPath: path.join(input.output_dir, 'image-artifact-path-contract.json'),
+    skipNativeInvocationPlan
   });
 }
 

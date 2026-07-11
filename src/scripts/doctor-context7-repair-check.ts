@@ -18,7 +18,8 @@ await fs.mkdir(path.join(tmp, '.codex'), { recursive: true })
 await fs.mkdir(codexHome, { recursive: true })
 
 const localBlock = [
-  'model = "gpt-5.5"',
+  '# SKS managed fixture',
+  'model = "gpt-5.6-terra"',
   '',
   '[mcp_servers.context7]',
   'command = "npx"',

@@ -28,13 +28,17 @@ test('imagegen capability records gpt-image-2 fidelity policy', async () => {
   assert.deepEqual(capability.blockers, ['codex_app_builtin_imagegen_capability_missing', 'imagegen_capability_missing']);
 });
 
-test('imagegen capability falls back to plain codex features list output', async () => {
+test('imagegen capability reads the supported plain codex features list output', async () => {
   const codexBin = await writeFakeCodex(`
 codex_git_commit                    stable             true
 image_generation                    stable             true
 remote_control                      stable             false
 `);
-  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 1000 }));
+  // The shebang starts a second Node process; under the parallel canonical
+  // runner its cold start can exceed 1s. This fixture tests feature parsing,
+  // so use the production probe budget instead of turning scheduler load into
+  // a false missing-capability result.
+  const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({ codexBin, timeoutMs: 5000 }));
   assert.equal(capability.codex_app.available, true);
   assert.equal(capability.codex_app.official_surface, '$imagegen');
   assert.equal(capability.codex_app.generated_output_required_for_full_verification, true);
@@ -48,7 +52,7 @@ remote_control                      stable             false
   assert.equal(capability.supported_workflows.ux_review_callouts, true);
 });
 
-test('imagegen capability plain feature fallback respects disabled value', async () => {
+test('imagegen capability plain feature reader respects disabled value', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-imagegen-disabled-'));
   const codexBin = await writeFakeCodex(`
 codex_git_commit                    stable             true
@@ -57,7 +61,7 @@ remote_control                      stable             true
 `);
   const capability = await withoutCodexImagegenEnv(() => detectImagegenCapability({
     codexBin,
-    timeoutMs: 1000,
+    timeoutMs: 5000,
     env: { HOME: home },
     configText: ''
   }));

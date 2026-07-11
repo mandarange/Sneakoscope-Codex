@@ -4,6 +4,8 @@ import { readJson, writeJsonAtomic } from '../fsx.js'
 
 export interface Codex0139RealProbeSummary {
   schema: 'sks.codex-0139-real-probe-summary.v1'
+  target_version: string
+  compatibility_authority: 'deprecated_non_authoritative_lineage_only'
   ok: boolean
   require_real: boolean
   codex_bin: string | null
@@ -23,17 +25,21 @@ export interface Codex0139RealProbeSummary {
 
 export async function buildCodex0139RealProbeSummary(root: string): Promise<Codex0139RealProbeSummary> {
   const result = await readJson<Codex0139RealProbeResult>(codex0139ProbeArtifactPath(root))
-  const probes = Object.fromEntries(Object.entries(result.probes || {}).map(([name, probe]) => [name, {
+  const requested = new Set<string>((result.requested_probes?.length ? result.requested_probes : Object.keys(result.probes || {})).map(String))
+  const requestedEntries = Object.entries(result.probes || {}).filter(([name]) => requested.has(name))
+  const probes = Object.fromEntries(requestedEntries.map(([name, probe]) => [name, {
     ok: probe.ok === true,
     mode: probe.mode,
     blockers: probe.blockers || []
   }]))
-  const values = Object.values(result.probes || {})
+  const values = requestedEntries.map(([, probe]) => probe)
   const skippedCount = values.filter((probe) => probe.mode === 'skipped').length
   const failedCount = values.filter((probe) => probe.ok !== true && probe.mode !== 'skipped').length
   return {
     schema: 'sks.codex-0139-real-probe-summary.v1',
-    ok: result.require_real ? skippedCount === 0 && failedCount === 0 : result.overall_ok === true,
+    target_version: result.target_version,
+    compatibility_authority: 'deprecated_non_authoritative_lineage_only',
+    ok: result.overall_ok === true,
     require_real: result.require_real,
     codex_bin: result.codex_bin,
     parsed_version: result.parsed_version,

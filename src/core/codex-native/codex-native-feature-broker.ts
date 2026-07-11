@@ -7,7 +7,7 @@ import { probeCodexHookApprovalState } from '../codex-app/codex-hook-approval-pr
 import { detectCodex0138Capability } from '../codex-control/codex-0138-capability.js'
 import { detectCodex0139Capability } from '../codex-control/codex-0139-capability.js'
 import { detectCodex0140Capability } from '../codex-control/codex-0140-capability.js'
-import { detectCodex0142Capability, type Codex0142FeatureKey } from '../codex-control/codex-0142-capability.js'
+import { detectCodex0144Capability, type Codex0144FeatureKey } from '../codex-control/codex-0144-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
 import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
 import { MANAGED_AGENT_ROLES, MANAGED_SKILLS, managedAgentRoleOwnsText } from '../managed-assets/managed-assets-manifest.js'
@@ -46,26 +46,26 @@ export async function buildCodexNativeFeatureMatrix(input: {
       process.env.SKS_CODEX_0138_FAKE,
       process.env.SKS_CODEX_0139_FAKE,
       process.env.SKS_CODEX_0140_FAKE,
-      process.env.SKS_CODEX_0142_FAKE,
+      process.env.SKS_CODEX_0144_FAKE,
       process.env.SKS_CODEX_PLUGIN_JSON_FAKE
     ]
   })
   if (!input.missionDir && !repairManagedAssets && invocationMatrixCache.has(cacheKey)) {
     return invocationMatrixCache.get(cacheKey) as CodexNativeFeatureMatrix
   }
-  const fixtureMode = process.env.SKS_CODEX_0138_FAKE === '1' || process.env.SKS_CODEX_0139_FAKE === '1' || process.env.SKS_CODEX_0140_FAKE === '1' || process.env.SKS_CODEX_0142_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
+  const fixtureMode = process.env.SKS_CODEX_0138_FAKE === '1' || process.env.SKS_CODEX_0139_FAKE === '1' || process.env.SKS_CODEX_0140_FAKE === '1' || process.env.SKS_CODEX_0144_FAKE === '1' || process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1'
   const codexBin = fixtureMode ? process.env.CODEX_BIN || 'codex' : await findCodexBinary().catch(() => null)
   const version = codexBin ? await codexVersion(codexBin) : null
   const cap0138 = await detectCodex0138Capability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const cap0139 = await detectCodex0139Capability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
   const cap0140 = await detectCodex0140Capability({ codexBin }).catch((err: unknown) => ({ blockers: [messageOf(err)] }))
-  const cap0142 = await detectCodex0142Capability({ codexBin, root }).catch((err: unknown) => ({
-    schema: 'sks.codex-0142-capability.v1',
+  const cap0144 = await detectCodex0144Capability({ codexBin, root }).catch((err: unknown) => ({
+    schema: 'sks.codex-0144-capability.v1',
     ok: false,
     release_authorizing: false,
     feature_states: {},
     blockers: [messageOf(err)],
-    warnings: ['codex_0142_probe_exception']
+    warnings: ['codex_0144_probe_exception']
   }))
   const app = await codexAppIntegrationStatus({ codex: { bin: codexBin, version, available: Boolean(codexBin) } }).catch((err: unknown) => ({ ok: false, blockers: [messageOf(err)] }))
   const plugins = await buildCodexPluginInventory().catch((err: unknown) => ({
@@ -150,17 +150,17 @@ export async function buildCodexNativeFeatureMatrix(input: {
     app_handoff: boolState(booleanFeature(cap0138, 'supports_app_handoff'), 'actual-probe', '.sneakoscope/codex-0138-capability.json', blockersOf(cap0138)),
     image_path_exposure: boolState(booleanFeature(cap0138, 'supports_image_path_exposure'), 'actual-probe', '.sneakoscope/codex-0138-capability.json', blockersOf(cap0138)),
     code_mode_web_search: boolState(booleanFeature(cap0139, 'supports_code_mode_web_search'), 'actual-probe', '.sneakoscope/codex-0139-capability.json', blockersOf(cap0139)),
-    codex_0142: boolState(recordOk(cap0142) === true, 'actual-probe', '.sneakoscope/codex/codex-0142-capability.json', blockersOf(cap0142), warningsOf(cap0142)),
-    multi_agent_mode: codex0142State(cap0142, 'multi_agent_mode_schema'),
-    rollout_budget: codex0142State(cap0142, 'rollout_budget_schema'),
-    indexed_web_search: codex0142State(cap0142, 'indexed_web_search_schema'),
-    current_time_read: codex0142State(cap0142, 'current_time_read_schema'),
-    terminal_subagent_error: codex0142State(cap0142, 'terminal_subagent_error_schema'),
-    exec_mcp_reconnect: codex0142State(cap0142, 'exec_mcp_reconnect_schema'),
-    plugin_catalog_refresh: codex0142State(cap0142, 'plugin_catalog_refresh_schema'),
-    native_thread_list_search: codex0142State(cap0142, 'native_thread_list_search_schema'),
-    remote_native_environment: codex0142State(cap0142, 'remote_native_environment_schema'),
-    app_server_overload: codex0142State(cap0142, 'app_server_overload_schema'),
+    codex_0144: boolState(recordOk(cap0144) === true, 'actual-probe', '.sneakoscope/codex/codex-0144-capability.json', blockersOf(cap0144), warningsOf(cap0144)),
+    multi_agent_mode: codex0144State(cap0144, 'multi_agent_mode_schema'),
+    rollout_budget: codex0144State(cap0144, 'rollout_budget_schema'),
+    indexed_web_search: codex0144State(cap0144, 'indexed_web_search_schema'),
+    current_time_read: codex0144State(cap0144, 'current_time_read_schema'),
+    terminal_subagent_error: codex0144State(cap0144, 'terminal_subagent_error_schema'),
+    exec_mcp_reconnect: codex0144State(cap0144, 'exec_mcp_reconnect_schema'),
+    plugin_catalog_refresh: codex0144State(cap0144, 'plugin_catalog_refresh_schema'),
+    native_thread_list_search: codex0144State(cap0144, 'native_thread_list_search_schema'),
+    remote_native_environment: codex0144State(cap0144, 'remote_native_environment_schema'),
+    app_server_overload: codex0144State(cap0144, 'app_server_overload_schema'),
     codex_0140: boolState(booleanFeature(cap0140, 'supports_0140'), 'actual-probe', '.sneakoscope/codex-0140-capability.json', blockersOf(cap0140)),
     usage_views: boolState(booleanFeature((cap0140 as any)?.features || {}, 'usage_views'), 'actual-probe', '.sneakoscope/codex-0140-capability.json', blockersOf(cap0140)),
     goal_attachment_preservation: boolState(booleanFeature((cap0140 as any)?.features || {}, 'goal_attachment_preservation'), 'actual-probe', '.sneakoscope/codex-0140-capability.json', blockersOf(cap0140)),
@@ -185,7 +185,7 @@ export async function buildCodexNativeFeatureMatrix(input: {
       codex_0138: cap0138,
       codex_0139: cap0139,
       codex_0140: cap0140,
-      codex_0142: cap0142,
+      codex_0144: cap0144,
       app,
       plugin_inventory: plugins,
       mcp_candidates: mcpCandidates,
@@ -347,14 +347,14 @@ function warningsOf(value: unknown): string[] {
   return value.warnings.map((item) => String(item)).filter(Boolean)
 }
 
-function codex0142State(capability: unknown, key: Codex0142FeatureKey): CodexNativeFeatureState {
+function codex0144State(capability: unknown, key: Codex0144FeatureKey): CodexNativeFeatureState {
   const state = isRecord(capability)
     && isRecord(capability.feature_states)
     && isRecord(capability.feature_states[key])
     ? capability.feature_states[key]
     : null
   const evidence = Array.isArray(state?.evidence) ? state.evidence.map(String) : []
-  const blockers = Array.isArray(state?.blockers) ? state.blockers.map(String) : [`codex_0142_${key}_not_verified`]
+  const blockers = Array.isArray(state?.blockers) ? state.blockers.map(String) : [`codex_0144_${key}_not_verified`]
   const supported = state?.supported === true
   const certainty = typeof state?.certainty === 'string' ? state.certainty : ''
   const input: {
@@ -368,10 +368,10 @@ function codex0142State(capability: unknown, key: Codex0142FeatureKey): CodexNat
   } = {
     ok: supported,
     source: 'actual-probe',
-    artifact_path: '.sneakoscope/codex/codex-0142-capability.json',
+    artifact_path: '.sneakoscope/codex/codex-0144-capability.json',
     evidence,
     blockers: supported ? [] : blockers,
-    warnings: certainty && certainty !== 'actual' && certainty !== 'discovered' ? [`codex_0142_${key}_${certainty}`] : []
+    warnings: certainty && certainty !== 'actual' && certainty !== 'discovered' ? [`codex_0144_${key}_${certainty}`] : []
   }
   if (!supported) input.unavailableStatus = 'fallback'
   return codexNativeFeatureState(input)

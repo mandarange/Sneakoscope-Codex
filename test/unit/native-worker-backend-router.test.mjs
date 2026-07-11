@@ -236,11 +236,20 @@ test('enabled local model auto-selects local-llm for simple codex-sdk worker sli
           lease_id: 'task-ollama',
           allowed_paths: ['owned.ts'],
           operations: [{ op: 'write', path: 'owned.ts', search: '', replace: '', content: 'export const AUTO_LOCAL_WORKER = true;\n', diff: '' }],
-          rationale: 'simple code write'
+          rationale: 'simple code write',
+          cochange_acknowledged: null,
+          cochange_acknowledged_reason: null,
+          regression_proof: null,
+          repair_hypothesis: null,
+          tournament: null
         }],
         verification: { status: 'passed', checks: ['local-worker-self-check'] },
         rollback_notes: [],
-        blockers: []
+        blockers: [],
+        work_item_kind: null,
+        regression_proof: null,
+        repair_hypothesis: null,
+        tournament: null
       })
     })
   });
@@ -306,11 +315,20 @@ test('explicit local-llm backend uses OpenAI-compatible chat completions path', 
                 lease_id: 'task-local',
                 allowed_paths: ['owned.ts'],
                 operations: [{ op: 'write', path: 'owned.ts', search: '', replace: '', content: 'export const OPENAI_COMPAT_LOCAL = true;\n', diff: '' }],
-                rationale: 'simple local worker patch'
+                rationale: 'simple local worker patch',
+                cochange_acknowledged: null,
+                cochange_acknowledged_reason: null,
+                regression_proof: null,
+                repair_hypothesis: null,
+                tournament: null
               }],
               verification: { status: 'passed', checks: ['local-worker-self-check'] },
               rollback_notes: [],
-              blockers: []
+              blockers: [],
+              work_item_kind: null,
+              regression_proof: null,
+              repair_hypothesis: null,
+              tournament: null
             })
           }
         }]

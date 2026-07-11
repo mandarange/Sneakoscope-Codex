@@ -5,7 +5,7 @@ import { COMMAND_MANIFEST_LITE, type CommandManifestLiteEntry } from '../../cli/
 import { flag } from '../../cli/args.js';
 import { printJson, sksTextLogo } from '../../cli/output.js';
 import { ui as cliUi } from '../../cli/cli-theme.js';
-import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
+import { PACKAGE_VERSION, ensureDir, exists, nowIso, projectRoot, readJson, rmrf, sksRoot, tmpdir, writeJsonAtomic } from '../fsx.js';
 import { DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, USAGE_TOPICS, routePrompt, routeReasoning, reasoningInstruction } from '../routes.js';
 import { DOLLAR_COMMAND_ALIASES_LITE, DOLLAR_COMMANDS_LITE } from '../routes/dollar-manifest-lite.js';
 import { initProject, normalizeInstallScope, sksCommandPrefix } from '../init.js';
@@ -15,6 +15,7 @@ import { hooksExplainReport } from '../../cli/feature-commands.js';
 import { writeSelftestRouteProof } from '../proof/selftest-proof-fixtures.js';
 import { createMission } from '../mission.js';
 import { formatSksUpdateCheckText, runSksUpdateCheck, runSksUpdateNow } from '../update-check.js';
+import { persistSksUpdateNoticeFromVersions } from '../update/update-notice.js';
 import { withSecretPreservationGuard } from '../config/config-migration-journal.js';
 
 interface CommandRow {
@@ -130,6 +131,12 @@ For implementation work, use Codex App prompt routes such as $Naruto, $Goal, $QA
 
 export async function updateCheckCommand(args: any = []) {
   const result = await runSksUpdateCheck();
+  await persistSksUpdateNoticeFromVersions({
+    packageName: result.package,
+    currentVersion: result.current,
+    latestVersion: result.latest,
+    error: result.error
+  }).catch(() => undefined);
   if (flag(args, '--json')) return printJson(result);
   cliUi.banner('update');
   result.update_available ? cliUi.warn('update available') : cliUi.ok('already current or no update required');
@@ -159,6 +166,14 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
     timeoutMs: 10 * 60 * 1000,
     maxOutputBytes: 128 * 1024
   }));
+  if (!flag(effectiveArgs, '--dry-run')) {
+    await persistSksUpdateNoticeFromVersions({
+      packageName: result.package,
+      currentVersion: result.new_version || result.from,
+      latestVersion: result.latest,
+      error: result.ok ? null : result.error
+    }).catch(() => undefined);
+  }
   if (flag(effectiveArgs, '--json')) return printJson(result);
   cliUi.banner('update');
   result.ok ? cliUi.ok(result.status) : result.status === 'updated_with_issues' ? cliUi.warn(result.status) : cliUi.fail(result.status || 'failed');
@@ -296,25 +311,30 @@ export async function selftestCommand(args: any = []) {
   const root = await projectRoot();
   const tmp = tmpdir('sks-selftest-');
   await ensureDir(tmp);
-  const registry = await buildFeatureRegistry({ root });
-  const coverage = validateFeatureRegistry(registry);
-  if (!coverage.ok) throw new Error(`selftest: feature registry blocked: ${coverage.blockers.join(', ')}`);
-  const mission = await createMission(tmp, { mode: 'team', prompt: 'selftest route proof fixture' });
-  await writeSelftestRouteProof(tmp, { missionId: mission.id, kind: 'team_gate' });
-  const proof = await readJson(path.join(tmp, '.sneakoscope', 'missions', mission.id, 'completion-proof.json'), null);
-  if (!proof?.mission_id) throw new Error('selftest: completion proof fixture missing');
-  const hookExplain = hooksExplainReport();
-  if (!hookExplain.events.includes('Stop')) throw new Error('selftest: hook explain missing Stop');
-  const result = {
-    schema: 'sks.selftest.v1',
-    ok: true,
-    version: PACKAGE_VERSION,
-    generated_at: nowIso(),
-    checks: ['feature_registry', 'route_completion_proof_fixture', 'hooks_policy_surface'],
-    tmp_root: tmp
-  };
-  if (flag(args, '--json')) return printJson(result);
-  console.log('SKS selftest passed');
+  try {
+    const registry = await buildFeatureRegistry({ root });
+    const coverage = validateFeatureRegistry(registry);
+    if (!coverage.ok) throw new Error(`selftest: feature registry blocked: ${coverage.blockers.join(', ')}`);
+    const mission = await createMission(tmp, { mode: 'team', prompt: 'selftest route proof fixture' });
+    await writeSelftestRouteProof(tmp, { missionId: mission.id, kind: 'team_gate' });
+    const proof = await readJson(path.join(tmp, '.sneakoscope', 'missions', mission.id, 'completion-proof.json'), null);
+    if (!proof?.mission_id) throw new Error('selftest: completion proof fixture missing');
+    const hookExplain = hooksExplainReport();
+    if (!hookExplain.events.includes('Stop')) throw new Error('selftest: hook explain missing Stop');
+    const result = {
+      schema: 'sks.selftest.v1',
+      ok: true,
+      version: PACKAGE_VERSION,
+      generated_at: nowIso(),
+      checks: ['feature_registry', 'route_completion_proof_fixture', 'hooks_policy_surface'],
+      tmp_root: tmp,
+      tmp_cleaned: true
+    };
+    if (flag(args, '--json')) return printJson(result);
+    console.log('SKS selftest passed');
+  } finally {
+    await rmrf(tmp);
+  }
 }
 
 /**

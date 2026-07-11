@@ -3,7 +3,13 @@ import path from 'node:path'
 import { appendJsonl, exists, nowIso, packageRoot, readJson, writeJsonAtomic } from '../fsx.js'
 import { drainZellijLaneSupervisor } from './zellij-lane-supervisor.js'
 import { normalizeAgentSessionRows } from './agent-session-rows.js'
+import { isAgentTerminalSessionStatus, writeAgentCleanupReport } from './agent-cleanup.js'
 import { closeZellijPaneById } from '../zellij/zellij-worker-pane-manager.js'
+import { processReportMatchesProjectNamespace, resolveOwnedNamespacePath, validProjectNamespaceHash } from './agent-namespace-safety.js'
+import { appendAgentLedgerEvent } from './agent-central-ledger.js'
+import { closeAgentSession } from './agent-lifecycle.js'
+import { closeAgentSessionGeneration } from './agent-session-generation.js'
+import { closeAgentTerminalSession } from './agent-terminal-session.js'
 
 export const AGENT_CLEANUP_PROOF_SCHEMA = 'sks.agent-cleanup-proof.v2'
 export const AGENT_CLEANUP_ACTION_LEDGER_SCHEMA = 'sks.agent-cleanup-action-ledger.v1'
@@ -20,7 +26,7 @@ export interface AgentCleanupExecutorOptions {
   killEscalation?: boolean
 }
 
-type CleanupActionKind = 'terminate_process' | 'close_zellij_pane' | 'remove_temp_dir' | 'remove_lock' | 'skip_active_session' | 'skip_foreign_namespace' | 'archive_transcript_keep'
+type CleanupActionKind = 'terminalize_stale_session' | 'terminate_process' | 'close_zellij_pane' | 'remove_temp_dir' | 'remove_lock' | 'skip_active_session' | 'skip_foreign_namespace' | 'archive_transcript_keep'
 
 interface CleanupAction {
   kind: CleanupActionKind
@@ -43,8 +49,6 @@ interface ProcessTreeEntry {
   command: string
 }
 
-const TERMINAL_STATUSES = new Set(['closed', 'completed', 'done', 'failed', 'blocked', 'killed', 'timed_out'])
-
 export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions) {
   const agentRoot = path.join(opts.missionDir, 'agents')
   const action = opts.action || 'cleanup'
@@ -53,31 +57,60 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
   const namespace = await readJson<any>(path.join(opts.missionDir, 'project-session-namespace.json'), null)
   const sessionsRaw = await readJson<any>(path.join(agentRoot, 'agent-sessions.json'), { sessions: {} })
   const sessions = normalizeAgentSessionRows(sessionsRaw)
+  const sessionById = new Map(sessions.map((row: any) => [String(row.session_id || row.id || row.agent_id || ''), row]))
   const activeSessionIds = new Set(
     sessions
-      .filter((row: any) => !TERMINAL_STATUSES.has(String(row.status || row.lifecycle_state || '')))
+      .filter((row: any) => !isAgentTerminalSessionStatus(row.status || row.lifecycle_state))
       .map((row: any) => String(row.session_id || row.id || row.agent_id || ''))
       .filter(Boolean)
   )
   const now = Date.now()
-  const staleMs = opts.staleMs ?? 30 * 60 * 1000
+  const requestedStaleMs = Number(opts.staleMs ?? 30 * 60 * 1000)
+  const staleMs = Number.isFinite(requestedStaleMs) ? Math.max(0, requestedStaleMs) : 30 * 60 * 1000
   const projectHash = String(namespace?.root_hash || '')
+  const namespaceAuthorized = validProjectNamespaceHash(projectHash)
   const actions: CleanupAction[] = []
   const graceMs = opts.graceMs ?? Number(process.env.SKS_CLEANUP_GRACE_MS || 750)
   const killEscalation = opts.killEscalation !== false && process.env.SKS_CLEANUP_KILL_ESCALATION !== '0'
-  const processReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-process-report.json')
+  const sessionFiles = await listFiles(path.join(agentRoot, 'sessions'))
+  for (const session of sessions) {
+    if (isAgentTerminalSessionStatus(session.status || session.lifecycle_state)) continue
+    const staleAction = await reconcileStaleSession({
+      agentRoot,
+      session,
+      sessionFiles,
+      projectHash,
+      namespaceAuthorized,
+      missionId: opts.missionId || namespace?.mission_id || null,
+      now,
+      staleMs,
+      apply
+    })
+    if (!staleAction) continue
+    actions.push(staleAction)
+    if (staleAction.kind === 'terminalize_stale_session' && (staleAction.status === 'planned' || staleAction.status === 'applied')) {
+      activeSessionIds.delete(String(session.session_id || session.session_key || session.id || session.agent_id || ''))
+    }
+  }
+  const processReports = sessionFiles.filter((file) => path.basename(file) === 'agent-process-report.json')
   for (const file of processReports) {
     const report = await readJson<any>(file, null)
     const pid = Number(report?.pid || 0)
     const sessionId = String(report?.session_id || '')
-    const status = String(sessions.find((row: any) => String(row.session_id || '') === sessionId)?.status || '')
-    const terminal = TERMINAL_STATUSES.has(status) || (report?.exit_code !== null && report?.exit_code !== undefined)
+    const status = String(sessionById.get(sessionId)?.status || '')
+    const terminal = isAgentTerminalSessionStatus(status)
     if (!pid || !processIsAlive(pid)) continue
+    // A non-null exit code proves the recorded process already exited. If the
+    // PID is alive now it has been reused and must never be killed.
+    if (report?.exit_code !== null && report?.exit_code !== undefined) {
+      actions.push({ kind: 'skip_foreign_namespace', target: String(pid), status: 'skipped', reason: 'recorded_process_already_exited_pid_reused' })
+      continue
+    }
     if (activeSessionIds.has(sessionId) && !terminal) {
       actions.push({ kind: 'skip_active_session', target: sessionId || String(pid), status: 'skipped', reason: 'session_active' })
       continue
     }
-    if (!processReportInNamespace(report, projectHash)) {
+    if (!processReportMatchesProjectNamespace(report, projectHash)) {
       actions.push({ kind: 'skip_foreign_namespace', target: String(pid), status: 'skipped', reason: 'process_outside_project_namespace' })
       continue
     }
@@ -90,14 +123,14 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
     }))
   }
   const seenZellijPaneIds = new Set<string>()
-  const zellijReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-zellij-report.json')
+  const zellijReports = sessionFiles.filter((file) => path.basename(file) === 'agent-zellij-report.json')
   for (const file of zellijReports) {
     const report = await readJson<any>(file, null)
     const paneId = String(report?.pane_id || '')
     const sessionId = String(report?.session_id || '')
     if (!paneId) continue
     seenZellijPaneIds.add(paneId)
-    if (!processReportInNamespace(report, projectHash)) {
+    if (!processReportMatchesProjectNamespace(report, projectHash)) {
       actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'zellij_pane_outside_project_namespace' })
       continue
     }
@@ -117,7 +150,7 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       }
     }))
   }
-  const workerPaneReports = await listNamedFiles(path.join(agentRoot, 'sessions'), 'zellij-worker-pane.json')
+  const workerPaneReports = sessionFiles.filter((file) => path.basename(file) === 'zellij-worker-pane.json')
   for (const file of workerPaneReports) {
     const report = await readJson<any>(file, null)
     const paneId = String(report?.pane_id || '')
@@ -126,11 +159,15 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
     const status = String(report?.status || '')
     if (!paneId || !sessionName || seenZellijPaneIds.has(paneId)) continue
     seenZellijPaneIds.add(paneId)
+    if (!namespaceAuthorized) {
+      actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'project_namespace_missing_or_invalid' })
+      continue
+    }
     if (opts.missionId && report?.mission_id && String(report.mission_id) !== String(opts.missionId)) {
       actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'zellij_pane_wrong_mission' })
       continue
     }
-    const terminal = TERMINAL_STATUSES.has(status) || Boolean(report?.closed_at)
+    const terminal = isAgentTerminalSessionStatus(status) || Boolean(report?.closed_at)
     if (activeSessionIds.has(sessionId) && !terminal && opts.drain !== true) {
       actions.push({ kind: 'skip_active_session', target: sessionId || paneId, status: 'skipped', reason: 'managed_zellij_worker_active' })
       continue
@@ -165,6 +202,10 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
     for (const paneId of anchorPaneIds) {
       if (seenZellijPaneIds.has(paneId)) continue
       seenZellijPaneIds.add(paneId)
+      if (!namespaceAuthorized) {
+        actions.push({ kind: 'skip_foreign_namespace', target: paneId, status: 'skipped', reason: 'project_namespace_missing_or_invalid' })
+        continue
+      }
       if ((visibleActive || headlessActive) && opts.drain !== true) {
         actions.push({ kind: 'skip_active_session', target: paneId, status: 'skipped', reason: 'zellij_right_column_anchor_active' })
         continue
@@ -184,21 +225,21 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
     }
   }
   for (const dir of Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs.map(String) : []) {
-    if (!namespaceOwnsPath(dir, projectHash)) {
+    const ownedDir = await resolveOwnedNamespacePath(dir, projectHash, namespace?.temp_dir ? [namespace.temp_dir] : [])
+    if (!ownedDir) {
       actions.push({ kind: 'skip_foreign_namespace', target: dir, status: 'skipped', reason: 'path_outside_project_namespace' })
       continue
     }
-    if (!(await exists(dir))) continue
     actions.push(await applyAction({
       kind: 'remove_temp_dir',
-      target: dir,
+      target: ownedDir,
       reason: 'orphan_temp_dir',
       apply,
-      before: async () => ({ exists: await exists(dir) }),
-      after: async () => ({ exists: await exists(dir) }),
+      before: async () => ({ exists: await exists(ownedDir) }),
+      after: async () => ({ exists: await exists(ownedDir) }),
       run: async () => {
-        await fsp.rm(dir, { recursive: true, force: true })
-        if (await exists(dir)) throw new Error('temp_dir_still_exists_after_remove')
+        await fsp.rm(ownedDir, { recursive: true, force: true })
+        if (await exists(ownedDir)) throw new Error('temp_dir_still_exists_after_remove')
       }
     }))
   }
@@ -216,9 +257,10 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
       }
     }))
   }
-  for (const transcript of await listNamedFiles(path.join(agentRoot, 'sessions'), 'agent-terminal-session.json')) {
+  for (const transcript of sessionFiles.filter((file) => path.basename(file) === 'agent-terminal-session.json')) {
     actions.push({ kind: 'archive_transcript_keep', target: transcript, status: 'skipped', reason: 'terminal_transcripts_are_preserved' })
   }
+  const sessionCleanup = await writeAgentCleanupReport(agentRoot)
   const proof = buildCleanupProof({
     generatedAt: nowIso(),
     missionId: opts.missionId || namespace?.mission_id || null,
@@ -227,7 +269,8 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
     apply,
     dryRun: !apply,
     actions,
-    activeSessionIds: [...activeSessionIds]
+    activeSessionIds: [...activeSessionIds],
+    sessionCleanup
   })
   await writeJsonAtomic(path.join(agentRoot, 'agent-cleanup-proof.json'), proof)
   await writeJsonAtomic(path.join(agentRoot, 'agent-command-cleanup.json'), {
@@ -250,6 +293,279 @@ export async function runAgentCleanupExecutor(opts: AgentCleanupExecutorOptions)
   return proof
 }
 
+const STALE_SESSION_REASON = 'stale_nonterminal_session_without_live_process'
+const SESSION_PROCESS_REPORT_NAMES = new Set(['agent-process-report.json', 'worker-process-report.json'])
+
+async function reconcileStaleSession(input: {
+  agentRoot: string
+  session: any
+  sessionFiles: string[]
+  projectHash: string
+  namespaceAuthorized: boolean
+  missionId: string | null
+  now: number
+  staleMs: number
+  apply: boolean
+}): Promise<CleanupAction | null> {
+  const initial = await assessStaleSession(input)
+  if (!initial.stale) return null
+  const sessionId = initial.session_id
+  if (!sessionId || !initial.artifact_dir || !input.namespaceAuthorized) {
+    return {
+      kind: 'skip_foreign_namespace',
+      target: sessionId || 'unknown-session',
+      status: 'skipped',
+      reason: !input.namespaceAuthorized ? 'stale_session_project_namespace_missing_or_invalid' : 'stale_session_artifact_path_invalid',
+      before: initial.evidence
+    }
+  }
+  if (initial.foreign_process_reports.length > 0) {
+    return {
+      kind: 'skip_foreign_namespace',
+      target: sessionId,
+      status: 'skipped',
+      reason: 'stale_session_foreign_process_report',
+      before: initial.evidence
+    }
+  }
+  if (initial.live_pids.length > 0) {
+    return {
+      kind: 'skip_active_session',
+      target: sessionId,
+      status: 'skipped',
+      reason: 'stale_session_live_process',
+      before: initial.evidence
+    }
+  }
+  if (!input.apply) {
+    return {
+      kind: 'terminalize_stale_session',
+      target: sessionId,
+      status: 'planned',
+      reason: STALE_SESSION_REASON,
+      before: initial.evidence,
+      after: initial.evidence
+    }
+  }
+
+  const latestSession = await readLatestSessionRecord(input.agentRoot, input.session, initial.artifact_dir)
+  const latestFiles = await listFiles(path.join(input.agentRoot, 'sessions'))
+  const latest = await assessStaleSession({ ...input, session: latestSession, sessionFiles: latestFiles })
+  if (!latest.stale) {
+    return {
+      kind: 'skip_active_session',
+      target: sessionId,
+      status: 'skipped',
+      reason: 'stale_session_activity_refreshed_before_apply',
+      before: initial.evidence,
+      after: latest.evidence
+    }
+  }
+  if (latest.foreign_process_reports.length > 0) {
+    return {
+      kind: 'skip_foreign_namespace',
+      target: sessionId,
+      status: 'skipped',
+      reason: 'stale_session_foreign_process_report',
+      before: initial.evidence,
+      after: latest.evidence
+    }
+  }
+  if (latest.live_pids.length > 0) {
+    return {
+      kind: 'skip_active_session',
+      target: sessionId,
+      status: 'skipped',
+      reason: 'stale_session_live_process',
+      before: initial.evidence,
+      after: latest.evidence
+    }
+  }
+  try {
+    const after = await terminalizeStaleSession(input.agentRoot, latestSession, latest, input.missionId)
+    return {
+      kind: 'terminalize_stale_session',
+      target: sessionId,
+      status: 'applied',
+      reason: STALE_SESSION_REASON,
+      before: initial.evidence,
+      after
+    }
+  } catch (err: unknown) {
+    return {
+      kind: 'terminalize_stale_session',
+      target: sessionId,
+      status: 'failed',
+      reason: STALE_SESSION_REASON,
+      before: initial.evidence,
+      error: err instanceof Error ? err.message : String(err)
+    }
+  }
+}
+
+async function assessStaleSession(input: {
+  agentRoot: string
+  session: any
+  sessionFiles: string[]
+  projectHash: string
+  now: number
+  staleMs: number
+}) {
+  const sessionId = String(input.session?.session_id || input.session?.session_key || input.session?.id || input.session?.agent_id || '')
+  const artifact = resolveSessionArtifactDir(input.agentRoot, input.session)
+  const activity = latestSessionActivity(input.session)
+  const ageMs = activity ? Math.max(0, input.now - activity.timestamp) : null
+  const stale = ageMs !== null && ageMs > input.staleMs
+  const reportFiles = input.sessionFiles.filter((file) => SESSION_PROCESS_REPORT_NAMES.has(path.basename(file)))
+  const reports: Array<{ file: string; row: any }> = []
+  for (const file of reportFiles) {
+    const row = await readJson<any>(file, null).catch(() => null)
+    if (row && String(row.session_id || '') === sessionId) reports.push({ file, row })
+  }
+  const foreignProcessReports = reports
+    .filter(({ row }) => !processReportMatchesProjectNamespace(row, input.projectHash))
+    .map(({ file }) => path.relative(input.agentRoot, file))
+  const pids = [...new Set([
+    Number(input.session?.pid || input.session?.process_id || input.session?.worker_pid || 0),
+    ...reports.flatMap(({ row }) => [Number(row?.pid || row?.process_id || row?.worker_pid || 0), ...(Array.isArray(row?.child_process_ids) ? row.child_process_ids.map(Number) : [])])
+  ].filter((pid) => Number.isSafeInteger(pid) && pid > 0))]
+  const livePids = pids.filter(processIsAlive)
+  const evidence = {
+    session_id: sessionId || null,
+    observed_status: String(input.session?.status || input.session?.lifecycle_state || ''),
+    last_activity_at: activity?.iso || null,
+    last_activity_source: activity?.source || null,
+    age_ms: ageMs,
+    stale_ms: input.staleMs,
+    stale,
+    process_report_count: reports.length,
+    process_reports: reports.map(({ file }) => path.relative(input.agentRoot, file)),
+    observed_pids: pids,
+    live_pids: livePids,
+    foreign_process_reports: foreignProcessReports,
+    artifact_dir: artifact?.relative || null,
+    checked_at: new Date(input.now).toISOString()
+  }
+  return {
+    stale,
+    session_id: sessionId,
+    artifact_dir: artifact,
+    foreign_process_reports: foreignProcessReports,
+    live_pids: livePids,
+    evidence
+  }
+}
+
+function latestSessionActivity(session: any) {
+  const candidates = [
+    ['heartbeat_at', session?.heartbeat_at],
+    ['last_heartbeat_at', session?.last_heartbeat_at],
+    ['updated_at', session?.updated_at],
+    ['opened_at', session?.opened_at]
+  ].map(([source, value]) => ({ source: String(source), iso: String(value || ''), timestamp: Date.parse(String(value || '')) }))
+    .filter((row) => Number.isFinite(row.timestamp))
+    .sort((a, b) => b.timestamp - a.timestamp)
+  return candidates[0] || null
+}
+
+function resolveSessionArtifactDir(agentRoot: string, session: any) {
+  const slotId = String(session?.slot_id || session?.worker_slot_id || '')
+  const generationIndex = Number(session?.generation_index)
+  const raw = String(session?.session_artifact_dir || (slotId && Number.isFinite(generationIndex) ? path.join('sessions', slotId, `gen-${generationIndex}`) : ''))
+  if (!raw || path.isAbsolute(raw) || raw.split(/[\\/]+/).includes('..')) return null
+  const resolved = path.resolve(agentRoot, raw)
+  const relative = path.relative(path.resolve(agentRoot), resolved)
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null
+  return { absolute: resolved, relative: relative.split(path.sep).join('/') }
+}
+
+async function readLatestSessionRecord(agentRoot: string, fallback: any, artifact: { absolute: string; relative: string }) {
+  const sessionKey = String(fallback?.session_key || fallback?.session_id || fallback?.agent_id || 'session').replace(/[^A-Za-z0-9._-]+/g, '_')
+  const shard = await readJson<any>(path.join(agentRoot, 'sessions', `${sessionKey}.json`), null).catch(() => null)
+  if (shard) return shard
+  const artifactRecord = await readJson<any>(path.join(artifact.absolute, 'agent-session-record.json'), null).catch(() => null)
+  return artifactRecord || fallback
+}
+
+async function terminalizeStaleSession(
+  agentRoot: string,
+  session: any,
+  assessment: Awaited<ReturnType<typeof assessStaleSession>>,
+  missionId: string | null
+) {
+  const artifact = assessment.artifact_dir
+  if (!artifact) throw new Error('stale_session_artifact_path_invalid')
+  const sessionId = String(session.session_id || session.session_key || session.agent_id || '')
+  if (!sessionId) throw new Error('stale_session_id_missing')
+  const closedAt = nowIso()
+  const evidencePath = path.join(artifact.relative, 'agent-stale-session-terminalization.json')
+  const closeReportPath = path.join(artifact.relative, 'agent-terminal-close-report.json')
+  const transactionId = `stale-${Date.now()}-${sessionId.slice(0, 80)}`
+  const evidence = {
+    schema: 'sks.agent-stale-session-terminalization.v1',
+    transaction_id: transactionId,
+    mission_id: missionId,
+    session_id: sessionId,
+    status: 'timed_out',
+    generation_status: 'blocked',
+    reason: STALE_SESSION_REASON,
+    applied_at: closedAt,
+    assessment: assessment.evidence
+  }
+  const sessionKey = String(session.session_key || sessionId).replace(/[^A-Za-z0-9._-]+/g, '_')
+  const reasonedSession = {
+    ...session,
+    session_key: sessionKey,
+    timed_out_at: closedAt,
+    cleanup_terminalized_at: closedAt,
+    terminal_reason: STALE_SESSION_REASON,
+    terminalization_evidence: evidencePath
+  }
+  const agent = {
+    ...reasonedSession,
+    id: String(session.agent_id || session.id || sessionId),
+    session_id: sessionId,
+    session_generation_id: String(session.session_key || sessionId),
+    session_artifact_dir: artifact.relative
+  }
+  await writeJsonAtomic(path.join(agentRoot, evidencePath), evidence)
+  await writeJsonAtomic(path.join(agentRoot, 'sessions', `${sessionKey}.json`), { ...reasonedSession, schema: 'sks.agent-session-record.v1' })
+  await writeJsonAtomic(path.join(artifact.absolute, 'agent-session-record.json'), { ...reasonedSession, schema: 'sks.agent-session-record.v1' })
+  const closeReport = await closeAgentTerminalSession(agentRoot, agent, {
+    exitCode: 124,
+    status: 'timed_out',
+    ...(session.slot_id ? { slotId: String(session.slot_id) } : {}),
+    ...(Number.isFinite(Number(session.generation_index)) ? { generationIndex: Number(session.generation_index) } : {}),
+    requireGeneration: Boolean(session.slot_id && Number.isFinite(Number(session.generation_index)))
+  })
+  const terminalPath = path.join(artifact.absolute, 'agent-terminal-session.json')
+  const terminalRecord = await readJson<any>(terminalPath, null)
+  await writeJsonAtomic(terminalPath, { ...terminalRecord, close_status: 'timed_out', close_reason: STALE_SESSION_REASON, terminalization_evidence: evidencePath })
+  await writeJsonAtomic(path.join(agentRoot, closeReportPath), { ...closeReport, status: 'timed_out', reason: STALE_SESSION_REASON, terminalization_evidence: evidencePath })
+  const generation = await closeAgentSessionGeneration(agentRoot, sessionId, { status: 'blocked', terminalCloseReportPath: closeReportPath })
+  await appendAgentLedgerEvent(agentRoot, {
+    agent_id: agent.id,
+    session_id: sessionId,
+    event_type: 'stale_session_terminalized',
+    payload: evidence
+  })
+  // closeAgentSession atomically replaces the session shard and then the
+  // canonical aggregate, so registry state is the final commit point.
+  const canonical = await closeAgentSession(agentRoot, agent, 'timed_out')
+  return {
+    session_id: sessionId,
+    status: canonical.status,
+    generation_status: generation?.status || null,
+    closed_at: canonical.closed_at,
+    transaction_id: transactionId,
+    canonical_registry: 'agent-sessions.json',
+    session_record: path.join(artifact.relative, 'agent-session-record.json'),
+    terminal_record: path.join(artifact.relative, 'agent-terminal-session.json'),
+    terminal_close_report: closeReportPath,
+    evidence: evidencePath
+  }
+}
+
 function buildCleanupProof(input: {
   generatedAt: string
   missionId: string | null
@@ -259,6 +575,7 @@ function buildCleanupProof(input: {
   dryRun: boolean
   actions: CleanupAction[]
   activeSessionIds: string[]
+  sessionCleanup: Record<string, unknown>
 }) {
   const byKind = (kind: CleanupActionKind, status?: CleanupAction['status']) => input.actions.filter((row) => row.kind === kind && (!status || row.status === status))
   const failed = input.actions.filter((row) => row.status === 'failed')
@@ -273,6 +590,10 @@ function buildCleanupProof(input: {
     apply: input.apply,
     stale_processes_found: byKind('terminate_process').map((row) => row.target),
     stale_processes_killed: byKind('terminate_process', 'applied').map((row) => row.target),
+    stale_sessions_found: byKind('terminalize_stale_session').map((row) => row.target),
+    stale_sessions_terminalization_planned: byKind('terminalize_stale_session', 'planned').map((row) => row.target),
+    stale_sessions_terminalized: byKind('terminalize_stale_session', 'applied').map((row) => row.target),
+    stale_session_terminalization_failures: byKind('terminalize_stale_session', 'failed').map((row) => row.target),
     process_trees: byKind('terminate_process').map((row) => ({ target: row.target, tree: row.process_tree || [] })),
     process_tree_count: byKind('terminate_process').filter((row) => (row.process_tree || []).length > 0).length,
     sigterm_planned: input.actions.filter((row) => row.status === 'planned' && row.signal_sequence?.includes('SIGTERM')).map((row) => row.target),
@@ -294,6 +615,7 @@ function buildCleanupProof(input: {
     skipped_active_sessions: [...new Set([...input.activeSessionIds, ...byKind('skip_active_session').map((row) => row.target)])].filter(Boolean),
     skipped_foreign_namespace: byKind('skip_foreign_namespace').map((row) => row.target),
     terminal_transcripts_preserved: byKind('archive_transcript_keep').map((row) => row.target),
+    session_cleanup: input.sessionCleanup,
     action_count: input.actions.length,
     applied_count: input.actions.filter((row) => row.status === 'applied').length,
     failed_count: failed.length,
@@ -381,8 +703,9 @@ async function applyAction(input: { kind: CleanupActionKind; target: string; rea
 
 async function staleLockFiles(lockDir: string, projectHash: string, now: number, staleMs: number) {
   const out: string[] = []
-  if (!lockDir || !namespaceOwnsPath(lockDir, projectHash) || !(await exists(lockDir))) return out
-  for (const file of await listFiles(lockDir)) {
+  const ownedLockDir = await resolveOwnedNamespacePath(lockDir, projectHash)
+  if (!ownedLockDir) return out
+  for (const file of await listFiles(ownedLockDir)) {
     const stat = await fsp.stat(file).catch(() => null)
     if (stat && now - stat.mtimeMs > staleMs) out.push(file)
   }
@@ -404,23 +727,6 @@ async function listFiles(dir: string): Promise<string[]> {
   return out
 }
 
-function namespaceOwnsPath(candidate: string, projectHash: string) {
-  return Boolean(candidate && (!projectHash || candidate.includes(projectHash)))
-}
-
-function processReportInNamespace(report: any, projectHash: string) {
-  if (!projectHash) return true
-  const raw = JSON.stringify({
-    project_hash: report?.project_hash,
-    root_hash: report?.root_hash,
-    project_namespace: report?.project_namespace,
-    cwd: report?.cwd,
-    stdout_log: report?.stdout_log,
-    stderr_log: report?.stderr_log
-  })
-  return raw === '{}' || raw.includes(projectHash) || (!report?.project_hash && !report?.root_hash && !report?.project_namespace)
-}
-
 function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -440,11 +746,16 @@ async function readProcessTree(rootPid: number): Promise<ProcessTreeEntry[]> {
       return { pid: Number(match[1]), ppid: Number(match[2]), command: match[3] || '' }
     }).filter(Boolean) as ProcessTreeEntry[]
     const byParent = new Map<number, ProcessTreeEntry[]>()
+    const byPid = new Map<number, ProcessTreeEntry>()
     for (const row of rows) byParent.set(row.ppid, [...(byParent.get(row.ppid) || []), row])
+    for (const row of rows) byPid.set(row.pid, row)
     const out: ProcessTreeEntry[] = []
+    const visited = new Set<number>()
     const visit = (pid: number) => {
-      const current = rows.find((row) => row.pid === pid)
-      if (current && !out.some((row) => row.pid === current.pid)) out.push(current)
+      if (visited.has(pid)) return
+      visited.add(pid)
+      const current = byPid.get(pid)
+      if (current) out.push(current)
       for (const child of byParent.get(pid) || []) visit(child.pid)
     }
     visit(rootPid)

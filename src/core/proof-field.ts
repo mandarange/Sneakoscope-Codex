@@ -35,14 +35,14 @@ export const PROOF_CONE_DEFINITIONS = Object.freeze([
     id: 'db_safety',
     surfaces: ['database', 'supabase', 'mad-sks'],
     match: [/db-safety|supabase|migration|rls|schema|sql/i],
-    verification: ['npm run packcheck', 'npm run selftest -- --mock', 'sks db scan --json'],
+    verification: ['npm run packcheck', 'sks selftest --mock --json', 'sks db scan --json'],
     negative_work: ['browser_ui_e2e', 'visual_snapshot']
   },
   {
     id: 'route_surface',
     surfaces: ['routes', 'skills', 'cli-help', 'docs'],
     match: [/routes\.js|init\.js|codex-app|README|AGENTS|skills/i],
-    verification: ['npm run packcheck', 'npm run selftest -- --mock', 'sks commands --json'],
+    verification: ['npm run packcheck', 'sks selftest --mock --json', 'sks commands --json'],
     negative_work: ['database_migration', 'from_chat_img_forensics']
   },
   {
@@ -70,7 +70,7 @@ export const PROOF_CONE_DEFINITIONS = Object.freeze([
     id: 'visual_forensic',
     surfaces: ['from-chat-img', 'visual', 'qa-loop'],
     match: [/from-chat-img|visual|screenshot|qa-loop|dogfood/i],
-    verification: ['npm run packcheck', 'npm run selftest -- --mock'],
+    verification: ['npm run packcheck', 'sks selftest --mock --json'],
     negative_work: ['database_migration']
   }
 ]);

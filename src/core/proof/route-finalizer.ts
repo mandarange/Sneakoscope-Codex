@@ -253,7 +253,7 @@ function inferRouteFailureAnalysis({
     return {
       status: 'complete',
       root_cause: 'Visual evidence was produced from a mock fixture, which cannot support a real fully verified visual route claim.',
-      corrective_action: 'Kept the Completion Proof at verified_partial and recorded the mock-evidence caveat in unverified evidence.',
+      corrective_action: `Kept the Completion Proof at ${status || 'mock_only'} and recorded the mock-evidence caveat instead of upgrading fixture evidence to a real verification claim.`,
       evidence
     };
   }

@@ -209,28 +209,39 @@ async function inspectOrRepairConfig(root: string, candidate: { scope: Scope; pa
   const codexApps = tomlBlock(next, 'mcp_servers.codex_apps')
   if (codexApps && /token_expired|expired/i.test(codexApps.text)) blockers.push('codex_apps_token_expired')
 
-  const changed = next !== text
-  const backupPath = changed && fix ? await backupConfig(candidate.path, text, 'startup') : null
-  if (changed && fix) await writeCodexConfigGuarded({
-    root,
-    configPath: candidate.path,
-    before: text,
-    cause: 'doctor-codex-startup-repair',
-    mutate: () => next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
-  })
+  const plannedChanged = next !== text
+  let changed = plannedChanged
+  let backupPath: string | null = null
+  let writeApplied = true
+  if (plannedChanged && fix) {
+    const guarded = await writeCodexConfigGuarded({
+      root,
+      configPath: candidate.path,
+      before: text,
+      cause: 'doctor-codex-startup-repair',
+      mutate: () => next.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
+    })
+    writeApplied = guarded.ok
+    changed = guarded.ok && guarded.changed
+    backupPath = guarded.backup_path
+    if (!guarded.ok) {
+      blockers.push(`config_write_guard:${guarded.status}`)
+      warnings.push(`config_preserved:${guarded.status}`)
+    }
+  }
   return {
     scope: candidate.scope,
     path: candidate.path,
     present: true,
     changed,
     backup_path: backupPath,
-    agent_config_files_repaired: agentConfigFilesRepaired,
-    stale_mcp_blocks_removed: staleMcpBlocksRemoved,
-    mcp_blocks_repaired: mcpBlocksRepaired,
+    agent_config_files_repaired: writeApplied ? agentConfigFilesRepaired : [],
+    stale_mcp_blocks_removed: writeApplied ? staleMcpBlocksRemoved : [],
+    mcp_blocks_repaired: writeApplied ? mcpBlocksRepaired : [],
     optional_mcp_blocks_ignored: optionalMcpBlocksIgnored,
     blockers,
     warnings,
-    duplicate_toml_blocks_removed: duplicateTomlBlocksRemoved
+    duplicate_toml_blocks_removed: writeApplied ? duplicateTomlBlocksRemoved : []
   }
 }
 
@@ -531,7 +542,7 @@ async function backupConfig(configPath: string, text: string, label: string): Pr
   try {
     const backupPath = `${configPath}.sks-${label}-${Date.now().toString(36)}.bak`
     await ensureDir(path.dirname(backupPath))
-    await writeTextAtomic(backupPath, text)
+    await writeTextAtomic(backupPath, text, { mode: 0o600 })
     return backupPath
   } catch {
     return null

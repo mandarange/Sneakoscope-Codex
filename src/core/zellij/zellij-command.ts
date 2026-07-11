@@ -20,10 +20,17 @@ export interface ZellijCommandResult {
   cwd: string
   exit_code: number | null
   stdout_tail: string
+  /**
+   * Complete stdout retained only in memory for bounded machine parsing.
+   * This property is deliberately non-enumerable so JSON evidence keeps the
+   * compact tail instead of duplicating potentially large `list-panes` output.
+   */
+  stdout_for_parsing?: string
   stderr_tail: string
   stdout_bytes: number
   stderr_bytes: number
   timed_out: boolean
+  output_truncated: boolean
   duration_ms: number
   env: ZellijProcessEnvMeta
   blockers: string[]
@@ -58,7 +65,7 @@ export async function runZellij(args: readonly string[] = [], opts: ZellijRunOpt
   const stderr = String(result.stderr || '')
   const missing = result.code === -1 && /ENOENT|not found|spawn zellij/i.test(stderr)
   const socketPathTooLong = isZellijSocketPathTooLong(stderr)
-  return {
+  const record: ZellijCommandResult = {
     ok,
     command: 'zellij',
     args: [...args],
@@ -69,6 +76,7 @@ export async function runZellij(args: readonly string[] = [], opts: ZellijRunOpt
     stdout_bytes: result.stdoutBytes,
     stderr_bytes: result.stderrBytes,
     timed_out: result.timedOut,
+    output_truncated: result.truncated,
     duration_ms: Date.now() - started,
     env: preparedEnv.meta,
     blockers: ok ? [] : [missing ? 'zellij_missing' : socketPathTooLong ? 'zellij_socket_path_too_long' : result.timedOut ? 'zellij_command_timeout' : 'zellij_command_failed'],
@@ -77,6 +85,17 @@ export async function runZellij(args: readonly string[] = [], opts: ZellijRunOpt
       ...(ok || opts.optional !== true ? [] : ['zellij_command_failed_optional'])
     ]
   }
+  Object.defineProperty(record, 'stdout_for_parsing', {
+    value: String(result.stdout || ''),
+    enumerable: false,
+    configurable: false,
+    writable: false
+  })
+  return record
+}
+
+export function zellijCommandStdout(result: Pick<ZellijCommandResult, 'stdout_tail' | 'stdout_for_parsing'> | null | undefined): string {
+  return String(result?.stdout_for_parsing ?? result?.stdout_tail ?? '')
 }
 
 export async function prepareZellijProcessEnv(envOverrides: NodeJS.ProcessEnv = {}): Promise<{ env: NodeJS.ProcessEnv; meta: ZellijProcessEnvMeta; warnings: string[] }> {

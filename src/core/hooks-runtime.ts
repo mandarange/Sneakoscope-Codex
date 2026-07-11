@@ -18,6 +18,7 @@ import { evaluateLoopContinuation } from './loops/loop-continuation-enforcer.js'
 import { diagnosticPromptAllowedDuringNoQuestions } from './routes/diagnostic-allowlist.js';
 import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reconcile-preflight.js';
 import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-preflight.js';
+import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
 import { joinSystemMessages, teamLiveDigest } from './hooks-runtime/team-digest.js';
 const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json';
 const LIGHT_ROUTE_STOP_ARTIFACT = 'light-route-stop.json';
@@ -168,7 +169,15 @@ function toolFailed(payload: any = {}) {
 
 export async function hookMain(name: any): Promise<JsonData> {
   const payload = await loadHookPayload();
-  return evaluateHookPayload(name, payload);
+  const root = await projectRoot(payload.cwd || process.cwd());
+  return evaluateHookPayloadOnce(name, payload, { root });
+}
+
+export async function evaluateHookPayloadOnce(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {
+  const root = opts.root || await projectRoot(payload.cwd || process.cwd());
+  const claim = await claimHookInvocation(root, name, payload).catch(() => ({ duplicate: false }));
+  if (claim.duplicate) return { continue: true, suppressedDuplicate: true };
+  return evaluateHookPayload(name, payload, { root });
 }
 
 export async function evaluateHookPayload(name: any, payload: any = {}, opts: any = {}): Promise<JsonData> {

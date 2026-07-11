@@ -146,8 +146,8 @@ export function buildNarutoCloneRoster(opts: { clones?: unknown; prompt?: string
     const cloneReadonly = readonly || !writeAllowed
     const role = mapNarutoRoleToAgentRole(narutoRole)
     const allowedTools = writeAllowed ? ['read', 'search', 'edit', 'test'] : narutoRole === 'verifier' ? ['read', 'search', 'test'] : ['read', 'search']
-    // Dynamic per-clone effort like team mode, capped at low/medium and always fast.
-    const effort = decideNarutoCloneEffort({ persona: { ...base, role, allowed_tools: allowedTools, read_only: cloneReadonly, write_policy: writeAllowed ? 'exclusive Naruto patch-envelope lease required' : 'read-only Naruto role' }, prompt: opts.prompt || '', agentId: id, readonly: cloneReadonly })
+    // Dynamic Naruto-only GPT-5.6 model/effort policy; there is no legacy low/medium cap.
+    const effort = decideNarutoCloneEffort({ persona: { ...base, role, naruto_role: narutoRole, allowed_tools: allowedTools, read_only: cloneReadonly, write_policy: writeAllowed ? 'exclusive Naruto patch-envelope lease required' : 'read-only Naruto role' }, prompt: opts.prompt || '', agentId: id, readonly: cloneReadonly })
     const persona: AgentPersona = {
       ...base,
       id,

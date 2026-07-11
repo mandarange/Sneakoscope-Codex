@@ -8,10 +8,14 @@ import {
 } from './codex-app-ui-state-snapshot.js'
 import { assertCodexAppUiMutationAllowed } from './codex-app-ui-clobber-guard.js'
 import { codexProviderModelUiStatus } from '../codex-app.js'
+import { cleanupCodexConfigBackups } from '../codex/codex-config-toml.js'
 
 export const CODEX_APP_FAST_UI_REPAIR_SCHEMA = 'sks.codex-app-fast-ui-repair.v1'
 
-const FAST_UI_TOP_LEVEL_RE = /^\s*(?:model|model_reasoning_effort|service_tier)\s*=/
+// `service_tier = "fast"` is the current Codex Desktop default-selection
+// contract. Removing it would silently turn Fast mode off, not restore the
+// selector. Only legacy SKS model/effort pins lock the native picker.
+const FAST_UI_TOP_LEVEL_RE = /^\s*(?:model|model_reasoning_effort)\s*=/
 const FAST_UI_FEATURE_LINE_RE = /^\s*fast_mode\s*=/
 const FAST_UI_LEGACY_TABLES = new Set(['user.fast_mode', 'profiles.sks-fast-high'])
 const SKS_CAUSED_RE = /(?:SKS|Sneakoscope|codex-lb|sks-mad|sks fast)/i
@@ -21,6 +25,7 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
   apply?: boolean
   force?: boolean
   reportPath?: string | null
+  env?: NodeJS.ProcessEnv
 } = {}) {
   const resolvedRoot = path.resolve(root)
   const home = codexHome(input.codexHome === undefined ? {} : { codexHome: input.codexHome })
@@ -32,6 +37,7 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
   const actions = []
   const detectedProjectLocalForbiddenKeys: string[] = []
   const unsafeReasons: string[] = []
+  let permissionsHardened = 0
   let detectedSksCausedMutation = false
   for (const candidate of candidates) {
     const text = await readText(candidate.file, null)
@@ -39,32 +45,36 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
       actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: 'missing', changed: false })
       continue
     }
+    if (input.apply === true) permissionsHardened += await hardenCodexConfigPermissions(candidate.file)
     const repaired = candidate.mode === 'project_forbidden_keys'
       ? stripProjectLocalForbiddenKeys(text)
       : stripSksCausedHostOwnedLines(text)
+    const candidateUnsafeReasons = detectUnsafeFastUiRepair(text)
+    unsafeReasons.push(...candidateUnsafeReasons)
     if (candidate.mode === 'project_forbidden_keys') detectedProjectLocalForbiddenKeys.push(...repaired.removedKeys)
     if (candidate.mode === 'sks_caused_host_owned_keys') {
-      const unsafe = detectUnsafeFastUiRepair(text)
-      unsafeReasons.push(...unsafe)
       if (repaired.text !== text) detectedSksCausedMutation = true
     }
     if (repaired.text === text) {
-      actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: unsafeReasons.length && candidate.mode === 'sks_caused_host_owned_keys' ? 'requires_confirmation' : 'ok', changed: false, removed_keys: repaired.removedKeys })
+      actions.push({ scope: candidate.scope, file: displayPath(candidate.file), status: candidateUnsafeReasons.length ? 'requires_confirmation' : 'ok', changed: false, removed_keys: repaired.removedKeys })
       continue
     }
     const backupPath = `${candidate.file}.codex-app-ui-repair-${Date.now().toString(36)}.bak`
-    if (input.apply) {
+    const applyAllowed = input.apply === true && (candidateUnsafeReasons.length === 0 || input.force === true)
+    if (applyAllowed) {
       await ensureDir(path.dirname(candidate.file))
-      await fs.writeFile(backupPath, text, 'utf8')
+      await fs.writeFile(backupPath, text, { encoding: 'utf8', mode: 0o600 })
+      await fs.chmod(backupPath, 0o600)
       assertCodexAppUiMutationAllowed({ kind: 'codex_app_ui_state', scope: 'codex-app-ui-repair', backupPath })
-      await writeTextAtomic(candidate.file, repaired.text)
+      await writeTextAtomic(candidate.file, repaired.text, { mode: 0o600 })
+      await cleanupCodexConfigBackups(candidate.file, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined)
     }
     actions.push({
       scope: candidate.scope,
       file: displayPath(candidate.file),
-      status: input.apply ? 'repaired' : 'planned',
+      status: applyAllowed ? 'repaired' : input.apply ? 'requires_confirmation' : 'planned',
       changed: true,
-      backup_path: input.apply ? displayPath(backupPath) : null,
+      backup_path: applyAllowed ? displayPath(backupPath) : null,
       before_hash: sha256(text),
       after_hash: sha256(repaired.text),
       removed_keys: repaired.removedKeys
@@ -73,17 +83,24 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
   const after = await snapshotCodexAppUiState(resolvedRoot, { codexHome: home })
   const providerModelUi = await codexProviderModelUiStatus({
     cwd: resolvedRoot,
+    env: input.env,
     home: path.dirname(home),
     configPath: path.join(home, 'config.toml'),
     codexLbEnvPath: path.join(home, 'sks-codex-lb.env')
   })
   const changed = actions.some((action) => action.changed)
+  const applied = actions.some((action) => action.status === 'repaired')
+  const pending = actions.some((action) => action.changed && action.status !== 'repaired')
   const requiresConfirmation = unsafeReasons.length > 0 && input.force !== true
+  const selectedProviderBlockers = Array.isArray(providerModelUi.selected_provider_blockers)
+    ? providerModelUi.selected_provider_blockers
+    : []
   const safeAutoApply = changed && !requiresConfirmation
   const manual = changed && !input.apply
   const blockers = [
     ...(requiresConfirmation ? ['codex_app_fast_ui_repair_requires_confirmation'] : []),
     ...(manual && !safeAutoApply ? ['codex_app_fast_ui_repair_requires_explicit_apply'] : []),
+    ...selectedProviderBlockers.map((blocker: string) => `selected_provider:${blocker}`),
     ...(after.indicators.secret_leak_suspected ? ['codex_app_ui_repair_secret_leak_suspected'] : [])
   ]
   const report = {
@@ -96,12 +113,15 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
     detected_sks_caused_mutation: detectedSksCausedMutation,
     detected_project_local_forbidden_keys: [...new Set(detectedProjectLocalForbiddenKeys)],
     unsafe_repair_reasons: [...new Set(unsafeReasons)],
-    fast_selector: changed ? (input.apply ? 'repaired' : 'manual_action_required') : before.indicators.fast_selector === 'maybe_hidden_or_locked' ? 'manual_action_required' : 'ok',
-    provider_selector: providerModelUi.ok ? 'ok' : 'manual_action_required',
+    permissions_hardened: permissionsHardened,
+    fast_selector: pending ? 'manual_action_required' : applied ? 'repaired' : before.indicators.fast_selector === 'maybe_hidden_or_locked' ? 'manual_action_required' : 'ok',
+    provider_selector: selectedProviderBlockers.length ? 'manual_action_required' : 'selected_provider_ready',
     provider_model_ui: providerModelUi,
     provider_actions: providerModelUi.ui_actions || [],
     provider_blockers: providerModelUi.blockers || [],
-    host_owned_config: input.apply && changed ? 'repaired_with_backup' : changed ? 'preserved_until_explicit_apply' : 'preserved',
+    selected_provider_blockers: selectedProviderBlockers,
+    optional_provider_blockers: providerModelUi.optional_provider_blockers || [],
+    host_owned_config: applied && !pending ? 'repaired_with_backup' : changed ? 'preserved_until_explicit_apply' : 'preserved',
     actions,
     before_fast_selector: before.indicators.fast_selector,
     after_fast_selector: after.indicators.fast_selector,
@@ -112,15 +132,27 @@ export async function repairCodexAppFastUi(root: string = process.cwd(), input: 
   return report
 }
 
+async function hardenCodexConfigPermissions(configFile: string) {
+  const dir = path.dirname(configFile)
+  const base = path.basename(configFile)
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+  const targets = [configFile, ...entries
+    .filter((entry) => entry.isFile() && entry.name.startsWith(`${base}.`) && entry.name.endsWith('.bak'))
+    .map((entry) => path.join(dir, entry.name))]
+  let hardened = 0
+  for (const target of targets) {
+    const stat = await fs.lstat(target).catch(() => null)
+    if (!stat?.isFile() || stat.isSymbolicLink()) continue
+    if ((stat.mode & 0o777) !== 0o600) {
+      await fs.chmod(target, 0o600)
+      hardened += 1
+    }
+  }
+  return hardened
+}
+
 function detectUnsafeFastUiRepair(text: string) {
   const reasons: string[] = []
-  const lines = text.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i] || ''
-    const serviceTier = line.match(/^\s*service_tier\s*=\s*"(standard|flex)"\s*(?:#.*)?$/i)?.[1]
-    const sksMarked = SKS_CAUSED_RE.test(line) || SKS_CAUSED_RE.test(lines[i - 1] || '') || SKS_CAUSED_RE.test(lines[i + 1] || '')
-    if (serviceTier && !sksMarked) reasons.push(`user_selected_service_tier_${serviceTier.toLowerCase()}`)
-  }
   if (hasOddUnescapedQuotes(text)) reasons.push('unparseable_config_requires_manual_review')
   return [...new Set(reasons)]
 }

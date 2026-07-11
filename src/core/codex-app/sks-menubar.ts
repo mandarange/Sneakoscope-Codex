@@ -121,6 +121,12 @@ export interface SksMenuBarStatusResult {
     smoke_code: number | null;
     smoke_output: string | null;
     version_detected: boolean;
+    detected_version: string | null;
+    expected_version: string;
+    version_matches_expected: boolean;
+    script_sha256: string | null;
+    expected_script_sha256: string | null;
+    script_hash_matches_stamp: boolean;
     executable: boolean;
     ok: boolean;
   };
@@ -588,8 +594,8 @@ async function resolveCodexBundleId(input: { home: string; env: NodeJS.ProcessEn
   return null;
 }
 
-export async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{ ok: boolean; code: number | null; output: string | null; versionDetected: boolean; executable: boolean }> {
-  if (!(await exists(actionScriptPath))) return { ok: false, code: null, output: null, versionDetected: false, executable: false };
+export async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{ ok: boolean; code: number | null; output: string | null; versionDetected: boolean; detectedVersion: string | null; executable: boolean }> {
+  if (!(await exists(actionScriptPath))) return { ok: false, code: null, output: null, versionDetected: false, detectedVersion: null, executable: false };
   // The Swift app runs the script directly (which requires the executable bit), so the smoke
   // check must invoke it the same way. Running it via `/bin/zsh <script>` — as this check used
   // to — succeeds even when +x is missing, which let doctor/status report a healthy action
@@ -601,6 +607,7 @@ export async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{
       code: null,
       output: 'action script is not executable (missing +x); the menu bar app cannot run it',
       versionDetected: false,
+      detectedVersion: null,
       executable: false
     };
   }
@@ -609,12 +616,14 @@ export async function smokeSksMenuBarAction(actionScriptPath: string): Promise<{
     maxOutputBytes: 16 * 1024
   }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
   const output = String(`${result.stdout || ''}\n${result.stderr || ''}`).trim();
-  const versionDetected = /\b(?:sks|sneakoscope)?\s*v?\d+\.\d+\.\d+\b/i.test(output);
+  const detectedVersion = output.match(/\b(?:sks|sneakoscope)?\s*v?(\d+\.\d+\.\d+)\b/i)?.[1] || null;
+  const versionDetected = Boolean(detectedVersion);
   return {
     ok: result.code === 0 && versionDetected,
     code: result.code,
     output: output ? output.slice(0, 700) : null,
     versionDetected,
+    detectedVersion,
     executable: true
   };
 }
@@ -650,6 +659,10 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
     warning: config.codex_bundle_id ? null : 'codex_sync_disabled'
   };
   const buildStamp = await readJson<SksMenuBarBuildStamp | null>(paths.build_stamp_path, null);
+  const actionIntegrity = evaluateActionScriptIntegrity(actionText, buildStamp);
+  const expectedActionVersion = buildStamp?.package_version || PACKAGE_VERSION;
+  const actionVersionMatchesExpected = actionSmoke.detectedVersion === expectedActionVersion
+    && actionSmoke.detectedVersion === PACKAGE_VERSION;
   const launchd = await inspectLaunchdService(opts.env);
   const signature = await inspectSignature(paths.app_path, opts.env);
   const blockers: string[] = [];
@@ -658,6 +671,9 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
   if (installed && launchd.checked && !launchd.ok) blockers.push('launchd_not_running');
   if (installed && !actionSmoke.executable) blockers.push('action_script_not_executable');
   if (installed && !actionSmoke.ok) blockers.push('action_script_smoke_failed');
+  if (installed && actionSmoke.ok && !actionVersionMatchesExpected) blockers.push('action_target_version_mismatch');
+  if (installed && !buildStamp) blockers.push('build_stamp_missing');
+  if (installed && buildStamp && !actionIntegrity.script_hash_matches_stamp) blockers.push('action_script_hash_mismatch');
   if (installed && signature.checked && !signature.ok) warnings.push('codesign_identifier_unexpected');
   if (!codexSync.ok) warnings.push('codex_sync_disabled');
   if (buildStamp?.package_version && buildStamp.package_version !== PACKAGE_VERSION) warnings.push('build_stamp_package_version_mismatch');
@@ -677,8 +693,12 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
       smoke_code: actionSmoke.code,
       smoke_output: actionSmoke.output,
       version_detected: actionSmoke.versionDetected,
+      detected_version: actionSmoke.detectedVersion,
+      expected_version: expectedActionVersion,
+      version_matches_expected: actionVersionMatchesExpected,
+      ...actionIntegrity,
       executable: actionSmoke.executable,
-      ok: actionSmoke.ok
+      ok: actionSmoke.ok && actionVersionMatchesExpected && actionIntegrity.script_hash_matches_stamp
     },
     codex_sync: codexSync,
     build_stamp: buildStamp,
@@ -687,6 +707,19 @@ export async function inspectSksMenuBarStatus(opts: { home?: string; root?: stri
     blockers,
     warnings,
     next_actions: blockers.length || warnings.length ? defaultNextActions() : ['sks menubar status --json']
+  };
+}
+
+export function evaluateActionScriptIntegrity(
+  actionText: string,
+  buildStamp: Pick<SksMenuBarBuildStamp, 'action_script_sha256'> | null | undefined
+) {
+  const scriptSha256 = actionText ? sha256(actionText) : null;
+  const expectedScriptSha256 = buildStamp?.action_script_sha256 || null;
+  return {
+    script_sha256: scriptSha256,
+    expected_script_sha256: expectedScriptSha256,
+    script_hash_matches_stamp: Boolean(scriptSha256 && expectedScriptSha256 && scriptSha256 === expectedScriptSha256)
   };
 }
 
@@ -898,6 +931,14 @@ run_node_entry() {
   exec "$node_bin" "$entry" "$@"
 }
 
+# The installer pins the entry that produced this menu build. Prefer it over
+# PATH/global copies so a newly updated 6.0.3 companion cannot execute stale
+# 6.0.2 auth/restart logic. Fall back only when the pinned file or Node runtime
+# is unavailable.
+if [ -f "$SKS_ENTRY" ]; then
+  run_node_entry "$SKS_ENTRY" "$@" || true
+fi
+
 SKS_BIN="$(/bin/zsh -lc 'command -v sks' 2>/dev/null | /usr/bin/head -n 1 || true)"
 if [ -n "$SKS_BIN" ] && [ -x "$SKS_BIN" ]; then
   exec "$SKS_BIN" "$@"
@@ -913,7 +954,6 @@ for entry in "$HOME"/.nvm/versions/node/*/lib/node_modules/sneakoscope/dist/bin/
     run_node_entry "$entry" "$@" || true
   fi
 done
-run_node_entry "$SKS_ENTRY" "$@" || true
 notify_sks_missing
 echo "SKS command not found. Run npm install -g sneakoscope or sks doctor --fix, then try again." >&2
 exit 127
@@ -1318,9 +1358,10 @@ ${codexLifecycleSource}
         let cachePath = NSString(string: "~/.sneakoscope/cache/update-notice.json").expandingTildeInPath
         guard let data = FileManager.default.contents(atPath: cachePath) else { return false }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
-        if let available = json["update_available"] as? Bool { return available }
-        guard let latest = json["latest_version"] as? String else { return false }
-        return latest != packageVersion && !latest.isEmpty
+        if let latest = json["latest_version"] as? String, !latest.isEmpty {
+            return latest.compare(packageVersion, options: .numeric) == .orderedDescending
+        }
+        return json["update_available"] as? Bool == true
     }
 
     func runSksCapture(_ args: [String], title: String, stdinText: String? = nil, notify: Bool = true, completion: ((Int32, String) -> Void)? = nil) {
@@ -1380,12 +1421,18 @@ ${codexLifecycleSource}
         runSksSilent(["codex-lb", "status", "--json"]) { [weak self] code, output in
             guard let self = self else { return }
             let json = parseJsonObject(output)
-            let selected = json?["selected"] as? Bool == true
-            let provider = (json?["model_provider"] as? String)?.lowercased() == "codex-lb"
-            let mode = (json?["mode"] as? String)?.lowercased() == "codex-lb"
-            let codexLbActive = code == 0 && (selected || provider || mode)
+            guard code == 0, let json = json else {
+                self.codexLbItem.state = .off
+                self.oauthItem.state = .off
+                return
+            }
+            let selected = json["selected"] as? Bool == true
+            let providerContract = json["provider_contract_ok"] as? Bool == true
+            let authMode = (json["auth_mode"] as? String)?.lowercased() ?? ""
+            let codexLbActive = selected && providerContract && authMode == "apikey"
+            let oauthActive = !selected && (authMode.contains("chatgpt") || authMode.contains("oauth") || authMode.contains("browser"))
             self.codexLbItem.state = codexLbActive ? .on : .off
-            self.oauthItem.state = codexLbActive ? .off : .on
+            self.oauthItem.state = oauthActive ? .on : .off
         }
     }
 
@@ -1393,22 +1440,32 @@ ${codexLifecycleSource}
         runSksSilent(["fast-mode", "status", "--json"]) { [weak self] code, output in
             guard let self = self else { return }
             let json = parseJsonObject(output)
-            let fastMode = json?["fast_mode"] as? Bool == true
-            let serviceTier = (json?["service_tier"] as? String)?.lowercased()
-            let fastActive = code == 0 && (fastMode || serviceTier == "fast" || serviceTier == "priority")
-            self.fastModeOnItem.state = fastActive ? .on : .off
-            self.fastModeOffItem.state = fastActive ? .off : .on
+            guard code == 0, let json = json else {
+                self.fastModeOnItem.state = .off
+                self.fastModeOffItem.state = .off
+                return
+            }
+            guard let global = json["global"] as? [String: Any], let desktopFast = global["on"] as? Bool else {
+                self.fastModeOnItem.state = .off
+                self.fastModeOffItem.state = .off
+                return
+            }
+            let fastMode = json["fast_mode"] as? Bool == true
+            let serviceTier = (json["service_tier"] as? String)?.lowercased()
+            let projectFast = fastMode || serviceTier == "fast" || serviceTier == "priority"
+            self.fastModeOnItem.state = projectFast && desktopFast ? .on : .off
+            self.fastModeOffItem.state = !projectFast && !desktopFast ? .on : .off
         }
     }
 
     @objc func useCodexLb() {
-        runSksBackground(["codex-lb", "use-codex-lb", "--json"], title: "Use codex-lb") { [weak self] code, _ in
+        runSksBackground(["codex-lb", "use-codex-lb", "--restart-app", "--json"], title: "Use codex-lb") { [weak self] code, _ in
             if code == 0 { self?.updateAuthModeChecks() }
         }
     }
 
     @objc func useChatGptOAuth() {
-        runSksBackground(["codex-lb", "use-oauth", "--json"], title: "Use ChatGPT OAuth") { [weak self] code, _ in
+        runSksBackground(["codex-lb", "use-oauth", "--restart-app", "--json"], title: "Use ChatGPT OAuth") { [weak self] code, _ in
             if code == 0 { self?.updateAuthModeChecks() }
         }
     }
@@ -1416,14 +1473,14 @@ ${codexLifecycleSource}
     @objc func setCodexLbDomainAndKey() {
         guard let domain = promptText(title: "Set codex-lb Domain", message: "Enter just your codex-lb domain or base URL — the /backend-api/codex path is added automatically.", placeholder: "lb.example.com") else { return }
         guard let key = promptText(title: "Set codex-lb Key", message: "Enter your codex-lb API key.", placeholder: "sk-clb-...", secure: true) else { return }
-        runSksBackground(["codex-lb", "setup", "--host", domain, "--api-key-stdin", "--yes", "--json"], title: "Set codex-lb", stdinText: key + "\\n") { [weak self] code, _ in
+        runSksBackground(["codex-lb", "setup", "--host", domain, "--api-key-stdin", "--yes", "--restart-app", "--json"], title: "Set codex-lb", stdinText: key + "\\n") { [weak self] code, _ in
             if code == 0 { self?.updateAuthModeChecks() }
         }
     }
 
     @objc func setOpenRouterKey() {
         guard let key = promptText(title: "Set OpenRouter Key", message: "Enter your OpenRouter API key.", placeholder: "sk-or-v1-...", secure: true) else { return }
-        runSksBackground(["codex-app", "set-openrouter-key", "--api-key-stdin", "--json"], title: "Set OpenRouter Key", stdinText: key + "\\n")
+        runSksBackground(["codex-app", "set-openrouter-key", "--api-key-stdin", "--restart-app", "--json"], title: "Set OpenRouter Key", stdinText: key + "\\n")
     }
 
     @objc func fastModeOn() {
@@ -1454,36 +1511,46 @@ ${codexLifecycleSource}
         let urlString = "http://127.0.0.1:4477"
         runProcess("/usr/bin/curl", ["-fsS", "--max-time", "1", urlString]) { [weak self] code, _ in
             DispatchQueue.main.async {
-                if code != 0 {
+                if code == 0 {
+                    if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
+                } else {
                     self?.startSksDetached(["ui"], title: "SKS Dashboard")
+                    self?.waitForDashboard(urlString, attempts: 20)
                 }
-                if let url = URL(string: urlString) {
-                    NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    func waitForDashboard(_ urlString: String, attempts: Int) {
+        runProcess("/usr/bin/curl", ["-fsS", "--max-time", "1", urlString]) { [weak self] code, _ in
+            if code == 0 {
+                DispatchQueue.main.async {
+                    if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
+                }
+            } else if attempts > 1 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.25) {
+                    self?.waitForDashboard(urlString, attempts: attempts - 1)
+                }
+            } else {
+                DispatchQueue.main.async {
+                    showAlert("SKS Dashboard failed", informative: "Dashboard did not become ready at \(urlString). See View Last Log.")
                 }
             }
         }
     }
 
     @objc func openCodexSettings() {
-        runProcess("/usr/bin/open", ["codex://settings"])
+        runProcess("/usr/bin/open", ["codex://settings"]) { code, output in
+            if code != 0 {
+                DispatchQueue.main.async {
+                    showAlert("Open Codex Settings failed", informative: humanizeSksFailure(redactSecrets(output)))
+                }
+            }
+        }
     }
 
     @objc func restartCodex() {
-        let running = NSWorkspace.shared.runningApplications.filter { app in
-            if let bundle = codexBundleId, app.bundleIdentifier == bundle { return true }
-            return app.localizedName == "Codex"
-        }
-        for app in running {
-            app.terminate()
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            if let bundle = codexBundleId, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) {
-                NSWorkspace.shared.open(url)
-                showNotification("Restart Codex", "requested")
-            } else {
-                showAlert("Restart Codex failed", informative: "Codex app bundle could not be resolved.")
-            }
-        }
+        runSksBackground(["codex-app", "restart", "--json"], title: "Restart Codex")
     }
 
     @objc func viewLastLog() {

@@ -15,10 +15,8 @@ export async function requireCodexImagegen(root: string, opts: {
     core_ready: false,
     blockers: [err instanceof Error ? err.message : String(err)]
   }));
-  if ((capability as any).core_ready === true) {
-    return { ok: true, capability, repair: null, blocker: null, blockers: [] };
-  }
-  const repair = opts.autoRepair === true
+  const capabilityReadyBeforeRepair = (capability as any).core_ready === true;
+  const repair = opts.autoRepair === true && !capabilityReadyBeforeRepair
     ? await repairCodexImagegen({
         root,
         apply: opts.applyRepair === true,
@@ -33,8 +31,13 @@ export async function requireCodexImagegen(root: string, opts: {
   const finalCapability = repair
     ? (repair as any).after || capability
     : capability;
-  const ok = (finalCapability as any).core_ready === true || (repair as any)?.recovered === true;
-  const blockers = ok ? [] : [
+  const capabilityReady = (finalCapability as any).core_ready === true || (repair as any)?.capability_ready === true;
+  const currentTaskToolManifestVerified = (repair as any)?.current_task_tool_manifest_verified === true;
+  const generatedOutputVerified = (finalCapability as any).real_output_verified_by_capability_check === true
+    || (repair as any)?.real_generation_verified === true;
+  const routeReady = capabilityReady && (currentTaskToolManifestVerified || generatedOutputVerified);
+  const preflightReady = capabilityReady;
+  const blockers = preflightReady ? [] : [
     ...new Set([
       ...(((finalCapability as any)?.core_blockers || []).map(String)),
       ...(((finalCapability as any)?.blockers || []).map(String)),
@@ -42,19 +45,42 @@ export async function requireCodexImagegen(root: string, opts: {
       'codex_imagegen_unavailable'
     ])
   ];
+  const completionBlockers = routeReady ? [] : [
+    ...new Set([
+      ...(!capabilityReady ? blockers : []),
+      ...(capabilityReady && !currentTaskToolManifestVerified
+        ? ['codex_imagegen_current_task_tool_manifest_unverified']
+        : []),
+      ...(capabilityReady && !generatedOutputVerified
+        ? ['codex_imagegen_real_output_unverified']
+        : [])
+    ])
+  ];
   return {
-    ok,
+    ok: preflightReady,
+    preflight_ready: preflightReady,
+    preflight_only: true,
+    preflight_does_not_satisfy_generated_output_proof: true,
+    capability_ready: capabilityReady,
+    route_ready: routeReady,
+    current_task_tool_manifest_verified: currentTaskToolManifestVerified,
+    generated_output_verified: generatedOutputVerified,
+    completion_blockers: completionBlockers,
     capability: finalCapability,
     repair,
-    blocker: ok ? null : {
+    blocker: preflightReady ? null : {
       schema: 'sks.codex-imagegen-required-blocker.v1',
       blocker: 'codex_imagegen_unavailable',
       status: 'blocked',
       blockers,
       next_actions: (repair as any)?.manual_actions || [
-        'Install/update Codex CLI: npm i -g @openai/codex@latest',
-        'Open Codex App settings and enable image_generation / $imagegen.',
-        'Verify with: codex features list --json'
+        ...(capabilityReady ? [] : [
+          'Install/update Codex CLI: npm i -g @openai/codex@latest',
+          'Open Codex App settings and enable image_generation / $imagegen.',
+          'Verify configuration with: codex features list'
+        ]),
+        'Start a fresh Codex/Work task so $imagegen is present in its tool manifest.',
+        'Invoke $imagegen with gpt-image-2 and bind the selected raster output path to route evidence.'
       ]
     },
     blockers

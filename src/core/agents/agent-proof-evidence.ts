@@ -322,7 +322,7 @@ export async function writeAgentProofEvidence(root: string, input: { missionId: 
     patch_conflict_count: patchConflictCount,
     serial_bottleneck_count: serialBottleneckCount,
     changed_files_by_agent: changedFilesByAgent(patchApplyRows, patchEntries),
-    lease_compliance_by_patch: leaseComplianceByPatch(patchEntries, input.partition?.leases || []),
+    lease_compliance_by_patch: leaseComplianceByPatch(patchEntries, input.partition?.leases || [], patchProof),
     rollback_digest_count: patchApplyRows.filter((row: any) => row.rollback_digest).length,
     real_parallel_claim: input.realParallel === true && input.backend === 'codex-sdk',
     fake_backend_disclaimer: input.backend === 'fake' ? 'fixture only; no real parallel execution claim' : null,
@@ -462,7 +462,21 @@ function changedFilesByAgent(applyRows: any[], queueEntries: any[]) {
   return out
 }
 
-function leaseComplianceByPatch(queueEntries: any[], leases: any[]) {
+export function leaseComplianceByPatch(queueEntries: any[], leases: any[], patchProof?: any) {
+  if (Array.isArray(patchProof?.lease_compliance_by_patch)) {
+    const entriesById = new Map(queueEntries.map((entry) => [String(entry.id), entry]))
+    return patchProof.lease_compliance_by_patch.map((row: any) => {
+      const patchEntryId = String(row.patch_entry_id || row.entry_id || '')
+      const entry = entriesById.get(patchEntryId)
+      return {
+        patch_entry_id: patchEntryId,
+        agent_id: entry?.envelope?.agent_id || row.agent_id || null,
+        lease_id: row.lease_id || null,
+        ok: row.ok === true,
+        write_paths: Array.isArray(row.write_paths) ? row.write_paths.map(String) : []
+      }
+    })
+  }
   return queueEntries.map((entry) => {
     const leaseId = entry.envelope?.lease_id || entry.envelope?.lease_proof?.lease_id || null
     const agentId = entry.envelope?.agent_id || null

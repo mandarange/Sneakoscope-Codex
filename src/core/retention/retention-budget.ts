@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { writeJsonAtomic } from '../fsx.js'
+import { readJson, writeJsonAtomic } from '../fsx.js'
 
 export interface RetentionBudgetReport {
   schema: 'sks.retention-budget.v1'
@@ -18,15 +18,31 @@ const DEFAULT_BUDGETS = [
 ]
 
 export async function runRetentionBudget(root: string): Promise<RetentionBudgetReport> {
+  const policyFile = await readJson(path.join(root, '.sneakoscope', 'policy.json'), {}).catch(() => ({}))
+  const retentionPolicy = (policyFile as any)?.retention || policyFile || {}
+  const configuredTotalBudget = Number(retentionPolicy.max_sneakoscope_bytes)
+  const totalBudget = Number.isFinite(configuredTotalBudget)
+    ? Math.max(0, configuredTotalBudget)
+    : 256 * 1024 * 1024
+  const configuredBudgets = [
+    { path: '.sneakoscope', max_bytes: totalBudget },
+    ...DEFAULT_BUDGETS
+  ]
   const budgets = []
   const blockers: string[] = []
-  for (const budget of DEFAULT_BUDGETS) {
+  const stateRoot = path.join(root, '.sneakoscope')
+  const stateRootStat = await fs.lstat(stateRoot).catch(() => null)
+  const stateRootSafe = !stateRootStat || (stateRootStat.isDirectory() && !stateRootStat.isSymbolicLink())
+  if (!stateRootSafe) blockers.push('unsafe_sneakoscope_root')
+  for (const budget of configuredBudgets) {
     const bytes = await sizeOf(path.join(root, budget.path))
-    const ok = bytes <= budget.max_bytes
+    const ok = stateRootSafe && (budget.max_bytes <= 0 || bytes <= budget.max_bytes)
     budgets.push({ path: budget.path, bytes, max_bytes: budget.max_bytes, ok })
-    if (!ok) blockers.push(`retention_budget_exceeded:${budget.path}`)
+    if (!ok && stateRootSafe) blockers.push(`retention_budget_exceeded:${budget.path}`)
   }
-  const oversizedJsonl = await findOversizedJsonl(path.join(root, '.sneakoscope', 'missions'), 10 * 1024 * 1024)
+  const oversizedJsonl = stateRootSafe
+    ? await findOversizedJsonl(path.join(root, '.sneakoscope', 'missions'), 10 * 1024 * 1024)
+    : []
   for (const row of oversizedJsonl) blockers.push(`jsonl_budget_exceeded:${row.path}`)
   const report: RetentionBudgetReport = {
     schema: 'sks.retention-budget.v1',
@@ -41,8 +57,9 @@ export async function runRetentionBudget(root: string): Promise<RetentionBudgetR
 }
 
 async function sizeOf(file: string): Promise<number> {
-  const stat = await fs.stat(file).catch(() => null)
+  const stat = await fs.lstat(file).catch(() => null)
   if (!stat) return 0
+  if (stat.isSymbolicLink()) return 0
   if (stat.isFile()) return stat.size
   if (!stat.isDirectory()) return 0
   const entries = await fs.readdir(file, { withFileTypes: true }).catch(() => [])

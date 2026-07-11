@@ -16,5 +16,12 @@ assertGate(String(scripts['release:check:affected']).includes('build:incremental
 assertGate(dag.includes('selectAffectedReleaseGates'), 'release DAG must use affected selector')
 assertGate(dagMod.selectReleaseGatePreset(manifest, 'affected').length === releaseCount, 'affected preset must select the release gate universe before affected filtering')
 assertGate(dagMod.selectReleaseGatePreset(manifest, 'fast').length === releaseCount, 'fast preset must select the release gate universe before affected filtering')
+let unknownPresetBlocked = false
+try {
+  dagMod.selectReleaseGatePreset(manifest, 'unknown-preset')
+} catch (error: any) {
+  unknownPresetBlocked = /release_gate_preset_empty_or_unknown/.test(String(error?.message || error))
+}
+assertGate(unknownPresetBlocked, 'unknown or empty release presets must fail closed')
 assertGate(runner.includes('--changed-since') && runner.includes('--full') && runner.includes('--sla'), 'release DAG runner must parse changed-since/full/sla')
 emitGate('release:dynamic-presets', { presets: 4 })

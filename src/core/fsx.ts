@@ -6,11 +6,14 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { gunzip as gunzipCallback } from 'node:zlib';
+import { promisify } from 'node:util';
 import { PACKAGE_VERSION } from './version.js';
 
 export { PACKAGE_VERSION };
 export const DEFAULT_PROCESS_TAIL_BYTES = 256 * 1024;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
+const gunzipAsync = promisify(gunzipCallback);
 
 export interface RunProcessOptions {
   cwd?: string;
@@ -114,27 +117,41 @@ export async function readText<T>(p: string, fallback?: T): Promise<string | T> 
   }
 }
 
-export async function writeTextAtomic(p: string, text: string): Promise<void> {
+export async function writeTextAtomic(p: string, text: string, opts: { mode?: number } = {}): Promise<void> {
   await ensureDir(path.dirname(p));
   try {
-    if ((await fsp.readFile(p, 'utf8')) === text) return;
+    if ((await fsp.readFile(p, 'utf8')) === text) {
+      if (opts.mode === undefined) return;
+      const existing = await fsp.lstat(p).catch(() => null);
+      if (existing?.isFile() && !existing.isSymbolicLink()) {
+        await fsp.chmod(p, opts.mode & 0o777);
+        return;
+      }
+      // Replace symlink or non-regular targets atomically below. Never chmod
+      // through a link merely because its current contents happen to match.
+    }
   } catch {}
   const tmp = `${p}.${process.pid}.${randomId(6)}.tmp`;
+  const existingMode = await fsp.lstat(p).then((stat) => stat.isFile() && !stat.isSymbolicLink() ? stat.mode & 0o777 : null).catch(() => null);
+  const requestedMode = opts.mode === undefined ? existingMode : opts.mode & 0o777;
   try {
-    const handle = await fsp.open(tmp, 'w');
+    const handle = await fsp.open(tmp, 'w', requestedMode ?? 0o666);
     try {
       await handle.writeFile(text, 'utf8');
       await handle.sync().catch(() => {});
     } finally {
       await handle.close().catch(() => {});
     }
+    if (requestedMode !== null) await fsp.chmod(tmp, requestedMode);
     await fsp.rename(tmp, p);
+    if (requestedMode !== null) await fsp.chmod(p, requestedMode);
   } catch (err: unknown) {
     await fsp.rm(tmp, { force: true }).catch(() => {});
     if (!canFallbackToDirectWrite(err)) throw err;
     try {
       await ensureDir(path.dirname(p));
-      await fsp.writeFile(p, text, 'utf8');
+      await fsp.writeFile(p, text, { encoding: 'utf8', ...(requestedMode === null ? {} : { mode: requestedMode }) });
+      if (requestedMode !== null) await fsp.chmod(p, requestedMode);
     } catch (fallbackErr: unknown) {
       const error = fallbackErr instanceof Error ? fallbackErr : new Error(String(fallbackErr));
       error.message = `Atomic write failed (${errorMessage(err)}); direct write fallback failed: ${error.message}`;
@@ -173,11 +190,39 @@ export async function readJson(p: string, fallback: object): Promise<JsonData>;
 export async function readJson<T>(p: string, fallback: T): Promise<T>;
 export async function readJson<T = unknown>(p: string, fallback?: T): Promise<T> {
   try {
-    return JSON.parse(await fsp.readFile(p, 'utf8')) as T;
+    const parsed = JSON.parse(await fsp.readFile(p, 'utf8'));
+    if (parsed?.retention_archived === true) {
+      return await hydrateRetentionArchivedJson(p, parsed) as T;
+    }
+    return parsed as T;
   } catch (err: unknown) {
     if (fallback !== undefined) return fallback;
     throw err;
   }
+}
+
+async function hydrateRetentionArchivedJson(p: string, stub: any): Promise<unknown> {
+  const archive = stub?.retention_archive;
+  const sourceRel = String(archive?.source_path || '').split(path.sep).join('/');
+  const gzipRel = String(archive?.gzip_path || '').split(path.sep).join('/');
+  if (!sourceRel || sourceRel.startsWith('../') || path.posix.isAbsolute(sourceRel) || path.posix.normalize(sourceRel) !== sourceRel) {
+    throw new Error('retention_archive_invalid_source_path');
+  }
+  if (gzipRel !== `${sourceRel}.gz`) throw new Error('retention_archive_invalid_gzip_path');
+  const sourceParts = sourceRel.split('/').filter(Boolean);
+  const archiveRoot = path.resolve(path.dirname(p), ...Array(Math.max(0, sourceParts.length - 1)).fill('..'));
+  const resolvedSource = path.resolve(p);
+  const resolvedGzip = path.resolve(archiveRoot, ...gzipRel.split('/'));
+  if (path.resolve(archiveRoot, ...sourceParts) !== resolvedSource || resolvedGzip !== `${resolvedSource}.gz`) {
+    throw new Error('retention_archive_path_escape');
+  }
+  const compressed = await fsp.readFile(resolvedGzip);
+  const original = await gunzipAsync(compressed);
+  const expectedSha = String(archive?.original_sha256 || '');
+  if (!/^[a-f0-9]{64}$/i.test(expectedSha) || sha256(original) !== expectedSha) {
+    throw new Error('retention_archive_sha256_mismatch');
+  }
+  return JSON.parse(original.toString('utf8'));
 }
 
 export async function writeJsonAtomic<T>(p: string, data: T): Promise<void> {

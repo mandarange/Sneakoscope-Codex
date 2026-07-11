@@ -11,6 +11,7 @@ import path from 'node:path';
 import { assertGate, emitGate, importDist, readText, root } from './sks-1-18-gate-lib.js';
 
 const triwiki = await importDist('core/triwiki-runtime.js');
+const coordinates = await importDist('core/wiki-coordinate.js');
 const { loadTriWikiRuntimeContext, triWikiProofRecord, writeTriWikiContextArtifact } = triwiki;
 
 // 1) Absent pack -> graceful fallback (present:false, warning, not consulted).
@@ -25,10 +26,23 @@ assertGate(triWikiProofRecord(emptyCtx).triwiki_context_consulted === false, 'ab
 const packRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-triwiki-pack-'));
 const packDir = path.join(packRoot, '.sneakoscope', 'wiki');
 fs.mkdirSync(packDir, { recursive: true });
+const wiki = coordinates.compactWikiCoordinateIndex(coordinates.buildWikiCoordinateIndex({
+  mission: { id: 'project-wiki', coord: { rgba: [48, 132, 212, 240] } },
+  claims: [
+    { id: 'claim-a', text: 'claim a', status: 'supported', freshness: 'fresh', risk: 'low', trust_score: 0.95 },
+    { id: 'claim-b', text: 'claim b', status: 'weak', freshness: 'unknown', risk: 'high', trust_score: 0.5 }
+  ],
+  maxAnchors: 2
+}));
+const anchorById = new Map(wiki.a.map((row) => [row[0], row]));
 const pack = {
   mission: 'project-wiki',
-  attention: { mode: 'aggressive_triwiki_active_recall', use_first: [['claim-a', [48, 132, 212, 240], 'h1']], hydrate_first: [['claim-b', 'risk:high']] },
-  wiki: { a: [['claim-a'], ['claim-b']] },
+  attention: {
+    mode: 'aggressive_triwiki_active_recall',
+    use_first: [['claim-a', anchorById.get('claim-a')?.[1], anchorById.get('claim-a')?.[7]]],
+    hydrate_first: [['claim-b', 'risk:high']]
+  },
+  wiki,
   claims: [{ id: 'claim-a' }, { id: 'claim-b' }],
   trust_summary: { avg: 0.71 }
 };

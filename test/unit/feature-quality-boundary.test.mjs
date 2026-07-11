@@ -4,18 +4,18 @@ import { spawnSync } from 'node:child_process';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary } from '../../dist/core/feature-fixtures.js';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, runtimeRoutesNotStaticContract } from '../../dist/core/feature-registry.js';
 
-test('feature fixtures expose the 0.9.20 quality taxonomy', () => {
+test('feature fixtures expose the current quality taxonomy', () => {
   assert.deepEqual(FEATURE_QUALITY_LEVELS, [
     'runtime_verified',
-    'runtime_mock_verified',
+    'wiring_only',
     'integration_optional',
     'static_contract',
     'missing'
   ]);
   assert.equal(fixtureForFeature('cli-proof').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('route-team').quality, 'runtime_verified');
-  assert.equal(fixtureForFeature('route-answer').quality, 'runtime_mock_verified');
-  assert.equal(fixtureForFeature('cli-doctor').quality, 'integration_optional');
+  assert.equal(fixtureForFeature('route-answer').quality, 'wiring_only');
+  assert.equal(fixtureForFeature('cli-doctor').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('cli-help').quality, 'runtime_verified');
   assert.equal(fixtureForFeature('unknown-runtime-feature').quality, 'missing');
 });
@@ -43,6 +43,6 @@ test('check-feature-quality script reports visible quality counts', () => {
   assert.equal(parsed.schema, 'sks.feature-quality-check.v1');
   assert.equal(parsed.ok, true);
   assert.ok(parsed.quality_counts.runtime_verified > 0);
-  assert.ok(parsed.quality_counts.runtime_mock_verified > 0);
+  assert.ok(parsed.quality_counts.wiring_only > 0);
   assert.deepEqual(parsed.runtime_route_static_contract_blockers, []);
 });

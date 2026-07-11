@@ -96,3 +96,8 @@ test('agent command parser keeps patch entry id out of rollback prompt positiona
   assert.equal(parsed.apply, true);
   assert.equal(parsed.prompt, 'Native agent run');
 });
+
+test('agent cleanup parser preserves an explicit zero stale threshold', () => {
+  const parsed = parseAgentCommandArgs('agent', ['cleanup', 'M-stale', '--stale-ms', '0', '--apply']);
+  assert.equal(parsed.staleMs, 0);
+});

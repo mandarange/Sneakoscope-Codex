@@ -9,6 +9,7 @@ export async function registerImageArtifact(root: string, input: {
   filePath: string
   route: string
   stage: string
+  skipNativeInvocationPlan?: boolean
 }): Promise<ImageArtifactPathContract> {
   const artifactPath = imageArtifactRegistryPath(root, input.missionId)
   const existing = await readJson(artifactPath, null) as ImageArtifactPathContract | null
@@ -31,7 +32,11 @@ export async function registerImageArtifact(root: string, input: {
       stage: input.stage
     }
   ]
-  const contract = await buildImageArtifactPathContract(root, { missionId: input.missionId, images: rows })
+  const contract = await buildImageArtifactPathContract(root, {
+    missionId: input.missionId,
+    images: rows,
+    ...(input.skipNativeInvocationPlan === undefined ? {} : { skipNativeInvocationPlan: input.skipNativeInvocationPlan })
+  })
   await writeJsonAtomic(artifactPath, contract)
   return contract
 }

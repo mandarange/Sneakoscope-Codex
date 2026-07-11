@@ -23,7 +23,7 @@ test('prepublish fast-check does not fail solely on git commit drift', () => {
   fs.writeFileSync(
     stampPath,
     `${JSON.stringify({
-      schema: 'sks.release-check-stamp.v1',
+      schema: 'sks.release-check-stamp.v2',
       package_name: pkg.name,
       package_version: pkg.version,
       git_commit: 'stale-but-content-equivalent'

@@ -1,4 +1,5 @@
 import type { CodexTaskInput } from './codex-control-plane.js'
+import { mapCodexSdkSandboxPolicy } from './codex-sdk-sandbox-policy.js'
 
 export interface CodexExecutionPolicy {
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -48,7 +49,7 @@ export function buildCodexSdkConfig(input: CodexTaskInput) {
 }
 
 export function buildCodexExecutionPolicy(input: CodexTaskInput): CodexExecutionPolicy {
-  const sandbox = String(input.requestedScopeContract?.sandbox || process.env.SKS_CODEX_SANDBOX || 'workspace-write') as CodexExecutionPolicy['sandbox']
+  const sandbox = mapCodexSdkSandboxPolicy(input).sandboxMode
   const approval = String(process.env.SKS_CODEX_APPROVAL || (String(input.tier || '') === 'verifier' ? 'never' : 'on-request')) as CodexExecutionPolicy['approval']
   const network = String(process.env.SKS_CODEX_NETWORK || 'disabled') as CodexExecutionPolicy['network']
   const webSearch = String(process.env.SKS_CODEX_WEB_SEARCH || 'cached') as CodexExecutionPolicy['webSearch']

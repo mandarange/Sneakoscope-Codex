@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { applyNarutoPatchEnvelopes } from './naruto-parallel-patch-apply.js'
@@ -8,7 +7,7 @@ import {
   validateNarutoRealWriteProof,
   type NarutoRealWriteProof
 } from './naruto-real-write-proof.js'
-import { ensureDir, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { ensureDir, runProcess, tmpdir, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 
 export type NarutoWriteE2eMode = 'hermetic' | 'real-codex'
 
@@ -52,7 +51,7 @@ export async function runNarutoWriteE2e(mode: NarutoWriteE2eMode): Promise<Narut
 }
 
 export async function runHermeticWriteE2e(): Promise<NarutoWriteE2eReport> {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-write-e2e-'))
+  const tempRoot = tmpdir('naruto-write-e2e-')
   const mergeArtifactPath = path.join(tempRoot, '.sneakoscope', 'naruto-write-e2e-parent-merge.json')
   const blockers: string[] = []
   let cleanup = { ok: false, temp_root_removed: false, blockers: [] as string[] }
@@ -330,7 +329,7 @@ async function probeRealCodexRuntime(): Promise<{ ok: boolean; blockers: string[
 }
 
 async function runRealNarutoCommandWriteE2e(): Promise<NarutoWriteE2eReport> {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-real-write-e2e-'))
+  const tempRoot = tmpdir('naruto-real-write-e2e-')
   const mergeArtifactPath = path.join(tempRoot, '.sneakoscope', 'naruto-real-write-e2e-parent-merge.json')
   const blockers: string[] = []
   let cleanup = { ok: false, temp_root_removed: false, blockers: [] as string[] }

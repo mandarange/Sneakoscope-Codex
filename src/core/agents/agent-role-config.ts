@@ -48,7 +48,7 @@ export async function repairAgentRoleConfigs(input: {
     let managedCopyFound = false
     for (const foundPath of foundPaths) {
       const text = fs.readFileSync(foundPath, 'utf8')
-      if (isValidRoleConfig(text, role)) {
+      if (isValidRoleConfig(text, content)) {
         managedCopyFound = true
         existing.push(path.relative(root, foundPath) || foundPath)
         continue
@@ -92,9 +92,6 @@ export async function repairAgentRoleConfigs(input: {
   return report
 }
 
-function isValidRoleConfig(text: string, role: { id: string; codex_name: string; sandbox: string }) {
-  return managedAgentRoleOwnsText(text, role as any)
-    && text.includes('description = "')
-    && text.includes('developer_instructions = """')
-    && !/^\s*(?:model|model_reasoning_effort)\s*=/m.test(text)
+function isValidRoleConfig(text: string, expected: string) {
+  return text === expected
 }

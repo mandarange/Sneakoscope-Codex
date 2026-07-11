@@ -15,11 +15,13 @@ test('codex-lb setup applies selected actions and reports drift-free writes', as
   });
   const json = JSON.parse(result.stdout);
   const config = await readText(path.join(home, '.codex', 'config.toml'), '');
-  assert.equal(result.code, 0);
-  assert.equal(json.ok, true);
+  assert.equal(result.code, 1);
+  assert.equal(json.ok, false);
+  assert.equal(json.status, 'configured');
   assert.equal(await exists(path.join(home, '.codex', 'sks-codex-lb.env')), true);
   assert.match(config, /^\s*model_provider\s*=\s*"codex-lb"/m);
   assert.match(config, /^\s*env_key\s*=\s*"CODEX_LB_API_KEY"/m);
-  assert.match(config, /^\s*requires_openai_auth\s*=\s*false/m);
+  assert.match(config, /^\s*requires_openai_auth\s*=\s*true/m);
   assert.deepEqual(json.drift, []);
+  assert.ok(json.codex_app_fast_ui.selected_provider_blockers.includes('codex_lb_gpt_5_6_catalog_unverified'));
 });

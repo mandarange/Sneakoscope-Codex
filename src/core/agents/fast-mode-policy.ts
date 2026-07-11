@@ -17,7 +17,7 @@ export interface FastModePolicy {
   service_tier: AgentServiceTier
   codex_desktop_service_tier: CodexDesktopServiceTier
   default_fast_mode: boolean
-  disabled_by: 'none' | 'no-fast' | 'service-tier-standard' | 'preference-standard' | 'default-standard'
+  disabled_by: 'none' | 'no-fast' | 'service-tier-standard' | 'preference-standard'
   explicit_fast: boolean
   explicit_no_fast: boolean
   explicit_service_tier: AgentServiceTier | null
@@ -49,17 +49,15 @@ export function resolveFastModePolicy(input: any = {}): FastModePolicy {
       ? 'standard'
       : preference?.mode === 'standard'
         ? 'standard'
-        : explicitFast || explicitTier === 'fast' || preference?.mode === 'fast'
-          ? 'fast'
-          : 'standard'
+        : 'fast'
   return {
     schema: FAST_MODE_POLICY_SCHEMA,
     generated_at: nowIso(),
     fast_mode: serviceTier === 'fast',
     service_tier: serviceTier,
     codex_desktop_service_tier: codexDesktopServiceTier(serviceTier),
-    default_fast_mode: false,
-    disabled_by: explicitNoFast ? 'no-fast' : explicitTier === 'standard' ? 'service-tier-standard' : preference?.mode === 'standard' ? 'preference-standard' : serviceTier === 'standard' ? 'default-standard' : 'none',
+    default_fast_mode: true,
+    disabled_by: explicitNoFast ? 'no-fast' : explicitTier === 'standard' ? 'service-tier-standard' : preference?.mode === 'standard' ? 'preference-standard' : 'none',
     explicit_fast: explicitFast,
     explicit_no_fast: explicitNoFast,
     explicit_service_tier: explicitTier,

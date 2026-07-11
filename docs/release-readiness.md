@@ -1,5 +1,13 @@
 # Release Readiness
 
+SKS 6.1.0 is ready for publication only when package/lock/Rust/docs/dist versions agree; the active `rust-v0.144.1` manifest, exact `@openai/codex-sdk`/`@openai/codex` 0.144.1 dependency graph, generated App Server schema digest, package file allowlist, and current Codex compatibility evidence agree; the Voxel TriWiki coordinate/voxel, trust, wrongness, and bounded-context contracts validate; generation-aware GC preserves the active mission and durable evidence; Codex plugin repair proves Browser, Chrome, Computer Use, and ImageGen inventory; and the lifecycle-disabled publish gates pass from a clean build.
+
+Codex 0.142 references later in this document are historical release records and cannot authorize the 6.1.0 release.
+
+6.1.0 release readiness also requires codex-lb repair to preserve `service_tier = "fast"` while removing only SKS-provenance model locks, a successful menu build/restart contract, duplicate-hook suppression, real native-tool probes, the 200-gate/100-script lean budgets, sequential tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. Desktop picker visibility remains a live post-restart visual check rather than being inferred from TOML or `/models` alone.
+
+Retention and command-lifecycle readiness requires `sks agent --help` to leave mission state untouched, `route_closed` current/session records to be inactive, and recently updated non-closed sessions to remain protected for two hours. Mission compaction preserves durable JSON and visual/review evidence byte-for-byte, removes only known disposable runtime files, and retains verified read compatibility for legacy gzip archives; full storage-budget reports count every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file scan safety ceiling; and release-gate run history keeps five run directories by default.
+
 SKS 5.10.0 is the local performance dominance release after 5.9.0. It requires package, lockfile, README, CHANGELOG, version-gated release docs, built output, cold-start/import budgets, hook latency, fs hot-path checks, doctor/update fast paths, Super-Search offline/local/live smoke, Naruto hermetic and real-Codex E2E tiers, retention performance smoke, command/dollar performance scorecards, release runner efficiency, package surface budgets, and lifecycle-disabled publish evidence to agree on 5.10.0 before `npm publish --ignore-scripts`.
 
 5.10.0 release readiness adds proof that fast CLI paths avoid heavy imports, hooks avoid recursive runtime scans, doctor/update no-fix paths stay read-only and lazy, Super-Search fetch remains SSRF-safe, Naruto E2E separates deterministic fixture proof from real runtime proof, release timing records duplicate build count 0, and publish preflight remains explicit even when npm lifecycle scripts are disabled.
@@ -184,9 +192,9 @@ SKS 2.0.9 is the dynamic Zellij worker-pane and Naruto extreme parallelism patch
 
 The 2.0.9 release gate adds initial-main-only Zellij proof, right-column manager state/schema checks, geometry proof, dynamic pane lifecycle checks, developer controls for worker focus/logs/dashboard/close-drained, real active-pool lifecycle checks, extreme parallelism checks, dynamic Zellij right-column checks, recursive release cache glob hashing, and full DAG coverage proof. Publish readiness still requires a fresh full release check, with `publish:dry` retaining the version/provenance/dist freshness/npm dry-run checks before a human runs the real publish.
 
-SKS 2.0.8 is the DAG-parallel release-check and worktree proof hardening patch for the 2.0 line. It makes `release:check` execute the manifest-backed `release-gate-dag-runner` by default, while preserving the historical full chain as `release:check:legacy` for audit coverage and long-form regression runs.
+SKS 2.0.8 introduced the DAG-parallel release check. As of 6.1.0, the broken historical `release:check:legacy` chain is removed; `release-gates.v2.json` and the DAG runner are the only release-gate SSOT, while `release:real-check` is the explicit environment-dependent proof runner.
 
-The 2.0.8 release gate adds `release-gates.v2.json`, release gate node/schema/report/cache/scheduler infrastructure, resource-aware parallel scheduling, per-gate hermetic environments, release stability scoring, real Zellij dashboard/worker-pane proof, and targeted Git worktree regression gates for manifest appends, dirty main detection, untracked diffs, single `git_apply_patch` envelopes, integration worktree application, dirty worktree locks, and Naruto worktree coding blackbox behavior. Publish readiness now requires the generic metadata gate to accept either the legacy parallel chain or the new DAG runner, with `publish:dry` retaining the version/provenance/dist freshness/npm dry-run checks before a human runs the real publish.
+The 2.0.8 release gate added `release-gates.v2.json`, release gate node/schema/report/cache/scheduler infrastructure, resource-aware parallel scheduling, per-gate hermetic environments, release stability scoring, real Zellij dashboard/worker-pane proof, and targeted Git worktree regression gates for manifest appends, dirty main detection, untracked diffs, single `git_apply_patch` envelopes, integration worktree application, dirty worktree locks, and Naruto worktree coding blackbox behavior. At that historical point the generic metadata gate accepted the legacy parallel chain or the new DAG runner; the 6.1.0 authorization path accepts only the current DAG/full-proof contract described below.
 
 SKS 2.0.7 is the Git worktree parallel coding closure patch for the 2.0 line. It adds Git worktree capability detection, safe out-of-repo worktree allocation, worktree diff export into patch envelopes, integration worktree merge queues, cleanup/retention policy, and Naruto worker/runtime evidence for write-capable parallel coding while preserving patch-envelope-only fallback for non-Git projects.
 
@@ -232,24 +240,50 @@ Publish mode treats main/tag/npm mismatches as blockers.
 runtime totals. Readiness blocks on unexpected applied mutations, global mutations
 without confirmation, or config/auth/skill mutations without backup or no-op proof.
 
-## Publish authorization policy (2.0.15)
+## Current publish authorization policy (6.1.0)
 
-Publishing to npm requires `npm run release:check:full` (the complete hermetic gate
-set) **plus** `npm run release:real-check` for environment-dependent proof when that
-proof is required. Ordinary `npm run release:check` is now the change-aware affected
-gate for local checks; it cannot authorize a publish on its own. `npm run publish:dry`
-runs `release:check:full`, verifies the fresh
-`.sneakoscope/reports/release-check-stamp.json`, and then runs provenance/registry
-checks before the dry-run publish step. `prepublishOnly` uses
-`prepublish-release-check-or-fast` to accept that current stamp before the real
-publish; if the stamp is missing or stale, it runs `release:check:full` once before
-continuing. The dynamic runners
+Publishing to npm starts with `npm run release:check:full`. In 6.1.0 that single
+command performs a clean build, a repairing Doctor pass, the complete manifest-backed
+release DAG, the environment-dependent real check, and only then writes the
+`.sneakoscope/reports/release-check-stamp.json` v2 authorization stamp. The stamp is
+bound to the current source/package/dist hashes, the successful full-DAG summary,
+and the successful real-check summary. `npm run release:real-check` remains useful
+for standalone environment diagnostics, but it does not write or replace the full
+authorization stamp. Ordinary `npm run release:check` is the change-aware affected
+gate for local checks and cannot authorize a publish on its own. The dynamic runners
 `npm run release:check:dynamic` and `npm run release:check:dynamic:execute` remain
 local/CI accelerations only — they narrow the gate set to changed inputs and cached
 results, so they **cannot** authorize a publish on their own. See
 `docs/dynamic-release-pipeline.md` for the two-tier model.
 
-`prepublishOnly` also runs `release-registry-check.mjs --require-publish-auth`
+Each release-DAG completion also rotates `.sneakoscope/reports/release-gates/` to the
+five most recent run directories by default. This bounds local proof storage without
+weakening the source/package/dist-bound authorization stamp.
+
+After the full check, `npm run publish:prep-ignore-scripts` rebuilds cleanly, runs
+typecheck plus the canonical recursive `npm test` suite, verifies version/dist truth,
+packlist performance, published-script targets, publish tag, unpublished registry
+state and npm authorization, performs `npm pack --dry-run --ignore-scripts`, and
+verifies the fresh full-release stamp. The supported operator sequence is:
+
+```bash
+npm run release:check:full
+npm run publish:prep-ignore-scripts
+
+# Verification only; does not publish:
+npm publish --dry-run --ignore-scripts --json
+# Equivalent verified wrapper:
+npm run publish:dry
+
+# Actual publication, only after reviewing all evidence:
+npm run publish:ignore-scripts
+```
+
+The actual-publication wrapper repeats `publish:prep-ignore-scripts` immediately
+before `npm publish --ignore-scripts`. The removed `publish:npm` and
+`release:publish` aliases are not supported 6.1.0 commands.
+
+`prepublishOnly` also runs `release-registry-check.js --require-publish-auth`
 before `prepack`. That check uses the documented npm `whoami` identity and the
 published package maintainer list to prove the current shell can publish
 `sneakoscope`; otherwise it fails early with an `npm login --registry
@@ -262,14 +296,9 @@ configured through npm itself, for example an npmrc entry such as
 publish-capable token; a raw `NPM_TOKEN` environment variable alone is not enough
 unless npm config references it.
 
-The operator-facing publish entrypoint is `npm run publish:npm` (or
-`npm run release:publish`), which runs `npm run publish:prep-ignore-scripts`
-and then calls `npm publish --ignore-scripts`. That prep command intentionally
-does not rely on `prepublishOnly`, because the final npm publish command disables
-npm lifecycle hooks on purpose. It rebuilds `dist`, checks version truth,
-packlist performance, published-package script targets, registry unpublished/auth
-state, and the publish tag. Operators who intentionally run
-`npm publish --ignore-scripts` directly must run
+Because the supported final command disables npm lifecycle hooks on purpose,
+publication authorization does not rely on `prepublishOnly`. Operators who
+intentionally run `npm publish --ignore-scripts` directly must run
 `npm run publish:prep-ignore-scripts` immediately before it.
 
 ```bash

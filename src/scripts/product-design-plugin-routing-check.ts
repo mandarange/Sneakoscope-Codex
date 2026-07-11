@@ -28,7 +28,7 @@ assertGate(PRODUCT_DESIGN_PLUGIN.app_server.read_params.pluginName === PRODUCT_D
 assertGate(PRODUCT_DESIGN_PLUGIN.app_server.install_params.pluginName === PRODUCT_DESIGN_PLUGIN.remote_plugin_id, 'plugin/install must use Product Design remote plugin id');
 assertGate(PRODUCT_DESIGN_PLUGIN.app_server.list_params.marketplaceKinds.includes('vertical'), 'plugin/list must query vertical marketplaces');
 
-for (const skill of ['audit', 'design-qa', 'get-context', 'ideate', 'image-to-code', 'prototype', 'research', 'share', 'url-to-code', 'user-context']) {
+for (const skill of ['audit', 'design-qa', 'get-context', 'ideate', 'image-to-code', 'index', 'research', 'share', 'url-to-code', 'user-context']) {
   assertGate(PRODUCT_DESIGN_REQUIRED_SKILLS.includes(skill), `Product Design required skill missing: ${skill}`);
 }
 assertGate(PRODUCT_DESIGN_PIPELINE_STAGES.length >= 5, 'Product Design pipeline stage map too small');

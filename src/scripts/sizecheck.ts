@@ -5,10 +5,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const limits = {
-  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || 2410 * 1024),
+  packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYTES),
   unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 1024),
   packFiles: Number(process.env.SKS_MAX_PACK_FILES || 2100),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
@@ -17,7 +18,11 @@ const trackedFileSizeAllowlist = new Set([
   // Historical source documentation export; not included in the npm package payload.
   'docs/sks-local-llm-mode/exports/sks-local-llm-mode-deck.pdf',
   // Central release DAG manifest; package footprint limits still apply below.
-  'release-gates.v2.json'
+  'release-gates.v2.json',
+  // Generated Codex App Server protocol schemas; handwritten sources remain
+  // subject to the 384 KiB split-review limit.
+  'schemas/codex/app-server-0.144/codex_app_server_protocol.schemas.json',
+  'schemas/codex/app-server-0.144/codex_app_server_protocol.v2.schemas.json'
 ]);
 
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';

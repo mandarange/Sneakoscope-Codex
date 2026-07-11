@@ -36,13 +36,14 @@ delete process.env.SKS_MANAGE_CODEX_APP_PLUGINS;
   results.push({ case: 'preserves_disabled_features', ok, hooks: featureValue(out, 'hooks') });
 }
 
-// 1b) Removed legacy feature flags are stripped instead of preserved.
+// 1b) Stable host capabilities preserve an explicit user false; only a
+// genuinely removed SKS stamp is stripped.
 {
   const out = normalize('[features]\nguardian_approval = false\nbrowser_use_external = false\nfast_mode_ui = true\n');
-  const ok = featureValue(out, 'guardian_approval') === undefined
-    && featureValue(out, 'browser_use_external') === undefined
+  const ok = featureValue(out, 'guardian_approval') === 'false'
+    && featureValue(out, 'browser_use_external') === 'false'
     && featureValue(out, 'fast_mode_ui') === undefined;
-  results.push({ case: 'strips_removed_feature_flags', ok });
+  results.push({ case: 'preserves_stable_and_strips_removed_flags', ok });
 }
 
 // 2) Default install must NOT auto-enable any marketplace plugins.
@@ -72,10 +73,41 @@ delete process.env.SKS_MANAGE_CODEX_APP_PLUGINS;
     && featureValue(out, 'hooks') === 'true'
     && featureValue(out, 'multi_agent') === 'true'
     && featureValue(out, 'fast_mode') === 'true'
+    && featureValue(out, 'computer_use') === 'true'
+    && featureValue(out, 'browser_use') === 'true'
+    && featureValue(out, 'browser_use_external') === 'true'
+    && featureValue(out, 'image_generation') === 'true'
+    && featureValue(out, 'in_app_browser') === 'true'
+    && featureValue(out, 'tool_suggest') === 'true'
+    && featureValue(out, 'plugins') === 'true'
     && !/\[user\.fast_mode\]/.test(out)
     && !/\[profiles\.sks-fast-high\]/.test(out)
     && !/^model\s*=/m.test(out);
   results.push({ case: 'fresh_config_seeds_defaults', ok });
+}
+
+// 7) A blank-separated SKS migration block must release only its own native
+// model/reasoning locks. The documented service tier and an unrelated user
+// model selection remain untouched.
+{
+  const migrated = normalize([
+    '# SKS moved machine-local Codex config from .codex/config.toml at 2026-07-11T00:00:00Z',
+    '',
+    'service_tier = "fast"',
+    'model = "gpt-5.6-sol"',
+    'model_reasoning_effort = "ultra"',
+    '',
+    '[features]',
+    'fast_mode = true',
+    ''
+  ].join('\n'));
+  const user = normalize('model = "user-selected-model"\nmodel_reasoning_effort = "low"\nservice_tier = "fast"\n');
+  const ok = !/^model\s*=/m.test(migrated.split(/\n\s*\[/)[0] || '')
+    && !/^model_reasoning_effort\s*=/m.test(migrated.split(/\n\s*\[/)[0] || '')
+    && /^service_tier\s*=\s*"fast"/m.test(migrated)
+    && /^model\s*=\s*"user-selected-model"/m.test(user)
+    && /^model_reasoning_effort\s*=\s*"low"/m.test(user);
+  results.push({ case: 'bounded_sks_mode_lock_provenance', ok });
 }
 
 // 6) Opt-in enables plugins on a fresh config, but still preserves a user-disabled one.

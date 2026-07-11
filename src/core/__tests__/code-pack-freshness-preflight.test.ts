@@ -7,6 +7,8 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { codePackFreshnessNote } from '../hooks-runtime/code-pack-freshness-preflight.js';
 
+const SEMANTIC_TEST_BUDGET_MS = 5_000;
+
 async function tempRepo(): Promise<{ root: string; head: string }> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-code-pack-fresh-'));
   const git = (args: string[]) => spawnSync('git', args, { cwd: root, encoding: 'utf8' });
@@ -34,13 +36,13 @@ test('codePackFreshnessNote stays silent when there is no code pack at all (neve
 test('codePackFreshnessNote stays silent when the pack matches the current HEAD', async () => {
   const { root, head } = await tempRepo();
   await writePack(root, head);
-  assert.equal(await codePackFreshnessNote(root), null);
+  assert.equal(await codePackFreshnessNote(root, { budgetMs: SEMANTIC_TEST_BUDGET_MS }), null);
 });
 
 test('codePackFreshnessNote returns a one-line stale nudge when the pack was built against a different HEAD', async () => {
   const { root } = await tempRepo();
   await writePack(root, '0000000000000000000000000000000000000000');
-  const note = await codePackFreshnessNote(root);
+  const note = await codePackFreshnessNote(root, { budgetMs: SEMANTIC_TEST_BUDGET_MS });
   assert.ok(typeof note === 'string', 'expected a stale note string');
   assert.match(note!, /wiki refresh --code/);
   // A one-line note must not contain embedded newlines that would fragment the
@@ -51,13 +53,13 @@ test('codePackFreshnessNote returns a one-line stale nudge when the pack was bui
 test('codePackFreshnessNote stays silent when the pack has no recorded git sha (non-git build)', async () => {
   const { root } = await tempRepo();
   await writePack(root, null);
-  assert.equal(await codePackFreshnessNote(root), null);
+  assert.equal(await codePackFreshnessNote(root, { budgetMs: SEMANTIC_TEST_BUDGET_MS }), null);
 });
 
 test('codePackFreshnessNote never throws even when the root is not a git repo', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-code-pack-nogit-'));
   await writePack(root, 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef');
   // Not a git repo -> git rev-parse fails -> no current sha to compare -> silent, not a throw.
-  assert.equal(await codePackFreshnessNote(root), null);
+  assert.equal(await codePackFreshnessNote(root, { budgetMs: SEMANTIC_TEST_BUDGET_MS }), null);
   fs.rmSync(root, { recursive: true, force: true });
 });

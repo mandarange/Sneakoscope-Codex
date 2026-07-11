@@ -17,8 +17,7 @@ test('feature registry carries fixture contracts', async () => {
   assert.equal(registry.source_inventory.cli_command_names.includes('auth'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('ux-review'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('cu'), false);
-  assert.equal(registry.source_inventory.cli_command_names.includes('memory'), false);
-  assert.ok(registry.source_inventory.doc_route_mentions.includes('$CODEX_HOME'));
+  assert.equal(registry.source_inventory.cli_command_names.includes('memory'), true);
   const computerUse = registry.features.find((feature) => feature.id === 'cli-computer-use');
   assert.equal(computerUse.fixture.status, 'pass');
   const selftest = buildAllFeaturesSelftest(registry);

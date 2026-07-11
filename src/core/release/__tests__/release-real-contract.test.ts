@@ -1,0 +1,228 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import {
+  buildReleaseRealLiveCoverage,
+  dependencyReleaseRealResult,
+  normalizeReleaseRealProcessResult,
+  summarizeReleaseRealPhases,
+  validateReleaseRealSkipProof,
+  type ReleaseRealTaskLike,
+  type ReleaseRealTaskPolicy
+} from '../release-real-contract.js'
+
+const terminal = ['failed', 'blocked', 'skipped', 'integration_optional', 'optional']
+
+function policy(requirement: ReleaseRealTaskPolicy['requirement'], options: Partial<ReleaseRealTaskPolicy> = {}): ReleaseRealTaskPolicy {
+  return {
+    requirement,
+    expectedSchemas: ['sks.test-result.v1'],
+    statusRequired: options.statusRequired ?? false,
+    passStatuses: options.passStatuses || [],
+    allowedStatuses: options.allowedStatuses || terminal
+  }
+}
+
+function task(taskPolicy: ReleaseRealTaskPolicy, overrides: Partial<ReleaseRealTaskLike> = {}): ReleaseRealTaskLike {
+  return {
+    id: overrides.id || 'test:gate',
+    script: overrides.script || 'test:gate',
+    group: overrides.group || 'environment_required',
+    phase: overrides.phase || 'parallel_processing',
+    deps: overrides.deps || [],
+    command: overrides.command || null,
+    policy: taskPolicy
+  }
+}
+
+function normalize(taskPolicy: ReleaseRealTaskPolicy, input: Partial<Parameters<typeof normalizeReleaseRealProcessResult>[0]> = {}) {
+  return normalizeReleaseRealProcessResult({
+    task: input.task || task(taskPolicy),
+    commandLine: input.commandLine || ['node', 'gate.js'],
+    code: input.code === undefined ? 0 : input.code,
+    signal: input.signal || null,
+    error: input.error || null,
+    stdout: input.stdout === undefined ? JSON.stringify({ schema: 'sks.test-result.v1', ok: true }) : input.stdout,
+    stderr: input.stderr || '',
+    durationMs: input.durationMs || 1,
+    attempt: input.attempt || 1
+  })
+}
+
+test('required JSON-contract checks fail closed instead of trusting exit code', () => {
+  const required = policy('release_authorizing')
+  const passed = normalize(required, { stdout: `log before\n${JSON.stringify({ schema: 'sks.test-result.v1', ok: true })}\nlog after` })
+  assert.equal(passed.outcome, 'passed')
+  assert.equal(passed.contract_ok, true)
+  assert.equal(passed.ok, true)
+
+  const fixtureNegativeEvidence = normalize(required, {
+    stdout: JSON.stringify({ schema: 'sks.test-result.v1', ok: true, blockers: [], invalid_fixture: { blockers: ['expected_fixture_failure'] } })
+  })
+  assert.deepEqual(fixtureNegativeEvidence.blockers, [])
+
+  const parsedFailure = normalize(required, { stdout: JSON.stringify({ schema: 'sks.test-result.v1', ok: false }) })
+  assert.equal(parsedFailure.process_ok, true)
+  assert.equal(parsedFailure.outcome, 'failed')
+  assert.equal(parsedFailure.release_blocking, true)
+  assert.equal(parsedFailure.ok, false)
+
+  const missing = normalize(required, { stdout: 'plain text success' })
+  assert.equal(missing.contract_ok, false)
+  assert.equal(missing.ok, false)
+  assert.ok(missing.blockers.includes('release_real_json_contract_missing'))
+  assert.ok(missing.blockers.includes('release_real_json_schema_missing'))
+  assert.ok(missing.blockers.includes('release_real_json_ok_missing'))
+})
+
+test('required optional outcome blocks, while declared live-optional coverage remains non-authorizing', () => {
+  const required = policy('release_authorizing', {
+    statusRequired: true,
+    passStatuses: ['proven'],
+    allowedStatuses: ['proven', ...terminal]
+  })
+  const requiredOptional = normalize(required, {
+    stdout: JSON.stringify({ schema: 'sks.test-result.v1', ok: true, status: 'integration_optional' })
+  })
+  assert.equal(requiredOptional.outcome, 'optional')
+  assert.equal(requiredOptional.ok, false)
+  assert.ok(requiredOptional.blockers.includes('release_required_outcome_not_passed:optional'))
+
+  const booleanOptionalMarker = normalize(policy('release_authorizing'), {
+    stdout: JSON.stringify({ schema: 'sks.test-result.v1', ok: true, integration_optional: true })
+  })
+  assert.equal(booleanOptionalMarker.parsed_status, 'integration_optional')
+  assert.equal(booleanOptionalMarker.ok, false)
+
+  const unknownStatus = normalize(required, {
+    stdout: JSON.stringify({ schema: 'sks.test-result.v1', ok: true, status: 'mystery_success' })
+  })
+  assert.equal(unknownStatus.contract_ok, false)
+  assert.ok(unknownStatus.blockers.includes('release_real_json_status_unexpected:mystery_success'))
+
+  const liveOptional = policy('live_optional', {
+    statusRequired: true,
+    passStatuses: ['passed'],
+    allowedStatuses: ['passed', ...terminal]
+  })
+  const skipped = normalize(liveOptional, {
+    stdout: JSON.stringify({ schema: 'sks.test-result.v1', ok: true, status: 'skipped', reason: 'credential absent' })
+  })
+  assert.equal(skipped.outcome, 'skipped')
+  assert.equal(skipped.passed, false)
+  assert.equal(skipped.required_for_release, false)
+  assert.equal(skipped.release_blocking, false)
+  assert.equal(skipped.ok, true)
+
+  const malformedOptional = normalize(liveOptional, { stdout: JSON.stringify({ ok: true, status: 'skipped' }) })
+  assert.equal(malformedOptional.contract_ok, false)
+  assert.equal(malformedOptional.release_blocking, true)
+  assert.equal(malformedOptional.ok, false)
+})
+
+test('stderr failure envelopes preserve detail.blockers and nested report blockers', () => {
+  const required = policy('release_authorizing')
+  const stderr = `warning before\n${JSON.stringify({
+    ok: false,
+    message: 'probe failed',
+    detail: {
+      schema: 'sks.test-result.v1',
+      overall_ok: false,
+      blockers: ['interrupt_event_missing'],
+      report: { blockers: ['sandbox_preservation_missing'] }
+    }
+  }, null, 2)}\nwarning after`
+  const result = normalize(required, { code: 1, stdout: '', stderr })
+  assert.equal(result.parsed_schema, 'sks.test-result.v1')
+  assert.equal(result.parsed_ok, false)
+  assert.equal(result.contract_ok, true)
+  assert.ok(result.blockers.includes('interrupt_event_missing'))
+  assert.ok(result.blockers.includes('sandbox_preservation_missing'))
+  assert.doesNotMatch(result.blockers.join('\n'), /release_real_process_exit/)
+})
+
+test('optional imagegen dependency does not execute downstream optional UX/PPT as a passed result', () => {
+  const optionalPolicy = policy('live_optional', {
+    statusRequired: true,
+    passStatuses: ['passed'],
+    allowedStatuses: ['passed', ...terminal]
+  })
+  const upstream = { id: 'imagegen:real-smoke', outcome: 'skipped' as const, ok: true }
+  for (const id of ['ux-review:real-imagegen-smoke', 'ppt:real-imagegen-smoke']) {
+    const downstream = dependencyReleaseRealResult(task(optionalPolicy, { id, deps: [upstream.id] }), [upstream])
+    assert.equal(downstream.outcome, 'optional')
+    assert.equal(downstream.process_ok, null)
+    assert.equal(downstream.passed, false)
+    assert.equal(downstream.ok, true)
+    assert.deepEqual(downstream.dependency_outcomes, [{ id: upstream.id, outcome: 'skipped' }])
+    assert.ok(downstream.blockers.includes(`optional_by_dependency:${upstream.id}:skipped`))
+  }
+})
+
+test('phase pass counts exclude optional ok=true rows and live coverage owns those outcomes', () => {
+  const requiredPassed = {
+    id: 'required', phase: 'parallel_processing', required_for_release: true,
+    requirement: 'release_authorizing', outcome: 'passed', ok: true, duration_ms: 5
+  }
+  const optionalSkipped = {
+    id: 'optional', phase: 'parallel_processing', required_for_release: false,
+    requirement: 'live_optional', outcome: 'skipped', ok: true, contract_ok: true,
+    process_ok: true, parsed_status: 'skipped', reason: 'not configured', blockers: [], duration_ms: 2
+  }
+  const phases = summarizeReleaseRealPhases(
+    ['design', 'parallel_processing'],
+    [requiredPassed, optionalSkipped],
+    { id: 'design', phase: 'design', required_for_release: true, outcome: 'passed', ok: true }
+  )
+  const parallel = phases.at(1)!
+  assert.equal(parallel.passed, 1)
+  assert.equal(parallel.release_authorizing_passed, 1)
+  assert.equal(parallel.outcome_counts.skipped, 1)
+  assert.equal(parallel.live_optional_total, 1)
+  assert.equal(parallel.live_optional_covered, 0)
+
+  const coverage = buildReleaseRealLiveCoverage([requiredPassed, optionalSkipped])
+  assert.equal(coverage.total, 1)
+  assert.equal(coverage.skipped, 1)
+  assert.equal(coverage.complete, false)
+  assert.equal(coverage.excluded_from_release_authorizing_pass_count, true)
+})
+
+test('skip proof requires the latest full receipt to postdate a matching current-source build stamp', () => {
+  const base = {
+    summary: {
+      schema: 'sks.release-gate-dag-run.v1',
+      ok: true,
+      run_id: 'full-1',
+      selected_preset: 'release',
+      selected_gates: 3,
+      selected_gate_ids: ['gate:a', 'gate:b', 'gate:c'],
+      completed: 3,
+      failed: 0,
+      affected_selection: { mode: 'full' },
+      completion_certificate: { confidence: 'full-release-proof', full_release_proof: 'current_run' }
+    },
+    summaryPath: '.sneakoscope/reports/release-gates/full-1/summary.json',
+    summaryMtimeMs: 2_000,
+    summarySha256: 'a'.repeat(64),
+    distStamp: { schema: 'sks.dist-build-stamp.v1', source_digest: 'b'.repeat(64), source_file_count: 9 },
+    distStampPath: 'dist/.sks-build-stamp.json',
+    distStampMtimeMs: 1_000,
+    currentSourceDigest: 'b'.repeat(64),
+    currentSourceFileCount: 9,
+    nowMs: 3_000,
+    maxAgeMs: 10_000
+  }
+  assert.equal(validateReleaseRealSkipProof(base).ok, true)
+
+  const staleSource = validateReleaseRealSkipProof({ ...base, currentSourceDigest: 'c'.repeat(64) })
+  assert.equal(staleSource.ok, false)
+  assert.ok(staleSource.blockers.includes('release_real_skip_source_digest_mismatch'))
+
+  const predated = validateReleaseRealSkipProof({ ...base, summaryMtimeMs: 500 })
+  assert.equal(predated.ok, false)
+  assert.ok(predated.blockers.includes('release_real_skip_full_summary_predates_current_build'))
+
+  const expired = validateReleaseRealSkipProof({ ...base, nowMs: 20_001 })
+  assert.equal(expired.ok, false)
+  assert.ok(expired.blockers.includes('release_real_skip_full_summary_expired'))
+})

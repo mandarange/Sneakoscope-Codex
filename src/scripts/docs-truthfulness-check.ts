@@ -27,7 +27,7 @@ const required = {
   'docs/codex-0.136-compat.md': ['rust-v0.136.0', 'codex:0.136-compat', 'codex archive', 'codex app-server --stdio', 'CODEX_API_KEY', 'server tokens'],
   'docs/codex-0.135-compat.md': ['rust-v0.135.0', 'codex:0.135-compat', 'named permission profiles'],
   'docs/codex-cli-compat.md': ['rust-v0.136.0', 'session_archive_restore', 'profile_primary_selector', 'managed_network_proxy_env', 'goals_default_enabled', 'permission_profiles_requirements', 'SubagentStart', 'sks_zero_warning_disallowed', 'strict subset'],
-  'docs/official-docs-compat.md': ['official-docs:compat', 'rust-v0.136.0', 'gpt-image-2', 'input_fidelity', 'additionalProperties:false'],
+  'docs/official-docs-compat.md': ['official-docs-compat-report.js', 'rust-v0.144.1', 'gpt-image-2', 'input_fidelity', 'additionalProperties:false'],
   'docs/hooks-pat.md': ['SubagentStop', 'strict subset', 'zero-warning'],
   'docs/known-gaps.md': ['No P0', 'P1'],
   'docs/release-readiness.md': ['sks.release-readiness.v1', 'release:readiness', 'official-docs:compat']

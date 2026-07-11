@@ -50,12 +50,21 @@ async function postcheckCapability(root: string, state: NativeCapabilityRepairSt
 }
 
 function postcheckImageGeneration(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
-  if (fixture === 'all-repairable' || state.before === 'verified') return verified(state);
+  if (fixture === 'all-repairable' || (
+    state.before === 'verified'
+    && state.evidence_level === 'real-interaction'
+    && state.real_interaction_verified === true
+  )) return verified(state);
+  const blocker = state.evidence_level === 'configuration'
+    ? 'codex_imagegen_real_output_unverified'
+    : 'codex_app_builtin_imagegen_capability_missing';
   return {
     ...state,
     after: 'unknown',
+    availability: 'manual-required',
+    repairability: 'manual-required',
     core_blockers: [],
-    route_blockers: mergeStateRouteBlockers(state, 'route-image', ['imagegen_auth_or_codex_app_builtin_missing']),
+    route_blockers: mergeStateRouteBlockers(state, 'route-image', [blocker]),
     blockers: [],
     warnings: [...new Set([...state.warnings, 'image_generation_not_verified_without_real_capability'])]
   };
@@ -69,11 +78,13 @@ async function postcheckImageFollowupEdit(root: string, state: NativeCapabilityR
   return verified(state);
 }
 
-function postcheckComputerUse(state: NativeCapabilityRepairState, _fixture: FixtureMode): NativeCapabilityRepairState {
-  if (syntheticNativeVerificationAllowed(_fixture) && process.env.SKS_COMPUTER_USE_CAPABILITY === 'verified') return verified(state);
+function postcheckComputerUse(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
+  if (fixture === 'all-repairable') return verified(state);
   return {
     ...state,
     after: 'unknown',
+    availability: 'manual-required',
+    repairability: 'manual-required',
     core_blockers: [],
     route_blockers: mergeStateRouteBlockers(state, 'route-computer-use', ['computer_use_os_permission_or_capability_unknown']),
     blockers: [],
@@ -82,19 +93,17 @@ function postcheckComputerUse(state: NativeCapabilityRepairState, _fixture: Fixt
 }
 
 function postcheckChromeWebReview(state: NativeCapabilityRepairState, fixture: FixtureMode): NativeCapabilityRepairState {
-  if (fixture === 'all-repairable' || (syntheticNativeVerificationAllowed(fixture) && process.env.SKS_CHROME_EXTENSION_READY === '1')) return verified(state);
+  if (fixture === 'all-repairable') return verified(state);
   return {
     ...state,
     after: 'unknown',
+    availability: 'manual-required',
+    repairability: 'manual-required',
     core_blockers: [],
     route_blockers: mergeStateRouteBlockers(state, 'route-chrome-web-review', ['codex_chrome_extension_readiness_not_verified']),
     blockers: [],
     warnings: [...new Set([...state.warnings, 'manual_chrome_extension_setup_required'])]
   };
-}
-
-function syntheticNativeVerificationAllowed(fixture: FixtureMode): boolean {
-  return fixture === 'all-repairable' || process.env.SKS_NATIVE_CAPABILITY_FIXTURE === '1' || process.env.NODE_ENV === 'test';
 }
 
 async function postcheckAppScreenshot(root: string, state: NativeCapabilityRepairState): Promise<NativeCapabilityRepairState> {

@@ -71,8 +71,8 @@ export interface AgentRosterEntry {
   write_policy: string
   status: AgentStatus
   model?: string
-  reasoning_effort?: 'low' | 'medium' | 'high' | 'xhigh'
-  model_reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+  reasoning_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+  model_reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
   model_tier?: string
   model_profile?: string
   model_selection_reason?: string
@@ -91,6 +91,7 @@ export interface AgentRunOptions {
   missionId?: string | null
   sessionKey?: string | null
   prompt?: string
+  promptExplicit?: boolean
   route?: string
   agents?: number
   concurrency?: number

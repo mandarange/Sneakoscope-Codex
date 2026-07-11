@@ -101,7 +101,7 @@ test('gpt-image-2 fallback uses codex-lb key only when explicitly enabled', asyn
         env: { HOME: root, CODEX_LB_API_KEY: 'sk-clb-test' },
         configText: codexLbConfig()
       },
-      openai: { codexLbApiKey: 'sk-clb-test' },
+      openai: { codexLbApiKey: 'sk-clb-test', responsesModel: 'gpt-5.6-terra' },
       allowApiFallback: true,
       allowCodexLbApiFallback: true
     }));

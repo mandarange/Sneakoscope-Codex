@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @ts-nocheck
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
@@ -8,32 +9,47 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 const distCli = path.join(root, 'dist', 'bin', 'sks.js');
 
 function run(extra = []) {
-  return JSON.parse(execFileSync(process.execPath, [
-    distCli,
-    'agent',
-    'run',
-    'fast mode default fixture',
-    '--mock',
-    '--agents',
-    '2',
-    '--concurrency',
-    '2',
-    '--work-items',
-    '2',
-    '--minimum-work-items',
-    '2',
-    '--json',
-    ...extra
-  ], {
-    cwd: root,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      SKS_TEST_ISOLATION: '1',
-      SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS: '1'
-    },
-    maxBuffer: 32 * 1024 * 1024
-  }));
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-agent-fast-mode-fixture-'));
+  const fixtureHome = path.join(fixtureRoot, 'home');
+  try {
+    return JSON.parse(execFileSync(process.execPath, [
+      distCli,
+      'agent',
+      'run',
+      'fast mode default fixture',
+      '--mock',
+      '--agents',
+      '2',
+      '--concurrency',
+      '2',
+      '--work-items',
+      '2',
+      '--minimum-work-items',
+      '2',
+      '--json',
+      ...extra
+    ], {
+      cwd: fixtureRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: fixtureHome,
+        CODEX_HOME: path.join(fixtureHome, '.codex'),
+        SKS_GLOBAL_ROOT: path.join(fixtureHome, '.sneakoscope-global'),
+        TMPDIR: fixtureRoot,
+        TMP: fixtureRoot,
+        TEMP: fixtureRoot,
+        PWD: fixtureRoot,
+        SKS_TEST_ISOLATION: '1',
+        SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+        NODE_ENV: 'test',
+        CI: 'true'
+      },
+      maxBuffer: 32 * 1024 * 1024
+    }));
+  } finally {
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  }
 }
 
 const defaultRun = run();
@@ -47,6 +63,7 @@ const report = {
     mission_id: defaultRun.mission_id,
     fast_mode: defaultRun.fast_mode_policy?.fast_mode,
     service_tier: defaultRun.fast_mode_policy?.service_tier,
+    default_fast_mode: defaultRun.fast_mode_policy?.default_fast_mode,
     preference_mode: defaultRun.fast_mode_policy?.preference_mode,
     explicit_fast: defaultRun.fast_mode_policy?.explicit_fast,
     explicit_service_tier: defaultRun.fast_mode_policy?.explicit_service_tier,
@@ -77,10 +94,11 @@ fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 
 assertGate(defaultRun.ok === true, 'default agent run must pass', report);
 assertGate(defaultRun.fast_mode_policy?.explicit_fast === false && defaultRun.fast_mode_policy?.explicit_service_tier === null, 'default run must not use explicit fast/service-tier flags', report);
-if (defaultRun.fast_mode_policy?.preference_mode === 'fast') {
-  assertGate(defaultRun.fast_mode_policy?.fast_mode === true && defaultRun.fast_mode_policy?.service_tier === 'fast', 'default run must honor saved fast preference', report);
+assertGate(defaultRun.fast_mode_policy?.default_fast_mode === true, 'built-in Fast default must be recorded', report);
+if (defaultRun.fast_mode_policy?.preference_mode === 'standard') {
+  assertGate(defaultRun.fast_mode_policy?.fast_mode === false && defaultRun.fast_mode_policy?.service_tier === 'standard', 'default run must honor saved standard preference', report);
 } else {
-  assertGate(defaultRun.fast_mode_policy?.fast_mode === false && defaultRun.fast_mode_policy?.service_tier === 'standard', 'default run without saved fast preference must record service_tier standard', report);
+  assertGate(defaultRun.fast_mode_policy?.fast_mode === true && defaultRun.fast_mode_policy?.service_tier === 'fast', 'default run without a saved standard preference must use Fast', report);
 }
 assertGate(fastRun.fast_mode_policy?.fast_mode === true, '--fast must enable fast mode', report);
 assertGate(fastRun.fast_mode_policy?.service_tier === 'fast', '--fast must record service_tier fast', report);

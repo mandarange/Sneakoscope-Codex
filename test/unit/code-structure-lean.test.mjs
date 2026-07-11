@@ -66,3 +66,21 @@ test('code structure scan only treats real ts-nocheck directives as scoped block
   assert.equal(report.semantic_review.status, 'needs-review');
   assert.equal(report.semantic_review.findings.some((finding) => finding.severity === 'blocker'), false);
 });
+
+test('full code structure scan skips hidden worktree and cache repository copies', async () => {
+  const mod = await import('../../dist/core/code-structure.js');
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-code-structure-hidden-'));
+  await fs.mkdir(path.join(root, 'src'), { recursive: true });
+  await fs.mkdir(path.join(root, '.claude/worktrees/clone/src'), { recursive: true });
+  await fs.mkdir(path.join(root, '.cache/mirror/src'), { recursive: true });
+  await fs.writeFile(path.join(root, 'src/main.ts'), 'export const main = true;\n');
+  await fs.writeFile(path.join(root, '.claude/worktrees/clone/src/huge.ts'), 'export {};\n'.repeat(3_100));
+  await fs.writeFile(path.join(root, '.cache/mirror/src/cached.ts'), 'export {};\n'.repeat(3_100));
+
+  const report = await mod.scanCodeStructure(root, { includeOk: true });
+  const paths = report.files.map((entry) => entry.path);
+
+  assert.ok(paths.includes('src/main.ts'));
+  assert.equal(paths.some((file) => file.startsWith('.claude/')), false);
+  assert.equal(paths.some((file) => file.startsWith('.cache/')), false);
+});

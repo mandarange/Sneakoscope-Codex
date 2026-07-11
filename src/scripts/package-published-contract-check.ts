@@ -8,6 +8,13 @@ import { assertGate, emitGate, readJson, root } from './sks-1-18-gate-lib.js';
 const pkg = readJson('package.json');
 const scripts = pkg.scripts || {};
 const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-package-published-contract-'));
+let cacheCleaned = false;
+const cleanupCacheRoot = () => {
+  if (cacheCleaned) return;
+  cacheCleaned = true;
+  fs.rmSync(cacheRoot, { recursive: true, force: true });
+};
+process.once('exit', cleanupCacheRoot);
 const dry = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   cwd: root,
   encoding: 'utf8',
@@ -34,6 +41,7 @@ assertGate(missingTargets.length === 0, 'published package scripts must not refe
   missingTargets: missingTargets.slice(0, 50),
   missing_count: missingTargets.length
 });
+cleanupCacheRoot();
 emitGate('package:published-contract', {
   files: files.size,
   script_count: Object.keys(scripts).length,

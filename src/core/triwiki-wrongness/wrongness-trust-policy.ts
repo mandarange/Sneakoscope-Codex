@@ -52,6 +52,7 @@ export function applyWrongnessTrustStatus(base: TrustStatus, impact: { status?: 
   if (base === 'blocked' || impactStatus === 'blocked') return 'blocked';
   if (base === 'failed' || impactStatus === 'failed') return 'failed';
   if (base === 'not_verified' || impactStatus === 'not_verified') return 'not_verified';
+  if (base === 'mock_only' || impactStatus === 'mock_only') return 'mock_only';
   if (base === 'verified_partial' || impactStatus === 'verified_partial' || (impact.issues || []).length) return 'verified_partial';
   return 'verified';
 }

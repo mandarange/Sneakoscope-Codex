@@ -155,7 +155,7 @@ export async function generateSlideCalloutReviews({ root, dir, slideExportLedger
     extraction_pending_count: generatedReviewImages.filter((image: any) => image.callout_extraction_status === 'pending').length,
     blockers: [...new Set(blockers)],
     passed: slides.length > 0 && generatedReviewImages.length === slides.length && blockers.length === 0 && generatedReviewImages.every((image: any) => image.callout_extraction_status === 'succeeded'),
-    verified_level: mock ? 'verified_partial' : generatedReviewImages.length ? 'verified_partial' : 'blocked',
+    verified_level: mock ? 'mock_only' : generatedReviewImages.length ? 'verified_partial' : 'blocked',
     next_action: blockers.includes('imagegen_capability_missing')
       ? 'Generate slide callout review images with Codex App $imagegen/gpt-image-2, then attach them or rerun extraction.'
       : null

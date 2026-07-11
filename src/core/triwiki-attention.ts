@@ -233,8 +233,10 @@ function uniqueAttentionRows(rows: any = [], max: any = 4) {
  * independent of the policy-claim RGBA/geometric selection above: code entries carry
  * no meaningful mission-coordinate proximity, so competing them against policy claims
  * for the same fixed slot budget would make their appearance arbitrary. Each surviving
- * entry becomes a use_first row (bare id, no fabricated RGBA) plus a hydrate_first row
- * pointing at its source citations, so a consumer knows which real files back it. */
+ * high-trust, clean entry becomes a use_first row (bare id, no fabricated RGBA).
+ * Lower-trust or wrongness-linked entries are hydrate-only so negative evidence can
+ * never be promoted into the high-trust fast path. Citation-backed hydrate rows tell
+ * consumers which real files must be read before relying on a summary. */
 function codePackAttentionRows(codePackEntries: any[] = [], tokenBudget = 2000, wrongnessByModule: Record<string, number> = {}): { useFirst: any[]; hydrateFirst: any[] } {
   const moduleWrongness = (entryId: any): number => Number(wrongnessByModule[String(entryId || '').replace(/^code:/, '')] || 0);
   const sorted = [...(codePackEntries || [])]
@@ -248,13 +250,17 @@ function codePackAttentionRows(codePackEntries: any[] = [], tokenBudget = 2000, 
     const cost = Number(entry.token_cost) || Math.max(1, Math.ceil(String(entry.text || '').length / 4));
     if (tokens + cost > tokenBudget) continue;
     tokens += cost;
-    useFirst.push([entry.id, null, null]);
     const citationPaths = Array.isArray(entry.citations) ? entry.citations.map((c: any) => c?.path).filter(Boolean) : [];
     const citationReason = citationPaths.length ? `code_citations:${citationPaths.join(',')}` : null;
     const wrongCount = moduleWrongness(entry.id);
-    // A module with past wrongness earns a hydrate row even without citations, tagged
-    // with a wrongness:<count> signal so a consumer re-reads it before trusting recall.
-    const reason = wrongCount > 0 ? `wrongness:${wrongCount}${citationReason ? `;${citationReason}` : ''}` : citationReason;
+    const action = trustAction(entry);
+    if (action === 'use' && wrongCount === 0) useFirst.push([entry.id, null, null]);
+    const reasons = [
+      wrongCount > 0 ? `wrongness:${wrongCount}` : null,
+      action !== 'use' ? `trust_action:${action}` : null,
+      citationReason
+    ].filter(Boolean);
+    const reason = reasons.join(';');
     if (reason) hydrateFirst.push([entry.id, reason]);
   }
   return { useFirst, hydrateFirst };

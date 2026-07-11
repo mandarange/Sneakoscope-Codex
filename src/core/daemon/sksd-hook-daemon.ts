@@ -36,17 +36,94 @@ export interface SksdHookResponse {
   error?: string;
 }
 
-// Unix domain socket paths have a ~100 byte limit on macOS/Linux (see
-// ZELLIJ_UNIX_SOCKET_PATH_LIMIT for the same constraint elsewhere in this
-// codebase) — a deeply nested project path under .sneakoscope/ would
-// routinely blow that. Keyed by a root hash under the OS tmpdir instead,
-// same strategy as zellij's socket dir.
+// Unix domain socket paths have a ~100 byte limit on macOS/Linux. TMPDIR can
+// itself be a deeply nested hermetic test root, so sockets use a short,
+// per-user SKS-owned runtime directory under the platform's real /tmp. The
+// project hash keeps independent repositories collision-free.
 export function sksdSocketPath(root: string): string {
-  return path.join(os.tmpdir(), `sksd-${sha256(path.resolve(root)).slice(0, 16)}.sock`);
+  return path.join(sksdRuntimeDir(), `sksd-${projectKey(root)}.sock`);
 }
 
 function sksdPidFilePath(root: string): string {
-  return path.join(os.tmpdir(), `sksd-${sha256(path.resolve(root)).slice(0, 16)}.pid.json`);
+  return path.join(sksdRuntimeDir(), `sksd-${projectKey(root)}.pid.json`);
+}
+
+function projectKey(root: string): string {
+  return sha256(path.resolve(root)).slice(0, 16);
+}
+
+function sksdRuntimeDir(): string {
+  const owner = typeof process.getuid === 'function'
+    ? String(process.getuid())
+    : sha256(os.userInfo().username).slice(0, 8);
+  const base = process.platform === 'win32'
+    ? os.tmpdir()
+    : fs.realpathSync.native('/tmp');
+  return path.join(base, `sksd-${owner}`);
+}
+
+async function ensureSafeRuntimeDir(runtimeDir: string): Promise<void> {
+  await fsp.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
+  const stat = await fsp.lstat(runtimeDir);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('unsafe_sksd_runtime_dir_type');
+  if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) throw new Error('unsafe_sksd_runtime_dir_owner');
+  if ((stat.mode & 0o077) !== 0) await fsp.chmod(runtimeDir, 0o700);
+  const real = await fsp.realpath(runtimeDir);
+  if (real !== path.resolve(runtimeDir)) throw new Error('unsafe_sksd_runtime_dir_symlink');
+}
+
+async function hardenSocketPermissions(socketPath: string): Promise<void> {
+  await fsp.chmod(socketPath, 0o600);
+}
+
+function safeRuntimeDirPresent(runtimeDir: string): boolean {
+  try {
+    const stat = fs.lstatSync(runtimeDir);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) return false;
+    if (typeof process.getuid === 'function' && stat.uid !== process.getuid()) return false;
+    if ((stat.mode & 0o077) !== 0) return false;
+    return fs.realpathSync(runtimeDir) === path.resolve(runtimeDir);
+  } catch {
+    return false;
+  }
+}
+
+async function safeExistingPid(pidFilePath: string): Promise<number | null | undefined> {
+  const stat = await fsp.lstat(pidFilePath).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  });
+  if (!stat) return undefined;
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('unsafe_sksd_pid_file');
+  const record = await fsp.readFile(pidFilePath, 'utf8').then((raw) => JSON.parse(raw), () => null);
+  return Number.isInteger(record?.pid) ? Number(record.pid) : null;
+}
+
+async function claimPidFile(pidFilePath: string, root: string): Promise<boolean> {
+  const existingPid = await safeExistingPid(pidFilePath);
+  if (existingPid && pidAlive(existingPid)) return false;
+  if (existingPid !== undefined) await fsp.rm(pidFilePath, { force: true });
+  try {
+    const handle = await fsp.open(pidFilePath, 'wx', 0o600);
+    try {
+      await handle.writeFile(JSON.stringify({
+        pid: process.pid,
+        started_at: new Date().toISOString(),
+        root,
+        project_hash: projectKey(root)
+      }));
+      await handle.sync().catch(() => undefined);
+    } finally {
+      await handle.close();
+    }
+    return true;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException)?.code === 'EEXIST') {
+      const racedPid = await safeExistingPid(pidFilePath);
+      if (racedPid && pidAlive(racedPid)) return false;
+    }
+    throw err;
+  }
 }
 
 function pidAlive(pid: number): boolean {
@@ -63,6 +140,17 @@ export interface SksdHookDaemonHandle {
   close: () => Promise<void>;
 }
 
+async function removeStaleSocketPath(socketPath: string): Promise<void> {
+  const stat = await fsp.lstat(socketPath).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  });
+  if (!stat) return;
+  if (stat.isDirectory() && !stat.isSymbolicLink()) throw new Error('unsafe_sksd_socket_path_directory');
+  // rm() unlinks a symlink itself; it never follows it to the target.
+  await fsp.rm(socketPath, { force: true });
+}
+
 // Called by the daemon entrypoint (registers real process signal handlers
 // and exits the process on shutdown) and directly by tests (which own the
 // returned handle's close() instead and must not have this call
@@ -70,17 +158,22 @@ export interface SksdHookDaemonHandle {
 export async function startSksdHookDaemon(root: string, handleHook: (name: string, payload: unknown) => Promise<unknown>): Promise<SksdHookDaemonHandle | null> {
   const socketPath = sksdSocketPath(root);
   const pidFilePath = sksdPidFilePath(root);
+  const runtimeDir = path.dirname(socketPath);
 
-  const existingPid = await fsp.readFile(pidFilePath, 'utf8').then((raw) => JSON.parse(raw)?.pid, () => null);
-  if (existingPid && pidAlive(existingPid)) {
-    // Another daemon for this root is already up; nothing to do.
-    return null;
+  await ensureSafeRuntimeDir(runtimeDir);
+  if (!(await claimPidFile(pidFilePath, root))) {
+    return null; // Another daemon for this root owns the live PID claim.
   }
-  await fsp.rm(socketPath, { force: true }).catch(() => undefined);
-  await fsp.mkdir(path.dirname(pidFilePath), { recursive: true });
-  await fsp.writeFile(pidFilePath, JSON.stringify({ pid: process.pid, started_at: new Date().toISOString(), root }));
+  try {
+    await removeStaleSocketPath(socketPath);
+  } catch (err) {
+    await fsp.rm(pidFilePath, { force: true }).catch(() => undefined);
+    throw err;
+  }
 
   let idleTimer: NodeJS.Timeout | null = null;
+  let closePromise: Promise<void> | null = null;
+  let signalHandlersRegistered = false;
   const server = net.createServer((socket) => {
     resetIdleTimer();
     let buffer = '';
@@ -116,11 +209,34 @@ export async function startSksdHookDaemon(root: string, handleHook: (name: strin
     idleTimer.unref();
   }
 
-  async function close(): Promise<void> {
-    if (idleTimer) clearTimeout(idleTimer);
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+  const onSigterm = () => void idleShutdown();
+  const onSigint = () => void idleShutdown();
+
+  function removeSignalHandlers() {
+    if (!signalHandlersRegistered) return;
+    signalHandlersRegistered = false;
+    process.removeListener('SIGTERM', onSigterm);
+    process.removeListener('SIGINT', onSigint);
+  }
+
+  async function cleanupRuntimeArtifacts(): Promise<void> {
     await fsp.rm(socketPath, { force: true }).catch(() => undefined);
-    await fsp.rm(pidFilePath, { force: true }).catch(() => undefined);
+    const claimedPid = await safeExistingPid(pidFilePath).catch(() => null);
+    if (claimedPid === process.pid) await fsp.rm(pidFilePath, { force: true }).catch(() => undefined);
+    await fsp.rmdir(runtimeDir).catch((err: NodeJS.ErrnoException) => {
+      if (!['ENOENT', 'ENOTEMPTY'].includes(String(err.code))) throw err;
+    });
+  }
+
+  function close(): Promise<void> {
+    if (closePromise) return closePromise;
+    closePromise = (async () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      removeSignalHandlers();
+      if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+      await cleanupRuntimeArtifacts();
+    })();
+    return closePromise;
   }
 
   async function idleShutdown() {
@@ -128,16 +244,23 @@ export async function startSksdHookDaemon(root: string, handleHook: (name: strin
     process.exit(0);
   }
 
-  process.on('SIGTERM', () => void idleShutdown());
-  process.on('SIGINT', () => void idleShutdown());
-
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(socketPath, () => {
-      server.removeListener('error', reject);
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(socketPath, () => {
+        server.removeListener('error', reject);
+        resolve();
+      });
     });
-  });
+    await hardenSocketPermissions(socketPath);
+  } catch (err) {
+    if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()));
+    await cleanupRuntimeArtifacts();
+    throw err;
+  }
+  process.on('SIGTERM', onSigterm);
+  process.on('SIGINT', onSigint);
+  signalHandlersRegistered = true;
   resetIdleTimer();
   return { close };
 }
@@ -161,7 +284,9 @@ export function spawnSksdHookDaemonDetached(root: string): void {
 // can fail open to the direct in-process path.
 export async function callSksdHookDaemon(root: string, name: string, payload: unknown): Promise<{ ok: true; result: unknown } | null> {
   const socketPath = sksdSocketPath(root);
-  if (!fs.existsSync(socketPath)) return null;
+  if (!safeRuntimeDirPresent(path.dirname(socketPath))) return null;
+  const socketStat = fs.lstatSync(socketPath, { throwIfNoEntry: false });
+  if (!socketStat || socketStat.isSymbolicLink() || socketStat.isDirectory()) return null;
   return new Promise((resolve) => {
     const socket = net.createConnection(socketPath);
     let settled = false;

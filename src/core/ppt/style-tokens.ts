@@ -203,7 +203,7 @@ export function buildPptStyleTokens(contract: any = {}) {
       avoid: ['over-designed decoration', 'ornamental gradients', 'nested cards', 'low-contrast gray body text', 'excessive motion or effects'],
       detail_strategy: ['precise spacing', 'clear hierarchy', 'thin rules', 'disciplined alignment', 'visible source rails', 'subtle accent color only when it clarifies meaning'],
       anti_generic_ai_style: 'prevent AI-like design: select and apply a concrete awesome-design-md reference profile before styling; do not default to generic cards, gradients, vague SaaS visuals, oversized decoration, or unsupported image-like flourishes',
-      image_policy: 'use images only when they improve comprehension; prefer Codex App built-in image generation via https://developers.openai.com/codex/app/features#image-generation when generated assets are needed'
+      image_policy: 'use images only when they improve comprehension; prefer Codex App built-in image generation via https://learn.chatgpt.com/docs/image-generation when generated assets are needed'
     }
   };
 }
@@ -250,4 +250,3 @@ export function selectPptDesignReference(contract: any = {}) {
       : `no strong domain match; defaulted to ${primary.name} for restrained business presentation output`
   };
 }
-

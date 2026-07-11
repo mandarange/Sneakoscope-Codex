@@ -2,6 +2,7 @@ import path from 'node:path'
 import { findCodexBinary } from '../codex-adapter.js'
 import { detectCodex0138Capability } from '../codex-control/codex-0138-capability.js'
 import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
+import { redactSecrets, redactString } from '../secret-redaction.js'
 
 export interface CodexPluginInventory {
   schema: 'sks.codex-plugin-inventory.v1'
@@ -10,11 +11,14 @@ export interface CodexPluginInventory {
   fetch_concurrency: number
   detail_fetch_count: number
   detail_fetch_failed_count: number
+  detail_json_supported?: boolean
   duration_ms: number
   plugins: Array<{
     id: string
     name: string
     source: 'marketplace' | 'local' | 'remote' | 'unknown'
+    marketplace?: string | null
+    version?: string | null
     installed: boolean
     enabled: boolean
     default_prompts: string[]
@@ -30,29 +34,37 @@ export interface CodexPluginInventory {
   blockers: string[]
 }
 
-export async function runCodexPluginListJson(): Promise<any> {
+export async function runCodexPluginListJson(codexBin?: string | null): Promise<any> {
   if (process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1') return fakePluginList()
-  const bin = await findCodexBinary()
+  const bin = codexBin === undefined ? await findCodexBinary() : codexBin
   if (!bin) return { plugins: [], blockers: ['codex_cli_missing'] }
   return runCodexJson(bin, ['plugin', 'list', '--json'])
 }
 
-export async function runCodexPluginDetailJson(pluginId: string): Promise<any> {
+export async function runCodexPluginDetailJson(pluginId: string, codexBin?: string | null): Promise<any> {
   if (process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1') return fakePluginDetail(pluginId)
-  const bin = await findCodexBinary()
+  const bin = codexBin === undefined ? await findCodexBinary() : codexBin
   if (!bin) return { blockers: ['codex_cli_missing'] }
   return runCodexJson(bin, ['plugin', 'detail', pluginId, '--json'])
 }
 
-export async function buildCodexPluginInventory(): Promise<CodexPluginInventory> {
+export async function buildCodexPluginInventory(input: {
+  codexBin?: string | null
+  listJson?: any
+  detailJsonSupported?: boolean
+} = {}): Promise<CodexPluginInventory> {
   const started = Date.now()
   const capability = await detectCodex0138Capability()
-  const listJson = await runCodexPluginListJson()
+  const codexBin = input.codexBin === undefined ? await findCodexBinary() : input.codexBin
+  const listJson = input.listJson === undefined ? await runCodexPluginListJson(codexBin) : input.listJson
   const summaries = normalizePluginList(listJson)
   const concurrency = Math.max(1, Number(process.env.SKS_CODEX_PLUGIN_DETAIL_CONCURRENCY || 6) || 6)
+  const detailJsonSupported = input.detailJsonSupported ?? await codexPluginDetailJsonSupported(codexBin)
   let failed = 0
   const plugins = await mapWithConcurrency(summaries, concurrency, async (summary) => {
-    const detail = await runCodexPluginDetailJson(summary.id || summary.name).catch((err: any) => ({ error: err?.message || String(err) }))
+    const detail = detailJsonSupported
+      ? await runCodexPluginDetailJson(pluginSelector(summary), codexBin).catch((err: any) => ({ error: err?.message || String(err) }))
+      : {}
     if (detail?.error || normalizeList(detail?.blockers).length > 0) failed += 1
     return normalizePlugin(summary, detail)
   })
@@ -61,18 +73,19 @@ export async function buildCodexPluginInventory(): Promise<CodexPluginInventory>
     ...normalizeList(listJson?.blockers),
     ...(process.env.SKS_CODEX_PLUGIN_JSON_FAKE_NO_MCP === '1' ? ['fixture_mcp_candidates_disabled'] : [])
   ]
-  return {
+  return redactSecrets({
     schema: 'sks.codex-plugin-inventory.v1',
     generated_at: nowIso(),
     codex_0138_capability: capability,
     fetch_concurrency: concurrency,
-    detail_fetch_count: summaries.length,
+    detail_fetch_count: detailJsonSupported ? summaries.length : 0,
     detail_fetch_failed_count: failed,
+    detail_json_supported: detailJsonSupported,
     duration_ms: Date.now() - started,
     plugins,
-    marketplace_available: plugins.some((plugin) => plugin.source === 'marketplace' || plugin.source === 'remote') || Boolean(listJson?.marketplace_available || listJson?.marketplaceAvailable),
+    marketplace_available: plugins.some((plugin) => plugin.source === 'marketplace' || plugin.source === 'remote' || plugin.marketplace) || Boolean(listJson?.marketplace_available || listJson?.marketplaceAvailable),
     blockers
-  }
+  }) as CodexPluginInventory
 }
 
 export async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -121,38 +134,75 @@ async function runCodexJson(bin: string, args: string[]) {
   try {
     return text ? JSON.parse(text) : {}
   } catch {
-    return { raw_text: text, blockers: [`codex_plugin_json_parse_failed:${args.join(' ')}`] }
+    return { raw_text: redactString(text), blockers: [`codex_plugin_json_parse_failed:${args.join(' ')}`] }
   }
 }
 
-function normalizePluginList(value: any): any[] {
+export function normalizePluginList(value: any): any[] {
   if (Array.isArray(value)) return value
-  for (const key of ['plugins', 'installed_plugins', 'installedPlugins', 'items']) {
-    if (Array.isArray(value?.[key])) return value[key]
+  const rows: any[] = []
+  const append = (items: any, installed: boolean | null = null) => {
+    if (!Array.isArray(items)) return
+    for (const item of items) rows.push(installed === null ? item : { ...item, installed: item?.installed ?? installed })
   }
-  return []
+  append(value?.installed, true)
+  append(value?.available, false)
+  for (const key of ['plugins', 'installed_plugins', 'installedPlugins', 'items']) append(value?.[key])
+  const deduped = new Map<string, any>()
+  for (const row of rows) {
+    const selector = pluginSelector(row)
+    const current = deduped.get(selector)
+    if (!current || (row?.installed === true && current?.installed !== true)) deduped.set(selector, row)
+  }
+  return [...deduped.values()]
 }
 
 function normalizePlugin(summary: any, detail: any) {
   const raw = { summary, detail }
-  const id = String(detail?.id || summary?.id || summary?.plugin_id || summary?.name || 'unknown')
+  const id = String(detail?.id || detail?.pluginId || summary?.id || summary?.pluginId || summary?.plugin_id || pluginSelector(summary) || summary?.name || 'unknown')
   const name = String(detail?.name || summary?.name || id)
-  const sourceText = String(detail?.source || detail?.marketplaceSource || summary?.source || summary?.marketplaceSource || '').toLowerCase()
+  const marketplace = stringOrNull(detail?.marketplaceName || detail?.marketplace || summary?.marketplaceName || summary?.marketplace)
+  const sourceText = sourceValue(detail?.source || detail?.marketplaceSource || summary?.source || summary?.marketplaceSource).toLowerCase()
   const source: 'marketplace' | 'local' | 'remote' | 'unknown' = sourceText.includes('marketplace') ? 'marketplace'
     : sourceText.includes('remote') ? 'remote'
       : sourceText.includes('local') ? 'local'
         : 'unknown'
+  const installed = boolish(detail?.installed ?? summary?.installed, false)
   return {
     id,
     name,
     source,
-    installed: boolish(detail?.installed ?? summary?.installed, true),
-    enabled: boolish(detail?.enabled ?? summary?.enabled, true),
+    marketplace,
+    version: stringOrNull(detail?.version || summary?.version),
+    installed,
+    enabled: boolish(detail?.enabled ?? summary?.enabled, installed),
     default_prompts: normalizeList(detail?.default_prompts || detail?.defaultPrompts || detail?.prompts),
     remote_mcp_servers: normalizeMcpServers(detail?.remote_mcp_servers || detail?.remoteMcpServers || detail?.mcp_servers || detail?.mcpServers),
     unavailable_app_templates: normalizeList(detail?.unavailable_app_templates || detail?.unavailableAppTemplates || detail?.app_templates_unavailable),
     raw
   }
+}
+
+function pluginSelector(value: any): string {
+  const explicit = String(value?.pluginId || value?.plugin_id || value?.id || '').trim()
+  if (explicit) return explicit
+  const name = String(value?.name || '').trim()
+  const marketplace = String(value?.marketplaceName || value?.marketplace || '').trim()
+  return name && marketplace ? `${name}@${marketplace}` : name
+}
+
+function sourceValue(value: any): string {
+  if (value && typeof value === 'object') {
+    return String(value.source || value.sourceType || value.type || value.path || '')
+  }
+  return String(value || '')
+}
+
+async function codexPluginDetailJsonSupported(codexBin: string | null): Promise<boolean> {
+  if (process.env.SKS_CODEX_PLUGIN_JSON_FAKE === '1') return true
+  if (!codexBin) return false
+  const help = await runProcess(codexBin, ['plugin', '--help'], { timeoutMs: 5000, maxOutputBytes: 32 * 1024 }).catch(() => null)
+  return help?.code === 0 && /^\s*detail\s+/m.test(`${help.stdout || ''}\n${help.stderr || ''}`)
 }
 
 function normalizeMcpServers(value: any): Array<{ name: string; url: string | null; auth_type: string | null }> {

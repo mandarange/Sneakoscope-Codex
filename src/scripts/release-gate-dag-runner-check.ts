@@ -24,7 +24,8 @@ assertGate(
 )
 assertGate(!/&&\s*npm run\s+\w/.test(releaseCheck.replace('npm run build --silent &&', '')), 'release:check must not be a giant npm-run chain', releaseCheck)
 assertGate(!/&&\s*npm run\s+\w/.test(effectiveReleaseCheck.replace('npm run build:incremental --silent &&', '').replace('npm run build --silent &&', '')), 'effective release:check must not be a giant npm-run chain', effectiveReleaseCheck)
-assertGate(pkg.scripts['release:check:legacy'], 'release:check:legacy must exist for explicit debugging')
+assertGate(!pkg.scripts['release:check:legacy'], 'retired release:check:legacy alias must stay removed')
+assertGate(pkg.scripts['release:real-check'] === 'node ./dist/scripts/release-real-check.js', 'release:real-check must expose the canonical environment-dependent proof runner')
 assertGate(manifest.schema === 'sks.release-gates.v2' && manifest.gates.length >= 10, 'release-gates.v2 manifest must exist with nodes', manifest)
 for (const gateId of [
   'scheduler:comprehensive',
@@ -44,7 +45,7 @@ assertGate(runner.includes('detached: process.platform') && runner.includes('kil
 assertGate(runner.includes('pruneOldReleaseGateRunDirs') && runner.includes('SKS_RELEASE_GATE_RUN_RETENTION'), 'DAG runner must prune stale release-gate run reports before they exhaust local disk')
 assertGate(runnerCli.includes('ensureCurrentMigrationBeforeCommand') && runnerCli.includes('release-gate-runner-preflight'), 'DAG runner CLI must self-heal project migration before hermetic gates run')
 assertGate(hermeticEnv.includes('SKS_UPDATE_MIGRATION_GATE_DISABLED'), 'hermetic release gates must not rewrite project migration receipts from temporary HOME roots')
-assertGate(hermeticEnv.includes('legacy:update-e2e') && hermeticEnv.includes('migrationGateDisabled'), 'legacy:update-e2e must keep migration gate enabled while testing migration retry/repair behavior')
+assertGate(hermeticEnv.includes("input.gate.id === 'legacy:update-e2e'") && hermeticEnv.includes('delete gateEnv.SKS_UPDATE_MIGRATION_GATE_DISABLED'), 'legacy:update-e2e must explicitly remove an inherited disable flag while testing migration retry/repair behavior')
 
 const dag = await importDist('core/release/release-gate-dag.js')
 const fsx = await importDist('core/fsx.js')

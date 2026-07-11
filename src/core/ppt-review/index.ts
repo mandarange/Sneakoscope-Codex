@@ -148,7 +148,7 @@ function buildPptImagegenReviewGate(parts: any = {}) {
     wrongness_checked: true,
     honest_mode_complete: true,
     mock_fixture: parts.mock === true,
-    verified_level: parts.mock === true ? 'verified_partial' : 'blocked_until_real_generation_extraction_recheck',
+    verified_level: parts.mock === true ? 'mock_only' : 'blocked_until_real_generation_extraction_recheck',
     blockers: [...new Set(blockers.filter(Boolean))],
     passed: false
   };

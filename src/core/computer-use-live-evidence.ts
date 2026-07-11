@@ -1,5 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ensureDir, exists, nowIso, packageRoot, readJson, rel, sha256, writeJsonAtomic } from './fsx.js';
 import type { ComputerUseStatus } from './computer-use-status.js';
 import { addVisualAnchor, ingestImage, missionImageLedgerPath } from './wiki-image/image-voxel-ledger.js';
@@ -41,6 +42,7 @@ export interface ComputerUseLiveEvidence {
       sha256: string | null;
       redacted: boolean;
       local_only: boolean;
+      adapter_provenance: ComputerUseAdapterProvenance;
     };
     action: {
       attempted: boolean;
@@ -65,21 +67,92 @@ export interface ComputerUseLiveEvidence {
   warnings: string[];
 }
 
+export interface ComputerUseAdapterProvenance {
+  source: 'codex_app_computer_use_host' | 'mock_fixture' | 'untrusted' | 'missing';
+  execution_class: 'real' | 'mock_fixture' | 'untrusted' | 'missing';
+  factory: 'createOfficialCodexComputerUseScreenshotAdapter' | null;
+  verified: boolean;
+  attestation_schema: 'sks.codex-computer-use-capture-attestation.v1' | null;
+  adapter_id: 'codex-app-computer-use-host' | null;
+  attestation_id: string | null;
+  issued_at: string | null;
+  request_binding: string | null;
+}
+
+export interface ComputerUseCaptureAttestation {
+  schema: 'sks.codex-computer-use-capture-attestation.v1';
+  adapter_id: 'codex-app-computer-use-host';
+  issued_by: 'createOfficialCodexComputerUseScreenshotAdapter';
+  execution_class: 'real';
+  attestation_id: string;
+  issued_at: string;
+  request_binding: string;
+}
+
+export interface ComputerUseScreenshotAdapterProvenance {
+  source: 'codex_app_computer_use_host' | 'mock_fixture';
+  execution_class: 'real' | 'mock_fixture';
+  factory?: 'createOfficialCodexComputerUseScreenshotAdapter' | null;
+}
+
+type ComputerUseScreenshotCaptureResult = {
+  ok: boolean;
+  path?: string | null;
+  data?: Buffer | Uint8Array | string | null;
+  blocker?: string | null;
+  warning?: string | null;
+  redacted?: boolean;
+  localOnly?: boolean;
+  attestation?: ComputerUseCaptureAttestation | null;
+};
+
 export interface ComputerUseScreenshotCaptureAdapter {
+  readonly provenance?: ComputerUseScreenshotAdapterProvenance;
   captureScreenshot: (opts: {
     root: string;
     route: string | null;
     missionId: string | null;
     outputPath: string;
-  }) => Promise<{
-    ok: boolean;
-    path?: string | null;
-    data?: Buffer | Uint8Array | string | null;
-    blocker?: string | null;
-    warning?: string | null;
-    redacted?: boolean;
-    localOnly?: boolean;
-  }>;
+  }) => Promise<ComputerUseScreenshotCaptureResult>;
+}
+
+const officialScreenshotAdapters = new WeakSet<object>();
+const officialCaptureAttestations = new WeakMap<object, ComputerUseCaptureAttestation>();
+
+/**
+ * Production trust boundary for a Codex App Computer Use host bridge.
+ * Object-literal adapters and fixture callbacks cannot mint the in-process
+ * attestation required for live_capture_success.
+ */
+export function createOfficialCodexComputerUseScreenshotAdapter(
+  captureScreenshot: ComputerUseScreenshotCaptureAdapter['captureScreenshot']
+): ComputerUseScreenshotCaptureAdapter {
+  if (typeof captureScreenshot !== 'function') throw new TypeError('official_computer_use_capture_function_required');
+  const adapter: ComputerUseScreenshotCaptureAdapter = {
+    provenance: Object.freeze({
+      source: 'codex_app_computer_use_host',
+      execution_class: 'real',
+      factory: 'createOfficialCodexComputerUseScreenshotAdapter'
+    }),
+    async captureScreenshot(opts) {
+      const raw = await captureScreenshot(opts);
+      if (!raw || typeof raw !== 'object' || raw.ok !== true) return raw;
+      const attestation: ComputerUseCaptureAttestation = Object.freeze({
+        schema: 'sks.codex-computer-use-capture-attestation.v1',
+        adapter_id: 'codex-app-computer-use-host',
+        issued_by: 'createOfficialCodexComputerUseScreenshotAdapter',
+        execution_class: 'real',
+        attestation_id: randomUUID(),
+        issued_at: nowIso(),
+        request_binding: captureRequestBinding(opts)
+      });
+      const result: ComputerUseScreenshotCaptureResult = { ...raw, attestation };
+      officialCaptureAttestations.set(result, attestation);
+      return result;
+    }
+  };
+  officialScreenshotAdapters.add(adapter);
+  return adapter;
 }
 
 export interface CodexAppComputerUseCapabilityAdapter {
@@ -159,7 +232,8 @@ export async function buildComputerUseLiveEvidence(opts: BuildComputerUseLiveEvi
         path: null,
         sha256: null,
         redacted: false,
-        local_only: true
+        local_only: true,
+        adapter_provenance: missingAdapterProvenance()
       },
       action: {
         attempted: false,
@@ -218,7 +292,7 @@ export async function buildComputerUseLiveEvidence(opts: BuildComputerUseLiveEvi
     warnings.push('Computer Use smoke never runs click/type actions without an official non-destructive Codex App adapter.');
   }
 
-  if (evidence.capture.screenshot.status === 'captured') {
+  if (evidence.capture.screenshot.status === 'captured' && evidence.capture.screenshot.adapter_provenance.verified) {
     evidence.mode = 'live_capture_success';
     evidence.privacy.contains_screen_content = true;
   } else if (blockers.length) {
@@ -230,11 +304,20 @@ export async function buildComputerUseLiveEvidence(opts: BuildComputerUseLiveEvi
 export function isComputerUseLiveEvidence(value: unknown): value is ComputerUseLiveEvidence {
   if (!value || typeof value !== 'object') return false;
   const evidence = value as Partial<ComputerUseLiveEvidence>;
-  return evidence.schema === 'sks.computer-use-live-evidence.v1'
+  const structurallyValid = evidence.schema === 'sks.computer-use-live-evidence.v1'
     && isComputerUseEvidenceMode(evidence.mode)
     && evidence.mock === false
     && typeof evidence.capture === 'object'
     && typeof evidence.privacy === 'object';
+  if (!structurallyValid) return false;
+  if (evidence.mode !== 'live_capture_success') return true;
+  const screenshot = evidence.capture?.screenshot;
+  return screenshot?.status === 'captured'
+    && typeof screenshot.path === 'string'
+    && screenshot.path.length > 0
+    && typeof screenshot.sha256 === 'string'
+    && /^[a-f0-9]{64}$/.test(screenshot.sha256)
+    && isPersistedOfficialAdapterProvenance(screenshot.adapter_provenance);
 }
 
 export function isComputerUseEvidenceMode(value: unknown): value is ComputerUseEvidenceMode {
@@ -276,6 +359,17 @@ async function attemptScreenshotCapture(root: string, evidence: ComputerUseLiveE
     evidence.image_voxel.reason = 'computer_use_capture_adapter_missing';
     return;
   }
+  const provenance = adapterProvenance(adapter);
+  evidence.capture.screenshot.adapter_provenance = provenance;
+  if (!officialScreenshotAdapters.has(adapter as object)) {
+    evidence.capture.screenshot.status = 'blocked';
+    evidence.blockers.push('computer_use_screenshot_adapter_untrusted');
+    evidence.warnings.push(provenance.execution_class === 'mock_fixture'
+      ? 'Mock/fixture Computer Use screenshot adapters cannot satisfy real live evidence.'
+      : 'Caller-supplied Computer Use screenshot adapters require the official production adapter factory.');
+    evidence.image_voxel.reason = 'computer_use_screenshot_adapter_untrusted';
+    return;
+  }
   try {
     const result = await adapter.captureScreenshot({
       root,
@@ -290,6 +384,31 @@ async function attemptScreenshotCapture(root: string, evidence: ComputerUseLiveE
       evidence.image_voxel.reason = result.blocker || 'screenshot_capture_blocked';
       return;
     }
+    const attestation = officialCaptureAttestations.get(result as object);
+    if (!attestation
+      || result.attestation !== attestation
+      || attestation.request_binding !== captureRequestBinding({
+        root,
+        route: opts.route || null,
+        missionId: opts.missionId || null,
+        outputPath
+      })) {
+      evidence.capture.screenshot.status = 'blocked';
+      evidence.blockers.push('computer_use_capture_attestation_invalid');
+      evidence.image_voxel.reason = 'computer_use_capture_attestation_invalid';
+      return;
+    }
+    evidence.capture.screenshot.adapter_provenance = {
+      source: 'codex_app_computer_use_host',
+      execution_class: 'real',
+      factory: 'createOfficialCodexComputerUseScreenshotAdapter',
+      verified: true,
+      attestation_schema: attestation.schema,
+      adapter_id: attestation.adapter_id,
+      attestation_id: attestation.attestation_id,
+      issued_at: attestation.issued_at,
+      request_binding: attestation.request_binding
+    };
     const capturedPath = await materializeScreenshot(result, outputPath);
     const data = await fsp.readFile(capturedPath);
     evidence.capture.screenshot.status = result.localOnly === false ? 'captured' : 'captured';
@@ -384,4 +503,84 @@ function redactCaptureMessage(value: unknown) {
     .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]')
     .replace(/CODEX_LB_API_KEY=([^\s]+)/g, 'CODEX_LB_API_KEY=[redacted]')
     .slice(0, 500);
+}
+
+function captureRequestBinding(opts: { root: string; route: string | null; missionId: string | null; outputPath: string }) {
+  return sha256(Buffer.from(JSON.stringify({
+    root: path.resolve(opts.root),
+    route: opts.route,
+    mission_id: opts.missionId,
+    output_path: path.resolve(opts.outputPath)
+  })));
+}
+
+function missingAdapterProvenance(): ComputerUseAdapterProvenance {
+  return {
+    source: 'missing',
+    execution_class: 'missing',
+    factory: null,
+    verified: false,
+    attestation_schema: null,
+    adapter_id: null,
+    attestation_id: null,
+    issued_at: null,
+    request_binding: null
+  };
+}
+
+function adapterProvenance(adapter: ComputerUseScreenshotCaptureAdapter): ComputerUseAdapterProvenance {
+  if (officialScreenshotAdapters.has(adapter as object)) {
+    return {
+      source: 'codex_app_computer_use_host',
+      execution_class: 'real',
+      factory: 'createOfficialCodexComputerUseScreenshotAdapter',
+      verified: false,
+      attestation_schema: null,
+      adapter_id: null,
+      attestation_id: null,
+      issued_at: null,
+      request_binding: null
+    };
+  }
+  if (adapter.provenance?.execution_class === 'mock_fixture') {
+    return {
+      source: 'mock_fixture',
+      execution_class: 'mock_fixture',
+      factory: null,
+      verified: false,
+      attestation_schema: null,
+      adapter_id: null,
+      attestation_id: null,
+      issued_at: null,
+      request_binding: null
+    };
+  }
+  return {
+    source: 'untrusted',
+    execution_class: 'untrusted',
+    factory: null,
+    verified: false,
+    attestation_schema: null,
+    adapter_id: null,
+    attestation_id: null,
+    issued_at: null,
+    request_binding: null
+  };
+}
+
+function isPersistedOfficialAdapterProvenance(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const provenance = value as Partial<ComputerUseAdapterProvenance>;
+  return provenance.source === 'codex_app_computer_use_host'
+    && provenance.execution_class === 'real'
+    && provenance.factory === 'createOfficialCodexComputerUseScreenshotAdapter'
+    && provenance.verified === true
+    && provenance.attestation_schema === 'sks.codex-computer-use-capture-attestation.v1'
+    && provenance.adapter_id === 'codex-app-computer-use-host'
+    && typeof provenance.attestation_id === 'string'
+    && provenance.attestation_id.length > 0
+    && typeof provenance.issued_at === 'string'
+    && Number.isFinite(Date.parse(provenance.issued_at))
+    && typeof provenance.request_binding === 'string'
+    && /^[a-f0-9]{64}$/.test(provenance.request_binding);
 }

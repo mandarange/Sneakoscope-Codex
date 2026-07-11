@@ -11,7 +11,7 @@ test('buildTriWikiAttention is unchanged when codePackEntries is omitted (backwa
   assert.deepEqual(withDefault.hydrate_first, []);
 });
 
-test('buildTriWikiAttention ranks code-pack entries into use_first/hydrate_first by trust_score within a dedicated token sub-budget', () => {
+test('buildTriWikiAttention keeps use_first high-trust and routes lower-trust code summaries to hydration', () => {
   const codePackEntries = [
     { id: 'code:low-trust', text: 'low trust module summary', trust_score: 0.5, token_cost: 10, citations: [{ path: 'src/low.ts' }] },
     { id: 'code:high-trust', text: 'high trust module summary', trust_score: 0.95, token_cost: 10, citations: [{ path: 'src/high.ts' }] },
@@ -20,11 +20,12 @@ test('buildTriWikiAttention ranks code-pack entries into use_first/hydrate_first
   const attention = buildTriWikiAttention({ selected: [], wiki: {}, maxUse: 4, maxHydrate: 4, codePackEntries, codePackTokenBudget: 100 });
   const useIds = attention.use_first.map((row: any) => row[0]);
   assert.ok(useIds.includes('code:high-trust'), 'higher trust_score entry must be ranked in');
-  assert.ok(useIds.includes('code:low-trust'), 'lower trust_score entry still fits the budget');
+  assert.ok(!useIds.includes('code:low-trust'), 'lower-trust entry must not enter the high-trust fast path');
   assert.ok(!useIds.includes('code:too-expensive'), 'entry exceeding the token sub-budget must be excluded');
-  assert.equal(useIds.indexOf('code:high-trust') < useIds.indexOf('code:low-trust'), true, 'higher trust_score must rank first');
   const hydrateIds = attention.hydrate_first.map((row: any) => row[0]);
   assert.ok(hydrateIds.includes('code:high-trust'));
+  assert.ok(hydrateIds.includes('code:low-trust'));
+  assert.match(String(attention.hydrate_first.find((row: any) => row[0] === 'code:low-trust')?.[1] || ''), /trust_action:limit/);
   const hydrateRow = attention.hydrate_first.find((row: any) => row[0] === 'code:high-trust');
   assert.match(String(hydrateRow?.[1] || ''), /code_citations:src\/high\.ts/);
 });
@@ -39,10 +40,10 @@ test('buildTriWikiAttention does not let code-pack entries crowd out policy-clai
   assert.ok(useIds.includes('code:module-a'), 'code entry is additive, not competing for the same maxUse slots');
 });
 
-test('buildTriWikiAttention ranks a wrongness-flagged module first and tags its hydrate row with the wrongness count (A-6)', () => {
+test('buildTriWikiAttention never promotes a wrongness-flagged module into use_first (A-6)', () => {
   const codePackEntries = [
     { id: 'code:clean-module', text: 'clean module summary', trust_score: 0.99, token_cost: 10, citations: [{ path: 'src/clean.ts' }] },
-    { id: 'code:buggy-module', text: 'buggy module summary', trust_score: 0.5, token_cost: 10, citations: [{ path: 'src/buggy.ts' }] }
+    { id: 'code:buggy-module', text: 'buggy module summary', trust_score: 0.95, token_cost: 10, citations: [{ path: 'src/buggy.ts' }] }
   ];
   const attention = buildTriWikiAttention({
     selected: [], wiki: {}, maxUse: 4, maxHydrate: 4,
@@ -50,8 +51,8 @@ test('buildTriWikiAttention ranks a wrongness-flagged module first and tags its 
     wrongnessByModule: { 'buggy-module': 3 }
   });
   const useIds = attention.use_first.map((row: any) => row[0]);
-  // Despite lower trust_score, the past-wrongness module is ranked ahead of the clean one.
-  assert.ok(useIds.indexOf('code:buggy-module') < useIds.indexOf('code:clean-module'), 'wrongness-flagged module must rank first');
+  assert.ok(useIds.includes('code:clean-module'));
+  assert.ok(!useIds.includes('code:buggy-module'), 'active wrongness must keep the module out of high-trust recall');
   const buggyHydrate = attention.hydrate_first.find((row: any) => row[0] === 'code:buggy-module');
   assert.ok(buggyHydrate, 'wrongness-flagged module must have a hydrate row');
   assert.match(String(buggyHydrate?.[1] || ''), /wrongness:3/);

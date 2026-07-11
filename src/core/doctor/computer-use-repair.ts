@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { CODEX_APP_DOCS_URL } from '../codex-app.js';
+import { ensureCodexPlugins } from '../codex-plugins/codex-plugin-repair.js';
 import { computerUseStatusReport } from '../computer-use-status.js';
 import { ensureDir, nowIso, runProcess, which, writeJsonAtomic } from '../fsx.js';
+import { redactString } from '../secret-redaction.js';
 
 export const DOCTOR_COMPUTER_USE_REPAIR_SCHEMA = 'sks.doctor-computer-use-repair.v1';
 
@@ -24,6 +26,7 @@ export async function repairComputerUse(input: {
   reportPath?: string | null;
   timeoutMs?: number;
   probe?: (opts: any) => Promise<any>;
+  pluginRepair?: typeof ensureCodexPlugins;
 }): Promise<any> {
   const root = path.resolve(input.root || process.cwd());
   const apply = input.apply === true;
@@ -92,35 +95,23 @@ export async function repairComputerUse(input: {
     });
   }
 
-  // codex plugin install subcommand syntax is not documented anywhere in this repo or the
-  // Codex CLI docs snapshot; a real `codex plugin --help` lookup was attempted but the
-  // binary was unavailable/unverified in this environment, so no install command is guessed.
+  const repairPlugins = input.pluginRepair || ensureCodexPlugins;
+  const pluginRepair: any = beforeReady
+    ? null
+    : await repairPlugins({
+        pluginIds: ['computer-use@openai-bundled'],
+        apply,
+        codexBin,
+        timeoutMs: input.timeoutMs || 30_000
+      }).catch((err: unknown) => ({ ok: false, changed: false, installs: [], blockers: [messageOf(err)], next_actions: [] }));
   const pluginInstallStep: DoctorComputerUseRepairStep = {
-    id: 'computer_use_plugin_install_lookup',
-    ok: false,
-    attempted: false,
-    command: codexBin ? `${codexBin} plugin --help` : 'codex plugin --help',
-    blocker: 'codex_plugin_install_subcommand_unverified'
+    id: 'computer_use_plugin_repair',
+    ok: beforeReady || pluginRepair?.ok === true,
+    attempted: Boolean(pluginRepair?.installs?.length),
+    command: codexBin ? `${codexBin} plugin add computer-use@openai-bundled --json` : 'codex plugin add computer-use@openai-bundled --json',
+    status: beforeReady ? 'already_ready' : pluginRepair?.ok ? 'ready' : 'blocked',
+    blocker: beforeReady || pluginRepair?.ok === true ? null : pluginRepair?.blockers?.[0] || 'computer_use_plugin_not_ready'
   };
-  let pluginHelpRaw: string | null = null;
-  if (codexBin && before?.status === 'codex_app_missing' && apply) {
-    const help = await runProcess(codexBin, ['plugin', '--help'], {
-      timeoutMs: input.timeoutMs || 8000,
-      maxOutputBytes: 32 * 1024
-    }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: messageOf(err) }));
-    pluginHelpRaw = tail(help.stdout || help.stderr, 4000);
-    pluginInstallStep.attempted = true;
-    pluginInstallStep.exit_code = help.code;
-    pluginInstallStep.stdout_tail = tail(help.stdout);
-    pluginInstallStep.stderr_tail = tail(help.stderr);
-    const installSubcommand = extractPluginInstallSubcommand(help.stdout || help.stderr || '');
-    if (installSubcommand) {
-      pluginInstallStep.ok = false;
-      pluginInstallStep.blocker = 'codex_plugin_install_subcommand_found_but_not_auto_run';
-    } else {
-      pluginInstallStep.blocker = 'codex_plugin_help_did_not_reveal_install_subcommand';
-    }
-  }
   steps.push(pluginInstallStep);
 
   const after = await probe({ root, codexBin: codexBin || undefined, forceMacos: true })
@@ -129,7 +120,7 @@ export async function repairComputerUse(input: {
     id: 'computer_use_status_redetect',
     ok: after?.status === 'available',
     attempted: true,
-    command: 'codex features list --json',
+    command: 'codex features list',
     blocker: after?.status === 'available' ? null : String(after?.status || 'unknown')
   });
 
@@ -137,15 +128,17 @@ export async function repairComputerUse(input: {
   const blockers = recovered ? [] : [
     ...new Set([
       String(after?.status || 'computer_use_unavailable'),
-      ...(pluginInstallStep.attempted && !recovered ? [pluginInstallStep.blocker as string] : [])
+      ...(pluginInstallStep.blocker && !recovered ? [pluginInstallStep.blocker] : [])
     ].filter(Boolean).map(String))
   ];
-  const nextActions = recovered ? [] : [
+  const refreshActions = pluginRepair?.changed ? pluginRepair.next_actions || [] : [];
+  const nextActions = recovered ? refreshActions : [
+    ...refreshActions,
     'Install/update Codex CLI if missing: npm i -g @openai/codex@latest',
     'Open Codex App settings and enable Computer Use, or run: codex features enable computer_use',
     after?.status === 'codex_app_missing'
-      ? 'A live `codex plugin --help` (or equivalent) lookup is required to find the real plugin install subcommand before SKS can auto-install a Computer Use plugin; this was not guessed. A human should run `codex plugin --help` (or check Codex App settings) and report the exact install subcommand back so it can be wired into this repair function.'
-      : 'Verify with: codex features list --json',
+      ? 'Open the ChatGPT/Codex desktop app after plugin installation, enable the Computer Use server and skill toggles, and grant Screen Recording/Accessibility when prompted.'
+      : 'Verify with: codex features list',
     `Docs: ${CODEX_APP_DOCS_URL}`
   ];
   let report: any = {
@@ -158,9 +151,11 @@ export async function repairComputerUse(input: {
     before,
     after,
     steps,
+    plugin_repair: pluginRepair,
+    current_task_tool_manifest_verified: false,
+    requires_new_task: pluginRepair?.requires_new_task === true,
     blockers,
     next_actions: nextActions,
-    plugin_help_raw: pluginHelpRaw,
     docs_url: CODEX_APP_DOCS_URL
   };
   if (input.reportPath !== null) {
@@ -176,13 +171,8 @@ export async function repairComputerUse(input: {
   return report;
 }
 
-function extractPluginInstallSubcommand(helpText: string): string | null {
-  const match = String(helpText || '').match(/^\s*install\s+/m);
-  return match ? 'install' : null;
-}
-
 function tail(value: unknown, max = 2000) {
-  const text = String(value || '');
+  const text = redactString(String(value || ''));
   return text.length > max ? text.slice(-max) : text;
 }
 

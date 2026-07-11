@@ -20,10 +20,10 @@ export async function runCodex0139WebSearchRealProbe(input: {
   if (!codexBin) return skippedCodex0139Probe('codex_cli_missing')
   const tempDir = path.join(input.root, '.sneakoscope', 'tmp', 'codex-0139-real-probes', `web-search-${Date.now()}`)
   await ensureDir(tempDir)
-  await writeTextAtomic(path.join(tempDir, 'README.md'), 'Temporary Codex 0.139 web-search real probe workspace.\n')
+  await writeTextAtomic(path.join(tempDir, 'README.md'), 'Temporary Codex 0.144.1 web-search real probe workspace.\n')
   const outputFile = path.join(tempDir, 'last-message.txt')
-  const prompt = 'In code mode, use standalone web search to find the title of https://example.com or OpenAI Codex release 0.139. Return JSON {"used_web_search":true,"answer":"...","sources":[...]}.'
-  const args = buildCodexExecArgs({ root: tempDir, prompt, outputFile, json: true, extraArgs: [] })
+  const prompt = 'In code mode, use standalone web search to find the title of https://example.com. Return JSON {"used_web_search":true,"answer":"...","sources":[...]}.'
+  const args = buildCodexExecArgs({ root: tempDir, prompt, outputFile, json: true, extraArgs: ['-c', 'mcp_servers={}'] })
   const result = await runProcess(codexBin, args, {
     cwd: tempDir,
     timeoutMs: input.timeoutMs || 120000,
@@ -38,13 +38,13 @@ export async function runCodex0139WebSearchRealProbe(input: {
   const output = await fs.readFile(outputFile, 'utf8').catch(() => '')
   const combined = `${(result as any).stdout || ''}\n${(result as any).stderr || ''}\n${output}`
   const sawWebSearchEvent = /\b(web[_ -]?search|search_result|sources?|tool_call|standalone web search)\b/i.test(combined)
-  const sawPlaintextResult = /(Example Domain|example\.com|OpenAI|Codex|0\.139)/i.test(combined)
+  const sawPlaintextResult = /(Example Domain|example\.com)/i.test(combined)
   const resultContainsExpectedMarker = /"used_web_search"\s*:\s*true|used_web_search/i.test(combined) || sawWebSearchEvent
   const processExitedSuccessfully = (result as any).code === 0
-  const ok = sawPlaintextResult && resultContainsExpectedMarker
+  const ok = processExitedSuccessfully && sawPlaintextResult && resultContainsExpectedMarker
   if (ok) {
-    await writeJsonAtomic(path.join(input.root, '.sneakoscope', 'codex-0139-code-mode-web-search-policy.json'), {
-      schema: 'sks.codex-0139-code-mode-web-search-policy.v1',
+    await writeJsonAtomic(path.join(input.root, '.sneakoscope', 'codex-0144-code-mode-web-search-policy.json'), {
+      schema: 'sks.codex-0144-code-mode-web-search-policy.v1',
       ok: true,
       generated_at: new Date().toISOString(),
       allow_standalone_web_search_in_code_mode: true,
@@ -72,6 +72,9 @@ export async function runCodex0139WebSearchRealProbe(input: {
       process_warning: processExitedSuccessfully ? null : 'Codex emitted web-search evidence before process timeout/nonzero exit.',
       output_file: outputFile
     },
-    blockers: ok ? [] : ['codex_web_search_real_probe_failed']
+    blockers: ok ? [] : [
+      ...(processExitedSuccessfully ? [] : ['codex_web_search_process_failed_or_timed_out']),
+      ...(!sawPlaintextResult || !resultContainsExpectedMarker ? ['codex_web_search_real_probe_failed'] : [])
+    ]
   }
 }

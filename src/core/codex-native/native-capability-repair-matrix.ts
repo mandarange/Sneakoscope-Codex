@@ -44,6 +44,8 @@ export interface NativeCapabilityRepairState {
   manual_actions: string[];
   blockers: string[];
   warnings: string[];
+  evidence_level?: 'real-interaction' | 'configuration' | 'environment-hint' | 'fixture' | 'none';
+  real_interaction_verified?: boolean;
 }
 
 export interface NativeCapabilityRepairMatrix {
@@ -78,13 +80,21 @@ export async function buildNativeCapabilityRepairMatrix(input: {
   const root = path.resolve(input.root);
   const selected = new Set(input.capabilities || NATIVE_CAPABILITY_IDS);
   const fixture = input.fixture || false;
+  const needsImageCapability = selected.has('image_generation');
   const imageCapability = fixture
     ? fixtureImageCapability(fixture)
-    : await detectImagegenCapability({ timeoutMs: 2500 }).catch((err: unknown) => ({ blockers: [messageOf(err)], auth_readiness: null, codex_app: { available: false } }));
+    : needsImageCapability
+      ? await detectImagegenCapability({ timeoutMs: 2500 }).catch((err: unknown) => ({ blockers: [messageOf(err)], auth_readiness: null, codex_app: { available: false } }))
+      : { blockers: [], auth_readiness: null, codex_app: { available: false } };
+  const needsNativeFeatureMatrix = selected.has('app_handoff') || selected.has('image_path_exposure');
   const nativeFeatureMatrix = fixture
     ? fixtureNativeFeatureMatrix(fixture)
-    : await buildCodexNativeFeatureMatrix({ root, mode: 'read-only' }).catch((err: unknown) => ({ ok: false, features: {}, blockers: [messageOf(err)], invocation_defaults: {} }));
-  const states = await Promise.all(NATIVE_CAPABILITY_IDS.filter((id) => selected.has(id)).map((id) => stateForCapability(root, id, imageCapability, nativeFeatureMatrix)));
+    : needsNativeFeatureMatrix
+      ? await buildCodexNativeFeatureMatrix({ root, mode: 'read-only' }).catch((err: unknown) => ({ ok: false, features: {}, blockers: [messageOf(err)], invocation_defaults: {} }))
+      : { ok: true, features: {}, blockers: [], invocation_defaults: {} };
+  const states = await Promise.all(NATIVE_CAPABILITY_IDS
+    .filter((id) => selected.has(id))
+    .map((id) => stateForCapability(root, id, imageCapability, nativeFeatureMatrix, fixture)));
   const coreBlockers = states.flatMap((state) => state.core_blockers || state.blockers);
   const routeBlockers = mergeRouteBlockers(states);
   const warnings = states.flatMap((state) => state.warnings);
@@ -108,24 +118,55 @@ export async function buildNativeCapabilityRepairMatrix(input: {
   return matrix;
 }
 
-async function stateForCapability(root: string, id: NativeCapabilityId, imageCapability: any, nativeFeatureMatrix: any): Promise<NativeCapabilityRepairState> {
+async function stateForCapability(
+  root: string,
+  id: NativeCapabilityId,
+  imageCapability: any,
+  nativeFeatureMatrix: any,
+  fixture: 'all-repairable' | 'manual-required' | false
+): Promise<NativeCapabilityRepairState> {
   const reports = path.join(root, '.sneakoscope', 'reports');
   if (id === 'image_generation') {
-    const verified = imageCapability?.codex_app?.available === true || imageCapability?.auth_readiness?.headless_auto_available === true;
+    const fixtureVerified = fixture === 'all-repairable';
+    const builtInConfigured = imageCapability?.codex_app?.available === true;
+    const authReady = imageCapability?.auth_readiness?.headless_auto_available === true;
+    const realOutputVerified = (
+      builtInConfigured
+      && imageCapability?.real_generation_available === true
+      && imageCapability?.real_output_verified_by_capability_check === true
+      && fixture === false
+    );
+    const verified = fixtureVerified || realOutputVerified;
+    const routeBlocker = builtInConfigured
+      ? 'codex_imagegen_real_output_unverified'
+      : 'codex_app_builtin_imagegen_capability_missing';
     return {
       id,
-      before: verified ? 'verified' : 'blocked',
+      before: verified ? 'verified' : builtInConfigured ? 'degraded' : 'blocked',
       repairability: verified ? 'auto' : 'manual-required',
       availability: verified ? 'verified' : 'manual-required',
       required_for: ['route-image'],
-      repair_actions: verified ? ['postcheck-imagegen-path-contract'] : ['Sign in to Codex App and enable/use the built-in $imagegen / gpt-image-2 surface, then rerun `sks doctor --capabilities --yes`.'],
+      repair_actions: verified
+        ? ['postcheck-imagegen-path-contract']
+        : builtInConfigured
+          ? ['Invoke Codex App $imagegen with gpt-image-2 in a fresh task and record the selected raster output path before retrying the image route.']
+          : ['Sign in to Codex App, enable the built-in $imagegen / gpt-image-2 surface, then verify it with a real generated raster output before retrying the image route.'],
       after: null,
       artifact_path: path.join(reports, 'native-capability-repair-matrix.json'),
       core_blockers: [],
-      route_blockers: verified ? {} : { 'route-image': ['imagegen_auth_or_codex_app_builtin_missing'] },
-      manual_actions: verified ? [] : ['Sign in to Codex App and enable/use the built-in $imagegen / gpt-image-2 surface before image routes.'],
+      route_blockers: verified ? {} : { 'route-image': [routeBlocker] },
+      manual_actions: verified ? [] : [
+        builtInConfigured
+          ? 'Generate one real raster with Codex App $imagegen / gpt-image-2 and bind its output path to the route evidence.'
+          : 'Sign in to Codex App and enable/use the built-in $imagegen / gpt-image-2 surface before image routes.'
+      ],
       blockers: [],
-      warnings: verified ? [] : ['image_generation_not_verified_without_real_capability']
+      warnings: verified ? [] : [
+        'image_generation_not_verified_without_real_capability',
+        ...(authReady && !builtInConfigured ? ['imagegen_auth_readiness_is_not_builtin_output_proof'] : [])
+      ],
+      evidence_level: fixtureVerified ? 'fixture' : realOutputVerified ? 'real-interaction' : builtInConfigured ? 'configuration' : authReady ? 'environment-hint' : 'none',
+      real_interaction_verified: realOutputVerified
     };
   }
   if (id === 'image_followup_edit') {
@@ -179,38 +220,50 @@ async function stateForCapability(root: string, id: NativeCapabilityId, imageCap
     };
   }
   if (id === 'computer_use') {
-    const envVerified = process.env.SKS_COMPUTER_USE_CAPABILITY === 'verified';
+    const fixtureVerified = fixture === 'all-repairable';
+    const envHint = process.env.SKS_COMPUTER_USE_CAPABILITY === 'verified';
     return {
       id,
-      before: envVerified ? 'verified' : 'unknown',
-      availability: envVerified ? 'verified' : 'manual-required',
+      before: fixtureVerified ? 'verified' : envHint ? 'degraded' : 'unknown',
+      availability: fixtureVerified ? 'verified' : 'manual-required',
       required_for: ['route-computer-use'],
-      repairability: envVerified ? 'auto' : 'manual-required',
-      repair_actions: envVerified ? ['postcheck-computer-use'] : ['Enable Codex Computer Use and macOS Screen Recording/Accessibility permissions; run `$CU doctor` for native capability diagnostics, then rerun `sks doctor --capabilities --yes`.'],
+      repairability: fixtureVerified ? 'auto' : 'manual-required',
+      repair_actions: fixtureVerified ? ['postcheck-computer-use'] : ['Enable Codex Computer Use and macOS Screen Recording/Accessibility permissions; execute a real native interaction, then rerun `sks doctor --capabilities --yes`.'],
       after: null,
       artifact_path: path.join(reports, 'native-capability-repair-matrix.json'),
       core_blockers: [],
-      route_blockers: envVerified ? {} : { 'route-computer-use': ['computer_use_os_permission_or_capability_unknown'] },
-      manual_actions: envVerified ? [] : ['Enable Codex Computer Use and macOS Screen Recording/Accessibility permissions before `$CU` routes.'],
+      route_blockers: fixtureVerified ? {} : { 'route-computer-use': ['computer_use_os_permission_or_capability_unknown'] },
+      manual_actions: fixtureVerified ? [] : ['Enable Codex Computer Use and macOS Screen Recording/Accessibility permissions and verify a real interaction before `$CU` routes.'],
       blockers: [],
-      warnings: envVerified ? [] : ['manual_os_permission_required']
+      warnings: fixtureVerified ? [] : [
+        'manual_os_permission_required',
+        ...(envHint ? ['computer_use_environment_hint_is_not_interaction_proof'] : [])
+      ],
+      evidence_level: fixtureVerified ? 'fixture' : envHint ? 'environment-hint' : 'none',
+      real_interaction_verified: false
     };
   }
-  const chromeReady = process.env.SKS_CHROME_EXTENSION_READY === '1';
+  const fixtureVerified = fixture === 'all-repairable';
+  const chromeHint = process.env.SKS_CHROME_EXTENSION_READY === '1';
   return {
     id,
-    before: chromeReady ? 'verified' : 'unknown',
-    availability: chromeReady ? 'verified' : 'manual-required',
+    before: fixtureVerified ? 'verified' : chromeHint ? 'degraded' : 'unknown',
+    availability: fixtureVerified ? 'verified' : 'manual-required',
     required_for: ['route-chrome-web-review'],
-    repairability: chromeReady ? 'auto' : 'manual-required',
-    repair_actions: chromeReady ? ['postcheck-chrome-extension-readiness'] : ['Install/enable the official Codex Chrome Extension, approve it in Codex App, then rerun `sks doctor --capabilities --yes`; web/browser/localhost verification must use the Chrome extension path first.'],
+    repairability: fixtureVerified ? 'auto' : 'manual-required',
+    repair_actions: fixtureVerified ? ['postcheck-chrome-extension-readiness'] : ['Install/enable the official Codex Chrome Extension, approve it in Codex App, then verify a real browser interaction; web/browser/localhost verification must use the Chrome extension path first.'],
     after: null,
     artifact_path: path.join(reports, 'native-capability-repair-matrix.json'),
     core_blockers: [],
-    route_blockers: chromeReady ? {} : { 'route-chrome-web-review': ['codex_chrome_extension_readiness_not_verified'] },
-    manual_actions: chromeReady ? [] : ['Install/enable the official Codex Chrome Extension before browser/web review routes.'],
+    route_blockers: fixtureVerified ? {} : { 'route-chrome-web-review': ['codex_chrome_extension_readiness_not_verified'] },
+    manual_actions: fixtureVerified ? [] : ['Install/enable the official Codex Chrome Extension and verify a real interaction before browser/web review routes.'],
     blockers: [],
-    warnings: chromeReady ? [] : ['manual_chrome_extension_setup_required']
+    warnings: fixtureVerified ? [] : [
+      'manual_chrome_extension_setup_required',
+      ...(chromeHint ? ['chrome_extension_environment_hint_is_not_interaction_proof'] : [])
+    ],
+    evidence_level: fixtureVerified ? 'fixture' : chromeHint ? 'environment-hint' : 'none',
+    real_interaction_verified: false
   };
 }
 
@@ -319,7 +372,13 @@ async function dirWritable(dir: string): Promise<boolean> {
 
 function fixtureImageCapability(mode: 'all-repairable' | 'manual-required'): any {
   return mode === 'all-repairable'
-    ? { codex_app: { available: true }, auth_readiness: { headless_auto_available: true }, blockers: [] }
+    ? {
+        codex_app: { available: true },
+        auth_readiness: { headless_auto_available: true },
+        real_generation_available: true,
+        real_output_verified_by_capability_check: false,
+        blockers: []
+      }
     : { codex_app: { available: false }, auth_readiness: { headless_auto_available: false }, blockers: ['fixture_manual_required'] };
 }
 

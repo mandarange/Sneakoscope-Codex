@@ -24,7 +24,8 @@ export async function detectCodexHookOutputWarnings(eventLike: unknown, output: 
   const issues: CodexHookIssue[] = [
     ...validation.structured_issues,
     ...semantic.issues,
-    ...snakeCaseKeyIssues(output)
+    ...snakeCaseKeyIssues(output),
+    ...unknownTopLevelKeyIssues(output)
   ];
   for (const key of LEGACY_TOP_LEVEL_KEYS) {
     if (output && typeof output === 'object' && Object.prototype.hasOwnProperty.call(output, key)) {
@@ -60,6 +61,19 @@ export async function detectCodexHookOutputWarnings(eventLike: unknown, output: 
     issues_by_category: codexHookIssuesByCategory(uniqueIssues),
     warnings: [...new Set(warnings)]
   };
+}
+
+function unknownTopLevelKeyIssues(output: unknown): CodexHookIssue[] {
+  if (!output || typeof output !== 'object' || Array.isArray(output)) return [];
+  const allowed = new Set(['continue', 'decision', 'reason', 'hookSpecificOutput']);
+  return Object.keys(output)
+    .filter((key) => !allowed.has(key))
+    .map((key) => makeCodexHookIssue(
+      'policy_disallowed',
+      `unknown_field_${key}`,
+      `Unknown top-level hook field is not accepted by the SKS zero-warning contract: ${key}.`,
+      { path: `$.${key}`, upstream_supported: false, sks_disallowed: true }
+    ));
 }
 
 type CodexHookWarningRow = {

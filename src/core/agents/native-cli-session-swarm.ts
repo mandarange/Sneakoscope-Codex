@@ -13,6 +13,7 @@ import { appendZellijSlotTelemetry, type ZellijSlotTelemetryEventType, type Zell
 import { appendParallelRuntimeEvent } from './parallel-runtime-proof.js'
 import { appendAgentMessage } from './agent-message-bus.js'
 import { markLoopWorkerInterrupted, registerLoopActiveWorker } from '../loops/loop-interrupt-registry.js'
+import { readCodexLbModelCatalog } from '../codex-lb/codex-lb-env.js'
 
 export const NATIVE_CLI_SESSION_SWARM_SCHEMA = 'sks.agent-native-cli-session-swarm.v1'
 
@@ -39,10 +40,25 @@ class NativeCliSessionSwarmRecorder {
     private writeLock: Promise<unknown> = Promise.resolve()
     private nextPaneToken = -1
     private visibleZellijReservations = new Set<string>()
+    private narutoModelCatalog: any = null
 
   constructor(private root: string, private input: { missionId: string; requestedAgents: number; targetActiveSlots: number; backend: string; backendExplicit?: boolean; noOllama?: boolean; route: string; fastModePolicy: FastModePolicy; workerPlacement?: string; zellijVisiblePaneCap?: number; projectRoot?: string }) {}
 
   async initialize() {
+    if (/\$?naruto/i.test(this.input.route) && (this.input.backend === 'codex-sdk' || this.input.backend === 'zellij')) {
+      this.narutoModelCatalog = await readCodexLbModelCatalog().catch(() => ({
+        schema: 'sks.codex-lb-model-catalog.v1',
+        ok: false,
+        status: 'blocked',
+        models: [],
+        model_efforts: {},
+        blockers: ['codex_lb_model_catalog_unavailable']
+      }))
+      if (this.narutoModelCatalog?.ok !== true) {
+        const blockers = Array.isArray(this.narutoModelCatalog?.blockers) ? this.narutoModelCatalog.blockers.join(',') : 'unavailable'
+        throw new Error(`naruto_model_catalog_preflight_failed:${blockers}`)
+      }
+    }
     await this.persist()
   }
 
@@ -85,7 +101,8 @@ class NativeCliSessionSwarmRecorder {
       source_intelligence_refs: ctx.agent.source_intelligence_refs || null,
       goal_mode_ref: ctx.agent.goal_mode_ref || null,
       strategy_refs: ctx.slice?.strategy_refs || null,
-      recursion_guard_env: true
+      recursion_guard_env: true,
+      naruto_model_catalog: this.narutoModelCatalog
     }
     await writeJsonAtomic(path.join(this.root, intakeRel), intake)
     const cliPath = await resolveWorkerCliPath()

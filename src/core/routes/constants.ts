@@ -52,4 +52,4 @@ export const RECOMMENDED_SKILLS = [
 // Route-level effort names are scheduling intents, not model compatibility
 // claims. Actual per-model options come from Codex runtime metadata; SKS never
 // derives them from a model slug.
-export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'ultra']);
+export const ALLOWED_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra']);

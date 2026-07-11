@@ -15,8 +15,13 @@ export async function runCodex0139DoctorEnvRealProbe(input: {
   if (!codexBin) return skippedCodex0139Probe('codex_cli_missing')
   const tempDir = path.join(input.root, '.sneakoscope', 'tmp', 'codex-0139-real-probes', `doctor-${Date.now()}`)
   await ensureDir(tempDir)
+  const isolatedHome = path.join(tempDir, 'home')
+  const isolatedCodexHome = path.join(isolatedHome, '.codex')
+  await ensureDir(isolatedCodexHome)
   const env = {
     ...process.env,
+    HOME: isolatedHome,
+    CODEX_HOME: isolatedCodexHome,
     EDITOR: 'vim',
     PAGER: 'less',
     TERM: 'xterm-256color',
@@ -53,7 +58,8 @@ export async function runCodex0139DoctorEnvRealProbe(input: {
       redacted_marker_or_omitted: redactedMarkerOrOmitted,
       redacted_sample_contains_secret: redactedText.includes('sk-test-secret-value') || redactedText.includes('test-secret-token'),
       process_exited_successfully: processExitedSuccessfully,
-      process_warning: processExitedSuccessfully ? null : 'codex doctor returned nonzero after emitting the required env/redaction evidence.'
+      process_warning: processExitedSuccessfully ? null : 'codex doctor returned nonzero after emitting the scoped env/redaction evidence.',
+      isolated_codex_home: true
     },
     blockers: ok ? [] : ['codex_doctor_env_redaction_real_probe_failed']
   }

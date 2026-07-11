@@ -17,6 +17,10 @@ import { cleanupMacLaunchSecretEnvironment } from '../core/codex-app/sks-menubar
 import { recordCodexLbHealthEvent } from '../core/codex-lb-circuit.js';
 import { loadCodexLbEnv, writeCodexLbKeychain, codexLbMetadataPath } from '../core/codex-lb/codex-lb-env.js';
 import {
+  codexLbToolCatalogPath,
+  ensureCodexLbToolCatalog
+} from '../core/codex-lb/codex-lb-tool-catalog.js';
+import {
   GLM_CODEX_CONFIG_PROFILE_ID,
   GLM_CODEX_CONFIG_PROVIDER_ID,
   GLM_CODEX_CONFIG_REASONING_PROFILES
@@ -31,9 +35,24 @@ import {
   type CodexLbPersistenceMode
 } from '../core/codex-lb/codex-lb-setup.js';
 import { extractTomlTable, writeCodexConfigGuarded } from '../core/codex/codex-config-guard.js';
-import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js';
+import {
+  ensureGlobalCodexFastModeDuringInstall,
+  ensureTrailingNewline,
+  normalizeCodexFastModeUiConfig,
+  removeTopLevelTomlKeyIfValue,
+  safeWriteCodexConfigToml,
+  upsertTopLevelTomlString,
+  upsertTomlTable
+} from '../core/codex-runtime/codex-desktop-config-policy.js';
 import { runPostinstallGlobalDoctorAndMarkPending } from '../core/update/update-migration-state.js';
 import { repairCodexImagegen } from '../core/doctor/imagegen-repair.js';
+
+export {
+  codexFastModeDesktopStatus,
+  ensureGlobalCodexFastModeDuringInstall,
+  normalizeCodexFastModeUiConfig,
+  safeWriteCodexConfigToml
+} from '../core/codex-runtime/codex-desktop-config-policy.js';
 
 type CodexLbStatusSnapshot = Awaited<ReturnType<typeof codexLbStatus>>;
 
@@ -91,6 +110,7 @@ export type CodexLbAuthInstallResult = {
   codex_environment?: CodexLbEnvSyncResult;
   codex_login?: CodexLbLoginSyncResult;
   auth_reconcile?: CodexLbAuthReconcileResult;
+  tool_catalog?: Record<string, unknown>;
   error?: string | null;
 };
 
@@ -113,6 +133,7 @@ export type ConfigureCodexLbResult = {
   codex_lb?: CodexLbStatusSnapshot;
   codex_environment?: CodexLbEnvSyncResult;
   codex_login?: CodexLbLoginSyncResult;
+  tool_catalog?: Record<string, unknown>;
   error?: string | null;
   chain_health?: { status?: string } & Record<string, unknown>;
   bypass_codex_lb?: boolean;
@@ -120,16 +141,6 @@ export type ConfigureCodexLbResult = {
 } & Partial<CodexLbStatusSnapshot>;
 
 export type CodexLbLaunchPromptResult = ConfigureCodexLbResult;
-
-const DEFAULT_CODEX_APP_PLUGINS = [
-  ['browser', 'openai-bundled'],
-  ['chrome', 'openai-bundled'],
-  ['computer-use', 'openai-bundled'],
-  ['latex', 'openai-bundled'],
-  ['documents', 'openai-primary-runtime'],
-  ['presentations', 'openai-primary-runtime'],
-  ['spreadsheets', 'openai-primary-runtime']
-];
 
 function packagedSksEntrypoint() {
   return path.join(packageRoot(), 'dist', 'bin', 'sks.js');
@@ -189,7 +200,7 @@ export async function postinstall({ bootstrap, args = [] }: any) {
   else if (fastModeRepair.status === 'failed') console.log(`Codex App Fast mode: auto repair failed. Run \`sks setup\`. ${fastModeRepair.error || ''}`.trim());
   const imagegenRepair = await ensureCodexImagegenDuringInstall();
   if (imagegenRepair.status === 'ready') console.log('Codex App Image Gen: ready ($imagegen/gpt-image-2 detected).');
-  else if (imagegenRepair.status === 'recovered') console.log('Codex App Image Gen: recovered and re-detected.');
+  else if (imagegenRepair.status === 'recovered') console.log('Codex App Image Gen: recovered and re-detected. Start a new Codex/Work task; restart the desktop app only if the new task still lacks $imagegen.');
   else if (imagegenRepair.status === 'blocked') console.log(`Codex App Image Gen: blocked; run \`sks doctor --fix\`. ${(imagegenRepair.blockers || []).join(', ')}`.trim());
   else if (imagegenRepair.status === 'skipped') console.log(`Codex App Image Gen: skipped (${imagegenRepair.reason}).`);
   const postinstallDoctor = await runPostinstallGlobalDoctorAndMarkPending().catch((err: any) => ({
@@ -438,7 +449,7 @@ async function restorePostinstallCodexLbConfigSnapshot(snapshot: any) {
     const currentAuthText = currentAuthExists ? await readText(snapshot.auth_path, '') : '';
     if (!currentAuthExists || !currentAuthText.trim()) {
       await ensureDir(path.dirname(snapshot.auth_path));
-      await writeTextAtomic(snapshot.auth_path, snapshot.auth_text);
+      await writeTextAtomic(snapshot.auth_path, snapshot.auth_text, { mode: 0o600 });
       await fsp.chmod(snapshot.auth_path, 0o600).catch(() => {});
       authRestored = true;
     }
@@ -458,6 +469,76 @@ export function normalizeCodexLbBaseUrl(input: any = '') {
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(host)) host = `https://${host}`;
   host = host.replace(/\/+$/, '');
   return /\/backend-api\/codex$/i.test(host) ? host : `${host}/backend-api/codex`;
+}
+
+async function ensureCodexLbToolCatalogSelection(input: {
+  home: string;
+  configPath: string;
+  baseUrl: string;
+  apiKey: string;
+}, opts: any = {}) {
+  const codexHome = opts.codexHome || path.join(input.home, '.codex');
+  const catalogPath = codexLbToolCatalogPath(codexHome);
+  const current = await readText(input.configPath, '');
+  const selected = hasTopLevelCodexLbSelected(current);
+  const existingCatalogPath = topLevelTomlString(current, 'model_catalog_json');
+  if (selected && existingCatalogPath && path.resolve(existingCatalogPath) !== path.resolve(catalogPath)) {
+    return {
+      schema: 'sks.codex-lb-tool-catalog-selection.v1',
+      ok: false,
+      required: true,
+      status: 'user_catalog_conflict',
+      path: catalogPath,
+      configured_path: existingCatalogPath,
+      config_changed: false,
+      blockers: ['codex_lb_user_model_catalog_conflict']
+    };
+  }
+  let hostname = '';
+  try { hostname = new URL(input.baseUrl).hostname.toLowerCase(); } catch {}
+  const reservedFixtureHost = /(?:^|\.)(?:test|invalid|example)$/.test(hostname);
+  if (reservedFixtureHost && typeof opts.toolCatalogFetch !== 'function') {
+    return {
+      schema: 'sks.codex-lb-tool-catalog-selection.v1',
+      ok: true,
+      required: false,
+      status: 'skipped_reserved_host',
+      path: catalogPath,
+      config_changed: false,
+      blockers: []
+    };
+  }
+  const catalog = await ensureCodexLbToolCatalog({
+    codexHome,
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    ...(typeof opts.toolCatalogFetch === 'function' ? { fetchImpl: opts.toolCatalogFetch } : {}),
+    timeoutMs: Number(opts.toolCatalogTimeoutMs || 5000),
+    force: opts.forceToolCatalog === true
+  });
+  if (!catalog.ok || !selected) {
+    return {
+      ...catalog,
+      schema: 'sks.codex-lb-tool-catalog-selection.v1',
+      config_changed: false,
+      selected
+    };
+  }
+  const next = ensureTrailingNewline(upsertTopLevelTomlString(current, 'model_catalog_json', catalog.path));
+  if (next === ensureTrailingNewline(current)) {
+    return { ...catalog, schema: 'sks.codex-lb-tool-catalog-selection.v1', config_changed: false, selected: true };
+  }
+  const safeWrite = await safeWriteCodexConfigToml(input.configPath, current, next, 'codex-lb-tool-catalog');
+  return {
+    ...catalog,
+    schema: 'sks.codex-lb-tool-catalog-selection.v1',
+    ok: catalog.ok && safeWrite.ok,
+    status: safeWrite.ok ? catalog.status : safeWrite.status,
+    config_changed: safeWrite.ok && safeWrite.changed === true,
+    backup_path: safeWrite.backup_path,
+    selected: true,
+    blockers: safeWrite.ok ? catalog.blockers : [...new Set([...(catalog.blockers || []), 'codex_lb_tool_catalog_config_write_failed'])]
+  };
 }
 
 export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLbResult> {
@@ -509,12 +590,16 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   appliedActions.push({ type: 'write_config_provider', target: configPath, ok: true, backup_path: safeWrite.backup_path });
   if (useDefaultProvider) appliedActions.push({ type: 'select_default_provider', target: configPath, ok: true });
   if (writeEnvFile) {
-    await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(baseUrl)}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
+    await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(baseUrl)}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`, { mode: 0o600 });
     await fsp.chmod(envPath, 0o600).catch(() => {});
     appliedActions.push({ type: 'write_env_file', target: envPath, ok: true });
   }
   process.env.CODEX_LB_BASE_URL = baseUrl;
   process.env.CODEX_LB_API_KEY = apiKey;
+  const toolCatalog = await ensureCodexLbToolCatalogSelection({ home, configPath, baseUrl, apiKey }, opts);
+  if (toolCatalog.config_changed || toolCatalog.status === 'repaired' || toolCatalog.status === 'cached_compatible') {
+    appliedActions.push({ type: 'write_model_tool_catalog', target: toolCatalog.path, ok: toolCatalog.ok === true, status: toolCatalog.status });
+  }
   const keyFingerprint = await sha256Text(apiKey);
   const metadataPath = opts.metadataPath || codexLbMetadataPath(home);
   await writeTextAtomic(metadataPath, `${JSON.stringify({
@@ -541,7 +626,8 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   const finalCodexLb = await codexLbStatus({ ...opts, home, configPath, envPath });
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
   const afterState = await captureCodexLbSetupWriteState({ home, configPath, envPath, shellProfile });
-  const drift = detectCodexLbSetupDrift({
+  const drift = [
+    ...detectCodexLbSetupDrift({
     useDefaultProvider,
     writeEnvFile,
     storeKeychain,
@@ -553,8 +639,10 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     codexEnvironment,
     shellProfileResult,
     beforeState,
-    afterState
-  });
+      afterState
+    }),
+    ...(toolCatalog.required !== false && toolCatalog.ok !== true ? ['codex_lb_gpt56_tool_catalog_not_ready'] : [])
+  ];
   const appliedPersistenceModes = appliedCodexLbPersistenceModes({
     writeEnvFile,
     storeKeychain,
@@ -571,7 +659,11 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     appliedModes: appliedPersistenceModes,
     processOnly: appliedPersistenceModes.includes('process_only_ephemeral')
   });
-  const warnings = [...insecureLocalWarning, ...persistence.warnings];
+  const warnings = [
+    ...insecureLocalWarning,
+    ...persistence.warnings,
+    ...(toolCatalog.required !== false && toolCatalog.ok !== true ? ['codex_lb_gpt56_tool_catalog_not_ready'] : [])
+  ];
   return {
     ok: ok && drift.length === 0,
     status: ok && drift.length === 0 ? 'configured' : drift.length ? 'setup_choice_drift' : (codexEnvironment.status || codexLogin.status),
@@ -590,6 +682,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     codex_lb: finalCodexLb,
     codex_environment: codexEnvironment,
     codex_login: codexLogin,
+    tool_catalog: toolCatalog,
     error: authReconcile.error || codexEnvironment.error || codexLogin.error || null
   };
 }
@@ -1062,13 +1155,19 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
   await migrateCodexAuthKeyFormat({ home: opts.home });
   const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
+  const toolCatalog = await ensureCodexLbToolCatalogSelection({
+    home: opts.home || process.env.HOME || os.homedir(),
+    configPath: status.config_path,
+    baseUrl: String(status.base_url || ''),
+    apiKey
+  }, opts);
   const forceCodexLbApiKeyAuth = opts.forceCodexLbApiKeyAuth === true || opts.authMode === 'codex-lb';
   const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status, forceCodexLbApiKeyAuth }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
   const codexLogin = forceCodexLbApiKeyAuth
     ? { ok: ['apikey_forced', 'apikey_auth_active'].includes(authReconcile.status), status: authReconcile.status, ...(authReconcile.reason ? { reason: authReconcile.reason } : {}), error: authReconcile.error || null }
     : await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
   const finalStatus = await codexLbStatus(opts);
-  const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
+  const ok = Boolean(codexEnvironment.ok && codexLogin.ok && (toolCatalog.required === false || toolCatalog.ok === true));
   return {
     ok,
     status: ok ? 'repaired' : (codexEnvironment.status || codexLogin.status),
@@ -1081,7 +1180,8 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
     auth_reconcile: authReconcile,
     codex_lb: finalStatus,
     codex_environment: codexEnvironment,
-    codex_login: codexLogin
+    codex_login: codexLogin,
+    tool_catalog: toolCatalog
   };
 }
 
@@ -1108,10 +1208,16 @@ export async function ensureCodexLbAuthDuringInstall(opts: any = {}): Promise<Co
   }
   const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
   const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
+  const toolCatalog = await ensureCodexLbToolCatalogSelection({
+    home: opts.home || process.env.HOME || os.homedir(),
+    configPath: status.config_path,
+    baseUrl: String(status.base_url || ''),
+    apiKey
+  }, opts);
   const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
   const authReconcile = await reconcileCodexLbAuthConflict({ ...opts, status }).catch((err: any) => ({ status: 'failed', reason: 'exception', error: err.message }));
   const finalStatus = await codexLbStatus(opts);
-  const ok = Boolean(codexEnvironment.ok && codexLogin.ok);
+  const ok = Boolean(codexEnvironment.ok && codexLogin.ok && (toolCatalog.required === false || toolCatalog.ok === true));
   return {
     ok,
     status: ok ? 'present' : (codexEnvironment.status || codexLogin.status),
@@ -1121,6 +1227,7 @@ export async function ensureCodexLbAuthDuringInstall(opts: any = {}): Promise<Co
     codex_lb: finalStatus,
     codex_environment: codexEnvironment,
     codex_login: codexLogin,
+    tool_catalog: toolCatalog,
     auth_reconcile: authReconcile,
     error: codexEnvironment.error || codexLogin.error || null
   };
@@ -1136,7 +1243,7 @@ async function restoreCodexLbEnvFromSharedLogin(status: any = {}, opts: any = {}
   const baseUrl = status.base_url || parseCodexLbEnvBaseUrl(await readText(envPath, ''));
   if (!baseUrl) return { ok: false, status: 'missing_base_url', auth_path: authPath, env_path: envPath };
   await ensureDir(path.dirname(envPath));
-  await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(normalizeCodexLbBaseUrl(baseUrl))}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`);
+  await writeTextAtomic(envPath, `export CODEX_LB_BASE_URL=${shellSingleQuote(normalizeCodexLbBaseUrl(baseUrl))}\nexport CODEX_LB_API_KEY=${shellSingleQuote(apiKey)}\n`, { mode: 0o600 });
   await fsp.chmod(envPath, 0o600).catch(() => {});
   return { ok: true, status: 'migrated_login_cache', auth_path: authPath, env_path: envPath, base_url: normalizeCodexLbBaseUrl(baseUrl) };
 }
@@ -1199,7 +1306,7 @@ async function migrateCodexAuthKeyFormat(opts: any = {}) {
     const legacyKey = parsed.key || parsed.api_key || parsed.apiKey || parsed.openai_api_key;
     if (!legacyKey) return { status: 'skipped', reason: 'no_key_found' };
     const replacement = `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: legacyKey })}\n`;
-    await writeTextAtomic(authPath, replacement);
+    await writeTextAtomic(authPath, replacement, { mode: 0o600 });
     await fsp.chmod(authPath, 0o600).catch(() => {});
     return { status: 'migrated', auth_path: authPath };
   } catch {
@@ -1230,7 +1337,7 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
   const forceCodexLbApiKeyAuth = opts.forceCodexLbApiKeyAuth === true;
   const writeApiKeyAuth = async (reason: string, backupPathForResult: string | null = null) => {
     try {
-      await writeTextAtomic(authPath, `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`);
+      await writeTextAtomic(authPath, `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`, { mode: 0o600 });
       await fsp.chmod(authPath, 0o600).catch(() => {});
       return {
         status: 'apikey_forced',
@@ -1253,7 +1360,7 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
   if (hasChatgptOAuthTokens(authText)) {
     try {
       await ensureDir(path.dirname(backupPath));
-      await writeTextAtomic(backupPath, authText);
+      await writeTextAtomic(backupPath, authText, { mode: 0o600 });
       await fsp.chmod(backupPath, 0o600).catch(() => {});
     } catch (err: any) {
       return { status: 'failed', reason: 'backup_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
@@ -1277,7 +1384,7 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
     }
     try {
       const replacement = `${JSON.stringify({ auth_mode: 'apikey', OPENAI_API_KEY: apiKey }, null, 2)}\n`;
-      await writeTextAtomic(authPath, replacement);
+      await writeTextAtomic(authPath, replacement, { mode: 0o600 });
       await fsp.chmod(authPath, 0o600).catch(() => {});
     } catch (err: any) {
       return { status: 'failed', reason: 'write_failed', auth_path: authPath, backup_path: backupPath, error: err.message };
@@ -1307,7 +1414,7 @@ export async function reconcileCodexLbAuthConflict(opts: any = {}): Promise<Code
     if (hasChatgptOAuthTokens(backupText) && process.env.SKS_CODEX_LB_KEEP_APIKEY_AUTH !== '1') {
       try {
         const restored = backupText.endsWith('\n') ? backupText : `${backupText}\n`;
-        await writeTextAtomic(authPath, restored);
+        await writeTextAtomic(authPath, restored, { mode: 0o600 });
         await fsp.chmod(authPath, 0o600).catch(() => {});
         return {
           status: 'oauth_restored',
@@ -1360,15 +1467,43 @@ export async function unselectCodexLbProvider(opts: any = {}) {
   const home = opts.home || process.env.HOME || os.homedir();
   const configPath = opts.configPath || codexLbConfigPath(home);
   const current = await readText(configPath, '');
-  if (!current.trim()) return { status: 'not_selected', reason: 'no_config', config_path: configPath };
-  if (!hasTopLevelCodexLbSelected(current)) return { status: 'not_selected', config_path: configPath };
+  if (!current.trim()) return { ok: true, status: 'not_selected', reason: 'no_config', config_path: configPath };
+  const managedCatalogPath = codexLbToolCatalogPath(opts.codexHome || path.join(home, '.codex'));
+  const managedCatalogSelected = topLevelTomlString(current, 'model_catalog_json') === managedCatalogPath;
+  if (!hasTopLevelCodexLbSelected(current) && !managedCatalogSelected) return { ok: true, status: 'not_selected', config_path: configPath };
   try {
-    const next = ensureTrailingNewline(removeTopLevelTomlString(current, 'model_provider'));
+    let next = removeTopLevelTomlString(current, 'model_provider');
+    next = removeTopLevelTomlKeyIfValue(next, 'model_catalog_json', managedCatalogPath);
+    next = ensureTrailingNewline(next);
     const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'codex-lb-unselect');
-    return { status: safeWrite.ok ? 'unselected' : safeWrite.status, config_path: configPath, backup_path: safeWrite.backup_path };
+    const after = safeWrite.ok ? await readText(configPath, '') : current;
+    const selectionRemoved = !hasTopLevelCodexLbSelected(after)
+      && topLevelTomlString(after, 'model_catalog_json') !== managedCatalogPath;
+    if (safeWrite.ok && selectionRemoved) return { ok: true, status: 'unselected', config_path: configPath, backup_path: safeWrite.backup_path };
+    const providerError = safeWrite.ok ? 'provider_selection_remains_after_write' : safeWrite.status || 'provider_config_write_blocked';
+    return {
+      ok: false,
+      status: 'failed',
+      reason: 'provider_config_write_blocked',
+      provider_error: providerError,
+      write_status: safeWrite.status || 'failed',
+      config_path: configPath,
+      backup_path: safeWrite.backup_path,
+      config_preserved: safeWrite.changed !== true
+    };
   } catch (err: any) {
-    return { status: 'failed', reason: 'write_failed', config_path: configPath, error: err.message };
+    return { ok: false, status: 'failed', reason: 'write_failed', provider_error: err.message || 'write_failed', config_path: configPath, error: err.message };
   }
+}
+
+function providerDeselectionOutcome(result: any) {
+  const ok = result?.status === 'unselected' || result?.status === 'not_selected';
+  return {
+    ok,
+    provider_unselected: ok,
+    provider_status: result?.status || 'failed',
+    provider_error: ok ? null : String(result?.provider_error || result?.error || result?.reason || result?.status || 'unselect_failed')
+  };
 }
 
 // Reverse of reconcileCodexLbAuthConflict: restore the ChatGPT OAuth blob from the backup file
@@ -1387,6 +1522,31 @@ export async function releaseCodexLbAuthHold(opts: any = {}) {
   const authPath = opts.authPath || codexAuthPath(home);
   const backupPath = opts.backupPath || codexAuthChatgptBackupPath(home);
   const configPath = opts.configPath || codexLbConfigPath(home);
+  const authExisted = await exists(authPath);
+  const currentAuthText = await readText(authPath, '');
+  const trimmedCurrent = currentAuthText.trim();
+
+  // Repeated "Use ChatGPT OAuth" is idempotent. If OAuth/browser auth is
+  // already active, a historical backup is unnecessary; only ensure that the
+  // codex-lb provider is no longer selected.
+  const currentAuthMode = codexAuthModeSummary(currentAuthText);
+  if (!opts.force && (currentAuthMode.mode === 'chatgpt_oauth' || currentAuthMode.mode === 'browser_marker')) {
+    let provider = { ok: true, provider_unselected: false, provider_status: 'kept', provider_error: null as string | null };
+    if (!opts.keepProvider) {
+      const unselected = await unselectCodexLbProvider({ ...opts, home, configPath });
+      provider = providerDeselectionOutcome(unselected);
+    }
+    return {
+      ok: provider.ok,
+      status: provider.ok ? 'already_chatgpt' : 'failed',
+      ...(provider.ok ? {} : { reason: 'provider_unselect_failed' }),
+      auth_path: authPath,
+      backup_path: backupPath,
+      provider_unselected: provider.provider_unselected,
+      provider_status: provider.provider_status,
+      provider_error: provider.provider_error
+    };
+  }
 
   const backupExists = await exists(backupPath);
   const backupText = backupExists ? await readText(backupPath, '') : '';
@@ -1408,25 +1568,23 @@ export async function releaseCodexLbAuthHold(opts: any = {}) {
     };
   }
 
-  const currentAuthText = await readText(authPath, '');
-  const trimmedCurrent = currentAuthText.trim();
-
   // If auth.json already looks like ChatGPT OAuth (user re-logged in some other way), don't
   // clobber it — but still honor the deselect request so the OAuth blob takes effect.
   if (trimmedCurrent && hasChatgptOAuthTokens(currentAuthText) && !opts.force) {
-    let providerUnselected = false;
-    let providerError = null;
+    let provider = { ok: true, provider_unselected: false, provider_status: 'kept', provider_error: null as string | null };
     if (!opts.keepProvider) {
       const unselected = await unselectCodexLbProvider({ ...opts, home, configPath });
-      if (unselected.status === 'unselected') providerUnselected = true;
-      else if (unselected.status === 'failed') providerError = unselected.error || unselected.reason || 'unselect_failed';
+      provider = providerDeselectionOutcome(unselected);
     }
     return {
-      status: 'already_chatgpt',
+      ok: provider.ok,
+      status: provider.ok ? 'already_chatgpt' : 'failed',
+      ...(provider.ok ? {} : { reason: 'provider_unselect_failed' }),
       auth_path: authPath,
       backup_path: backupPath,
-      provider_unselected: providerUnselected,
-      provider_error: providerError
+      provider_unselected: provider.provider_unselected,
+      provider_status: provider.provider_status,
+      provider_error: provider.provider_error
     };
   }
 
@@ -1449,7 +1607,7 @@ export async function releaseCodexLbAuthHold(opts: any = {}) {
   try {
     await ensureDir(path.dirname(authPath));
     const restored = backupText.endsWith('\n') ? backupText : `${backupText}\n`;
-    await writeTextAtomic(authPath, restored);
+    await writeTextAtomic(authPath, restored, { mode: 0o600 });
     await fsp.chmod(authPath, 0o600).catch(() => {});
   } catch (err: any) {
     return {
@@ -1462,32 +1620,64 @@ export async function releaseCodexLbAuthHold(opts: any = {}) {
     };
   }
 
+  let provider = { ok: true, provider_unselected: false, provider_status: 'kept', provider_error: null as string | null };
+  if (!opts.keepProvider) {
+    const unselected = await unselectCodexLbProvider({ ...opts, home, configPath });
+    provider = providerDeselectionOutcome(unselected);
+  }
+  if (!provider.ok) {
+    const rollback = await rollbackCodexAuthRestore({ authPath, authExisted, currentAuthText });
+    return {
+      ok: false,
+      status: 'failed',
+      reason: 'provider_unselect_failed',
+      auth_path: authPath,
+      backup_path: backupPath,
+      backup_removed: false,
+      auth_restored: rollback.ok !== true,
+      auth_rollback: rollback,
+      rollback_safe: rollback.ok === true,
+      provider_unselected: false,
+      provider_status: provider.provider_status,
+      provider_error: provider.provider_error
+    };
+  }
+
   let backupRemoved = false;
   if (opts.deleteBackup) {
     try {
       await fsp.rm(backupPath, { force: true });
       backupRemoved = true;
     } catch {
-      // Non-fatal: the restore already landed.
+      // Non-fatal: the restore and provider deselection already landed.
     }
   }
 
-  let providerUnselected = false;
-  let providerError = null;
-  if (!opts.keepProvider) {
-    const unselected = await unselectCodexLbProvider({ ...opts, home, configPath });
-    if (unselected.status === 'unselected') providerUnselected = true;
-    else if (unselected.status === 'failed') providerError = unselected.error || unselected.reason || 'unselect_failed';
-  }
-
   return {
+    ok: true,
     status: 'released',
     auth_path: authPath,
     backup_path: backupPath,
     backup_removed: backupRemoved,
-    provider_unselected: providerUnselected,
-    provider_error: providerError
+    auth_restored: true,
+    provider_unselected: provider.provider_unselected,
+    provider_status: provider.provider_status,
+    provider_error: provider.provider_error
   };
+}
+
+async function rollbackCodexAuthRestore(input: { authPath: string; authExisted: boolean; currentAuthText: string }) {
+  try {
+    if (input.authExisted) {
+      await writeTextAtomic(input.authPath, input.currentAuthText, { mode: 0o600 });
+      await fsp.chmod(input.authPath, 0o600).catch(() => {});
+    } else {
+      await fsp.rm(input.authPath, { force: true });
+    }
+    return { ok: true, status: 'restored_previous_auth' };
+  } catch (err: any) {
+    return { ok: false, status: 'rollback_failed', error: err.message };
+  }
 }
 
 export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any = {}) {
@@ -1514,6 +1704,15 @@ export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any
     const codexEnvironment = await syncCodexLbProviderEnvironment(status, opts);
     if (codexEnvironment.status === 'synced') console.log('codex-lb provider auth synced for this user session.');
     const apiKey = parseCodexLbEnvKey(await readText(status.env_path, ''));
+    const toolCatalog = await ensureCodexLbToolCatalogSelection({
+      home: opts.home || process.env.HOME || os.homedir(),
+      configPath: status.config_path,
+      baseUrl: String(status.base_url || ''),
+      apiKey
+    }, opts);
+    if (toolCatalog.required !== false && toolCatalog.ok !== true) {
+      return { status: 'repair_failed', ok: false, codex_lb: status, codex_environment: codexEnvironment, tool_catalog: toolCatalog };
+    }
     const codexLogin = await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir() });
     if (codexLogin.status === 'synced') console.log('codex-lb auth synced with Codex CLI login cache.');
     const chainHealth = await checkCodexLbResponseChain(status, opts);
@@ -1523,7 +1722,7 @@ export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any
       // health probe fails. Keep codex-lb active and just warn.
       if (chainHealth.status === 'previous_response_not_found') {
         console.log('codex-lb response chain check: previous_response_id not persisted by the load balancer (this is normal for stateless deployments). Keeping codex-lb active.');
-        return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
+        return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, tool_catalog: toolCatalog, chain_health: chainHealth };
       }
       // Hard chain failure (auth rejected, timeout, missing base URL, etc.). Don't silently
       // demote a configured codex-lb to ChatGPT OAuth — surface the failure and let the user
@@ -1531,23 +1730,23 @@ export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any
       console.log(`codex-lb response chain check failed (${chainHealth.status}${chainHealth.error ? `: ${chainHealth.error}` : ''}).`);
       if (process.env.SKS_CODEX_LB_AUTOBYPASS === '1') {
         console.log('SKS_CODEX_LB_AUTOBYPASS=1 set; bypassing codex-lb to ChatGPT OAuth for this launch.');
-        return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth, bypass_codex_lb: true };
+        return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, tool_catalog: toolCatalog, chain_health: chainHealth, bypass_codex_lb: true };
       }
       if (canAskYesNo()) {
         const answer = (await askPostinstallQuestion('Use codex-lb anyway, or fall back to ChatGPT OAuth? [LB/oauth] ')).trim().toLowerCase();
         if (/^(oauth|o|chatgpt|fall ?back|n|no|아니|아니요|ㄴ)$/.test(answer)) {
           console.log('Falling back to ChatGPT OAuth for this launch. Re-enable codex-lb anytime with `sks codex-lb repair`.');
-          return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth, bypass_codex_lb: true };
+          return { status: 'chain_unhealthy', ...status, ok: false, codex_environment: codexEnvironment, codex_login: codexLogin, tool_catalog: toolCatalog, chain_health: chainHealth, bypass_codex_lb: true };
         }
         console.log('Keeping codex-lb active. To switch back to ChatGPT OAuth: `sks codex-lb release`.');
-        return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
+        return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, tool_catalog: toolCatalog, chain_health: chainHealth };
       }
       // Non-interactive context with no opt-out env var. The user explicitly configured codex-lb,
       // so default to keeping it active rather than silently swapping providers.
       console.log('Non-interactive launch + chain check failure. Keeping codex-lb active. Set SKS_CODEX_LB_AUTOBYPASS=1 to auto-bypass to ChatGPT OAuth.');
-      return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
+      return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, tool_catalog: toolCatalog, chain_health: chainHealth };
     }
-    return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, chain_health: chainHealth };
+    return { status: 'present', ...status, codex_environment: codexEnvironment, codex_login: codexLogin, tool_catalog: toolCatalog, chain_health: chainHealth };
   }
   if (!canAskYesNo()) return { status: 'non_interactive', codex_lb: status };
   const useCodexLb = (await askPostinstallQuestion('\ncodex-lb is not configured for this Codex App profile. Configure and route Codex through codex-lb now? [y/N] ')).trim();
@@ -1809,359 +2008,6 @@ function appliedCodexLbPersistenceModes(state: any = {}): CodexLbPersistenceMode
   if (!modes.length && state.apiKeySource === 'process.env') modes.push('process_only_ephemeral');
   if (!modes.length) modes.push('none');
   return modes;
-}
-
-export async function ensureGlobalCodexFastModeDuringInstall(opts: any = {}) {
-  if (process.env.SKS_SKIP_CODEX_FAST_MODE_REPAIR === '1') return { status: 'skipped', reason: 'SKS_SKIP_CODEX_FAST_MODE_REPAIR=1' };
-  const home = opts.home || process.env.HOME || os.homedir();
-  const configPath = opts.configPath || codexLbConfigPath(home);
-  try {
-    await ensureDir(path.dirname(configPath));
-    const current = await readText(configPath, '');
-    // Safety gate 1: never blind-overwrite an unparseable user config — that would
-    // entrench corruption on the file Codex actually loads. Back it up and bail.
-    if (current.trim()) {
-      const currentSmoke = codexConfigParseSmoke(current);
-      if (!currentSmoke.ok) {
-        const backupPath = await backupCodexConfig(configPath, current, 'unparseable');
-        return { status: 'unparseable_config_preserved', config_path: configPath, backup_path: backupPath, parse_smoke: currentSmoke };
-      }
-    }
-    const next = normalizeCodexFastModeUiConfig(current, {
-      forceFastMode: opts.forceFastMode === true,
-      forceFastModeOff: opts.forceFastModeOff === true
-    });
-    if (next === ensureTrailingNewline(current)) return { status: 'present', config_path: configPath };
-    const safeWrite = await safeWriteCodexConfigToml(configPath, current, next, 'codex-fast-mode-install', {
-      preserveFastUiKeys: opts.forceFastModeOff !== true
-    });
-    return {
-      status: safeWrite.status === 'written' ? 'updated' : safeWrite.status,
-      config_path: configPath,
-      backup_path: safeWrite.backup_path,
-      parse_smoke: safeWrite.ok ? undefined : safeWrite
-    };
-  } catch (err: any) {
-    return { status: 'failed', config_path: configPath, error: err.message };
-  }
-}
-
-export function normalizeCodexFastModeUiConfig(text: any = '', opts: any = {}) {
-  // Run to a fixed point so a second install is a true no-op (idempotent). The per-pass
-  // table/whitespace normalization converges within one extra pass.
-  return normalizeCodexFastModeUiConfigOnce(normalizeCodexFastModeUiConfigOnce(text, opts), opts);
-}
-
-function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
-  // 2026-07 Codex App renewal (ChatGPT desktop merge): the config schema removed
-  // `default_profile`, `[profiles.<name>]` tables, `[user.fast_mode]`, and
-  // `notice.fast_default_opt_out`. The only documented fast-default mechanism is
-  // the plain top-level `service_tier = "fast"`. This pass strips every legacy
-  // schema stamps SKS wrote and keeps user-authored top-level choices intact.
-  let next = String(text || '');
-  next = removeLegacyTopLevelCodexModeLocks(next);
-  next = removeTopLevelTomlKeyIfValue(next, 'default_profile', 'sks-fast-high');
-  next = removeTomlTable(next, 'user.fast_mode');
-  next = removeTomlTable(next, 'profiles.sks-fast-high');
-  next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
-  // Feature flags SKS wrote in earlier versions that are not in the current
-  // [features] reference (renewal removed/renamed them). They only trigger the
-  // under-development warning now — strip our own stamps.
-  for (const legacyFlag of [
-    'codex_hooks', 'remote_control', 'fast_mode_ui', 'codex_git_commit', 'computer_use',
-    'browser_use', 'browser_use_external', 'image_generation', 'in_app_browser',
-    'guardian_approval', 'tool_suggest', 'plugins'
-  ]) {
-    next = removeTomlTableKey(next, 'features', legacyFlag);
-  }
-  if (opts.forceFastMode === true) {
-    next = upsertTopLevelTomlString(next, 'service_tier', 'fast');
-  } else if (opts.forceFastModeOff === true) {
-    // "off" = remove the tier and let Codex's own default apply. The old code
-    // wrote service_tier = "default", which is not a documented tier value.
-    next = removeTopLevelTomlKey(next, 'service_tier');
-  }
-  // Documented, currently-valid feature flags are SET-IF-ABSENT: a fresh config
-  // gets SKS's defaults, but SKS never re-enables a feature the user disabled.
-  next = upsertTopLevelTomlBooleanIfAbsent(next, 'suppress_unstable_features_warning', true);
-  for (const featureLine of ['hooks = true', 'multi_agent = true', 'fast_mode = true', 'apps = true']) {
-    next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
-  }
-  if (process.env.SKS_ALLOW_HIGH_AGENT_CONCURRENCY !== '1') {
-    next = upsertTomlTableKey(next, 'agents', 'max_threads = 4');
-  }
-  next = removeTomlTable(next, 'features.multi_agent_v2');
-  // Plugin auto-enable is OPT-IN only. Force-writing `[plugins."name@marketplace"] enabled =
-  // true` for marketplace plugins the App may not have installed (different build/channel)
-  // makes the App reference plugins it cannot load -> broken/blocked plugin UI. It also
-  // replaced the user's whole plugin table, reverting any `enabled = false` they set. By
-  // default SKS leaves the user's [plugins] alone; opt in with SKS_MANAGE_CODEX_APP_PLUGINS=1.
-  if (process.env.SKS_MANAGE_CODEX_APP_PLUGINS === '1') {
-    for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS) {
-      const table = `plugins."${name}@${marketplace}"`;
-      if (!hasTomlTable(next, table)) next = upsertTomlTable(next, table, `[${table}]\nenabled = true`);
-    }
-  }
-  return ensureTrailingNewline(next);
-}
-
-function removeTopLevelTomlKey(text: any = '', key: any = '') {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  return lines.filter((line: any, index: any) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function removeTomlTable(text: any, table: any) {
-  const lines = String(text || '').trimEnd().split('\n');
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) return String(text || '');
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const ln = lines[i];
-    if (ln !== undefined && /^\s*\[.+\]\s*$/.test(ln)) { end = i; break; }
-  }
-  return lines.filter((_, index) => index < start || index >= end).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function removeLegacyTopLevelCodexModeLocks(text: any = '') {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  return lines.filter((line: any, index: any) => {
-    if (index >= end) return true;
-    if (!/^\s*(?:model|model_reasoning_effort)\s*=/.test(line)) return true;
-    return ![line, lines[index - 1] || ''].some((candidate) => {
-      const trimmed = String(candidate || '').trim();
-      const comment = trimmed.startsWith('#') ? trimmed : trimmed.includes('#') ? trimmed.slice(trimmed.indexOf('#')) : '';
-      return /(?:SKS|Sneakoscope|codex-lb|sks fast)/i.test(comment);
-    });
-  }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function removeTopLevelTomlKeyIfValue(text: any = '', key: any = '', value: any = '') {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  const keyPattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"${escapeRegExp(value)}"\\s*(?:#.*)?$`);
-  return lines.filter((line: any, index: any) => index >= end || !keyPattern.test(line)).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function removeTomlTableKey(text: any, table: any, key: any) {
-  const lines = String(text || '').trimEnd().split('\n');
-  if (lines.length === 1 && lines[0] === '') return '';
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) return String(text || '');
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (/^\s*\[.+\]\s*$/.test(ln)) {
-      end = i;
-      break;
-    }
-  }
-  const keyPattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*=`);
-  return lines.filter((line: any, index: any) => index <= start || index >= end || !keyPattern.test(line)).join('\n').replace(/\n{3,}/g, '\n\n');
-}
-
-function upsertTomlTableKey(text: any, table: any, line: any) {
-  const key = String(line).split('=')[0]?.trim() ?? '';
-  const lines = String(text || '').trimEnd().split('\n');
-  if (lines.length === 1 && lines[0] === '') lines.length = 0;
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) return [...lines, ...(lines.length ? [''] : []), header, line].join('\n').replace(/\n{3,}/g, '\n\n');
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (/^\s*\[.+\]\s*$/.test(ln)) {
-      end = i;
-      break;
-    }
-  }
-  const keyRe = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  for (let i = start + 1; i < end; i++) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (keyRe.test(ln)) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-    }
-  }
-  if (hasTomlTableKey(lines.join('\n'), table, key)) return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-  lines.splice(end, 0, line);
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-}
-
-// True if [table] already declares `key` (so we never override a user's explicit value).
-function hasTomlTableKey(text: any, table: any, key: any) {
-  const lines = String(text || '').split('\n');
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  if (start === -1) return false;
-  const keyRe = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (/^\s*\[.+\]\s*$/.test(ln)) break;
-    if (keyRe.test(ln)) return true;
-  }
-  return false;
-}
-
-// Set a [table] key only when absent — preserves a Codex App feature the user toggled off
-// (so SKS never re-enables / re-surfaces UI the user hid). On a fresh config the key/table
-// is still created, preserving fresh-install enablement.
-function upsertTomlTableKeyIfAbsent(text: any, table: any, line: any) {
-  const key = String(line).split('=')[0]?.trim() ?? '';
-  return hasTomlTableKey(text, table, key) ? String(text || '') : upsertTomlTableKey(text, table, line);
-}
-
-function upsertTopLevelTomlBooleanIfAbsent(text: any, key: any, value: any) {
-  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlBoolean(text, key, value);
-}
-
-function ensureTrailingNewline(text: any = '') {
-  const value = String(text || '').trimEnd();
-  return value ? `${value}\n` : '';
-}
-
-function upsertTopLevelTomlString(text: any, key: any, value: any) {
-  const line = `${key} = "${value}"`;
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  for (let i = 0; i < end; i++) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(ln)) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-    }
-  }
-  lines.splice(end, 0, line);
-  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function hasTopLevelTomlKey(text: any, key: any) {
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  for (let i = 0; i < end; i += 1) {
-    if (typeof lines[i] === 'string' && pattern.test(lines[i] as string)) return true;
-  }
-  return false;
-}
-
-// Preserve a user's deliberate top-level scalar (model/service_tier/reasoning); only set
-// the SKS default when the key is ABSENT. This is what stops `npm i -g` from clobbering
-// a user's global Codex config on every update.
-function upsertTopLevelTomlStringIfAbsent(text: any, key: any, value: any) {
-  return hasTopLevelTomlKey(text, key) ? String(text || '') : upsertTopLevelTomlString(text, key, value);
-}
-
-// Lightweight safety gate: detect clearly-broken TOML so we never overwrite (or produce)
-// an unparseable config that Codex itself would reject. Mirrors the project-config smoke.
-function codexConfigParseSmoke(text: any = '') {
-  const str = String(text || '');
-  const tripleTokens = (str.match(/"""|'''/g) || []).length;
-  const unterminatedTriple = tripleTokens % 2 !== 0;
-  const invalidHeader = str.split('\n').find((line) => /^\s*\[/.test(line) && !/^\s*\[\[?[^\]]+\]\]?\s*(?:#.*)?$/.test(line)) || null;
-  return { ok: !unterminatedTriple && !invalidHeader, unterminated_multiline_string: unterminatedTriple, invalid_table_header: invalidHeader };
-}
-
-async function backupCodexConfig(configPath: string, text: string, tag: string) {
-  try {
-    const stamp = `${PACKAGE_VERSION}-${Date.now().toString(36)}`;
-    const backupPath = `${configPath}.sks-${tag}-${stamp}.bak`;
-    await writeTextAtomic(backupPath, text);
-    await cleanupCodexConfigBackups(configPath, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined);
-    return backupPath;
-  } catch {
-    return null;
-  }
-}
-
-// Single TOML-safe gate for every codex-lb config write. Mirrors the fast-mode safety so the
-// codex-lb path can NEVER corrupt ~/.codex/config.toml on install (esp. a fresh/initial one):
-//   - refuse to overwrite an existing config that is already unparseable (back it up, bail),
-//   - refuse to WRITE a result that would not parse (e.g. a regex helper mangled a multiline
-//     string), leaving the existing config untouched,
-//   - otherwise back up the prior config before mutating.
-export async function safeWriteCodexConfigToml(configPath: string, current: string, next: string, tag = 'codex-lb', opts: { preserveFastUiKeys?: boolean } = {}) {
-  return writeCodexConfigGuarded({
-    configPath,
-    before: String(current || ''),
-    cause: tag,
-    removeTopLevelModeLocks: true,
-    ...(opts.preserveFastUiKeys === undefined ? {} : { preserveFastUiKeys: opts.preserveFastUiKeys }),
-    mutate: () => String(next || '')
-  });
-}
-
-export function codexFastModeDesktopStatus(text: any = '') {
-  const validation = validateCodexConfigRoundTrip(String(text || ''));
-  // Post-renewal contract: the fast default is the plain top-level
-  // service_tier = "fast". default_profile/[profiles.*]/[user.fast_mode] are
-  // gone from the Codex config schema and are only reported as legacy_keys.
-  const globalOn = validation.ok && validation.service_tier === 'fast';
-  return {
-    schema: 'sks.codex-fast-mode-desktop-status.v2',
-    ok: validation.ok,
-    on: Boolean(globalOn),
-    service_tier: validation.service_tier ?? null,
-    model: validation.model ?? null,
-    legacy_keys: validation.legacy_keys,
-    validation
-  };
-}
-
-function upsertTopLevelTomlBoolean(text: any, key: any, value: any) {
-  const line = `${key} = ${value ? 'true' : 'false'}`;
-  const lines = String(text || '').split('\n');
-  const firstTable = lines.findIndex((x: any) => /^\s*\[.+\]\s*$/.test(x));
-  const end = firstTable === -1 ? lines.length : firstTable;
-  for (let i = 0; i < end; i += 1) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(ln)) {
-      lines[i] = line;
-      return lines.join('\n').replace(/\n{3,}/g, '\n\n');
-    }
-  }
-  lines.splice(end, 0, line);
-  return lines.join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function hasTomlTable(text: any, table: any) {
-  const header = `[${table}]`;
-  return String(text || '').split('\n').some((line) => String(line).trim() === header);
-}
-
-function upsertTomlTable(text: any, table: any, block: any) {
-  let lines = String(text || '').trimEnd().split('\n');
-  if (lines.length === 1 && lines[0] === '') lines = [];
-  const header = `[${table}]`;
-  const start = lines.findIndex((x: any) => x.trim() === header);
-  const blockLines = String(block || '').trim().split('\n');
-  if (start === -1) return [...lines, ...(lines.length ? [''] : []), ...blockLines].join('\n').replace(/\n{3,}/g, '\n\n');
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    const ln = lines[i];
-    if (ln === undefined) continue;
-    if (/^\s*\[.+\]\s*$/.test(ln)) {
-      end = i;
-      break;
-    }
-  }
-  lines.splice(start, end - start, ...blockLines);
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 function shellSingleQuote(value: any) {
@@ -3267,13 +3113,13 @@ export async function selftestCodexLb(tmp: any) {
     }
   );
   if (brokenChain.ok || brokenChain.status !== 'previous_response_not_found' || brokenChain.chain_unhealthy !== true) throw new Error('selftest: codex-lb response chain health check did not detect previous_response_not_found');
-  // 2026-07 renewal contract: only documented [features] flags remain; the flags,
-  // [user.fast_mode], [profiles.sks-fast-high], and notice.fast_default_opt_out SKS
-  // used to write must be STRIPPED by setup. User-authored tables ([profiles.custom])
-  // are preserved untouched even though the schema dropped profile tables.
-  const legacyStamps = ['remote_control = true', 'fast_mode_ui = true', 'codex_git_commit = true', 'computer_use = true', 'browser_use = true', 'browser_use_external = true', 'guardian_approval = true', 'tool_suggest = true', 'plugins = true', '[user.fast_mode]', '[profiles.sks-fast-high]', 'fast_default_opt_out = true'];
+  // 0.144 contract: removed feature stamps and legacy fast profile tables are
+  // stripped, while stable Computer Use/Browser/ImageGen/plugin flags remain.
+  const legacyStamps = ['remote_control = true', 'fast_mode_ui = true', 'codex_git_commit = true', '[user.fast_mode]', '[profiles.sks-fast-high]', 'fast_default_opt_out = true'];
   const survivingLegacy = legacyStamps.filter((stamp) => codexLbConfig.includes(stamp));
-  if (!codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('apps = true') || survivingLegacy.length || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error(`selftest: codex-lb setup did not enforce the renewed feature-flag contract (documented flags present, legacy stamps stripped, user profile tables preserved)${survivingLegacy.length ? ` — surviving legacy stamps: ${survivingLegacy.join(', ')}` : ''}`);
+  const stableCapabilityStamps = ['computer_use = true', 'browser_use = true', 'browser_use_external = true', 'image_generation = true', 'in_app_browser = true', 'guardian_approval = true', 'tool_suggest = true', 'plugins = true'];
+  const missingStableCapabilities = stableCapabilityStamps.filter((stamp) => !codexLbConfig.includes(stamp));
+  if (!codexLbConfig.includes('hooks = true') || hasDeprecatedCodexHooksFeatureFlag(codexLbConfig) || !codexLbConfig.includes('multi_agent = true') || !codexLbConfig.includes('fast_mode = true') || !codexLbConfig.includes('apps = true') || survivingLegacy.length || missingStableCapabilities.length || !/\[profiles\.custom\][\s\S]*?model_reasoning_effort = "low"/.test(codexLbConfig) || hasTopLevelCodexModeLock(codexLbConfig)) throw new Error(`selftest: codex-lb setup did not enforce the current feature-flag contract${survivingLegacy.length ? ` — surviving legacy stamps: ${survivingLegacy.join(', ')}` : ''}${missingStableCapabilities.length ? ` — missing stable capabilities: ${missingStableCapabilities.join(', ')}` : ''}`);
   if (!hasCodexUnstableFeatureWarningSuppression(codexLbConfig)) throw new Error('selftest: codex-lb setup did not suppress Codex unstable feature warning');
   const codexLbLaunch = `source ${path.join(tmp, '.codex', 'sks-codex-lb.env')} && codex`;
   if (!codexLbLaunch.includes('sks-codex-lb.env')) throw new Error('selftest: Zellij launch command does not source codex-lb env file');

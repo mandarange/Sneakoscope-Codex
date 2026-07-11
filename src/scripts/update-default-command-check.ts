@@ -25,8 +25,10 @@ assertGate(
   'sks update --json/--dry-run must be treated as update now with flags'
 );
 assertGate(
-  update.includes('installSksMenuBar') && update.includes('sks_menubar'),
-  'update now must refresh the SKS menu bar companion stage'
+  update.includes("[entrypoint, 'menubar', 'install', '--json']")
+    && update.includes('entrypoint: newBinary')
+    && update.includes('sks_menubar'),
+  'update now must refresh the SKS menu bar through the updated package-local entrypoint'
 );
 assertGate(
   routes.includes('sks update [check|now]'),
@@ -40,7 +42,7 @@ console.log(JSON.stringify({
     'registry_default_now',
     'basic_cli_default_now',
     'flag_first_default_now',
-    'update_menubar_stage',
+    'updated_package_local_menubar_stage',
     'command_catalog_usage'
   ]
 }, null, 2));

@@ -68,7 +68,6 @@ const FULL_ROUTE_STAGES = Object.freeze([
   'ssot_guard',
   'context7_evidence',
   AGENT_INTAKE_STAGE_ID,
-  'native_agent_intake',
   'planning_debate',
   'route_materialization',
   'fresh_executor_team',
@@ -153,7 +152,7 @@ export function buildPipelinePlan(input: any = {}) {
     agent_intake: agentPolicy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
     goal_continuation: ambientGoalContinuation(),
-    next_actions: planNextActions(route, task, ambiguity, lane, agentPolicy),
+    next_actions: planNextActions(route, task, ambiguity, lane, agentPolicy, input.missionId),
     no_unrequested_fallback_code: true
   };
 }
@@ -355,11 +354,11 @@ function planVerification(route: any, proof: any) {
   if (route?.id === 'Team') out.add('sks validate-artifacts latest --json');
   if (reflectionRequiredForRoute(route)) out.add('sks wiki validate .sneakoscope/wiki/context-pack.json');
   out.add('npm run packcheck');
-  out.add('npm run selftest -- --mock');
+  out.add('sks selftest --mock --json');
   return [...out];
 }
 
-function planNextActions(route: any, task: any, ambiguity: any, lane: any, agentPolicy: any = normalizeAgentPolicy(route, task, {})) {
+function planNextActions(route: any, task: any, ambiguity: any, lane: any, agentPolicy: any = normalizeAgentPolicy(route, task, {}), missionId: any = null) {
   if (ambiguity.required && !ambiguity.passed) {
     return [
       `read ${REQUEST_INTAKE_ARTIFACT} and preserve its source-order requirements`,
@@ -369,7 +368,11 @@ function planNextActions(route: any, task: any, ambiguity: any, lane: any, agent
     ];
   }
   const actions = [`read ${REQUEST_INTAKE_ARTIFACT} and use its transformed_prompt`, 'read pipeline-plan.json before work', 'execute kept stages only', 'run listed verification'];
-  if (agentPolicy.required) actions.splice(1, 0, 'run sks agents run latest --json before implementation');
+  if (agentPolicy.required) {
+    const missionArg = String(missionId || '').trim() || '<mission-id>';
+    const routeArg = String(route?.command || route?.id || '$Agent');
+    actions.splice(1, 0, `run sks agent run --mission ${shellQuote(missionArg)} --route ${shellQuote(routeArg)} --agents ${Number(agentPolicy.agent_count || AGENT_COUNT)} --json before implementation`);
+  }
   if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) {
     actions.splice(1, 0, route?.id === 'Naruto'
       ? 'materialize Naruto clone roster, work graph, worker proof, and naruto-gate.json before implementation'
@@ -378,6 +381,10 @@ function planNextActions(route: any, task: any, ambiguity: any, lane: any, agent
   if (looksLikeProblemSolvingRequest(task)) actions.splice(1, 0, 'run Solution Scout web search for similar fixes before editing');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
   return actions;
+}
+
+function shellQuote(value: unknown) {
+  return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
 }
 
 export function promptPipelineContext(prompt: any, route: any = null) {
@@ -412,7 +419,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     skillDreamPolicyText(),
     route?.id === 'PPT'
       ? `${pptPipelineAllowlistPolicyText()} ${getdesignReferencePolicyText()}`
-      : `Design routing: UI/UX uses the Codex App Product Design plugin first for get-context/user-context, research/ideate, prototype/image-to-code/url-to-code, audit/design-qa, and share when available. Treat design.md, design-system-builder, design-ui-editor, design-artifact-expert, and getdesign-reference as compatibility fallback only when the Product Design plugin is unavailable or an existing local design.md must be preserved. Image/logo/raster assets use imagegen, which must prefer Codex App built-in image generation documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} ${getdesignReferencePolicyText()}`,
+      : `Design routing: UI/UX uses the Codex App Product Design plugin first for get-context/user-context, research/ideate, index/image-to-code/url-to-code, audit/design-qa, and share when available. Treat design.md, design-system-builder, design-ui-editor, design-artifact-expert, and getdesign-reference as compatibility fallback only when the Product Design plugin is unavailable or an existing local design.md must be preserved. Image/logo/raster assets use imagegen, which must prefer Codex App built-in image generation documented at ${CODEX_APP_IMAGE_GENERATION_DOC_URL}. ${CODEX_IMAGEGEN_REQUIRED_POLICY} ${getdesignReferencePolicyText()}`,
     triwikiContextTrackingText(),
     triwikiStagePolicyText(),
     stackCurrentDocsPolicyText(),

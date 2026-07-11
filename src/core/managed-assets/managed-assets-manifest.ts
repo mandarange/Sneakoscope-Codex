@@ -1,5 +1,5 @@
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
-export const MANAGED_ASSET_VERSION = '4.8.1'
+export const MANAGED_ASSET_VERSION = '6.1.0'
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 
 export type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual'
@@ -13,8 +13,6 @@ export interface ManagedAgentRole {
   codex_name: string
   description: string
   sandbox: ManagedAgentSandbox
-  permission_profile: string
-  legacy_sandbox_projection: ManagedAgentSandbox
   required_for: string[]
   ownership_marker: string
   schema_version: number
@@ -99,8 +97,6 @@ export function managedAgentRoleContent(role: ManagedAgentRole): string {
     `name = "${role.codex_name}"`,
     `description = "${role.description}"`,
     `sandbox_mode = "${role.sandbox}"`,
-    `permission_profile = "${role.permission_profile}"`,
-    `legacy_sandbox_projection = "${role.legacy_sandbox_projection}"`,
     'developer_instructions = """',
     `You are the SKS ${role.id} role.`,
     role.sandbox === 'read-only' ? 'Do not edit files.' : 'Only edit the bounded files assigned by the parent orchestrator.',
@@ -150,8 +146,6 @@ function role(
     codex_name: codexName,
     description,
     sandbox,
-    permission_profile: sandbox === 'read-only' ? 'sks-readonly' : 'sks-workspace-write',
-    legacy_sandbox_projection: sandbox,
     required_for: ['codex-native-runtime'],
     ownership_marker: MANAGED_ASSET_MARKER,
     schema_version: MANAGED_ASSET_SCHEMA_VERSION

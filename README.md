@@ -19,13 +19,13 @@ sneakoscope is a proof-first Codex trust layer for bounded agent workflows, sear
 [![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
 [![license](https://img.shields.io/badge/license-MIT-blue)](#license)
 
-![SKS live dashboard preview](docs/assets/sneakoscope-architecture-pipeline.jpg)
+![SKS live dashboard preview](https://raw.githubusercontent.com/mandarange/Sneakoscope-Codex/main/docs/assets/sneakoscope-architecture-pipeline.jpg)
 
 </div>
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **6.0.2**. This release lets Codex own the complete model catalog—including current and future GPT-5.6 options—without SKS allowlists or silent model replacement. It also bounds agent, loop, and release concurrency to keep Codex Desktop responsive, preserves explicit user model/provider choices during repair and updates, and adds a clean-build verification path for `npm publish --ignore-scripts`. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **6.1.0**. Normal Codex sessions continue to inherit the complete Codex catalog without silent replacement. Naruto workers now use a scoped, live-catalog-verified GPT-5.6 policy: Terra `xhigh/max` for coding, Sol `max` for refactoring/planning/strategy/integration, and Luna `xhigh/max` for E2E/browser/Computer Use/GUI verification. This release restores the Codex Desktop Fast selector under codex-lb; its `1.5x` multiplier follows the [official Codex Speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed), not an SKS benchmark. It also self-repairs native capability plugins and hardens Voxel TriWiki retention: command help stays read-only, closed routes are not kept active, recent sessions receive a two-hour grace window, mission compaction preserves durable evidence byte-for-byte and deletes only known disposable runtime files, legacy gzip archives are transparently SHA-256-verified when read, full state-budget scans cover the complete top-level state surface, and release-gate history retains five runs by default. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -96,7 +96,7 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - Native capability repair: `sks doctor --fix` (imagegen/Computer Use/Browser Use), `.sneakoscope/reports/native-capability-readiness.json`
 - Agent bridge for any agent system: `sks mcp-server`, `sks agent-bridge setup`, `SKS_AGENT_MODE=1` — see [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)
 - Release gates: `node ./dist/scripts/release-gate-dag-runner.js --preset release --full`
-- Lifecycle-disabled npm release: run `npm run publish:verify-ignore-scripts` first, then `npm publish --ignore-scripts`; the raw publish command intentionally cannot run build or validation hooks.
+- Lifecycle-disabled npm release: run `npm run release:check:full`, then `npm run publish:prep-ignore-scripts`, and verify with `npm publish --dry-run --ignore-scripts --json` before the intentional `npm run publish:ignore-scripts` publication wrapper.
 - Release readiness notes: [docs/release-readiness.md](docs/release-readiness.md) and [CHANGELOG.md](CHANGELOG.md)
 - Image generation review routes require Codex App `$imagegen`/`gpt-image-2` evidence with recorded output hashes; direct API fallback and mock fixtures do not satisfy full route gates.
 
@@ -107,6 +107,8 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - macOS optional: menu bar integration and `/usr/bin/open`
   - The menubar icon shows and hides itself automatically as the Codex desktop app launches/quits; set `quit_with_codex: true` in `~/.codex/sks-menubar/config.json` to have the menubar fully quit with Codex instead of just hiding (default `false`).
   - Native input dialogs (API keys, codex-lb setup) pass secrets to `sks` via `--api-key-stdin` instead of a visible Terminal window or process arguments.
+  - Auth/provider changes wait for the ChatGPT/Codex app to exit and reopen by bundle id; a failed restart is reported as a failed menu action.
+  - Update installs always rebuild the companion with the newly installed SKS package, preventing a previous-version updater from restoring a stale menu binary.
   - The menubar dropdown's `View Last Log` item opens the most recent background action's log file, so you don't need to keep a Terminal window open to see command output.
   - `sks menubar status --json` reports a `codex_sync` object with `bundle_id`, `codex_running`, and `icon_visible_expected` to show Codex-lifecycle detection state.
 - Zellij optional but recommended for terminal worker panes

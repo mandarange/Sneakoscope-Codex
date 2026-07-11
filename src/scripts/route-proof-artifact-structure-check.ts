@@ -68,6 +68,7 @@ async function runNegativeFixture() {
     mission_id: mission,
     status: 'verified',
     route: '$Team',
+    execution_class: 'real',
     summary: { files_changed: 0, commands_run: 0, tests_passed: 0, tests_failed: 0, manual_review_required: false },
     evidence: {
       agents: {

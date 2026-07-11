@@ -2,6 +2,7 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { exists, nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { normalizeAgentSessionRows } from './agent-session-rows.js'
+import { resolveOwnedNamespacePath } from './agent-namespace-safety.js'
 
 export interface AgentJanitorReport {
   schema: 'sks.agent-janitor-report.v1'
@@ -64,7 +65,11 @@ export async function runAgentJanitor(input: {
   const staleZellijSessions = rawStaleZellijSessions.filter((id) => !activeGenerationSet.has(id))
   const skippedActiveGenerations = rawStaleZellijSessions.filter((id) => activeGenerationSet.has(id))
   const orphanGenerationDirs = await detectOrphanGenerationDirs(agentRoot, new Set(generationRows.map((row) => String(row.artifact_dir || ''))))
-  const orphanTempDirs = await scopedExistingPaths(Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs : [], projectHash)
+  const orphanTempDirs = await scopedExistingPaths(
+    Array.isArray(namespace?.orphan_temp_dirs) ? namespace.orphan_temp_dirs : [],
+    projectHash,
+    namespace?.temp_dir ? [namespace.temp_dir] : []
+  )
   const staleLocks = await scopedStaleLockPaths(namespace?.lock_dir ? [namespace.lock_dir] : [], projectHash, staleMs)
   const cleaned: string[] = []
   if (input.cleanup) {
@@ -127,12 +132,11 @@ export async function writeAgentJanitorReport(missionDir: string, report: AgentJ
   await writeJsonAtomic(path.join(missionDir, 'agents', 'agent-janitor-report.json'), report)
 }
 
-async function scopedExistingPaths(paths: string[], projectHash: string | null): Promise<string[]> {
+async function scopedExistingPaths(paths: string[], projectHash: string | null, anchors: string[] = []): Promise<string[]> {
   const out: string[] = []
   for (const candidate of paths) {
-    if (!candidate) continue
-    if (projectHash && !candidate.includes(projectHash)) continue
-    if (await exists(candidate)) out.push(candidate)
+    const owned = await resolveOwnedNamespacePath(candidate, String(projectHash || ''), anchors)
+    if (owned) out.push(owned)
   }
   return out
 }
@@ -141,8 +145,9 @@ async function scopedStaleLockPaths(paths: string[], projectHash: string | null,
   const out: string[] = []
   const now = Date.now()
   for (const dir of paths) {
-    if (!dir || (projectHash && !dir.includes(projectHash)) || !(await exists(dir))) continue
-    for (const file of await listFiles(dir)) {
+    const ownedDir = await resolveOwnedNamespacePath(dir, String(projectHash || ''))
+    if (!ownedDir) continue
+    for (const file of await listFiles(ownedDir)) {
       const stat = await fsp.stat(file).catch(() => null)
       if (stat && now - stat.mtimeMs > staleMs) out.push(file)
     }

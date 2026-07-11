@@ -30,7 +30,8 @@ test('codex-lb setup plan classifies durable and process-only persistence', () =
   }, { home: '/tmp/sks-home' });
   assert.ok(durable.selected_persistence_modes.includes('durable_env_file'));
   assert.ok(durable.selected_persistence_modes.includes('durable_keychain'));
-  assert.ok(durable.selected_persistence_modes.includes('durable_launchctl'));
+  assert.equal(durable.selected_persistence_modes.includes('durable_launchctl'), false);
+  assert.ok(durable.actions.some((action) => action.type === 'sync_launchctl'));
   assert.ok(durable.selected_persistence_modes.includes('shell_profile'));
   assert.equal(durable.persistence.durable, true);
 });

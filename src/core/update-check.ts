@@ -13,7 +13,7 @@ import {
   type UpdateMigrationReceipt,
   writeProjectUpdateMigrationReceipt
 } from './update/update-migration-state.js';
-import { installSksMenuBar, type SksMenuBarInstallResult } from './codex-app/sks-menubar.js';
+import { installSksMenuBar, sksMenuBarPaths, type SksMenuBarInstallResult } from './codex-app/sks-menubar.js';
 import { reconcileSkills } from './init/skills.js';
 import { codexHookTrustDoctor } from './codex-hooks/codex-hook-trust-doctor.js';
 import { readCodexHookActualState } from './codex-hooks/codex-hook-actual-discovery.js';
@@ -83,7 +83,7 @@ export interface SksUpdateNowStage {
 }
 
 export interface SksUpdateVerification {
-  id: 'version_match' | 'hooks_trusted' | 'dist_stamp' | 'skills_manifest';
+  id: 'version_match' | 'hooks_trusted' | 'dist_stamp' | 'skills_manifest' | 'sks_menubar_version';
   ok: boolean;
   detail?: string;
   remediation?: string;
@@ -132,7 +132,7 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
   if (options.maxOutputBytes !== undefined) effectiveOptions.maxOutputBytes = options.maxOutputBytes;
   const override = env[versionOverrideEnvName(packageName)];
   const effectivePromise = detectEffectiveSksVersion(effectiveOptions);
-  const latestCache = !override ? await readUpdateLatestCache(packageName, registry).catch(() => null) : null;
+  const latestCache = !override ? await readUpdateLatestCache(packageName, registry, env).catch(() => null) : null;
   const latestPromise = !override && npmBin
     ? runProcess(npmBin, ['view', packageName, 'version', '--silent', '--registry', registry], {
       env,
@@ -195,7 +195,7 @@ export async function runSksUpdateCheck(options: SksUpdateCheckOptions = {}): Pr
     });
   }
   const latest = String(result.stdout || '').trim().split(/\s+/).pop() || null;
-  if (latest) await writeUpdateLatestCache(packageName, registry, latest).catch(() => undefined);
+  if (latest) await writeUpdateLatestCache(packageName, registry, latest, env).catch(() => undefined);
   return buildResult({
     packageName,
     current,
@@ -211,7 +211,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   const registry = options.registry || DEFAULT_REGISTRY;
   const env = options.env || process.env;
   const npmBin = options.npmBin === undefined ? await which('npm') : options.npmBin;
-  const cwd = os.homedir();
+  const cwd = env.HOME || os.homedir();
   const check = await runSksUpdateCheck({
     ...options,
     packageName,
@@ -329,7 +329,7 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
     const sksMenuBar = migrationCurrent
       ? await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput })
       : null;
-    await runUpdateGlobalSkillsReconcile(stage, { quiet: machineOutput });
+    await runUpdateGlobalSkillsReconcile(stage, { quiet: machineOutput, env });
     return buildUpdateNowResult({
       packageName,
       from: check.current,
@@ -442,9 +442,9 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       stage('new_version_probe', Boolean(newVersion), newVersion ? 'version_detected' : 'failed', { new_version: newVersion, code: versionProbe.code });
       stageStart('new_version_global_doctor', 'running migration doctor on updated install');
       newVersionDoctor = await updateHeartbeat(machineOutput, 'new-version doctor', runPackageLocalDoctor({
-        root: globalSksRootPath(),
+        root: globalSksRootPath(env),
         entrypoint: newBinary,
-        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(), 'update', 'new-version-doctor.json')],
+        args: ['doctor', '--fix', '--yes', '--profile', 'migration', '--machine-only', '--report-file', path.join(globalSksRootPath(env), 'update', 'new-version-doctor.json')],
         env,
         timeoutMs: updateDoctorTimeoutMs(env),
         maxOutputBytes: 32 * 1024
@@ -471,13 +471,15 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
       }).catch(() => null);
       migrationCurrent = isUpdateMigrationReceiptCurrent(projectReceipt);
       stage('project_receipt', migrationCurrent, migrationCurrent ? 'current' : 'failed', { root: projectReceiptRoot });
-      if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput });
+      if (migrationCurrent) sksMenuBar = await installUpdateSksMenuBar({ root: projectReceiptRoot, env, stage, quiet: machineOutput, entrypoint: newBinary });
       await runUpdateGlobalSkillsReconcile(stage, {
         quiet: machineOutput,
+        env,
         newPackageRoot: newBinary ? path.resolve(path.dirname(newBinary), '..', '..') : null
       });
       await runUpdateNativeCapabilitySetup(stage, {
         quiet: machineOutput,
+        env,
         newPackageRoot: newBinary ? path.resolve(path.dirname(newBinary), '..', '..') : null,
         root: projectReceiptRoot
       });
@@ -521,8 +523,8 @@ export async function runSksUpdateNow(options: SksUpdateNowOptions = {}): Promis
   });
 }
 
-async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void, opts: { quiet?: boolean; newPackageRoot?: string | null } = {}) {
-  const targetDir = path.join(os.homedir(), '.agents', 'skills');
+async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void, opts: { quiet?: boolean; newPackageRoot?: string | null; env?: NodeJS.ProcessEnv } = {}) {
+  const targetDir = path.join(opts.env?.HOME || os.homedir(), '.agents', 'skills');
   // reconcileSkills stamps ~/.agents/skills/.sks-generated.json with the
   // PACKAGE_VERSION compiled into whichever module runs it. This function
   // executes inside the OLD (driver) binary, so after a real version install
@@ -538,6 +540,7 @@ async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, s
       'if (r && (r.ok === false || r.error)) process.exit(1);'
     ].join('\n');
     const work = runProcess(process.execPath, ['--input-type=module', '-e', script], {
+      env: opts.env || process.env,
       timeoutMs: 120_000,
       maxOutputBytes: 1024 * 1024
     }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
@@ -574,7 +577,7 @@ async function runUpdateGlobalSkillsReconcile(stage: (id: string, ok: boolean, s
 
 async function runUpdateNativeCapabilitySetup(
   stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void,
-  opts: { quiet?: boolean; newPackageRoot?: string | null; root: string }
+  opts: { quiet?: boolean; newPackageRoot?: string | null; root: string; env?: NodeJS.ProcessEnv }
 ) {
   if (!opts.newPackageRoot) {
     stage('native_capability_setup', true, 'skipped', { reason: 'new_package_root_unresolved' });
@@ -594,6 +597,7 @@ async function runUpdateNativeCapabilitySetup(
     'console.log(JSON.stringify({ imagegen, computer_use: computerUse, browser_use: browserUse }));'
   ].join('\n');
   const work = runProcess(process.execPath, ['--input-type=module', '-e', script], {
+    env: opts.env || process.env,
     timeoutMs: 180_000,
     maxOutputBytes: 1024 * 1024
   }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
@@ -764,8 +768,8 @@ function buildResult(input: {
   };
 }
 
-async function readUpdateLatestCache(packageName: string, registry: string): Promise<{ latest: string | null } | null> {
-  const file = updateLatestCachePath(packageName, registry);
+async function readUpdateLatestCache(packageName: string, registry: string, env: NodeJS.ProcessEnv): Promise<{ latest: string | null } | null> {
+  const file = updateLatestCachePath(packageName, registry, env);
   const text = await fs.readFile(file, 'utf8');
   const parsed = JSON.parse(text);
   if (parsed?.package !== packageName || parsed?.registry !== registry || !parsed?.latest || !parsed?.generated_at) return null;
@@ -774,8 +778,8 @@ async function readUpdateLatestCache(packageName: string, registry: string): Pro
   return { latest: String(parsed.latest) };
 }
 
-async function writeUpdateLatestCache(packageName: string, registry: string, latest: string): Promise<void> {
-  const file = updateLatestCachePath(packageName, registry);
+async function writeUpdateLatestCache(packageName: string, registry: string, latest: string, env: NodeJS.ProcessEnv): Promise<void> {
+  const file = updateLatestCachePath(packageName, registry, env);
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, `${JSON.stringify({
     schema: 'sks.update-check-cache.v1',
@@ -786,9 +790,11 @@ async function writeUpdateLatestCache(packageName: string, registry: string, lat
   }, null, 2)}\n`, 'utf8');
 }
 
-function updateLatestCachePath(packageName: string, registry: string): string {
+function updateLatestCachePath(packageName: string, registry: string, env: NodeJS.ProcessEnv): string {
   const safe = `${packageName}-${registry}`.replace(/[^a-z0-9._-]+/gi, '_').slice(0, 120);
-  return path.join(os.tmpdir(), 'sks-update-check-cache', `${safe}.json`);
+  const configuredRoot = String(env.SKS_UPDATE_CHECK_CACHE_ROOT || '').trim();
+  const cacheRoot = configuredRoot ? path.resolve(configuredRoot) : path.join(os.tmpdir(), 'sks-update-check-cache');
+  return path.join(cacheRoot, `${safe}.json`);
 }
 
 function buildUpdateNowResult(input: {
@@ -846,23 +852,26 @@ function buildUpdateNowResult(input: {
   };
 }
 
-async function installUpdateSksMenuBar(input: {
+export async function installUpdateSksMenuBar(input: {
   root: string;
   env: NodeJS.ProcessEnv;
   stage: (id: string, ok: boolean, status: string, detail?: Record<string, unknown>) => void;
   quiet?: boolean;
+  entrypoint?: string | null;
 }): Promise<SksMenuBarInstallResult | null> {
   if (input.env.SKS_UPDATE_SKIP_SKS_MENUBAR === '1') {
     input.stage('sks_menubar', true, 'skipped', { reason: 'SKS_UPDATE_SKIP_SKS_MENUBAR=1' });
     return null;
   }
-  const work = installSksMenuBar({
-    root: input.root,
-    apply: true,
-    launch: true,
-    env: input.env,
-    quiet: input.quiet === true
-  }).catch((err: any) => ({
+  const work = (input.entrypoint
+    ? installSksMenuBarFromEntrypoint(input.entrypoint, input)
+    : installSksMenuBar({
+        root: input.root,
+        apply: true,
+        launch: true,
+        env: input.env,
+        quiet: input.quiet === true
+      })).catch((err: any) => ({
     schema: 'sks.codex-app-sks-menubar.v1',
     ok: false,
     apply: true,
@@ -896,6 +905,33 @@ async function installUpdateSksMenuBar(input: {
   return result;
 }
 
+async function installSksMenuBarFromEntrypoint(
+  entrypoint: string,
+  input: { root: string; env: NodeJS.ProcessEnv; quiet?: boolean }
+): Promise<SksMenuBarInstallResult> {
+  const run = await runProcess(process.execPath, [entrypoint, 'menubar', 'install', '--json'], {
+    cwd: input.root,
+    env: {
+      ...input.env,
+      SKS_DISABLE_UPDATE_CHECK: '1',
+      SKS_UPDATE_MIGRATION_GATE_DISABLED: '1'
+    },
+    timeoutMs: updateDoctorTimeoutMs(input.env),
+    maxOutputBytes: 128 * 1024
+  });
+  const output = String(run.stdout || '').trim();
+  let parsed: SksMenuBarInstallResult | null = null;
+  try {
+    parsed = JSON.parse(output) as SksMenuBarInstallResult;
+  } catch {
+    parsed = null;
+  }
+  if (run.code !== 0 || parsed?.schema !== 'sks.codex-app-sks-menubar.v1') {
+    throw new Error(String(run.stderr || output || `updated SKS menu bar installer exited ${run.code}`).trim());
+  }
+  return parsed;
+}
+
 async function detectNpmGlobalRoot(npmBin: string, env: NodeJS.ProcessEnv, opts: SksUpdateCheckOptions = {}): Promise<string | null> {
   const result = await runProcess(npmBin, ['root', '--global', '--silent'], {
     env,
@@ -914,8 +950,9 @@ function parseVersionText(text: string): string | null {
   return match ? match[0] : null;
 }
 
-function globalSksRootPath(): string {
-  return path.join(process.env.HOME || os.homedir(), '.sneakoscope-global');
+function globalSksRootPath(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.SKS_GLOBAL_ROOT) return path.resolve(env.SKS_GLOBAL_ROOT);
+  return path.join(env.HOME || os.homedir(), '.sneakoscope-global');
 }
 
 function updateDoctorTimeoutMs(env: NodeJS.ProcessEnv): number {
@@ -977,6 +1014,16 @@ async function runFinalUpdateVerification(input: {
     detail: `expected ${input.installVersion}, got ${skillsManifest?.version || 'missing'}`,
     remediation: 'Run: sks doctor --fix --yes'
   });
+  if (process.platform === 'darwin' && input.env.SKS_UPDATE_SKIP_SKS_MENUBAR !== '1') {
+    const menuStampPath = sksMenuBarPaths(home, input.projectReceiptRoot).build_stamp_path;
+    const menuStamp = await readJson<any>(menuStampPath, null).catch(() => null);
+    verification.push({
+      id: 'sks_menubar_version',
+      ok: menuStamp?.package_version === input.installVersion,
+      detail: `expected ${input.installVersion}, got ${menuStamp?.package_version || 'missing'}`,
+      remediation: `Run: ${process.execPath} ${input.newBinary} menubar install --json`
+    });
+  }
   return verification;
 }
 

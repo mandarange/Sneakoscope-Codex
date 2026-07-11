@@ -24,10 +24,11 @@ export async function memoryCommand(sub: any, args: any = []) {
 }
 
 export async function gcCommand(args: any = []) {
-  const root = await sksRoot();
   const action = String(args[0] || '').toLowerCase();
+  if (action === 'help' || args.includes('--help') || args.includes('-h')) return gcHelp(flag(args, '--json'));
+  const root = await sksRoot();
   if (action === 'plan') {
-    const res = await enforceRetention(root, { dryRun: true, pruneReportLogs: true, policy: { max_tmp_age_hours: 0 } });
+    const res = await enforceRetention(root, { dryRun: true, pruneReportLogs: true });
     if (flag(args, '--json')) return console.log(JSON.stringify(res.plan, null, 2));
     console.log('ㅅㅋㅅ GC plan');
     console.log(`Plan hash: ${res.plan.plan_hash}`);
@@ -44,7 +45,6 @@ export async function gcCommand(args: any = []) {
     }
     const res = await applyRetentionPlan(root, {
       pruneReportLogs: true,
-      policy: { max_tmp_age_hours: 0 },
       planHash: readOption(args, '--plan-hash', null)
     });
     if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
@@ -63,13 +63,35 @@ export async function gcCommand(args: any = []) {
     console.log(`Latest plan: ${res.latest_plan?.plan_hash || 'none'}`);
     return res;
   }
-  const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run'), pruneReportLogs: true, policy: { max_tmp_age_hours: 0 } });
+  const res = await enforceRetention(root, { dryRun: flag(args, '--dry-run'), pruneReportLogs: true });
   if (flag(args, '--json')) return console.log(JSON.stringify(res, null, 2));
   console.log(flag(args, '--dry-run') ? 'ㅅㅋㅅ GC dry run' : 'ㅅㅋㅅ GC completed');
   console.log(`Storage: ${res.report.total_human || '0 B'}`);
   console.log(`Actions: ${res.actions.length}`);
   console.log(`Protected: ${res.cleanup.protected_durable_context.length} durable context classes`);
   for (const a of res.actions.slice(0, 20)) console.log(`- ${a.action} ${a.path || a.mission || ''} ${a.bytes ? formatBytes(a.bytes) : ''}`);
+}
+
+function gcHelp(json = false) {
+  const help = {
+    schema: 'sks.gc-help.v1',
+    ok: true,
+    usage: 'sks gc [plan|apply|status] [--dry-run] [--json]',
+    commands: {
+      plan: 'Create a hashed dry-run plan using the configured retention policy.',
+      apply: 'Apply a reviewed plan with --yes and optional --plan-hash.',
+      status: 'Show the latest mission index, plan, cleanup, and storage status.'
+    }
+  };
+  if (json) console.log(JSON.stringify(help, null, 2));
+  else {
+    console.log(`Usage: ${help.usage}`);
+    console.log('  sks gc --dry-run');
+    console.log('  sks gc plan [--json]');
+    console.log('  sks gc apply --yes [--plan-hash <hash>] [--json]');
+    console.log('  sks gc status [--json]');
+  }
+  return help;
 }
 
 function readOption(args: any[] = [], name: string, fallback: unknown = null) {

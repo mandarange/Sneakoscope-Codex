@@ -45,13 +45,18 @@ export function codePackPrevPath(root: string): string {
 }
 
 export function buildCodePack(root: string, index: CodeIndex, tokenBudget: number = DEFAULT_CODE_PACK_TOKEN_BUDGET): CodePack {
+  const normalizedBudget = Number.isFinite(tokenBudget) && tokenBudget >= 0
+    ? Math.floor(tokenBudget)
+    : DEFAULT_CODE_PACK_TOKEN_BUDGET;
   const entries: CodePackEntry[] = [];
+  let totalTokenCost = 0;
   for (const card of index.modules) {
     const entry = buildEntryForModule(card);
     if (!entry) continue;
+    if (totalTokenCost + entry.token_cost > normalizedBudget) continue;
     entries.push(entry);
+    totalTokenCost += entry.token_cost;
   }
-  const totalTokenCost = entries.reduce((sum, entry) => sum + entry.token_cost, 0);
   return {
     schema: CODE_PACK_SCHEMA,
     generated_at: nowIso(),
@@ -59,7 +64,7 @@ export function buildCodePack(root: string, index: CodeIndex, tokenBudget: numbe
     source_file_count: index.scanned_file_count,
     index_digest: computeIndexDigest(index),
     entries,
-    token_budget: tokenBudget,
+    token_budget: normalizedBudget,
     total_token_cost: totalTokenCost
   };
 }

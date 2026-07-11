@@ -35,9 +35,9 @@ test('GLM MAD launch profile escalates reasoning only for explicit profiles', ()
 });
 
 test('GLM MAD slash model selector keeps the model lock strict', () => {
-  const blocked = buildMadGlmLaunchProfileNoWrite(['/model', 'gpt-5.5', 'high']);
+  const blocked = buildMadGlmLaunchProfileNoWrite(['/model', 'gpt-5.6-terra', 'high']);
   assert.equal(blocked.glm_profile, 'deep');
-  assert.deepEqual(blocked.blockers, ['glm_slash_model_mismatch:gpt-5.5']);
+  assert.deepEqual(blocked.blockers, ['glm_slash_model_mismatch:gpt-5.6-terra']);
   assert.deepEqual(blocked.launch_args.filter((arg) => arg.includes('model=')
     || arg.startsWith('model_reasoning_effort=')), [
     'model_reasoning_effort=high',

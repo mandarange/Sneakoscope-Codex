@@ -61,12 +61,12 @@ async function readCodexCliMetadata(model: string): Promise<CodexModelMetadata |
 }
 
 function normalizePayload(payload: any, fallbackModel: string, source: 'app-server' | 'codex-cli'): CodexModelMetadata {
-  const catalog = Array.isArray(payload?.models) ? payload.models : null
+  const catalog = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : null
   const reportedSelection = String(payload?.selected_model || payload?.current_model || payload?.active_model || '').trim()
   const requestedModel = String(fallbackModel || reportedSelection).trim()
   const row = catalog
     ? requestedModel
-      ? catalog.find((candidate: any) => String(candidate?.id || candidate?.model || candidate?.name || '') === requestedModel) || null
+      ? catalog.find((candidate: any) => String(candidate?.id || candidate?.model || candidate?.slug || candidate?.name || '') === requestedModel) || null
       : null
     : payload?.model_metadata || payload?.metadata || payload
   if (!row) {
@@ -78,8 +78,12 @@ function normalizePayload(payload: any, fallbackModel: string, source: 'app-serv
       [requestedModel ? 'codex_model_not_found_in_advertised_catalog' : 'codex_model_selection_unknown']
     )
   }
-  const efforts = normalizeAdvertisedEfforts(row?.advertised_efforts || row?.advertisedEfforts || row?.reasoning_efforts || row?.reasoningEfforts || payload?.advertised_efforts)
-  return metadata(String(row?.model || row?.id || row?.name || requestedModel), efforts, row?.default_effort || row?.defaultEffort || payload?.default_effort || 'medium', source, efforts.length ? [] : ['codex_model_metadata_efforts_missing'])
+  const effortRows = row?.supportedReasoningEfforts || row?.supported_reasoning_levels || row?.supported_reasoning_efforts || []
+  const structuredEfforts = Array.isArray(effortRows)
+    ? effortRows.map((entry: any) => entry?.reasoningEffort || entry?.effort || entry)
+    : []
+  const efforts = normalizeAdvertisedEfforts(structuredEfforts.length ? structuredEfforts : row?.advertised_efforts || row?.advertisedEfforts || row?.reasoning_efforts || row?.reasoningEfforts || payload?.advertised_efforts)
+  return metadata(String(row?.model || row?.id || row?.slug || row?.name || requestedModel), efforts, row?.default_reasoning_level || row?.defaultReasoningLevel || row?.default_effort || row?.defaultEffort || payload?.default_effort || 'medium', source, efforts.length ? [] : ['codex_model_metadata_efforts_missing'])
 }
 
 function metadata(model: string, efforts: string[], defaultEffort: string, source: CodexModelMetadata['source'], blockers: string[]): CodexModelMetadata {

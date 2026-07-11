@@ -32,6 +32,11 @@ export async function loadHookPayload() {
 export function normalizeHookResult(name: any, result: any = {}) {
   const eventName = codexHookEventName(name);
   const out = { ...result };
+  // Project and legacy user-level SKS hooks can briefly coexist during an
+  // upgrade. The runtime owner performs the work once; duplicate invocations
+  // must be silent so Codex does not inject the same route or Stop feedback
+  // twice into one turn.
+  if (out.suppressedDuplicate === true) return { continue: true };
   const systemMessage = out.systemMessage || visibleHookMessage(name, out.reason || out.additionalContext || '');
   const reason = out.reason || 'SKS guard denied this action.';
 

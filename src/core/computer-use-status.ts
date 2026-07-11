@@ -5,10 +5,13 @@ import {
   writeComputerUseLiveEvidence
 } from './computer-use-live-evidence.js';
 export type {
+  ComputerUseCaptureAttestation,
   ComputerUseCaptureStatus,
   ComputerUseEvidenceMode,
-  ComputerUseLiveEvidence
+  ComputerUseLiveEvidence,
+  ComputerUseScreenshotCaptureAdapter
 } from './computer-use-live-evidence.js';
+export { createOfficialCodexComputerUseScreenshotAdapter } from './computer-use-live-evidence.js';
 
 export type ComputerUseStatus =
   | 'available'
@@ -96,7 +99,8 @@ export async function computerUseLiveSmoke(opts: any = {}) {
     : null;
   if (liveEvidence && evidencePath) await writeComputerUseLiveEvidence(evidencePath, liveEvidence);
   const evidenceMode = liveEvidence?.mode || 'probe_only';
-  const liveCaptureSuccess = evidenceMode === 'live_capture_success';
+  const adapterAttested = liveEvidence?.capture?.screenshot?.adapter_provenance?.verified === true;
+  const liveCaptureSuccess = evidenceMode === 'live_capture_success' && adapterAttested;
   const blockers = [...(liveEvidence?.blockers || [])];
   if (!realOptIn && status.status === 'not_macos') blockers.push('not_macos');
   const warnings = [...(liveEvidence?.warnings || [])];
@@ -121,7 +125,8 @@ export async function computerUseLiveSmoke(opts: any = {}) {
     blockers,
     warnings,
     evidence: {
-      screenshot_captured: liveEvidence?.capture?.screenshot?.status === 'captured',
+      screenshot_captured: liveEvidence?.capture?.screenshot?.status === 'captured' && adapterAttested,
+      official_adapter_attested: adapterAttested,
       action_captured: liveEvidence?.capture?.action?.status === 'captured',
       image_voxel_linked: liveEvidence?.image_voxel?.linked === true,
       evidence_path: liveEvidence && evidencePath ? evidencePath : null

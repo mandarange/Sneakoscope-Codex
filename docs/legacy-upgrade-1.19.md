@@ -1,7 +1,7 @@
 # Legacy upgrade: 1.18.x → 1.19.1
 
 SKS 1.19.1 guarantees that upgrading from any 1.18.x install never breaks an
-existing user Codex configuration. The `legacy:upgrade-zero-break` gate
+existing user Codex configuration. The canonical `migration:upgrade-safety` gate
 (`scripts/legacy-upgrade-matrix-check.mjs`) proves each guarantee below against a
 matrix of legacy config states, using throwaway temp dirs — it never touches the
 real `~/.codex`.
@@ -38,7 +38,7 @@ real `~/.codex`.
    reports `removed_runtime` → `zellij` and exits with code 2. Install Zellij
    with `brew install zellij` (macOS); SKS never auto-installs it.
 
-6. **Gate: `legacy:upgrade-zero-break`.** The gate emits a passing result and
+6. **Gate: `migration:upgrade-safety`.** The gate emits a passing result and
    writes a summary to `.sneakoscope/reports/legacy-upgrade-matrix.json` only
    when every legacy state below holds.
 

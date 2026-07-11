@@ -25,6 +25,7 @@ import { isUpdateMigrationReceiptCurrent, projectUpdateMigrationReceiptPath, wri
 import { inspectSksMenuBarStatus, installSksMenuBar } from '../core/codex-app/sks-menubar.js';
 import { sweepSksTempDirs } from '../core/retention.js';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
+import { CURRENT_CODEX_RELEASE_MANIFEST } from '../core/codex-compat/codex-release-manifest.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
@@ -775,30 +776,48 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     : null;
   const shouldProbeNativeCapabilityRepairs = doctorFix || deepDiagnostics || nativeCapabilityDiagnosticsRequested;
   const imagegen = await detectImagegenCapability({ codexBin: codexBin || undefined }).catch((err: any) => ({ ok: false, error: err.message, auth_readiness: null, core_ready: false, blockers: ['imagegen_detection_exception'] }));
-  const imagegenRepair = (imagegen as any).core_ready === true
-    ? {
-        schema: 'sks.doctor-imagegen-repair.v1',
-        ok: true,
-        attempted: false,
-        apply: doctorFix,
-        recovered: true,
-        before: imagegen,
-        after: imagegen,
-        steps: [],
-        blockers: [],
-        manual_actions: [],
-        communication_test: { level: 'flag_level', ok: true, checked: 'codex features list --json (feature-flag/plugin metadata only)', real_generation_round_trip_performed: false, blocker: null }
-      }
-    : shouldProbeNativeCapabilityRepairs
-      ? await (await import('../core/doctor/imagegen-repair.js')).repairCodexImagegen({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
+  const imagegenRepair = shouldProbeNativeCapabilityRepairs
+    ? await (await import('../core/doctor/imagegen-repair.js')).repairCodexImagegen({ root, apply: doctorFix, codexBin: codexBin || null }).catch((err: any) => ({
         schema: 'sks.doctor-imagegen-repair.v1',
         ok: false,
         attempted: true,
         apply: doctorFix,
         recovered: false,
+        capability_ready: false,
+        route_ready: false,
+        real_generation_verified: false,
         blockers: [err?.message || String(err)],
         manual_actions: ['Run `sks doctor --fix --json` after enabling Codex App image_generation.']
       }))
+    : (imagegen as any).core_ready === true
+      ? {
+          schema: 'sks.doctor-imagegen-repair.v1',
+          ok: false,
+          attempted: false,
+          apply: doctorFix,
+          recovered: false,
+          capability_ready: true,
+          configuration_ready: true,
+          route_ready: false,
+          real_generation_verified: false,
+          current_task_tool_manifest_verified: false,
+          requires_new_task: true,
+          before: imagegen,
+          after: imagegen,
+          steps: [],
+          blockers: ['codex_imagegen_current_task_tool_manifest_unverified', 'codex_imagegen_real_output_unverified'],
+          manual_actions: [
+            'Start a fresh Codex/Work task so $imagegen is present in its tool manifest.',
+            'Invoke $imagegen with gpt-image-2 and bind the selected raster output path to route evidence.'
+          ],
+          communication_test: {
+            level: 'flag_level',
+            ok: false,
+            checked: 'codex features list (feature-flag/plugin metadata only)',
+            real_generation_round_trip_performed: false,
+            blocker: 'codex_imagegen_real_output_unverified'
+          }
+        }
       : deferredNativeRepair('sks.doctor-imagegen-repair.v1', doctorFix, [
         'Run `sks doctor --fix --repair-native-capabilities --json` after enabling Codex App image_generation.'
       ]);
@@ -845,12 +864,23 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     : null;
   const nativeCapabilityReadinessStatus = (repair: any) => repair?.skipped === true
     ? (repair.status || 'deferred')
-    : (repair?.recovered === true || repair?.ok === true ? 'ok' : repair?.attempted ? 'blocked' : 'not-needed');
+    : repair?.route_ready === true
+      ? 'ok'
+      : repair?.capability_ready === true
+        ? 'available-unverified'
+        : (repair?.recovered === true || repair?.ok === true ? 'ok' : repair?.attempted ? 'blocked' : 'not-needed');
   const nativeCapabilityReadiness = {
     schema: 'sks.native-capability-readiness.v1',
     generated_at: nowIso(),
     apply: doctorFix,
-    imagegen: { status: nativeCapabilityReadinessStatus(imagegenRepair), communication_test: (imagegenRepair as any)?.communication_test || null, blockers: (imagegenRepair as any)?.blockers || [] },
+    imagegen: {
+      status: nativeCapabilityReadinessStatus(imagegenRepair),
+      capability_ready: (imagegenRepair as any)?.capability_ready === true,
+      route_ready: (imagegenRepair as any)?.route_ready === true,
+      generated_output_verified: (imagegenRepair as any)?.real_generation_verified === true,
+      communication_test: (imagegenRepair as any)?.communication_test || null,
+      blockers: (imagegenRepair as any)?.blockers || []
+    },
     computer_use: { status: nativeCapabilityReadinessStatus(computerUseRepair), blockers: (computerUseRepair as any)?.blockers || [], next_actions: (computerUseRepair as any)?.next_actions || [] },
     browser_use: { status: nativeCapabilityReadinessStatus(browserUseRepair), blockers: (browserUseRepair as any)?.blockers || [], next_actions: (browserUseRepair as any)?.next_actions || [] }
   };
@@ -1079,7 +1109,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       error: (sksTempSweep as any).error || null
     },
     imagegen: {
-      ok: (imagegen as any).auth_readiness?.available_paths?.length > 0,
+      ok: (imagegenRepair as any)?.route_ready === true,
+      capability_ready: (imagegen as any).codex_app?.available === true,
+      route_ready: (imagegenRepair as any)?.route_ready === true,
+      generated_output_verified: (imagegenRepair as any)?.real_generation_verified === true,
+      auth_ready: (imagegen as any).auth_readiness?.headless_auto_available === true,
       auth_readiness: (imagegen as any).auth_readiness || null,
       codex_app_builtin_available: (imagegen as any).codex_app?.available === true
     },
@@ -1229,7 +1263,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
       for (const action of imagegenReady.next_actions || []) console.log(`  - ${action}`);
     }
   }
-  console.log(`Image Gen repair: ${(imagegenRepair as any).recovered ? 'ok' : (imagegenRepair as any).attempted ? 'blocked' : 'not-needed'}`);
+  console.log(`Image Gen repair: ${nativeCapabilityReadiness.imagegen.status}`);
   for (const action of (imagegenRepair as any).manual_actions || []) console.log(`  - ${action}`);
   console.log(`Computer Use repair: ${(computerUseRepair as any).recovered ? 'ok' : (computerUseRepair as any).attempted ? 'blocked' : 'not-needed'}`);
   for (const action of (computerUseRepair as any).next_actions || []) console.log(`  - ${action}`);
@@ -1246,7 +1280,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }
   const codex0138 = (codex0138Capability as any).report || {};
   console.log('Codex current compatibility:');
-  console.log(`  target: rust-v0.142.0`);
+  console.log(`  target: ${CURRENT_CODEX_RELEASE_MANIFEST.targetTag}`);
   console.log(`  runtime: ${codex.version || 'unknown'}`);
   console.log(`  multi-agent mode: ${(codexNativeFeatureMatrix as any).features?.multi_agent_mode?.ok ? 'verified' : 'unverified'}`);
   console.log(`  rollout budget: ${(codexNativeFeatureMatrix as any).features?.rollout_budget?.ok ? 'verified' : 'unverified'}`);
@@ -1345,9 +1379,9 @@ function buildRuntimeReadiness(zellijReadiness: any, matrix: any) {
       ...(zellijStatus === 'headless_available' ? ['MAD can run with --headless; live panes require repair'] : []),
       ...(hookPolicy !== 'approved-only' ? ['hook-derived evidence will not count'] : []),
       ...(agentStrategy !== 'agent_type' ? ['message-role fallback active'] : []),
-      ...(multiAgentMode === 'proactive' ? ['Codex 0.142 multi-agent proactive mode available for Naruto-style routes'] : []),
-      ...(rolloutBudget === 'codex-0142-shared' ? ['Codex 0.142 rollout budget can be recorded in route proof'] : []),
-      ...(researchSource === 'indexed-web-search' ? ['Codex 0.142 indexed web search selected for source-intelligence routes'] : [])
+      ...(multiAgentMode === 'proactive' ? [`Codex ${CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion} multi-agent proactive mode available for Naruto-style routes`] : []),
+      ...(rolloutBudget === 'codex-0144-shared' ? [`Codex ${CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion} rollout budget can be recorded in route proof`] : []),
+      ...(researchSource === 'indexed-web-search' ? [`Codex ${CURRENT_CODEX_RELEASE_MANIFEST.requiredCliVersion} indexed web search selected for source-intelligence routes`] : [])
     ],
     repair_actions: [...new Set(repairActions)]
   };

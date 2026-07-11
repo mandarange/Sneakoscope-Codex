@@ -221,6 +221,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     return launchPreflight;
   }
   const madLaunch = await activateMadZellijPermissionState(process.cwd(), args);
+  const launchLifecycleTasks: Promise<unknown>[] = [...(madLaunch.lifecycle_tasks || [])];
+  try {
   const glmRuntime: any = glmMadLaunch ? await prepareMadGlmLaunchRuntime(madLaunch, { ...deps, glmArgs: deps?.glmArgs || rawArgs }) : null;
   if (glmMadLaunch && !glmRuntime?.ok) {
     process.exitCode = 1;
@@ -254,11 +256,12 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     cache_ttl_ms: 0,
     message: 'SKS update notice refresh deferred until after MAD UI launch.'
   };
-  void checkSksUpdateNotice({
+  const updateNoticePromise = checkSksUpdateNotice({
     packageName: deps.packageName || 'sneakoscope',
     currentVersion: deps.packageVersion || PACKAGE_VERSION,
     missionDir: madLaunch.dir
   }).then((notice: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_refreshed_background', non_blocking: true, update_available: notice.update_available === true, source: notice.source })).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_background_failed', error: err?.message || String(err) }));
+  launchLifecycleTasks.push(updateNoticePromise);
   await appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.update_notice_checked', non_blocking: true, update_available: updateNotice.update_available === true, source: updateNotice.source });
   console.log(`SKS MAD ready: ${glmRuntime?.profile?.profile_name || madHighProfileName()} | gate ${madLaunch.mission_id}`);
   if (glmRuntime?.profile) console.log(`GLM MAD launch active: ${glmRuntime.profile.model} via OpenRouter; GPT fallback blocked.`);
@@ -334,7 +337,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     workerPlacement: headlessZellij ? 'process' : shouldAutoAttachZellij(args) ? 'zellij-pane' : 'process',
     zellijVisiblePaneCap: Number(process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || zellijVisiblePaneSetting || 8)
   }).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_swarm_background_failed', error: err?.message || String(err) }));
-  void madNativeSwarmPromise;
+  launchLifecycleTasks.push(madNativeSwarmPromise);
   // The launcher only creates a detached background session. In an interactive
   // terminal, immediately attach so the session actually opens for the user
   // instead of leaving them to copy/paste the attach command by hand.
@@ -350,6 +353,21 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   if (launch.attach_command_with_env) console.log(`Attach with: ${launch.attach_command_with_env}`);
   if (headlessZellij) console.log('MAD launch running headless: live_panes=false.');
   return launch;
+  } finally {
+    await settleMadLaunchLifecycle(launchLifecycleTasks, madLaunch.dir);
+  }
+}
+
+export async function settleMadLaunchLifecycle(tasks: Promise<unknown>[], dir: string) {
+  if (tasks.length === 0) return;
+  const settled = await Promise.allSettled(tasks);
+  await appendJsonlBounded(path.join(dir, 'events.jsonl'), {
+    ts: nowIso(),
+    type: 'mad_sks.launch_lifecycle_settled',
+    task_count: settled.length,
+    fulfilled_count: settled.filter((row) => row.status === 'fulfilled').length,
+    rejected_count: settled.filter((row) => row.status === 'rejected').length
+  }).catch(() => undefined);
 }
 
 function isMadGlmLaunch(args: any[] = [], deps: any = {}) {
@@ -686,7 +704,6 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
   const has = (scope: string) => allowedScopes.has(scope as any);
   const dbWriteAllowed = has('db_write');
   const { id, dir } = await createMission(root, { mode: 'mad-sks', prompt: `${activatedBy} Zellij scoped high-power maintenance session` });
-  void refreshMadNativeLaunchArtifacts(root, id, dir).catch((err: any) => appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_artifact_background_failed', error: err?.message || String(err) }));
   const protectedCore = resolveProtectedCore({ packageRoot: packageRoot(), targetRoot: cwd });
   // The interactive launch 'before' snapshot is only persisted (env + policy json)
   // and is never compared against an 'after' snapshot during the session, so the
@@ -777,7 +794,9 @@ async function activateMadZellijPermissionState(cwd: any = process.cwd(), args: 
     stop_gate: 'mad-sks-gate.json',
     prompt: gate.activated_by
   });
-  return { mission_id: id, dir, gate, root };
+  const nativeArtifactsPromise = refreshMadNativeLaunchArtifacts(root, id, dir)
+    .catch((err: any) => appendJsonlBounded(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mad_sks.native_artifact_background_failed', error: err?.message || String(err) }));
+  return { mission_id: id, dir, gate, root, lifecycle_tasks: [nativeArtifactsPromise] };
 }
 
 async function refreshMadNativeLaunchArtifacts(root: string, missionId: string, dir: string) {

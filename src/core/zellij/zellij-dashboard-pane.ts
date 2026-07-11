@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { ensureDir, nowIso, writeJsonAtomic } from '../fsx.js'
-import { runZellij, type ZellijCommandResult } from './zellij-command.js'
+import { runZellij, zellijCommandStdout, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
 import { buildZellijDashboardSnapshot, type ZellijDashboardSnapshot } from './zellij-dashboard-renderer.js'
 
@@ -49,8 +49,8 @@ export async function openZellijDashboardPane(input: {
     optional: false
   })
   const stdoutPaneId = launch.ok ? extractZellijPaneIdFromOutput(launch.stdout_tail) : null
-  const listed = await runZellij(['--session', input.sessionName, 'action', 'list-panes', '--json', '--all'], { cwd, timeoutMs: 5000, optional: true })
-  const rows = parseRows(listed.stdout_tail)
+  const listed = await runZellij(['--session', input.sessionName, 'action', 'list-panes', '--json', '--all'], { cwd, timeoutMs: 5000, maxOutputBytes: 1024 * 1024, optional: true })
+  const rows = parseRows(zellijCommandStdout(listed))
   const pane = stdoutPaneId ? null : rows.find((row) => String(row.title || row.name || '').includes(paneTitle))
   const paneId = stdoutPaneId || pane?.pane_id || pane?.paneId || pane?.id || null
   const dump = await runZellij(['--session', input.sessionName, 'action', 'dump-screen'], { cwd, timeoutMs: 5000, optional: true })

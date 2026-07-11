@@ -2,6 +2,60 @@
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-07-11
+
+### Added
+
+- Add capability-driven Codex plugin inventory and repair for Browser, Chrome, Computer Use, and ImageGen, including the current `{ installed, available }` CLI schema, install/recheck evidence, and explicit new-task or app-restart guidance when a repaired plugin cannot appear in the current tool manifest.
+- Add duplicate-hook invocation suppression and legacy global-hook cleanup so project and global SKS hook registrations cannot create duplicate missions or repeat native-session feedback.
+
+### Changed
+
+- Make Voxel TriWiki coordinate/voxel parity a validated one-to-one contract, keep wrongness-linked or low-trust code recall out of `use_first`, enforce code-pack token budgets, reject incomplete runtime packs, and serialize wrongness-ledger mutations.
+- Make retention generation-aware: treat `route_closed` state as inactive, protect recently updated non-closed sessions with a two-hour grace window, preserve active missions and JSON/log proof while removing only terminal or stale orphan worker runtime homes, and deduplicate temporary cleanup plans.
+- Preserve durable mission JSON and visual/review evidence byte-for-byte during compaction, remove only known disposable runtime files, transparently hydrate and SHA-256-verify legacy gzip archives, count every `.sneakoscope` top-level directory and root file in full storage-budget reports, and retain five release-gate run directories by default.
+- Keep Naruto's GPT-5.6 Terra/Sol/Luna optimization capability-driven and fail closed for unavailable explicit models instead of silently replacing user choices.
+- Align the active Codex compatibility SSOT with `rust-v0.144.1`, including the exact SDK/CLI dependency graph, release manifest, generated App Server schemas and digest, package allowlist, Doctor surface, and release assertions; Codex 0.142 entries remain historical release records only.
+- Make `npm test` recursively discover the complete compiled source and unit-test corpus, and allow only the full release DAG plus environment-dependent real check to write a source/package/dist-bound v2 release stamp.
+- Stop source-structure scans from traversing hidden cache and worktree repository copies.
+
+### Fixed
+
+- Restore the Codex Desktop 1.5x Fast selector after codex-lb actions by removing only provenance-marked SKS `model` and `model_reasoning_effort` locks while preserving `service_tier = "fast"`, `[features].fast_mode`, and user-owned settings.
+- Run Fast UI repair before a successful codex-lb restart, detect blank-separated SKS provenance consistently across all config mutation paths, and refuse automatic rewrites of malformed TOML.
+- Parse installed plugin inventory without unsupported per-plugin detail calls, preserve current native capability feature flags during install/doctor, and self-repair missing Browser, Chrome, Computer Use, and ImageGen plugins without claiming they are available before re-verification.
+- Replace nonexistent Naruto pipeline commands and mock-only self-test guidance with runnable mission-scoped agent and `sks selftest` commands, and trust the live callable tool manifest instead of reporting native tools unavailable from obsolete aliases.
+- Clean package-contract temporary caches on success and failure, align lifecycle-disabled publish tests with the canonical 100-script surface, and keep all 6.1.0 release metadata synchronized.
+- Make `sks versioning bump --help` read-only so requesting usage can never create an accidental patch release section.
+- Make `sks agent --help` read-only so requesting command usage can never start a native mission.
+- Keep the 2.4 MiB publish budget by excluding retired scorecards and source-only release blackboxes from the npm tarball while retaining their source-tree release coverage.
+- Remove the broken `release:check:legacy` chain, make the manifest-backed DAG the sole release-gate SSOT, restore the canonical `release:real-check`, and include every changed regression test in the publish test command.
+- Replace removed `publish:npm` and `release:publish` operator guidance with the supported `release:check:full` → `publish:prep-ignore-scripts` → lifecycle-disabled dry-run or `publish:ignore-scripts` flow.
+
+## [6.0.3] - 2026-07-11
+
+### Changed
+
+- Apply a Naruto-worker-only GPT-5.6 policy while preserving normal Codex catalog passthrough everywhere else: ordinary coding uses `gpt-5.6-terra` at `xhigh` and escalates to `max` for complex/high-risk work; refactoring, architecture, planning, strategy, and integration use `gpt-5.6-sol` at `max`; E2E, browser, Computer Use, and GUI verification use `gpt-5.6-luna` at `xhigh` and escalate to `max` for complex/forensic work.
+- Remove the legacy Naruto low/medium effort cap, tool-use-to-medium rule, and low/medium parent-route reasoning paths. Naruto parent orchestration now uses only `xhigh/max`, snapshots the live codex-lb catalog once before fan-out, accepts only catalog-advertised Luna/Terra/Sol efforts, blocks non-family/local/process overrides, and records the exact model/effort through worker intake, SDK config, and proof reports.
+
+### Fixed
+
+- Make `sks update` reinstall the menu bar through the newly installed package entrypoint instead of the old updater process, and verify that the installed menu build stamp matches the new SKS version.
+- Make every menu auth/profile change restart the running ChatGPT/Codex app through bundle id `com.openai.codex`, wait for the old process to exit, and surface restart failures as non-zero JSON actions instead of false-success notifications.
+- Make the generated menu action script execute its pinned, build-matched SKS entry before PATH/npm-global fallbacks, and fail status with `action_target_version_mismatch` when the action runtime version differs from the 6.0.3 build stamp.
+- Make menu checkmarks reflect verified `auth_mode`, provider-contract, and Fast status; unknown/failed status checks now leave both choices unchecked instead of falsely selecting OAuth or Fast Off.
+- Make repeated `Use ChatGPT OAuth` idempotent without requiring an old backup when OAuth/browser auth is already active, while still unselecting codex-lb.
+- Wait for the local dashboard to become ready before opening it, report Codex Settings open failures, restart after OpenRouter/GLM profile changes, and clear stale update badges by comparing the cached latest version with the embedded menu version.
+- Add live codex-lb catalog verification for Sol/Terra/Luna, normalize current App Server/model-cache effort metadata shapes, recognize `/Applications/ChatGPT.app`, and remove parsed Codex config objects from Fast status JSON so MCP environment secrets are not emitted.
+- Give Naruto work items unique default patch-envelope write leases when a prompt names no target path, and explicitly close each child route between sequential swarm release proofs so valid follow-up runs are not blocked by stale session ownership.
+- Block the command-local `sks naruto --glm` GPT-5.6 policy bypass (the separate explicit `sks --mad --glm --naruto` mode remains available), and fail closed when Naruto receives invalid explicit reasoning or service-tier overrides instead of silently ignoring them.
+- Route conflict-resolution and patch-rebase integration work to Sol `max`, and disable Naruto's legacy local/Ollama auto-selection eligibility so scheduler planning and actual GPT-5.6 worker execution cannot disagree.
+- Fail closed for real write-capable Naruto prompts that name no source target path instead of treating route-local patch-envelope lease keys as source write authorization; fake/fixture swarm proofs retain isolated patch-envelope targets.
+- Unify sizecheck, packlist, and publish-performance packed-size limits behind one measured 2414 KiB SSOT, restore the real-release dry-run performance entrypoint, and exempt only the two generated Codex 0.142 protocol schemas from the handwritten-file size limit.
+- Prune 13 redundant npm aliases, retain canonical release/publish coverage (including the real-release dry-run performance entrypoint), and align the manifest and package-script budgets with the 200/100 lean-engineering limits.
+- Keep release metadata aligned at 6.0.3 after the explicit SKS version bump.
+
 ## [6.0.2] - 2026-07-10
 
 ### Changed

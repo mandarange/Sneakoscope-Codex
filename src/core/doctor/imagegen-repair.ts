@@ -2,6 +2,7 @@ import path from 'node:path';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL } from '../routes.js';
 import { detectImagegenCapability } from '../imagegen/imagegen-capability.js';
 import { ensureDir, nowIso, runProcess, which, writeJsonAtomic } from '../fsx.js';
+import { redactString } from '../secret-redaction.js';
 
 export const DOCTOR_IMAGEGEN_REPAIR_SCHEMA = 'sks.doctor-imagegen-repair.v1';
 
@@ -15,6 +16,7 @@ export interface DoctorImagegenRepairStep {
   blocker?: string | null;
   stdout_tail?: string | null;
   stderr_tail?: string | null;
+  evidence_level?: 'configuration' | 'real-output';
 }
 
 export async function repairCodexImagegen(input: {
@@ -129,24 +131,47 @@ export async function repairCodexImagegen(input: {
     id: 'imagegen_capability_redetect',
     ok: after?.core_ready === true,
     attempted: true,
-    command: 'codex features list --json',
+    command: 'codex features list',
+    status: after?.core_ready === true ? 'configuration_ready_output_unverified' : 'configuration_missing',
+    evidence_level: 'configuration',
     blocker: after?.core_ready === true ? null : 'codex_app_builtin_imagegen_capability_missing'
   });
 
-  // No real generation round-trip primitive exists in imagegen-capability.ts today; this only re-confirms the feature flag, not actual output.
+  const capabilityReady = after?.core_ready === true;
+  const realGenerationVerified = capabilityReady
+    && (after as any)?.real_generation_available === true
+    && (after as any)?.real_output_verified_by_capability_check === true;
+  // No real generation round-trip primitive exists in imagegen-capability.ts today.
+  // Keep configuration detection separate from route/output proof.
   const communicationTest = {
-    level: 'flag_level' as const,
-    ok: after?.core_ready === true,
-    checked: 'codex features list --json (feature-flag/plugin metadata only)',
-    real_generation_round_trip_performed: false,
-    blocker: after?.core_ready === true ? null : 'codex_app_builtin_imagegen_capability_missing'
+    level: realGenerationVerified ? 'real_output' as const : 'flag_level' as const,
+    ok: realGenerationVerified,
+    checked: realGenerationVerified
+      ? 'real Codex App $imagegen generated-output evidence'
+      : 'codex features list (feature-flag/plugin metadata only)',
+    real_generation_round_trip_performed: realGenerationVerified,
+    configuration_ready: capabilityReady,
+    blocker: realGenerationVerified
+      ? null
+      : capabilityReady
+        ? 'codex_imagegen_real_output_unverified'
+        : 'codex_app_builtin_imagegen_capability_missing'
   };
 
-  const recovered = after?.core_ready === true;
+  const recovered = realGenerationVerified;
+  const featureEnableStep = steps.find((step) => step.id === 'image_generation_feature_enable');
+  const configurationRecovered = before?.core_ready !== true && capabilityReady && featureEnableStep?.attempted === true && featureEnableStep.ok === true;
+  const requiresNewTask = !recovered;
+  const refreshActions = requiresNewTask ? [
+    'Start a new Codex/Work task so the repaired $imagegen tool is attached to a fresh task manifest.',
+    'Invoke Codex App $imagegen with gpt-image-2 and bind the selected raster output path to the route evidence.',
+    'If $imagegen is missing in the new task, restart the ChatGPT/Codex desktop app and rerun `sks doctor --fix --repair-native-capabilities --yes`.'
+  ] : [];
   const blockers = recovered ? [] : [
     ...new Set([
       ...((after as any)?.core_blockers || []),
       ...((after as any)?.blockers || []),
+      ...(capabilityReady ? ['codex_imagegen_real_output_unverified'] : []),
       'codex_imagegen_unavailable'
     ].map(String))
   ];
@@ -157,15 +182,26 @@ export async function repairCodexImagegen(input: {
     attempted: before?.core_ready !== true,
     apply,
     recovered,
+    capability_ready: capabilityReady,
+    configuration_ready: capabilityReady,
+    configuration_recovered: configurationRecovered,
+    route_ready: recovered,
+    real_generation_verified: realGenerationVerified,
+    evidence_level: realGenerationVerified ? 'real-output' : capabilityReady ? 'configuration' : 'none',
     before,
     after,
     steps,
     communication_test: communicationTest,
+    current_task_tool_manifest_verified: false,
+    requires_new_task: requiresNewTask,
     blockers,
     manual_actions: recovered ? [] : [
-      `Install/update Codex CLI if missing: npm i -g @openai/codex@latest`,
-      `Open Codex App settings and enable image_generation / $imagegen.`,
-      `Verify with: codex features list --json`,
+      ...refreshActions,
+      ...(!capabilityReady ? [
+        `Install/update Codex CLI if missing: npm i -g @openai/codex@latest`,
+        `Open Codex App settings and enable image_generation / $imagegen.`,
+        `Verify configuration with: codex features list`
+      ] : []),
       `Docs: ${CODEX_APP_IMAGE_GENERATION_DOC_URL}`
     ],
     docs_url: CODEX_APP_IMAGE_GENERATION_DOC_URL
@@ -184,7 +220,7 @@ export async function repairCodexImagegen(input: {
 }
 
 function tail(value: unknown, max = 2000) {
-  const text = String(value || '');
+  const text = redactString(String(value || ''));
   return text.length > max ? text.slice(-max) : text;
 }
 

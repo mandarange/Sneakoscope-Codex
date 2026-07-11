@@ -184,7 +184,7 @@ async function backupConfig(configPath: string, text: string): Promise<string | 
   try {
     const backupPath = `${configPath}.sks-context7-${Date.now().toString(36)}.bak`
     await ensureDir(path.dirname(backupPath))
-    await writeTextAtomic(backupPath, text)
+    await writeTextAtomic(backupPath, text, { mode: 0o600 })
     return backupPath
   } catch {
     return null

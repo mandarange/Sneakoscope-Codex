@@ -1,6 +1,7 @@
 import path from 'node:path'
-import crypto from 'node:crypto'
 import { ensureDir, readJson, writeJsonAtomic } from './fsx.js'
+import { validateWikiCoordinateIndex } from './wiki-coordinate.js'
+import { validateTriWikiContextPackProvenance } from './triwiki-provenance.js'
 
 // Inference-path TriWiki consumption. Routes/the agent kernel READ the deployed
 // context pack written by `sks wiki refresh|pack` (the SSOT); they never rebuild
@@ -23,7 +24,7 @@ export interface TriWikiRuntimeContext {
   warning: string | null
 }
 
-function emptyContext(file: string): TriWikiRuntimeContext {
+function emptyContext(file: string, warning = 'no_triwiki_context_pack (run `sks wiki refresh` to populate the project memory pack)'): TriWikiRuntimeContext {
   return {
     schema: TRIWIKI_RUNTIME_SCHEMA,
     present: false,
@@ -35,7 +36,7 @@ function emptyContext(file: string): TriWikiRuntimeContext {
     claim_count: 0,
     anchor_count: 0,
     trust_avg: null,
-    warning: 'no_triwiki_context_pack (run `sks wiki refresh` to populate the project memory pack)'
+    warning
   }
 }
 
@@ -53,14 +54,27 @@ export async function loadTriWikiRuntimeContext(root: string): Promise<TriWikiRu
     pack = null
   }
   if (!pack || typeof pack !== 'object') return emptyContext(file)
-  const attention = pack.attention || {}
-  const wiki = pack.wiki || {}
+  const attention = pack.attention
+  const wiki = pack.wiki
+  if (!wiki || typeof wiki !== 'object') {
+    return emptyContext(file, 'invalid_triwiki_context_pack:wiki_index_missing (run `sks wiki refresh`)')
+  }
+  const coordinateValidation = validateWikiCoordinateIndex(wiki, { root, claims: pack.claims })
+  const provenanceValidation = validateTriWikiContextPackProvenance(pack, { root })
+  const issues = [...coordinateValidation.issues, ...provenanceValidation.issues]
+  if (issues.length) {
+    const issueIds = issues.map((issue: any) => String(issue.id || 'unknown')).slice(0, 8)
+    return emptyContext(file, `invalid_triwiki_context_pack:${issueIds.join(',')} (run \`sks wiki refresh\`)`)
+  }
+  if (!attention || !Array.isArray(attention.use_first) || !Array.isArray(attention.hydrate_first) || !Array.isArray(pack.claims)) {
+    return emptyContext(file, 'invalid_triwiki_context_pack:attention_or_claims_missing (run `sks wiki refresh`)')
+  }
   const anchorCount = Array.isArray(wiki.a) ? wiki.a.length : (Array.isArray(wiki.anchors) ? wiki.anchors.length : 0)
   return {
     schema: TRIWIKI_RUNTIME_SCHEMA,
     present: true,
     context_pack_path: file,
-    context_pack_hash: crypto.createHash('sha256').update(JSON.stringify(pack)).digest('hex'),
+    context_pack_hash: pack.provenance.payload_sha256,
     mission: typeof pack.mission === 'string' ? pack.mission : null,
     use_first: Array.isArray(attention.use_first) ? attention.use_first : [],
     hydrate_first: Array.isArray(attention.hydrate_first) ? attention.hydrate_first : [],
@@ -73,7 +87,7 @@ export async function loadTriWikiRuntimeContext(root: string): Promise<TriWikiRu
 
 /** Compact instruction block injected into read-only agents / route additionalContext. */
 export function triWikiContextBlock(ctx: TriWikiRuntimeContext): string {
-  if (!ctx.present) return 'TriWiki: no context pack present; run `sks wiki refresh` before relying on cached project memory.'
+  if (!ctx.present) return `TriWiki unavailable: ${ctx.warning || 'context pack missing or invalid'}; do not rely on cached project memory.`
   const ids = (rows: any[]) => rows.map((row: any) => (Array.isArray(row) ? row[0] : row?.id)).filter(Boolean).slice(0, 6)
   const use = ids(ctx.use_first)
   const hyd = ids(ctx.hydrate_first)

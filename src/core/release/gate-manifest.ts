@@ -39,7 +39,7 @@ export const ALWAYS_ON_GATES = new Set<string>([
   'runtime:no-tmux',
   'runtime:ts-rust-boundary',
   'safety:side-effect-zero',
-  'safety:mutation-callsite-coverage:repo-wide',
+  'safety:mutation-callsite-coverage',
   'side-effect:runtime-report',
   'core-skill:no-inference-optimizer',
   'core-skill:heldout-validation',
@@ -47,7 +47,10 @@ export const ALWAYS_ON_GATES = new Set<string>([
   'core-skill:legacy-promotion-api-audit',
   'postinstall:safe-side-effects',
   'publish:packlist-performance',
-  'legacy:upgrade-zero-break',
+  'legacy:gate-inventory',
+  'legacy:gate-purge',
+  'legacy:strong-inventory',
+  'migration:upgrade-safety',
   'release:proof-truth',
   'release:dynamic-performance',
   'release:provenance',
@@ -61,20 +64,22 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'runtime:dist-parity',
   'runtime:ts-rust-boundary',
   'safety:side-effect-zero',
-  'safety:mutation-callsite-coverage:repo-wide',
+  'safety:mutation-callsite-coverage',
   'side-effect:runtime-report',
   'release:proof-truth',
   'release:provenance',
-  'release:codex-current',
-  'codex:0142:manifest',
-  'codex:0142:binary-identity',
-  'codex:0142:policy',
-  'codex:0142:app-server-v2',
-  'codex:0142:thread-store',
-  'codex:0142:capability',
+  'codex:0144:manifest',
+  'codex:0144:binary-identity',
+  'codex:0144:policy',
+  'codex:0144:app-server-v2',
+  'codex:0144:thread-store',
+  'codex:0144:capability',
   'publish:packlist-performance',
   'postinstall:safe-side-effects',
-  'legacy:upgrade-zero-break',
+  'legacy:gate-inventory',
+  'legacy:gate-purge',
+  'legacy:strong-inventory',
+  'migration:upgrade-safety',
   'core-skill:card-schema',
   'core-skill:patch',
   'core-skill:heldout-validation',
@@ -85,7 +90,7 @@ export const REQUIRED_FOR_PUBLISH = new Set<string>([
   'zellij:ui-design'
 ])
 
-const P0_PREFIXES = ['architecture:', 'core-skill:', 'safety:', 'side-effect:', 'runtime:', 'release:', 'legacy:', 'publish:', 'postinstall:', 'zellij:']
+const P0_PREFIXES = ['architecture:', 'core-skill:', 'safety:', 'side-effect:', 'runtime:', 'release:', 'legacy:', 'migration:', 'publish:', 'postinstall:', 'zellij:']
 
 function tierFor(id: string): GateTier {
   if (P0_PREFIXES.some((p) => id.startsWith(p))) return 'P0'
@@ -114,6 +119,7 @@ export function affectedGlobsFor(id: string): string[] {
     case 'side-effect':
       return ['src/core/safety/**', 'src/scripts/side-effect-runtime-report-check.ts', '.sneakoscope/missions/**/mutation-ledger.jsonl', '.sneakoscope/mutation-ledger.jsonl']
     case 'legacy':
+    case 'migration':
       return ['src/core/migration/**', 'src/core/codex/**', 'src/core/init.ts', 'src/cli/install-helpers.ts', 'src/scripts/legacy-upgrade-matrix-check.ts']
     case 'publish':
       return ['package.json', '.npmignore', 'src/scripts/packlist-performance-check.ts', 'src/scripts/npm-publish-performance-check.ts', 'dist/**']

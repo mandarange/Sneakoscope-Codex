@@ -64,7 +64,7 @@ export function buildGatePackManifest(root: string, gates?: ReleaseGateNode[]): 
 
 export function packForGateId(id: string): string {
   if (id.startsWith('triwiki:')) return 'triwiki';
-  if (id.startsWith('codex:') || id.includes('0140') || id.includes('0142')) return 'codex-current';
+  if (id.startsWith('codex:') || id.includes('0140') || id.includes('0144')) return 'codex-current';
   if (id.startsWith('doctor:')) return 'doctor-production';
   if (id.startsWith('sksd:') || id.startsWith('probes:') || id.includes('mcp')) return 'startup-mcp';
   if (id.includes('native') || id.startsWith('agent:')) return 'native-capability';

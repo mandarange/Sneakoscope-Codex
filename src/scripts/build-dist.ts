@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeTextAtomic } from '../core/fsx.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const srcRoot = path.join(root, 'src');
@@ -57,21 +58,25 @@ async function writeSkillsManifest() {
   const manifest = await generatePackagedSkillsManifest();
   const out = path.join(distRoot, 'config', 'skills-manifest.json');
   await fsp.mkdir(path.dirname(out), { recursive: true });
-  await fsp.writeFile(out, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  await writeTextAtomic(out, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 async function writeCommonJsBinScope() {
   const binDir = path.join(distRoot, 'bin');
   if (!fs.existsSync(binDir)) return;
-  await fsp.writeFile(path.join(binDir, 'package.json'), '{"type":"commonjs"}\n', 'utf8');
+  await writeTextAtomic(path.join(binDir, 'package.json'), '{"type":"commonjs"}\n');
   await rewriteIfPresent(path.join(binDir, 'sks.js'), (text) =>
     stripSourceMap(text)
       .replace(/^import \{ PACKAGE_VERSION \} from '\.\.\/core\/version\.js';$/m, "const { PACKAGE_VERSION } = require('../core/version.js');")
       .replace(/\nexport \{\};\n?/, '\n')
   );
-  await rewriteIfPresent(path.join(binDir, 'sks-dispatch.js'), (text) =>
-    `${stripSourceMap(text).replace(/^export async function runSks/m, 'async function runSks')}\nexports.runSks = runSks;\n`
-  );
+  await rewriteIfPresent(path.join(binDir, 'sks-dispatch.js'), (text) => {
+    const next = stripGeneratedCommonJsExports(
+      stripSourceMap(text).replace(/^export async function runSks/m, 'async function runSks'),
+      ['runSks']
+    );
+    return `${next}\n\nexports.runSks = runSks;\n`;
+  });
   await rewriteIfPresent(path.join(binDir, 'fast-inline.js'), (text) => {
     const names = [
       'rootJsonFastInline',
@@ -83,7 +88,8 @@ async function writeCommonJsBinScope() {
     for (const name of names) {
       next = next.replace(new RegExp(`^export (async )?function ${name}`, 'm'), '$1function ' + name);
     }
-    return `${next}\n${names.map((name) => `exports.${name} = ${name};`).join('\n')}\n`;
+    next = stripGeneratedCommonJsExports(next, names);
+    return `${next}\n\n${names.map((name) => `exports.${name} = ${name};`).join('\n')}\n`;
   });
   await rewriteIfPresent(path.join(binDir, 'install.js'), (text) =>
     stripSourceMap(text).replace(
@@ -96,11 +102,19 @@ async function writeCommonJsBinScope() {
 async function rewriteIfPresent(file, rewrite) {
   if (!fs.existsSync(file)) return;
   const text = await fsp.readFile(file, 'utf8');
-  await fsp.writeFile(file, rewrite(text), 'utf8');
+  await writeTextAtomic(file, rewrite(text));
 }
 
 function stripSourceMap(text) {
   return text.replace(/\n\/\/# sourceMappingURL=.*\.map\s*$/s, '\n');
+}
+
+function stripGeneratedCommonJsExports(text, names) {
+  const escaped = names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return text
+    .replace(new RegExp(`^exports\\.(${escaped}) = \\1;\\s*$`, 'gm'), '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd();
 }
 
 async function copyDirIfPresent(from, to) {

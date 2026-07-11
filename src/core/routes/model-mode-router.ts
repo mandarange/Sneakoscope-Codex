@@ -20,6 +20,9 @@ export function resolveSksModelMode(args: readonly string[] = []): SksModelModeD
   const hasMad = normalized.includes('--mad') || normalized.includes('--MAD') || normalized.includes('--mad-sks');
   const hasNaruto = normalized.includes('--naruto') || normalized.includes('naruto');
 
+  if (hasGlm && hasNaruto && !hasMad) {
+    return decision('classic-naruto', false, true, 'naruto_command_glm_override_forbidden', normalized);
+  }
   if (hasGlm && hasNaruto) {
     return decision('glm-naruto', true, false, 'explicit_--glm_with_naruto', normalized);
   }

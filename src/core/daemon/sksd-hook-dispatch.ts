@@ -28,8 +28,8 @@ export async function hookDaemonInline(name: string): Promise<void> {
     result = daemonResponse.result;
   } else {
     spawnSksdHookDaemonDetached(root);
-    const { evaluateHookPayload } = await import('../hooks-runtime.js');
-    result = await evaluateHookPayload(name, payload, { root });
+    const { evaluateHookPayloadOnce } = await import('../hooks-runtime.js');
+    result = await evaluateHookPayloadOnce(name, payload, { root });
   }
   process.stdout.write(`${JSON.stringify(normalizeHookResult(name, result))}\n`);
 }

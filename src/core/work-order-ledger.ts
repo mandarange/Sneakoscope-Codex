@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { nowIso, readJson, writeJsonAtomic } from './fsx.js';
+import { exists, nowIso, readJson, writeJsonAtomic } from './fsx.js';
 import { ARTIFACT_FILES, validateWorkOrderLedger } from './artifact-schemas.js';
 import { promptRequirementItems } from './questions.js';
 
@@ -29,7 +29,7 @@ export function createWorkOrderLedger({ missionId = 'unassigned', route = 'team'
     source_inventory_complete: Boolean(sourcesComplete),
     all_customer_requests_preserved: items.every((item: any) => Boolean(item.source.verbatim)),
     all_customer_requests_mapped: items.every((item: any) => item.implementation_tasks.length > 0 || item.blocker.blocked === true),
-    all_work_items_verified: items.length > 0 && items.every((item: any) => item.status === 'verified' || item.status === 'blocked'),
+    all_work_items_verified: items.length > 0 && items.every(workOrderItemResolved),
     items
   };
 }
@@ -51,11 +51,19 @@ export function evaluateWorkOrderCoverage(ledger: any): { ok: boolean; blockers:
   if (!ledger.all_work_items_verified) blockers.push('work_order_items_not_verified');
   let uncovered_count = 0;
   for (const item of (ledger.items || [])) {
-    const isVerified = item.status === 'verified';
+    const isVerified = item.status === 'verified'
+      && Array.isArray(item.implementation_evidence) && item.implementation_evidence.length > 0
+      && Array.isArray(item.verification_evidence) && item.verification_evidence.length > 0;
     const isBlockedWithEvidence = item.status === 'blocked' && item.blocker?.blocked === true;
     if (!isVerified && !isBlockedWithEvidence) {
       uncovered_count += 1;
-      blockers.push(`work_order_uncovered:${item.id}:"${item.source?.verbatim?.slice(0, 40) || ''}"`);
+      if (item.status === 'verified' && (!Array.isArray(item.implementation_evidence) || item.implementation_evidence.length === 0)) {
+        blockers.push(`work_order_implementation_evidence_missing:${item.id}`);
+      }
+      if (item.status === 'verified' && (!Array.isArray(item.verification_evidence) || item.verification_evidence.length === 0)) {
+        blockers.push(`work_order_verification_evidence_missing:${item.id}`);
+      }
+      if (item.status !== 'verified') blockers.push(`work_order_uncovered:${item.id}:"${item.source?.verbatim?.slice(0, 40) || ''}"`);
     }
   }
   return { ok: blockers.length === 0, blockers, uncovered_count };
@@ -70,7 +78,7 @@ export function updateWorkOrderItem(ledger: any, id: any, patch: any = {}) {
       : ((item.implementation_tasks || []).length > 0 || item.blocker?.blocked === true)),
     all_work_items_verified: (ledger.items || []).every((item: any) => {
       const next = item.id === id ? { ...item, ...patch } : item;
-      return next.status === 'verified' || next.status === 'blocked';
+      return workOrderItemResolved(next);
     })
   };
 }
@@ -81,15 +89,129 @@ export function updateWorkOrderItem(ledger: any, id: any, patch: any = {}) {
  * so every item is registered verbatim before any execution starts.
  */
 export async function createAndWriteWorkOrderLedgerForPrompt(dir: any, { missionId, route, prompt }: any = {}) {
-  const { items, truncated } = promptRequirementItems(String(prompt || ''));
+  const parsed = semanticSliceRequirementItems(String(prompt || '')) || promptRequirementItems(String(prompt || ''));
+  const { items, truncated } = parsed;
   const requests = items.map((item: any) => ({
     type: 'chat_text',
     verbatim: item.text,
+    normalized_requirement: item.context ? `${item.context}: ${item.text}` : item.text,
+    acceptance_criteria: item.acceptance_context ? [item.acceptance_context] : [],
     location: `prompt:${item.id}`
   }));
   const ledger = createWorkOrderLedger({ missionId, route, requests, sourcesComplete: !truncated });
   await writeWorkOrderLedger(dir, ledger);
   return ledger;
+}
+
+const SEMANTIC_SLICE_ITEM_CEILING = 128;
+
+function semanticSliceRequirementItems(prompt: string) {
+  const text = String(prompt || '').replace(/(?:^|\s)\$[A-Za-z0-9_-]+(?:\s|$)/g, ' ').trim();
+  const repeatedScopes = repeatedNamedSliceParts(text);
+  if (repeatedScopes) return repeatedScopes;
+  const marker = /\bslices?\s*:\s*|(?:슬라이스|영역|항목)\s*:\s*/i.exec(text);
+  if (!marker) return null;
+  const context = text.slice(0, marker.index).replace(/\s+/g, ' ').trim();
+  const body = text.slice(marker.index + marker[0].length).trim();
+  if (!body) return null;
+
+  const semicolonParts = body.split(/[;；]/).map((part) => part.trim()).filter(Boolean);
+  let parts = semicolonParts.length > 1 ? semicolonParts : numberedSliceParts(body);
+  let instructionTail = '';
+  if (parts.length <= 1) {
+    const sentenceSplit = sentenceSliceParts(body);
+    parts = sentenceSplit.parts;
+    instructionTail = sentenceSplit.tail;
+  }
+  if (parts.length <= 1) return null;
+
+  const last = splitSliceInstructionTail(parts.at(-1) || '');
+  parts[parts.length - 1] = last.topic;
+  instructionTail ||= last.tail;
+  const topics = parts.map(stripSliceMarker).filter(Boolean);
+  if (topics.length <= 1) return null;
+  const truncated = topics.length > SEMANTIC_SLICE_ITEM_CEILING;
+  const kept = topics.slice(0, SEMANTIC_SLICE_ITEM_CEILING);
+  return {
+    items: kept.map((topic, index) => ({
+      id: `REQ-${String(index + 1).padStart(3, '0')}`,
+      text: topic,
+      context,
+      acceptance_context: instructionTail,
+      required: true,
+      confidence: 1
+    })),
+    truncated,
+    truncated_count: truncated ? topics.length - SEMANTIC_SLICE_ITEM_CEILING : 0
+  };
+}
+
+function repeatedNamedSliceParts(text: string) {
+  const matches = [...text.matchAll(/(?:^|\s)(?:scope|slice|영역|범위)\s*(\d{1,3})\s*[:：]\s*/gi)];
+  if (matches.length < 2) return null;
+  const context = text.slice(0, Number(matches[0]?.index || 0)).replace(/\s+/g, ' ').trim();
+  const rawParts = matches.map((match, index) => {
+    const start = Number(match.index || 0) + match[0].length;
+    const end = index + 1 < matches.length ? Number(matches[index + 1]?.index ?? text.length) : text.length;
+    return text.slice(start, end).trim();
+  });
+  const last = splitSliceInstructionTail(rawParts.at(-1) || '');
+  rawParts[rawParts.length - 1] = last.topic;
+  const topics = rawParts.map(stripSliceMarker).filter(Boolean);
+  const truncated = topics.length > SEMANTIC_SLICE_ITEM_CEILING;
+  return {
+    items: topics.slice(0, SEMANTIC_SLICE_ITEM_CEILING).map((topic, index) => ({
+      id: `REQ-${String(index + 1).padStart(3, '0')}`,
+      text: topic,
+      context,
+      acceptance_context: last.tail,
+      required: true,
+      confidence: 1
+    })),
+    truncated,
+    truncated_count: truncated ? topics.length - SEMANTIC_SLICE_ITEM_CEILING : 0
+  };
+}
+
+function numberedSliceParts(text: string) {
+  const matches = [...text.matchAll(/(?:^|\s)(?:\d{1,3}[.)]|[①-⑳])\s+/g)];
+  if (matches.length < 2) return [text];
+  return matches.map((match, index) => {
+    const start = Number(match.index || 0) + match[0].length;
+    const end = index + 1 < matches.length ? Number(matches[index + 1]?.index ?? text.length) : text.length;
+    return text.slice(start, end).trim();
+  }).filter(Boolean);
+}
+
+function sentenceSliceParts(text: string) {
+  const sentences = text.split(/(?<=[.!?。！？])\s+/).map((part) => part.trim()).filter(Boolean);
+  if (sentences.length < 2) return { parts: [text], tail: '' };
+  const instructionIndex = sentences.findIndex((sentence) => isSliceInstruction(sentence));
+  return instructionIndex > 1
+    ? { parts: sentences.slice(0, instructionIndex), tail: sentences.slice(instructionIndex).join(' ') }
+    : { parts: [text], tail: '' };
+}
+
+function splitSliceInstructionTail(text: string) {
+  const sentences = text.split(/(?<=[.!?。！？])\s+/).map((part) => part.trim()).filter(Boolean);
+  const instructionIndex = sentences.findIndex((sentence, index) => index > 0 && isSliceInstruction(sentence));
+  if (instructionIndex < 0) return { topic: text.trim(), tail: '' };
+  return {
+    topic: sentences.slice(0, instructionIndex).join(' ').trim(),
+    tail: sentences.slice(instructionIndex).join(' ').trim()
+  };
+}
+
+function isSliceInstruction(text: string) {
+  return /^(?:inspect|review|check|verify|use|do\s+not|never|return|report|limit|only|검사|검토|확인|검증|사용|수정하지|실행하지|반환|보고|제한)/i.test(String(text || '').trim());
+}
+
+function stripSliceMarker(text: string) {
+  return String(text || '')
+    .replace(/^\s*(?:\d{1,3}[.)]|[①-⑳]|[-*])\s*/, '')
+    .replace(/[.!?。！？]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -103,13 +225,50 @@ export async function createAndWriteWorkOrderLedgerForPrompt(dir: any, { mission
 export async function closeWorkOrderLedgerForRouteResult(dir: any, { ok, blockers = [] }: { ok: boolean; blockers?: string[] }) {
   const ledger = await readWorkOrderLedger(dir);
   if (!ledger || !Array.isArray(ledger.items) || ledger.items.length === 0) return null;
+  const routeEvidence = ok ? await existingRouteEvidence(dir) : [];
+  const verified = ok && routeEvidence.length > 0;
   let next = ledger;
   for (const item of ledger.items) {
-    const patch = ok
-      ? { status: 'verified', implementation_tasks: item.implementation_tasks?.length ? item.implementation_tasks : ['route_completion'] }
-      : { status: 'blocked', blocker: { blocked: true, reason: blockers.join(', ') || 'route_completion_blocked', needed_to_unblock: 'resolve the route blockers and re-run' } };
+    const patch = verified
+      ? {
+          status: 'verified',
+          implementation_tasks: item.implementation_tasks?.length ? item.implementation_tasks : ['route_completion'],
+          implementation_evidence: item.implementation_evidence?.length ? item.implementation_evidence : routeEvidence,
+          verification_evidence: item.verification_evidence?.length ? item.verification_evidence : routeEvidence
+        }
+      : {
+          status: 'blocked',
+          blocker: {
+            blocked: true,
+            reason: blockers.join(', ') || (ok ? 'route_completion_evidence_missing' : 'route_completion_blocked'),
+            needed_to_unblock: ok ? 'write the route gate/proof artifact and close the work order again' : 'resolve the route blockers and re-run'
+          }
+        };
     next = updateWorkOrderItem(next, item.id, patch);
   }
   await writeWorkOrderLedger(dir, next);
   return next;
+}
+
+function workOrderItemResolved(item: any) {
+  if (item?.status === 'blocked') return item?.blocker?.blocked === true;
+  return item?.status === 'verified'
+    && Array.isArray(item?.implementation_evidence) && item.implementation_evidence.length > 0
+    && Array.isArray(item?.verification_evidence) && item.verification_evidence.length > 0;
+}
+
+async function existingRouteEvidence(dir: string): Promise<string[]> {
+  const candidates = [
+    'completion-proof.json',
+    'naruto-gate.json',
+    'loop-graph-proof.json',
+    'run-gate.json',
+    'agents/agent-proof-evidence.json',
+    'agents/agent-output-validation.json'
+  ];
+  const found: string[] = [];
+  for (const candidate of candidates) {
+    if (await exists(path.join(dir, candidate))) found.push(candidate);
+  }
+  return found;
 }

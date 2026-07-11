@@ -1,6 +1,6 @@
 # Feature Fixtures
 
-`sks all-features selftest --mock --execute-fixtures --strict-artifacts --json` promotes the feature registry from metadata-only coverage into release-gated mock/static fixture validation. `npm run feature-fixtures:strict` is the release script wrapper.
+`sks all-features selftest --mock --execute-fixtures --strict-artifacts --json` promotes the feature registry from metadata-only coverage into release-gated mock/static fixture validation. The canonical release wrapper is `npm run feature-quality:check`; no separate fixture alias is required.
 
 The fixture gate checks:
 

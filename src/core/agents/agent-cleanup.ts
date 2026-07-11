@@ -1,11 +1,32 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 
+export const AGENT_TERMINAL_SESSION_STATUSES = new Set([
+  'blocked',
+  'cancelled',
+  'canceled',
+  'closed',
+  'complete',
+  'completed',
+  'done',
+  'exited',
+  'failed',
+  'killed',
+  'stopped',
+  'terminated',
+  'timed_out',
+  'timeout'
+])
+
+export function isAgentTerminalSessionStatus(value: unknown) {
+  return AGENT_TERMINAL_SESSION_STATUSES.has(String(value || '').toLowerCase())
+}
+
 export async function writeAgentCleanupReport(root: string) {
   const sessions = await readJson<any>(path.join(root, 'agent-sessions.json'), { sessions: {} })
   const rows = Object.values<any>(sessions.sessions || {})
   const closed = rows.filter((session) => String(session.status) === 'closed')
-  const terminal = rows.filter((session) => ['closed', 'blocked', 'failed', 'killed', 'timed_out'].includes(String(session.status)))
+  const terminal = rows.filter((session) => isAgentTerminalSessionStatus(session.status))
   const report = {
     schema: 'sks.agent-cleanup.v1',
     generated_at: nowIso(),

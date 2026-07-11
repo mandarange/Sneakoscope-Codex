@@ -30,15 +30,18 @@ export interface ImageArtifactPathContract {
 export async function buildImageArtifactPathContract(root: string, input: {
   missionId: string
   images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string; route?: string | null; stage?: string | null }>
+  skipNativeInvocationPlan?: boolean
 }): Promise<ImageArtifactPathContract> {
   const images: ImageArtifactPathContract['images'] = []
   const blockers: string[] = []
-  const invocationPlan = await resolveCodexNativeInvocationPlan({
-    root,
-    missionId: input.missionId,
-    route: '$Image',
-    desiredCapability: 'image-followup'
-  }).catch(() => null)
+  const invocationPlan = input.skipNativeInvocationPlan === true
+    ? null
+    : await resolveCodexNativeInvocationPlan({
+        root,
+        missionId: input.missionId,
+        route: '$Image',
+        desiredCapability: 'image-followup'
+      }).catch(() => null)
   const followupStrategy: ImageArtifactPathContract['images'][number]['codex_native_followup_strategy'] = invocationPlan?.selected_strategy === 'codex-app-native' ? 'model-visible-path' : 'artifact-path'
   for (const [index, image] of input.images.entries()) {
     const filePath = path.resolve(root, image.filePath || '')
@@ -85,6 +88,7 @@ export async function writeImageArtifactPathContract(root: string, input: {
   missionId: string
   images: Array<{ id?: string; kind: ImageArtifactPathContract['images'][number]['kind']; filePath: string; route?: string | null; stage?: string | null }>
   artifactPath?: string | null
+  skipNativeInvocationPlan?: boolean
 }) {
   const contract = await buildImageArtifactPathContract(root, input)
   const artifactPath = input.artifactPath || path.join(root, '.sneakoscope', 'missions', input.missionId, 'image-artifact-path-contract.json')

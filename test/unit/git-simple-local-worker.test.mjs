@@ -17,6 +17,16 @@ test('simple git commit can use enabled local Ollama worker for message drafting
   const oldFetch = globalThis.fetch;
   process.env.SKS_OLLAMA_WORKERS = '1';
   process.env.SKS_LOCAL_MODEL_CONFIG = path.join(cwd, 'local-model.json');
+  await fs.writeFile(process.env.SKS_LOCAL_MODEL_CONFIG, JSON.stringify({
+    schema: 'sks.local-model-config.v2',
+    enabled: true,
+    status: 'verified',
+    provider: 'ollama',
+    model: 'rafw007/qwen36-a3b-claude-coder:q4_K_M',
+    base_url: 'http://127.0.0.1:11434',
+    capability: { api_reachable: true, model_installed: true },
+    last_smoke: { ok: true, schema_valid: true, ran_at: new Date().toISOString(), status: 'verified' }
+  }));
   globalThis.fetch = async (_url, init) => {
     const body = JSON.parse(String(init?.body || '{}'));
     assert.equal(body.stream, false);

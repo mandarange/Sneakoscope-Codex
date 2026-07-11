@@ -4,12 +4,12 @@ export const CODEX_CHROME_EXTENSION_EVIDENCE_SOURCE = 'codex_chrome_extension';
 export const CODEX_WEB_VERIFICATION_EVIDENCE_SOURCE = CODEX_IN_APP_BROWSER_EVIDENCE_SOURCE;
 export const CODEX_IMAGEGEN_EVIDENCE_SOURCE = 'codex_app_imagegen_gpt_image_2';
 
-export const CODEX_IN_APP_BROWSER_DOC_URL = 'https://developers.openai.com/codex/app/browser';
-export const CODEX_CHROME_EXTENSION_DOC_URL = 'https://developers.openai.com/codex/app/chrome-extension';
-export const CODEX_COMPUTER_USE_DOC_URL = 'https://developers.openai.com/codex/app/computer-use';
+export const CODEX_IN_APP_BROWSER_DOC_URL = 'https://learn.chatgpt.com/docs/browser';
+export const CODEX_CHROME_EXTENSION_DOC_URL = 'https://learn.chatgpt.com/docs/chrome-extension';
+export const CODEX_COMPUTER_USE_DOC_URL = 'https://learn.chatgpt.com/docs/computer-use';
 export const CODEX_RECORD_REPLAY_DOC_URL = 'https://developers.openai.com/codex/record-and-replay';
 export const CODEX_APP_SERVER_DOC_URL = 'https://developers.openai.com/codex/app-server';
-export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/codex/app/features#image-generation';
+export const CODEX_APP_IMAGE_GENERATION_DOC_URL = 'https://learn.chatgpt.com/docs/image-generation';
 export const OPENAI_IMAGE_GENERATION_DOC_URL = 'https://developers.openai.com/api/docs/guides/image-generation';
 export const OPENAI_CHATGPT_IMAGES_2_DOC_URL = 'https://openai.com/index/introducing-chatgpt-images-2-0/';
 export const OPENAI_GPT_IMAGE_2_MODEL_DOC_URL = 'https://developers.openai.com/api/docs/models/gpt-image-2';

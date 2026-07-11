@@ -9,6 +9,8 @@ import { root, assertGate, emitGate, readText } from './sks-1-18-gate-lib.js';
 // `postinstall`, because doing so would mutate the global Codex App / shell environment.
 
 const helpers = readText('src/cli/install-helpers.ts');
+const desktopConfigPolicy = readText('src/core/codex-runtime/codex-desktop-config-policy.ts');
+const codexConfigGuard = readText('src/core/codex/codex-config-guard.ts');
 
 // Heavy CLI tool installs (brew / npm globals) are opt-in only.
 assertGate(
@@ -30,12 +32,15 @@ assertGate(
 // Config writes are gated (unparseable preserved / unsafe rewrite skipped) and backed up.
 assertGate(helpers.includes('unparseable_config_preserved'), 'postinstall must preserve unparseable config');
 assertGate(helpers.includes('skipped_unsafe_rewrite'), 'postinstall must skip unsafe config rewrites');
-assertGate(helpers.includes('backupCodexConfig'), 'postinstall config writes must back up the existing config');
+assertGate(desktopConfigPolicy.includes('backupCodexConfig'), 'postinstall config writes must back up the existing config');
 
-// User model / service_tier are set-if-absent, never overwritten.
+// Host-owned feature choices are set-if-absent, and model/reasoning keys are
+// changed only when bounded SKS provenance proves SKS created them.
 assertGate(
-  helpers.includes('upsertTopLevelTomlStringIfAbsent'),
-  'postinstall must set user model/service_tier only when absent'
+  desktopConfigPolicy.includes('upsertTomlTableKeyIfAbsent')
+    && desktopConfigPolicy.includes('removeLegacyTopLevelCodexModeLocks')
+    && codexConfigGuard.includes('hasSksModeLockProvenance'),
+  'postinstall must preserve host-owned feature/model choices'
 );
 
 // The postinstall() body must be wrapped in try/catch/finally so it never fails `npm install`.

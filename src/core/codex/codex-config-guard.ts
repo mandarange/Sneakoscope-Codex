@@ -90,6 +90,7 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
   }
 
   if (next === ensureTrailingNewline(before)) {
+    await writeTextAtomic(configPath, next, { mode: 0o600 })
     const result = { ok: true, status: 'present', config_path: configPath, backup_path: null, changed: false, repaired_keys: preserved.keys, forbidden_top_level: forbiddenTopLevel }
     if (preserved.keys.length || forbiddenTopLevel.length) {
       await recordCodexConfigGuard(root, input.reportPath, {
@@ -107,7 +108,7 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
 
   const backupPath = before.trim() ? await backupCodexConfig(configPath, before, input.backupTag || cause) : null
   await ensureDir(path.dirname(configPath))
-  await writeTextAtomic(configPath, next)
+  await writeTextAtomic(configPath, next, { mode: 0o600 })
   const afterSnapshot = await snapshotForConfig(root, configPath).catch(() => null)
   const diff = beforeSnapshot && afterSnapshot ? diffCodexAppUiSnapshots(beforeSnapshot, afterSnapshot) : null
   const result = {
@@ -192,16 +193,34 @@ export function removeLegacyTopLevelCodexModeLocks(text: string = '') {
   return ensureTrailingNewline(lines.filter((line, index) => {
     if (index >= end) return true
     if (!/^\s*(?:model|model_reasoning_effort)\s*=/.test(line)) return true
-    return !isSksProvenanceLine(line, lines[index - 1] || '')
+    return !hasSksModeLockProvenance(lines, index)
   }).join('\n').replace(/^\n+/, '').replace(/\n{3,}/g, '\n\n'))
 }
 
-function isSksProvenanceLine(...lines: string[]) {
-  return lines.some((line) => {
-    const trimmed = String(line || '').trim()
-    const comment = trimmed.startsWith('#') ? trimmed : trimmed.includes('#') ? trimmed.slice(trimmed.indexOf('#')) : ''
-    return /(?:SKS|Sneakoscope|codex-lb|sks fast)/i.test(comment)
-  })
+function hasSksModeLockProvenance(lines: string[], index: number) {
+  const current = String(lines[index] || '')
+  const inlineComment = current.includes('#') ? current.slice(current.indexOf('#')) : ''
+  if (isSksModeLockMarker(inlineComment)) return true
+  const allowedManagedKeys = new Set([
+    'service_tier', 'model', 'model_reasoning_effort', 'model_provider',
+    'approval_policy', 'sandbox_mode', 'web_search', 'notify', 'preferred_auth_method'
+  ])
+  const lowerBound = Math.max(0, index - 16)
+  for (let cursor = index - 1; cursor >= lowerBound; cursor -= 1) {
+    const candidate = String(lines[cursor] || '').trim()
+    if (!candidate) continue
+    if (candidate.startsWith('#')) {
+      if (isSksModeLockMarker(candidate)) return true
+      continue
+    }
+    const key = candidate.match(/^([A-Za-z0-9_-]+)\s*=/)?.[1] || ''
+    if (!allowedManagedKeys.has(key)) return false
+  }
+  return false
+}
+
+function isSksModeLockMarker(value: string = '') {
+  return /^#\s*(?:SKS|Sneakoscope)\b.*(?:moved machine-local Codex config|forced fast UI|managed (?:Codex )?(?:model|reasoning)|codex-lb (?:model|reasoning))/i.test(String(value || '').trim())
 }
 
 function mergeLostFastUiKeys(before: string, nextInput: string) {
@@ -336,7 +355,7 @@ async function snapshotForConfig(root: string, configPath: string) {
 async function backupCodexConfig(configPath: string, text: string, tag: string) {
   try {
     const backupPath = `${configPath}.sks-${tag}-${Date.now().toString(36)}.bak`
-    await writeTextAtomic(backupPath, text)
+    await writeTextAtomic(backupPath, text, { mode: 0o600 })
     await cleanupCodexConfigBackups(configPath, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined)
     return backupPath
   } catch {

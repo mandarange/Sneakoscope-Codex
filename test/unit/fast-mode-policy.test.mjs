@@ -13,19 +13,19 @@ import {
   clearFastModePreference
 } from '../../dist/core/agents/fast-mode-policy.js';
 
-test('fast mode policy does not force fast without explicit opt-in', () => {
+test('fast mode policy defaults to Fast without requiring an explicit opt-in', () => {
   const policy = resolveFastModePolicy({});
-  assert.equal(policy.fast_mode, false);
-  assert.equal(policy.service_tier, 'standard');
-  assert.equal(policy.default_fast_mode, false);
-  assert.equal(policy.disabled_by, 'default-standard');
+  assert.equal(policy.fast_mode, true);
+  assert.equal(policy.service_tier, 'fast');
+  assert.equal(policy.default_fast_mode, true);
+  assert.equal(policy.disabled_by, 'none');
   assert.equal(policy.explicit_fast, false);
   assert.equal(policy.explicit_service_tier, null);
   assert.deepEqual(fastModeEnv(policy), {
-    SKS_FAST_MODE: '0',
-    SKS_SERVICE_TIER: 'standard',
-    SKS_CODEX_DESKTOP_SERVICE_TIER: 'default',
-    SKS_REASONING_PROFILE_SUFFIX: 'standard'
+    SKS_FAST_MODE: '1',
+    SKS_SERVICE_TIER: 'fast',
+    SKS_CODEX_DESKTOP_SERVICE_TIER: 'priority',
+    SKS_REASONING_PROFILE_SUFFIX: 'fast'
   });
 });
 
@@ -62,6 +62,7 @@ test('fast mode preference toggles project default while explicit flags still wi
   const preferred = resolveFastModePolicy({ root });
   assert.equal(preferred.fast_mode, false);
   assert.equal(preferred.service_tier, 'standard');
+  assert.equal(preferred.default_fast_mode, true);
   assert.equal(preferred.disabled_by, 'preference-standard');
   assert.equal(preferred.preference_source, 'project-state');
 
@@ -90,7 +91,7 @@ test('fast mode preference toggles project default while explicit flags still wi
 
   const cleared = await clearFastModePreference(root);
   assert.equal(cleared.removed, true);
-  assert.equal(resolveFastModePolicy({ root }).service_tier, 'standard');
+  assert.equal(resolveFastModePolicy({ root }).service_tier, 'fast');
 });
 
 test('fast mode policy rewrites roster reasoning profiles and service tier', () => {

@@ -25,26 +25,36 @@ export function createReleaseGateHermeticEnv(input: {
   fs.mkdirSync(codexHome, { recursive: true })
   fs.mkdirSync(cacheHome, { recursive: true })
   fs.mkdirSync(reportDir, { recursive: true })
-  const migrationGateDisabled = input.gate.id === 'legacy:update-e2e' ? undefined : '1'
+  const gateEnv: NodeJS.ProcessEnv = {
+    ...process.env,
+    SKS_GATE_ID: input.gate.id,
+    SKS_GATE_RUN_ID: input.runId,
+    SKS_REPORT_DIR: reportDir,
+    SKS_TMP_DIR: tmpRoot,
+    TMPDIR: tmpRoot,
+    TMP: tmpRoot,
+    TEMP: tmpRoot,
+    HOME: input.gate.isolation.home === 'temp' ? home : process.env.HOME,
+    CODEX_HOME: input.gate.isolation.codex_home === 'temp' ? codexHome : process.env.CODEX_HOME,
+    XDG_CACHE_HOME: cacheHome,
+    SKS_DISABLE_REAL_MODEL_CALLS: input.gate.preset.includes('real-check') ? process.env.SKS_DISABLE_REAL_MODEL_CALLS || '0' : '1',
+    SKS_DISABLE_GLOBAL_CONFIG_MUTATION: '1',
+    // Gates must never spawn a real GUI menu bar status item into the user's
+    // live session. Belt to the temp-path launch guard in installSksMenuBar.
+    SKS_SKIP_SKS_MENUBAR_LAUNCH: '1'
+  }
+  if (input.gate.id === 'legacy:update-e2e') {
+    // This gate exercises the migration path itself. An ambient disable flag
+    // from the parent Codex/SKS process must not turn the fixture into a false
+    // successful skip.
+    delete gateEnv.SKS_UPDATE_MIGRATION_GATE_DISABLED
+  } else {
+    gateEnv.SKS_UPDATE_MIGRATION_GATE_DISABLED = '1'
+  }
   return {
     tmp_dir: tmpRoot,
     report_dir: reportDir,
-    env: {
-      ...process.env,
-      SKS_GATE_ID: input.gate.id,
-      SKS_GATE_RUN_ID: input.runId,
-      SKS_REPORT_DIR: reportDir,
-      SKS_TMP_DIR: tmpRoot,
-      HOME: input.gate.isolation.home === 'temp' ? home : process.env.HOME,
-      CODEX_HOME: input.gate.isolation.codex_home === 'temp' ? codexHome : process.env.CODEX_HOME,
-      XDG_CACHE_HOME: cacheHome,
-      ...(migrationGateDisabled ? { SKS_UPDATE_MIGRATION_GATE_DISABLED: migrationGateDisabled } : {}),
-      SKS_DISABLE_REAL_MODEL_CALLS: input.gate.preset.includes('real-check') ? process.env.SKS_DISABLE_REAL_MODEL_CALLS || '0' : '1',
-      SKS_DISABLE_GLOBAL_CONFIG_MUTATION: '1',
-      // Gates must never spawn a real GUI menu bar status item into the user's
-      // live session. Belt to the temp-path launch guard in installSksMenuBar.
-      SKS_SKIP_SKS_MENUBAR_LAUNCH: '1'
-    }
+    env: gateEnv
   }
 }
 

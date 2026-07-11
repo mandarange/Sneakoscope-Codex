@@ -3,7 +3,9 @@ import { assertGate, emitGate, importDist, readJson, readText, root } from './sk
 const impactMod = await importDist('core/triwiki/triwiki-gate-impact-map.js');
 const map = impactMod.buildTriWikiGateImpactMap(root);
 const migration = readText('docs/sks-4-migration.md');
-const allowlist = parseAllowlist(migration);
+const currentVersion = String(readJson('package.json').version || '');
+assertGate(/^\d+\.\d+\.\d+(?:[-+].*)?$/.test(currentVersion), 'package version must be valid before evaluating legacy allowlist expiry', { currentVersion });
+const allowlist = parseAllowlist(migration, currentVersion);
 const gates = ((readJson('release-gates.v2.json').gates || []) as Array<{ id: string; command: string; preset?: string[] }>);
 const legacyOrphans = map.impacts.filter((impact: { orphan: boolean; gate_id: string }) => impact.orphan && removableLegacy(impact.gate_id, ''));
 const legacyPresent = gates.filter((gate) => gate.preset?.includes('release') && removableLegacy(gate.id, gate.command) && !isAllowed(gate.id, allowlist));
@@ -21,11 +23,11 @@ function removableLegacy(id: string, command: string): boolean {
     || /codex-0139/.test(command);
 }
 
-function parseAllowlist(text: string): Array<{ id: string; reason: string; owner: string; expires: string }> {
+function parseAllowlist(text: string, currentVersion: string): Array<{ id: string; reason: string; owner: string; expires: string }> {
   return [...text.matchAll(/<!--\s*sks-legacy-allowlist\s*([\s\S]*?)-->/g)].map((match) => {
     const body = match[1] || '';
     return { id: field(body, 'id'), reason: field(body, 'reason'), owner: field(body, 'owner'), expires: field(body, 'expires') };
-  }).filter((row) => row.id && row.reason && row.owner && compareVersion(row.expires, '4.0.2') > 0);
+  }).filter((row) => row.id && row.reason && row.owner && compareVersion(row.expires, currentVersion) > 0);
 }
 
 function isAllowed(id: string, allowlist: Array<{ id: string }>): boolean {
@@ -37,8 +39,8 @@ function field(body: string, name: string): string {
 }
 
 function compareVersion(a: string, b: string): number {
-  const left = a.split('.').map(Number);
-  const right = b.split('.').map(Number);
+  const left = (a.split(/[+-]/, 1)[0] || '').split('.').map(Number);
+  const right = (b.split(/[+-]/, 1)[0] || '').split('.').map(Number);
   for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
     const delta = (left[i] || 0) - (right[i] || 0);
     if (delta !== 0) return delta;

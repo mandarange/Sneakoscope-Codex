@@ -7,7 +7,11 @@ export function normalizeCodexMultiAgentEventName(name: string): {
   source_name: string
 } {
   const sourceName = String(name || '')
-  const normalized = sourceName.trim().toLowerCase().replace(/[-.\s]+/g, '_')
+  const normalized = sourceName
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace(/[-.\s]+/g, '_')
   if (normalized === 'start_agent' || normalized === 'spawn_agent' || normalized === 'subagent_start') {
     return { canonical: 'start_agent', stage: 'start', source_name: sourceName }
   }

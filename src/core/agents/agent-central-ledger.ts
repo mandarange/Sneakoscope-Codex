@@ -83,6 +83,15 @@ export async function initializeAgentCentralLedger(missionDir: string, input: { 
     heartbeat_at: null
   }]))
   await writeJsonAtomic(path.join(root, 'agent-sessions.json'), { schema: 'sks.agent-sessions.v1', mission_id: input.missionId, sessions })
+  await writeJsonAtomic(path.join(root, 'agent-session-cleanup.json'), {
+    schema: 'sks.agent-session-cleanup.v1',
+    generated_at: nowIso(),
+    source: 'agent-central-ledger-initialization',
+    total_sessions: Object.keys(sessions).length,
+    terminal_session_count: 0,
+    all_sessions_closed: false,
+    all_sessions_terminal: false
+  })
   await writeJsonAtomic(path.join(root, 'agent-roster.json'), input.roster)
   await writeJsonAtomic(path.join(root, 'agent-personas.json'), { schema: 'sks.agent-personas.v1', personas: input.roster.personas || [] })
   await writeJsonAtomic(path.join(root, 'agent-effort-policy.json'), input.roster.effort_policy || { schema: 'sks.agent-effort-policy.v1', dynamic: true, decisions: [] })

@@ -4,7 +4,7 @@ export const PRODUCT_DESIGN_REQUIRED_SKILLS = Object.freeze([
   'get-context',
   'ideate',
   'image-to-code',
-  'prototype',
+  'index',
   'research',
   'share',
   'url-to-code',
@@ -59,7 +59,7 @@ export const PRODUCT_DESIGN_PIPELINE_STAGES = Object.freeze([
   },
   {
     stage: 'artifact_generation',
-    skills: ['prototype', 'image-to-code', 'url-to-code'],
+    skills: ['index', 'image-to-code', 'url-to-code'],
     routes: ['Team', 'PPT'],
     purpose: 'turn sealed context, screenshots, images, or URLs into prototype/source direction'
   },

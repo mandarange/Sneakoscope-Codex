@@ -8,14 +8,14 @@ unless the user explicitly opts in. This policy is enforced by two compiled modu
 - `dist/core/safety/requested-scope-contract.js` — the deny-by-default scope contract.
 - `dist/core/safety/mutation-ledger.js` — the append-only record of every mutation.
 
-The gate `scripts/side-effect-zero-gate-check.mjs` (id `safety:side-effect-zero`)
+The gate `dist/scripts/side-effect-zero-gate-check.js` (id `safety:side-effect-zero`)
 proves the invariants below and writes `.sneakoscope/reports/side-effect-zero.json`.
 
-For 1.20.4, `scripts/mutation-callsite-coverage-check.mjs` extends the static check
-repo-wide across `src/**/*.ts` and the install/publish/release/doctor/codex/zellij/
-migration script surface. Raw mutation tokens must either be an observed `guarded*`
-call or match an external `safety-mutation-allowlist.json` entry with exact
-`file`, `symbol`, `token`, and `reason`. Unused or blanket allowlist entries fail.
+For 6.1.0, `dist/scripts/mutation-callsite-coverage-check.js` performs one static
+scan across every production `src/**/*.ts` file, excluding test sources. Raw
+mutation tokens must either be an observed `guarded*` call or match an external
+`safety-mutation-allowlist.json` entry with exact `file`, `symbol`, `token`, and
+`reason`. Unused, duplicate, or blanket allowlist entries fail.
 
 ## 1. The requested-scope contract (deny-by-default)
 

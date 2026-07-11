@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-nocheck
-// Gate: legacy:upgrade-zero-break
+// Gate: migration:upgrade-safety
 // Proves a 1.18.x -> 1.19 upgrade never breaks user Codex config across legacy
 // states. Operates entirely on temp dirs (os.tmpdir + fs.mkdtemp); never touches
 // the real ~/.codex. Always restores process.env.CODEX_HOME / HOME in finally.
@@ -46,7 +46,7 @@ try {
     tmpDirs.push(dir);
     const configPath = path.join(dir, 'config.toml');
     const corrupted =
-      'model = "gpt-5.5"\nservice_tier = "fast"\n\n[mcp_servers.xai-grok.env]\nXAI_API_KEY = "x"\nmodel_provider = "codex-lb"\nnotify = ["a","b"]\n';
+      'model = "gpt-5.6-terra"\nservice_tier = "fast"\n\n[mcp_servers.xai-grok.env]\nXAI_API_KEY = "x"\nmodel_provider = "codex-lb"\nnotify = ["a","b"]\n';
     fs.writeFileSync(configPath, corrupted, 'utf8');
 
     const result = await policy.repairCodexConfigStructure(configPath, { apply: true });
@@ -163,7 +163,7 @@ try {
     // project-scoped settings (sandbox_mode, [features]) must be PRESERVED in place.
     fs.writeFileSync(
       projectConfigPath,
-      'model_provider = "codex-lb"\nsandbox_mode = "workspace-write"\n\n[features]\nhooks = true\n',
+      '# Sneakoscope managed fixture\nmodel_provider = "codex-lb"\nsandbox_mode = "workspace-write"\n\n[features]\nhooks = true\n',
       'utf8'
     );
 
@@ -298,7 +298,7 @@ try {
     const dir = mkTmp('sks-legacy-noop-');
     tmpDirs.push(dir);
     const configPath = path.join(dir, 'config.toml');
-    const clean = 'model = "gpt-5.5"\nservice_tier = "fast"\n\n[features]\nhooks = true\n';
+    const clean = 'model = "gpt-5.6-terra"\nservice_tier = "fast"\n\n[features]\nhooks = true\n';
     fs.writeFileSync(configPath, clean, 'utf8');
     const before = fs.readFileSync(configPath, 'utf8');
 
@@ -388,7 +388,7 @@ try {
     'utf8'
   );
 
-  emitGate('legacy:upgrade-zero-break', {
+  emitGate('migration:upgrade-safety', {
     report_path: reportPath,
     states_checked: [
       'corrupted_config',

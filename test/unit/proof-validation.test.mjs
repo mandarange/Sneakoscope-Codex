@@ -98,6 +98,7 @@ async function writeRouteProof(root, missionId, patch = {}) {
     generated_at: '2026-05-25T00:00:00.000Z',
     mission_id: missionId,
     route: '$Team',
+    execution_class: 'real',
     status: 'verified',
     summary: { files_changed: 0, commands_run: 0, tests_passed: 0, tests_failed: 0, manual_review_required: false },
     evidence: {},

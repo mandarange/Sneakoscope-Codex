@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const stampPath = process.env.SKS_RELEASE_STAMP_PATH || path.join(root, '.sneakoscope', 'reports', 'release-check-stamp.json');
 const command = process.argv[2] || 'verify';
+const commandArgs = process.argv.slice(3);
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function fail(message, detail = '') {
@@ -270,7 +271,7 @@ function currentStampPayload() {
     include: (rel) => packageFileIncluded(`dist/${rel}`, packageEntries)
   });
   return {
-    schema: 'sks.release-check-stamp.v1',
+    schema: 'sks.release-check-stamp.v2',
     package_name: pkg.name,
     package_version: pkg.version,
     git_commit: gitCommit(),
@@ -286,8 +287,10 @@ function currentStampPayload() {
 }
 
 function writeStamp() {
+  const releaseGateProof = fullReleaseGateProofForWrite();
   const payload = {
     ...currentStampPayload(),
+    release_gate_proof: releaseGateProof,
     generated_at: new Date().toISOString()
   };
   fs.mkdirSync(path.dirname(stampPath), { recursive: true });
@@ -318,6 +321,8 @@ function inspectStamp() {
   for (const key of ['schema', 'package_name', 'package_version', 'package_json_sha256', 'package_files_sha256', 'dist_build_sha256', 'dist_file_count', 'release_gate_sha256', 'release_check_sha256', 'source_digest', 'source_file_count']) {
     if (stamp[key] !== current[key]) mismatches.push(`${key}: stamp=${stamp[key] || 'missing'} current=${current[key] || 'missing'}`);
   }
+  const proofInspection = inspectFullReleaseGateProof(stamp.release_gate_proof);
+  if (!proofInspection.ok) mismatches.push(...proofInspection.blockers.map((blocker) => `release_gate_proof:${blocker}`));
   if (mismatches.length) {
     return {
       ok: false,
@@ -327,6 +332,150 @@ function inspectStamp() {
     };
   }
   return { ok: true, current };
+}
+
+function fullReleaseGateProofForWrite() {
+  const preset = argValue('--preset');
+  const full = commandArgs.includes('--full');
+  if (preset !== 'release' || !full) {
+    fail('full release proof required to write publish stamp', 'Use `npm run release:check:full`; affected/fast/confidence checks cannot authorize publish.');
+  }
+  const explicit = argValue('--summary');
+  const summaryPath = explicit ? path.resolve(root, explicit) : latestFullReleaseSummaryPath();
+  if (!summaryPath) fail('full release DAG summary missing', 'Run `npm run release:check:full` before writing the publish stamp.');
+  const reportRoot = path.resolve(root, '.sneakoscope', 'reports', 'release-gates');
+  const relative = path.relative(reportRoot, summaryPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) fail('release DAG summary is outside the managed report root');
+  let summary;
+  try {
+    summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+  } catch (error) {
+    fail('unable to read full release DAG summary', error?.message || String(error));
+  }
+  const validation = validateFullReleaseSummary(summary);
+  if (validation.length) fail('release DAG summary is not full publish proof', validation.join('\n'));
+  const explicitRealSummary = argValue('--real-summary');
+  const realSummaryPath = explicitRealSummary
+    ? path.resolve(root, explicitRealSummary)
+    : path.join(root, '.sneakoscope', 'reports', 'release-real-check.json');
+  const managedReports = path.resolve(root, '.sneakoscope', 'reports');
+  const realRelative = path.relative(managedReports, realSummaryPath);
+  if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) fail('release real-check summary is outside the managed report root');
+  let realSummary;
+  try {
+    realSummary = JSON.parse(fs.readFileSync(realSummaryPath, 'utf8'));
+  } catch (error) {
+    fail('unable to read release real-check summary', error?.message || String(error));
+  }
+  const realValidation = validateReleaseRealSummary(realSummary);
+  if (realValidation.length) fail('release real-check summary is not publish proof', realValidation.join('\n'));
+  if (fs.statSync(realSummaryPath).mtimeMs < fs.statSync(summaryPath).mtimeMs) fail('release real-check predates the full release DAG summary');
+  return {
+    schema: 'sks.release-check-full-proof.v1',
+    preset: 'release',
+    full: true,
+    run_id: summary.run_id,
+    summary_path: path.relative(root, summaryPath).split(path.sep).join('/'),
+    summary_sha256: sha256(fs.readFileSync(summaryPath)),
+    selected_gates: summary.selected_gates,
+    completed: summary.completed,
+    failed: summary.failed,
+    affected_mode: summary.affected_selection?.mode,
+    confidence: summary.completion_certificate?.confidence || null,
+    real_check_path: path.relative(root, realSummaryPath).split(path.sep).join('/'),
+    real_check_sha256: sha256(fs.readFileSync(realSummaryPath)),
+    real_check_count: realSummary.all_checks.length
+  };
+}
+
+function latestFullReleaseSummaryPath() {
+  const reportRoot = path.join(root, '.sneakoscope', 'reports', 'release-gates');
+  if (!fs.existsSync(reportRoot)) return null;
+  return fs.readdirSync(reportRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(reportRoot, entry.name, 'summary.json'))
+    .filter((file) => fs.existsSync(file))
+    .map((file) => ({ file, stat: fs.statSync(file) }))
+    .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+    .map((row) => row.file)
+    .find((file) => {
+      try {
+        return validateFullReleaseSummary(JSON.parse(fs.readFileSync(file, 'utf8'))).length === 0;
+      } catch {
+        return false;
+      }
+    }) || null;
+}
+
+function validateFullReleaseSummary(summary) {
+  const blockers = [];
+  if (summary?.schema !== 'sks.release-gate-dag-run.v1') blockers.push('summary_schema_invalid');
+  if (summary?.ok !== true) blockers.push('summary_not_ok');
+  if (summary?.selected_preset !== 'release') blockers.push('preset_not_release');
+  if (summary?.affected_selection?.mode !== 'full') blockers.push('affected_mode_not_full');
+  if (!Number.isInteger(summary?.selected_gates) || summary.selected_gates <= 0) blockers.push('selected_gates_empty');
+  if (summary?.failed !== 0) blockers.push('failed_gates_present');
+  if (summary?.completed !== summary?.selected_gates) blockers.push('not_all_selected_gates_completed');
+  if (!Array.isArray(summary?.selected_gate_ids) || summary.selected_gate_ids.length !== summary.selected_gates) blockers.push('selected_gate_ids_incomplete');
+  if (summary?.completion_certificate?.confidence !== 'full-release-proof') blockers.push('completion_confidence_not_full');
+  if (summary?.completion_certificate?.full_release_proof !== 'current_run') blockers.push('full_release_proof_not_current_run');
+  return blockers;
+}
+
+function validateReleaseRealSummary(summary) {
+  const blockers = [];
+  if (summary?.schema !== 'sks.release-real-check.v1') blockers.push('real_check_schema_invalid');
+  if (summary?.ok !== true) blockers.push('real_check_not_ok');
+  if (!Array.isArray(summary?.all_checks) || summary.all_checks.length === 0) blockers.push('real_check_empty');
+  else if (summary.all_checks.some((row) => row?.ok !== true)) blockers.push('real_check_failures_present');
+  return blockers;
+}
+
+function inspectFullReleaseGateProof(proof) {
+  const blockers = [];
+  if (proof?.schema !== 'sks.release-check-full-proof.v1') blockers.push('proof_schema_invalid');
+  if (proof?.preset !== 'release' || proof?.full !== true) blockers.push('proof_not_full_release');
+  const summaryPath = proof?.summary_path ? path.resolve(root, proof.summary_path) : null;
+  const reportRoot = path.resolve(root, '.sneakoscope', 'reports', 'release-gates');
+  if (!summaryPath || !fs.existsSync(summaryPath)) blockers.push('summary_missing');
+  else {
+    const relative = path.relative(reportRoot, summaryPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) blockers.push('summary_outside_managed_reports');
+    else {
+      const bytes = fs.readFileSync(summaryPath);
+      if (sha256(bytes) !== proof.summary_sha256) blockers.push('summary_hash_mismatch');
+      try {
+        const summary = JSON.parse(bytes);
+        blockers.push(...validateFullReleaseSummary(summary));
+        if (summary.run_id !== proof.run_id || summary.selected_gates !== proof.selected_gates || summary.completed !== proof.completed || summary.failed !== proof.failed) blockers.push('summary_identity_mismatch');
+      } catch {
+        blockers.push('summary_parse_failed');
+      }
+    }
+  }
+  const realCheckPath = proof?.real_check_path ? path.resolve(root, proof.real_check_path) : null;
+  if (!realCheckPath || !fs.existsSync(realCheckPath)) blockers.push('real_check_summary_missing');
+  else {
+    const relative = path.relative(path.resolve(root, '.sneakoscope', 'reports'), realCheckPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) blockers.push('real_check_summary_outside_managed_reports');
+    else {
+      const bytes = fs.readFileSync(realCheckPath);
+      if (sha256(bytes) !== proof.real_check_sha256) blockers.push('real_check_summary_hash_mismatch');
+      try {
+        const realSummary = JSON.parse(bytes);
+        blockers.push(...validateReleaseRealSummary(realSummary));
+        if (realSummary.all_checks?.length !== proof.real_check_count) blockers.push('real_check_identity_mismatch');
+      } catch {
+        blockers.push('real_check_summary_parse_failed');
+      }
+    }
+  }
+  return { ok: blockers.length === 0, blockers: [...new Set(blockers)] };
+}
+
+function argValue(name) {
+  const index = commandArgs.indexOf(name);
+  return index >= 0 ? commandArgs[index + 1] || null : null;
 }
 
 function verifyStamp() {
@@ -356,4 +505,4 @@ function ensureStamp() {
 if (command === 'write') writeStamp();
 else if (command === 'verify') verifyStamp();
 else if (command === 'ensure') ensureStamp();
-else fail(`unknown command ${command}`, 'Usage: node ./dist/scripts/release-check-stamp.js <write|verify|ensure>');
+else fail(`unknown command ${command}`, 'Usage: node ./dist/scripts/release-check-stamp.js <write --preset release --full [--summary path]|verify|ensure>');

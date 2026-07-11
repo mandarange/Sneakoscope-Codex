@@ -74,7 +74,7 @@ const results = [];
   const codexDir = path.join(dir, '.codex');
   await fs.mkdir(codexDir, { recursive: true });
   const cfg = path.join(codexDir, 'config.toml');
-  const broken = 'model = "gpt-5.5"\n[features\nhooks = true\n'; // malformed table header
+  const broken = 'model = "gpt-5.6-terra"\n[features\nhooks = true\n'; // malformed table header
   await fs.writeFile(cfg, broken);
   const res = await helpers.ensureGlobalCodexFastModeDuringInstall({ home: dir, configPath: cfg });
   const after = await fs.readFile(cfg, 'utf8');

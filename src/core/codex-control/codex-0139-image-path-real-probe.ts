@@ -6,7 +6,7 @@ import { buildImageArtifactPathContract } from '../image/image-artifact-path-con
 import { codex0139ProbeTail, skippedCodex0139Probe, type Codex0139SingleProbe } from './codex-0139-real-probes.js'
 
 const ONE_BY_ONE_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',
   'base64'
 )
 
@@ -24,10 +24,10 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   await writeBinaryAtomic(inputA, ONE_BY_ONE_PNG)
   await writeBinaryAtomic(inputB, ONE_BY_ONE_PNG)
   const contract = await buildImageArtifactPathContract(input.root, {
-    missionId: 'codex-0139-image-path-real-probe',
+    missionId: 'codex-0144-image-path-real-probe',
     images: [
-      { id: 'input-a', kind: 'input_attachment', filePath: inputA, route: 'codex-0139-real-probe', stage: 'candidate' },
-      { id: 'input-b', kind: 'input_attachment', filePath: inputB, route: 'codex-0139-real-probe', stage: 'referenced' }
+      { id: 'input-a', kind: 'input_attachment', filePath: inputA, route: 'codex-0144-core-real-probe', stage: 'candidate' },
+      { id: 'input-b', kind: 'input_attachment', filePath: inputB, route: 'codex-0144-core-real-probe', stage: 'referenced' }
     ]
   })
   const codexBin = input.codexBin || await findCodexBinary()
@@ -44,7 +44,7 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
       artifact_paths: [tempDir]
     }
   }
-  if (process.env.SKS_CODEX_0139_IMAGE_REAL_PROBE_ALLOW_SKIP === '1') {
+  if (process.env.SKS_CODEX_0144_IMAGE_REAL_PROBE_ALLOW_SKIP === '1' || process.env.SKS_CODEX_0139_IMAGE_REAL_PROBE_ALLOW_SKIP === '1') {
     return {
       ...skippedCodex0139Probe('codex_image_edit_actual_api_skipped', {
         codex_bin: codexBin,
@@ -58,12 +58,12 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   }
   const outputFile = path.join(tempDir, 'last-message.txt')
   const prompt = [
-    'This is a Codex 0.139 image path routing probe.',
+    'This is a Codex 0.144.1 image path routing probe.',
     `Only the image file named ${path.basename(inputB)} is intentionally referenced.`,
     `Return compact JSON {"referenced_path":"${inputB.replace(/\\/g, '\\\\')}","saw_image":true}.`,
     'Do not edit files and do not reference any other image path.'
   ].join(' ')
-  const extraArgs = ['--image', inputB, '--skip-git-repo-check', '--ephemeral']
+  const extraArgs = ['-c', 'mcp_servers={}', '--image', inputB, '--skip-git-repo-check', '--ephemeral']
   const args = buildCodexExecArgs({ root: tempDir, prompt, outputFile, json: true, extraArgs })
   const result = await runProcess(codexBin, args, {
     cwd: tempDir,
@@ -78,6 +78,7 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   const ok = exactReferencedPath
     && commandReferencesOnlyInputB
     && outputReferencesInputB
+    && processExitedSuccessfully
     && contract.blockers.length === 0
   return {
     ok,
@@ -98,6 +99,11 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
       output_file: outputFile,
       contract_blockers: contract.blockers
     },
-    blockers: ok ? [] : ['codex_image_referenced_path_actual_cli_probe_failed']
+    blockers: ok ? [] : [
+      ...(processExitedSuccessfully ? [] : ['codex_image_referenced_path_process_failed_or_timed_out']),
+      ...(!exactReferencedPath || !commandReferencesOnlyInputB || !outputReferencesInputB || contract.blockers.length > 0
+        ? ['codex_image_referenced_path_actual_cli_probe_failed']
+        : [])
+    ]
   }
 }

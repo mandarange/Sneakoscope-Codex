@@ -20,13 +20,6 @@ const harnessGates = Array.isArray(harnessManifest?.gates)
 const releaseGateIds = new Set(releaseGates.map((gate) => gate.id));
 const harnessGateIds = new Set(harnessGates.map((gate) => gate.id));
 const allManifestGates = [...releaseGates, ...harnessGates];
-const parallelCheckPath = path.join(root, 'src/scripts/release-parallel-check.ts');
-const parallelCheckSource = fs.existsSync(parallelCheckPath) ? fs.readFileSync(parallelCheckPath, 'utf8') : '';
-const releaseCheckScriptSource = [
-  String(pkg.scripts?.['release:check'] || ''),
-  String(pkg.scripts?.['release:check:legacy'] || ''),
-  parallelCheckSource
-].join('\n');
 const releaseRealCheckPath = path.join(root, 'src/scripts/release-real-check.ts');
 const releaseRealCheckSource = fs.existsSync(releaseRealCheckPath) ? fs.readFileSync(releaseRealCheckPath, 'utf8') : '';
 const requiredDocs = [
@@ -224,7 +217,9 @@ const requiredScripts = [
   'agent:worker-pane-communication-contract',
   'zellij:real-session-heartbeat',
   'zellij:ui-design',
-  'legacy:upgrade-zero-break',
+  'legacy:gate-purge',
+  'legacy:gate-inventory',
+  'legacy:strong-inventory',
   'publish:packlist-performance',
   'postinstall:safe-side-effects',
   'runtime:ts-rust-boundary',
@@ -242,7 +237,6 @@ const requiredScripts = [
   'core-skill:trainer-loop',
   'safety:side-effect-zero',
   'safety:mutation-callsite-coverage',
-  'safety:mutation-callsite-coverage:repo-wide',
   'side-effect:runtime-report',
   'release:version-truth',
   'zellij:doctor-readiness',
@@ -332,14 +326,13 @@ const requiredReleaseGates = [
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',
   'naruto:canonical-stop-gate',
-  'agent:native-cli-session-swarm',
-  'agent:native-cli-session-proof',
-  'agent:fast-mode-worker-propagation',
-  'runtime:no-tmux',
-  'runtime:no-mjs-scripts',
-  'release:dag-full-coverage',
+  'agent:native-cli-session-swarm-scaling',
+  'agent:fast-mode-policy',
+  'codex-control:event-stream-ledger',
+  'runtime:proof-summary',
+  'release:dag-runner',
   'release:gate-budget',
-  'release:gate-planner',
+  'release:gate-selection-comprehensive',
   'policy:gate-audit',
   'package:published-contract',
   'typecheck'
@@ -375,7 +368,7 @@ assertGate(
 );
 assertGate(releaseManifest?.schema === 'sks.release-gates.v2', 'release gate manifest schema mismatch', { schema: releaseManifest?.schema || null });
 assertGate(harnessManifest?.schema === 'sks.infra-harness-gates.v1', 'infra harness manifest schema mismatch', { schema: harnessManifest?.schema || null });
-assertGate(releaseGates.length > 0 && releaseGates.length <= 220, 'release v2 manifest must include 1..220 release gates', { release_gates: releaseGates.length });
+assertGate(releaseGates.length > 0 && releaseGates.length <= 200, 'release v2 manifest must include 1..200 release gates', { release_gates: releaseGates.length });
 assertGate(harnessGates.length > 0, 'infra harness manifest must include harness gates', { harness_gates: harnessGates.length });
 const PACKAGE_SCRIPT_BUDGET = 100;
 assertGate(Object.keys(pkg.scripts || {}).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length, limit: PACKAGE_SCRIPT_BUDGET });
@@ -395,13 +388,15 @@ assertGate(pkg.bin?.sks === 'dist/bin/sks.js', 'package runtime must use dist/bi
 assertGate(pkg.bin?.sneakoscope === 'dist/bin/sks.js', 'sneakoscope runtime must use dist/bin/sks.js');
 assertGate(!pkg.files?.includes('src'), 'package files must not include src runtime shadows');
 const publishPrepIgnoreScripts = String(pkg.scripts?.['publish:prep-ignore-scripts'] || '');
+const publishVerifyIgnoreScripts = String(pkg.scripts?.['publish:verify-ignore-scripts'] || '');
+const effectivePublishPreflight = `${publishPrepIgnoreScripts} ${publishVerifyIgnoreScripts}`;
 assertGate(
   !/\bprepublishOnly\b/.test(publishPrepIgnoreScripts),
   'publish:prep-ignore-scripts must not depend on npm lifecycle hooks that --ignore-scripts disables',
   { script: publishPrepIgnoreScripts || null }
 );
+assertGate(/build:(?:clean|incremental)/.test(effectivePublishPreflight), 'publish:prep-ignore-scripts missing lifecycle-disabled publish preflight: build:clean|build:incremental', { script: effectivePublishPreflight });
 for (const required of [
-  'build:incremental',
   'release:version-truth',
   'publish:packlist-performance',
   'package-published-contract-check.js',
@@ -409,7 +404,7 @@ for (const required of [
   'publish-tag:check'
 ]) {
   assertGate(
-    publishPrepIgnoreScripts.includes(required),
+    effectivePublishPreflight.includes(required),
     `publish:prep-ignore-scripts missing lifecycle-disabled publish preflight: ${required}`,
     { script: publishPrepIgnoreScripts || null }
   );

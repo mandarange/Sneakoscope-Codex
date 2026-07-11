@@ -30,7 +30,8 @@ test('postinstall command auto-bootstrap passes a callable bootstrap command', a
       SKS_SKIP_POSTINSTALL_GLOBAL_SKILLS: '1',
       SKS_SKIP_POSTINSTALL_CODEX_LB_AUTH: '1',
       SKS_SKIP_CODEX_LB_LAUNCH_ENV: '1',
-      SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1'
+      SKS_SKIP_CODEX_APP_UPGRADE_REPAIR: '1',
+      SKS_POSTINSTALL_GLOBAL_DOCTOR: '0'
     }
   });
 

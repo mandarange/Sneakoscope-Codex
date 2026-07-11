@@ -1,9 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { sha256 } from './fsx.js';
 
 export const WIKI_COORD_SCHEMA = 'sks.wiki-coordinate.v1';
 export const WIKI_VOXEL_SCHEMA = 'sks.wiki-voxel.v1';
 export const WIKI_TAU = Math.PI * 2;
 export const WIKI_VOXEL_LAYERS = Object.freeze(['sem', 'trust', 'fresh', 'prio', 'conflict', 'route', 'cost']);
+export const DEFAULT_WIKI_VOXEL_QUANTIZATION = Object.freeze({ domain: 64, radius: 16, phase: 64 });
 
 export function clamp01(x: any) {
   return Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0));
@@ -266,10 +269,21 @@ function riskScore(value: any) {
   return table[String(value || 'medium')] ?? 0.35;
 }
 
-function quantizeVoxelCoord(c: any = []) {
-  const domain = Math.max(0, Math.min(63, Math.floor((wrapTau(c[0]) / WIKI_TAU) * 64)));
-  const radius = Math.max(0, Math.min(15, Math.floor(clamp01(Number(c[1])) * 16)));
-  const phase = Math.max(0, Math.min(63, Math.floor((wrapTau(c[2]) / WIKI_TAU) * 64)));
+function normalizeVoxelQuantization(value: any = {}) {
+  const normalize = (key: 'domain' | 'radius' | 'phase') => {
+    const candidate = Number(value?.[key]);
+    return Number.isInteger(candidate) && candidate > 0 && candidate <= 65_536
+      ? candidate
+      : DEFAULT_WIKI_VOXEL_QUANTIZATION[key];
+  };
+  return { domain: normalize('domain'), radius: normalize('radius'), phase: normalize('phase') };
+}
+
+function quantizeVoxelCoord(c: any = [], value: any = DEFAULT_WIKI_VOXEL_QUANTIZATION) {
+  const quantization = normalizeVoxelQuantization(value);
+  const domain = Math.max(0, Math.min(quantization.domain - 1, Math.floor((wrapTau(c[0]) / WIKI_TAU) * quantization.domain)));
+  const radius = Math.max(0, Math.min(quantization.radius - 1, Math.floor(clamp01(Number(c[1])) * quantization.radius)));
+  const phase = Math.max(0, Math.min(quantization.phase - 1, Math.floor((wrapTau(c[2]) / WIKI_TAU) * quantization.phase)));
   return `${domain}:${radius}:${phase}`;
 }
 
@@ -290,8 +304,10 @@ function layerVector(anchor: any = {}, claim: any = {}, q3: any = []) {
   const trust = Number.isFinite(Number(anchor.trust_score))
     ? Number(anchor.trust_score)
     : clamp01((0.7 * statusScore(claim.status || anchor.st)) + (0.3 * Math.log1p(Number(claim.evidence_count) || 0) / Math.log1p(8)));
+  const concentration = Number(anchor.c?.[3]);
+  const similarity = Number(anchor.sim);
   return [
-    clamp01((Number(anchor.c?.[3]) || 0.85) * (Number(anchor.sim) || 1)),
+    clamp01((Number.isFinite(concentration) ? concentration : 0.85) * (Number.isFinite(similarity) ? similarity : 1)),
     clamp01(trust),
     freshnessScore(claim.freshness),
     clamp01((required / 1.25) + (requestCount * 0.04) + (strongFeedback * 0.18)),
@@ -301,15 +317,16 @@ function layerVector(anchor: any = {}, claim: any = {}, q3: any = []) {
   ].map(round4);
 }
 
-export function buildWikiVoxelOverlay({ anchors = [], claimsById = new Map(), q3 = [], quantization = { domain: 64, radius: 16, phase: 64 } }: any = {}) {
+export function buildWikiVoxelOverlay({ anchors = [], claimsById = new Map(), q3 = [], quantization = DEFAULT_WIKI_VOXEL_QUANTIZATION }: any = {}) {
+  const normalizedQuantization = normalizeVoxelQuantization(quantization);
   const rows = (anchors || []).map((anchor: any) => {
     const claim = claimsById instanceof Map ? claimsById.get(anchor.id) || {} : {};
-    return [quantizeVoxelCoord(anchor.c), anchor.id, layerVector(anchor, claim, q3)];
+    return [quantizeVoxelCoord(anchor.c, normalizedQuantization), anchor.id, layerVector(anchor, claim, q3)];
   });
   return {
     s: WIKI_VOXEL_SCHEMA,
     base: WIKI_COORD_SCHEMA,
-    q: quantization,
+    q: normalizedQuantization,
     l: WIKI_VOXEL_LAYERS,
     v: rows
   };
@@ -321,13 +338,39 @@ export function validateWikiVoxelOverlay(overlay: any = {}, anchorIds: any = nul
   if (overlay.s !== WIKI_VOXEL_SCHEMA) issues.push({ id: 'vx_schema', severity: 'error' });
   if (overlay.base !== WIKI_COORD_SCHEMA) issues.push({ id: 'vx_base', severity: 'error' });
   if (!Array.isArray(overlay.l) || overlay.l.join('|') !== WIKI_VOXEL_LAYERS.join('|')) issues.push({ id: 'vx_layers', severity: 'error' });
+  const rawQuantization = overlay.q;
+  for (const key of ['domain', 'radius', 'phase']) {
+    const value = Number(rawQuantization?.[key]);
+    if (!Number.isInteger(value) || value <= 0 || value > 65_536) issues.push({ id: 'vx_quantization', severity: 'error', axis: key });
+  }
+  const quantization = normalizeVoxelQuantization(rawQuantization);
+  const expectedById = new Map<string, string | null>();
+  if (anchorIds instanceof Map) {
+    for (const [id, value] of anchorIds) {
+      const coord = Array.isArray(value) ? value : value?.c;
+      expectedById.set(String(id), Array.isArray(coord) && coord.length === 4 ? quantizeVoxelCoord(coord, quantization) : null);
+    }
+  } else if (anchorIds instanceof Set) {
+    for (const id of anchorIds) expectedById.set(String(id), null);
+  }
   const rows = Array.isArray(overlay.v) ? overlay.v : [];
+  const seenIds = new Set<string>();
   for (const row of rows) {
     const id = row[1];
     const values = row[2];
-    if (!/^\d{1,2}:\d{1,2}:\d{1,2}$/.test(String(row[0] || ''))) issues.push({ id: 'vx_key', severity: 'error', anchor: id });
+    const key = String(row[0] || '');
+    const parts = /^\d+:\d+:\d+$/.test(key) ? key.split(':').map(Number) : [];
+    const [domainKey = -1, radiusKey = -1, phaseKey = -1] = parts;
+    if (parts.length !== 3
+      || domainKey < 0 || domainKey >= quantization.domain
+      || radiusKey < 0 || radiusKey >= quantization.radius
+      || phaseKey < 0 || phaseKey >= quantization.phase) issues.push({ id: 'vx_key', severity: 'error', anchor: id });
     if (!id) issues.push({ id: 'vx_id', severity: 'error' });
-    if (anchorIds && !anchorIds.has(id)) issues.push({ id: 'vx_anchor', severity: 'error', anchor: id });
+    if (id && seenIds.has(String(id))) issues.push({ id: 'vx_duplicate_anchor', severity: 'error', anchor: id });
+    if (id) seenIds.add(String(id));
+    if (anchorIds && !expectedById.has(String(id))) issues.push({ id: 'vx_anchor', severity: 'error', anchor: id });
+    const expectedKey = expectedById.get(String(id));
+    if (expectedKey && key !== expectedKey) issues.push({ id: 'vx_coord_mismatch', severity: 'error', anchor: id });
     if (!Array.isArray(values) || values.length !== WIKI_VOXEL_LAYERS.length) issues.push({ id: 'vx_tuple', severity: 'error', anchor: id });
     else {
       for (const value of values) {
@@ -335,6 +378,9 @@ export function validateWikiVoxelOverlay(overlay: any = {}, anchorIds: any = nul
         if (!Number.isFinite(n) || n < 0 || n > 1) issues.push({ id: 'vx_value', severity: 'error', anchor: id });
       }
     }
+  }
+  for (const id of expectedById.keys()) {
+    if (!seenIds.has(id)) issues.push({ id: 'vx_missing_anchor', severity: 'error', anchor: id });
   }
   return { ok: issues.length === 0, checked: rows.length, issues };
 }
@@ -375,25 +421,92 @@ function validateTrustFields(anchor: any = {}, issues: any = []) {
   }
 }
 
-export function validateWikiCoordinateIndex(index: any = {}) {
+function pathIsInsideRoot(root: string, candidate: string) {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+interface HydrationValidationRoot {
+  resolved: string;
+  real: string | null;
+  cache: Map<string, string | null>;
+}
+
+function hydrationValidationRoot(root: unknown): HydrationValidationRoot | null {
+  if (!root) return null;
+  const resolved = path.resolve(String(root));
+  try {
+    return { resolved, real: fs.realpathSync(resolved), cache: new Map() };
+  } catch {
+    return { resolved, real: null, cache: new Map() };
+  }
+}
+
+function validateHydrationPath(anchor: any = {}, root: HydrationValidationRoot | null, issues: any[] = []) {
+  if (!root || !hasOwn(anchor, 'p') || anchor.p == null) return;
+  if (typeof anchor.p !== 'string' || !anchor.p.trim()) {
+    issues.push({ id: 'invalid_hydration_path', severity: 'error', anchor: anchor.id, path: anchor.p });
+    return;
+  }
+  const citation = anchor.p.trim();
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(citation)) return;
+  const resolvedCitation = path.isAbsolute(citation) ? path.resolve(citation) : path.resolve(root.resolved, citation);
+  if (!pathIsInsideRoot(root.resolved, resolvedCitation)) {
+    issues.push({ id: 'hydration_path_outside_root', severity: 'error', anchor: anchor.id, path: citation });
+    return;
+  }
+  let realCitation = root.cache.get(resolvedCitation) || null;
+  if (!root.cache.has(resolvedCitation)) {
+    try {
+      realCitation = fs.realpathSync(resolvedCitation);
+    } catch {
+      realCitation = null;
+    }
+    root.cache.set(resolvedCitation, realCitation);
+  }
+  if (!realCitation) {
+    issues.push({ id: 'hydration_path_missing', severity: 'error', anchor: anchor.id, path: citation });
+    return;
+  }
+  if (!root.real || !pathIsInsideRoot(root.real, realCitation)) {
+    issues.push({ id: 'hydration_path_outside_root', severity: 'error', anchor: anchor.id, path: citation });
+  }
+}
+
+export function validateWikiCoordinateIndex(index: any = {}, options: { root?: string | null; claims?: any[] | null } = {}) {
   const issues: any[] = [];
   if (index.schema !== WIKI_COORD_SCHEMA) issues.push({ id: 'schema_mismatch', severity: 'error' });
   if (!index.channel_map && !index.ch) issues.push({ id: 'channel_map_missing', severity: 'error' });
   const anchors = expandedAnchors(index);
   if (!anchors.length && !Array.isArray(index.anchors) && !Array.isArray(index.a)) issues.push({ id: 'anchors_missing', severity: 'error' });
   const seen = new Set();
+  const hydrationRoot = hydrationValidationRoot(options.root);
+  const compactClaims = new Map(
+    (Array.isArray(options.claims) ? options.claims : [])
+      .filter((claim: any) => claim && typeof claim.id === 'string')
+      .map((claim: any) => [String(claim.id), claim])
+  );
   for (const anchor of anchors) {
     if (!anchor.id) issues.push({ id: 'anchor_id_missing', severity: 'error' });
     if (seen.has(anchor.id)) issues.push({ id: 'duplicate_anchor', severity: 'error', anchor: anchor.id });
     seen.add(anchor.id);
     if (!/^[0-9a-f]{8}$/i.test(String(anchor.rgba || ''))) issues.push({ id: 'invalid_rgba_key', severity: 'error', anchor: anchor.id });
     if (!Array.isArray(anchor.c) || anchor.c.length !== 4) issues.push({ id: 'invalid_coord_tuple', severity: 'error', anchor: anchor.id });
+    if (!/^[0-9a-f]{16}$/i.test(String(anchor.h || ''))) issues.push({ id: 'invalid_anchor_hash', severity: 'error', anchor: anchor.id });
+    const compactClaim: any = compactClaims.get(String(anchor.id));
+    if (compactClaim && typeof compactClaim.text === 'string') {
+      const expectedHash = sha256(`${anchor.id}\n${compactClaim.text}`).slice(0, 16);
+      if (anchor.h !== expectedHash) issues.push({ id: 'anchor_hash_mismatch', severity: 'error', anchor: anchor.id });
+      if (compactClaim.h !== expectedHash) issues.push({ id: 'compact_claim_hash_mismatch', severity: 'error', anchor: anchor.id });
+    }
     validateTrustFields(anchor, issues);
+    validateHydrationPath(anchor, hydrationRoot, issues);
   }
   const voxel = index.vx || index.voxel_overlay;
   if (!voxel) issues.push({ id: 'vx_missing', severity: 'error' });
   else {
-    const voxelValidation = validateWikiVoxelOverlay(voxel, seen);
+    const anchorMap = new Map(anchors.map((anchor: any) => [String(anchor.id), anchor]));
+    const voxelValidation = validateWikiVoxelOverlay(voxel, anchorMap);
     for (const issue of voxelValidation.issues) issues.push(issue);
   }
   return { ok: issues.length === 0, checked: anchors.length, issues };

@@ -21,7 +21,8 @@ test('trust kernel writes contract, evidence index, and report for a serious rou
   assert.equal(result.ok, true);
   const report = await latestTrustReport(root, 'M-fixture');
   assert.equal(report.schema, 'sks.trust-report.v1');
-  assert.equal(report.status, 'verified_partial');
+  assert.equal(report.status, 'mock_only');
+  assert.equal(report.ok, false);
   assert.equal(report.issues.length, 0);
   assert.ok(await fileExists(path.join(root, '.sneakoscope/missions/M-fixture/route-completion-contract.json')));
   assert.ok(await fileExists(path.join(root, '.sneakoscope/missions/M-fixture/evidence-index.json')));

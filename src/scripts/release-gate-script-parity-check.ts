@@ -61,7 +61,7 @@ export const REQUIRED_3110_RELEASE_IDS = [
   'update:preserves-supabase-keys',
   'update:secret-preservation-guard',
   'update:secret-migration-journal',
-  'config:managed-merge-callsite-coverage',
+  'safety:mutation-callsite-coverage',
   'release:gate-script-parity',
   'release:wiring-3110-blackbox',
   'sks:3112-all-feature-regression'

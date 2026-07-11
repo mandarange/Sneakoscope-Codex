@@ -18,6 +18,35 @@ export interface SksUpdateNotice {
   error?: string
 }
 
+export async function persistSksUpdateNoticeFromVersions(input: {
+  packageName?: string
+  currentVersion: string
+  latestVersion?: string | null
+  error?: string | null
+}): Promise<SksUpdateNotice> {
+  const packageName = input.packageName || 'sneakoscope'
+  const latestVersion = input.latestVersion || null
+  const updateAvailable = Boolean(latestVersion && compareVersions(latestVersion, input.currentVersion) > 0)
+  const notice: SksUpdateNotice = {
+    schema: SKS_UPDATE_NOTICE_SCHEMA,
+    checked_at: nowIso(),
+    package_name: packageName,
+    current_version: input.currentVersion,
+    latest_version: latestVersion,
+    update_available: updateAvailable,
+    source: input.error ? 'error' : 'cache',
+    cache_ttl_ms: 6 * 60 * 60 * 1000,
+    message: updateAvailable
+      ? `SKS ${latestVersion} is available; current ${input.currentVersion}.`
+      : `SKS ${input.currentVersion} is current enough.`,
+    ...(input.error ? { error: input.error } : {})
+  }
+  const cachePath = path.join(os.homedir(), '.sneakoscope', 'cache', 'update-notice.json')
+  await ensureDir(path.dirname(cachePath))
+  await writeJsonAtomic(cachePath, notice)
+  return notice
+}
+
 export async function checkSksUpdateNotice(input: {
   packageName?: string
   currentVersion?: string

@@ -19,40 +19,9 @@ Removed runtime migration is explicit. `tmux` remains only as a removed-runtime 
 
 No silent legacy fallback is allowed. Users must call the canonical command names (`sks naruto`, `sks computer-use`, `sks image-ux-review`, `sks dollar-commands`, `sks gc`, and related first-class commands) rather than relying on compatibility aliases.
 
-<!-- sks-legacy-allowlist
-id: team:*
-reason: documented transition gates verify Team aliases route to Naruto and must expire after 4.0.x compatibility proof is no longer needed
-owner: release
-expires: 4.1.0
--->
-
-<!-- sks-legacy-allowlist
-id: codex:0139*
-reason: kept until codex:0140 real probes replace all 0.139 compatibility coverage
-owner: release
-expires: 4.1.0
--->
-
-<!-- sks-legacy-allowlist
-id: doctor:codex-0139-real-probes
-reason: doctor bridge remains as coverage for 0.139 real probes until codex:0140 doctor coverage is complete
-owner: release
-expires: 4.1.0
--->
-
-<!-- sks-legacy-allowlist
-id: docs:codex-0139*
-reason: documentation wording checks remain until 0.139 terminology is replaced by the 0.140 capability line
-owner: release
-expires: 4.1.0
--->
-
-<!-- sks-legacy-allowlist
-id: legacy:upgrade-zero-break
-reason: upgrade compatibility proof remains through 4.0.x while old command compatibility gates are removed from release selection
-owner: release
-expires: 4.1.0
--->
+The 4.0.x structured legacy exceptions expired before 6.1.0 and are removed;
+release selection no longer permits those compatibility gates through an expired
+allowlist.
 
 ## Release Proof
 

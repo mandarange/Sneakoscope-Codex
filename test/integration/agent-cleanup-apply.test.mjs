@@ -14,7 +14,7 @@ test('agent cleanup apply verifies process exit', async () => {
   await fs.writeFile(path.join(agentRoot, 'agent-sessions.json'), JSON.stringify({ sessions: { stale: { session_id: 'stale-session', status: 'closed' } } }));
   await fs.writeFile(path.join(missionDir, 'project-session-namespace.json'), JSON.stringify({ root_hash: 'cleanupapply' }));
   const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
-  await fs.writeFile(path.join(agentRoot, 'sessions', 'slot-001', 'agent-process-report.json'), JSON.stringify({ session_id: 'stale-session', pid: child.pid, exit_code: 0, project_hash: 'cleanupapply' }));
+  await fs.writeFile(path.join(agentRoot, 'sessions', 'slot-001', 'agent-process-report.json'), JSON.stringify({ session_id: 'stale-session', pid: child.pid, exit_code: null, project_hash: 'cleanupapply' }));
   const proof = await mod.runAgentCleanupExecutor({ missionDir, apply: true });
   assert.ok(proof.process_exit_verified.includes(String(child.pid)));
 });

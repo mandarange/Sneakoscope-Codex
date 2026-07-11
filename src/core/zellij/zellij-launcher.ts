@@ -89,20 +89,19 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   }
   if (layout.main_pane_kind === 'codex_interactive') paneProofOpts.expectedMainCommandIncludes = 'codex'
   const strictPaneProof = opts.requireZellij === true || opts.dryRun === true || process.env.SKS_ZELLIJ_STRICT_PANE_PROOF === '1'
-  const paneProof = strictPaneProof
+  const shouldWritePaneProof = strictPaneProof || (opts.dryRun !== true && capability.status === 'ok')
+  const paneProof = shouldWritePaneProof
     ? await writeZellijPaneProof(root, paneProofOpts).catch((err: any) => ({
         ok: false,
+        status: 'probe_failed',
         blockers: [`zellij_pane_proof_exception:${err?.message || String(err)}`]
       }))
     : {
         ok: true,
-        status: 'deferred_background',
+        status: 'skipped_optional_unavailable',
         blockers: [],
-        warnings: ['zellij_pane_proof_deferred_until_after_attach']
+        warnings: ['zellij_pane_proof_skipped_optional_unavailable']
       }
-  if (!strictPaneProof && opts.dryRun !== true && capability.status === 'ok') {
-    void writeZellijPaneProof(root, paneProofOpts).catch(() => undefined)
-  }
   if (launch?.create_background) {
     launch.create_background = normalizeExistingZellijSession(sessionName, launch.create_background)
   }
@@ -147,7 +146,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     clipboard_mouse_mode: clipboard.mouse_mode,
     pane_proof_path: path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json'),
     pane_proof: paneProof,
-    pane_proof_background: !strictPaneProof,
+    pane_proof_background: false,
     dry_run: opts.dryRun === true,
     capability,
     launch,
@@ -161,13 +160,15 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   }
   const sessionPath = path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-session.json')
   await writeJsonAtomic(sessionPath, report)
-  await writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-layout.kdl.json'), { ...layout, layout_kdl: undefined })
-  await appendJsonl(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-session-events.jsonl'), {
-    schema: 'sks.zellij-session-event.v1',
-    ts: nowIso(),
-    event_type: opts.dryRun === true ? 'zellij_launch_dry_run' : 'zellij_launch_attempted',
-    report: path.relative(root, sessionPath)
-  })
+  await Promise.all([
+    writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-layout.kdl.json'), { ...layout, layout_kdl: undefined }),
+    appendJsonl(path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-session-events.jsonl'), {
+      schema: 'sks.zellij-session-event.v1',
+      ts: nowIso(),
+      event_type: opts.dryRun === true ? 'zellij_launch_dry_run' : 'zellij_launch_attempted',
+      report: path.relative(root, sessionPath)
+    })
+  ])
   return report
 }
 

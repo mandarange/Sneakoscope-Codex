@@ -8,6 +8,7 @@ const calls: any[] = [];
 const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-fast-truth-'));
 await fs.mkdir(path.join(home, '.codex'), { recursive: true });
 await fs.writeFile(path.join(home, '.codex', 'config.toml'), [
+  'model = "gpt-5.6-sol"',
   'model_provider = "codex-lb"',
   'service_tier = "fast"',
   '',

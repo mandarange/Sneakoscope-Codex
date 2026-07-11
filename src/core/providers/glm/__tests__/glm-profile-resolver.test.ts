@@ -20,7 +20,7 @@ test('GLM slash model selector parses reasoning effort and strips selector token
 });
 
 test('GLM slash model selector blocks non-GLM model choices without changing model lock', () => {
-  const profile = resolveGlmProfileFromArgs(['/model', 'gpt-5.5', 'high']);
+  const profile = resolveGlmProfileFromArgs(['/model', 'gpt-5.6-terra', 'high']);
   assert.equal(profile.name, 'deep');
-  assert.deepEqual(profile.blockers, ['glm_slash_model_mismatch:gpt-5.5']);
+  assert.deepEqual(profile.blockers, ['glm_slash_model_mismatch:gpt-5.6-terra']);
 });

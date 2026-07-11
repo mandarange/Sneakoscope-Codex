@@ -2,6 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { codexLbEnvPath, parseShellEnvValue } from '../codex-lb/codex-lb-env.js';
 import { nowIso, readText, runProcess, which } from '../fsx.js';
+import { redactSecrets, redactString } from '../secret-redaction.js';
 import { evaluateImagegenAuthReadiness } from './imagegen-auth-readiness.js';
 
 export async function detectImagegenCapability(opts: any = {}) {
@@ -160,37 +161,33 @@ async function detectCodexAppImagegen(codexBin: string | null, opts: any = {}) {
     return { available: true, detector: 'env_or_option', blocker: null, raw: null };
   }
   if (!codexBin) return { available: false, detector: 'codex_binary_missing', blocker: 'codex_binary_missing', raw: null };
-  const jsonRun = await runProcess(codexBin, ['features', 'list', '--json'], {
+  // Codex 0.144 exposes `features list` as a stable text table and rejects
+  // `--json`. Read the supported surface once; still accept JSON output if a
+  // future CLI returns it from the plain command.
+  const featureRun = await runProcess(codexBin, ['features', 'list'], {
     timeoutMs: opts.timeoutMs || 5000,
     maxOutputBytes: 64 * 1024
   }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
   let parsed: any = null;
   try {
-    const candidate = JSON.parse(jsonRun.stdout || 'null');
+    const candidate = JSON.parse(featureRun.stdout || 'null');
     parsed = hasCodexFeatureSignal(candidate) ? candidate : null;
   } catch {}
-  let plainRun: any = null;
-  if (!parsed) {
-    plainRun = await runProcess(codexBin, ['features', 'list'], {
-      timeoutMs: opts.timeoutMs || 5000,
-      maxOutputBytes: 64 * 1024
-    }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
-  }
-  if (!parsed && plainRun?.code !== 0) {
+  if (featureRun.code !== 0) {
     return {
       available: false,
       detector: 'codex_features_list',
       blocker: 'codex_app_imagegen_not_detected',
-      raw: String(plainRun?.stderr || plainRun?.stdout || jsonRun.stderr || '').slice(0, 2000)
+      raw: redactString(String(featureRun.stderr || featureRun.stdout || '').slice(0, 2000))
     };
   }
-  const rawText = String(plainRun?.stdout || plainRun?.stderr || jsonRun.stdout || jsonRun.stderr || '');
+  const rawText = String(featureRun.stdout || featureRun.stderr || '');
   const available = codexFeatureEnabled(parsed, rawText);
   return {
     available,
     detector: 'codex_features_list',
     blocker: available ? null : 'codex_app_imagegen_not_detected',
-    raw: parsed || rawText.slice(0, 2000)
+    raw: parsed ? redactSecrets(parsed) : redactString(rawText.slice(0, 2000))
   };
 }
 

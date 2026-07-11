@@ -2,7 +2,7 @@
 
 Upgrading SKS from **1.18.x** or **1.19.x** to **1.20.1** is a zero-break upgrade:
 no user choice, no skill card, and no codex-lb auth is ever clobbered. The gate
-`scripts/legacy-upgrade-matrix-check.mjs` (id `legacy:upgrade-zero-break`) proves
+`src/scripts/legacy-upgrade-matrix-check.ts` (id `migration:upgrade-safety`) proves
 every guarantee below on temp dirs and writes
 `.sneakoscope/reports/legacy-upgrade-matrix.json`.
 

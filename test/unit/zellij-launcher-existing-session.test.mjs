@@ -35,10 +35,48 @@ test('MAD Zellij launcher reuses an existing background session instead of block
     assert.deepEqual(second.blockers, []);
     assert.match(second.launch.create_background.stderr_tail, /Session already exists/);
     assert.ok(second.launch.create_background.warnings.some((warning) => warning === 'zellij_session_already_exists:sks-existing'));
+    assert.equal(second.pane_proof_background, false);
+    assert.equal(second.pane_proof.schema, 'sks.zellij-pane-proof.v1');
+    assert.notEqual(second.pane_proof.status, 'deferred_background');
+    assert.ok(!second.pane_proof.warnings.includes('zellij_pane_proof_deferred_until_after_attach'));
+    await fs.access(path.join(root, '.sneakoscope', 'missions', 'M-existing-second', 'zellij-pane-proof.json'));
   } finally {
     restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter);
     restoreEnv('SKS_ZELLIJ_FAKE_ROOT', previous.fakeRoot);
     restoreEnv('SKS_ZELLIJ_FAKE_CREATE_BACKGROUND_EXISTS', previous.exists);
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('optional pane proof failure is reported truthfully without blocking launch', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-optional-proof-failure-'));
+  const previous = {
+    adapter: process.env.SKS_ZELLIJ_FAKE_ADAPTER,
+    fakeRoot: process.env.SKS_ZELLIJ_FAKE_ROOT
+  };
+  process.env.SKS_ZELLIJ_FAKE_ADAPTER = '1';
+  process.env.SKS_ZELLIJ_FAKE_ROOT = root;
+
+  try {
+    const missionId = 'M-optional-proof-failure';
+    const proofPath = path.join(root, '.sneakoscope', 'missions', missionId, 'zellij-pane-proof.json');
+    await fs.mkdir(proofPath, { recursive: true });
+
+    const report = await launchMadZellijUi(['--session', 'sks-optional-proof-failure'], {
+      root,
+      missionId,
+      ledgerRoot: path.join(root, '.sneakoscope', 'missions', missionId, 'agents')
+    });
+
+    assert.equal(report.ok, true);
+    assert.deepEqual(report.blockers, []);
+    assert.equal(report.pane_proof_background, false);
+    assert.equal(report.pane_proof.ok, false);
+    assert.equal(report.pane_proof.status, 'probe_failed');
+    assert.ok(report.pane_proof.blockers.some((blocker) => blocker.startsWith('zellij_pane_proof_exception:')));
+  } finally {
+    restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter);
+    restoreEnv('SKS_ZELLIJ_FAKE_ROOT', previous.fakeRoot);
     await fs.rm(root, { recursive: true, force: true });
   }
 });

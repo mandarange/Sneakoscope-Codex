@@ -10,8 +10,9 @@ import { normalizeAgentPatchEnvelope, type AgentPatchEnvelope } from './agent-pa
 import { runCodexTask } from '../codex-control/codex-control-plane.js'
 import { CODEX_AGENT_WORKER_RESULT_SCHEMA_ID, codexAgentWorkerResultSchema } from '../codex-control/schemas/agent-worker-result.schema.js'
 import { leanEngineeringCompactText, leanPolicyReference } from '../lean-engineering-policy.js'
-import { readLbHealth } from '../codex-lb/codex-lb-env.js'
-import { categoryForWorkerRole, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
+import { readCodexLbModelCatalog, readLbHealth } from '../codex-lb/codex-lb-env.js'
+import { categoryForWorkerRole, isNarutoGpt56Model, modelRouteReason, routeModel, type ModelChoice, type TaskCategory } from '../provider/model-router.js'
+import { codexTimeoutClassForRoute } from '../codex-control/codex-reliability-shield.js'
 
 export const NATIVE_WORKER_BACKEND_ROUTER_SCHEMA = 'sks.native-worker-backend-router.v1'
 
@@ -34,6 +35,7 @@ export async function runNativeWorkerBackendRouter(input: {
   const requestedBackend = String(input.backend || '')
   let backend = normalizeBackend(requestedBackend)
   backend = await maybeAutoSelectOllamaBackend(backend, input)
+  const narutoRequest = isNarutoWorkerRequest(input)
   const reportRel = path.join(input.workerDirRel, 'worker-backend-router-report.json')
   const startedAt = nowIso()
   let result: any
@@ -41,9 +43,13 @@ export async function runNativeWorkerBackendRouter(input: {
   let patchEnvelopes: AgentPatchEnvelope[] = []
   let proofLevel = 'blocked'
   let outputLastMessagePath: string | null = null
-  let modelRouting: { category: TaskCategory; choice: ModelChoice; reason: string; explicit: boolean; lb_health: any } | null = null
+  let modelRouting: { category: TaskCategory; choice: ModelChoice; reason: string; explicit: boolean; lb_health: any; lb_catalog: any; blockers: string[] } | null = null
 
-  if (!input.guard?.ok) {
+  const narutoBackendBlocker = narutoWorkerBackendBlocker(backend, narutoRequest)
+  if (narutoBackendBlocker) {
+    const blocker = narutoBackendBlocker
+    result = validateAgentWorkerResult(blockedResult(input, [blocker]))
+  } else if (!input.guard?.ok) {
     result = validateAgentWorkerResult(blockedResult(input, ['native_cli_worker_recursion_guard_missing']))
   } else if (requestedBackend === 'codex-exec') {
     result = validateAgentWorkerResult(blockedResult(input, ['legacy_codex_exec_runtime_removed']))
@@ -106,6 +112,10 @@ export async function runNativeWorkerBackendRouter(input: {
   } else if (backend === 'codex-sdk' || backend === 'zellij' || backend === 'local-llm') {
     const localPreferred = backend === 'local-llm'
     modelRouting = await resolveWorkerModelRouting(input)
+    if (modelRouting.blockers.length) {
+      proofLevel = 'blocked'
+      result = validateAgentWorkerResult(blockedResult(input, modelRouting.blockers))
+    } else {
     const sdkTask = await runCodexTask({
       route: String(input.intake.route || '$Agent'),
       tier: 'worker',
@@ -146,7 +156,7 @@ export async function runNativeWorkerBackendRouter(input: {
       zellijPaneId: await readZellijPaneId(root, input.workerDirRel),
       reliabilityPolicy: {
         maxEmptyResultRetries: 1,
-        timeoutClass: 'standard'
+        timeoutClass: codexTimeoutClassForRoute(input.intake.route, 'standard')
       }
     })
     outputLastMessagePath = sdkTask.workerResultPath
@@ -204,6 +214,7 @@ export async function runNativeWorkerBackendRouter(input: {
         ]
       }
     })
+    }
   } else {
     const zellijRun = await runZellijAgent(input.agent, input.slice, {
       missionId: input.intake.mission_id || input.intake.parent_mission_id || '',
@@ -273,29 +284,74 @@ export async function runNativeWorkerBackendRouter(input: {
   }
 }
 
-async function resolveWorkerModelRouting(input: {
+export async function resolveWorkerModelRouting(input: {
   agent: any
   slice: any
   intake: any
   fastModePolicy: { fast_mode: boolean; service_tier: 'fast' | 'standard' }
-}) {
-  const category = categoryForWorkerRole(String(input.agent?.role || input.slice?.role || input.slice?.type || input.agent?.persona_id || 'executor'))
-  const lbHealth = await readLbHealth().catch(() => null)
-  const explicitModel = String(process.env.SKS_WORKER_MODEL || process.env.SKS_AGENT_MODEL || '').trim()
-  const explicitReasoning = normalizeModelReasoning(process.env.SKS_WORKER_REASONING || process.env.SKS_WORKER_MODEL_REASONING || '')
-  const explicitTier = normalizeServiceTier(process.env.SKS_WORKER_SERVICE_TIER || process.env.SKS_SERVICE_TIER || '')
-  const routed = explicitModel
+}, deps: { lbHealth?: any; lbCatalog?: any; env?: NodeJS.ProcessEnv } = {}) {
+  const narutoOnly = Boolean(input.agent?.naruto_role) || /\$?naruto/i.test(String(input.intake?.route || ''))
+  const taskKindText = [
+    input.slice?.work_item_kind,
+    input.slice?.kind,
+    input.slice?.type,
+    input.slice?.title,
+    input.slice?.required_role,
+    input.slice?.role,
+    input.agent?.naruto_role,
+    input.agent?.role,
+    input.agent?.persona_id
+  ].map((value) => String(value || '')).join(' ')
+  const riskText = [taskKindText, input.slice?.risk, input.slice?.risk_focus, input.slice?.acceptance, input.slice?.parent_prompt, input.slice?.description, input.intake?.prompt].map((value) => String(value || '')).join(' ')
+  const category = categoryForWorkerRole(String(input.agent?.role || 'executor'), taskKindText)
+  const env = deps.env || process.env
+  const lbHealth = Object.prototype.hasOwnProperty.call(deps, 'lbHealth') ? deps.lbHealth : await readLbHealth().catch(() => null)
+  const lbCatalog = narutoOnly
+    ? Object.prototype.hasOwnProperty.call(deps, 'lbCatalog')
+      ? deps.lbCatalog
+      : input.intake?.naruto_model_catalog || await readCodexLbModelCatalog().catch(() => null)
+    : null
+  const explicitModel = String(env.SKS_WORKER_MODEL || env.SKS_AGENT_MODEL || '').trim()
+  const explicitReasoningRaw = String(env.SKS_WORKER_REASONING || env.SKS_WORKER_MODEL_REASONING || '').trim()
+  const explicitTierRaw = String(env.SKS_WORKER_SERVICE_TIER || env.SKS_SERVICE_TIER || '').trim()
+  const explicitReasoning = normalizeModelReasoning(explicitReasoningRaw)
+  const explicitTier = normalizeServiceTier(explicitTierRaw)
+  const explicitNarutoModelInvalid = narutoOnly && Boolean(explicitModel) && !isNarutoGpt56Model(explicitModel)
+  const explicitNarutoReasoningInvalid = narutoOnly && Boolean(explicitReasoningRaw) && !explicitReasoning
+  const explicitNarutoTierInvalid = narutoOnly && Boolean(explicitTierRaw) && !explicitTier
+  const routed = explicitModel && !narutoOnly
     ? {
         model: explicitModel,
         reasoning: explicitReasoning || normalizeModelReasoning(input.agent?.model_reasoning_effort) || 'medium',
         serviceTier: explicitTier || input.fastModePolicy.service_tier || 'fast'
       } satisfies ModelChoice
-    : await routeModel(category, { lbHealth, model: input.agent?.model || null })
+    : await routeModel(category, {
+        lbHealth,
+        ...(narutoOnly ? {
+          narutoOnly: true,
+          taskText: taskKindText,
+          riskText,
+          availableModels: lbCatalog?.models || [],
+          availableModelEfforts: lbCatalog?.model_efforts || {},
+          ...(explicitModel ? { model: explicitModel } : {})
+        } : { model: input.agent?.model || null })
+      })
+  const blockers = [
+    ...(narutoOnly && !lbCatalog?.ok ? (lbCatalog?.blockers || ['codex_lb_model_catalog_unavailable']) : []),
+    ...(explicitNarutoModelInvalid ? ['naruto_worker_model_outside_gpt_5_6_family'] : []),
+    ...(explicitNarutoReasoningInvalid ? ['naruto_reasoning_override_invalid'] : []),
+    ...(explicitNarutoTierInvalid ? ['naruto_service_tier_override_invalid'] : []),
+    ...(narutoOnly && explicitReasoning && explicitReasoning !== routed.reasoning ? ['naruto_reasoning_override_conflicts_with_policy'] : []),
+    ...(narutoOnly && explicitTier && explicitTier !== 'fast' ? ['naruto_service_tier_override_conflicts_with_policy'] : []),
+    ...(narutoOnly && !routed.model ? ['naruto_required_gpt_5_6_model_unavailable'] : [])
+  ]
   return {
     category,
     choice: routed,
     explicit: Boolean(explicitModel),
     lb_health: lbHealth,
+    lb_catalog: lbCatalog,
+    blockers: [...new Set(blockers)],
     reason: modelRouteReason(category, routed, {
       explicit: Boolean(explicitModel),
       quotaLow: lbHealth?.quota_low === true,
@@ -306,7 +362,7 @@ async function resolveWorkerModelRouting(input: {
 
 function normalizeModelReasoning(value: unknown): ModelChoice['reasoning'] | null {
   const text = String(value || '').toLowerCase()
-  return text === 'low' || text === 'medium' || text === 'high' || text === 'xhigh' ? text : null
+  return text === 'low' || text === 'medium' || text === 'high' || text === 'xhigh' || text === 'max' || text === 'ultra' ? text : null
 }
 
 function normalizeServiceTier(value: unknown): ModelChoice['serviceTier'] | null {
@@ -320,6 +376,7 @@ async function maybeAutoSelectOllamaBackend(backend: ReturnType<typeof normalize
   intake: any
 }) {
   if (backend !== 'codex-sdk') return backend
+  if (isNarutoWorkerRequest(input)) return backend
   if (input.intake?.backend_explicit === true || input.intake?.no_ollama === true) return backend
   const config = await resolveOllamaWorkerConfig({
     ollamaEnabled: input.intake?.ollama_enabled === true,
@@ -329,6 +386,17 @@ async function maybeAutoSelectOllamaBackend(backend: ReturnType<typeof normalize
   if (!config?.ok || config.enabled !== true || config.status !== 'verified') return backend
   const policy = classifyOllamaWorkerSlice(input.slice, { route: input.intake?.route, agent: input.agent })
   return policy.ok ? 'local-llm' : backend
+}
+
+function isNarutoWorkerRequest(input: { agent?: any; intake?: any }): boolean {
+  return Boolean(input.agent?.naruto_role) || /\$?naruto/i.test(String(input.intake?.route || ''))
+}
+
+export function narutoWorkerBackendBlocker(backend: string | null, narutoRequest = true): string | null {
+  if (!narutoRequest) return null
+  if (backend === 'process') return 'naruto_gpt_5_6_family_only_process_backend_forbidden'
+  if (backend === 'ollama' || backend === 'local-llm') return 'naruto_gpt_5_6_family_only_local_backend_forbidden'
+  return null
 }
 
 function normalizeBackend(value: string): 'fake' | 'process' | 'codex-sdk' | 'zellij' | 'ollama' | 'local-llm' | null {

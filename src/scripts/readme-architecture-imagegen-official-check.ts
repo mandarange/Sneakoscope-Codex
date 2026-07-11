@@ -5,12 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { writeTextAtomic } from '../core/fsx.js';
+import { PACKAGE_VERSION, writeTextAtomic } from '../core/fsx.js';
 
 const root = process.cwd();
 const args = process.argv.slice(2);
-const reportPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-attempt-1.18.8.json');
-const promptPath = path.join(root, '.sneakoscope', 'reports', 'readme-architecture-imagegen-prompt-1.18.8.txt');
+const reportPath = path.join(root, '.sneakoscope', 'reports', `readme-architecture-imagegen-attempt-${PACKAGE_VERSION}.json`);
+const promptPath = path.join(root, '.sneakoscope', 'reports', `readme-architecture-imagegen-prompt-${PACKAGE_VERSION}.txt`);
 const assetPath = path.join(root, 'docs', 'assets', 'sneakoscope-architecture-pipeline.jpg');
 const promptOnly = hasFlag('--print-prompt') || hasFlag('--prompt-only');
 const suppliedOutput = String(argValue('--output', process.env.SKS_CODEX_APP_IMAGEGEN_OUTPUT || '')).trim();
@@ -29,7 +29,7 @@ const codexFeatureEvidence = detectCodexImageGenerationFeature();
 
 const prompt = `Use case: infographic-diagram
 Asset type: README architecture hero image for Sneakoscope Codex
-Primary request: Use ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2 to generate a polished, abstract architecture flow summary image for SKS 1.18.8.
+Primary request: Use ChatGPT Images 2.0 / GPT Image 2.0 with gpt-image-2 to generate a polished, abstract architecture flow summary image for SKS ${PACKAGE_VERSION}.
 Content intent: Show Codex App, SKS runtime, Team/Goal routing, MAD-SKS scoped permission widening, gpt-image-2 image evidence, validation gates, and release readiness as connected layers.
 Visual constraints: 16:9 or wide landscape, premium technical product style, no logos, no mascot, no tiny unreadable text, no fake UI screenshots, no dark stock-photo look, no placeholder glyph soup.
 Output requirement: real Codex App $imagegen/gpt-image-2 raster output. Save the selected output path, then run:
@@ -204,7 +204,7 @@ function baseReport(extra) {
       ? 'SKS_CODEX_APP_IMAGEGEN_TOOL_EXPOSED=1'
       : 'not exposed to this script/tool context; only an actual Codex App $imagegen output can satisfy replacement evidence',
     official_docs_checked: [
-      'https://developers.openai.com/codex/app/features#image-generation',
+      'https://learn.chatgpt.com/docs/image-generation',
       'https://deploymentsafety.openai.com/chatgpt-images-2-0',
       'https://openai.com/index/introducing-chatgpt-images-2-0/',
       'https://developers.openai.com/api/docs/guides/image-generation',

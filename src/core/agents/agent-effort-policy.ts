@@ -1,9 +1,10 @@
 import type { AgentPersona } from './agent-schema.js'
 import { codexModelEffortCapability, type CodexModelEffortCapability } from '../codex-control/codex-model-capabilities.js'
 import { GLM_52_OPENROUTER_MODEL, type Glm52ReasoningEffort } from '../providers/glm/glm-52-settings.js'
+import { isNarutoGpt56Model, routeNarutoGpt56Model } from '../provider/model-router.js'
 
-export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh'
-export type AgentModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
+export type AgentReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+export type AgentModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export type AgentWorkerModelTier = string
 
 export interface AgentEffortDecision {
@@ -87,53 +88,47 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
   }
 }
 
-// Any action-tool signal (write/run/search/mcp/db/etc.) lifts a clone to medium.
-// Passive reading alone does not count — "really simple" no-tool work stays at low.
-const NARUTO_ACTION_TOOL_RE = /(write|edit|create|modif|delete|remove|run\b|exec|command|bash|shell|script|install|build|test|migrat|patch|apply|fetch|curl|http|mcp|sql|database|\bdb\b|deploy|commit|push|rename|refactor|generate|scaffold|작성|수정|생성|삭제|실행|명령|빌드|테스트|설치|배포|패치|커밋|마이그레이션)/i
-
-// $Naruto shadow-clone effort policy: dynamic like team mode, but capped.
-//   - truly simple / no tool use  -> low
-//   - any tool use (one is enough) -> medium
-//   - NEVER escalates to high/xhigh
-//   - ALWAYS fast service tier
+// $Naruto workers use the codex-lb GPT-5.6 family only. Model and effort are
+// selected by the actual work kind; the removed low/medium cap must never be
+// reintroduced through tool-count or read-only heuristics.
 export function decideNarutoCloneEffort(input: { persona?: Partial<AgentPersona>; prompt?: string; agentId?: string; readonly?: boolean } = {}): AgentEffortDecision {
   const persona = input.persona || {}
   const prompt = String(input.prompt || '')
   const role = String(persona.role || '')
   const agentId = String(input.agentId || persona.id || 'naruto_clone')
-  const readonly = input.readonly === true || persona.read_only === true
-  const allowedTools = Array.isArray(persona.allowed_tools) ? persona.allowed_tools : []
-  const writePolicy = String(persona.write_policy || '')
-  // Tool use is driven by (a) write capability, (b) the persona's actual action tools, or
-  // (c) the work prompt itself — NOT by incidental persona prose (role/risk_focus), so a
-  // read-only analysis clone on a no-tool prompt stays at low. Passive Read/Grep ≠ tool use.
-  const hasActionTool = allowedTools.some((tool) => /write|edit|create|bash|shell|command|exec|run|mcp|patch|apply|multiedit|notebook/i.test(String(tool)))
-  const writes = !readonly || /write|edit|route-local|workspace|patch|integrat/i.test(writePolicy) || hasActionTool
-  const toolUse = writes || NARUTO_ACTION_TOOL_RE.test(prompt)
-  const effort: AgentReasoningEffort = toolUse ? 'medium' : 'low'
-  const modelDecision = decideAgentWorkerModel({ effort, prompt, role, agentId, readonly, writePolicy: String(writePolicy || '') })
-  const modelCapability = codexModelEffortCapability({ model: modelDecision.model, defaultEffort: modelDecision.model_reasoning_effort })
+  const taskText = [role, agentId, persona.naruto_role].join(' ')
+  const riskText = [prompt, persona.risk_focus, persona.write_policy].join(' ')
+  const routed = routeNarutoGpt56Model({ taskText, riskText })
+  const effort = routed.reasoning as AgentReasoningEffort
+  const modelCapability = codexModelEffortCapability({
+    model: routed.model,
+    advertisedEfforts: narutoAdvertisedEfforts(routed.model),
+    defaultEffort: effort
+  })
   return {
     schema: 'sks.agent-effort-decision.v1',
     policy_version: 1,
     agent_id: agentId,
     role,
-    model: modelDecision.model,
+    model: routed.model,
     reasoning_effort: effort,
-    model_reasoning_effort: modelDecision.model_reasoning_effort,
-    model_tier: modelDecision.model_tier,
-    model_profile: modelDecision.model_profile,
-    model_selection_reason: modelDecision.reason,
+    model_reasoning_effort: effort,
+    model_tier: `${routed.model}-${effort}`,
+    model_profile: `sks-naruto-${safeProfileSegment(routed.model)}-${effort}-fast`,
+    model_selection_reason: narutoSelectionReason(routed.model, effort),
     model_effort_capability: modelCapability,
     reasoning_profile: reasoningProfileName(effort),
     service_tier: 'fast',
-    reason: toolUse ? 'naruto_tool_use_medium' : 'naruto_simple_no_tool_low',
+    reason: narutoSelectionReason(routed.model, effort),
     dynamic: true,
     escalation_triggers: [
-      'any tool use (write/edit/run/search/build/mcp/db) lifts the clone from low to medium'
+      'complex or high-risk Terra work escalates from xhigh to max',
+      'complex E2E, browser, Computer Use, or forensic Luna verification escalates from xhigh to max',
+      'refactoring, architecture, planning, strategy, and integration select Sol at max'
     ],
     downshift_triggers: [
-      'truly simple, no-tool, read-only reasoning stays at low'
+      'ordinary coding stays on Terra xhigh',
+      'ordinary E2E, browser, Computer Use, and GUI verification stays on Luna xhigh'
     ]
   }
 }
@@ -153,21 +148,26 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     reason: agent.reasoning_reason,
     dynamic: true
   })) : []
+  const narutoFamilyOnly = decisions.length > 0 && decisions.every((decision: any) => isNarutoGpt56Model(decision.model))
   return {
     schema: 'sks.agent-effort-policy.v1',
     policy_version: 1,
     dynamic: true,
     service_tier: 'fast',
-    model_catalog_policy: 'codex_catalog_passthrough',
-    model_constraint: null,
-    model_tiers: ['codex-selected-low', 'codex-selected-medium', 'codex-selected-high', 'codex-selected-xhigh', 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
-    allowed_efforts: codexModelEffortCapability().advertised_efforts,
+    model_catalog_policy: narutoFamilyOnly ? 'naruto_gpt_5_6_family_dynamic' : 'codex_catalog_passthrough',
+    model_constraint: narutoFamilyOnly ? ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] : null,
+    model_tiers: narutoFamilyOnly
+      ? ['gpt-5.6-luna-xhigh', 'gpt-5.6-luna-max', 'gpt-5.6-terra-xhigh', 'gpt-5.6-terra-max', 'gpt-5.6-sol-max']
+      : ['codex-selected-low', 'codex-selected-medium', 'codex-selected-high', 'codex-selected-xhigh', 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
+    allowed_efforts: narutoFamilyOnly ? ['xhigh', 'max'] : codexModelEffortCapability().advertised_efforts,
     model_effort_capability: codexModelEffortCapability(),
     max_agents: roster.max_agents || 20,
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
-    rule: 'Codex/OpenAI workers inherit the current Codex-selected model, including future catalog entries; SKS changes only advertised reasoning effort. Explicit non-Codex provider modes retain their provider model.'
+    rule: narutoFamilyOnly
+      ? 'Naruto workers use only GPT-5.6 Luna/Terra/Sol: Terra xhigh/max for coding, Sol max for refactoring/planning/strategy/integration, and Luna xhigh/max for E2E/browser/Computer Use/GUI verification.'
+      : 'Codex/OpenAI workers inherit the current Codex-selected model, including future catalog entries; SKS changes only advertised reasoning effort. Explicit non-Codex provider modes retain their provider model.'
   }
 }
 
@@ -188,6 +188,18 @@ function effortReason(effort: AgentReasoningEffort) {
   if (effort === 'high') return 'safety_release_db_schema_signal'
   if (effort === 'low') return 'simple_bounded_slice'
   return 'default_orchestration_slice'
+}
+
+function narutoAdvertisedEfforts(model: string): string[] {
+  return model === 'gpt-5.6-luna'
+    ? ['low', 'medium', 'high', 'xhigh', 'max']
+    : ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+}
+
+function narutoSelectionReason(model: string, effort: AgentReasoningEffort): string {
+  if (model === 'gpt-5.6-sol') return `naruto_refactor_plan_strategy_sol_${effort}`
+  if (model === 'gpt-5.6-luna') return `naruto_e2e_browser_computer_use_luna_${effort}`
+  return `naruto_coding_terra_${effort}`
 }
 
 export function decideAgentWorkerModel(input: {

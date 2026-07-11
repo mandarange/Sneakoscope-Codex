@@ -4,7 +4,7 @@ import { appendParallelRuntimeEvent } from '../agents/parallel-runtime-proof.js'
 import { providerPaneLabel } from '../provider/provider-badge.js'
 import { resolveProviderContext, type ProviderContext } from '../provider/provider-context.js'
 import { checkZellijStackedPaneCapability, type ZellijStackedPaneCapability } from './zellij-capability.js'
-import { runZellij, type ZellijCommandResult } from './zellij-command.js'
+import { runZellij, zellijCommandStdout, type ZellijCommandResult } from './zellij-command.js'
 import { extractZellijPaneIdFromOutput } from './zellij-lane-runtime.js'
 import { buildZellijSlotColumnAnchorCommand } from './zellij-slot-column-anchor.js'
 import { closeWorkerInRightColumn, prepareWorkerInRightColumn, readRightColumnState, recordSlotColumnAnchorInRightColumn, recordWorkerPaneInRightColumn } from './zellij-right-column-manager.js'
@@ -803,6 +803,7 @@ async function reconcileZellijWorkerPaneId(sessionName: string, paneName: string
   const listed = await runZellij(['--session', sessionName, 'action', 'list-panes', '--json', '--all'], {
     cwd,
     timeoutMs: 5000,
+    maxOutputBytes: 1024 * 1024,
     optional: true
   })
   const screen = await runZellij(['--session', sessionName, 'action', 'dump-screen'], {
@@ -810,7 +811,7 @@ async function reconcileZellijWorkerPaneId(sessionName: string, paneName: string
     timeoutMs: 5000,
     optional: true
   })
-  const rows = parsePaneRows(listed.stdout_tail)
+  const rows = parsePaneRows(zellijCommandStdout(listed))
   const pane = rows.find((row: any) => {
     const title = String(row.title || row.name || row.pane_name || '')
     const command = String(row.terminal_command || row.command || row.command_line || row.running_command || '')
@@ -840,10 +841,11 @@ async function findExistingSlotsAnchorPaneId(sessionName: string, cwd: string): 
   const listed = await runZellij(['--session', sessionName, 'action', 'list-panes', '--json', '--all'], {
     cwd,
     timeoutMs: 5000,
+    maxOutputBytes: 1024 * 1024,
     optional: true
   })
   if (!listed.ok) return null
-  const rows = parsePaneRows(listed.stdout_tail)
+  const rows = parsePaneRows(zellijCommandStdout(listed))
   const pane = rows.find((row: any) => {
     if (row?.is_plugin === true) return false
     const exited = row?.exited === true || row?.is_exited === true || row?.exit_status != null

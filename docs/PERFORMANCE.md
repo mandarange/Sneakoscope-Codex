@@ -1,6 +1,6 @@
 # Sneakoscope Codex performance and leak policy
 
-Sneakoscope Codex v0.6 is designed to keep runtime, package size, RAM, and storage bounded.
+Sneakoscope Codex 6.1 is designed to keep runtime, package size, RAM, and storage bounded.
 
 ## Speed
 
@@ -10,6 +10,7 @@ Sneakoscope Codex v0.6 is designed to keep runtime, package size, RAM, and stora
 - `sks wiki sweep` records intentional forgetting and promotion candidates so default recall stays top-K instead of becoming an unbounded memory dump.
 - `sks code-structure scan` flags 1000/2000/3000-line handwritten source files before new logic is added to oversized modules.
 - TriWiki claim selection uses bounded top-K selection plus the latest RGBA/trig wiki anchors and required voxel overlay metadata instead of sorting unbounded context into prompts.
+- Voxel TriWiki code indexing uses full-content cache hashes, excludes cache/worktree mirrors, enforces a dedicated token budget, and serializes wrongness-ledger updates so fast recall cannot trade correctness for partial hashes or lost concurrent writes.
 - GX visual context renders deterministic SVG/HTML from JSON sources, avoiding external image-generation latency, cost, and nondeterminism. Rendered nodes expose the same RGBA wiki-coordinate anchors used by TriWiki.
 - `sks gc` keeps mission/runtime artifacts bounded.
 
@@ -50,12 +51,11 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 
 ## Package size
 
-- The npm package has zero runtime dependencies.
-- `@openai/codex` is no longer bundled. Users install Codex separately or set `SKS_CODEX_BIN`.
+- Runtime dependencies remain explicit in `package.json`; the 6.1.0 package pins `@openai/codex-sdk` exactly to 0.144.1 and npm resolves its exact `@openai/codex` 0.144.1 dependency without vendoring that CLI package inside the SKS tarball. `SKS_CODEX_BIN` may select a separately installed compatible CLI.
 - Optional Rust source is in `crates/sks-core/` and is included in the npm package as source only. Build artifacts under `target/` stay excluded.
 - GX rendering uses only built-in Node.js APIs and ships as source in the npm package.
-- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=1536 KiB` packed, `<=6144 KiB` unpacked, `<=1200` package files, and `<=384 KiB` per tracked file by default.
-- The packed package cap is 1536 KiB to match the publish dry-run and packlist performance gates while keeping the TypeScript-built `dist` runtime bounded; shrinking that cap requires measured justification.
+- `npm run sizecheck` enforces package limits during `release:check`, `publish:dry`, and publish: `<=2414 KiB` packed, `<=10 MiB` unpacked, `<=2100` package files, and `<=384 KiB` per tracked file by default.
+- The packed package cap is 2414 KiB from the shared release size-budget SSOT, matching sizecheck, publish dry-run performance, and packlist gates while keeping the TypeScript-built `dist` runtime bounded; changing that cap requires measured justification.
 
 ## Memory leaks
 
@@ -67,12 +67,15 @@ Each anchor stores id, RGBA key, `[domain, layer, phase, concentration]`, source
 ## Storage leaks
 
 - `.sneakoscope/policy.json` controls retention.
-- Old missions, old cycle directories, arenas, temp files, and oversized JSONL logs are removed or rotated by `sks gc`.
-- `sks stats` reports package/state size.
+- Old missions, old cycle directories, arenas, temp files, oversized JSONL logs, and terminal inactive worker runtime homes are removed or rotated by `sks gc`; `route_closed` records are inactive, while recently updated non-closed sessions receive a two-hour protection window.
+- Mission compaction preserves durable JSON and review/image evidence in place and removes only known disposable runtime files. Existing legacy gzip archives are hydrated transparently only after their payload path and original SHA-256 are verified.
+- Cleanup containment checks reject symlink or realpath escapes, and bounded scans report when the inspected set is incomplete instead of claiming a full cleanup.
+- `sks stats` reports package/state size, while the full retention budget scan counts every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file safety ceiling instead of silently stopping at the former partial scan.
+- Release-gate run storage retains the five most recent run directories by default.
 
 ## Rust decision
 
-Rust is useful for CPU-heavy long-running kernels, but prebuilt native binaries are not shipped in `0.9.12`: binary packages increase package size and create OS/architecture install failure modes. Sneakoscope Codex therefore ships a zero-dependency Node runtime by default and includes optional zero-dependency Rust helper source at `crates/sks-core` for future builds or users who want to compile locally. JS fallbacks remain authoritative when no `sks-rs` binary is available.
+Rust is useful for CPU-heavy long-running kernels, but the 6.1.0 npm package does not ship a prebuilt native binary: binary packages increase package size and create OS/architecture install failure modes. The published runtime remains Node.js, and the package includes the minimal Rust helper source and lockfile at `crates/sks-core` for explicit local compilation and parity-checked acceleration. Absence of a local `sks-rs` binary must not be reported as native proof or silently bypass parity validation.
 
 ## Database safety resource policy
 

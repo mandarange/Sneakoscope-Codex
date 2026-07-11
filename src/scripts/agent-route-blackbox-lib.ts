@@ -1,11 +1,15 @@
 // @ts-nocheck
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const PROMPT = 'route truth dynamic scheduler fixture';
 const ROUTE_ARGS = ['--agents', '5', '--work-items', '8', '--target-active-slots', '4', '--minimum-work-items', '5', '--max-queue-expansion', '10', '--mock', '--json'];
+const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-agent-route-blackbox-'));
+fs.mkdirSync(path.join(fixtureRoot, '.sneakoscope'), { recursive: true });
+process.once('exit', () => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
 
 export function runRouteBackfillBlackbox(route, gate) {
   if (String(route).toLowerCase().includes('team')) return runActualTeamBackfillBlackbox(gate);
@@ -50,7 +54,8 @@ export function validateNativeRun(json, gate, expected = {}) {
   assertGate(Boolean(json), `${gate} native agent run JSON missing`, {});
   const state = json.scheduler?.state || {};
   const proof = json.proof || {};
-  const ledgerRoot = path.join(root, json.ledger_root || '');
+  const ledgerRoot = fixtureScopedPath(json.ledger_root || '');
+  assertGate(Boolean(json.ledger_root) && ledgerRoot !== fixtureRoot, `${gate} ledger root escaped fixture isolation`, { ledger_root: json.ledger_root });
   assertGate(fs.existsSync(ledgerRoot), `${gate} ledger root missing`, { ledger_root: json.ledger_root });
   const events = readJsonl(path.join(ledgerRoot, 'agent-scheduler-events.jsonl'));
   const backfills = events.filter((event) => event.event_type === 'backfill_event');
@@ -104,10 +109,24 @@ export function validateNativeRun(json, gate, expected = {}) {
 }
 
 function runSks(args, gate) {
-  const result = spawnSync(process.execPath, ['dist/bin/sks.js', ...args], {
-    cwd: root,
+  const result = spawnSync(process.execPath, [path.join(root, 'dist', 'bin', 'sks.js'), ...args], {
+    cwd: fixtureRoot,
     encoding: 'utf8',
-    env: { ...process.env, SKS_AGENT_DYNAMIC_BACKFILL_FIXTURE: '1' },
+    env: {
+      ...process.env,
+      SKS_AGENT_DYNAMIC_BACKFILL_FIXTURE: '1',
+      // Zellij and native worker helpers create runtime logs below the OS temp
+      // directory. Keep those children inside the fixture lifecycle too.
+      TMPDIR: fixtureRoot,
+      TMP: fixtureRoot,
+      TEMP: fixtureRoot,
+      PWD: fixtureRoot,
+      // These blackboxes exercise a hermetic mock route inside fixtureRoot.
+      // The fixture cwd, not a router bypass, isolates it from operator state.
+      SKS_TEST_ISOLATION: '1',
+      NODE_ENV: 'test',
+      CI: 'true'
+    },
     maxBuffer: 1024 * 1024 * 16
   });
   assertGate(result.status === 0, `${gate} route command failed`, { args, stdout: result.stdout.slice(-4000), stderr: result.stderr.slice(-4000) });
@@ -126,7 +145,14 @@ function parseJson(stdout, gate) {
 }
 
 function readMissionJson(missionId, rel) {
-  return readJson(path.join(root, '.sneakoscope', 'missions', missionId, rel));
+  return readJson(fixtureScopedPath('.sneakoscope', 'missions', missionId, rel));
+}
+
+function fixtureScopedPath(...parts) {
+  const candidate = path.resolve(fixtureRoot, ...parts.map((part) => String(part || '')));
+  const relative = path.relative(fixtureRoot, candidate);
+  assertGate(relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative), 'agent route blackbox path escaped fixture root', { parts });
+  return candidate;
 }
 
 function readJson(file) {

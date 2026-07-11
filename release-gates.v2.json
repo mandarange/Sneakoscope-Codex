@@ -612,6 +612,37 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
+      "id": "safety:mutation-callsite-coverage",
+      "command": "node ./dist/scripts/mutation-callsite-coverage-check.js",
+      "deps": [
+        "config:managed-merge"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "safety-mutation-allowlist.json",
+          "src/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
       "id": "context7:evidence-dedupe",
       "command": "node ./dist/scripts/context7-evidence-dedupe-check.js",
       "deps": [],
@@ -1196,8 +1227,8 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
-      "id": "legacy:upgrade-zero-break",
-      "command": "node ./dist/scripts/legacy-upgrade-matrix-check.js",
+      "id": "legacy:gate-purge",
+      "command": "node ./dist/scripts/legacy-gate-purge-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -1210,8 +1241,105 @@
         "inputs": [
           "package.json",
           "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
+          "src/cli/command-registry.ts",
+          "src/scripts/legacy-gate-purge-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "legacy:gate-inventory",
+      "command": "node ./dist/scripts/legacy-gate-inventory-check.js",
+      "deps": [
+        "legacy:gate-purge"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "docs/sks-4-migration.md",
+          "src/scripts/legacy-gate-inventory-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "legacy:strong-inventory",
+      "command": "node ./dist/scripts/legacy-strong-inventory-check.js",
+      "deps": [
+        "legacy:gate-inventory"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "docs/sks-4-migration.md",
+          "src/core/triwiki/triwiki-gate-impact-map.ts",
+          "src/scripts/legacy-strong-inventory-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "migration:upgrade-safety",
+      "command": "node ./dist/scripts/legacy-upgrade-matrix-check.js",
+      "deps": [
+        "legacy:strong-inventory"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-write"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/cli/**",
+          "src/core/codex/**",
+          "src/core/migration/**",
+          "src/core/skills/**",
+          "src/scripts/legacy-upgrade-matrix-check.ts"
         ]
       },
       "isolation": {
@@ -1996,7 +2124,6 @@
         "fast:codex-service-tier-proof",
         "git-collaboration:e2e",
         "git:worktree-diff-envelope",
-        "legacy:upgrade-zero-break",
         "local-collab:all-pipelines-final-gpt",
         "mad-sks:app-ui-no-mutation",
         "mad:preflight-blocks-unreadable-config",
@@ -2724,9 +2851,40 @@
           "package.json",
           "release-gates.v2.json",
           "src/core/__tests__/**",
+          "src/core/hooks-runtime/code-pack-freshness-preflight.ts",
+          "src/core/release/release-gate-hermetic-env.ts",
           "src/core/questions.ts",
           "src/core/work-order-ledger.ts",
           "src/core/mission.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
+    },
+    {
+      "id": "test:triwiki-voxel-integrity",
+      "command": "node --test --test-concurrency=1 dist/core/__tests__/triwiki-voxel-integrity.test.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/wiki-coordinate.ts",
+          "src/core/__tests__/triwiki-voxel-integrity.test.ts"
         ]
       },
       "isolation": {
@@ -2874,36 +3032,6 @@
       ],
       "side_effect": "hermetic",
       "timeout_ms": 420000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "package-lock.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "codex:0139-comprehensive",
-      "command": "node ./dist/scripts/codex-0139-capability-check.js && node ./dist/scripts/codex-0139-interrupt-agent-check.js && node ./dist/scripts/codex-0139-doctor-env-redaction-check.js && node ./dist/scripts/codex-0139-marketplace-source-check.js && node ./dist/scripts/codex-0139-feature-probes-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 700000,
       "cache": {
         "enabled": true,
         "inputs": [
@@ -3340,7 +3468,7 @@
     },
     {
       "id": "codex-lb:comprehensive",
-      "command": "node ./dist/scripts/codex-lb-fast-ui-preservation-check.js && node ./dist/scripts/codex-lb-gpt55-fast-profile-check.js",
+      "command": "node ./dist/scripts/codex-lb-fast-ui-preservation-check.js && node ./dist/scripts/codex-lb-fast-mode-truth-check.js && node --test --test-concurrency=1 dist/core/__tests__/codex-lb-tool-catalog.test.js dist/core/__tests__/codex-lb-transport-security.test.js && node ./dist/scripts/codex-lb-gpt56-fast-profile-check.js",
       "deps": [
         "codex-app:fast-ui-preservation"
       ],
@@ -3450,6 +3578,384 @@
       "preset": [
         "release"
       ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0144:manifest",
+      "command": "node ./dist/scripts/codex-0144-manifest-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "config/codex-releases/**",
+          "schemas/codex/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0144:binary-identity",
+      "command": "node ./dist/scripts/codex-0144-binary-identity-check.js",
+      "deps": [
+        "codex:0144:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "src/scripts/codex-0144-binary-identity-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0144:policy",
+      "command": "node ./dist/scripts/codex-0144-policy-check.js",
+      "deps": [
+        "codex:0144:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/scripts/codex-0144-policy-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0144:app-server-v2",
+      "command": "node ./dist/scripts/codex-0144-app-server-v2-check.js",
+      "deps": [
+        "codex:0144:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "schemas/codex/app-server-0.144/**",
+          "src/scripts/codex-0144-app-server-v2-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0144:thread-store",
+      "command": "node ./dist/scripts/codex-0144-thread-store-check.js",
+      "deps": [
+        "codex:0144:manifest"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/scripts/codex-0144-thread-store-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "codex:0144:capability",
+      "command": "node ./dist/scripts/codex-0144-capability-check.js",
+      "deps": [
+        "codex:0144:manifest",
+        "codex:0144:binary-identity",
+        "codex:0144:app-server-v2"
+      ],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "package-lock.json",
+          "release-gates.v2.json",
+          "src/core/codex-control/**",
+          "src/core/codex-compat/**",
+          "src/core/codex-runtime/**",
+          "config/codex-releases/**",
+          "schemas/codex/app-server-0.144/**"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ux-review:run-wires-imagegen",
+      "command": "node ./dist/scripts/ux-review-run-wires-imagegen-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/commands/image-ux-review-command.ts", "src/scripts/ux-review-run-wires-imagegen-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ux-review:extract-wires-real-extractor",
+      "command": "node ./dist/scripts/ux-review-extract-wires-real-extractor-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/image-ux-review/**", "src/scripts/ux-review-extract-wires-real-extractor-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ux-review:patch-diff-recheck",
+      "command": "node ./dist/scripts/ux-review-patch-diff-recheck-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/image-ux-review/**", "src/scripts/ux-review-patch-diff-recheck-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ux-review:imagegen-blackbox",
+      "command": "node ./dist/scripts/ux-review-imagegen-blackbox-check.js",
+      "deps": ["ux-review:run-wires-imagegen", "ux-review:extract-wires-real-extractor"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/image-ux-review/**", "src/scripts/ux-review-imagegen-blackbox-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ppt:real-export-adapter",
+      "command": "node ./dist/scripts/ppt-real-export-adapter-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/ppt/**", "src/scripts/ppt-real-export-adapter-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ppt:real-imagegen-wiring",
+      "command": "node ./dist/scripts/ppt-real-imagegen-wiring-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/ppt/**", "src/scripts/ppt-real-imagegen-wiring-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ppt:reexport-rereview",
+      "command": "node ./dist/scripts/ppt-reexport-rereview-check.js",
+      "deps": ["ppt:real-export-adapter", "ppt:real-imagegen-wiring"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/ppt/**", "src/scripts/ppt-reexport-rereview-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "ppt:full-e2e-blackbox",
+      "command": "node ./dist/scripts/ppt-full-e2e-blackbox-check.js",
+      "deps": ["ppt:reexport-rereview"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/ppt/**", "src/scripts/ppt-full-e2e-blackbox-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "dfix:fixture",
+      "command": "node ./dist/scripts/dfix-fixture-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/dfix/**", "src/scripts/dfix-fixture-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "dfix:patch-handoff",
+      "command": "node ./dist/scripts/dfix-patch-handoff-check.js",
+      "deps": ["dfix:fixture"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/dfix/**", "src/scripts/dfix-patch-handoff-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "dfix:verification-recommendation",
+      "command": "node ./dist/scripts/dfix-verification-recommendation-check.js",
+      "deps": ["dfix:fixture"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/dfix/**", "src/scripts/dfix-verification-recommendation-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "dfix:verification",
+      "command": "node ./dist/scripts/dfix-verification-check.js",
+      "deps": ["dfix:fixture"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/dfix/**", "src/scripts/dfix-verification-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "evidence:flagship-coverage",
+      "command": "node ./dist/scripts/evidence-flagship-coverage-check.js",
+      "deps": ["dfix:verification", "ppt:full-e2e-blackbox", "ux-review:imagegen-blackbox"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/evidence/**", "src/core/trust-kernel/**", "src/scripts/evidence-flagship-coverage-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "all-features:deep-completion",
+      "command": "node ./dist/scripts/all-feature-deep-completion-check.js",
+      "deps": ["evidence:flagship-coverage"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 300000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/feature-registry.ts", "src/core/feature-fixtures.ts", "src/scripts/all-feature-deep-completion-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "release:runtime-truth-matrix",
+      "command": "node ./dist/scripts/release-runtime-truth-matrix-check.js",
+      "deps": ["all-features:deep-completion"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "real-env",
+      "timeout_ms": 120000,
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/proof/runtime-truth-matrix.ts", "src/scripts/release-runtime-truth-matrix-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
       "output_contract": "sks.gate-result.v1"
     }
   ]

@@ -1,6 +1,6 @@
 # Fast Mode Default
 
-SKS 1.18.11 defaults agent runs to Fast mode. A user can explicitly pass `--no-fast` or `--service-tier standard` for one run, or use the project-local dollar commands in 1.20.3 to toggle the default:
+SKS 6.1.0 defaults agent runs to Fast mode. A user can explicitly pass `--no-fast` or `--service-tier standard` for one run, or use the project-local commands to toggle the default:
 
 ```bash
 sks fast-mode on
@@ -53,11 +53,8 @@ sks agent run "fixture" --no-fast
 sks agent run "fixture" --service-tier standard
 ```
 
-Release gates:
+The `agent:fast-mode-policy` release gate runs the default-policy and worker-propagation checks. Execute it through the canonical release preset:
 
 ```bash
-npm run agent:fast-mode-default
-npm run agent:fast-mode-worker-propagation
-npm run codex:fast-mode-profile-propagation
-npm run mad-sks:fast-mode-propagation
+npm run release:check:full
 ```
