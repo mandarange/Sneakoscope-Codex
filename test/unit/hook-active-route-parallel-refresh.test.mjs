@@ -120,3 +120,78 @@ test('natural language commit and push bypasses hook pipeline preparation', asyn
     assert.match(String(stop.systemMessage || ''), /accepted without route finalization/);
   });
 });
+
+test('Stop accepts an explicitly closed persisted route without reopening stale gates', async () => {
+  const root = await makeRoot();
+  const sessionId = 'closed-route-stop';
+  const missionId = 'M-closed-route-stop';
+  const missionDir = path.join(root, '.sneakoscope', 'missions', missionId);
+  await fs.mkdir(missionDir, { recursive: true });
+  await fs.writeFile(path.join(missionDir, 'naruto-gate.json'), JSON.stringify({
+    schema: 'sks.naruto-gate.v1',
+    passed: false,
+    blockers: ['naruto_run_not_started']
+  }));
+
+  const { evaluateHookPayload } = await import('../../dist/core/hooks-runtime.js');
+  const { setCurrent, closeRouteState } = await import('../../dist/core/mission.js');
+  await setCurrent(root, {
+    mission_id: missionId,
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mode: 'NARUTO',
+    phase: 'NARUTO_READY',
+    stop_gate: 'naruto-gate.json',
+    implementation_allowed: true,
+    agents_required: true,
+    subagents_required: true,
+    reflection_required: true,
+    proof_required: true
+  }, { sessionKey: sessionId });
+  await closeRouteState(root, { missionId });
+
+  const result = await evaluateHookPayload('stop', {
+    cwd: root,
+    session_id: sessionId,
+    last_assistant_message: 'Route closed without claiming completion.'
+  }, { root });
+
+  assert.equal(result.continue, true);
+  assert.equal(result.action, 'route_closed');
+  await assert.rejects(fs.access(path.join(missionDir, 'compliance-loop-guard.json')));
+});
+
+test('Stop ignores an untrusted payload state that claims an active route is closed', async () => {
+  const root = await makeRoot();
+  const sessionId = 'active-route-stop-spoof';
+  const missionId = 'M-active-route-stop-spoof';
+  await fs.mkdir(path.join(root, '.sneakoscope', 'missions', missionId), { recursive: true });
+
+  const { evaluateHookPayload } = await import('../../dist/core/hooks-runtime.js');
+  const { setCurrent } = await import('../../dist/core/mission.js');
+  await setCurrent(root, {
+    mission_id: missionId,
+    route: 'Naruto',
+    route_command: '$Naruto',
+    mode: 'NARUTO',
+    phase: 'NARUTO_READY',
+    stop_gate: 'naruto-gate.json',
+    implementation_allowed: true,
+    agents_required: true,
+    subagents_required: true,
+    reflection_required: true,
+    proof_required: true,
+    route_closed: false
+  }, { sessionKey: sessionId });
+
+  const result = await evaluateHookPayload('stop', {
+    cwd: root,
+    session_id: sessionId,
+    state: { route_closed: true },
+    last_assistant_message: 'Done.'
+  }, { root });
+
+  assert.equal(result.decision, 'block');
+  assert.match(String(result.reason || ''), /requires native multi-session evidence/);
+  assert.notEqual(result.action, 'route_closed');
+});

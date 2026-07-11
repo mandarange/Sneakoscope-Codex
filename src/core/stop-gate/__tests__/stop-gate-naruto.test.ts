@@ -196,6 +196,39 @@ test('generic route stop hook accepts recorded hard blocker before completion pr
   assert.match(decision?.systemMessage, /managed_config_requires_human_remedy/);
 });
 
+test('explicitly closed route bypasses stale native agent intake requirements', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-closed-route';
+  const dir = await setupMission(root, missionId);
+  const state = {
+    mission_id: missionId,
+    stop_gate: 'naruto-gate.json',
+    mode: 'NARUTO',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    route_closed: true,
+    route_closed_at: new Date().toISOString(),
+    implementation_allowed: false,
+    agents_required: true,
+    subagents_required: true,
+    reflection_required: true,
+    proof_required: true
+  };
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({
+    schema: 'sks.naruto-gate.v1',
+    passed: false,
+    blockers: ['naruto_run_not_started']
+  }));
+  await writeCurrent(root, state);
+
+  const decision: any = await evaluateStop(root, state, { message: 'done' }, { noQuestion: true });
+
+  assert.equal(decision?.continue, true);
+  assert.equal(decision?.action, 'route_closed');
+  assert.match(decision?.systemMessage, /explicitly closed route accepted/);
+  await assert.rejects(fsp.access(path.join(dir, 'compliance-loop-guard.json')));
+});
+
 test('strict pass rule rejects status blocked or blockers', async () => {
   const root = await makeTempRoot();
   const missionId = 'M-test-008';

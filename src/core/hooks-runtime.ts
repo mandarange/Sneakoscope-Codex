@@ -192,7 +192,15 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
       hook: name
     }).catch(() => null);
   }
-  const loadedState = opts.state || payload.state || await loadState(root, payload);
+  // Stop decisions must use the persisted session state. Codex's Stop payload
+  // does not define a trusted `state` field, so accepting one here would let a
+  // caller spoof `route_closed` and bypass active route gates. Explicit
+  // `opts.state` remains available for internal replay and focused tests.
+  const loadedState = opts.state || (
+    name === 'stop'
+      ? await loadState(root, payload)
+      : payload.state || await loadState(root, payload)
+  );
   const state = { ...loadedState, _session_key: loadedState?._session_key || sessionKey };
   const noQuestion = isNoQuestionRunning(state);
   if (name === 'user-prompt-submit') {

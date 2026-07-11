@@ -190,6 +190,17 @@ export async function projectGateStatus(root: any, state: any = {}) {
 }
 
 export async function evaluateStop(root: any, state: any, payload: any, opts: any = {}) {
+  // `sks route close` is the explicit terminal control for abandoning or
+  // superseding a route. Once it has closed the route, stale requirements
+  // from that route must not re-open native-agent, reflection, or proof gates
+  // on the next Stop hook invocation.
+  if (state?.route_closed === true) {
+    return {
+      continue: true,
+      action: 'route_closed',
+      systemMessage: `SKS: explicitly closed route accepted${state?.mission_id ? ` (${state.mission_id})` : ''}.`
+    };
+  }
   const last = extractLastMessage(payload);
   const jsonCache = new Map<string, Promise<any>>();
   if (clarificationGatePending(state)) {
