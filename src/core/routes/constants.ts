@@ -11,7 +11,7 @@ export const FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT = 'from-chat-img-temp-triwiki.j
 export const FROM_CHAT_IMG_QA_LOOP_ARTIFACT = 'from-chat-img-qa-loop.json';
 export const FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS = 5;
 
-export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|review|ui|research|seo-geo-optimizer|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|super-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|memory|wrongness|code-structure|proof-field|skill-dream|rust';
+export const USAGE_TOPICS = 'install|setup|bootstrap|root|deps|zellij|tmux|auto-review|naruto|team|qa-loop|ppt|image-ux-review|computer-use|goal|fast-mode|review|ui|research|seo-geo-optimizer|db|git|codex|codex-app|codex-native|hooks|features|all-features|dfix|commit|commit-and-push|design|imagegen|dollar|context7|super-search|xai|pipeline|reasoning|guard|conflicts|versioning|eval|harness|hproof|gx|wiki|memory|wrongness|code-structure|proof-field|skill-dream|rust';
 
 export const RECOMMENDED_MCP_SERVERS = [
   {

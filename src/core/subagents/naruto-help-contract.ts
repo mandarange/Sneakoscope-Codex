@@ -22,6 +22,12 @@ export function buildNarutoHelpResult() {
       'sks naruto proof [latest|M-...] [--json]'
     ],
     commands: ['help', 'status', 'subagents', 'proof', 'run'],
+    max_depth: 1,
+    completion_evidence: {
+      lifecycle_events: ['SubagentStart', 'SubagentStop'],
+      stop_is_success_evidence: false,
+      structured_parent_summary: 'subagent-parent-summary.json'
+    },
     deprecated_aliases: {
       '--clones N': '--agents N',
       workers: 'subagents'

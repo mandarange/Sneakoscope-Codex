@@ -8,7 +8,12 @@ import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
-const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 1024);
+// 6.1.1 adds the official-subagent runtime/evidence/config surfaces plus the
+// Codex CLI lifecycle and tool-output recovery modules. The measured unpacked
+// payload was ~10.07 MiB before the installed-runtime contract added the three
+// root gate/script manifests (~140 KiB). Keep a narrow 10.375 MiB ceiling for
+// that required surface plus the focused stabilization delta.
+const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10.375 * 1024 * 1024);
 // Raised from 2300 KiB after the 5.4.0 dollar-command hardening pass added
 // src/core/feature-fixture-executor.ts and expanded several command modules
 // (route-success-helpers.ts, seo-command.ts, ppt-command.ts, qa-loop-command.ts,
@@ -78,6 +83,9 @@ for (const entry of runtimeManifest.scripts) {
 assertGate(files.includes('package.json'), 'packlist_missing_runtime_entry', { missing: 'package.json' });
 assertGate(files.includes('README.md'), 'packlist_missing_runtime_entry', { missing: 'README.md' });
 assertGate(files.includes('LICENSE'), 'packlist_missing_runtime_entry', { missing: 'LICENSE' });
+for (const manifest of ['release-gates.v2.json', 'infra-harness-gates.json', 'runtime-required-scripts.json']) {
+  assertGate(files.includes(manifest), 'packlist_missing_runtime_manifest', { missing: manifest });
+}
 assertGate(files.some((f) => f.startsWith('schemas/')), 'packlist_missing_runtime_entry', { missing: 'schemas/' });
 
 const forbidden = files.filter((f) =>

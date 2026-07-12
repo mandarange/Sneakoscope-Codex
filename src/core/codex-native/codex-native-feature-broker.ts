@@ -10,13 +10,17 @@ import { detectCodex0140Capability } from '../codex-control/codex-0140-capabilit
 import { detectCodex0144Capability, type Codex0144FeatureKey } from '../codex-control/codex-0144-capability.js'
 import { buildCodexPluginInventory } from '../codex-plugins/codex-plugin-json.js'
 import { nowIso, runProcess, writeJsonAtomic } from '../fsx.js'
-import { MANAGED_AGENT_ROLES, MANAGED_SKILLS, managedAgentRoleOwnsText } from '../managed-assets/managed-assets-manifest.js'
+import {
+  MANAGED_OFFICIAL_SUBAGENT_ROLES,
+  MANAGED_SKILLS,
+  managedOfficialSubagentRoleOwnsText
+} from '../managed-assets/managed-assets-manifest.js'
 import { buildMcpPluginServerCandidates } from '../mcp/mcp-plugin-inventory.js'
 import { codexNativeFeatureState, computeCodexNativeInvocationDefaults, type CodexNativeFeatureMatrix, type CodexNativeFeatureState } from './codex-native-feature-matrix.js'
 
 const REPORT_PATH = '.sneakoscope/reports/codex-native-feature-matrix.json'
 const REQUIRED_SKILL_NAMES = MANAGED_SKILLS.map((skill) => skill.id)
-const REQUIRED_AGENT_ROLES = MANAGED_AGENT_ROLES.map((role) => role.id)
+const REQUIRED_AGENT_ROLES = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.id)
 const invocationMatrixCache = new Map<string, CodexNativeFeatureMatrix>()
 
 export async function buildCodexNativeFeatureMatrix(input: {
@@ -256,20 +260,14 @@ async function inspectManagedSkillState(root: string): Promise<{ ok: boolean; ap
 }
 
 async function inspectManagedAgentRoleState(root: string): Promise<{ ok: boolean; apply: false; artifact_path: string; existing_count: number; managed_count: number; missing_required: string[]; blockers: string[]; warnings: string[] }> {
-  const dirs = [
-    path.join(root, '.codex', 'agents'),
-    ...(process.env.CODEX_HOME ? [path.join(process.env.CODEX_HOME, 'agents')] : [])
-  ]
+  const dir = path.join(root, '.codex', 'agents')
   let existingCount = 0
   const managed = new Set<string>()
-  for (const dir of dirs) {
-    const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
-    existingCount += rows.filter((row) => row.isFile() && row.name.endsWith('.toml')).length
-    for (const role of MANAGED_AGENT_ROLES) {
-      if (managed.has(role.id)) continue
-      const text = await fs.readFile(path.join(dir, role.filename), 'utf8').catch(() => '')
-      if (managedAgentRoleOwnsText(text, role)) managed.add(role.id)
-    }
+  const rows = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+  existingCount = rows.filter((row) => row.isFile() && row.name.endsWith('.toml')).length
+  for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
+    const text = await fs.readFile(path.join(dir, role.filename), 'utf8').catch(() => '')
+    if (managedOfficialSubagentRoleOwnsText(text, role)) managed.add(role.id)
   }
   const missing = REQUIRED_AGENT_ROLES.filter((role) => !managed.has(role))
   return {

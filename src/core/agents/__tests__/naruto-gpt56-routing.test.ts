@@ -36,7 +36,7 @@ test('Naruto GPT-5.6 policy maps bounded work to Luna Max and judgment work to S
 
 test('Naruto GPT-5.6 policy fails closed for missing model or unadvertised effort', () => {
   assert.equal(routeNarutoGpt56Model({
-    taskText: 'implementation',
+    taskText: 'exact bounded code_modification',
     availableModels: ['gpt-5.6-sol'],
     availableModelEfforts: modelEfforts
   }).model, '');

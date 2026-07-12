@@ -85,7 +85,8 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
   const primaryBlockers = [
     ...blockers,
-    ...(adapterResult?.blockers || [])
+    ...(adapterResult?.blockers || []),
+    ...codexControlAdapterFailureBlockers(adapterResult, 'codex-sdk')
   ]
   const runFailed = isRunFailureBlocker(primaryBlockers)
   const finalBlockers = [
@@ -190,7 +191,10 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
   for (const event of translatedEvents) await appendJsonlBounded(path.join(root, 'python-codex-sdk-events.jsonl'), event, 5 * 1024 * 1024)
   const structuredOutput = parseStructuredOutput(adapterResult.finalResponse || '')
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
-  const primaryBlockers = adapterResult.blockers || []
+  const primaryBlockers = [
+    ...(adapterResult.blockers || []),
+    ...codexControlAdapterFailureBlockers(adapterResult, 'python-codex-sdk')
+  ]
   const runFailed = isRunFailureBlocker(primaryBlockers)
   const finalBlockers = [
     ...primaryBlockers,
@@ -296,7 +300,10 @@ async function runLocalControlTask(root: string, task: CodexTaskInput, schema: R
   for (const event of adapterResult.events || []) await appendJsonlBounded(path.join(root, 'local-llm-events.jsonl'), event, 5 * 1024 * 1024)
   const structuredOutput = adapterResult.structuredOutput
   const validation = structuredOutput ? validateJsonSchemaRecursive(structuredOutput, schema) : { ok: false, issues: ['structured_output_missing'] }
-  const primaryBlockers = adapterResult.blockers || []
+  const primaryBlockers = [
+    ...(adapterResult.blockers || []),
+    ...codexControlAdapterFailureBlockers(adapterResult, 'local-llm')
+  ]
   const runFailed = isRunFailureBlocker(primaryBlockers)
   const finalBlockers = [
     ...primaryBlockers,
@@ -439,9 +446,23 @@ function isRunFailureBlocker(blockers: readonly unknown[]): boolean {
       || text.startsWith('python_codex_sdk_error')
       || text.startsWith('local_llm_generate_failed')
       || text.startsWith('local_llm_eligibility_blocked')
+      || text.endsWith('_adapter_reported_failure')
+      || text === 'codex_reliability_shield_failed'
       || text === 'codex_reliability_fatal_error_no_retry'
       || text === 'codex_reliability_mcp_auth_error'
   })
+}
+
+export function codexControlAdapterFailureBlockers(
+  adapterResult: any,
+  backend: 'codex-sdk' | 'python-codex-sdk' | 'local-llm'
+): string[] {
+  if (!adapterResult) return []
+  const blockers = adapterResult.ok === true ? [] : [`${backend.replaceAll('-', '_')}_adapter_reported_failure`]
+  if (backend === 'codex-sdk' && adapterResult.reliabilityShield && adapterResult.reliabilityShield.ok !== true) {
+    blockers.push('codex_reliability_shield_failed')
+  }
+  return [...new Set(blockers)]
 }
 
 function mapPythonSandbox(value: string) {

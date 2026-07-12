@@ -5,8 +5,9 @@ import path from 'node:path';
 import fsp from 'node:fs/promises';
 import { evaluateHookPayload, evaluateHookPayloadOnce } from '../../hooks-runtime.js';
 import { lightTurnReceiptPath } from '../light-turn.js';
+import { toolOutputQuarantinePath } from '../tool-output-quarantine.js';
 import { prepareRoute } from '../../pipeline.js';
-import { loadStateForSession, missionDir } from '../../mission.js';
+import { loadStateForSession, missionDir, setCurrent } from '../../mission.js';
 
 async function tempRoot(prefix: string) {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -98,8 +99,50 @@ test('greeting fast path does not emit a session-id fallback warning artifact', 
       prompt: 'hi'
     }, { root, state: {} });
     assert.equal(submitted.sksTaskProfile, 'passthrough');
+    const stopped: any = await evaluateHookPayload('stop', {
+      cwd: root,
+      turn_id: 'turn-no-session-warning',
+      last_assistant_message: 'Hello!'
+    }, { root, state: {} });
+    assert.equal(stopped.continue, true);
+    assert.equal(stopped.action, 'light_turn');
     await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'state', 'session-id-fallback-warning.jsonl')));
   } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('standalone parent launch attaches its child hook session to the owning mission without duplication', async () => {
+  const root = await tempRoot('sks-parent-launch-attach-');
+  const outerSession = 'standalone-outer';
+  const oldLaunch = process.env.SKS_NARUTO_PARENT_LAUNCH;
+  const oldMission = process.env.SKS_NARUTO_PARENT_MISSION_ID;
+  try {
+    await prepareRoute(root, '$Naruto --agents 2 audit two packages', {}, {
+      sessionKey: outerSession,
+      parentModel: 'gpt-5.6-sol'
+    });
+    const outerState: any = await loadStateForSession(root, outerSession);
+    const before = (await fsp.readdir(path.join(root, '.sneakoscope', 'missions'))).sort();
+    process.env.SKS_NARUTO_PARENT_LAUNCH = '1';
+    process.env.SKS_NARUTO_PARENT_MISSION_ID = outerState.mission_id;
+
+    const result: any = await evaluateHookPayload('user-prompt-submit', {
+      cwd: root,
+      session_id: 'standalone-child-thread',
+      turn_id: 'standalone-child-turn',
+      prompt: 'Use a Codex subagent workflow for two independent slices and wait for both.'
+    }, { root });
+    const after = (await fsp.readdir(path.join(root, '.sneakoscope', 'missions'))).sort();
+    const childState: any = await loadStateForSession(root, 'standalone-child-thread');
+
+    assert.deepEqual(after, before);
+    assert.equal(result.attached_parent_mission_id, outerState.mission_id);
+    assert.equal(childState.mission_id, outerState.mission_id);
+    assert.match(String(result.additionalContext || ''), new RegExp(outerState.mission_id));
+  } finally {
+    restoreEnv('SKS_NARUTO_PARENT_LAUNCH', oldLaunch);
+    restoreEnv('SKS_NARUTO_PARENT_MISSION_ID', oldMission);
     await fsp.rm(root, { recursive: true, force: true });
   }
 });
@@ -135,7 +178,7 @@ test('a later non-light prompt invalidates an older light receipt before Stop', 
   }
 });
 
-test('active continuation prompts keep the active mission context instead of arming answer bypass', async () => {
+test('active continuation prompts trust persisted state and tolerate terminal punctuation', async () => {
   const root = await tempRoot('sks-active-continuation-');
   const session = 'active-continuation-session';
   const state = {
@@ -148,17 +191,80 @@ test('active continuation prompts keep the active mission context instead of arm
   };
   try {
     await fsp.mkdir(missionDir(root, state.mission_id), { recursive: true });
-    for (const prompt of ['keep going', 'please continue', '계속 진행해줘', '이어서 해줘']) {
+    await setCurrent(root, state, { sessionKey: session });
+    for (const prompt of [
+      'keep going',
+      'please continue',
+      '계속 진행해줘',
+      '이어서 해줘',
+      'please continue.',
+      '계속 진행해줘!',
+      '이어서 해줘.',
+      'keep going…'
+    ]) {
       const submitted: any = await evaluateHookPayload('user-prompt-submit', {
         conversation_id: session,
         turn_id: `turn-continue-${prompt}`,
-        prompt
-      }, { root, state });
+        prompt,
+        state: {}
+      }, { root });
       assert.equal(submitted.sksTaskProfile, undefined);
       assert.match(String(submitted.additionalContext || ''), /Active Naruto mission/i);
+      assert.match(String(submitted.additionalContext || ''), /subagent-parent-summary\.json/i);
+      assert.doesNotMatch(String(submitted.additionalContext || ''), /write the integrated parent result to naruto-summary\.json/i);
       assert.doesNotMatch(String(submitted.additionalContext || ''), /answer-only pipeline active/i);
       await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
     }
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('missing custom tool output quarantines every later prompt in the same thread and permits a fresh thread', async () => {
+  const root = await tempRoot('sks-interrupted-tool-output-');
+  const session = 'interrupted-tool-output-session';
+  const state = {
+    mission_id: 'M-interrupted-tool-output',
+    mode: 'NARUTO',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    route_closed: false
+  };
+  try {
+    await fsp.mkdir(missionDir(root, state.mission_id), { recursive: true });
+    const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      turn_id: 'turn-interrupted-tool-output',
+      prompt: '[No tool output found for custom tool call call_interrupted_1.] 계속해줘'
+    }, { root, state });
+    assert.equal(submitted.decision, 'block');
+    assert.equal(submitted.continue, undefined);
+    assert.match(String(submitted.reason || ''), /call_interrupted_1/);
+    assert.match(String(submitted.reason || ''), /M-interrupted-tool-output/);
+    assert.match(String(submitted.reason || ''), /fresh Codex thread/i);
+    assert.match(String(submitted.reason || ''), /1\.21\.0-beta\.3/);
+    assert.doesNotMatch(String(submitted.reason || ''), /infer success/i);
+    await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
+
+    const quarantine = JSON.parse(await fsp.readFile(toolOutputQuarantinePath(root, session), 'utf8'));
+    assert.equal(quarantine.active, true);
+    assert.equal(quarantine.call_id, 'call_interrupted_1');
+
+    const later: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      turn_id: 'turn-after-interrupted-output',
+      prompt: '계속해줘'
+    }, { root, state });
+    assert.equal(later.decision, 'block');
+    assert.match(String(later.reason || ''), /call_interrupted_1/);
+
+    const fresh: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: 'fresh-thread-after-interrupted-output',
+      turn_id: 'turn-fresh-after-interrupted-output',
+      prompt: '계속해줘'
+    }, { root, state });
+    assert.equal(fresh.continue, true);
+    assert.match(String(fresh.additionalContext || ''), /Active Naruto mission/i);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }
@@ -213,9 +319,18 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
     await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
     await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 9\nmax_depth = 1\n');
     await fsp.mkdir(missionDir(root, missionId), { recursive: true });
+    await fsp.writeFile(path.join(missionDir(root, missionId), 'subagent-plan.json'), JSON.stringify({
+      schema: 'sks.subagent-plan.v1',
+      workflow: 'official_codex_subagent',
+      mission_id: missionId,
+      requested_subagents: 1
+    }));
     const started: any = await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', 'agent-a1'), { root, state });
     assert.match(started.additionalContext, /max_threads is 9/i);
     assert.doesNotMatch(started.additionalContext, /at most 4/i);
+    const startedEvidence = JSON.parse(await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-evidence.json'), 'utf8'));
+    assert.equal(startedEvidence.started_threads, 1);
+    assert.deepEqual(startedEvidence.event_sources, ['SubagentStart']);
 
     const stopped: any = await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', 'agent-a1', 'Bounded slice result.'), { root, state });
     assert.equal(stopped.continue, true);
@@ -224,6 +339,9 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
     const events = await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-events.jsonl'), 'utf8');
     assert.match(events, /SubagentStart/);
     assert.match(events, /SubagentStop/);
+    const stoppedEvidence = JSON.parse(await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-evidence.json'), 'utf8'));
+    assert.equal(stoppedEvidence.started_threads, 1);
+    assert.deepEqual(stoppedEvidence.event_sources, ['SubagentStart', 'SubagentStop']);
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }
@@ -277,6 +395,12 @@ test('official events plus parent summary pass Naruto without legacy process art
     assert.equal(summary.schema, 'sks.naruto-subagent-workflow.v1');
     assert.equal(summary.parent_summary_present, true);
     assert.equal(gate.passed, true);
+    assert.equal(gate.subagent_evidence_ready, true);
+    assert.equal(gate.requested_subagents, 2);
+    assert.equal(gate.started_subagents, 2);
+    assert.equal(gate.completed_subagents, 2);
+    assert.equal(gate.failed_subagents, 0);
+    assert.deepEqual(gate.event_sources, ['SubagentStart', 'SubagentStop']);
     const ledger = JSON.parse(await fsp.readFile(path.join(dir, 'work-order-ledger.json'), 'utf8'));
     assert.equal(ledger.items[0].status, 'verified');
     await assert.rejects(fsp.access(path.join(dir, 'agents', 'naruto-work-graph.json')));
@@ -327,8 +451,52 @@ test('generic parallel route materializes and refreshes official evidence withou
     const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
     assert.equal(evidence.ok, true);
     assert.equal(evidence.completed_threads, 2);
+    await evaluateHookPayload('stop', {
+      conversation_id: session,
+      turn_id: 'turn-official-parent-retry',
+      last_assistant_message: 'Completion Summary: all slices remain integrated. Honest Mode: evidence is recorded; reflection remains pending.'
+    }, { root, state });
+    const evidenceAfterRetry = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    assert.equal(evidenceAfterRetry.ok, true);
+    assert.equal(evidenceAfterRetry.parent_summary_trustworthy, true);
     const ledger = JSON.parse(await fsp.readFile(path.join(dir, 'work-order-ledger.json'), 'utf8'));
     assert.equal(ledger.items[0].status, 'pending');
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-summary.json')));
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('generic official evidence preserves config blockers and never marks invalid TOML verified', async () => {
+  const root = await tempRoot('sks-generic-subagent-invalid-config-');
+  const session = 'generic-invalid-config-parent';
+  try {
+    await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
+    await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents\nmax_threads = 12\n');
+    await prepareRoute(root, '$DB --agents 1 audit the schema in parallel', {}, {
+      sessionKey: session,
+      parentModel: 'gpt-5.6-sol'
+    });
+    let state: any = await loadStateForSession(root, session);
+    const dir = missionDir(root, state.mission_id);
+    const plan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    assert.ok(plan.config_blockers.includes('project_official_subagent_config_toml_parse_failed'));
+
+    await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', 'db-invalid-a1'), { root, state });
+    await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', 'db-invalid-a1', 'Read-only review completed.'), { root, state });
+    await evaluateHookPayload('stop', {
+      conversation_id: session,
+      turn_id: 'turn-generic-invalid-config',
+      last_assistant_message: structuredParentSummary(['db-invalid-a1'])
+    }, { root, state });
+
+    const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    assert.equal(evidence.completed_threads, 1);
+    assert.equal(evidence.ok, false);
+    assert.ok(evidence.blockers.includes('official_subagent_config:project_official_subagent_config_toml_parse_failed'));
+    state = await loadStateForSession(root, session);
+    assert.equal(state.subagents_verified, false);
     await assert.rejects(fsp.access(path.join(dir, 'naruto-summary.json')));
     await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
   } finally {
@@ -369,3 +537,8 @@ test('automatic bounded work stays parent-owned and does not materialize Naruto 
     await fsp.rm(root, { recursive: true, force: true });
   }
 });
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}

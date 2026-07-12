@@ -51,6 +51,29 @@ test('SKS menu bar action script resolves sks dynamically from the login shell P
   assert.match(result.stdout, /fake-sks:version/);
 });
 
+test('SKS menu bar action script prepends the resolved NVM Node bin before running the pinned entry', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-nvm-'));
+  t.after(async () => {
+    await fs.rm(temp, { recursive: true, force: true });
+  });
+  const home = path.join(temp, 'home');
+  const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v24.0.2', 'bin');
+  const node = path.join(nvmBin, 'node');
+  const entry = path.join(temp, 'sks.js');
+  await fs.mkdir(nvmBin, { recursive: true });
+  await fs.writeFile(node, '#!/bin/sh\nprintf "%s\\n" "$PATH"\n', { mode: 0o755 });
+  await fs.writeFile(entry, '// fixture\n');
+  const script = path.join(temp, 'sks-menubar-action.sh');
+  await fs.writeFile(script, actionScriptSource({ nodeBin: '/missing/node', sksEntry: entry }), { mode: 0o755 });
+
+  const result = await run('/bin/zsh', [script, 'version'], {
+    HOME: home,
+    PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+  });
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout.trim().split(':')[0], nvmBin);
+});
+
 test('SKS menu bar action script exits 127 when every candidate is unavailable', async (t) => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-action-missing-'));
   t.after(async () => {

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAllFeaturesSelftest, buildFeatureRegistry, validateFeatureRegistry } from '../../dist/core/feature-registry.js';
+import { COMMAND_MANIFEST_LITE } from '../../dist/cli/command-manifest-lite.js';
+import { COMMANDS } from '../../dist/cli/command-registry.js';
 
 test('feature registry carries fixture contracts', async () => {
   const registry = await buildFeatureRegistry({ root: process.cwd() });
@@ -18,6 +20,17 @@ test('feature registry carries fixture contracts', async () => {
   assert.equal(registry.source_inventory.cli_command_names.includes('ux-review'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('cu'), false);
   assert.equal(registry.source_inventory.cli_command_names.includes('memory'), true);
+  assert.deepEqual(
+    [...registry.source_inventory.cli_command_names].sort(),
+    COMMAND_MANIFEST_LITE.map((entry) => entry.name).sort()
+  );
+  assert.ok(registry.source_inventory.handler_keys.length > 0);
+  assert.deepEqual(
+    [...registry.source_inventory.handler_keys].sort(),
+    Object.keys(COMMANDS).sort()
+  );
+  assert.ok(registry.features.some((feature) => feature.id === 'cli-gates'));
+  assert.ok(registry.features.some((feature) => feature.id === 'cli-naruto'));
   const computerUse = registry.features.find((feature) => feature.id === 'cli-computer-use');
   assert.equal(computerUse.fixture.status, 'pass');
   const selftest = buildAllFeaturesSelftest(registry);
@@ -47,11 +60,12 @@ test('feature registry does not silently allow unknown uppercase dollar mentions
       dollar_commands: ['$Team'],
       app_skill_aliases: [],
       skills: [],
-      doc_route_mentions: ['$FOO_BAR', '$CODEX_HOME', '$SKS_WORKTREE_ROOT', '$XDG_CACHE_HOME']
+      doc_route_mentions: ['$FOO_BAR', '$CODEX_HOME', '$HOME', '$SKS_WORKTREE_ROOT', '$XDG_CACHE_HOME']
     }
   });
   assert.ok(coverage.blockers.includes('doc_route_mention_without_route:$FOO_BAR'));
   assert.equal(coverage.doc_route_mentions_without_route.includes('$CODEX_HOME'), false);
+  assert.equal(coverage.doc_route_mentions_without_route.includes('$HOME'), false);
   assert.equal(coverage.doc_route_mentions_without_route.includes('$SKS_WORKTREE_ROOT'), false);
   assert.equal(coverage.doc_route_mentions_without_route.includes('$XDG_CACHE_HOME'), false);
 });

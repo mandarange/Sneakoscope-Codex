@@ -1,20 +1,11 @@
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { PACKAGE_VERSION, nowIso, writeJsonAtomic, writeTextAtomic, ensureDir } from '../fsx.js'
+import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { repairAgentRoleConfigs } from '../agents/agent-role-config.js'
 import { agentRolePayloadFor, probeCodexAgentTypeSupport } from './codex-agent-type-probe.js'
 import type { CodexAgentRolePayload, CodexAgentTypeProbe } from './codex-app-types.js'
 
-const DIRECTIVE_ROLES = [
-  'sks-explorer',
-  'sks-planner',
-  'sks-implementer',
-  'sks-checker',
-  'sks-release-verifier',
-  'sks-zellij-ui-verifier',
-  'sks-codex-probe-verifier'
-]
+const OFFICIAL_ROLES = ['worker', 'expert'] as const
 
 interface CodexAgentRoleSyncReport {
   schema: 'sks.codex-agent-role-sync.v1'
@@ -27,10 +18,12 @@ interface CodexAgentRoleSyncReport {
   probe_artifact_path: string
   clobbered_user_roles: false
   codex_home: string
+  official_roles: string[]
   directive_roles: string[]
   role_payloads: Record<string, CodexAgentRolePayload>
   agent_type_probe: CodexAgentTypeProbe
   created: string[]
+  updated: string[]
   base_repair: unknown
   blockers: string[]
 }
@@ -45,7 +38,6 @@ export async function syncCodexAgentRoles(input: {
   const root = path.resolve(input.root)
   const env = input.env || process.env
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex')
-  const targetDir = path.join(codexHome, 'agents')
   const baseRepair = await repairAgentRoleConfigs({
     root,
     apply: input.apply === true,
@@ -77,18 +69,9 @@ export async function syncCodexAgentRoles(input: {
       blockers: [],
       warnings: []
     }
-  const rolePayloads = Object.fromEntries(DIRECTIVE_ROLES.map((role) => [role, agentRolePayloadFor(role, agentTypeProbe)]))
-  const created: string[] = []
-  if (input.apply === true) {
-    await ensureDir(targetDir)
-    for (const role of DIRECTIVE_ROLES) {
-      const file = path.join(targetDir, `${role}.toml`)
-      const current = await fs.readFile(file, 'utf8').catch(() => '')
-      if (current && !isSksManagedDirectiveRole(current)) continue
-      await writeTextAtomic(file, roleToml(role, rolePayloads[role]))
-      created.push(file)
-    }
-  }
+  const rolePayloads = Object.fromEntries(OFFICIAL_ROLES.map((role) => [role, agentRolePayloadFor(role, agentTypeProbe)]))
+  const created = stringList(baseRepair, 'created')
+  const updated = stringList(baseRepair, 'repaired')
   const report: CodexAgentRoleSyncReport = {
     schema: 'sks.codex-agent-role-sync.v1',
     generated_at: nowIso(),
@@ -100,43 +83,17 @@ export async function syncCodexAgentRoles(input: {
     probe_artifact_path: '.sneakoscope/reports/codex-agent-type-probe.json',
     clobbered_user_roles: false,
     codex_home: codexHome,
-    directive_roles: DIRECTIVE_ROLES,
+    official_roles: [...OFFICIAL_ROLES],
+    directive_roles: [],
     role_payloads: rolePayloads as Record<string, CodexAgentRolePayload>,
     agent_type_probe: agentTypeProbe,
     created,
+    updated,
     base_repair: baseRepair,
     blockers: blockersOf(baseRepair)
   }
   await writeJsonAtomic(path.join(root, '.sneakoscope', 'reports', 'codex-agent-role-sync.json'), report).catch(() => undefined)
   return report
-}
-
-function roleToml(role: string, payload: CodexAgentRolePayload | undefined): string {
-  return [
-    `name = "${role}"`,
-    `description = "SKS managed ${PACKAGE_VERSION} directive role: ${role}"`,
-    role.includes('implementer') ? 'sandbox_mode = "workspace-write"' : 'sandbox_mode = "read-only"',
-    'approval_policy = "never"',
-    'developer_instructions = """',
-    `You are ${role}. SKS managed ${PACKAGE_VERSION} directive role with bounded ownership.`,
-    'Bounded ownership: use only the assigned owner files/directories and treat memory as guidance, not permission.',
-    role.includes('implementer') ? 'Maker/checker separation: implementer may patch only owner scope and cannot self-approve.' : 'Maker/checker separation: checker is read-only and must reject missing gates or missing proof artifacts.',
-    role.includes('implementer') ? 'Allowed sandbox: workspace-write only within assigned owner scope.' : 'Allowed sandbox: read-only; checker roles cannot mutate.',
-    role.includes('release') ? 'Release verifier: verify version truth, release DAG coverage, package scripts, packlist, and changelog evidence.' : '',
-    role.includes('zellij') ? 'UI/Zellij verifier: inspect readiness status, headless fallback, repair_required, pane proof, and slot telemetry without mutating unrelated UI state.' : '',
-    role.includes('codex') ? 'Codex native verifier: inspect hook approval, agent_type, skill sync, plugin inventory, MCP candidates, and invocation plan artifacts.' : '',
-    'Side-effect restrictions: no destructive shell, package publish, global config mutation, database mutation, or external service write unless the sealed route contract explicitly allows it.',
-    'Required proof artifacts: cite concrete repo paths, command outputs, and route-local JSON proof before claiming completion.',
-    'Final arbiter constraints: parent integration owns final acceptance; this role supplies evidence and cannot override missing gates.',
-    `Execution role strategy: ${payload?.strategy || 'message-role'}. Probe: ${payload?.probe_artifact_path || '.sneakoscope/reports/codex-agent-type-probe.json'}.`,
-    '"""',
-    ''
-  ].join('\n')
-}
-
-function isSksManagedDirectiveRole(text: string): boolean {
-  return /SKS managed (?:3\.1\.(?:4|5|6|7|11)|4\.1\.\d+) (?:directive|bounded) role/.test(text)
-    || /\bmessage_role_prefix\s*=/.test(text) && /SKS managed 3\.1\./.test(text)
 }
 
 function blockersOf(value: unknown): string[] {
@@ -151,8 +108,10 @@ function recordOk(value: unknown): boolean | undefined {
     : undefined
 }
 
-function escapeToml(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+function stringList(value: unknown, key: string): string[] {
+  return Boolean(value) && typeof value === 'object' && Array.isArray((value as Record<string, unknown>)[key])
+    ? ((value as Record<string, unknown>)[key] as unknown[]).map(String).filter(Boolean)
+    : []
 }
 
 function messageOf(err: unknown): string {

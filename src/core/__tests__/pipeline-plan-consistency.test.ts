@@ -30,6 +30,40 @@ test('Naruto plan uses canonical official subagent stages without legacy intake 
   assert.ok(!plan.verification.some((command: string) => /packcheck|selftest/i.test(command)));
 });
 
+test('specialized parallel routes use one official subagent fanout without legacy intake', () => {
+  for (const task of [
+    '$DB --agents 2 audit all schemas in parallel',
+    '$PPT --agents 3 build independent slide sections in parallel'
+  ]) {
+    const plan: any = buildPipelinePlan({ route: routePrompt(task), task });
+    assert.equal(plan.route.subagents_required, true, task);
+    assert.equal(plan.agent_intake.required, false, task);
+    assert.equal(plan.agent_intake.subagents_required, false, task);
+    assert.equal(plan.stages.filter((stage: any) => stage.id === 'native_agent_intake').length, 0, task);
+    assert.equal(plan.stages.filter((stage: any) => stage.id === 'official_subagent_execution').length, 1, task);
+    assert.doesNotMatch(plan.next_actions.join('\n'), /sks agent run/i, task);
+  }
+});
+
+test('implicit bounded Naruto routing does not create a default six-agent intake', () => {
+  for (const task of ['work on the parser', '로그인 버그 수정해줘', 'Implement the route parser']) {
+    const routed: any = routePrompt(task);
+    assert.equal(routed.explicit_invocation, false, task);
+    const plan: any = buildPipelinePlan({ route: routed, task });
+    assert.equal(plan.route.subagents_required, false, task);
+    assert.equal(plan.agent_intake.required, false, task);
+    assert.equal(plan.agent_intake.requested_subagents, 0, task);
+    assert.equal(plan.stages.some((stage: any) => stage.id === 'native_agent_intake'), false, task);
+  }
+
+  const explicitWorkRoute: any = routePrompt('$Work');
+  assert.equal(explicitWorkRoute.explicit_invocation, true);
+  const explicitWork: any = buildPipelinePlan({ route: explicitWorkRoute, task: '$Work' });
+  assert.equal(explicitWork.route.subagents_required, true);
+  assert.equal(explicitWork.agent_intake.required, false);
+  assert.equal(explicitWork.stages.some((stage: any) => stage.id === 'native_agent_intake'), false);
+});
+
 test('subagent policy uses official natural-language delegation without unstable tool contracts', () => {
   const text = subagentExecutionPolicyText(routePrompt('$Naruto'), 'implement the repair');
   assert.match(text, /Codex subagent workflow/i);

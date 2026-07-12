@@ -245,7 +245,7 @@ export const ROUTES = [
     command: '$Fast-Mode',
     mode: 'FAST_MODE',
     route: 'fast-mode toggle',
-    description: 'Turn the SKS Fast mode default on or off for project-local dollar-command and native-agent routes. Explicit --fast, --no-fast, and --service-tier flags still override it.',
+    description: 'Turn the SKS Fast mode default on or off for project-local dollar-command and routed workflows. Explicit --fast, --no-fast, and --service-tier flags still override it.',
     requiredSkills: ['fast-mode', 'honest-mode'],
     dollarAliases: ['$Fast-On', '$Fast-Off'],
     appSkillAliases: ['fast-on', 'fast-off'],
@@ -633,9 +633,9 @@ export const COMMAND_CATALOG = [
   { name: 'daemon', usage: 'sks daemon status|warm|stop [--json]', description: 'Inspect or warm the local SKS daemon cache state for build/proof reuse.' },
   { name: 'run', usage: 'sks run "task" [--visual|--research|--db] [--json]', description: 'Classify a plain-language task, materialize a mission, and route it through the SKS trust kernel.' },
   { name: 'plan', usage: 'sks plan "task" [--json]', description: 'Write a planning-only artifact under .sneakoscope/plans without editing code.' },
-  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, native agent, image voxel, DB safety, and next action.' },
+  { name: 'status', usage: 'sks status [--json]', description: 'Show the active mission, route, phase, proof, trust, subagent or legacy-agent evidence, image voxel, DB safety, and next action.' },
   { name: 'review', usage: 'sks review [--staged|--diff <ref>] [--fix] [--json]', description: 'Review a diff with machine-evidence findings sorted above LLM review notes.' },
-  { name: 'ui', usage: 'sks ui [--port 4477] [--mission latest] [--once] [--json]', description: 'Open the localhost SKS dashboard with live swarm slots, events, and gate status.' },
+  { name: 'ui', usage: 'sks ui [--port 4477] [--mission latest] [--once] [--json]', description: 'Open the localhost SKS dashboard with live agent-thread slots, events, and gate status.' },
   { name: 'usage', usage: `sks usage [${USAGE_TOPICS}]`, description: 'Print copy-ready workflows for common tasks.' },
   { name: 'quickstart', usage: 'sks quickstart', description: 'Show the shortest safe setup and verification flow.' },
   { name: 'bootstrap', usage: 'sks bootstrap [--install-scope global|project] [--local-only] [--json]', description: 'Initialize the current project, install SKS Codex App files/skills, check Context7/Codex App/Zellij, and print ready true/false.' },
@@ -643,7 +643,7 @@ export const COMMAND_CATALOG = [
   { name: 'update', usage: 'sks update [check|now] [--version <version>] [--json] [--dry-run]', description: 'Check npm for the latest SKS release and update the global package by default; use `check` for status-only.' },
   { name: 'uninstall', usage: 'sks uninstall [--dry-run] [--yes] [--keep-config] [--keep-data] [--purge-projects] [--json]', description: 'Remove SKS global skills, hooks, menu bar, state, temp files, and optional project residue while preserving user-owned content by default.' },
   { name: 'deps', usage: 'sks deps check [--json] [--yes]', description: 'Check Node/npm, Codex CLI, and Zellij readiness; pass --yes to repair missing Codex CLI/Zellij tooling when supported.' },
-  { name: 'codex', usage: 'sks codex compatibility|version|doctor|schema|0.144 [--json]', description: 'Check Codex CLI rust-v0.144.1 compatibility, installed version, current manifest/capability evidence, inherited historical baselines, and vendored hook schema snapshot freshness.' },
+  { name: 'codex', usage: 'sks codex compatibility|version|update-status [--refresh]|update|doctor|schema|0.144 [--json]', description: 'Check Codex CLI compatibility/version/update status, run the official `codex update`, and inspect current manifest, capability, and hook-schema evidence.' },
   { name: 'codex-app', usage: 'sks codex-app [check|glm-profile install|set-openrouter-key --api-key-stdin|product-design|chrome-extension|pat status|remote-control]', description: 'Check Codex App install, GLM/OpenRouter model profile visibility, codex-lb key-entry guidance, Product Design plugin readiness, Codex Chrome Extension web verification readiness, PAT-safe status, first-party MCP/plugin readiness, and Codex CLI 0.130.0+ remote-control availability.' },
   { name: 'codex-native', usage: 'sks codex-native status|feature-broker|invocation-plan|init-deep [--json]', description: 'Inspect Codex Native feature broker readiness, invocation routing, pattern evidence, and managed memory setup.' },
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
@@ -701,6 +701,7 @@ export const COMMAND_CATALOG = [
   { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or roll back Codex subagent missions with an explicit requested-agent/thread budget, disjoint work ownership, official event evidence, and parent-owned integration.' },
+  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent, Luna Max bounded workers, Sol Max experts, max_depth=1, and structured parent-thread completion evidence.' },
   { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; observation subcommands remain for old Team missions.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
@@ -1049,6 +1050,7 @@ function looksLikeExplicitDirectWorkDirective(prompt: any = '') {
   if (!text) return false;
   const koreanDirective = /(해\s*줘|해\s*주세요|해달|달라|진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|수정해줘|변경해줘|바꿔줘|해결해줘|만들어줘|준비해줘|완료해줘|배포\s*준비|릴리즈\s*준비|다음\s*버전)/i.test(text);
   const englishDirective = /\b(?:please\s+)?(?:fix|repair|resolve|solve|implement|patch|update|change|modify|prepare|ship|release|publish|deploy)\b[\s\S]{0,180}\b(?:for\s+me|now|release|deployment|publish|next\s+version|ship|deploy|prepare)\b/i.test(text)
+    || /^(?:please\s+)?work\s+on\b/i.test(text)
     || /\b(?:prepare|make)\b[\s\S]{0,120}\b(?:next\s+version|release|deployment|publish|ship)\b/i.test(text)
     || /\b(?:fix|repair|resolve|solve|implement|patch|update|change|modify)\b[\s\S]{0,180}\b(?:prepare|ship|release|publish|deploy)\b/i.test(text);
   return koreanDirective || englishDirective;
@@ -1063,14 +1065,16 @@ export function routeNeedsContext7(route: any, prompt: any = '') {
 
 export function routeRequiresSubagents(route: any, prompt: any = '', profile: TaskProfile = classifyTaskProfile(prompt)) {
   if (!route) return false;
+  if (['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse'].includes(String(route.id || ''))) return false;
   if ((route.id === 'Team' || route.id === 'Naruto') && route.explicit_invocation !== false) return true;
+  if (/(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b/i.test(String(prompt || ''))) return true;
   if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change' || profile === 'bounded-work') return false;
   if (profile === 'parallel-read' || profile === 'parallel-write') return true;
   return profile === 'high-risk' && explicitlyParallelizable(prompt);
 }
 
 function explicitlyParallelizable(prompt: any = '') {
-  return /\b(parallel|subagents?|one agent per|fan out|independent slices?|multiple files|audit all)\b|병렬|하위\s*에이전트|서브\s*에이전트|독립\s*(?:작업|범위)|분담|여러\s*파일|전체\s*검토/i.test(String(prompt || ''));
+  return /(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b|\b(parallel|subagents?|one agent per|fan out|independent slices?|multiple files|audit all)\b|병렬|하위\s*에이전트|서브\s*에이전트|독립\s*(?:작업|범위)|분담|여러\s*파일|전체\s*검토/i.test(String(prompt || ''));
 }
 
 export function simpleGitOnlyRouteId(prompt: any = '') {
@@ -1147,9 +1151,8 @@ export function routeReasoning(route: any, prompt: any = '') {
   return reasoning('medium', 'simple_fulfillment');
 }
 
-function narutoRouteReasoning(text: any = '') {
-  if (/(frontier|autoresearch|novelty|hypothesis|falsify|forensic|from-chat-img|research|current docs?|library|framework|sdk|api|database|supabase|sql|migration|security|permission|mad|release|publish|deploy|commit|push|architecture|algorithm|strategy|planning|integration|refactor|가설|포렌식|리서치|문서|데이터베이스|마이그레이션|보안|권한|배포|커밋|푸쉬|전략|기획|통합|리팩터)/i.test(text)) return reasoning('max', 'naruto_complex_or_high_risk_signal');
-  return reasoning('xhigh', 'naruto_gpt56_baseline');
+function narutoRouteReasoning(_text: any = '') {
+  return reasoning('max', 'naruto_parent_sol_max');
 }
 
 export function reasoningProfileName(effort: any) {

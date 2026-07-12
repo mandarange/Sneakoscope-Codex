@@ -12,6 +12,7 @@ export interface WriteCodexConfigGuardedInput {
   backupTag?: string
   removeTopLevelModeLocks?: boolean
   preserveFastUiKeys?: boolean
+  ownershipVerified?: boolean
   reportPath?: string
 }
 
@@ -34,7 +35,7 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
   const root = path.resolve(input.root || process.cwd())
   const cause = input.cause || 'codex-config'
   const before = input.before === undefined ? String(await readText(configPath, '')) : String(input.before || '')
-  if (isUnmanagedProjectCodexConfig(root, configPath, before)) {
+  if (isUnmanagedProjectCodexConfig(root, configPath, before) && input.ownershipVerified !== true) {
     const result = { ok: false, status: 'blocked_unmanaged_project_config', config_path: configPath, backup_path: null, changed: false }
     await recordCodexConfigGuard(root, input.reportPath, {
       cause,
@@ -178,7 +179,8 @@ export function isProjectCodexConfig(root: string, configPath: string): boolean 
 
 export function hasSksManagedCodexConfigMarker(text: string): boolean {
   const source = String(text || '')
-  return /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(source)
+  return /^\s*#\s*SKS-MANAGED-CODEX-CONFIG\b/im.test(source)
+    || /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(source)
     || /^\s*model_provider\s*=\s*["']codex-lb["']\s*(?:#.*)?$/mi.test(source)
     || /^\s*default_profile\s*=\s*["']sks-fast-high["']\s*(?:#.*)?$/mi.test(source)
     || /^\s*\[(?:user\.fast_mode|model_providers\.(?:"codex-lb"|codex-lb)|profiles\.(?:"sks-fast-high"|sks-fast-high))\]\s*(?:#.*)?$/mi.test(source)

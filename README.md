@@ -13,7 +13,7 @@ sneakoscope is a proof-first Codex trust layer for bounded agent workflows, sear
 
 # Sneakoscope Codex
 
-**The proof-first swarm harness for Codex. Machine-verified completion, not vibes.**
+**The proof-first workflow harness for Codex. Machine-verified completion, not vibes.**
 
 [![npm version](https://img.shields.io/npm/v/sneakoscope?color=cb3837&logo=npm)](https://www.npmjs.com/package/sneakoscope)
 [![node](https://img.shields.io/badge/node-%3E%3D20.11-339933?logo=node.js&logoColor=white)](#requirements)
@@ -42,6 +42,8 @@ npm i -g sneakoscope
 sks doctor --fix
 ```
 
+The SKS menu bar shows the installed Codex CLI version and latest known version. An `⬆` marker appears when an update is available; **Update Codex CLI Now** runs the official `codex update` command, and **Run sks doctor --fix** performs the global-only menu repair flow without treating the user's home directory as a project.
+
 ## The Front Door
 
 | Command | What it does |
@@ -55,6 +57,16 @@ sks doctor --fix
 | `$Review` / `sks review --staged` | Reviews diffs with `evidence: machine` findings sorted above `evidence: llm`. |
 | `sks ui` | Opens the local live dashboard at `http://127.0.0.1:4477`. |
 
+## Naruto In 6.1.1
+
+`$Naruto` and `sks naruto run "task" --agents 8 --max-threads 12` use Codex official subagents. The parent is GPT-5.6 Sol Max; clear bounded `worker` slices use GPT-5.6 Luna Max; UI, review, debugging, planning, integration, security, database, and release judgment use the GPT-5.6 Sol Max `expert`.
+
+Fresh SKS-owned project config uses `max_threads = 12`, `max_depth = 1`, `job_max_runtime_seconds = 1200`, and `interrupt_message = true`. `max_depth = 1` means subagents cannot spawn nested subagents. Explicit user limits are preserved, and larger requests run in waves.
+
+Gates are task-profile aware: greetings and answer-only turns create no mission gate; tiny work gets minimal verification; parallel work gets scoped ownership and verification; high-risk work keeps the full safety gates. `SubagentStart`/`SubagentStop` prove lifecycle only. Completion also requires `subagent-parent-summary.json` with one trustworthy structured outcome per thread, correlated with `subagent-events.jsonl` and `subagent-evidence.json`.
+
+`--clones` and `workers` remain one-release aliases. The historical process swarm is never selected automatically; an operator must explicitly set `SKS_NARUTO_LEGACY_PROCESS_SWARM=1` for the compatibility runtime.
+
 ## Why Not Just An LLM Reviewer?
 
 | Question | Oracle-style LLM review | SKS gate/review |
@@ -62,14 +74,14 @@ sks doctor --fix
 | Did tests/typecheck fail? | Another model may say so. | Machine check output is tagged `evidence: machine`. |
 | Are findings ranked? | Usually one blended opinion. | Machine evidence sorts before LLM findings. |
 | Can work stop? | The model decides. | Stop gates, Completion Proof, and Honest Mode decide. |
-| Can I watch the swarm? | Usually no runtime UI. | Zellij panes plus `sks ui` SSE dashboard. |
+| Can I inspect agent-thread progress? | Usually no runtime UI. | `sks ui` plus the official Codex subagent/thread surfaces. |
 
 ## Dashboard
 
 `sks ui` serves a dependency-free localhost dashboard with:
 
 - mission, route, elapsed time, and gate badge
-- live worker slot grid with role, backend/model badge, progress, and current task
+- live official subagent thread grid with role/model badge, progress, and current task
 - run/verify/queue/done/fail counters
 - recent mission events
 - current gate checklist
@@ -84,7 +96,7 @@ The reproducible VHS script lives at [docs/demo.tape](docs/demo.tape).
 vhs docs/demo.tape
 ```
 
-It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`, and `sks ui`.
+It shows the current quickstart flow: one-line install, `$Plan`, `sks review`, `sks ui`, and an official `$Naruto` subagent run.
 
 ## Proof Surfaces
 
@@ -94,6 +106,7 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - Project memory: `sks memory build`
 - Codebase index/pack for LLM context: `sks wiki refresh --code`, `sks wiki validate --json` (code-pack freshness)
 - Native capability repair: `sks doctor --fix` (imagegen/Computer Use/Browser Use), `.sneakoscope/reports/native-capability-readiness.json`
+- codex-lb continuity: `sks codex-lb status --json` verifies the selected proxy's unauthenticated `/health` `X-App-Version`. Tool-heavy continuation requires codex-lb `1.21.0-beta.3` or later; older or unverified deployments block setup, doctor, and launch instead of silently falling back.
 - Agent bridge for any agent system: `sks mcp-server`, `sks agent-bridge setup`, `SKS_AGENT_MODE=1` — see [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)
 - Release gates: `node ./dist/scripts/release-gate-dag-runner.js --preset release --full`
 - Lifecycle-disabled npm release: run `npm run release:check:full`, inspect the package with `npm pack --dry-run --ignore-scripts --json`, then let the repository owner publish intentionally with `npm publish --ignore-scripts`.
@@ -111,6 +124,8 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
   - Update installs always rebuild the companion with the newly installed SKS package, preventing a previous-version updater from restoring a stale menu binary.
   - The menubar dropdown's `View Last Log` item opens the most recent background action's log file, so you don't need to keep a Terminal window open to see command output.
   - `sks menubar status --json` reports a `codex_sync` object with `bundle_id`, `codex_running`, and `icon_visible_expected` to show Codex-lifecycle detection state.
+  - The menu displays the installed Codex CLI version, adds an `⬆` status icon when `sks codex update-status` sees a newer release, runs the official self-updater through `Update Codex CLI Now`, and exposes `Run sks doctor --fix` as a background repair action.
+- If Codex shows `[No tool output found for custom tool call ...]`, SKS blocks reuse of that structurally ambiguous thread. Upgrade codex-lb (or explicitly run `sks codex-lb use-oauth`), inspect possible side effects, then continue the persisted mission in a fresh Codex task. SKS never rewrites session JSONL or fabricates a successful tool output.
 - Zellij optional but recommended for terminal worker panes
 
 ## License

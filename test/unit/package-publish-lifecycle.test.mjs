@@ -52,6 +52,15 @@ test('publish lifecycle separates full release stamps from lifecycle-disabled pu
   assert.doesNotMatch(scripts['publish:ignore-scripts'], /--tag rc/);
   assert.equal(scripts['publish:npm'], undefined);
   assert.equal(scripts['release:publish'], undefined);
+  const runtimeManifests = {
+    'release-gates.v2.json': 'sks.release-gates.v2',
+    'infra-harness-gates.json': 'sks.infra-harness-gates.v1',
+    'runtime-required-scripts.json': 'sks.runtime-required-scripts.v1'
+  };
+  for (const [manifest, schema] of Object.entries(runtimeManifests)) {
+    assert.ok(pkg.files.includes(manifest), `installed package must include ${manifest}`);
+    assert.equal(JSON.parse(fs.readFileSync(manifest, 'utf8')).schema, schema);
+  }
 });
 
 test('prepack rebuild keeps the release stamp stable', () => {

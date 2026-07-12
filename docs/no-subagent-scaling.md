@@ -14,7 +14,8 @@ The canonical policy is:
 - hard SKS request safety cap: 32, with larger requested work planned in waves
 
 Completion requires matched thread evidence from official `SubagentStart` and
-`SubagentStop` events, zero failed requested threads, and a parent summary.
+`SubagentStop` events, zero failed requested threads, and a trustworthy
+`sks.subagent-parent-summary.v1` object with one explicit outcome per thread.
 `delegation_context_ready` is preparation only and cannot pass the gate.
 
 Canonical artifacts are:
@@ -22,6 +23,7 @@ Canonical artifacts are:
 ```text
 subagent-plan.json
 subagent-events.jsonl
+subagent-parent-summary.json
 subagent-evidence.json
 naruto-summary.json
 naruto-gate.json

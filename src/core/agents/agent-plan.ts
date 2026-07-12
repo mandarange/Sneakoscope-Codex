@@ -30,7 +30,13 @@ export function routeRequiresAgentIntake(route: any, input: any = {}): boolean {
   if (options.force === true || options.forceAgents === true) return true
 
   const task = String(options.task || '')
-  if (OFFICIAL_SUBAGENT_ROUTE_KEYS.has(routeKey(route)) || EXPLICIT_SUBAGENT_RE.test(task)) return true
+  const officialRouteWasImplicit = Boolean(
+    route
+    && typeof route === 'object'
+    && !Array.isArray(route)
+    && route.explicit_invocation === false
+  )
+  if ((OFFICIAL_SUBAGENT_ROUTE_KEYS.has(routeKey(route)) && !officialRouteWasImplicit) || EXPLICIT_SUBAGENT_RE.test(task)) return true
   if (positiveNumber(options.requestedSubagents) || positiveNumber(options.agents)) return true
 
   const profile = taskProfile(options.taskProfile, task)
@@ -69,7 +75,7 @@ export function normalizeAgentPolicy(route: any, task: any = '', input: any = {}
     agent_count: requestedSubagents,
     backend: 'official-codex-subagent',
     reason: policyReason(route, task, profile, required),
-    outputs: ['subagent-events.jsonl', 'subagent-evidence.json', 'verification-summary.json'],
+    outputs: ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json'],
     deprecated_fields: ['agent_count']
   }
 }
@@ -95,7 +101,7 @@ export function agentPipelineStage(policy: any = {}) {
     backend: 'official-codex-subagent',
     read_only: false,
     write_policy: 'bounded workspace-write with disjoint path leases; parent-owned integration',
-    outputs: policy.outputs || ['subagent-events.jsonl', 'subagent-evidence.json', 'verification-summary.json'],
+    outputs: policy.outputs || ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-parent-summary.json', 'subagent-evidence.json'],
     deprecated_fields: ['agent_count']
   }
 }

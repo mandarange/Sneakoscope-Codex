@@ -41,5 +41,5 @@ test('Naruto GPT-5.6 routing preserves explicit Terra compatibility without auto
   })
 
   assert.deepEqual(choice, { model: 'gpt-5.6-terra', reasoning: 'max', serviceTier: 'fast' })
-  assert.equal(routeNarutoGpt56Model({ taskText: 'implementation' }).model, 'gpt-5.6-luna')
+  assert.equal(routeNarutoGpt56Model({ taskText: 'implementation' }).model, 'gpt-5.6-sol')
 })

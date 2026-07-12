@@ -1,247 +1,170 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { ensureDir, nowIso, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
-import { managedAgentRoleConfigForFile, managedAgentRoleConfigForRole } from '../agents/agent-role-config.js';
-import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from './codex-config-guard.js';
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import {
+  backupInvalidToml,
+  inspectOfficialSubagentToml,
+  mergeOfficialSubagentConfig,
+  officialSubagentConfigOwnershipProof,
+  officialSubagentConfigWarnings,
+  readInheritedOfficialSubagentConfigText
+} from '../subagents/official-subagent-config.js'
+import { writeCodexConfigGuarded } from './codex-config-guard.js'
 
 export interface AgentConfigFileRepairReport {
-  schema: 'sks.agent-config-file-repair.v1';
-  generated_at: string;
-  ok: boolean;
-  apply: boolean;
-  config_path: string;
-  repaired_paths: string[];
-  created_files: string[];
-  removed_unsupported_fields: string[];
-  skipped_unmanaged_paths: string[];
-  manual_required: boolean;
-  blockers: string[];
+  schema: 'sks.agent-config-file-repair.v1'
+  generated_at: string
+  ok: boolean
+  apply: boolean
+  config_path: string
+  backup_path: string | null
+  repaired_paths: string[]
+  created_files: string[]
+  removed_unsupported_fields: string[]
+  skipped_unmanaged_paths: string[]
+  manual_required: boolean
+  blockers: string[]
+  warnings: string[]
+  ownership_proof: {
+    owned: boolean
+    reasons: string[]
+  }
 }
 
-export async function repairAgentConfigFileReferences(input: { root: string; apply?: boolean; reportPath?: string | null }): Promise<AgentConfigFileRepairReport> {
-  const root = path.resolve(input.root);
-  const configPath = path.join(root, '.codex', 'config.toml');
-  const configExists = await fs.stat(configPath).then((stat) => stat.isFile()).catch(() => false);
-  const original = configExists ? await fs.readFile(configPath, 'utf8').catch(() => '') : minimalManagedConfigToml();
-  if (input.apply && configExists && isUnmanagedProjectCodexConfig(root, configPath, original)) {
-    const report: AgentConfigFileRepairReport = {
+/**
+ * Compatibility entrypoint retained for doctor callers. In 6.1.1 it repairs
+ * only the official project [agents] settings. Legacy [agents.*] tables and
+ * role TOMLs are compatibility/user surfaces and are never created or edited.
+ */
+export async function repairAgentConfigFileReferences(input: {
+  root: string
+  apply?: boolean
+  reportPath?: string | null
+  home?: string
+  codexHome?: string
+}): Promise<AgentConfigFileRepairReport> {
+  const root = path.resolve(input.root)
+  const configPath = path.join(root, '.codex', 'config.toml')
+  const configExists = await fs.stat(configPath).then((stat) => stat.isFile()).catch(() => false)
+  const original = configExists ? await fs.readFile(configPath, 'utf8').catch(() => '') : ''
+  const manifest = await readJson(path.join(root, '.sneakoscope', 'manifest.json'), null)
+  const migrationReceipt = await readJson(path.join(root, '.sneakoscope', 'update', 'migration-receipt.json'), null)
+  const ownershipProof = officialSubagentConfigOwnershipProof({
+    text: original,
+    manifest,
+    migrationReceipt
+  })
+  const originalValidation = inspectOfficialSubagentToml(original)
+
+  if (configExists && !originalValidation.ok) {
+    const backupPath = input.apply
+      ? await backupInvalidToml(configPath, original, 'doctor-project-config-invalid')
+      : null
+    return writeReport(input.reportPath, root, {
       schema: 'sks.agent-config-file-repair.v1',
       generated_at: nowIso(),
       ok: false,
-      apply: true,
+      apply: input.apply === true,
       config_path: configPath,
+      backup_path: backupPath,
       repaired_paths: [],
       created_files: [],
       removed_unsupported_fields: [],
       skipped_unmanaged_paths: [],
       manual_required: true,
-      blockers: ['user_owned_file_without_sks_marker']
-    };
-    if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json'), report).catch(() => undefined);
-    return report;
+      blockers: [
+        'project_official_subagent_config_toml_parse_failed',
+        ...(!ownershipProof.owned ? ['user_owned_file_without_sks_marker'] : [])
+      ],
+      warnings: [],
+      ownership_proof: ownershipProof
+    })
   }
-  const createdFiles: string[] = [];
-  const repairedPaths: string[] = [];
-  const removedUnsupportedFields: string[] = [];
-  const skippedUnmanagedPaths: string[] = [];
-  const edits: Array<{ start: number; end: number; replacement: string }> = [];
-  let text = original;
-  for (const block of tomlBlocks(original)) {
-    const managed = managedBlockTarget(root, block);
-    const currentConfigFile = stringValue(block.text, 'config_file');
-    if (!managed) {
-      if (currentConfigFile && !path.isAbsolute(currentConfigFile)) skippedUnmanagedPaths.push(currentConfigFile);
-      continue;
-    }
-    const target = path.join(root, '.codex', 'agents', managed.file);
-    let replacement = removeKey(block.text, 'message_role_prefix', removedUnsupportedFields);
-    replacement = replaceOrInsertKey(replacement, 'config_file', `"${escapeToml(target)}"`);
-    if (replacement !== block.text) {
-      edits.push({ start: block.start, end: block.end, replacement });
-      repairedPaths.push(target);
-    }
-    if (input.apply) {
-      const exists = await fs.stat(target).then((stat) => stat.isFile()).catch(() => false);
-      if (!exists) {
-        await ensureDir(path.dirname(target));
-        await writeTextAtomic(target, managed.content);
-        createdFiles.push(target);
-      }
-    }
+
+  if (input.apply && configExists && !ownershipProof.owned) {
+    return writeReport(input.reportPath, root, {
+      schema: 'sks.agent-config-file-repair.v1',
+      generated_at: nowIso(),
+      ok: false,
+      apply: true,
+      config_path: configPath,
+      backup_path: null,
+      repaired_paths: [],
+      created_files: [],
+      removed_unsupported_fields: [],
+      skipped_unmanaged_paths: [],
+      manual_required: true,
+      blockers: ['user_owned_file_without_sks_marker'],
+      warnings: [],
+      ownership_proof: ownershipProof
+    })
   }
-  if (edits.length) text = applyEdits(original, edits);
-  if (input.apply && !configExists) {
-    await ensureDir(path.dirname(configPath));
-    await writeCodexConfigGuarded({
-      root,
-      configPath,
-      before: '',
-      cause: 'agent-config-file-repair',
-      mutate: () => text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
-    });
-    createdFiles.push(configPath);
-  } else if (input.apply && text !== original) {
-    await writeCodexConfigGuarded({
+
+  const inheritedText = await readInheritedOfficialSubagentConfigText(configPath, {
+    ...(input.home ? { home: input.home } : {}),
+    ...(input.codexHome ? { codexHome: input.codexHome } : {})
+  })
+  const merged = mergeOfficialSubagentConfig(original, {
+    sksOwned: ownershipProof.owned,
+    inheritedText
+  })
+  const validation = inspectOfficialSubagentToml(merged)
+  const warnings = officialSubagentConfigWarnings(merged, inheritedText)
+  const blockers: string[] = []
+  let changed = merged !== original
+  let writeSucceeded = input.apply !== true
+  let backupPath: string | null = null
+
+  if (input.apply) {
+    const guarded = await writeCodexConfigGuarded({
       root,
       configPath,
       before: original,
-      cause: 'agent-config-file-repair',
-      mutate: () => text.replace(/\n{3,}/g, '\n\n').replace(/\s*$/, '\n')
-    });
+      cause: 'official-subagent-config-repair',
+      ownershipVerified: ownershipProof.owned,
+      mutate: () => merged
+    })
+    writeSucceeded = guarded.ok
+    changed = guarded.ok && guarded.changed
+    backupPath = guarded.backup_path
+    if (!guarded.ok) blockers.push(`config_write_guard:${guarded.status}`)
+  } else if (!validation.ok) {
+    blockers.push('project_official_subagent_config_toml_parse_failed')
   }
-  const effectiveText = input.apply ? await fs.readFile(configPath, 'utf8').catch(() => text) : text;
-  const missing = await missingAgentConfigFiles(effectiveText);
-  const unsupportedManagedFields = managedAgentBlocks(effectiveText)
-    .flatMap((block) => block.text.split(/\r?\n/).filter((line) => /^\s*message_role_prefix\s*=/.test(line)));
+
   const report: AgentConfigFileRepairReport = {
     schema: 'sks.agent-config-file-repair.v1',
     generated_at: nowIso(),
-    ok: missing.length === 0 && !/^\s*message_role_prefix\s*=/m.test(text),
+    ok: blockers.length === 0,
     apply: input.apply === true,
     config_path: configPath,
-    repaired_paths: repairedPaths,
-    created_files: createdFiles,
-    removed_unsupported_fields: removedUnsupportedFields,
-    skipped_unmanaged_paths: skippedUnmanagedPaths,
-    manual_required: skippedUnmanagedPaths.length > 0,
-    blockers: [
-      ...missing.map((file) => `missing_agent_config_file:${file}`),
-      ...unsupportedManagedFields.map(() => 'unsupported_message_role_prefix_field')
-    ]
-  };
-  report.ok = report.blockers.length === 0;
-  if (input.reportPath !== null) await writeJsonAtomic(input.reportPath || path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json'), report).catch(() => undefined);
-  return report;
-}
-
-export async function missingAgentConfigFiles(text: string): Promise<string[]> {
-  const rows = managedAgentBlocks(text)
-    .map((block) => stringValue(block.text, 'config_file'))
-    .filter((file): file is string => Boolean(file));
-  const missing: string[] = [];
-  for (const file of rows) {
-    if (!path.isAbsolute(file)) {
-      missing.push(file);
-      continue;
-    }
-    const ok = await fs.stat(file).then((stat) => stat.isFile()).catch(() => false);
-    if (!ok) missing.push(file);
+    backup_path: backupPath,
+    repaired_paths: changed && writeSucceeded ? [configPath] : [],
+    created_files: input.apply === true && !configExists && changed && writeSucceeded ? [configPath] : [],
+    removed_unsupported_fields: [],
+    skipped_unmanaged_paths: [],
+    manual_required: blockers.length > 0,
+    blockers,
+    warnings,
+    ownership_proof: ownershipProof
   }
-  return missing;
+  return writeReport(input.reportPath, root, report)
 }
 
-interface TomlBlock {
-  header: string;
-  start: number;
-  end: number;
-  text: string;
+// Retained for compatibility with the startup postcheck API. Official custom
+// agents are discovered from .codex/agents and do not require config_file
+// references; legacy references are intentionally ignored and preserved.
+export async function missingAgentConfigFiles(_text: string): Promise<string[]> {
+  return []
 }
 
-function tomlBlocks(text: string): TomlBlock[] {
-  const source = String(text || '');
-  const matches = [...source.matchAll(/(^|\n)\s*\[([^\]]+)\]\s*(?:#.*)?(?:\n|$)/g)];
-  return matches.map((match, index) => {
-    const start = Number(match.index || 0) + (match[1] ? 1 : 0);
-    const next = matches[index + 1];
-    const end = next ? Number(next.index || 0) + (next[1] ? 1 : 0) : source.length;
-    return {
-      header: String(match[2] || '').trim(),
-      start,
-      end,
-      text: source.slice(start, end)
-    };
-  });
-}
-
-function managedAgentBlocks(text: string): TomlBlock[] {
-  return tomlBlocks(text).filter((block) => Boolean(managedBlockTarget(process.cwd(), block)));
-}
-
-function managedBlockTarget(root: string, block: TomlBlock): { file: string; content: string } | null {
-  if (!block.header.startsWith('agents.')) return null;
-  const role = block.header.slice('agents.'.length);
-  const byRole = managedAgentRoleConfigForRole(role);
-  if (byRole) return byRole;
-  const configFile = stringValue(block.text, 'config_file');
-  if (configFile) {
-    const content = managedAgentRoleConfigForFile(configFile);
-    if (content) return { file: path.basename(configFile), content };
+async function writeReport(
+  reportPath: string | null | undefined,
+  root: string,
+  report: AgentConfigFileRepairReport
+): Promise<AgentConfigFileRepairReport> {
+  if (reportPath !== null) {
+    await writeJsonAtomic(reportPath || path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json'), report).catch(() => undefined)
   }
-  if (/SKS managed|sks_/i.test(block.text)) {
-    const fallback = managedAgentRoleConfigForRole(role);
-    if (fallback) return fallback;
-  }
-  void root;
-  return null;
-}
-
-function stringValue(text: string, key: string): string | null {
-  const match = text.match(new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"`, 'm'));
-  return match && typeof match[1] === 'string' ? match[1] : null;
-}
-
-function removeKey(text: string, key: string, removed: string[]): string {
-  return text.split(/\r?\n/).filter((line) => {
-    const match = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`).test(line);
-    if (match) removed.push(line.trim());
-    return !match;
-  }).join('\n');
-}
-
-function replaceOrInsertKey(text: string, key: string, encodedValue: string): string {
-  const lines = text.replace(/\s*$/, '').split('\n');
-  const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`);
-  const index = lines.findIndex((line) => re.test(line));
-  if (index >= 0) lines[index] = `${key} = ${encodedValue}`;
-  else lines.push(`${key} = ${encodedValue}`);
-  return `${lines.join('\n')}\n`;
-}
-
-function applyEdits(text: string, edits: Array<{ start: number; end: number; replacement: string }>): string {
-  return [...edits]
-    .sort((a, b) => b.start - a.start)
-    .reduce((current, edit) => `${current.slice(0, edit.start)}${edit.replacement}${current.slice(edit.end)}`, text);
-}
-
-function escapeToml(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function minimalManagedConfigToml(): string {
-  return [
-    'service_tier = "fast"',
-    '',
-    '[features]',
-    'hooks = true',
-    'multi_agent = true',
-    'fast_mode = true',
-    'apps = true',
-    '',
-    '[mcp_servers.context7]',
-    'url = "https://mcp.context7.com/mcp"',
-    '',
-    agentConfigBlock('native_agent', 'SKS native agent with bounded write capability.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']),
-    '',
-    agentConfigBlock('team_consensus', 'SKS planning/debate agent with bounded write capability.', './agents/team-consensus.toml', ['Consensus', 'Atlas']),
-    '',
-    agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']),
-    '',
-    agentConfigBlock('db_safety_reviewer', 'DB safety reviewer with bounded write capability.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']),
-    '',
-    agentConfigBlock('qa_reviewer', 'QA reviewer with bounded write capability.', './agents/qa-reviewer.toml', ['Verifier', 'Reviewer']),
-    ''
-  ].join('\n');
-}
-
-function agentConfigBlock(table: string, description: string, configFile: string, nicknames: string[] = []): string {
-  return [
-    `[agents.${table}]`,
-    `description = "${description}"`,
-    `config_file = "${configFile}"`,
-    `nickname_candidates = [${nicknames.map((name) => `"${name}"`).join(', ')}]`
-  ].join('\n');
+  return report
 }

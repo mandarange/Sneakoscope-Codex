@@ -8,6 +8,8 @@ import { getCodexInfo } from '../core/codex-adapter.js';
 import { rustInfo } from '../core/rust-accelerator.js';
 import { codexAppIntegrationStatus } from '../core/codex-app.js';
 import { codexLbMetrics, readCodexLbCircuit } from '../core/codex-lb-circuit.js';
+import { codexLbStatus } from '../cli/install-helpers.js';
+import { codexLbToolOutputRecoveryOverrideAcknowledged } from '../core/codex-lb/codex-lb-tool-output-recovery.js';
 import { normalizeInstallScope } from '../core/init.js';
 import { inspectCodexConfigReadability } from '../core/codex/codex-config-readability.js';
 import { checkZellijCapability } from '../core/zellij/zellij-capability.js';
@@ -28,9 +30,10 @@ import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.j
 import { CURRENT_CODEX_RELEASE_MANIFEST } from '../core/codex-compat/codex-release-manifest.js';
 import { formatHarnessConflictReport, scanHarnessConflicts } from '../core/harness-conflicts.js';
 
-export async function run(_command: any, args: any = []) {
+export async function run(_command: any, args: any = [], deps: any = {}) {
   const root = await projectRoot();
   const doctorFix = flag(args, '--fix');
+  const globalOnly = doctorFix && flag(args, '--global-only');
   if (doctorFix) {
     const conflictScan = await scanHarnessConflicts(root);
     if (conflictScan.hard_block) {
@@ -61,8 +64,150 @@ export async function run(_command: any, args: any = []) {
     cliUi.step(doctorFix ? 'repairing and validating' : 'validating');
   }
   if (!doctorFix && flag(args, '--json') && doctorProfile === 'fast') return runDoctorJsonFastPath(args, root);
-  if (doctorFix) return withSecretPreservationGuard(root, 'doctor-fix', () => runDoctor(args, root, doctorFix));
+  if (doctorFix) {
+    const guardRoot = globalOnly
+      ? path.resolve(deps.home || process.env.HOME || os.homedir())
+      : root;
+    return withSecretPreservationGuard(guardRoot, 'doctor-fix', async () => (
+      globalOnly
+        ? runDoctorGlobalOnlyFix(args, root, deps)
+        : runDoctor(args, root, doctorFix)
+    ));
+  }
   return runDoctor(args, root, doctorFix);
+}
+
+export async function executeDoctorGlobalOnlyFix(args: any[] = [], root: string, deps: any = {}) {
+  const startedAtMs = Date.now();
+  const home = path.resolve(deps.home || process.env.HOME || os.homedir());
+  const reconcileSkillsImpl = deps.reconcileSkillsImpl
+    || (await import('../core/init/skills.js')).reconcileSkills;
+  const ensureGlobalFastModeImpl = deps.ensureGlobalCodexFastModeDuringInstallImpl
+    || (await import('../cli/install-helpers.js')).ensureGlobalCodexFastModeDuringInstall;
+  const installMenuBarImpl = deps.installSksMenuBarImpl || installSksMenuBar;
+  const codexLbStatusImpl = deps.codexLbStatusImpl || codexLbStatus;
+
+  const providerStatus = await codexLbStatusImpl({
+    probeToolOutputRecovery: true,
+    allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
+  }).catch((err: any) => ({
+    selected: null,
+    provider_ready: false,
+    recovery_probe_failed: true,
+    tool_output_recovery: {
+      ok: false,
+      status: 'probe_failed',
+      blockers: ['codex_lb_tool_output_recovery_status_probe_failed'],
+      operator_actions: []
+    },
+    error: err?.message || String(err)
+  }));
+  const globalSkills = await reconcileSkillsImpl({
+    targetDir: path.join(home, '.agents', 'skills'),
+    scope: 'global',
+    fix: true
+  }).catch((err: any) => ({
+    schema: 'sks.skill-reconcile.v1',
+    scope: 'global',
+    target_dir: path.join(home, '.agents', 'skills'),
+    fix: true,
+    error: err?.message || String(err),
+    core_skill_integrity: { ok: false, installed_count: 0, restored_count: 0 }
+  }));
+  const globalFastMode = await ensureGlobalFastModeImpl().catch((err: any) => ({
+    status: 'failed',
+    error: err?.message || String(err)
+  }));
+  const menuBar = await installMenuBarImpl({
+    home,
+    root: home,
+    apply: true,
+    launch: true,
+    quiet: flag(args, '--json') || flag(args, '--machine-only')
+  }).catch((err: any) => ({
+    schema: 'sks.codex-app-sks-menubar.v1',
+    ok: false,
+    status: 'blocked',
+    blockers: [err?.message || String(err)],
+    warnings: []
+  }));
+
+  const recoveryReady = codexLbRecoveryStatusReady(providerStatus, true);
+  const globalSkillsReady = !(globalSkills as any)?.error
+    && (globalSkills as any)?.core_skill_integrity?.ok !== false;
+  const globalFastModeReady = (globalFastMode as any)?.status !== 'failed'
+    && (globalFastMode as any)?.ok !== false;
+  const menuBarReady = (menuBar as any)?.ok !== false;
+  const blockers = [...new Set([
+    ...(!globalSkillsReady ? [`global_skills_reconcile_failed:${(globalSkills as any)?.error || 'core_skill_integrity'}`] : []),
+    ...(!globalFastModeReady ? [`global_fast_mode_repair_failed:${(globalFastMode as any)?.error || (globalFastMode as any)?.status || 'unknown'}`] : []),
+    ...(!menuBarReady ? ((menuBar as any)?.blockers || ['sks_menubar_repair_failed']) : []),
+    ...(!recoveryReady ? ((providerStatus as any)?.tool_output_recovery?.blockers || ['codex_lb_tool_output_recovery_unverified']) : [])
+  ].map(String).filter(Boolean))];
+  const ok = blockers.length === 0;
+  return {
+    schema: 'sks.doctor-status.v3',
+    elapsed_ms: Date.now() - startedAtMs,
+    ok,
+    status: ok ? 'global_fix_ok' : 'blocked',
+    diagnostic_depth: 'global-only',
+    global_only: true,
+    install_scope: 'global',
+    root,
+    home,
+    project_root_alias_detected: path.resolve(root) === home,
+    no_project_writes_performed: true,
+    project_phases_skipped: [
+      'project_skills_reconcile',
+      'project_codex_config_repair',
+      'project_context7_mcp_repair',
+      'project_supabase_mcp_repair',
+      'project_hook_trust_repair',
+      'project_command_alias_cleanup',
+      'project_migration_receipt'
+    ],
+    skills: { global: globalSkills, project: { skipped: true, reason: 'global_only_doctor' } },
+    codex_app_fast_mode: globalFastMode,
+    sks_menubar: menuBar,
+    codex_lb: {
+      provider_status: providerStatus,
+      tool_output_recovery: providerStatus?.tool_output_recovery || null,
+      recovery_ok: recoveryReady
+    },
+    blockers,
+    next_actions: [
+      ...(recoveryReady ? [] : ((providerStatus as any)?.tool_output_recovery?.operator_actions || [])),
+      'Run `sks doctor --fix --json` from a specific project directory when project-scoped repair is required.'
+    ]
+  };
+}
+
+async function runDoctorGlobalOnlyFix(args: any[] = [], root: string, deps: any = {}) {
+  const result = await executeDoctorGlobalOnlyFix(args, root, deps);
+  const reportFile = readOption(args, '--report-file', null);
+  if (reportFile) await writeJsonReportFile(reportFile, result);
+  if (flag(args, '--machine-only') && !flag(args, '--json')) {
+    if (!result.ok) process.exitCode = 1;
+    return result;
+  }
+  if (flag(args, '--json')) {
+    printJson(result);
+  } else {
+    console.log(`SKS Doctor global repair: ${result.ok ? 'ok' : 'blocked'}`);
+    console.log(`Global skills: ${(result.skills.global as any)?.error ? 'blocked' : 'reconciled'}`);
+    console.log(`SKS menu bar: ${(result.sks_menubar as any)?.status || ((result.sks_menubar as any)?.ok ? 'ok' : 'blocked')}`);
+    for (const blocker of result.blockers) console.log(`- blocker: ${blocker}`);
+    for (const action of result.next_actions) console.log(`- ${action}`);
+  }
+  if (!result.ok) process.exitCode = 1;
+  return result;
+}
+
+function codexLbRecoveryStatusReady(status: any, probeRequired = false): boolean {
+  if (status == null) return !probeRequired;
+  if (status.recovery_probe_failed === true || status.error) return false;
+  if (status.selected === false) return true;
+  return status.selected === true && status.tool_output_recovery?.ok === true;
 }
 
 async function runDoctorJsonFastPath(args: any = [], root: string) {
@@ -384,7 +529,31 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const codexApp = deepDiagnostics
     ? await codexAppIntegrationStatus({ codex }).catch((err: any) => ({ ok: false, error: err.message }))
     : { ok: false, skipped: true, warnings: ['codex_app_optional_diagnostic_skipped'] };
-  const codexLb = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
+  const codexLbCircuit = codexLbMetrics(await readCodexLbCircuit(root).catch(() => ({})));
+  const codexLbProviderStatus = deepDiagnostics || doctorFix
+    ? await codexLbStatus({
+        probeToolOutputRecovery: true,
+        allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
+      }).catch((err: any) => ({
+        selected: null,
+        provider_ready: false,
+        recovery_probe_failed: true,
+        tool_output_recovery: {
+          ok: false,
+          status: 'probe_failed',
+          blockers: ['codex_lb_tool_output_recovery_status_probe_failed'],
+          operator_actions: []
+        },
+        error: err?.message || String(err)
+      }))
+    : null;
+  const codexLbRecoveryReady = codexLbRecoveryStatusReady(codexLbProviderStatus, deepDiagnostics || doctorFix);
+  const codexLb = {
+    ...codexLbCircuit,
+    provider_status: codexLbProviderStatus,
+    tool_output_recovery: codexLbProviderStatus?.tool_output_recovery || null,
+    recovery_ok: codexLbRecoveryReady
+  };
   const providerContext = deepDiagnostics
     ? await resolveProviderContext({ root, route: '$Doctor', serviceTier: process.env.SKS_SERVICE_TIER || 'fast' }).catch((err: any) => ({
         schema: 'sks.provider-context.v1',
@@ -782,20 +951,23 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   const zellij = await checkZellijCapability({ root, require: process.env.SKS_REQUIRE_ZELLIJ === '1' });
   const localModel = await readLocalModelConfig().catch(() => null);
   const permissionProfiles = await inventoryCodexPermissionProfiles(root, { writeReport: true });
-  const agentRoleConfigRepair = await repairAgentRoleConfigs({
-    root,
-    apply: doctorFix,
-    reportPath: `${root}/.sneakoscope/reports/agent-role-config-repair.json`
-  }).catch((err: any) => ({
-    schema: 'sks.agent-role-config-repair.v1',
-    ok: false,
-    apply: doctorFix,
-    missing: [],
-    existing: [],
-    created: [],
-    warnings_suppressed: false,
-    blockers: [err?.message || String(err)]
-  }));
+  const startupRoleRepair = (startupConfigRepair as any)?.role_repair;
+  const agentRoleConfigRepair = doctorFix && startupRoleRepair
+    ? startupRoleRepair
+    : await repairAgentRoleConfigs({
+        root,
+        apply: false,
+        reportPath: `${root}/.sneakoscope/reports/agent-role-config-repair.json`
+      }).catch((err: any) => ({
+        schema: 'sks.agent-role-config-repair.v1',
+        ok: false,
+        apply: false,
+        missing: [],
+        existing: [],
+        created: [],
+        warnings_suppressed: false,
+        blockers: [err?.message || String(err)]
+      }));
   const officialSubagentConfig = await (await import('../core/subagents/official-subagent-config.js'))
     .readOfficialSubagentConfig(root)
     .catch((err: any) => ({
@@ -1093,7 +1265,8 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     && (commandAliasCleanup as any).ok !== false
     && (codexStartupRepair as any).ok !== false
     && (agentRoleConfigRepair as any).ok !== false
-    && ((officialSubagentConfig as any).blockers || []).length === 0;
+    && ((officialSubagentConfig as any).blockers || []).length === 0
+    && codexLbRecoveryReady;
   const result = {
     schema: 'sks.doctor-status.v3',
     elapsed_ms: Date.now() - startedAtMs,
@@ -1101,7 +1274,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     status: resultOk ? (doctorFix ? 'fix_ok' : deepDiagnostics ? 'full_ok' : 'fast_ok') : 'blocked',
     diagnostic_depth: deepDiagnostics ? 'full' : doctorFix ? 'fix' : 'fast',
     deep_diagnostics_skipped: !deepDiagnostics,
-    deep_ok: deepDiagnostics ? Boolean(ready.ready) : null,
+    deep_ok: deepDiagnostics ? resultOk : null,
     not_counted_as_full_doctor: !deepDiagnostics,
     root,
     arg_warnings: argWarnings,
@@ -1340,6 +1513,11 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   for (const warning of pluginPolicy?.doctor_warnings || []) console.log(`  warning: ${warning}`);
   if ((codex0138Doctor as any)?.fixed?.length) console.log(`  doctor --fix repaired: ${(codex0138Doctor as any).fixed.join(', ')}`);
   console.log(`codex-lb:  ${codexLb.ok ? 'ok' : `warning ${codexLb.circuit?.state || 'unknown'}`}`);
+  if (codexLb.tool_output_recovery) {
+    const recovery: any = codexLb.tool_output_recovery;
+    console.log(`  interrupted tool-output recovery: ${recovery.ok ? 'ready' : 'blocked'} (${recovery.observed_version || recovery.status}; minimum ${recovery.minimum_version})`);
+    if (!recovery.ok) for (const action of recovery.operator_actions || []) console.log(`  action: ${action}`);
+  }
   if (localModel) {
     console.log('Local LLM:');
     console.log(`  enabled: ${localModel.enabled ? 'yes' : 'no'}`);
@@ -1491,7 +1669,7 @@ function unknownDoctorFlags(args: any[] = []): string[] {
   const knownBoolean = new Set([
     '--fix', '--yes', '-y', '--machine-only', '--actual-codex', '--require-actual-codex',
     '--full', '--capabilities', '--repair-codex-app-ui', '--repair-zellij', '--install-homebrew',
-    '--repair-native-capabilities', '--repair-codex-native', '--local-only', '--project', '--global',
+    '--repair-native-capabilities', '--repair-codex-native', '--local-only', '--global-only', '--project', '--global',
     '--dry-run', '--json'
   ]);
   const knownValue = new Set(['--profile', '--report-file', '--codex-bin', '--install-scope']);

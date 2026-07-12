@@ -261,8 +261,9 @@ async function richContentGate(id: string) {
     const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
     const codexHome = path.join(rootDir, 'codex-home')
     const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true })
-    const role = fs.readFileSync(path.join(codexHome, 'agents', 'sks-checker.toml'), 'utf8')
-    assertGate(/SKS managed \d+\.\d+\.\d+ directive role/.test(role) && role.includes('Execution role strategy'), 'managed agent role must include rich directive content', { role, report })
+    const role = fs.readFileSync(path.join(rootDir, '.codex', 'agents', 'expert.toml'), 'utf8')
+    assertGate(role.includes('model = "gpt-5.6-sol"') && role.includes('Do not spawn another subagent.'), 'official expert role must include Sol Max and no-nesting instructions', { role, report })
+    assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'rich-content sync must not create global directive roles', report)
     emitGate(id, { roles: report.created.length })
   } finally {
     restoreEnv(previous)

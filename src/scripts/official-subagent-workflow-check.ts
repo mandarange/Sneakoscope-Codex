@@ -4,7 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
 import { buildOfficialSubagentPrompt } from '../core/subagents/official-subagent-prompt.js'
-import { writeSubagentEvidence } from '../core/subagents/subagent-evidence.js'
+import {
+  SUBAGENT_PARENT_SUMMARY_FILENAME,
+  persistOrReuseTrustworthySubagentParentSummary,
+  writeSubagentEvidence
+} from '../core/subagents/subagent-evidence.js'
 import { resolveSubagentThreadBudget } from '../core/subagents/thread-budget.js'
 import { runOfficialSubagentWorkflow } from '../core/subagents/official-subagent-runner.js'
 
@@ -39,24 +43,80 @@ try {
     { event: 'SubagentStop', agent: 'worker', thread_id: 'a2' },
     { event: 'SubagentStop', agent: 'expert', thread_id: 'a3' }
   ]
+  const structuredParentSummary = {
+    schema: 'sks.subagent-parent-summary.v1',
+    status: 'completed',
+    summary: 'All three official subagents completed and the parent integrated their findings.',
+    thread_outcomes: ['a1', 'a2', 'a3'].map((thread_id) => ({ thread_id, status: 'completed', summary: `${thread_id} complete` })),
+    changed_files: [],
+    verification: [],
+    blockers: []
+  }
+  const persistedParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, structuredParentSummary)
+  const persistedParentSummaryFile = JSON.parse(fs.readFileSync(path.join(fixture, SUBAGENT_PARENT_SUMMARY_FILENAME), 'utf8'))
+  assertGate(persistedParentSummaryFile.schema === 'sks.subagent-parent-summary.v1' && persistedParentSummaryFile.thread_outcomes.length === 3, 'structured parent summary must persist under the canonical artifact name', persistedParentSummaryFile)
+  const reusedParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, 'prose retry must not replace durable structured evidence')
+  assertGate(JSON.stringify(reusedParentSummary) === JSON.stringify(structuredParentSummary), 'untrusted prose must not downgrade a persisted trustworthy parent summary', { reusedParentSummary })
+  const explicitFailure = 'The parent integration failed with an error and did not complete.'
+  const failedParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, explicitFailure)
+  assertGate(failedParentSummary === explicitFailure && !fs.existsSync(path.join(fixture, SUBAGENT_PARENT_SUMMARY_FILENAME)), 'explicit failure prose must invalidate persisted successful parent evidence', { failedParentSummary })
+  const contradictedParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, structuredParentSummary, { workflowStatus: 'parent_failed' })
+  assertGate(contradictedParentSummary === null && !fs.existsSync(path.join(fixture, SUBAGENT_PARENT_SUMMARY_FILENAME)), 'failed parent workflow must override and invalidate a contradictory completed summary', { contradictedParentSummary })
+  const restoredParentSummary = await persistOrReuseTrustworthySubagentParentSummary(fixture, structuredParentSummary)
   const evidence = await writeSubagentEvidence(fixture, {
     requestedSubagents: 3,
     events,
-    parentSummary: {
-      schema: 'sks.subagent-parent-summary.v1',
-      status: 'completed',
-      summary: 'All three official subagents completed and the parent integrated their findings.',
-      thread_outcomes: ['a1', 'a2', 'a3'].map((thread_id) => ({ thread_id, status: 'completed', summary: `${thread_id} complete` })),
-      changed_files: [],
-      verification: [],
-      blockers: []
-    },
+    parentSummary: restoredParentSummary,
     workflowStatus: 'completed',
     preparationOnly: false
   })
   assertGate(evidence.ok === true && evidence.parent_summary_trustworthy === true, 'matched official SubagentStart/SubagentStop events plus a structured parent summary must pass', evidence)
   assertGate(evidence.started_threads === 3 && evidence.completed_threads === 3 && evidence.failed_threads === 0, 'official event counts must be normalized without PID evidence', evidence)
   assertGate(Array.isArray(evidence.event_sources) && evidence.event_sources.includes('SubagentStart') && evidence.event_sources.includes('SubagentStop'), 'official hook event sources must be retained', evidence)
+
+  const proseOnly = await writeSubagentEvidence(fixture, {
+    requestedSubagents: 3,
+    events,
+    parentSummary: 'All subagents stopped successfully.',
+    workflowStatus: 'completed',
+    preparationOnly: false
+  })
+  assertGate(proseOnly.ok === false && proseOnly.parent_summary_trustworthy === false && proseOnly.ambiguous_stop_thread_ids.length === 3, 'prose-only parent output must fail closed', proseOnly)
+
+  const ambiguous = await writeSubagentEvidence(fixture, {
+    requestedSubagents: 3,
+    events,
+    parentSummary: { ...structuredParentSummary, status: 'success' },
+    workflowStatus: 'completed',
+    preparationOnly: false
+  })
+  assertGate(ambiguous.ok === false && ambiguous.blockers.includes('parent_summary_status_ambiguous'), 'ambiguous parent status must fail closed', ambiguous)
+
+  const blocked = await writeSubagentEvidence(fixture, {
+    requestedSubagents: 3,
+    events,
+    parentSummary: {
+      ...structuredParentSummary,
+      status: 'blocked',
+      summary: 'Integration is blocked on a required result.',
+      thread_outcomes: structuredParentSummary.thread_outcomes.map((row) => ({ ...row, status: 'blocked', summary: `${row.thread_id} blocked` })),
+      blockers: ['fixture_blocker']
+    },
+    workflowStatus: 'blocked',
+    preparationOnly: false
+  })
+  assertGate(blocked.ok === false && blocked.parent_summary_status === 'failed', 'blocked parent outcomes must fail closed', blocked)
+
+  const failedResultText = await writeSubagentEvidence(fixture, {
+    requestedSubagents: 3,
+    events: events.map((row) => row.event === 'SubagentStop' && row.thread_id === 'a2'
+      ? { ...row, last_assistant_message: 'The delegated slice failed with an error.' }
+      : row),
+    parentSummary: structuredParentSummary,
+    workflowStatus: 'completed',
+    preparationOnly: false
+  })
+  assertGate(failedResultText.ok === false && failedResultText.failed_thread_ids.includes('a2'), 'unambiguous failed result text must override a contradictory completed claim', failedResultText)
 
   let nestedLaunch = false
   const appResult = await runOfficialSubagentWorkflow({

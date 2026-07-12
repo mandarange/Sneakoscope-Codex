@@ -32,6 +32,10 @@ import {
 import { GLM_MAD_MODE } from '../providers/glm/glm-52-settings.js';
 import { assertNonGlmMadRoute } from '../routes/model-mode-router.js';
 import { evaluateGate } from '../stop-gate/gate-evaluator.js';
+import {
+  CODEX_LB_TOOL_OUTPUT_RECOVERY_OVERRIDE_FLAG,
+  codexLbToolOutputRecoveryOverrideAcknowledged
+} from '../codex-lb/codex-lb-tool-output-recovery.js';
 
 const MAD_SKS_DEFAULT_TTL_MS = 10 * 60 * 1000;
 
@@ -188,7 +192,15 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
   const allowMadRepair = rawArgs.includes('--repair-config') || rawArgs.includes('--fix') || rawArgs.includes('--yes-repair');
-  const launchPreflightOpts = { fix: allowMadRepair, launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1', profile: profile.profile_name, sandbox: 'danger-full-access', serviceTier: 'fast' };
+  const launchPreflightOpts = {
+    fix: allowMadRepair,
+    launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1',
+    profile: profile.profile_name,
+    sandbox: 'danger-full-access',
+    serviceTier: 'fast',
+    skipCodexLbToolOutputRecovery: glmMadLaunch,
+    allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args: rawArgs })
+  };
   let launchPreflight = await runCodexLaunchPreflight(launchRoot, launchPreflightOpts);
   // Fresh-project bootstrap: when the ONLY blocker is that the managed Codex config does
   // not exist yet (`.codex/config.toml` absent), regenerate it — exactly what the blocker
@@ -858,8 +870,9 @@ function baseMadLaunchOnlyFlags() {
     '--yes',
     '-y',
     '--dry-run',
-	    '--plan-only',
-	    '--ack'
+    '--plan-only',
+	    '--ack',
+    CODEX_LB_TOOL_OUTPUT_RECOVERY_OVERRIDE_FLAG
   ]);
 }
 

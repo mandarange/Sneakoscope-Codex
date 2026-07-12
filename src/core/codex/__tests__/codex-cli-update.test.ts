@@ -1,0 +1,425 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { packageRoot } from '../../fsx.js';
+import {
+  CODEX_CLI_UPDATE_STATUS_SCHEMA,
+  compareCodexCliVersions,
+  inspectCodexCliUpdate,
+  resolveOperatorCodexCli,
+  updateCodexCliNow,
+  type CodexCliUpdateStatus
+} from '../codex-cli-update.js';
+
+test('Codex CLI update status reports the operator PATH source/current/latest versions and reuses its cache', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-status-');
+  let registryCalls = 0;
+  try {
+    const deps = {
+      whichImpl: async (command: string) => command === 'npm' ? '/fixture/npm' : null,
+      runProcessImpl: async (command: string, args: string[]) => {
+        if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+        registryCalls += 1;
+        return processResult(0, '0.145.0\n');
+      },
+      now: () => new Date('2026-07-12T10:00:00.000Z')
+    };
+    const first = await inspectCodexCliUpdate({ home: fixture.home, env: fixture.env, deps });
+    assert.equal(first.ok, true);
+    assert.equal(first.current_version, '0.144.1');
+    assert.equal(first.latest_version, '0.145.0');
+    assert.equal(first.update_available, true);
+    assert.equal(first.source, 'npm');
+    assert.equal(first.cli_source, 'path');
+    assert.equal(first.cli_path, fixture.codex);
+    assert.equal(first.bin, fixture.codex);
+    assert.equal(registryCalls, 1);
+
+    const second = await inspectCodexCliUpdate({ home: fixture.home, env: fixture.env, deps });
+    assert.equal(second.source, 'cache');
+    assert.equal(second.update_available, true);
+    assert.equal(second.cli_path, fixture.codex);
+    assert.equal(registryCalls, 1);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update action invokes the official operator codex update command and refreshes status', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-now-');
+  let current = '0.144.1';
+  const calls: Array<{ command: string; args: string[] }> = [];
+  try {
+    const deps = {
+      whichImpl: async (command: string) => command === 'npm' ? '/fixture/npm' : null,
+      runProcessImpl: async (command: string, args: string[]) => {
+        calls.push({ command, args });
+        if (command === fixture.codex && args[0] === '--version') return processResult(0, `codex-cli ${current}\n`);
+        if (command === fixture.codex && args.join(' ') === 'update --help') {
+          return processResult(0, 'Update Codex to the latest version\n\nUsage: codex update [OPTIONS]\n');
+        }
+        if (command === fixture.codex && args.join(' ') === 'update') {
+          current = '0.145.0';
+          return processResult(0, 'Codex updated to 0.145.0\n');
+        }
+        return processResult(0, '0.145.0\n');
+      },
+      now: () => new Date('2026-07-12T10:05:00.000Z')
+    };
+    const result = await updateCodexCliNow({ home: fixture.home, env: fixture.env, deps });
+    assert.equal(result.ok, true);
+    assert.equal(result.status, 'updated');
+    assert.equal(result.before_version, '0.144.1');
+    assert.equal(result.after_version, '0.145.0');
+    assert.equal(result.cli_source, 'path');
+    assert.equal(result.cli_path, fixture.codex);
+    assert.equal(result.post_update_cli_path, fixture.codex);
+    assert.equal(result.update_status?.update_available, false);
+    assert.equal(calls.some((call) => call.command === fixture.codex && call.args.join(' ') === 'update'), true);
+    assert.equal(calls.some((call) => call.command === '/fixture/npm' && call.args.join(' ') === 'view @openai/codex version'), true);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('explicit operator Codex override takes precedence over a different PATH installation', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-explicit-');
+  const explicitDir = path.join(fixture.home, 'explicit-bin');
+  const explicit = path.join(explicitDir, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  await fsp.mkdir(explicitDir, { recursive: true });
+  await fsp.writeFile(explicit, process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n', 'utf8');
+  await fsp.chmod(explicit, 0o755).catch(() => {});
+  try {
+    const result = await inspectCodexCliUpdate({
+      home: fixture.home,
+      codexBin: explicit,
+      env: fixture.env,
+      deps: {
+        whichImpl: async (command: string) => command === 'npm' ? '/fixture/npm' : null,
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === explicit && args[0] === '--version') return processResult(0, 'codex-cli 0.150.0\n');
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.149.0\n');
+          return processResult(0, '0.150.0\n');
+        }
+      }
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.cli_source, 'explicit');
+    assert.equal(result.cli_path, explicit);
+    assert.equal(result.current_version, '0.150.0');
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('menu status ignores divergent Sneakoscope-bundled Codex and selects the operator PATH CLI', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-divergent-');
+  const bundled = path.join(packageRoot(), 'node_modules', '.bin', process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  try {
+    assert.equal(await fsp.stat(bundled).then(() => true, () => false), true, 'fixture requires the package-local Codex dependency');
+    const env = {
+      ...fixture.env,
+      SKS_CODEX_BIN: bundled,
+      PATH: `${path.dirname(bundled)}${path.delimiter}${fixture.env.PATH}`
+    };
+    const result = await inspectCodexCliUpdate({
+      home: fixture.home,
+      env,
+      deps: {
+        // A generic adapter result may still point at the bundled SDK runtime;
+        // this dependency is deliberately ignored by the update resolver.
+        getCodexInfoImpl: async () => ({ bin: bundled, version: 'codex-cli 0.144.1', available: true }),
+        whichImpl: async (command: string) => command === 'npm' ? '/fixture/npm' : null,
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.155.0\n');
+          if (command === bundled && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+          return processResult(0, '0.155.0\n');
+        }
+      }
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.current_version, '0.155.0');
+    assert.equal(result.cli_source, 'path');
+    assert.equal(result.cli_path, fixture.codex);
+    assert.match(result.warnings.join('\n'), /sneakoscope_bundled_candidate_rejected/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('operator Codex resolver discovers an NVM global install from a launchd-style minimal PATH', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-codex-cli-nvm-'));
+  const codex = path.join(home, '.nvm', 'versions', 'node', 'v24.0.2', 'bin', process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  try {
+    await fsp.mkdir(path.dirname(codex), { recursive: true });
+    await fsp.writeFile(codex, process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n', 'utf8');
+    await fsp.chmod(codex, 0o755).catch(() => {});
+    const result = await resolveOperatorCodexCli({
+      env: { HOME: home, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' },
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => command === codex && args[0] === '--version'
+          ? processResult(0, 'codex-cli 0.144.1\n')
+          : processResult(1, '', 'unexpected command')
+      }
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.path, codex);
+    assert.equal(result.source, 'path');
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('operator Codex resolver rejects project-local node_modules binaries', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-codex-cli-project-local-'));
+  const codex = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  try {
+    await fsp.mkdir(path.dirname(codex), { recursive: true });
+    await fsp.writeFile(path.join(root, 'package.json'), '{"name":"fixture","private":true}\n');
+    await fsp.writeFile(codex, process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n', 'utf8');
+    await fsp.chmod(codex, 0o755).catch(() => {});
+    const result = await resolveOperatorCodexCli({
+      env: { HOME: root, PATH: path.dirname(codex) },
+      deps: { runProcessImpl: async () => processResult(0, 'codex-cli 0.144.1\n') }
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.warnings.join('\n'), /project_local_candidate_rejected/);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('operator Codex resolver rejects a semver-bearing non-Codex executable', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-identity-');
+  try {
+    const result = await resolveOperatorCodexCli({
+      env: fixture.env,
+      deps: { runProcessImpl: async () => processResult(0, 'not-codex 7.8.9\n') }
+    });
+    assert.equal(result.ok, false);
+    assert.match(result.warnings.join('\n'), /identity_or_version_unavailable/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update fails closed when the present operator CLI disappears after update', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-disappears-');
+  try {
+    const result = await updateCodexCliNow({
+      home: fixture.home,
+      env: fixture.env,
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+          if (command === fixture.codex && args.join(' ') === 'update --help') return processResult(0, 'Usage: codex update [OPTIONS]\n');
+          if (command === fixture.codex && args.join(' ') === 'update') {
+            await fsp.rm(fixture.codex, { force: true });
+            return processResult(0, 'update completed\n');
+          }
+          return processResult(1, '', 'unexpected command');
+        }
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.cli_path, fixture.codex);
+    assert.equal(result.post_update_cli_path, null);
+    assert.match(result.blockers.join('\n'), /codex_cli_post_update_missing/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update does not hide a disappeared target by falling through to another PATH installation', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-target-changed-');
+  const fallbackDir = path.join(fixture.home, 'fallback-bin');
+  const fallback = path.join(fallbackDir, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  await fsp.mkdir(fallbackDir, { recursive: true });
+  await fsp.writeFile(fallback, process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n', 'utf8');
+  await fsp.chmod(fallback, 0o755).catch(() => {});
+  try {
+    const result = await updateCodexCliNow({
+      home: fixture.home,
+      env: { ...fixture.env, PATH: `${path.dirname(fixture.codex)}${path.delimiter}${fallbackDir}` },
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+          if (command === fixture.codex && args.join(' ') === 'update --help') return processResult(0, 'Usage: codex update [OPTIONS]\n');
+          if (command === fixture.codex && args.join(' ') === 'update') {
+            await fsp.rm(fixture.codex, { force: true });
+            return processResult(0, 'update completed\n');
+          }
+          if (command === fallback && args[0] === '--version') return processResult(0, 'codex-cli 0.143.0\n');
+          return processResult(1, '', 'unexpected command');
+        }
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.cli_path, fixture.codex);
+    assert.equal(result.post_update_cli_path, fallback);
+    assert.match(result.blockers.join('\n'), /codex_cli_post_update_target_changed/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update fails closed when refreshed update status is missing or failed', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-status-missing-');
+  try {
+    const result = await updateCodexCliNow({
+      home: fixture.home,
+      env: fixture.env,
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+          if (command === fixture.codex && args.join(' ') === 'update --help') return processResult(0, 'Usage: codex update [OPTIONS]\n');
+          if (command === fixture.codex && args.join(' ') === 'update') return processResult(0, 'already current\n');
+          return processResult(1, '', 'unexpected command');
+        },
+        inspectCodexCliUpdateImpl: async () => missingStatus(fixture)
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'failed');
+    assert.match(result.blockers.join('\n'), /codex_cli_post_update_status_untrusted/);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update fails closed when the post-update version regresses', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-regressed-');
+  let current = '0.145.0';
+  try {
+    const result = await updateCodexCliNow({
+      home: fixture.home,
+      env: fixture.env,
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, `codex-cli ${current}\n`);
+          if (command === fixture.codex && args.join(' ') === 'update --help') return processResult(0, 'Usage: codex update [OPTIONS]\n');
+          if (command === fixture.codex && args.join(' ') === 'update') {
+            current = '0.144.0';
+            return processResult(0, 'update completed\n');
+          }
+          return processResult(1, '', 'unexpected command');
+        }
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'failed');
+    assert.equal(result.before_version, '0.145.0');
+    assert.equal(result.after_version, '0.144.0');
+    assert.ok(result.blockers.includes('codex_cli_post_update_version_regressed'));
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update verifies the official update capability before mutation', async () => {
+  const fixture = await operatorFixture('sks-codex-cli-update-capability-');
+  let updateRan = false;
+  try {
+    const result = await updateCodexCliNow({
+      home: fixture.home,
+      env: fixture.env,
+      deps: {
+        runProcessImpl: async (command: string, args: string[]) => {
+          if (command === fixture.codex && args[0] === '--version') return processResult(0, 'codex-cli 0.144.1\n');
+          if (command === fixture.codex && args.join(' ') === 'update --help') return processResult(0, 'unrelated help output\n');
+          if (command === fixture.codex && args.join(' ') === 'update') updateRan = true;
+          return processResult(0, '');
+        }
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.ok(result.blockers.includes('codex_cli_update_capability_unverified'));
+    assert.equal(updateRan, false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
+test('Codex CLI update action fails closed when no operator Codex is installed', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-codex-cli-missing-'));
+  let ran = false;
+  try {
+    const result = await updateCodexCliNow({
+      home,
+      env: { HOME: home, PATH: '' },
+      deps: {
+        runProcessImpl: async () => {
+          ran = true;
+          return processResult(0, '');
+        }
+      }
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'missing');
+    assert.equal(result.cli_source, 'unavailable');
+    assert.equal(ran, false);
+    assert.match(result.guidance.join('\n'), /does not invent a package-manager fallback/i);
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('Codex CLI version comparison handles prerelease and stable ordering', () => {
+  assert.equal(compareCodexCliVersions('0.145.0', '0.144.1') > 0, true);
+  assert.equal(compareCodexCliVersions('0.145.0-beta.1', '0.145.0') < 0, true);
+  assert.equal(compareCodexCliVersions('codex-cli 0.145.0', '0.145.0'), 0);
+});
+
+async function operatorFixture(prefix: string) {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), prefix));
+  const binDir = path.join(home, 'bin');
+  await fsp.mkdir(binDir, { recursive: true });
+  const codex = path.join(binDir, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+  await fsp.writeFile(codex, process.platform === 'win32' ? '@exit /b 0\r\n' : '#!/bin/sh\nexit 0\n', 'utf8');
+  await fsp.chmod(codex, 0o755).catch(() => {});
+  return {
+    home,
+    codex,
+    env: { HOME: home, PATH: binDir },
+    cleanup: () => fsp.rm(home, { recursive: true, force: true })
+  };
+}
+
+function missingStatus(fixture: Awaited<ReturnType<typeof operatorFixture>>): CodexCliUpdateStatus {
+  return {
+    schema: CODEX_CLI_UPDATE_STATUS_SCHEMA,
+    ok: false,
+    status: 'missing',
+    installed: false,
+    bin: null,
+    cli_path: null,
+    cli_source: 'unavailable',
+    current_version: null,
+    raw_version: null,
+    latest_version: null,
+    update_available: null,
+    update_command: 'codex update',
+    source: 'unavailable',
+    checked_at: '2026-07-12T10:05:00.000Z',
+    cache_path: path.join(fixture.home, '.sneakoscope', 'cache', 'codex-cli-update.json'),
+    warnings: [],
+    blockers: ['codex_cli_missing'],
+    guidance: []
+  };
+}
+
+function processResult(code: number, stdout: string, stderr = '') {
+  return {
+    code,
+    stdout,
+    stderr,
+    stdoutBytes: Buffer.byteLength(stdout),
+    stderrBytes: Buffer.byteLength(stderr),
+    truncated: false,
+    timedOut: false
+  };
+}

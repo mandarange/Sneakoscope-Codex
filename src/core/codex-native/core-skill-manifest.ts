@@ -67,10 +67,10 @@ const CORE_SKILL_DEFINITIONS: Array<{
     route: '$Naruto',
     purpose: 'run a Codex official subagent workflow with official agent threads while parent integration remains owner.',
     when: 'Use when the user explicitly invokes $Naruto or the selected route requires bounded parallel delegation.',
-    workflow: 'Use sks naruto run "<task>" [--agents N] [--max-threads N] [--json]. The parent runs on GPT-5.6 Sol Max; clear bounded worker slices use GPT-5.6 Luna Max; UI, review, debugging, planning, strategy, architecture, integration, security, DB, release, ambiguity, and other judgment-sensitive expert slices use GPT-5.6 Sol Max. Treat Codex [agents].max_threads as the concurrency authority, keep max_depth=1, avoid duplicate or overlapping write slices, wait for every requested subagent, accept official SubagentStart/SubagentStop events, and let the parent own integration and final judgment.',
+    workflow: 'Use sks naruto run "<task>" [--agents N] [--max-threads N] [--json]. The parent runs on GPT-5.6 Sol Max; clear bounded worker slices use GPT-5.6 Luna Max; UI, review, debugging, planning, strategy, architecture, integration, security, DB, release, ambiguity, and other judgment-sensitive expert slices use GPT-5.6 Sol Max. Treat Codex [agents].max_threads as the concurrency authority, keep max_depth=1, avoid duplicate or overlapping write slices, wait for every requested subagent, treat SubagentStart/SubagentStop as lifecycle-only evidence, require subagent-parent-summary.json with one structured outcome per thread, and let the parent own integration and final judgment.',
     safety: 'Preserve user-authored content, inherit the parent permission mode, do not spawn nested subagents, do not silently fall back to another model or process swarm, and stop with explicit blocker evidence when the official path is unavailable.',
     cli: 'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]; sks naruto status|subagents|proof [--mission <id>] [--json]',
-    evidence: 'subagent-plan.json, subagent-events.jsonl, subagent-evidence.json, verification-summary.json, and naruto-summary.json.',
+    evidence: 'subagent-plan.json, subagent-events.jsonl, subagent-parent-summary.json, subagent-evidence.json, naruto-summary.json, and naruto-gate.json.',
     fallback: 'Return explicit official-subagent availability blockers and continue parent-owned only when the sealed task still has meaningful in-scope work; never fabricate process, PID, or subagent evidence.'
   },
   {

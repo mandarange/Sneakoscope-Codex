@@ -119,8 +119,8 @@ const FIXTURES = Object.freeze({
   'cli-init': fixture('execute', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-eval': fixture('execute', 'sks eval run --mock --json', [], 'pass'),
   'cli-harness': fixture('execute', 'sks harness fixture --mock --json', [], 'pass'),
-  'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', { codex_app_session: true }),
-  'cli-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000, codex_app_session: true }),
+  'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract()),
+  'cli-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
   'cli-profile': fixture('execute', 'sks profile status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['db-operation-report.json', 'completion-proof.json'], 'pass'),
@@ -138,9 +138,9 @@ const FIXTURES = Object.freeze({
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
   'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
   'cli-wrongness': fixture('execute_and_validate_artifacts', 'sks wrongness add --kind missing_evidence --claim "fixture wrongness" --json', ['.sneakoscope/wiki/wrongness-ledger.json'], 'pass'),
-  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000, codex_app_session: true }),
-  'route-team-alias': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json'], 'pass', { codex_app_session: true }),
-  'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000, codex_app_session: true }),
+  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
+  'route-team-alias': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json'], 'pass', preparationFixtureContract()),
+  'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'route-work': fixture('static', '$Work compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
   'route-swarm': fixture('static', '$Swarm compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
@@ -244,6 +244,21 @@ const STATIC_CONTRACT_FEATURES = new Set([
   'cli-team',
   'cli-reasoning',
   'cli-profile',
+  'cli-gates',
+  'cli-postinstall',
+  'cli-menubar',
+  'cli-zellij-lane',
+  'cli-zellij-slot-pane',
+  'cli-zellij-monitor-pane',
+  'cli-zellij-viewport-pane',
+  'cli-zellij-slot-column-anchor',
+  'cli-glm',
+  'cli-mad-db',
+  'cli-stop-gate',
+  'cli-route',
+  'cli-loop',
+  'cli-autoresearch',
+  'cli-hook',
   'handler-$',
   'handler-autoresearch',
   'handler-autoreview',
@@ -322,6 +337,26 @@ function fixture(kind: any, command: any, expected_artifacts: any, status: any, 
     status,
     explicit: true,
     fallback_removed: true,
+    ...extra
+  };
+}
+
+function preparationFixtureContract(extra: any = {}) {
+  return {
+    timeout_ms: 90000,
+    codex_app_session: true,
+    completion_semantics: 'preparation_only',
+    expected_stdout_fields: {
+      ok: false,
+      status: 'delegation_context_ready',
+      completion_evidence: false
+    },
+    expected_artifact_fields: {
+      'naruto-gate.json': {
+        passed: false
+      }
+    },
+    reason: 'Codex App execution prepares delegation in the current parent. The fixture passes only when stdout remains ok:false/status:delegation_context_ready and naruto-gate.json remains passed:false.',
     ...extra
   };
 }

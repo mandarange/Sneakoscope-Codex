@@ -194,7 +194,7 @@ export async function loadCodexLbEnv(opts: any = {}): Promise<CodexLbEnvLoadResu
   const sourcePriority: CodexLbEnvSource[] = ['process.env', 'keychain', 'env-file', 'legacy-env-file'];
   if (opts.allowProjectSecrets) sourcePriority.push('project-local');
 
-  const processEnv = pickEnv(process.env);
+  const processEnv = pickEnv(opts.processEnv || process.env);
   const envFile = await readEnvFile(envPaths[0]);
   const legacyEnv = await readEnvFile(envPaths[1]);
   const keychain = await readMacKeychain(opts);

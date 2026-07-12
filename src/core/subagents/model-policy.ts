@@ -24,6 +24,9 @@ const SOL_TASK_RE = new RegExp([
   'audit',
   'debug',
   'diagnos',
+  'investigat',
+  '\\bwhy\\b',
+  '\\bfail(?:ed|ure|ing)?\\b',
   'root[- ]?cause',
   'strategy',
   '\\bplan\\b',
@@ -36,6 +39,7 @@ const SOL_TASK_RE = new RegExp([
   'integrat',
   'conflict',
   'security',
+  '\\bauth(?:entication|orization)?\\b',
   '\\bsafety\\b',
   'database',
   '\\bdb\\b',
@@ -87,35 +91,13 @@ const SOL_TASK_RE = new RegExp([
 ].join('|'), 'i')
 
 const CLEAR_BOUNDED_TASK_RE = new RegExp([
-  'clear',
-  'bounded',
-  'exact',
-  'specified',
-  'mechanical',
-  'repeatable',
-  'inventory',
-  'extract',
-  'fixture',
-  'rename',
-  'copy',
-  'format',
-  'list',
-  'apply',
-  'execute',
-  'implementation',
+  '\\b(?:clear|bounded|exact|specified)\\b[^\n]{0,48}\\b(?:task|change|step|scope|fixture|file|implementation|rename|copy|format|inventory|extract|list|check)\\b',
+  '\\b(?:mechanical|repeatable)\\b',
+  '\\bstructured[- ]?(?:extract|extraction|output|inventory|list)\\b',
   'code_modification',
   'test_execution',
   'single[- ]?(?:file|step|check|change)',
-  '정해진',
-  '명확',
-  '단순',
-  '반복',
-  '기계적',
-  '목록',
-  '추출',
-  '이름\s*변경',
-  '적용',
-  '실행'
+  '(?:정해진|명확한?|단순한?|반복적?|기계적)[^\n]{0,32}(?:작업|변경|단계|파일|목록|추출|이름\\s*변경)'
 ].join('|'), 'i')
 
 export function decideSubagentModel(input: {

@@ -1,31 +1,12 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
-import { ensureDir, exists, nowIso, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { exists, nowIso, readText, writeJsonAtomic } from '../fsx.js'
 import { isUnmanagedProjectCodexConfig, writeCodexConfigGuarded } from '../codex/codex-config-guard.js'
 
 export const DOCTOR_CODEX_STARTUP_REPAIR_SCHEMA = 'sks.doctor-codex-startup-repair.v1'
 
 type Scope = 'project' | 'global'
-
-const AGENT_ROLE_FILES = new Map<string, { file: string; description: string; sandbox: 'read-only' | 'workspace-write'; nicknames: string[] }>([
-  ['analysis_scout', { file: 'analysis-scout.toml', description: 'SKS scout with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Scout', 'Mapper'] }],
-  ['native_agent', { file: 'native-agent-intake.toml', description: 'SKS native agent with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Analysis', 'Mapper'] }],
-  ['team_consensus', { file: 'team-consensus.toml', description: 'SKS planning/debate agent with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Consensus', 'Atlas'] }],
-  ['implementation_worker', { file: 'implementation-worker.toml', description: 'SKS bounded implementation worker.', sandbox: 'workspace-write', nicknames: ['Builder', 'Mason'] }],
-  ['db_safety_reviewer', { file: 'db-safety-reviewer.toml', description: 'DB safety reviewer with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Sentinel', 'Ledger'] }],
-  ['qa_reviewer', { file: 'qa-reviewer.toml', description: 'QA reviewer with bounded write capability.', sandbox: 'workspace-write', nicknames: ['Verifier', 'Reviewer'] }]
-])
-
-const DIRECTIVE_ROLE_FILES = [
-  'sks-explorer.toml',
-  'sks-planner.toml',
-  'sks-implementer.toml',
-  'sks-checker.toml',
-  'sks-release-verifier.toml',
-  'sks-zellij-ui-verifier.toml',
-  'sks-codex-probe-verifier.toml'
-]
 
 export interface DoctorCodexStartupRepairResult {
   schema: typeof DOCTOR_CODEX_STARTUP_REPAIR_SCHEMA
@@ -67,9 +48,10 @@ export async function runDoctorCodexStartupRepair(input: {
 }): Promise<DoctorCodexStartupRepairResult> {
   const root = path.resolve(input.root || process.cwd())
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex')
-  const roleFiles = input.fix
-    ? await repairAgentRoleFiles(root, codexHome)
-    : await inspectAgentRoleFiles(root, codexHome)
+  // Official worker/expert installation is owned by repairAgentRoleConfigs.
+  // This startup repair remains structural/MCP-only and never touches legacy
+  // or user agent TOMLs in project or global directories.
+  const roleFiles = { sanitized: [], created: [], blockers: [] }
   const configs = []
   for (const candidate of [
     { scope: 'project' as const, path: path.join(root, '.codex', 'config.toml'), agentDir: path.join(root, '.codex', 'agents') },
@@ -162,35 +144,6 @@ async function inspectOrRepairConfig(root: string, candidate: { scope: Scope; pa
   next = duplicateRepair.text
   duplicateTomlBlocksRemoved.push(...duplicateRepair.removed)
   warnings.push(...duplicateRepair.warnings)
-
-  for (const [tableName, role] of AGENT_ROLE_FILES) {
-    const target = path.join(candidate.agentDir, role.file)
-    let table = tomlBlock(next, `agents.${tableName}`)
-    if (!table) continue
-    const currentDescription = stringValue(table.text, 'description')
-    if (currentDescription !== role.description) {
-      if (!fix) warnings.push(`agent_description_stale:${tableName}`)
-      else {
-        next = replaceOrInsertKey(next, table, 'description', `"${escapeToml(role.description)}"`)
-        table = tomlBlock(next, `agents.${tableName}`)
-        if (!table) continue
-      }
-    }
-    const current = stringValue(table.text, 'config_file')
-    const targetExists = await exists(target)
-    const currentValid = Boolean(current && path.isAbsolute(current) && await exists(current))
-    if (currentValid && current === target) continue
-    if (!fix) {
-      warnings.push(`agent_config_file_stale:${tableName}`)
-      continue
-    }
-    if (!targetExists) {
-      await ensureDir(path.dirname(target))
-      await writeTextAtomic(target, roleConfigToml(tableName, role.description, role.sandbox))
-    }
-    next = replaceOrInsertKey(next, table, 'config_file', `"${escapeToml(target)}"`)
-    agentConfigFilesRepaired.push(target)
-  }
 
   const nodeReplRepair = await inspectOrRepairNodeRepl(next, fix, nodeReplCommandCandidates, includeDefaultNodeReplCandidates)
   next = nodeReplRepair.text
@@ -295,22 +248,7 @@ function tomlBlocks(text: string): TomlNamedBlock[] {
 }
 
 function selectDuplicateTomlBlockToKeep(header: string, rows: TomlNamedBlock[], candidate: { agentDir: string }): number {
-  const agentName = header.startsWith('agents.') ? header.slice('agents.'.length) : ''
-  const role = agentName ? AGENT_ROLE_FILES.get(agentName) : undefined
-  if (role) {
-    const target = path.join(candidate.agentDir, role.file)
-    return maxIndexBy(rows, (block, index) => {
-      const configFile = stringValue(block.text, 'config_file')
-      const description = stringValue(block.text, 'description')
-      return (
-        (configFile === target ? 100 : 0) +
-        (configFile && path.isAbsolute(configFile) ? 20 : 0) +
-        (description === role.description ? 30 : 0) +
-        assignmentCount(block.text) -
-        index / 1000
-      )
-    })
-  }
+  void candidate
   if (header.startsWith('mcp_servers.')) return 0
   return maxIndexBy(rows, (block, index) => assignmentCount(block.text) - index / 1000)
 }
@@ -380,54 +318,6 @@ async function inspectOrRepairNodeRepl(text: string, fix: boolean, extraCandidat
     removed: [server],
     repaired: [] as string[]
   }
-}
-
-async function inspectAgentRoleFiles(root: string, codexHome: string): Promise<DoctorCodexStartupRepairResult['agent_role_files']> {
-  const dirs = [path.join(root, '.codex', 'agents'), path.join(codexHome, 'agents')]
-  const sanitized: string[] = []
-  for (const dir of dirs) {
-    for (const file of DIRECTIVE_ROLE_FILES) {
-      const full = path.join(dir, file)
-      const text = await readText(full, null)
-      if (typeof text === 'string' && /\bmessage_role_prefix\s*=/.test(text) && /SKS managed 3\.1\./.test(text)) sanitized.push(full)
-    }
-  }
-  return { sanitized, created: [], blockers: [] }
-}
-
-async function repairAgentRoleFiles(root: string, codexHome: string): Promise<DoctorCodexStartupRepairResult['agent_role_files']> {
-  const dirs = [path.join(root, '.codex', 'agents'), path.join(codexHome, 'agents')]
-  const sanitized: string[] = []
-  const created: string[] = []
-  const blockers: string[] = []
-  for (const dir of dirs) {
-    for (const [name, role] of AGENT_ROLE_FILES) {
-      const file = path.join(dir, role.file)
-      const text = await readText(file, null)
-      if (text == null) {
-        await ensureDir(dir)
-        await writeTextAtomic(file, roleConfigToml(name, role.description, role.sandbox))
-        created.push(file)
-        continue
-      }
-      if (!text.includes(`sandbox_mode = "${role.sandbox}"`) || text.includes('Do not edit files.')) {
-        await backupConfig(file, text, 'role-write-capable')
-        await writeTextAtomic(file, roleConfigToml(name, role.description, role.sandbox))
-        sanitized.push(file)
-      }
-    }
-    for (const file of DIRECTIVE_ROLE_FILES) {
-      const full = path.join(dir, file)
-      const text = await readText(full, null)
-      if (typeof text !== 'string') continue
-      if (!/\bmessage_role_prefix\s*=/.test(text) || !/SKS managed 3\.1\./.test(text)) continue
-      const next = text.split('\n').filter((line) => !/^\s*message_role_prefix\s*=/.test(line)).join('\n')
-      await backupConfig(full, text, 'role')
-      await writeTextAtomic(full, next.replace(/\s*$/, '\n'))
-      sanitized.push(full)
-    }
-  }
-  return { sanitized, created, blockers }
 }
 
 function tomlBlock(text: string, table: string): { start: number; end: number; text: string } | null {
@@ -536,32 +426,6 @@ function nodeReplCandidatesFromNodePaths(values: Array<string | undefined>): str
 function stringValues(text: string, key: string): string[] {
   const re = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=\\s*"([^"]*)"`, 'gm')
   return [...text.matchAll(re)].map((match) => String(match[1] || '')).filter(Boolean)
-}
-
-async function backupConfig(configPath: string, text: string, label: string): Promise<string | null> {
-  try {
-    const backupPath = `${configPath}.sks-${label}-${Date.now().toString(36)}.bak`
-    await ensureDir(path.dirname(backupPath))
-    await writeTextAtomic(backupPath, text, { mode: 0o600 })
-    return backupPath
-  } catch {
-    return null
-  }
-}
-
-function roleConfigToml(name: string, description: string, sandbox: 'read-only' | 'workspace-write'): string {
-  return [
-    `name = "${name}"`,
-    `description = "${description}"`,
-    `sandbox_mode = "${sandbox}"`,
-    'approval_policy = "never"',
-    'developer_instructions = """',
-    `You are the SKS ${name} role.`,
-    sandbox === 'read-only' ? 'Do not edit files.' : 'Only edit the bounded files assigned by the parent orchestrator.',
-    'Return concise source-backed findings and LIVE_EVENT lines when applicable.',
-    '"""',
-    ''
-  ].join('\n')
 }
 
 function escapeToml(value: string): string {

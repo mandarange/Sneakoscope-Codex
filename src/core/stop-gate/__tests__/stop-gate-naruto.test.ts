@@ -9,6 +9,7 @@ import { writeFinalStopGate } from '../stop-gate-writer.js';
 import { evaluateStop } from '../../pipeline-internals/runtime-gates.js';
 import { hasSubagentEvidence } from '../../pipeline-internals/runtime-core.js';
 import { writeRouteCompletionProof } from '../../proof/route-adapter.js';
+import { buildSubagentEvidence } from '../../subagents/subagent-evidence.js';
 
 async function makeTempRoot(): Promise<string> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-sg-root-'));
@@ -200,18 +201,29 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     JSON.stringify({ event_name: 'SubagentStop', thread_id: 'a1', outcome: 'stopped' }),
     JSON.stringify({ event_name: 'SubagentStop', thread_id: 'a2', outcome: 'stopped' })
   ].join('\n') + '\n');
-  await fsp.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify({
-    schema: 'sks.subagent-evidence.v1',
-    workflow: 'official_codex_subagent',
-    requested_subagents: 2,
-    started_threads: 2,
-    completed_threads: 2,
-    failed_threads: 0,
-    parent_summary_present: true,
-    parent_summary_trustworthy: true,
-    ok: true,
+  const parentSummary = {
+    schema: 'sks.subagent-parent-summary.v1',
+    status: 'completed',
+    summary: 'Both independent slices completed and were integrated.',
+    thread_outcomes: [
+      { thread_id: 'a1', status: 'completed', summary: 'a1 completed' },
+      { thread_id: 'a2', status: 'completed', summary: 'a2 completed' }
+    ],
+    changed_files: [],
+    verification: [],
     blockers: []
-  }));
+  };
+  await fsp.writeFile(path.join(dir, 'subagent-parent-summary.json'), JSON.stringify(parentSummary));
+  await fsp.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify(buildSubagentEvidence({
+    requestedSubagents: 2,
+    parentSummary,
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'a1' },
+      { event_name: 'SubagentStart', thread_id: 'a2' },
+      { event_name: 'SubagentStop', thread_id: 'a1' },
+      { event_name: 'SubagentStop', thread_id: 'a2' }
+    ]
+  })));
   await fsp.writeFile(path.join(dir, 'naruto-summary.json'), JSON.stringify({
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: true,
@@ -228,7 +240,8 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     verification: { budget: 'affected', checks: [] },
     legacy_process_swarm_used: false,
     parent_summary_present: true,
-    parent_summary: 'Both independent slices completed and were integrated.'
+    parent_summary: 'Both independent slices completed and were integrated.',
+    parent_thread_outcomes: parentSummary.thread_outcomes
   }));
   await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({
     schema: 'sks.naruto-gate.v1',
@@ -283,6 +296,47 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
   const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, subagents_required: true, proof_required: false, reflection_required: true }, { message: 'done' });
   assert.equal(decision?.continue, true);
   assert.match(decision?.systemMessage, /canonical stop-gate passed/);
+
+  await fsp.rm(path.join(dir, 'subagent-parent-summary.json'));
+  assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, subagents_required: true }), false);
+  const missingParentDecision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, subagents_required: true, proof_required: false, reflection_required: true }, { message: 'done' });
+  assert.equal(missingParentDecision?.decision, 'block');
+  assert.match(missingParentDecision?.reason || missingParentDecision?.systemMessage || '', /parent_summary|parent summary/i);
+});
+
+test('forged persisted official evidence cannot pass without raw event correlation', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-forged-evidence';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'subagent-plan.json'), JSON.stringify({
+    schema: 'sks.subagent-plan.v1',
+    workflow: 'official_codex_subagent',
+    requested_subagents: 1,
+    max_threads: 1,
+    max_depth: 1,
+    delegation_prompt: 'delegate one slice'
+  }));
+  await fsp.writeFile(path.join(dir, 'subagent-events.jsonl'), '');
+  await fsp.writeFile(path.join(dir, 'subagent-parent-summary.json'), JSON.stringify({
+    schema: 'sks.subagent-parent-summary.v1',
+    status: 'completed',
+    summary: 'Claimed completion.',
+    thread_outcomes: [{ thread_id: 'a1', status: 'completed', summary: 'Claimed completion.' }],
+    blockers: []
+  }));
+  await fsp.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify({
+    schema: 'sks.subagent-evidence.v1',
+    workflow: 'official_codex_subagent',
+    requested_subagents: 1,
+    started_threads: 1,
+    completed_threads: 1,
+    failed_threads: 0,
+    parent_summary_present: true,
+    parent_summary_trustworthy: true,
+    ok: true,
+    blockers: []
+  }));
+  assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, subagents_required: true }), false);
 });
 
 test('generic route stop hook accepts recorded hard blocker before completion proof gate', async () => {

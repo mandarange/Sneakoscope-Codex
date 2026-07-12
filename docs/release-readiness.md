@@ -4,7 +4,9 @@ SKS 6.1.1 is ready for publication only when package/lock/Rust/docs/dist version
 
 Codex 0.142 references later in this document are historical release records and cannot authorize the 6.1.1 release.
 
-6.1.1 release readiness requires `$Naruto` to use the Codex official subagent workflow, Sol Max parent orchestration, Luna Max bounded workers, Sol Max reasoning-sensitive experts, matched `SubagentStart`/`SubagentStop` thread evidence plus a parent summary, no native PID requirement, preserved user-owned agent/config files, the 200-gate/100-script lean budgets, focused tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. Live paid Naruto fan-out and npm publication remain operator-only checks.
+6.1.1 release readiness requires `$Naruto` to use the Codex official subagent workflow, Sol Max parent orchestration, Luna Max bounded subagents, Sol Max reasoning-sensitive experts, matched `SubagentStart`/`SubagentStop` thread evidence plus a parent summary, no native PID requirement, preserved user-owned agent/config files, the 200-gate/100-script lean budgets, focused tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. The installed package must also contain `release-gates.v2.json`, `infra-harness-gates.json`, and `runtime-required-scripts.json` so stable `sks check`, `sks gates`, and package contract checks do not depend on source-checkout-only files. Live paid Naruto fan-out and npm publication remain operator-only checks.
+
+The direct `test:official-subagent-policy` release gate runs the official config, model-policy, and affected-selector regressions from their compiled test files; it does not depend on package-script aliases.
 
 Retention and command-lifecycle readiness requires `sks agent --help` to leave mission state untouched, `route_closed` current/session records to be inactive, and recently updated non-closed sessions to remain protected for two hours. Mission compaction preserves durable JSON and visual/review evidence byte-for-byte, removes only known disposable runtime files, and retains verified read compatibility for legacy gzip archives; full storage-budget reports count every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file scan safety ceiling; and release-gate run history keeps five run directories by default.
 
@@ -242,46 +244,36 @@ without confirmation, or config/auth/skill mutations without backup or no-op pro
 
 ## Current publish authorization policy (6.1.1)
 
-Publishing to npm starts with `npm run release:check:full`. In 6.1.1 that single
-command performs a clean build, a repairing Doctor pass, the complete manifest-backed
-release DAG, the environment-dependent real check, and only then writes the
-`.sneakoscope/reports/release-check-stamp.json` v2 authorization stamp. The stamp is
-bound to the current source/package/dist hashes, the successful full-DAG summary,
-and the successful real-check summary. `npm run release:real-check` remains useful
-for standalone environment diagnostics, but it does not write or replace the full
-authorization stamp. Ordinary `npm run release:check` is the change-aware affected
-gate for local checks and cannot authorize a publish on its own. The dynamic runners
-`npm run release:check:dynamic` and `npm run release:check:dynamic:execute` remain
-local/CI accelerations only — they narrow the gate set to changed inputs and cached
-results, so they **cannot** authorize a publish on their own. See
-`docs/dynamic-release-pipeline.md` for the two-tier model.
+The 6.1.1 implementation handoff uses this bounded verification sequence:
+
+```bash
+npm run typecheck --silent
+npm run build:clean --silent
+# Run the focused suites for the changed surfaces.
+npm run release:check:affected
+npm run release:check:confidence
+npm pack --dry-run --ignore-scripts --json
+```
+
+Run the clean build once and `release:check:confidence` once, after substantive
+implementation and focused verification are complete. The pack command is metadata
+verification only and must not run lifecycle scripts. `release:check:full`,
+`release-parallel-check`, npm publish dry-runs, publish wrappers, tags, and actual npm
+publication are outside this work order. Publication remains a separate repository-owner
+handoff.
+
+`npm run release:check` is the change-aware affected gate for local checks and cannot
+authorize publication on its own. The removed dynamic runner aliases are not part of
+the 6.1.1 command surface; affected selection is owned by the manifest-backed release
+DAG.
 
 Each release-DAG completion also rotates `.sneakoscope/reports/release-gates/` to the
 five most recent run directories by default. This bounds local proof storage without
 weakening the source/package/dist-bound authorization stamp.
 
-After the full check, `npm run publish:prep-ignore-scripts` rebuilds cleanly, runs
-typecheck plus the canonical recursive `npm test` suite, verifies version/dist truth,
-packlist performance, published-script targets, publish tag, unpublished registry
-state and npm authorization, performs `npm pack --dry-run --ignore-scripts`, and
-verifies the fresh full-release stamp. The supported operator sequence is:
-
-```bash
-npm run release:check:full
-npm run publish:prep-ignore-scripts
-
-# Verification only; does not publish:
-npm publish --dry-run --ignore-scripts --json
-# Equivalent verified wrapper:
-npm run publish:dry
-
-# Actual publication, only after reviewing all evidence:
-npm run publish:ignore-scripts
-```
-
-The actual-publication wrapper repeats `publish:prep-ignore-scripts` immediately
-before `npm publish --ignore-scripts`. The removed `publish:npm` and
-`release:publish` aliases are not supported 6.1.1 commands.
+Legacy publish-preparation wrappers remain historical compatibility surfaces only;
+they are not part of this 6.1.1 work-order procedure and must not be invoked during
+the implementation handoff.
 
 `prepublishOnly` also runs `release-registry-check.js --require-publish-auth`
 before `prepack`. That check uses the documented npm `whoami` identity and the
@@ -300,6 +292,11 @@ Because the supported final command disables npm lifecycle hooks on purpose,
 publication authorization does not rely on `prepublishOnly`. Operators who
 intentionally run `npm publish --ignore-scripts` directly must run
 `npm run publish:prep-ignore-scripts` immediately before it.
+
+The following long command list and report inventory are archived 1.x/2.x provenance,
+not the 6.1.1 release procedure. Some aliases were intentionally removed and must not
+be reintroduced or invoked by the compatibility `release-parallel-check`; current
+verification uses `release-gates.v2.json` directly.
 
 ```bash
 npm run super-search:provider-interface
@@ -357,7 +354,7 @@ npm run codex-control:side-effect-scope
 npm run codex-control:all-pipelines
 npm run codex-control:empty-result-retry
 npm run codex-control:stream-idle-watchdog
-npm run codex-control:tool-call-sequence-repair
+node ./dist/scripts/codex-control-tool-output-continuity-audit-check.js
 npm run codex-control:keepalive-no-cot-leak
 npm run ultra-router:classification
 npm run ultra-router:auto-router
@@ -395,11 +392,9 @@ npm run agent:patch-transaction-journal
 npm run agent:patch-conflict-rebase
 npm run agent:strategy-to-patch-strict
 npm run agent:rollback-command
-npm run agent:native-cli-session-swarm
-npm run agent:native-cli-session-swarm-10
-npm run agent:native-cli-session-swarm-20
-npm run agent:no-subagent-scaling
-npm run agent:native-cli-session-proof
+# Historical native PID/process-swarm npm checks were removed in 6.1.1.
+# The retained compatibility gate ids now execute this official evidence gate:
+node ./dist/scripts/official-subagent-workflow-check.js
 npm run agent:worker-backend-router
 npm run agent:codex-child-overlap
 npm run agent:model-authored-patch-envelope
@@ -435,7 +430,9 @@ npm run official-docs:compat
 npm run release:readiness
 ```
 
-`release:readiness` writes current-version reports such as:
+The following 2.x report names and native-process artifacts are historical examples only; they do not satisfy the 6.1.1 official-subagent gate. Current 6.1.1 proof comes from the canonical subagent plan/events/parent-summary/evidence artifacts and the focused release gates listed at the top of this document.
+
+`release:readiness` historically wrote reports such as:
 
 - `.sneakoscope/reports/release-readiness-2.0.10.json`
 - `.sneakoscope/reports/release-readiness-2.0.10.md`
@@ -481,7 +478,7 @@ npm run release:readiness
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-The report covers version drift, release metadata freshness, stale `dist` prevention, native proof artifact structure, Codex App cockpit artifacts, official docs compatibility, docs truthfulness, Source Intelligence proof, runtime truth matrix, Codex 0.136 release compatibility, inherited Codex 0.135/0.134 runner deltas, optional real Codex patch smoke next action, managed proxy propagation, MCP modernization, MCP readOnly runtime scheduling, Appshots thread provenance, proof-safe parallel patches, transaction journaling, conflict rebase, rollback command proof, native CLI worker process scaling, no-subagent scaling, Fast mode propagation, real Codex parallel worker proof, Zellij spawn-on-demand worker-pane proof, and the current 1.21.8 release closure gaps.
+Those historical reports covered version drift, native-process proof, Zellij worker panes, and earlier patch-swarm closure. They remain archival evidence and are not represented as current 6.1.1 completion proof.
 
 ## Priority Closure
 
@@ -514,4 +511,8 @@ codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, a
 sks codex-lb setup --write-env-file --keychain
 ```
 
+For 6.1.1, a selected codex-lb must also report `X-App-Version >= 1.21.0-beta.3` from its origin `/health` endpoint. That release floor includes interrupted custom/apply-patch output synthesis plus reconnect-affinity hardening. `sks codex-lb status`, codex-lb doctor, deep/fix doctor, setup-before-write, and Codex launch preflight fail closed for an older or unverified proxy. The only bypass is the explicit `--allow-unverified-codex-lb-recovery` (or `SKS_ALLOW_UNVERIFIED_CODEX_LB_RECOVERY=1`) acknowledgement; SKS never silently changes providers. A `[No tool output found ...]` placeholder blocks same-thread continuation and requires a fresh task after proxy upgrade or an explicit `sks codex-lb use-oauth` switch.
+
 Privacy statement: secrets are redacted, Codex Chrome Extension screenshots, native Computer Use screenshots, SuperSearch raw/source artifacts, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.
+
+The 6.1.1 SKS menu bar also exposes the current Codex CLI version, an `⬆` update-needed indicator, `Update Codex CLI Now`, and `Run sks doctor --fix`. Read-only status uses `sks codex update-status --json` with a bounded latest-version cache. The mutation action calls the official `codex update` self-updater and fails closed for missing/debug/unsupported installations; it does not silently substitute a package-manager install.

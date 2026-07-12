@@ -118,6 +118,9 @@ function reflectionStopReason(state: any = {}, status: any = {}) {
 export async function projectGateStatus(root: any, state: any = {}) {
   const gates: any[] = [];
   const id = state?.mission_id || null;
+  const hasActiveGate = Boolean(id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate));
+  const activeGate: any = hasActiveGate ? await passedActiveGate(root, state) : null;
+  const activeGateNotApplicable = activeGate?.not_applicable === true;
   if (clarificationGatePending(state)) {
     gates.push({
       id: 'clarification-gate',
@@ -135,7 +138,7 @@ export async function projectGateStatus(root: any, state: any = {}) {
       source: id ? `.sneakoscope/missions/${id}/context7-evidence.jsonl` : '.sneakoscope/state/context7-evidence.jsonl'
     });
   }
-  if (state?.subagents_required) {
+  if (state?.subagents_required && !activeGateNotApplicable) {
     const evidence = await subagentEvidence(root, state);
     gates.push({
       id: 'official-subagent-evidence',
@@ -153,8 +156,8 @@ export async function projectGateStatus(root: any, state: any = {}) {
       source: `.sneakoscope/missions/${id}/agents/agent-proof-evidence.json`
     });
   }
-  if (id && state?.stop_gate && !['none', 'honest_mode', 'clarification-gate'].includes(state.stop_gate)) {
-    const active: any = await passedActiveGate(root, state);
+  if (hasActiveGate) {
+    const active: any = activeGate;
     gates.push({
       id: active.file || state.stop_gate,
       ok: active.ok,
@@ -223,9 +226,13 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (!opts.noQuestion && (stopGate === 'none' || stopGate === 'honest_mode') && !state?.context7_required && !state?.subagents_required && !completionProofRequired && !reflectionRequired) {
     return null;
   }
+  const activeGatePreview: any = state?.subagents_required
+    ? await passedActiveGate(root, state, jsonCache)
+    : null;
+  const activeGateNotApplicable = activeGatePreview?.not_applicable === true;
   const agentIntakeRequired = state?.mission_id && !stateUsesOfficialSubagentWorkflow(state) && routeRequiresAgentIntake(route, { task: state.prompt, force: state.forceAgents === true, noAgents: state.agents_required === false });
   const context7Promise = state?.context7_required ? hasContext7DocsEvidence(root, state) : Promise.resolve(true);
-  const subagentPromise = state?.subagents_required ? hasSubagentEvidence(root, state) : Promise.resolve(true);
+  const subagentPromise = state?.subagents_required && !activeGateNotApplicable ? hasSubagentEvidence(root, state) : Promise.resolve(true);
   const completionProofPromise = agentIntakeRequired
     ? exists(path.join(missionDir(root, state.mission_id), 'completion-proof.json'))
     : Promise.resolve(true);
@@ -241,7 +248,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
   if (state?.context7_required && !context7Ok) {
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires Context7 evidence before completion. Use Context7 resolve-library-id, then query-docs (or legacy get-library-docs), so SKS can record context7-evidence.jsonl.`, { gate: 'context7-evidence' });
   }
-  if (state?.subagents_required && !subagentOk) {
+  if (state?.subagents_required && !activeGateNotApplicable && !subagentOk) {
     const evidence = await subagentEvidence(root, state);
     return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} requires official Codex subagent evidence before completion. Record matched SubagentStart/SubagentStop events for every requested agent thread, wait for all threads, and provide the parent integration summary. Missing: ${(evidence.blockers || ['official_subagent_events_and_parent_summary']).join(', ')}.`, { gate: 'official-subagent-evidence', missing: evidence.blockers });
   }
@@ -275,9 +282,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
       if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
       const reflection = await reflectionGateStatus(root, state, jsonCache);
       if (!reflection.ok) {
-        const coverageRequiredRoute = routeById(routeFromState(state))?.coverage_required === true;
-        if (coverageRequiredRoute) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
-        await appendHonestModeNote(root, state, `reflection stale: ${(reflection.missing || []).join(', ')}`);
+        return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
       }
       return { continue: true };
     }
@@ -299,15 +304,18 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
       });
       if (stopCheck.action === 'allow_stop') {
         if (narutoFamily) {
-          const nativeGate = await readJson(path.join(missionDir(root, state.mission_id), 'naruto-gate.json'), null);
-          const officialMissing = nativeGate
-            ? [
-                ...missingRequiredGateFields('naruto-gate.json', state, nativeGate),
-                ...await missingNarutoArtifacts(root, state, nativeGate)
-              ]
-            : ['naruto-gate.json'];
-          if (officialMissing.length) {
-            return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot stop yet. Official subagent evidence and the parent integration summary are incomplete. Missing: ${officialMissing.join(', ')}. Legacy clone/process artifacts are accepted only when SKS_NARUTO_LEGACY_PROCESS_SWARM=1 or the mission carries an explicit legacy workflow marker.`, { gate: 'official-subagent-evidence', missing: officialMissing });
+          const activeGateNotApplicable = stopCheck.diagnostics.reason === 'gate_not_applicable';
+          if (!activeGateNotApplicable) {
+            const nativeGate = await readJson(path.join(missionDir(root, state.mission_id), 'naruto-gate.json'), null);
+            const officialMissing = nativeGate
+              ? [
+                  ...missingRequiredGateFields('naruto-gate.json', state, nativeGate),
+                  ...await missingNarutoArtifacts(root, state, nativeGate)
+                ]
+              : ['naruto-gate.json'];
+            if (officialMissing.length) {
+              return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot stop yet. Official subagent evidence and the parent integration summary are incomplete. Missing: ${officialMissing.join(', ')}. Legacy clone/process artifacts are accepted only when SKS_NARUTO_LEGACY_PROCESS_SWARM=1 or the mission carries an explicit legacy workflow marker.`, { gate: 'official-subagent-evidence', missing: officialMissing });
+            }
           }
           const coverage = await workOrderCoverageGateStatus(root, state);
           if (!coverage.ok) return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route has unresolved work-order-ledger items (neither verified nor honestly blocked): ${coverage.blockers.join(', ')}.`, { gate: 'work-order-ledger', missing: coverage.blockers });
@@ -317,7 +325,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
           }
           const reflection = await reflectionGateStatus(root, state, jsonCache);
           if (!reflection.ok) return complianceBlock(root, state, reflectionStopReason(state, reflection), { gate: 'reflection', missing: reflection.missing });
-          return { continue: true, systemMessage: `SKS: canonical stop-gate passed at ${stopCheck.gate_path}` };
+          return { continue: true, systemMessage: `SKS: canonical stop-gate ${activeGateNotApplicable ? 'was not applicable and independent gates passed' : 'passed'} at ${stopCheck.gate_path}` };
         }
       } else if (stopCheck.action === 'hard_blocked') {
         return { continue: true, systemMessage: stopCheck.feedback, action: 'hard_blocked', gate: stopCheck.gate_path };
@@ -497,9 +505,15 @@ async function passedActiveGate(root: any, state: any, jsonCache?: Map<string, P
     if (gate) {
       if (String(gate.status || '').trim().toLowerCase() === 'not_applicable') {
         const reason = String(gate.reason || '').trim();
-        return reason
-          ? { ok: true, file, not_applicable: true, reason }
-          : { ok: false, file, missing: ['reason'] };
+        const missing: string[] = [];
+        if (!reason) missing.push('reason');
+        if (gate.blockers !== undefined && !Array.isArray(gate.blockers)) missing.push('blockers_invalid');
+        else if (Array.isArray(gate.blockers) && gate.blockers.length > 0) missing.push('blockers');
+        if (gate.missing_fields !== undefined && !Array.isArray(gate.missing_fields)) missing.push('missing_fields_invalid');
+        else if (Array.isArray(gate.missing_fields) && gate.missing_fields.length > 0) missing.push('missing_fields');
+        return missing.length
+          ? { ok: false, file, missing }
+          : { ok: true, file, not_applicable: true, reason };
       }
       const missing = [
         ...missingRequiredGateFields(file, state, gate),
@@ -530,17 +544,6 @@ async function passedHardBlocker(root: any, state: any, jsonCache?: Map<string, 
       : { ok: true, file, hard_blocked: true, reason: String(blocker.reason || '').trim() };
   }
   return { ok: blocker.passed === true && hasReason && hasEvidence, file };
-}
-
-async function appendHonestModeNote(root: any, state: any = {}, message: string) {
-  if (!state?.mission_id) return;
-  const dir = missionDir(root, state.mission_id);
-  await appendJsonl(path.join(dir, 'honest-mode-notes.jsonl'), {
-    ts: nowIso(),
-    type: 'honest_mode_note',
-    route: state.route_command || state.route || state.mode || null,
-    message
-  });
 }
 
 function missingRequiredGateFields(file: any, state: any, gate: any = {}) {
@@ -788,6 +791,7 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
     'naruto-gate.json',
     'subagent-plan.json',
     'subagent-events.jsonl',
+    'subagent-parent-summary.json',
     'subagent-evidence.json',
     'naruto-summary.json'
   ];
@@ -795,10 +799,11 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   for (const file of required) {
     if (!(await exists(path.join(dir, file)))) missing.push(file);
   }
-  const [plan, evidence, summary] = await Promise.all([
+  const [plan, evidenceFile, summary, recomputedEvidence] = await Promise.all([
     readJson(path.join(dir, 'subagent-plan.json'), null),
     readJson(path.join(dir, 'subagent-evidence.json'), null),
-    readJson(path.join(dir, 'naruto-summary.json'), null)
+    readJson(path.join(dir, 'naruto-summary.json'), null),
+    subagentEvidence(root, state)
   ]);
   if (plan?.schema !== 'sks.subagent-plan.v1') missing.push('subagent-plan.json:schema');
   if (plan?.workflow !== 'official_codex_subagent') missing.push('subagent-plan.json:workflow');
@@ -807,12 +812,13 @@ async function missingNarutoArtifacts(root: any, state: any = {}, gate: any = {}
   if (Number(plan?.max_depth || 0) !== 1) missing.push('subagent-plan.json:max_depth');
   if (!String(plan?.delegation_prompt || '').trim()) missing.push('subagent-plan.json:delegation_prompt');
   if (plan?.parent_model_match === false) missing.push('subagent-plan.json:parent_model_match');
-  if (evidence?.schema !== 'sks.subagent-evidence.v1') missing.push('subagent-evidence.json:schema');
-  if (evidence?.workflow !== 'official_codex_subagent') missing.push('subagent-evidence.json:workflow');
-  if (evidence?.ok !== true) missing.push(...(Array.isArray(evidence?.blockers) && evidence.blockers.length ? evidence.blockers.map((item: any) => `subagent-evidence.json:${String(item)}`) : ['subagent-evidence.json:ok']));
-  if (evidence?.parent_summary_present !== true) missing.push('subagent-evidence.json:parent_summary_present');
-  if (Number(evidence?.failed_threads || 0) !== 0) missing.push('subagent-evidence.json:failed_threads');
-  if (Number(evidence?.completed_threads || 0) < Number(evidence?.requested_subagents || plan?.requested_subagents || 0)) missing.push('subagent-evidence.json:completed_threads');
+  if (evidenceFile?.schema !== 'sks.subagent-evidence.v1') missing.push('subagent-evidence.json:schema');
+  if (evidenceFile?.workflow !== 'official_codex_subagent') missing.push('subagent-evidence.json:workflow');
+  if (recomputedEvidence?.ok !== true) missing.push(...(Array.isArray(recomputedEvidence?.blockers) && recomputedEvidence.blockers.length ? recomputedEvidence.blockers.map((item: any) => `subagent-evidence.json:${String(item)}`) : ['subagent-evidence.json:ok']));
+  if (recomputedEvidence?.parent_summary_present !== true || recomputedEvidence?.parent_summary_trustworthy !== true) missing.push('subagent-evidence.json:parent_summary_trustworthy');
+  if (Number(recomputedEvidence?.requested_subagents || 0) !== Number(plan?.requested_subagents || 0)) missing.push('subagent-evidence.json:requested_subagents');
+  if (Number(recomputedEvidence?.failed_threads || 0) !== 0) missing.push('subagent-evidence.json:failed_threads');
+  if (Number(recomputedEvidence?.completed_threads || 0) < Number(plan?.requested_subagents || 0)) missing.push('subagent-evidence.json:completed_threads');
   if (summary?.schema !== 'sks.naruto-subagent-workflow.v1') missing.push('naruto-summary.json:schema');
   if (summary?.workflow !== 'official_codex_subagent') missing.push('naruto-summary.json:workflow');
   if (summary?.ok !== true || summary?.status !== 'completed') missing.push('naruto-summary.json:completed');

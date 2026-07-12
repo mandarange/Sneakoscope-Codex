@@ -9,6 +9,7 @@
 - Make `$Naruto` a thin facade over the Codex official subagent workflow: Codex App/Desktop turns return delegation context to the current parent, while standalone `sks naruto run` launches at most one Sol Max `codex exec` parent.
 - Route clear bounded subagent work to GPT-5.6 Luna Max and reasoning-sensitive UI, review, debugging, planning, architecture, integration, security, database, and release work to GPT-5.6 Sol Max; automatic Terra selection is removed from the Naruto path.
 - Replace clone/process terminology with canonical parent, subagent, thread, wave, and official event evidence while retaining `--clones`, `workers`, and the legacy process runtime as explicit one-release compatibility surfaces.
+- Show the installed Codex CLI version in the SKS menu bar, mark available CLI updates with an `⬆` indicator, and add one-click official `codex update` plus `sks doctor --fix` actions.
 
 ### Fixed
 
@@ -17,6 +18,10 @@
 - Treat `SubagentStop` as lifecycle evidence rather than success evidence. Naruto completion now requires a trustworthy `sks.subagent-parent-summary.v1` object with one unambiguous outcome per stopped thread; missing, prose-only, ambiguous, blocked, or failed outcomes fail closed.
 - Make Naruto CLI parsing fail closed for empty tasks, malformed or missing `--agents`/`--max-threads` values, and every legacy backend/scheduler/pool/model flag while accepting both `--key value` and `--key=value`; App delegation preparation reports `ok: false` and cannot be mistaken for completion.
 - Clear stale light-turn receipts on every later prompt, bind receipts to the current turn, resume active continuations directly, keep greeting fast paths warning-free, and recognize `$Work` only as an explicit dollar command rather than ordinary prose such as “work on …”.
+- Block structurally ambiguous same-thread continuation after a missing custom tool output, require selected codex-lb deployments to report `X-App-Version >= 1.21.0-beta.3` before setup/doctor/launch, and replace the post-run fake tool-result repair with a fail-closed continuity audit.
+- Treat the exact missing-tool-output API error as fatal before Reliability Shield retries, preventing ambiguous mutation replay, and make Doctor fail closed when codex-lb recovery status cannot be inspected.
+- Preserve committed implementation changes in `--changed-since auto` affected selection by diffing from the tracked-upstream merge base, and map Doctor, hook, command, preflight, menu, and recovery surfaces to their focused release gates.
+- Keep `not_applicable` scoped to the active route gate even when subagents were originally required, preserve independent proof/reflection/work-order checks, and keep missionless Computer Use/Wiki fast lanes out of generic overlay materialization.
 
 ### Performance
 

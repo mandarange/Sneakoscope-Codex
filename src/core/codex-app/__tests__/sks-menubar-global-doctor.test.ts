@@ -1,0 +1,133 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { executeDoctorGlobalOnlyFix, run as doctorRun } from '../../../commands/doctor.js';
+
+test('menu global-only doctor preserves global skills and never runs project reconciliation', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-'));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-project-'));
+  const userSkill = path.join(home, '.agents', 'skills', 'user-owned-skill', 'SKILL.md');
+  let menuRoot: string | null = null;
+  try {
+    await fsp.mkdir(path.dirname(userSkill), { recursive: true });
+    await fsp.writeFile(userSkill, '---\nname: user-owned-skill\n---\n\nKeep me.\n');
+    const result: any = await executeDoctorGlobalOnlyFix(
+      ['--fix', '--global-only', '--json'],
+      root,
+      {
+        home,
+        ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+        installSksMenuBarImpl: async (opts: any) => {
+          menuRoot = opts.root;
+          return { schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] };
+        },
+        codexLbStatusImpl: async () => ({ selected: false, provider_ready: true, tool_output_recovery: { ok: true, status: 'not_selected', blockers: [], operator_actions: [] } })
+      }
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.global_only, true);
+    assert.equal(result.no_project_writes_performed, true);
+    assert.equal(result.root, root);
+    assert.equal(menuRoot, home);
+    assert.equal(result.skills.global.scope, 'global');
+    assert.equal(result.skills.project.skipped, true);
+    assert.ok(result.project_phases_skipped.includes('project_skills_reconcile'));
+    assert.equal(await fsp.readFile(userSkill, 'utf8').then((text) => /Keep me\./.test(text)), true);
+    const installed = await fsp.readdir(path.join(home, '.agents', 'skills'));
+    assert.ok(installed.length > 1, 'official global skills should remain installed after the menu doctor flow');
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('menu global-only doctor fails closed when codex-lb recovery status cannot be inspected', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-probe-failure-'));
+  try {
+    const result: any = await executeDoctorGlobalOnlyFix(
+      ['--fix', '--global-only', '--json'],
+      home,
+      {
+        home,
+        reconcileSkillsImpl: async () => ({
+          schema: 'sks.skill-reconcile.v1',
+          scope: 'global',
+          core_skill_integrity: { ok: true }
+        }),
+        ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+        installSksMenuBarImpl: async () => ({ schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] }),
+        codexLbStatusImpl: async () => { throw new Error('fixture recovery probe unavailable'); }
+      }
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.codex_lb.recovery_ok, false);
+    assert.equal(result.codex_lb.provider_status.recovery_probe_failed, true);
+    assert.ok(result.blockers.includes('codex_lb_tool_output_recovery_status_probe_failed'));
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('menu global-only doctor fails closed when a required recovery probe returns no status', async () => {
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-null-probe-'));
+  try {
+    const result: any = await executeDoctorGlobalOnlyFix(
+      ['--fix', '--global-only', '--json'],
+      home,
+      {
+        home,
+        reconcileSkillsImpl: async () => ({ schema: 'sks.skill-reconcile.v1', scope: 'global', core_skill_integrity: { ok: true } }),
+        ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+        installSksMenuBarImpl: async () => ({ schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] }),
+        codexLbStatusImpl: async () => undefined
+      }
+    );
+    assert.equal(result.ok, false);
+    assert.equal(result.codex_lb.recovery_ok, false);
+    assert.ok(result.blockers.includes('codex_lb_tool_output_recovery_unverified'));
+  } finally {
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('global-only doctor wrapper writes guard evidence under HOME and not the project', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-wrapper-root-'));
+  const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-global-doctor-wrapper-home-'));
+  const oldCwd = process.cwd();
+  const oldHome = process.env.HOME;
+  const oldExitCode = process.exitCode;
+  const oldLog = console.log;
+  const oldError = console.error;
+  try {
+    process.chdir(root);
+    process.env.HOME = home;
+    process.exitCode = undefined;
+    console.log = () => undefined;
+    console.error = () => undefined;
+    const result: any = await doctorRun('doctor', ['--fix', '--global-only', '--machine-only'], {
+      home,
+      reconcileSkillsImpl: async () => ({ schema: 'sks.skill-reconcile.v1', scope: 'global', core_skill_integrity: { ok: true } }),
+      ensureGlobalCodexFastModeDuringInstallImpl: async () => ({ status: 'current', ok: true }),
+      installSksMenuBarImpl: async () => ({ schema: 'sks.codex-app-sks-menubar.v1', ok: true, status: 'installed_launch_skipped', blockers: [], warnings: [] }),
+      codexLbStatusImpl: async () => ({ selected: false, provider_ready: true, tool_output_recovery: { ok: true, status: 'not_selected', blockers: [], operator_actions: [] } })
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.no_project_writes_performed, true);
+    await fsp.access(path.join(home, '.sneakoscope', 'reports', 'secret-preservation-guard.json'));
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'reports', 'secret-preservation-guard.json')));
+  } finally {
+    process.chdir(oldCwd);
+    if (oldHome === undefined) delete process.env.HOME;
+    else process.env.HOME = oldHome;
+    process.exitCode = oldExitCode;
+    console.log = oldLog;
+    console.error = oldError;
+    await fsp.rm(root, { recursive: true, force: true });
+    await fsp.rm(home, { recursive: true, force: true });
+  }
+});

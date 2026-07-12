@@ -21,6 +21,10 @@ test('task profiles keep greetings and answers off execution routes', () => {
 test('task profiles distinguish tiny, bounded, parallel, and high-risk work', () => {
   assert.equal(classifyTaskProfile('Fix the typo in README'), 'tiny-change')
   assert.equal(classifyTaskProfile('Implement the route parser'), 'bounded-work')
+  assert.equal(classifyTaskProfile('UI implementation 해줘'), 'bounded-work')
+  assert.equal(classifyTaskProfile('UI 버그 고치고 리뷰해줘'), 'bounded-work')
+  assert.equal(classifyTaskProfile('parallel implementation'), 'parallel-write')
+  assert.equal(classifyTaskProfile('이 문제는 이번 버전에서 반드시 해결해야해'), 'bounded-work')
   assert.equal(classifyTaskProfile('Audit all files in parallel'), 'parallel-read')
   assert.equal(classifyTaskProfile('Edit multiple files in parallel'), 'parallel-write')
   assert.equal(classifyTaskProfile('Fix the database migration'), 'high-risk')

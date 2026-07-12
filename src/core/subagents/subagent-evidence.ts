@@ -7,6 +7,7 @@ export const SUBAGENT_EVENT_SCHEMA = 'sks.subagent-event.v1'
 export const SUBAGENT_PARENT_SUMMARY_SCHEMA = 'sks.subagent-parent-summary.v1'
 export const SUBAGENT_EVIDENCE_FILENAME = 'subagent-evidence.json'
 export const SUBAGENT_EVENT_LOG_FILENAME = 'subagent-events.jsonl'
+export const SUBAGENT_PARENT_SUMMARY_FILENAME = 'subagent-parent-summary.json'
 
 export type SubagentEventName = 'SubagentStart' | 'SubagentStop'
 
@@ -66,6 +67,7 @@ export interface BuildSubagentEvidenceInput {
   parentSummaryPresent?: boolean
   workflowStatus?: string | null
   preparationOnly?: boolean
+  additionalBlockers?: readonly unknown[]
 }
 
 export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unknown): NormalizedSubagentEvent | null {
@@ -223,8 +225,13 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   if (!parentSummaryPresent) blockers.push('parent_summary_missing')
   else if (!parentSummary.trustworthy) blockers.push(...parentSummary.blockers)
   if (parentSummary.status === 'failed') blockers.push('parent_summary_failed')
+  for (const blocker of input.additionalBlockers || []) {
+    const normalized = String(blocker || '').trim()
+    if (normalized) blockers.push(normalized)
+  }
 
-  const ok = blockers.length === 0
+  const uniqueBlockers = uniqueStrings(blockers)
+  const ok = uniqueBlockers.length === 0
   const status: SubagentEvidence['status'] = preparationOnly
     ? 'preparation_only'
     : ok
@@ -253,7 +260,7 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     preparation_only: preparationOnly,
     status,
     ok,
-    blockers
+    blockers: uniqueBlockers
   }
 }
 
@@ -295,6 +302,34 @@ export async function writeSubagentEvidence(
   return evidence
 }
 
+export async function persistOrReuseTrustworthySubagentParentSummary(
+  artifactDir: string,
+  value: unknown,
+  opts: { workflowStatus?: string | null } = {}
+): Promise<unknown> {
+  const incoming = normalizeSubagentParentSummary(value)
+  const file = path.join(artifactDir, SUBAGENT_PARENT_SUMMARY_FILENAME)
+  const workflowFailed = isFailureWorkflowStatus(opts.workflowStatus)
+  if (incoming.trustworthy && incoming.status === 'failed' && incoming.raw) {
+    await writeJsonAtomic(file, incoming.raw)
+    return incoming.raw
+  }
+  if (workflowFailed || incoming.status === 'failed' || parentResultExplicitlyFailed(value)) {
+    await fsp.rm(file, { force: true }).catch(() => undefined)
+    if (workflowFailed && incoming.trustworthy && incoming.status === 'completed') return null
+    return value
+  }
+  if (incoming.trustworthy && incoming.raw) {
+    await writeJsonAtomic(file, incoming.raw)
+    return incoming.raw
+  }
+  const persisted = await fsp.readFile(file, 'utf8')
+    .then((text) => JSON.parse(text))
+    .catch(() => null)
+  const previous = normalizeSubagentParentSummary(persisted)
+  return previous.trustworthy && previous.raw ? previous.raw : value
+}
+
 export const normalizeSubagentEvidence = buildSubagentEvidence
 
 function normalizeEventName(value: unknown): SubagentEventName | null {
@@ -319,7 +354,7 @@ function stopFailed(row: Record<string, unknown>): boolean {
     || row.failed === true
     || Boolean(row.error)
     || /^(failed|failure|error|blocked|cancelled|canceled|interrupted|timed[_ -]?out)$/.test(status)
-    || /\b(failed|failure|error|blocked|cancelled|canceled|timed\s*out|could\s+not|unable\s+to|not\s+completed|incomplete)\b|실패|차단|오류|에러|완료하지\s*못|미완료/i.test(resultText)
+    || containsUnambiguousFailureText(resultText)
 }
 
 export function normalizeSubagentParentSummary(value: unknown): {
@@ -349,13 +384,33 @@ export function normalizeSubagentParentSummary(value: unknown): {
   }
 
   const summary = String(parsed.summary || '').trim()
-  if (!summary) blockers.push('parent_summary_text_missing')
+  if (typeof parsed.summary !== 'string' || !summary) blockers.push('parent_summary_text_missing')
+  const topLevelKeys = new Set(['schema', 'status', 'summary', 'thread_outcomes', 'changed_files', 'verification', 'blockers'])
+  for (const key of Object.keys(parsed as any)) {
+    if (!topLevelKeys.has(key)) blockers.push(`parent_summary_unknown_field:${key}`)
+  }
+  if (parsed.changed_files !== undefined && (!Array.isArray(parsed.changed_files) || parsed.changed_files.some((item) => typeof item !== 'string'))) {
+    blockers.push('parent_summary_changed_files_invalid')
+  }
+  if (parsed.verification !== undefined && !Array.isArray(parsed.verification)) blockers.push('parent_summary_verification_invalid')
+  if (parsed.blockers !== undefined && (!Array.isArray(parsed.blockers) || parsed.blockers.some((item) => typeof item !== 'string'))) {
+    blockers.push('parent_summary_blockers_invalid')
+  }
   if (!Array.isArray(parsed.thread_outcomes) || parsed.thread_outcomes.length === 0) {
     blockers.push('parent_thread_outcomes_missing')
   }
   for (const row of Array.isArray(parsed.thread_outcomes) ? parsed.thread_outcomes : []) {
+    if (!isRecord(row)) {
+      blockers.push('parent_thread_outcome_invalid')
+      continue
+    }
+    const rowKeys = new Set(['thread_id', 'status', 'summary'])
+    for (const key of Object.keys(row)) {
+      if (!rowKeys.has(key)) blockers.push(`parent_thread_outcome_unknown_field:${key}`)
+    }
     const threadId = firstText(row?.thread_id)
-    const status = normalizeTerminalOutcome(row?.status)
+    const status = strictTerminalOutcome(row?.status)
+    const rowSummary = typeof row?.summary === 'string' ? row.summary.trim() : ''
     if (!threadId) {
       blockers.push('parent_thread_outcome_thread_id_missing')
       continue
@@ -366,10 +421,18 @@ export function normalizeSubagentParentSummary(value: unknown): {
     }
     threadOutcomes.set(threadId, status)
     if (status === 'ambiguous') blockers.push(`parent_thread_outcome_ambiguous:${threadId}`)
+    if (!rowSummary) blockers.push(`parent_thread_outcome_summary_missing:${threadId}`)
+    if (status === 'completed' && containsUnambiguousFailureText(rowSummary)) {
+      blockers.push(`parent_thread_outcome_text_contradiction:${threadId}`)
+    }
   }
 
-  const status = normalizeTerminalOutcome(parsed.status)
+  const status = strictTerminalOutcome(parsed.status)
   if (status === 'ambiguous') blockers.push('parent_summary_status_ambiguous')
+  if (status === 'completed' && containsUnambiguousFailureText(summary)) blockers.push('parent_summary_text_contradiction')
+  if (status === 'completed' && Array.isArray(parsed.blockers) && parsed.blockers.length > 0) {
+    blockers.push('parent_summary_completed_with_blockers')
+  }
   return {
     present: true,
     trustworthy: blockers.length === 0,
@@ -384,7 +447,9 @@ export function normalizeSubagentParentSummary(value: unknown): {
 function parseStructuredParentSummary(value: unknown): StructuredSubagentParentSummary | null {
   if (isRecord(value)) return validStructuredParentSummary(value)
   if (typeof value !== 'string' || !value.trim()) return null
-  const candidates = [value.trim(), ...jsonFenceBodies(value)]
+  const trimmed = value.trim()
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed)?.[1]?.trim()
+  const candidates = [trimmed, ...(fenced ? [fenced] : [])]
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate)
@@ -401,19 +466,55 @@ function validStructuredParentSummary(value: unknown): StructuredSubagentParentS
   return value as unknown as StructuredSubagentParentSummary
 }
 
-function jsonFenceBodies(value: string): string[] {
-  const out: string[] = []
-  for (const match of value.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
-    if (match[1]?.trim()) out.push(match[1].trim())
-  }
-  return out.reverse()
+function strictTerminalOutcome(value: unknown): 'completed' | 'failed' | 'ambiguous' {
+  const status = String(value || '').trim().toLowerCase()
+  if (status === 'completed') return 'completed'
+  if (status === 'blocked' || status === 'failed') return 'failed'
+  return 'ambiguous'
 }
 
-function normalizeTerminalOutcome(value: unknown): 'completed' | 'failed' | 'ambiguous' {
-  const status = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (/^(completed|complete|success|succeeded|passed|ok)$/.test(status)) return 'completed'
-  if (/^(blocked|failed|failure|error|cancelled|canceled|interrupted|timed_out|incomplete)$/.test(status)) return 'failed'
-  return 'ambiguous'
+function containsUnambiguousFailureText(value: unknown): boolean {
+  const source = String(value || '').trim()
+  if (!source) return false
+  const scrubbed = source
+    .replace(/\b(?:no|without)\s+(?:errors?|failures?|blockers?|issues?)\b/gi, ' ')
+    .replace(/\bnot\s+blocked\b/gi, ' ')
+    .replace(/\b(?:did\s+not|didn't)\s+fail\b/gi, ' ')
+    .replace(/\b(?:failure|error|blocked)[- ]path\b/gi, ' ')
+    .replace(/\b(?:could\s+not|unable\s+to)\s+(?:reproduce|find|detect|observe|identify)\b[^.!?\n]*/gi, ' ')
+    .replace(/(?:실패한|차단된|오류(?:가|는)?\s*발생한?)\s*(?:테스트|검사|항목|문제)(?:가|이|는|은)?\s*(?:없음|없다|없습니다)/g, ' ')
+    .replace(/(?:실패|오류|에러|차단|문제)(?:가|이|는|은)?\s*(?:없음|없다|없습니다|없이)/g, ' ')
+    .replace(/차단되지\s*않(?:음|았다|았습니다)/g, ' ')
+  return /^(?:failed|failure|error|blocked|cancelled|canceled|interrupted|timed\s*out|incomplete)\b/i.test(scrubbed)
+    || /\b(?:slice|thread|task|work|review|integration|execution|run|job|agent|subagent)\b[^.!?\n]{0,32}\b(?:failed|blocked|cancelled|canceled|interrupted|timed\s*out|not\s+completed|incomplete)\b/i.test(scrubbed)
+    || /\b(?:could\s+not|unable\s+to|failed\s+to)\s+(?:complete|finish|deliver|execute|run|continue|return)\b/i.test(scrubbed)
+    || /(?:작업|슬라이스|스레드|검수|통합|실행|에이전트|서브\s*에이전트)[^.!?\n]{0,20}(?:실패|차단|중단|미완료)/i.test(scrubbed)
+    || /(?:완료|수행|실행|진행|통합)하지\s*못|완료되지\s*않|미완료/i.test(scrubbed)
+}
+
+function parentResultExplicitlyFailed(value: unknown): boolean {
+  if (typeof value === 'string') return containsUnambiguousFailureText(value)
+  if (!isRecord(value)) return false
+  const status = firstText(value.status, value.outcome, value.result, value.state).toLowerCase()
+  const resultText = firstText(
+    value.summary,
+    value.message,
+    value.last_assistant_message,
+    value.lastAssistantMessage,
+    value.result_text,
+    value.resultText
+  )
+  return value.ok === false
+    || value.success === false
+    || value.failed === true
+    || Boolean(value.error)
+    || (Array.isArray(value.blockers) && value.blockers.length > 0)
+    || /^(failed|failure|error|blocked|cancelled|canceled|interrupted|timed[_ -]?out|incomplete)$/.test(status)
+    || containsUnambiguousFailureText(resultText)
+}
+
+function isFailureWorkflowStatus(value: unknown): boolean {
+  return /^(parent_failed|failed|blocked|incomplete|cancelled|canceled|timed[_ -]?out)$/i.test(String(value || '').trim())
 }
 
 function uniqueStrings(values: string[]): string[] {

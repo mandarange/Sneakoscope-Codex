@@ -118,7 +118,10 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
     const migrationGate = await ensureCurrentMigrationBeforeCommand({
       command,
       args: rest,
-      skipMigrationGate: entry.skipMigrationGate === true || entry.readonly === true || safeActiveRouteVisualQuery(command, rest)
+      skipMigrationGate: entry.skipMigrationGate === true
+        || entry.readonly === true
+        || safeReadOnlySubcommand(command, rest)
+        || safeActiveRouteVisualQuery(command, rest)
     });
     if (!migrationGate.ok) {
       console.error('SKS project migration blocked.');
@@ -209,7 +212,7 @@ function printHandledCommandBlock(result: any) {
 }
 
 export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly string[]) {
-  const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
+  const sub = String(args[0] || '').toLowerCase();
   if (command === 'naruto' && ['status', 'subagents', 'workers', 'proof'].includes(sub)) {
     return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
   }

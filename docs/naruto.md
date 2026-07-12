@@ -81,6 +81,14 @@ same-session mission.
 While a Naruto mission is active, its read-only `status`, `subagents`,
 deprecated `workers`, and `proof` commands remain available.
 
+If the Codex App reports `[No tool output found for custom tool call ...]`, the
+current conversation may no longer satisfy the Responses call/output pairing
+contract. SKS blocks same-thread continuation rather than treating preparation
+context or a post-hoc stub as recovery. The operator must upgrade a selected
+codex-lb to `1.21.0-beta.3` or later (or explicitly switch with
+`sks codex-lb use-oauth`), inspect possible side effects, and continue this
+mission from a fresh Codex task.
+
 ## Completion Evidence
 
 Preparation is not completion. A run passes only when all of the following are
@@ -103,6 +111,7 @@ Canonical mission artifacts are:
 
 - `subagent-plan.json`
 - `subagent-events.jsonl`
+- `subagent-parent-summary.json`
 - `subagent-evidence.json`
 - `naruto-summary.json`
 - `naruto-gate.json`

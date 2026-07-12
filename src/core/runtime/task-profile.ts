@@ -31,7 +31,7 @@ const PARALLEL_CUE_RE =
   /\b(parallel|subagents?|one agent per|fan out|multiple files|audit all|all files|independent slices?|naruto|shadow\s*clone|kagebunshin|swarm)\b|병렬|하위\s*에이전트|서브\s*에이전트|여러\s*파일|모든\s*파일|전체\s*검토|나루토|분담/i
 
 const CHANGE_RE =
-  /\b(fix|implement|change|edit|add|remove|delete|drop|modify|refactor|build|create|write|update|rename|rewrite|patch|apply|execute|publish|release|deploy|migrate)\b|고쳐|수정|변경|추가|삭제|구현|리팩터|작성|생성|만들어|업데이트|적용|실행|이름\s*변경|배포|출시|마이그레이션/i
+  /\b(fix|implement|implementation|change|edit|add|remove|delete|drop|modify|refactor|build|create|write|update|rename|rewrite|patch|apply|execute|repair|resolve|solve|publish|release|deploy|migrate)\b|\bwork\s+on\b|고쳐|고치|수정|변경|추가|삭제|구현|리팩터|작성|생성|만들어|업데이트|적용|실행|해결|이름\s*변경|배포|출시|마이그레이션/i
 
 const TINY_CHANGE_RE =
   /\b(typo|copy|wording|label|spacing|whitespace|punctuation|spelling|one[-\s]?line|single[-\s]?(?:line|word)|rename only)\b|오타|문구|라벨|띄어쓰기|공백|맞춤법|구두점|한\s*줄|단어\s*하나|이름만\s*변경/i

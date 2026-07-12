@@ -15,6 +15,7 @@ export interface OfficialSubagentWorkflowInput {
   requestedSubagents: number
   maxThreads: number
   appSession: boolean
+  missionId?: string | null
   sessionKey?: string | null
   codexBin?: string | null
   timeoutMs?: number | null
@@ -92,7 +93,8 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       env: {
         ...(input.env || {}),
         SKS_NARUTO_STANDALONE_CLI: '0',
-        SKS_NARUTO_PARENT_LAUNCH: '1'
+        SKS_NARUTO_PARENT_LAUNCH: '1',
+        ...(input.missionId ? { SKS_NARUTO_PARENT_MISSION_ID: input.missionId } : {})
       }
     })
   } catch (error: any) {

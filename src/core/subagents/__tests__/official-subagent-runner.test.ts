@@ -49,3 +49,21 @@ test('Codex thread environment selects the in-app path unless standalone is expl
   assert.equal(codexAppSessionKey({ SKS_NARUTO_APP_SESSION: '1' }), null)
   assert.equal(codexAppSessionKey({ CODEX_THREAD_ID: 'thread', SKS_NARUTO_STANDALONE_CLI: '1' }), null)
 })
+
+test('standalone parent launch exports the owning mission id to child hooks', async () => {
+  let childEnv: NodeJS.ProcessEnv | undefined
+  await runOfficialSubagentWorkflow({
+    root: process.cwd(),
+    prompt: 'delegate and wait',
+    requestedSubagents: 2,
+    maxThreads: 2,
+    appSession: false,
+    missionId: 'M-parent-owner',
+    runProcessImpl: async (_command, _args, opts: any) => {
+      childEnv = opts.env
+      return { code: 1, stdout: '', stderr: 'fixture stop', stdoutBytes: 0, stderrBytes: 12, truncated: false, timedOut: false }
+    }
+  })
+  assert.equal(childEnv?.SKS_NARUTO_PARENT_LAUNCH, '1')
+  assert.equal(childEnv?.SKS_NARUTO_PARENT_MISSION_ID, 'M-parent-owner')
+})

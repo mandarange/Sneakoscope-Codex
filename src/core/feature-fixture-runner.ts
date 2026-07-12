@@ -21,7 +21,10 @@ export function runFeatureFixture(feature: any, {
   const latestAfter = execution?.mission_id || latestMissionId(projectRoot) || latestBefore;
   const shouldValidateArtifacts = validateArtifacts && (fixture.kind === 'execute_and_validate_artifacts' || execution);
   const artifacts = shouldValidateArtifacts
-    ? expected.map((artifact: any) => inspectExpectedArtifact(projectRoot, tempRoot, artifact, { latestMissionId: latestAfter }))
+    ? expected.map((artifact: any) => inspectExpectedArtifact(projectRoot, tempRoot, artifact, {
+        latestMissionId: latestAfter,
+        expectedFields: fixture.expected_artifact_fields?.[artifact.path]
+      }))
     : expected.map((artifact: any) => ({ path: artifact.path, requested_path: artifact.path, schema: artifact.schema || inferSchema(artifact.path), exists: null, schema_ok: null, content_ok: null, skipped: 'static_contract' }));
   const artifactFailures = shouldValidateArtifacts
     ? artifacts.filter((artifact: any) => !artifact.exists || !artifact.schema_ok || !artifact.content_ok).map((artifact: any) => `${feature.id}:${artifact.path}:${artifact.failure || 'artifact_invalid'}`)
@@ -73,15 +76,24 @@ function executeCommand(sourceRoot: any, projectRoot: any, spec: any, fixture: a
   const command = normalized.command || normalized.args || [];
   const result: any = command.length ? spawnSks(sourceRoot, projectRoot, command, fixtureEnv) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
   const missionId = result.mission_id || [...setupResults].reverse().find((row: any) => row.mission_id)?.mission_id || null;
+  const expectationFailures = expectedFieldFailures('stdout', result.stdout_json, fixture.expected_stdout_fields);
   return {
     args: command,
     setup: setupResults,
     mission_id: missionId,
     status: result.status,
     signal: result.signal || null,
-    ok: setupResults.every((row: any) => row.ok) && result.ok,
+    ok: setupResults.every((row: any) => row.ok) && result.ok && expectationFailures.length === 0,
     stdout_bytes: result.stdout_bytes,
-    stderr_bytes: result.stderr_bytes
+    stderr_bytes: result.stderr_bytes,
+    completion_semantics: fixture.completion_semantics || null,
+    stdout_contract: {
+      expected_fields: fixture.expected_stdout_fields || null,
+      parsed: Boolean(result.stdout_json),
+      ok: expectationFailures.length === 0,
+      failures: expectationFailures
+    },
+    expectation_failures: expectationFailures
   };
 }
 
@@ -104,6 +116,7 @@ function spawnSks(sourceRoot: any, projectRoot: any, args: any = [], fixtureEnv:
     timeout_ms: FEATURE_FIXTURE_COMMAND_TIMEOUT_MS,
     error_code: (result.error as any)?.code || null,
     mission_id: parsed?.mission_id || parsed?.id || parsed?.proof?.mission_id || parsed?.completion_proof?.mission_id || null,
+    stdout_json: parsed,
     stdout_bytes: Buffer.byteLength(result.stdout || ''),
     stderr_bytes: Buffer.byteLength(result.stderr || ''),
     stderr_tail: String(result.stderr || '').slice(-600)
@@ -112,6 +125,7 @@ function spawnSks(sourceRoot: any, projectRoot: any, args: any = [], fixtureEnv:
 
 function fixtureExecutionFailure(featureId: any, execution: any) {
   if (execution?.timed_out) return `${featureId}:command_timeout_${execution.timeout_ms || 'unknown'}`;
+  if (execution?.expectation_failures?.length) return `${featureId}:${execution.expectation_failures[0]}`;
   return `${featureId}:command_exit_${execution?.status}`;
 }
 
@@ -193,17 +207,29 @@ function inspectExpectedArtifact(root: any, tempRoot: any, artifact: any, ctx: a
   } catch {
     return { ...result, failure: 'json_parse' };
   }
-  if (schema === 'sks.completion-proof.v1') return { ...result, schema_ok: parsed.schema === schema, content_ok: ['verified', 'verified_partial', 'mock_only', 'blocked'].includes(parsed.status), status: parsed.status };
+  const fieldFailures = expectedFieldFailures(`artifact:${artifact.path}`, parsed, ctx.expectedFields);
+  if (schema === 'sks.completion-proof.v1') return { ...result, schema_ok: parsed.schema === schema, content_ok: ['verified', 'verified_partial', 'mock_only', 'blocked'].includes(parsed.status) && fieldFailures.length === 0, status: parsed.status, field_failures: fieldFailures };
   if (schema === 'sks.image-voxel-ledger.v1') {
     const anchorCount = Array.isArray(parsed.anchors) ? parsed.anchors.length : 0;
     const relationCount = Array.isArray(parsed.relations) ? parsed.relations.length : 0;
     const requireAnchors = artifact.require_anchors !== false;
     const requireRelations = artifact.require_relations === true;
-    return { ...result, schema_ok: parsed.schema === schema, content_ok: (!requireAnchors || anchorCount >= 1) && (!requireRelations || relationCount >= 1), anchor_count: anchorCount, relation_count: relationCount };
+    return { ...result, schema_ok: parsed.schema === schema, content_ok: (!requireAnchors || anchorCount >= 1) && (!requireRelations || relationCount >= 1) && fieldFailures.length === 0, anchor_count: anchorCount, relation_count: relationCount, field_failures: fieldFailures };
   }
-  if (schema === 'sks.visual-anchors.v1') return { ...result, schema_ok: parsed.schema === schema, content_ok: Array.isArray(parsed.anchors) && (artifact.require_anchors === false || parsed.anchors.length >= 1), anchor_count: parsed.anchors?.length || 0 };
-  if (schema === 'sks.fixture-artifact.v1') return { ...result, schema_ok: Boolean(parsed.schema || parsed.schema_version || Object.hasOwn(parsed, 'passed') || Object.hasOwn(parsed, 'ok')), content_ok: true };
-  return { ...result, schema_ok: schema ? parsed.schema === schema || parsed.schema_version != null : true, content_ok: true };
+  if (schema === 'sks.visual-anchors.v1') return { ...result, schema_ok: parsed.schema === schema, content_ok: Array.isArray(parsed.anchors) && (artifact.require_anchors === false || parsed.anchors.length >= 1) && fieldFailures.length === 0, anchor_count: parsed.anchors?.length || 0, field_failures: fieldFailures };
+  if (schema === 'sks.fixture-artifact.v1') return { ...result, schema_ok: Boolean(parsed.schema || parsed.schema_version || Object.hasOwn(parsed, 'passed') || Object.hasOwn(parsed, 'ok')), content_ok: fieldFailures.length === 0, field_failures: fieldFailures };
+  return { ...result, schema_ok: schema ? parsed.schema === schema || parsed.schema_version != null : true, content_ok: fieldFailures.length === 0, field_failures: fieldFailures };
+}
+
+function expectedFieldFailures(scope: string, actual: unknown, expected: unknown): string[] {
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)) return [];
+  if (!actual || typeof actual !== 'object' || Array.isArray(actual)) return [`${scope}:json_missing`];
+  const failures: string[] = [];
+  for (const [field, expectedValue] of Object.entries(expected as Record<string, unknown>)) {
+    const actualValue = field.split('.').reduce<any>((value, key) => value && typeof value === 'object' ? value[key] : undefined, actual);
+    if (JSON.stringify(actualValue) !== JSON.stringify(expectedValue)) failures.push(`${scope}:field_mismatch:${field}`);
+  }
+  return failures;
 }
 
 function normalizeExpectedArtifacts(items: any = []) {

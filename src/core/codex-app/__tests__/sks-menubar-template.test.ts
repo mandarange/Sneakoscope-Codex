@@ -207,6 +207,31 @@ test('SKS menu bar update badge prefers version comparison over a stale boolean 
   assert.match(body, /latest\.compare\(packageVersion, options: \.numeric\) == \.orderedDescending/);
 });
 
+test('SKS menu bar shows Codex CLI version, update indicator/action, and doctor fix action', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /codexCliVersionItem = NSMenuItem\(title: "Codex CLI: checking…"/);
+  assert.match(swift, /codexCliUpdateItem = add\(menu, "Update Codex CLI Now", #selector\(updateCodexCliNow\)\)/);
+  assert.match(swift, /add\(menu, "Run sks doctor --fix", #selector\(runDoctorFix\)\)/);
+  assert.match(swift, /runSksSilent\(args\)/);
+  assert.match(swift, /\["codex", "update-status", "--json"\]/);
+  assert.match(swift, /runSksBackground\(\["codex", "update", "--json"\], title: "Update Codex CLI Now"\)/);
+  assert.match(swift, /runSksBackground\(\["doctor", "--fix", "--global-only", "--json"\], title: "Run sks doctor --fix"\)/);
+  assert.match(swift, /MenuState\(title: "SKS ⬆", line: "SKS v\\\(packageVersion\) · Codex CLI/);
+  assert.match(swift, /self\.codexCliUpdateItem\.title = updateAvailable \? "Update Codex CLI Now  ⬆"/);
+});
+
+test('SKS menu bar actions run from global HOME scope instead of an arbitrary project', () => {
+  const script = actionScriptSource({ nodeBin: '/usr/bin/node', sksEntry: '/opt/sneakoscope/dist/bin/sks.js' });
+  const homeCd = script.indexOf('cd "$HOME" 2>/dev/null || true');
+  const migrationGate = script.indexOf('export SKS_UPDATE_MIGRATION_GATE_DISABLED=1');
+  const pinnedEntry = script.indexOf('run_node_entry "$SKS_ENTRY" "$@"');
+  const prependNodeBin = script.indexOf('export PATH="$node_bin_dir:$PATH"');
+  assert.ok(homeCd >= 0, 'menu actions must start from HOME');
+  assert.ok(migrationGate > homeCd, 'global menu actions must disable project migration repair');
+  assert.ok(prependNodeBin > migrationGate, 'resolved NVM/global Node bin must be available to Codex/npm child resolution');
+  assert.ok(pinnedEntry > migrationGate, 'scope must be established before any SKS action executes');
+});
+
 test('SKS menu bar action script prefers its pinned package entry over stale PATH/global copies', () => {
   const script = actionScriptSource({ nodeBin: '/usr/bin/node', sksEntry: '/opt/sneakoscope/dist/bin/sks.js' });
   const pinned = script.indexOf('run_node_entry "$SKS_ENTRY" "$@"');

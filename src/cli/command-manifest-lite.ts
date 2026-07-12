@@ -35,7 +35,7 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'wizard', summary: 'Open setup wizard help', maturity: 'stable' },
   { name: 'usage', summary: 'Show focused usage topic', maturity: 'stable', readonly: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'quickstart', summary: 'Show quickstart flow', maturity: 'stable' },
-  { name: 'setup', summary: 'Initialize SKS state', maturity: 'stable' },
+  { name: 'setup', summary: 'Initialize SKS state', maturity: 'stable', skipMigrationGate: true },
   { name: 'bootstrap', summary: 'Initialize SKS project files', maturity: 'stable' },
   { name: 'init', summary: 'Initialize local control surface', maturity: 'stable' },
   { name: 'deps', summary: 'Check local dependencies', maturity: 'stable' },

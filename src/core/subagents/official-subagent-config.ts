@@ -1,7 +1,7 @@
 import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'smol-toml'
-import { ensureDir, exists, readText, sha256, writeTextAtomic } from '../fsx.js'
+import { ensureDir, exists, PACKAGE_VERSION, readText, sha256, writeTextAtomic } from '../fsx.js'
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
   managedOfficialSubagentRoleContent,
@@ -38,6 +38,11 @@ export interface OfficialSubagentConfigMergeOptions {
   defaultMaxThreads?: number
 }
 
+export interface OfficialSubagentConfigOwnershipProof {
+  owned: boolean
+  reasons: string[]
+}
+
 export interface OfficialSubagentAgentInstallResult {
   schema: 'sks.official-subagent-agent-install.v1'
   ok: boolean
@@ -71,6 +76,7 @@ export function mergeOfficialSubagentConfig(
   const inherited = parsedToml(opts.inheritedText || '')
   const inheritedAgents = objectValue(inherited?.agents)
   let next = source.trimEnd()
+  if (!next.trim()) next = '# SKS-MANAGED-CODEX-CONFIG'
   const targetMaxThreads = positiveInteger(opts.defaultMaxThreads) || DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS
   const currentMaxThreads = readTomlTableInteger(next, 'agents', 'max_threads')
 
@@ -180,11 +186,18 @@ export async function readInheritedOfficialSubagentConfigText(
   projectConfigPath: string,
   opts: { home?: string; codexHome?: string } = {}
 ): Promise<string> {
+  const globalConfigPath = resolveInheritedOfficialSubagentConfigPath(projectConfigPath, opts)
+  return globalConfigPath ? readText(globalConfigPath, '') : ''
+}
+
+export function resolveInheritedOfficialSubagentConfigPath(
+  projectConfigPath: string,
+  opts: { home?: string; codexHome?: string } = {}
+): string | null {
   const home = opts.home || process.env.HOME || os.homedir()
   const codexHome = opts.codexHome || process.env.CODEX_HOME || path.join(home, '.codex')
   const globalConfigPath = path.resolve(codexHome, 'config.toml')
-  if (globalConfigPath === path.resolve(projectConfigPath)) return ''
-  return readText(globalConfigPath, '')
+  return globalConfigPath === path.resolve(projectConfigPath) ? null : globalConfigPath
 }
 
 export async function installOfficialSubagentAgentConfigs(
@@ -279,6 +292,25 @@ export function manifestProvesSksGeneratedPath(manifest: unknown, relativePath: 
   return Array.isArray(files) && files.map((entry) => String(entry || '').replaceAll('\\', '/')).includes(relativePath.replaceAll('\\', '/'))
 }
 
+export function officialSubagentConfigOwnershipProof(input: {
+  text?: string
+  manifest?: unknown
+  migrationReceipt?: unknown
+} = {}): OfficialSubagentConfigOwnershipProof {
+  const text = String(input.text || '')
+  const reasons: string[] = []
+  if (manifestProvesSksGeneratedPath(input.manifest, '.codex/config.toml')) {
+    reasons.push('generated_file_inventory')
+  }
+  if (hasExactManagedConfigMarker(text)) reasons.push('managed_marker_or_hash')
+  if (migrationReceiptProvesManagedMaxThreads(input.migrationReceipt)) {
+    reasons.push('migration_receipt:agents.max_threads')
+  }
+  const legacyBlockCount = exactLegacyManagedAgentBlockCount(text)
+  if (legacyBlockCount >= 3) reasons.push(`exact_legacy_managed_blocks:${legacyBlockCount}`)
+  return { owned: reasons.length > 0, reasons: uniqueStrings(reasons) }
+}
+
 export function inspectOfficialSubagentToml(text: string = ''): { ok: boolean; error: string | null } {
   return inspectToml(text)
 }
@@ -353,6 +385,91 @@ function objectValue(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 }
 
+function hasExactManagedConfigMarker(text: string): boolean {
+  return /^(?:#\s*SKS-MANAGED-CODEX-CONFIG\b|#\s*SKS managed Codex config\b|#\s*sks_managed_(?:body_)?sha256\s*=\s*["'][a-f0-9]{64}["'])/mi.test(text)
+}
+
+function migrationReceiptProvesManagedMaxThreads(value: unknown): boolean {
+  const root = objectValue(value)
+  if (root.schema !== 'sks.project-migration-receipt.v2') return false
+  if (root.status !== 'current' || root.sks_version !== PACKAGE_VERSION) return false
+  if (typeof root.installation_epoch_sha256 !== 'string' || !root.installation_epoch_sha256.trim()) return false
+  if (!Array.isArray(root.blockers) || root.blockers.length > 0) return false
+  if (root.required_blockers !== undefined && (!Array.isArray(root.required_blockers) || root.required_blockers.length > 0)) return false
+  if (root.doctor !== undefined && root.doctor !== null && objectValue(root.doctor).ok !== true) return false
+  if (root.retention_cleanup !== undefined && root.retention_cleanup !== null && objectValue(root.retention_cleanup).ok === false) return false
+
+  const stages = [
+    ...(Array.isArray(root.update_stages) ? root.update_stages : []),
+    ...(Array.isArray(root.legacy_migration_stages) ? root.legacy_migration_stages : [])
+  ]
+  if (!stages.length || stages.some((stage) => migrationStageFailed(stage))) return false
+  return stages.some((stage) => migrationStageSucceeded(stage) && migrationStageProvesManagedMaxThreads(stage))
+}
+
+function migrationStageSucceeded(value: unknown): boolean {
+  const stage = objectValue(value)
+  if (stage.ok !== true) return false
+  const status = String(stage.status || '').trim()
+  return Boolean(status) && !/(?:fail|block|error|skip|pending|partial|cancel|timeout|unavailable|unknown)/i.test(status)
+}
+
+function migrationStageFailed(value: unknown): boolean {
+  const stage = objectValue(value)
+  const status = String(stage.status || '').trim()
+  return stage.ok === false || /(?:fail|block|error|cancel|timeout)/i.test(status)
+}
+
+function migrationStageProvesManagedMaxThreads(value: unknown): boolean {
+  const queue: unknown[] = [value]
+  const seen = new Set<unknown>()
+  while (queue.length) {
+    const current = queue.shift()
+    if (!current || seen.has(current)) continue
+    seen.add(current)
+    if (Array.isArray(current)) {
+      queue.push(...current)
+      continue
+    }
+    if (typeof current === 'string') {
+      if (/\bagents\.max_threads\b/i.test(current) && /\b(?:set|write|wrote|written|upsert|update|updated|migrat(?:e|ed|ion)|manage(?:d)?|apply|applied|repair|repaired)\b/i.test(current)) return true
+      continue
+    }
+    if (typeof current !== 'object') continue
+    const row = current as Record<string, unknown>
+    if (row.ok === false || /(?:fail|block|error|cancel|timeout)/i.test(String(row.status || ''))) continue
+    for (const key of ['managed_keys', 'written_keys', 'migrated_keys', 'config_keys', 'keys_written']) {
+      const entries = row[key]
+      if (Array.isArray(entries) && entries.some((entry) => String(entry || '').trim() === 'agents.max_threads')) return true
+    }
+    if (String(row.key || row.config_key || '').trim() === 'agents.max_threads') return true
+    for (const key of ['actions', 'detail', 'changes', 'writes', 'result', 'summary']) {
+      if (row[key] !== undefined) queue.push(row[key])
+    }
+  }
+  return false
+}
+
+function exactLegacyManagedAgentBlockCount(text: string): number {
+  const agents = objectValue(parsedToml(text)?.agents)
+  const specs = [
+    ['analysis_scout', 'analysis-scout.toml', 'SKS scout with bounded write capability.', ['Scout', 'Mapper']],
+    ['native_agent', 'native-agent-intake.toml', 'SKS native agent with bounded write capability.', ['Analysis', 'Mapper']],
+    ['team_consensus', 'team-consensus.toml', 'SKS planning/debate agent with bounded write capability.', ['Consensus', 'Atlas']],
+    ['implementation_worker', 'implementation-worker.toml', 'SKS bounded implementation worker.', ['Builder', 'Mason']],
+    ['db_safety_reviewer', 'db-safety-reviewer.toml', 'DB safety reviewer with bounded write capability.', ['Sentinel', 'Ledger']],
+    ['qa_reviewer', 'qa-reviewer.toml', 'QA reviewer with bounded write capability.', ['Verifier', 'Reviewer']]
+  ] as const
+  return specs.filter(([name, filename, description, nicknames]) => {
+    const row = objectValue(agents[name])
+    const configFile = String(row.config_file || '')
+    return row.description === description
+      && path.basename(configFile) === filename
+      && Array.isArray(row.nickname_candidates)
+      && JSON.stringify(row.nickname_candidates) === JSON.stringify(nicknames)
+  }).length
+}
+
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key)
 }
@@ -381,7 +498,7 @@ function hasTomlTableKey(text: string, table: string, key: string): boolean {
 
 function tomlTableKeyLine(text: string, table: string, key: string): string | null {
   const lines = String(text || '').split('\n')
-  const start = lines.findIndex((line) => line.trim() === `[${table}]`)
+  const start = lines.findIndex((line) => isTomlTableHeader(line, table))
   if (start === -1) return null
   const pattern = new RegExp(`^\\s*${escapeRegExp(key)}\\s*=`)
   for (let index = start + 1; index < lines.length; index += 1) {
@@ -397,7 +514,7 @@ function upsertTomlTableKey(text: string, table: string, line: string): string {
   let lines = String(text || '').trimEnd().split('\n')
   if (lines.length === 1 && lines[0] === '') lines = []
   const header = `[${table}]`
-  const start = lines.findIndex((entry) => entry.trim() === header)
+  const start = lines.findIndex((entry) => isTomlTableHeader(entry, table))
   if (start === -1) {
     const firstChild = lines.findIndex((entry) => entry.trim().startsWith(`[${table}.`))
     const block = [header, line, '']
@@ -428,6 +545,14 @@ function upsertTomlTableKey(text: string, table: string, line: string): string {
 function ensureTrailingNewline(text: string): string {
   const value = String(text || '').trimEnd()
   return value ? `${value}\n` : ''
+}
+
+function isTomlTableHeader(line: string, table: string): boolean {
+  return new RegExp(`^\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?$`).test(String(line || ''))
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)]
 }
 
 function escapeRegExp(value: string): string {

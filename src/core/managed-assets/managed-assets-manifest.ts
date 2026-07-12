@@ -61,7 +61,7 @@ export const MANAGED_AGENT_ROLES: readonly ManagedAgentRole[] = Object.freeze([
 
 /**
  * Canonical Codex custom agents for the 6.1.1 official subagent workflow.
- * Legacy SKS role files remain in MANAGED_AGENT_ROLES for compatibility repair,
+ * Legacy SKS role files remain in MANAGED_AGENT_ROLES for compatibility inventory,
  * but fresh setup only requires and generates these two roles.
  */
 export const MANAGED_OFFICIAL_SUBAGENT_ROLES: readonly ManagedOfficialSubagentRole[] = Object.freeze([

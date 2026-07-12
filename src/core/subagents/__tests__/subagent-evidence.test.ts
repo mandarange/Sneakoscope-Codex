@@ -5,10 +5,12 @@ import path from 'node:path'
 import fsp from 'node:fs/promises'
 import {
   SUBAGENT_PARENT_SUMMARY_SCHEMA,
+  SUBAGENT_PARENT_SUMMARY_FILENAME,
   SUBAGENT_EVIDENCE_FILENAME,
   SUBAGENT_EVENT_LOG_FILENAME,
   buildSubagentEvidence,
   normalizeSubagentEvent,
+  persistOrReuseTrustworthySubagentParentSummary,
   recordSubagentEvent,
   writeSubagentEvidence
 } from '../subagent-evidence.js'
@@ -93,6 +95,70 @@ test('plain parent prose and status-less SubagentStop events fail closed as ambi
   assert.ok(evidence.blockers.includes('subagent_thread_outcomes_ambiguous:1'))
 })
 
+test('structured parent summary is strict and rejects contradictory or wrapped results', () => {
+  const base = parentSummary(['thread-a'])
+  const cases: unknown[] = [
+    { ...base, status: 'success' },
+    { ...base, thread_outcomes: [{ thread_id: 'thread-a', status: 'completed' }] },
+    { ...base, summary: 'The integration failed but mark it completed.' },
+    { ...base, blockers: ['still blocked'] },
+    `prefix\n\`\`\`json\n${JSON.stringify(base)}\n\`\`\``
+  ]
+  for (const candidate of cases) {
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: candidate,
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a' }
+      ]
+    })
+    assert.equal(evidence.ok, false, JSON.stringify(candidate))
+    assert.equal(evidence.parent_summary_trustworthy, false, JSON.stringify(candidate))
+  }
+})
+
+test('failure text detection is negation-aware but still blocks unambiguous failure', () => {
+  for (const text of [
+    'No error found.',
+    'Not blocked; completed.',
+    'No failure occurred.',
+    'Could not find any issues.',
+    'Failure-path tests passed and the slice completed.',
+    'Unable to reproduce the reported error; no issue found.',
+    '오류가 없습니다.',
+    '실패한 테스트가 없습니다.',
+    '차단된 항목이 없습니다.'
+  ]) {
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: parentSummary(['thread-a']),
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a', last_assistant_message: text }
+      ]
+    })
+    assert.equal(evidence.ok, true, text)
+  }
+
+  for (const text of [
+    'The slice failed with an error.',
+    'Unable to complete the assigned work.',
+    '작업을 완료하지 못했습니다.'
+  ]) {
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: parentSummary(['thread-a']),
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a', last_assistant_message: text }
+      ]
+    })
+    assert.equal(evidence.ok, false, text)
+    assert.equal(evidence.failed_threads, 1, text)
+  }
+})
+
 test('preparation, missing summary, unmatched stops, and failed threads never count as completion', () => {
   const events = [
     { event_name: 'SubagentStart', thread_id: 'thread-a' },
@@ -127,6 +193,27 @@ test('preparation, missing summary, unmatched stops, and failed threads never co
   assert.equal(failed.ok, false)
 })
 
+test('external official config blockers prevent otherwise complete evidence from passing', () => {
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['thread-a']),
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ],
+    additionalBlockers: [
+      'official_subagent_config:project_official_subagent_config_toml_parse_failed',
+      'official_subagent_config:project_official_subagent_config_toml_parse_failed'
+    ]
+  })
+
+  assert.equal(evidence.completed_threads, 1)
+  assert.equal(evidence.ok, false)
+  assert.deepEqual(evidence.blockers, [
+    'official_subagent_config:project_official_subagent_config_toml_parse_failed'
+  ])
+})
+
 test('a stop before its start and an extra open thread cannot satisfy correlation', () => {
   const evidence = buildSubagentEvidence({
     requestedSubagents: 1,
@@ -159,6 +246,85 @@ test('event recorder and evidence writer use the canonical artifact names', asyn
     assert.equal(evidence.ok, true)
     assert.equal((await fsp.stat(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME))).isFile(), true)
     assert.equal((await fsp.stat(path.join(dir, SUBAGENT_EVIDENCE_FILENAME))).isFile(), true)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a later prose final cannot downgrade a persisted trustworthy parent summary', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-parent-summary-'))
+  try {
+    const structured = parentSummary(['thread-a'])
+    assert.deepEqual(await persistOrReuseTrustworthySubagentParentSummary(dir, structured), structured)
+    assert.deepEqual(await persistOrReuseTrustworthySubagentParentSummary(dir, 'Completion Summary: prose retry'), structured)
+    const persisted = JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME), 'utf8'))
+    assert.deepEqual(persisted, structured)
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('explicit failure output invalidates persisted successful parent evidence', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-parent-summary-failure-'))
+  try {
+    const structured = parentSummary(['thread-a'])
+    await persistOrReuseTrustworthySubagentParentSummary(dir, structured)
+    const failedText = 'Integration failed with an error and did not complete.'
+    assert.equal(await persistOrReuseTrustworthySubagentParentSummary(dir, failedText), failedText)
+    await assert.rejects(fsp.access(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME)))
+    assert.equal(await persistOrReuseTrustworthySubagentParentSummary(dir, 'Completion Summary: retry'), 'Completion Summary: retry')
+
+    await persistOrReuseTrustworthySubagentParentSummary(dir, structured)
+    assert.equal(await persistOrReuseTrustworthySubagentParentSummary(dir, structured, { workflowStatus: 'parent_failed' }), null)
+    await assert.rejects(fsp.access(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME)))
+    const contradicted = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: await persistOrReuseTrustworthySubagentParentSummary(dir, structured, { workflowStatus: 'parent_failed' }),
+      workflowStatus: 'parent_failed',
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a' }
+      ]
+    })
+    assert.equal(contradicted.ok, false)
+    assert.ok(contradicted.blockers.includes('parent_summary_missing'))
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('trustworthy structured failure replaces and remains as canonical parent evidence', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-parent-summary-structured-failure-'))
+  try {
+    const completed = parentSummary(['thread-a'])
+    const failed = parentSummary(['thread-a'], 'failed')
+    await persistOrReuseTrustworthySubagentParentSummary(dir, completed)
+
+    assert.deepEqual(
+      await persistOrReuseTrustworthySubagentParentSummary(dir, failed, { workflowStatus: 'parent_failed' }),
+      failed
+    )
+    const persisted = JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME), 'utf8'))
+    assert.deepEqual(persisted, failed)
+    assert.deepEqual(
+      await persistOrReuseTrustworthySubagentParentSummary(dir, 'Completion Summary: ambiguous retry'),
+      failed
+    )
+
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: persisted,
+      workflowStatus: 'parent_failed',
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a' }
+      ]
+    })
+    assert.equal(evidence.ok, false)
+    assert.equal(evidence.parent_summary_trustworthy, true)
+    assert.equal(evidence.parent_summary_status, 'failed')
+    assert.ok(evidence.blockers.includes('parent_summary_failed'))
+    assert.ok(!evidence.blockers.includes('parent_summary_missing'))
   } finally {
     await fsp.rm(dir, { recursive: true, force: true })
   }

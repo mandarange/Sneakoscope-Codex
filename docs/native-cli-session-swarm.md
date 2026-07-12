@@ -31,17 +31,20 @@ Required worker artifacts:
 
 The parent writes `agent-native-cli-session-swarm.json`, then `native-cli-session-proof.json` validates requested agents, target active slots, spawned worker process count, max observed worker process count, unique sessions, unique slots, unique generations, process ids, heartbeat files, process-report close fields, and worker artifact directories.
 
-Release blockers:
+Historical release blockers (process-swarm compatibility only; not current
+Naruto release criteria):
 
 - `--agents 10` with enough work must observe at least 10 native worker processes.
 - `--agents 20` with enough work must observe at least 20 native worker processes.
 - Missing process ids, missing process-report close fields, missing heartbeats, or subagent-only proof block the release.
 
-Release gates:
+The npm commands that previously checked PID/process scaling were removed in
+6.1.1. Current release validation uses the canonical official-subagent gate:
 
 ```bash
-npm run agent:native-cli-session-swarm
-npm run agent:native-cli-session-swarm-10
-npm run agent:native-cli-session-swarm-20
-npm run agent:native-cli-session-proof
+node ./dist/scripts/official-subagent-workflow-check.js
 ```
+
+The retained manifest id `agent:native-cli-session-swarm-scaling` is a
+compatibility label for that official event/structured-parent-summary check; it
+does not restore PID counting as completion evidence.

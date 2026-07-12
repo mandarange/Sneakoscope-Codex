@@ -16,21 +16,32 @@ type CodexStartupConfigRepairReport = {
   report_write_failed?: boolean
 }
 
-export async function repairCodexStartupConfig(input: { root: string; apply?: boolean; reportPath?: string | null }): Promise<CodexStartupConfigRepairReport> {
+export async function repairCodexStartupConfig(input: {
+  root: string
+  apply?: boolean
+  reportPath?: string | null
+  home?: string
+  codexHome?: string
+}): Promise<CodexStartupConfigRepairReport> {
   const root = path.resolve(input.root);
   const roleRepair = await repairAgentRoleConfigs({
     root,
     apply: input.apply === true,
-    reportPath: path.join(root, '.sneakoscope', 'reports', 'agent-role-config-repair.json')
+    reportPath: path.join(root, '.sneakoscope', 'reports', 'agent-role-config-repair.json'),
+    ...(input.codexHome ? { codexHome: input.codexHome } : {})
   });
   const fileRepair = await repairAgentConfigFileReferences({
     root,
     apply: input.apply === true,
-    reportPath: path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json')
+    reportPath: path.join(root, '.sneakoscope', 'reports', 'agent-config-file-repair.json'),
+    ...(input.home ? { home: input.home } : {}),
+    ...(input.codexHome ? { codexHome: input.codexHome } : {})
   });
   const postcheck = await postcheckCodexStartupConfig({
     root,
-    reportPath: path.join(root, '.sneakoscope', 'reports', 'codex-startup-config-postcheck.json')
+    reportPath: path.join(root, '.sneakoscope', 'reports', 'codex-startup-config-postcheck.json'),
+    ...(input.home ? { home: input.home } : {}),
+    ...(input.codexHome ? { codexHome: input.codexHome } : {})
   });
   let report: CodexStartupConfigRepairReport = {
     schema: 'sks.codex-startup-config-repair.v1',

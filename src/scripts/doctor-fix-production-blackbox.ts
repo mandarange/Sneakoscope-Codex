@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import fs from 'node:fs/promises';
 import path from 'node:path';
+import { parse } from 'smol-toml';
 import { assertGate, emitGate, makeTempRoot, writeText } from './sks-3-1-8-check-lib.js';
 import { repairCodexStartupConfig } from '../core/doctor/codex-startup-config-repair.js';
 import { repairContext7Mcp } from '../core/doctor/context7-mcp-repair.js';
@@ -8,8 +10,16 @@ import { runDoctorFixTransaction } from '../core/doctor/doctor-transaction.js';
 import { doctorRepairPostcheck } from '../core/doctor/doctor-repair-postcheck.js';
 
 const root = await makeTempRoot('sks-doctor-production-');
-await writeText(path.join(root, '.codex', 'config.toml'), '[mcp_servers.context7]\ncommand = "npx"\n\n[mcp_servers.supabase]\nurl = "https://supabase.example/mcp"\nread_only = true\n\n[agents.analysis_scout]\nconfig_file = ".codex/agents/stale.toml"\nmessage_role_prefix = "legacy"\n');
-const startup = await repairCodexStartupConfig({ root, apply: true });
+await writeText(path.join(root, '.codex', 'config.toml'), '# SKS-MANAGED-CODEX-CONFIG\n[mcp_servers.context7]\ncommand = "npx"\n\n[mcp_servers.supabase]\nurl = "https://supabase.example/mcp"\nread_only = true\n\n[agents.analysis_scout]\nconfig_file = ".codex/agents/stale.toml"\nmessage_role_prefix = "legacy"\n');
+const startup = await repairCodexStartupConfig({ root, apply: true, home: path.join(root, 'home'), codexHome: path.join(root, 'codex-home') });
+const startupText = await fs.readFile(path.join(root, '.codex', 'config.toml'), 'utf8');
+const startupConfig = parse(startupText);
+const startupAgents = (startupConfig as any).agents || {};
+const startupAgentFiles = (await fs.readdir(path.join(root, '.codex', 'agents'))).sort();
+assertGate(startup.ok === true, 'doctor production startup repair must pass', startup);
+assertGate(startupAgents.max_threads === 12 && startupAgents.max_depth === 1 && startupAgents.job_max_runtime_seconds === 1200 && startupAgents.interrupt_message === true, 'doctor production startup repair must write official config defaults', startupAgents);
+assertGate(startupAgentFiles.join(',') === 'expert.toml,worker.toml', 'doctor production startup repair must create only official worker/expert TOMLs', startupAgentFiles);
+assertGate(startupText.includes('[agents.analysis_scout]') && startupText.includes('config_file = ".codex/agents/stale.toml"'), 'doctor production startup repair must preserve legacy config tables', startupText);
 const context7 = await repairContext7Mcp({ root, apply: true });
 const supabase = await repairSupabaseMcp({ root, apply: true });
 const tx = await runDoctorFixTransaction({ root, phases: [

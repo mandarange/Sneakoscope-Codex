@@ -21,10 +21,11 @@ import { maybeReconcileProjectSkillsPreflight } from './hooks-runtime/skill-reco
 import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-preflight.js';
 import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
 import { joinSystemMessages, teamLiveDigest } from './hooks-runtime/team-digest.js';
-import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass } from './hooks-runtime/light-turn.js';
+import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass, hasMatchingLightTurnStopBypass } from './hooks-runtime/light-turn.js';
 import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
+import { withFileLock } from './locks/file-lock.js';
 import {
   DEFAULT_SUBAGENT_MODEL,
   NARUTO_PARENT_EFFORT,
@@ -34,9 +35,11 @@ import {
 } from './subagents/model-policy.js';
 import {
   normalizeSubagentParentSummary,
+  persistOrReuseTrustworthySubagentParentSummary,
   readSubagentEvents,
   recordSubagentEvent,
   SUBAGENT_EVIDENCE_FILENAME,
+  SUBAGENT_PARENT_SUMMARY_FILENAME,
   writeSubagentEvidence
 } from './subagents/subagent-evidence.js';
 const STOP_REPEAT_GUARD_ARTIFACT = 'stop-hook-repeat-guard.json';
@@ -51,6 +54,30 @@ const UPDATE_CHECK_HOOK_INVOCATION_POLICY = 'function-only:no-runSksUpdateCheck-
 // by release readiness so ordinary Codex hook flow cannot grow a hidden update
 // prompt path.
 import { loadHookPayload, normalizeHookResult, visibleHookMessage } from './hooks-runtime/hook-io.js';
+import {
+  codexGitActionMetadataSignal,
+  codexGitActionMetadataText,
+  compactAnswerContext,
+  conversationId,
+  explicitConversationId,
+  extractCommand,
+  extractLastMessage,
+  extractUserPrompt,
+  hookTurnId,
+  looksLikeCodexGitAction,
+  looksLikeCodexGitActionStopCompletion,
+  looksLikeCodexUiSettingsEvent,
+  looksLikeMadSksConfirmationPrompt,
+  observedParentModel,
+  observedParentModelMismatch,
+  toolFailed
+} from './hooks-runtime/payload-signals.js';
+import {
+  interruptedToolOutputRecoveryBlockReason,
+  missingToolOutputCallId,
+  quarantineMissingToolOutput,
+  readToolOutputQuarantine
+} from './hooks-runtime/tool-output-quarantine.js';
 export { loadHookPayload, normalizeHookResult };
 
 async function loadState(root: any, payload: any = {}) {
@@ -60,134 +87,6 @@ async function loadState(root: any, payload: any = {}) {
 function isNoQuestionRunning(state: any) {
   return (state.mode === 'RESEARCH' && state.phase === 'RESEARCH_RUNNING_NO_QUESTIONS')
     || (state.mode === 'QALOOP' && state.phase === 'QALOOP_RUNNING_NO_QUESTIONS');
-}
-
-function extractLastMessage(payload: any) {
-  return payload.last_assistant_message || payload.assistant_message || payload.message || payload.response || payload.raw || '';
-}
-
-function extractUserPrompt(payload: any) {
-  return payload.prompt
-    || payload.user_prompt
-    || payload.userPrompt
-    || payload.message
-    || payload.input?.prompt
-    || payload.input?.message
-    || payload.raw
-    || '';
-}
-
-function conversationId(payload: any) {
-  return String(payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || payload.cwd || 'default');
-}
-
-function explicitConversationId(payload: any = {}) {
-  return payload.conversation_id || payload.thread_id || payload.session_id || payload.chat_id || null;
-}
-
-function hookTurnId(payload: any = {}) {
-  return String(payload.turn_id || payload.turnId || payload.metadata?.turn_id || payload.metadata?.turnId || '');
-}
-
-function extractCommand(payload: any) {
-  return payload.command || payload.tool_input?.command || payload.toolInput?.command || payload.input?.command || payload.tool?.input?.command || '';
-}
-
-function codexGitActionMetadataText(payload: any = {}) {
-  const seen = new Set();
-  const out: any[] = [];
-  const interesting = new Set([
-    'action',
-    'intent',
-    'operation',
-    'permission',
-    'description',
-    'kind',
-    'type',
-    'feature',
-    'tool_name',
-    'toolName',
-    'name',
-    'label',
-    'title',
-    'source',
-    'event',
-    'hook',
-    'hook_name',
-    'hookName',
-    'hook_event_name',
-    'hookEventName',
-    'id',
-    'command'
-  ]);
-  const noisy = new Set([
-    'prompt',
-    'user_prompt',
-    'userPrompt',
-    'message',
-    'assistant_message',
-    'last_assistant_message',
-    'response',
-    'raw',
-    'stdout',
-    'stderr'
-  ]);
-  function walk(value: any, depth: any = 0, parentKey: any = '') {
-    if (!value || typeof value !== 'object' || depth > 5 || seen.has(value)) return;
-    seen.add(value);
-    for (const [key, candidate] of Object.entries(value)) {
-      if (noisy.has(key)) continue;
-      if (typeof candidate === 'string') {
-        if (interesting.has(key) || /\b(?:codex[_\s-]*app|git[_\s-]*actions?|codex_git_|gitCommit|gitPush|pull\s+request)\b/i.test(candidate)) {
-          out.push(`${key}:${candidate}`);
-        }
-        continue;
-      }
-      if (candidate && typeof candidate === 'object') {
-        const allowedContainer = interesting.has(key)
-          || /^(?:input|metadata|context|client|thread|session|request|payload|tool|tool_input|toolInput|permission_request|permissionRequest)$/i.test(key)
-          || parentKey;
-        if (allowedContainer) walk(candidate, depth + 1, key);
-      }
-    }
-  }
-  walk(payload);
-  return out.join(' ');
-}
-
-function codexGitActionMetadataSignal(text: any = '') {
-  const s = String(text || '');
-  if (!s) return false;
-  const action = String(s)
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ');
-  if (/\bcodex\s*app\b[\s\S]{0,120}\bgit\b[\s\S]{0,120}\b(?:action|actions|commit|push|pr|pull request)\b/i.test(action)) return true;
-  if (/\bgit\s*actions?\b[\s\S]{0,120}\b(?:commit|push|pr|pull request|commit\s*(?:and|&)\s*push)\b/i.test(action)) return true;
-  if (/\bcodex\s*git\s*(?:commit|push|pr|pull request|commit\s*(?:and|&)\s*push)\b/i.test(action)) return true;
-  if (/\b(?:git\s*)?(?:commit|push|commit\s*(?:and|&)\s*push|create\s+(?:a\s+)?pull\s+request|pull\s+request|pr)\b/i.test(action)) {
-    return /\b(?:action|intent|operation|permission|feature|tool\s*name|source|event|hook|name|label|title|type|kind|id)\s*:/i.test(action);
-  }
-  return false;
-}
-
-function toolFailed(payload: any = {}) {
-  const candidates = [
-    payload.exit_code,
-    payload.exitCode,
-    payload.tool_response?.exit_code,
-    payload.toolResponse?.exitCode,
-    payload.result?.exit_code,
-    payload.result?.exitCode
-  ];
-  for (const candidate of candidates) {
-    if (candidate === undefined || candidate === null || candidate === '') continue;
-    const n = Number(candidate);
-    if (Number.isFinite(n)) return n !== 0;
-  }
-  if (payload.isError === true || payload.tool_response?.isError === true || payload.toolResponse?.isError === true || payload.result?.isError === true) return true;
-  if (payload.success === false || payload.tool_response?.success === false || payload.toolResponse?.success === false || payload.result?.success === false) return true;
-  if (payload.executed === false) return true;
-  return false;
 }
 
 export async function hookMain(name: any): Promise<JsonData> {
@@ -220,7 +119,9 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   const greetingFastPath = name === 'user-prompt-submit'
     && !dollarCommand(stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload)))
     && classifyTaskProfile(stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload))) === 'passthrough';
-  if (!explicitConversationId(payload) && !greetingFastPath) {
+  const matchingLightStop = name === 'stop'
+    && await hasMatchingLightTurnStopBypass(root, { sessionKey, turnId: hookTurnId(payload) }).catch(() => false);
+  if (!explicitConversationId(payload) && !greetingFastPath && !matchingLightStop) {
     await appendJsonl(path.join(root, '.sneakoscope', 'state', 'session-id-fallback-warning.jsonl'), {
       ts: nowIso(),
       warning: 'hook_payload_missing_explicit_session_id',
@@ -229,15 +130,11 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
       hook: name
     }).catch(() => null);
   }
-  // Stop decisions must use the persisted session state. Codex's Stop payload
-  // does not define a trusted `state` field, so accepting one here would let a
-  // caller spoof `route_closed` and bypass active route gates. Explicit
-  // `opts.state` remains available for internal replay and focused tests.
-  const loadedState = opts.state || (
-    name === 'stop'
-      ? await loadState(root, payload)
-      : payload.state || await loadState(root, payload)
-  );
+  // Hook decisions use persisted session state. Codex hook payloads do not
+  // define a trusted `state` field; accepting a partial/spoofed value can hide
+  // an active mission or bypass route gates. Explicit opts.state remains for
+  // internal replay and focused tests.
+  const loadedState = opts.state || await loadState(root, payload);
   const state = { ...loadedState, _session_key: loadedState?._session_key || sessionKey };
   const noQuestion = isNoQuestionRunning(state);
   if (name === 'user-prompt-submit') {
@@ -254,7 +151,7 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
 
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
-  await recordSubagentEvent(artifactDir, payload, 'SubagentStart').catch(() => null);
+  await recordAndRefreshSubagentEvidence(artifactDir, state, payload, 'SubagentStart').catch(() => null);
   const config = await readOfficialSubagentConfig(root);
   const budget = resolveSubagentThreadBudget({ configuredMaxThreads: config.maxThreads });
   const active = await activeRouteContext(root, state).catch(() => '');
@@ -271,7 +168,7 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
 
 async function hookSubagentStop(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
-  await recordSubagentEvent(artifactDir, payload, 'SubagentStop').catch(() => null);
+  await recordAndRefreshSubagentEvidence(artifactDir, state, payload, 'SubagentStop').catch(() => null);
   // SubagentStop is evidence collection only. It must never reuse the parent
   // Stop hook's route gate or block a child thread from returning its result.
   return { continue: true, silent: true };
@@ -282,66 +179,89 @@ function officialSubagentArtifactDir(root: any, state: any = {}, sessionKey: any
   return path.join(root, '.sneakoscope', 'state', 'subagents', sha256(String(sessionKey || 'default')).slice(0, 32));
 }
 
-function compactAnswerContext(prompt: any = '') {
-  return [
-    'SKS answer-only pipeline active (light turn).',
-    'Answer the user directly. Do not create or continue a mission, prepare a route, reconcile project skills, load active route context, read TriWiki/code-pack preflight state, or open a subagent workflow for this turn.',
-    'Use tools only when the answer itself needs current repository facts, official documentation, web evidence, or another source explicitly requested by the user.',
-    `Question: ${String(prompt || '').trim()}`
-  ].join('\n');
-}
-
-function looksLikeMadSksConfirmationPrompt(prompt: any = '') {
-  return /^(yes|y|no|n|confirm|confirmed|approve|approved|proceed|continue|ok|okay|stop|abort|cancel|deny|denied|네|예|응|아니|아니요|허용|승인|진행|계속|중단|취소|거부|삭제\s*허용|테이블\s*삭제\s*허용)\b/i.test(String(prompt || '').trim());
-}
-
-function observedParentModel(payload: any = {}) {
-  const value = payload.parent_model
-    || payload.parentModel
-    || payload.model
-    || payload.metadata?.parent_model
-    || payload.metadata?.model
-    || payload.session?.model
-    || null;
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function observedParentModelMismatch(model: any) {
-  const value = String(model || '').trim();
-  if (!value) return false;
-  return value.toLowerCase() !== NARUTO_PARENT_MODEL && !/gpt[-_. ]?5\.6[-_. ]?sol|\bsol(?:\s+max)?\b/i.test(value);
-}
-
-function looksLikeCodexUiSettingsEvent(payload: any = {}) {
-  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
-  const haystack = [
-    payload.action,
-    payload.intent,
-    payload.operation,
-    payload.permission,
-    payload.description,
-    payload.kind,
-    payload.type,
-    payload.feature,
-    payload.source,
-    payload.event,
-    payload.hook,
-    payload.hook_name,
-    payload.metadata?.action,
-    payload.metadata?.intent,
-    payload.metadata?.operation,
-    payload.metadata?.feature,
-    payload.metadata?.source,
-    payload.context?.surface,
-    payload.session?.surface
-  ].filter(Boolean).join(' ');
-  return !prompt && /\b(?:settings|preferences|profile|speed|fast[_\s-]*mode|reasoning|model[_\s-]*select|codex[_\s-]*app)\b/i.test(haystack);
+async function recordAndRefreshSubagentEvidence(artifactDir: string, state: any, payload: any, eventName: 'SubagentStart' | 'SubagentStop') {
+  return withFileLock({
+    lockPath: path.join(artifactDir, '.subagent-evidence.lock'),
+    timeoutMs: 5_000,
+    staleMs: 60_000
+  }, async () => {
+    const event = await recordSubagentEvent(artifactDir, payload, eventName);
+    if (!event) return null;
+    const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), {});
+    const existing: any = await readJson(path.join(artifactDir, SUBAGENT_EVIDENCE_FILENAME), {});
+    const parentSummary: any = await readJson(path.join(artifactDir, SUBAGENT_PARENT_SUMMARY_FILENAME), null);
+    const requestedSubagents = Number(
+      plan?.requested_subagents
+      || state?.requested_subagents
+      || existing?.requested_subagents
+      || 0
+    );
+    if (!Number.isFinite(requestedSubagents) || requestedSubagents < 1) return event;
+    await writeSubagentEvidence(artifactDir, {
+      requestedSubagents,
+      parentSummary,
+      parentSummaryPresent: parentSummary !== null,
+      workflowStatus: 'running',
+      preparationOnly: false,
+      additionalBlockers: Array.isArray(plan?.config_blockers)
+        ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
+        : []
+    });
+    return event;
+  });
 }
 
 async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: any, sessionKey: any = null) {
   // A receipt is scoped to exactly one submitted turn. Every later prompt,
   // including Codex App git/settings events, invalidates it before returning.
   await clearLightTurnStopBypass(root, { sessionKey }).catch(() => undefined);
+  const submittedPrompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+  const explicitSession = explicitConversationId(payload);
+  const detectedMissingCallId = missingToolOutputCallId(submittedPrompt);
+  let toolOutputQuarantine = explicitSession
+    ? await readToolOutputQuarantine(root, sessionKey).catch(() => null)
+    : null;
+  if (detectedMissingCallId && explicitSession) {
+    toolOutputQuarantine = await quarantineMissingToolOutput({
+      root,
+      sessionKey,
+      callId: detectedMissingCallId,
+      missionId: state?.mission_id,
+      turnId: hookTurnId(payload)
+    }).catch(() => toolOutputQuarantine);
+  }
+  if (submittedPrompt && (detectedMissingCallId || toolOutputQuarantine)) {
+    return {
+      decision: 'block',
+      reason: interruptedToolOutputRecoveryBlockReason({
+        callId: detectedMissingCallId || toolOutputQuarantine?.call_id,
+        missionId: state?.mission_id || toolOutputQuarantine?.mission_id
+      })
+    };
+  }
+  const parentLaunchMissionId = process.env.SKS_NARUTO_PARENT_LAUNCH === '1'
+    ? String(process.env.SKS_NARUTO_PARENT_MISSION_ID || '').trim()
+    : '';
+  if (parentLaunchMissionId) {
+    const attachedState = {
+      ...state,
+      mission_id: parentLaunchMissionId,
+      mode: 'NARUTO',
+      route: 'Naruto',
+      route_command: '$Naruto',
+      route_closed: false,
+      subagents_required: true,
+      native_sessions_required: false
+    };
+    await setCurrent(root, attachedState, { sessionKey, replace: true });
+    const activeContext = await activeRouteContext(root, attachedState);
+    return {
+      continue: true,
+      additionalContext: activeContext,
+      systemMessage: visibleHookMessage('user-prompt-submit', activeContext),
+      attached_parent_mission_id: parentLaunchMissionId
+    };
+  }
   if (looksLikeCodexGitAction(payload)) {
     await armCodexGitActionStopBypass(root, payload).catch(() => null);
     return {
@@ -356,7 +276,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     };
   }
   if (!noQuestion) {
-    const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
+    const prompt = submittedPrompt;
     const taskProfile = classifyTaskProfile(prompt);
     const explicitCommand = Boolean(dollarCommand(prompt));
     const lightRoute = explicitCommand ? null : routePrompt(prompt);
@@ -364,30 +284,39 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     const madConfirmationPrompt = looksLikeMadSksConfirmationPrompt(prompt);
     const activeContinuation = Boolean(state?.mission_id && state?.route_closed !== true && looksLikeActiveContinuationPrompt(prompt));
     if (!explicitCommand && !clarificationPending && !madConfirmationPrompt && !activeContinuation && taskProfile === 'passthrough') {
-      await armLightTurnStopBypass(root, {
-        sessionKey,
-        turnId: hookTurnId(payload),
-        prompt,
-        profile: 'passthrough',
-        ttlMs: 60_000
-      });
+      const turnId = hookTurnId(payload);
+      if (turnId) {
+        await armLightTurnStopBypass(root, {
+          sessionKey,
+          turnId,
+          prompt,
+          profile: 'passthrough',
+          ttlMs: 60_000
+        });
+      }
       return { continue: true, silent: true, sksTaskProfile: taskProfile };
     }
     if (!explicitCommand && !clarificationPending && !madConfirmationPrompt && !activeContinuation && lightRoute?.id === 'Answer') {
-      await armLightTurnStopBypass(root, {
-        sessionKey,
-        turnId: hookTurnId(payload),
-        prompt,
-        profile: 'answer',
-        ttlMs: 5 * 60_000
-      });
+      const turnId = hookTurnId(payload);
+      if (turnId) {
+        await armLightTurnStopBypass(root, {
+          sessionKey,
+          turnId,
+          prompt,
+          profile: 'answer',
+          ttlMs: 5 * 60_000
+        });
+      }
       const additionalContext = compactAnswerContext(prompt);
       return { continue: true, additionalContext, sksTaskProfile: 'answer' };
     }
     if (activeContinuation) {
       const activeContext = await activeRouteContext(root, state);
       const teamDigest = await teamLiveDigest(root, state);
-      const additionalContext = [activeContext, teamDigest?.context].filter(Boolean).join('\n\n');
+      const additionalContext = [
+        activeContext,
+        teamDigest?.context
+      ].filter(Boolean).join('\n\n');
       return {
         continue: true,
         additionalContext,
@@ -473,7 +402,10 @@ function shouldPrepareFreshRouteOnActivePrompt(prompt: any, route: any = null, o
 }
 
 function looksLikeActiveContinuationPrompt(prompt: any = '') {
-  const text = stripVisibleDecisionAnswerBlocks(String(prompt || '')).trim();
+  const text = stripVisibleDecisionAnswerBlocks(String(prompt || ''))
+    .trim()
+    .replace(/[.!?。！？…,:;]+$/u, '')
+    .trim();
   if (!text) return false;
   return /^(?:(?:please\s+)?(?:keep\s+going|continue|resume|go\s+on|proceed|carry\s+on)(?:\s+please)?|계속(?:\s*진행)?(?:\s*해\s*줘|\s*해주세요|\s*해)?|이어\s*서(?:\s*해\s*줘|\s*해주세요|\s*진행해)?|이어서(?:\s*해\s*줘|\s*해주세요|\s*진행해)?|진행(?:\s*해\s*줘|\s*해주세요|\s*해)?|마저\s*해(?:\s*줘|\s*주세요)?|다음|next)$/i.test(text);
 }
@@ -831,12 +763,18 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
   if (plan?.workflow !== 'official_codex_subagent') return null;
   const requestedSubagents = Number(plan.requested_subagents || state.requested_subagents || 0);
   const events = await readSubagentEvents(dir);
+  const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, parentSummary, {
+    workflowStatus: 'parent_completed'
+  });
   const evidence = await writeSubagentEvidence(dir, {
     requestedSubagents,
     events,
-    parentSummary,
+    parentSummary: effectiveParentSummary,
     workflowStatus: 'parent_completed',
-    preparationOnly: false
+    preparationOnly: false,
+    additionalBlockers: Array.isArray(plan.config_blockers)
+      ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
+      : []
   });
   const isNaruto = String(state?.mode || '').toUpperCase() === 'NARUTO'
     || String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase() === 'NARUTO';
@@ -852,7 +790,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
   }
   const previousGate = await readJson(path.join(dir, 'naruto-gate.json'), {}).catch(() => ({}));
   const parentModel = plan.observed_parent_model || state.observed_parent_model || null;
-  const parentModelMismatch = previousGate.parent_model_match === false || observedParentModelMismatch(parentModel);
+  const parentModelMismatch = previousGate.parent_model_match === false || observedParentModelMismatch(parentModel, NARUTO_PARENT_MODEL);
   const blockers = [...new Set([
     ...evidence.blockers,
     ...(Array.isArray(previousGate.config_blockers) ? previousGate.config_blockers.map(String) : []),
@@ -861,7 +799,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
   ])];
   const passed = evidence.ok === true && blockers.length === 0;
   const updatedAt = nowIso();
-  const structuredParentSummary = normalizeSubagentParentSummary(parentSummary);
+  const structuredParentSummary = normalizeSubagentParentSummary(effectiveParentSummary);
   const summary = {
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: passed,
@@ -915,10 +853,16 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     official_subagent_evidence: evidence.ok === true,
     parent_summary_present: evidence.parent_summary_present,
     session_cleanup: evidence.failed_threads === 0 && evidence.completed_threads >= requestedSubagents,
+    subagent_evidence_ready: evidence.ok === true,
+    requested_subagents: evidence.requested_subagents,
+    started_subagents: evidence.started_threads,
+    completed_subagents: evidence.completed_threads,
+    failed_subagents: evidence.failed_threads,
+    event_sources: evidence.event_sources,
     evidence: {
       ...(previousGate.evidence || {}),
       official_subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
-      parent_summary: 'naruto-summary.json',
+      parent_summary: SUBAGENT_PARENT_SUMMARY_FILENAME,
       requested_subagents: requestedSubagents,
       started_threads: evidence.started_threads,
       completed_threads: evidence.completed_threads,
@@ -966,88 +910,6 @@ function hasDfixLightCompletion(text: any) {
   const verification = /(검증|확인|통과|verified|verification|checked|evidence|근거)/i.test(s);
   const gap = /(미검증|남은|문제|gap|remaining|not verified|not run|blocker|차단|불가|없음|none)/i.test(s);
   return verification && gap;
-}
-
-function looksLikeCodexGitAction(payload: any = {}) {
-  const prompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
-  const metadataText = codexGitActionMetadataText(payload);
-  const haystack = [
-    metadataText,
-    payload.action,
-    payload.intent,
-    payload.operation,
-    payload.permission,
-    payload.description,
-    payload.kind,
-    payload.type,
-    payload.feature,
-    payload.tool_name,
-    payload.toolName,
-    payload.source,
-    payload.event,
-    payload.hook,
-    payload.hook_name,
-    payload.input?.action,
-    payload.input?.intent,
-    payload.input?.operation,
-    payload.input?.feature,
-    payload.input?.source,
-    payload.metadata?.action,
-    payload.metadata?.intent,
-    payload.metadata?.operation,
-    payload.metadata?.feature,
-    payload.metadata?.source
-  ].filter(Boolean).join(' ');
-  const codexAppGitSignal = /\bcodex[_\s-]*app\b[\s\S]{0,80}\bgit\b[\s\S]{0,80}\b(?:action|actions|commit|push|pr)\b/i.test(haystack);
-  const gitActionSignal = /\bgit[_\s-]*actions?\b[\s\S]{0,80}\b(?:commit|push|commit[\s_-]*(?:and|&)?[\s_-]*push)\b/i.test(haystack);
-  const appSignal = codexGitActionMetadataSignal(metadataText)
-    || codexAppGitSignal
-    || gitActionSignal
-    || /\b(?:codex[_\s-]*(?:app[_\s-]*)?)?(?:git[_\s-]*)?(?:commit[_\s-]*message|git[_\s-]*commit|git[_\s-]*push|git[_\s-]*pr|codex_git_commit|codex_git_push|codex_git_pr)\b/i.test(haystack)
-    || /커밋\s*메시지\s*생성/i.test(haystack);
-  const promptSignal = /\bgenerate(?:\s+a)?(?:\s+git)?\s+commit\s+message\b/i.test(prompt)
-    || /\bcommit\s+message\b[\s\S]{0,80}\b(?:staged|diff|changes?|git)\b/i.test(prompt)
-    || looksLikeStockCodexGitActionPrompt(prompt)
-    || /커밋\s*메시지\s*생성/i.test(prompt);
-  if (!appSignal && !promptSignal) return false;
-  if (looksLikeStockCodexGitActionPrompt(prompt)) return true;
-  if (appSignal) return true;
-  return !looksLikeUserImplementationRequest(prompt);
-}
-
-function looksLikeStockCodexGitActionPrompt(prompt: any = '') {
-  const text = String(prompt || '').trim();
-  if (!text || text.length > 120) return false;
-  return /^(?:generate\s+(?:a\s+)?git\s+commit\s+message(?:\s+for\s+(?:the\s+)?(?:staged\s+)?diff)?|commit\s+changes|commit\s+and\s+push\s+changes|push\s+changes|create\s+(?:a\s+)?commit|create\s+(?:a\s+)?pull\s+request)\.?$/i.test(text);
-}
-
-function looksLikeCodexGitActionStopCompletion(last: any = '', payload: any = {}) {
-  const text = String(last || '').trim();
-  const metadataText = codexGitActionMetadataText(payload);
-  const haystack = [
-    metadataText,
-    payload.action,
-    payload.intent,
-    payload.operation,
-    payload.kind,
-    payload.type,
-    payload.feature,
-    payload.source,
-    payload.event,
-    payload.metadata?.action,
-    payload.metadata?.intent,
-    payload.metadata?.operation,
-    payload.metadata?.feature,
-    payload.metadata?.source
-  ].filter(Boolean).join(' ');
-  if (codexGitActionMetadataSignal(metadataText)) return true;
-  if (/\bcodex[_\s-]*app\b[\s\S]{0,80}\bgit\b[\s\S]{0,80}\b(?:action|commit|push|pr)\b/i.test(haystack)) return true;
-  if (!text || text.length > 180) return false;
-  return /^(?:commit(?:ted)?(?:\s+and\s+pushed)?(?:\s+changes)?(?:\s+complete[.!]?)?|push(?:ed)?(?:\s+changes)?(?:\s+complete[.!]?)?|created\s+(?:a\s+)?pull\s+request[.!]?)$/i.test(text);
-}
-
-function looksLikeUserImplementationRequest(text: any = '') {
-  return /(fix|bug|broken|error|issue|implement|change|update|repair|수정|버그|오류|에러|문제|고쳐|고치|해결|변경|수리|패치|안생기|안\s*생기)/i.test(String(text || ''));
 }
 
 async function armCodexGitActionStopBypass(root: any, payload: any = {}) {

@@ -53,7 +53,7 @@ test('substantive prompt during active Team state prepares a fresh parallel rout
 
     const context = String(result.additionalContext || '');
     assert.match(context, /\$(Team|Naruto) route prepared|Route: \$Naruto/);
-    assert.match(context, /Native sessions: required before code-changing execution/);
+    assert.match(context, /Codex subagent workflow: required for this explicit Naruto or parallel task/);
     assert.doesNotMatch(context, /Active Team mission M-active/);
 
     const missions = await missionEntries(root);
@@ -75,7 +75,7 @@ test('plain continuation prompt keeps the active route context instead of spawni
     }, { root, state: ACTIVE_TEAM_STATE });
 
     const context = String(result.additionalContext || '');
-    assert.match(context, /Active Team mission M-active/);
+    assert.match(context, /Legacy Team mission M-active/);
     assert.doesNotMatch(context, /\$Team route prepared/);
     assert.deepEqual(await missionEntries(root), []);
   });
@@ -192,6 +192,6 @@ test('Stop ignores an untrusted payload state that claims an active route is clo
   }, { root });
 
   assert.equal(result.decision, 'block');
-  assert.match(String(result.reason || ''), /requires native multi-session evidence/);
+  assert.match(String(result.reason || ''), /requires official Codex subagent evidence/);
   assert.notEqual(result.action, 'route_closed');
 });

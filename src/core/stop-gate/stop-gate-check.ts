@@ -15,15 +15,34 @@ function normalizeRoute(route: string | null): string | null {
 
 function rawGateToV1(raw: Record<string, unknown> | null, gatePath: string, route: string | null): SksStopGateV1 | null {
   if (!raw) return null;
-  // If already canonical schema, cast
+  // Canonical input still needs runtime normalization. Older or hand-written
+  // gate files can omit optional arrays; malformed types must fail closed
+  // rather than throwing or being treated as empty.
   if (raw.schema === 'sks.stop-gate.v1') {
-    return raw as unknown as SksStopGateV1;
+    return {
+      ...(raw as any),
+      schema: 'sks.stop-gate.v1',
+      route: String(raw.route || route || 'Naruto'),
+      route_command: String(raw.route_command || '$Naruto'),
+      mission_id: String(raw.mission_id || ''),
+      gate_file: String(raw.gate_file || path.basename(gatePath)),
+      gate_abs_path: String(raw.gate_abs_path || gatePath),
+      status: String(raw.status || 'blocked') as SksStopGateV1['status'],
+      passed: raw.passed === true,
+      reason: typeof raw.reason === 'string' ? raw.reason : null,
+      terminal: raw.terminal === true,
+      terminal_state: String(raw.terminal_state || 'blocked') as SksStopGateV1['terminal_state'],
+      evidence: isRecord(raw.evidence) ? raw.evidence as SksStopGateV1['evidence'] : {},
+      blockers: normalizedStringArray(raw.blockers, 'blockers_invalid'),
+      missing_fields: normalizedStringArray(raw.missing_fields, 'missing_fields_invalid'),
+      created_at: String(raw.created_at || raw.updated_at || nowIso()),
+    };
   }
   // Normalize from legacy naruto-gate.json / glm-naruto termination
   const passed = raw.passed === true;
   const status = passed ? 'passed' : (raw.status as string || 'blocked');
   const terminalState = (raw.terminal_state as string) || (passed ? 'completed' : 'blocked');
-  const evidence = (raw.evidence as Record<string, unknown>) || {};
+  const evidence = isRecord(raw.evidence) ? raw.evidence : {};
   return {
     schema: 'sks.stop-gate.v1',
     route: route || String(raw.route || 'Naruto'),
@@ -33,13 +52,26 @@ function rawGateToV1(raw: Record<string, unknown> | null, gatePath: string, rout
     gate_abs_path: gatePath,
     status: status as SksStopGateV1['status'],
     passed,
+    reason: typeof raw.reason === 'string' ? raw.reason : null,
     terminal: raw.terminal === true || passed,
     terminal_state: terminalState as SksStopGateV1['terminal_state'],
     evidence: evidence as SksStopGateV1['evidence'],
-    blockers: Array.isArray(raw.blockers) ? raw.blockers : [],
-    missing_fields: Array.isArray(raw.missing_fields) ? raw.missing_fields : [],
+    blockers: normalizedStringArray(raw.blockers, 'blockers_invalid'),
+    missing_fields: normalizedStringArray(raw.missing_fields, 'missing_fields_invalid'),
     created_at: String(raw.created_at || raw.updated_at || nowIso()),
   };
+}
+
+function normalizedStringArray(value: unknown, invalidMarker: string): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return [invalidMarker];
+  const strings = value.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean);
+  if (strings.length !== value.length) strings.push(invalidMarker);
+  return [...new Set(strings)];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 async function checkHardBlocker(root: string, missionId: string | null): Promise<{ hardBlocked: boolean; file: string | null; reason: string | null; evidence: unknown[] }> {
@@ -143,20 +175,21 @@ export async function checkStopGate(input: {
     };
   }
 
+  const notApplicable = normalizedGate.status === 'not_applicable';
   const missingFields: string[] = [];
-  if (normalizedGate.status !== 'passed') missingFields.push('status');
-  if (normalizedGate.passed !== true) missingFields.push('passed');
+  if (!notApplicable && normalizedGate.status !== 'passed') missingFields.push('status');
+  if (!notApplicable && normalizedGate.passed !== true) missingFields.push('passed');
+  if (notApplicable && !String(normalizedGate.reason || '').trim()) missingFields.push('not_applicable_reason');
   if (normalizedGate.blockers.length > 0) missingFields.push('blockers');
   if (normalizedGate.missing_fields.length > 0) missingFields.push(...normalizedGate.missing_fields.map((field) => `missing_fields:${field}`));
-  const bugfixMission = await missionHasBugfixWork(root, missionId, normalizedGate);
+  const bugfixMission = !notApplicable && await missionHasBugfixWork(root, missionId, normalizedGate);
   if (bugfixMission && normalizedGate.evidence.regression_test_added !== true) missingFields.push('regression_test_added');
   if (bugfixMission && normalizedGate.evidence.regression_test_failed_before_fix !== true) missingFields.push('regression_test_failed_before_fix');
   if (normalizedGate.evidence.required_coverage_passed === false) missingFields.push('coverage_required_but_not_passed');
   if ((normalizedGate.evidence.uncovered_required_count ?? 0) > 0) missingFields.push(`work_order_uncovered_count:${normalizedGate.evidence.uncovered_required_count}`);
 
   if (
-    normalizedGate.status === 'passed'
-    && normalizedGate.passed === true
+    (normalizedGate.status === 'passed' && normalizedGate.passed === true || notApplicable)
     && normalizedGate.blockers.length === 0
     && normalizedGate.missing_fields.length === 0
     && missingFields.length === 0
@@ -174,7 +207,7 @@ export async function checkStopGate(input: {
       selected_gate_mtime: statInfo.mtime,
       current_state_path: resolution.current_state_path,
       current_state_mission_id: resolution.current_state_mission_id,
-      reason: 'gate_passed',
+      reason: notApplicable ? 'gate_not_applicable' : 'gate_passed',
       missing_fields: [],
       blockers: [],
     };
@@ -188,7 +221,9 @@ export async function checkStopGate(input: {
       gate_path: resolution.gate_path,
       normalized_gate: normalizedGate,
       diagnostics,
-      feedback: `Stop allowed: gate passed at ${resolution.gate_path}`,
+      feedback: notApplicable
+        ? `Stop allowed: active gate is not applicable at ${resolution.gate_path}`
+        : `Stop allowed: gate passed at ${resolution.gate_path}`,
     };
   }
 

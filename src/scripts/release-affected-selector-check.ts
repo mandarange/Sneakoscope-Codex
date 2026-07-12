@@ -37,9 +37,88 @@ const schedulerScriptIds = new Set<string>(schedulerScriptOnly.selection.selecte
 assertGate(schedulerScriptIds.has('scheduler:comprehensive'), 'scheduler script change must select scheduler gates', schedulerScriptOnly.selection)
 assertGate(![...schedulerScriptIds].some((id) => id.startsWith('research:') || id.startsWith('zellij:')), 'scheduler script change must not expand to unrelated route gates', schedulerScriptOnly.selection)
 
+const officialSubagentOnly = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+  changedFiles: ['src/core/subagents/subagent-evidence.ts'],
+  preset: 'affected'
+})
+const officialSubagentIds = new Set<string>(officialSubagentOnly.selection.selected_gate_ids.map(String))
+assertGate(officialSubagentIds.has('naruto:canonical-stop-gate'), 'official subagent source changes must select the canonical Naruto stop gate', officialSubagentOnly.selection)
+
+for (const changedFile of [
+  'src/core/codex-lb/codex-lb-tool-output-recovery.ts',
+  'src/core/codex/codex-cli-update.ts',
+  'src/core/codex-control/codex-reliability-shield.ts',
+  'src/core/hooks-runtime.ts',
+  'src/commands/codex.ts',
+  'src/commands/codex-lb.ts',
+  'src/commands/doctor.ts',
+  'src/core/preflight/parallel-preflight-engine.ts'
+]) {
+  const selectedForRuntime = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+    changedFiles: [changedFile],
+    preset: 'affected'
+  })
+  const runtimeIds = new Set<string>(selectedForRuntime.selection.selected_gate_ids.map(String))
+  assertGate(runtimeIds.has('test:codex-runtime-recovery'), `Codex runtime change must select test:codex-runtime-recovery (${changedFile})`, selectedForRuntime.selection)
+}
+
+const doctorOnly = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+  changedFiles: ['src/commands/doctor.ts'],
+  preset: 'affected'
+})
+const doctorIds = new Set<string>(doctorOnly.selection.selected_gate_ids.map(String))
+assertGate(doctorIds.has('test:menubar-doctor'), 'Doctor changes must select test:menubar-doctor', doctorOnly.selection)
+
+for (const changedFile of [
+  'src/cli/router.ts',
+  'src/cli/command-registry.ts',
+  'src/bin/fast-inline.ts',
+  'src/bin/sks-dispatch.ts'
+]) {
+  const selectedForCommands = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+    changedFiles: [changedFile],
+    preset: 'affected'
+  })
+  const commandIds = new Set<string>(selectedForCommands.selection.selected_gate_ids.map(String))
+  assertGate(commandIds.has('test:commands-regression'), `CLI implementation changes must select test:commands-regression (${changedFile})`, selectedForCommands.selection)
+}
+
+for (const changedFile of [
+  'src/core/runtime/task-profile.ts',
+  'src/core/routes.ts',
+  'src/core/subagents/naruto-help-contract.ts',
+  'src/core/commands/naruto-command.ts',
+  'src/bin/fast-inline.ts',
+  'test/blackbox/naruto-shadow-clone-swarm-packed.test.mjs'
+]) {
+  const selectedForPolicy = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+    changedFiles: [changedFile],
+    preset: 'affected'
+  })
+  const policyIds = new Set<string>(selectedForPolicy.selection.selected_gate_ids.map(String))
+  assertGate(policyIds.has('test:official-subagent-policy'), `Task-profile, route, or help changes must select test:official-subagent-policy (${changedFile})`, selectedForPolicy.selection)
+}
+
+for (const changedFile of [
+  'src/cli/command-manifest-lite.ts',
+  'src/cli/command-registry.ts',
+  'src/core/routes/dollar-manifest-lite.ts',
+  'src/core/feature-registry.ts',
+  'docs/feature-inventory.md',
+  'test/unit/feature-registry.test.mjs'
+]) {
+  const selectedForFeatures = selectorMod.selectAffectedReleaseGates(root, manifest, gates, {
+    changedFiles: [changedFile],
+    preset: 'affected'
+  })
+  const featureIds = new Set<string>(selectedForFeatures.selection.selected_gate_ids.map(String))
+  assertGate(featureIds.has('all-features:deep-completion'), `Command manifest, registry, inventory, or feature-test changes must select all-features:deep-completion (${changedFile})`, selectedForFeatures.selection)
+}
+
 emitGate('release:affected-selector', {
   selected: ids.size,
   skipped: selected.selection.skipped_gate_ids.length,
   release_script_selected: releaseScriptIds.size,
-  scheduler_script_selected: schedulerScriptIds.size
+  scheduler_script_selected: schedulerScriptIds.size,
+  official_subagent_selected: officialSubagentIds.size
 })

@@ -7,10 +7,14 @@ export const OTHER_HARNESS_NAMES = ['OMX', 'DCodex'];
 export async function scanHarnessConflicts(root: any, opts: any = {}) {
   const projectRoot = path.resolve(root || process.cwd());
   const home = opts.home || process.env.HOME || '';
+  const codexHomes = [...new Set([
+    home ? path.join(home, '.codex') : '',
+    opts.codexHome || process.env.CODEX_HOME || ''
+  ].filter(Boolean).map((entry) => path.resolve(entry)))];
   const includeGlobal = opts.includeGlobal !== false;
   const conflicts: any[] = [];
   conflicts.push(...await scanProjectHarnessConflicts(projectRoot));
-  if (includeGlobal && home) conflicts.push(...await scanGlobalHarnessConflicts(home));
+  if (includeGlobal && (home || codexHomes.length)) conflicts.push(...await scanGlobalHarnessConflicts(home, codexHomes));
   const hard = conflicts.filter((x: any) => x.hard_block);
   const repairable = conflicts.filter((x: any) => x.repairable && !x.hard_block);
   return {
@@ -19,6 +23,7 @@ export async function scanHarnessConflicts(root: any, opts: any = {}) {
     requires_human_approval: conflicts.some((x: any) => x.requires_human_approval),
     project_root: projectRoot,
     global_home: home || null,
+    global_codex_homes: codexHomes,
     conflicts,
     hard,
     repairable
@@ -75,9 +80,9 @@ async function scanProjectHarnessConflicts(root: any) {
   return out;
 }
 
-async function scanGlobalHarnessConflicts(home: any) {
+async function scanGlobalHarnessConflicts(home: any, codexHomes: string[]) {
   const out: any[] = [];
-  for (const rel of [
+  for (const rel of home ? [
     '.omx',
     '.omxrc',
     '.config/omx',
@@ -86,7 +91,7 @@ async function scanGlobalHarnessConflicts(home: any) {
     '.dcodexrc',
     '.config/dcodex',
     'Library/Application Support/DCodex'
-  ]) {
+  ] : []) {
     const abs = path.join(home, rel);
     if (await exists(abs)) {
       const name = rel.toLowerCase().includes('omx') ? 'OMX' : 'DCodex';
@@ -94,10 +99,12 @@ async function scanGlobalHarnessConflicts(home: any) {
     }
   }
 
-  const globalCodex = path.join(home, '.codex', 'config.toml');
-  const configText = await readText(globalCodex, null);
-  if (typeof configText === 'string' && /\bomx\b|\.omx|\bdcodex\b|\.dcodex/i.test(configText)) {
-    out.push(blockingConflict('global', globalCodex, 'Other harness marker detected in global Codex config', 'Remove the other harness global config before SKS setup.'));
+  for (const codexHome of codexHomes) {
+    const globalCodex = path.join(codexHome, 'config.toml');
+    const configText = await readText(globalCodex, null);
+    if (typeof configText === 'string' && /\bomx\b|\.omx|\bdcodex\b|\.dcodex/i.test(configText)) {
+      out.push(blockingConflict('global', globalCodex, 'Other harness marker detected in global Codex config', 'Remove the other harness global config before SKS setup.'));
+    }
   }
   return out;
 }

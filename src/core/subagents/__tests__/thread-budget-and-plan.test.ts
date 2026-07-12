@@ -11,6 +11,7 @@ import {
   normalizeAgentPolicy,
   routeRequiresAgentIntake
 } from '../../agents/agent-plan.js'
+import { routePrompt } from '../../routes.js'
 
 test('official thread budget defaults to six requested and twelve open threads', () => {
   assert.equal(DEFAULT_NARUTO_REQUESTED_SUBAGENTS, 6)
@@ -51,6 +52,9 @@ test('agent intake is task-profile aware and no longer required for every seriou
   assert.equal(routeRequiresAgentIntake('$DFix', { task: 'fix a typo' }), false)
   assert.equal(routeRequiresAgentIntake('$Release-Review', { task: 'fix the release metadata' }), false)
   assert.equal(routeRequiresAgentIntake('$Release-Review', { task: 'fix release metadata in parallel across independent files' }), true)
+  assert.equal(routeRequiresAgentIntake(routePrompt('work on the parser'), { task: 'work on the parser' }), false)
+  assert.equal(routeRequiresAgentIntake(routePrompt('$Work'), { task: '$Work' }), true)
+  assert.equal(routeRequiresAgentIntake(routePrompt('parallel implementation'), { task: 'parallel implementation' }), true)
 })
 
 test('official agent policy exposes requested count, waves, and canonical evidence outputs', () => {

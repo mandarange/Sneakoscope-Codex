@@ -1,5 +1,3 @@
-import { buildNarutoHelpResult } from '../core/subagents/naruto-help-contract.js';
-
 export function rootJsonFastInline(fs: { existsSync(path: string): boolean }, cwd = process.cwd()): void {
   const project = findProjectRootSync(fs, cwd);
   const global = joinPath(process.env.HOME || process.env.USERPROFILE || cwd, '.sneakoscope');
@@ -61,7 +59,8 @@ export function doctorJsonFastInline(): void {
   }, null, 2)}\n`);
 }
 
-export function narutoHelpJsonFastInline(): void {
+export async function narutoHelpJsonFastInline(): Promise<void> {
+  const { buildNarutoHelpResult } = await import('../core/subagents/naruto-help-contract.js');
   process.stdout.write(`${JSON.stringify(buildNarutoHelpResult(), null, 2)}\n`);
 }
 

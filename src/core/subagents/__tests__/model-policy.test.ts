@@ -25,6 +25,9 @@ test('official parent and bounded worker use the required Sol/Luna Max policy', 
     reason: 'clear_bounded_repeatable_task'
   })
   assert.equal(decideSubagentModel({ description: 'Build the specified fixture' }).model, 'gpt-5.6-luna')
+  assert.equal(decideSubagentModel({ description: 'Generate the exact file inventory' }).model, 'gpt-5.6-luna')
+  assert.equal(decideSubagentModel({ description: 'Investigate why the fixture failed' }).model, 'gpt-5.6-sol')
+  assert.equal(decideSubagentModel({ description: 'Implement authentication for the list endpoint' }).model, 'gpt-5.6-sol')
 })
 
 test('every judgment-sensitive signal selects Sol Max', () => {
@@ -52,6 +55,9 @@ test('every judgment-sensitive signal selects Sol Max', () => {
     assert.equal(decision.modelReasoningEffort, 'max', description)
   }
   assert.equal(decideSubagentModel({ description: 'Handle this task' }).model, 'gpt-5.6-sol')
+  for (const description of ['implementation', 'apply', 'execute', '적용', '실행']) {
+    assert.equal(decideSubagentModel({ description }).model, 'gpt-5.6-sol', description)
+  }
 })
 
 test('official effort policy keeps the legacy function as an exact compatibility alias', () => {

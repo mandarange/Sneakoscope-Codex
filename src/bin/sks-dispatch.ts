@@ -31,9 +31,9 @@ export async function runSks(args: string[]): Promise<void> {
     // verified and deliberately turned on.
     const { hookDaemonInline } = await import('../core/daemon/sksd-hook-dispatch.js');
     await hookDaemonInline(args[1]);
-  } else if (args[0] === 'naruto' && (args[1] === 'help' || args.includes('--help')) && args.includes('--json')) {
+  } else if (args.length === 3 && args[0] === 'naruto' && args[1] === 'help' && args[2] === '--json') {
     const { narutoHelpJsonFastInline } = await import('./fast-inline.js');
-    narutoHelpJsonFastInline();
+    await narutoHelpJsonFastInline();
   } else if (args[0] === 'help' || args[0] === '--help' || args[0] === '-h') {
     if (args.length > 1) {
       const { helpCommand } = await import('../core/commands/basic-cli.js');

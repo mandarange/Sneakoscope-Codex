@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { safeReadOnlySubcommand } from '../router.js'
+import fsp from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { dispatch, safeReadOnlySubcommand } from '../router.js'
 
 test('active Naruto permits only its read-only observation subcommands', () => {
   for (const subcommand of ['status', 'subagents', 'workers', 'proof']) {
@@ -8,4 +11,53 @@ test('active Naruto permits only its read-only observation subcommands', () => {
   }
   assert.equal(safeReadOnlySubcommand('naruto', ['run', 'task']), false)
   assert.equal(safeReadOnlySubcommand('naruto', ['proof', 'latest', '--write']), false)
+  assert.equal(safeReadOnlySubcommand('naruto', ['--json', 'status', 'latest']), false)
+  assert.equal(safeReadOnlySubcommand('naruto', ['--agents=8', 'status']), false)
+  assert.equal(safeReadOnlySubcommand('naruto', ['--max-threads=12', 'proof', 'latest']), false)
 })
+
+test('Naruto observation dispatch skips migration repair and remains read-only', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-router-naruto-readonly-'))
+  const oldCwd = process.cwd()
+  const oldHome = process.env.HOME
+  const oldCodexHome = process.env.CODEX_HOME
+  const oldRequireReceipt = process.env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT
+  const oldDoctorFail = process.env.SKS_TEST_DOCTOR_FAIL
+  const oldThreadId = process.env.CODEX_THREAD_ID
+  const oldLog = console.log
+  const oldError = console.error
+  const oldExitCode = process.exitCode
+  try {
+    await fsp.mkdir(path.join(root, '.sneakoscope', 'state'), { recursive: true })
+    await fsp.writeFile(path.join(root, '.sneakoscope', 'state', 'current.json'), '{"mode":"IDLE","phase":"IDLE"}\n')
+    process.chdir(root)
+    process.env.HOME = path.join(root, 'home')
+    process.env.CODEX_HOME = path.join(root, 'home', '.codex')
+    process.env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT = '1'
+    process.env.SKS_TEST_DOCTOR_FAIL = '1'
+    delete process.env.CODEX_THREAD_ID
+    console.log = () => undefined
+    console.error = () => undefined
+    process.exitCode = undefined
+
+    const result: any = await dispatch(['naruto', 'status', 'latest', '--json'])
+    assert.equal(result.status, 'missing_mission')
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'update', 'doctor-migration.json')))
+  } finally {
+    process.chdir(oldCwd)
+    restoreEnv('HOME', oldHome)
+    restoreEnv('CODEX_HOME', oldCodexHome)
+    restoreEnv('SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT', oldRequireReceipt)
+    restoreEnv('SKS_TEST_DOCTOR_FAIL', oldDoctorFail)
+    restoreEnv('CODEX_THREAD_ID', oldThreadId)
+    console.log = oldLog
+    console.error = oldError
+    process.exitCode = oldExitCode
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}

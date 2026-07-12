@@ -40,5 +40,21 @@ test('greetings and bounded work avoid subagents while explicit parallel work re
   assert.equal(routeRequiresSubagents(routePrompt('$Naruto implement one fix'), '$Naruto implement one fix'), true);
   assert.equal(routePrompt('$Work')?.id, 'Naruto');
   assert.equal(routePrompt('$Work')?.explicit_invocation, true);
-  assert.notEqual(routePrompt('work on the parser')?.explicit_invocation, true);
+  const ordinaryWork = routePrompt('work on the parser');
+  assert.equal(ordinaryWork?.id, 'Naruto');
+  assert.equal(ordinaryWork?.task_profile, 'bounded-work');
+  assert.equal(ordinaryWork?.explicit_invocation, false);
+  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), false);
+});
+
+test('implementation language and Korean fix conjugations route as work', () => {
+  for (const prompt of ['UI implementation 해줘', 'UI 버그 고치고 리뷰해줘', '이 문제는 이번 버전에서 반드시 해결해야해']) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'Naruto', prompt);
+    assert.equal(route?.task_profile, 'bounded-work', prompt);
+  }
+  const parallel = routePrompt('parallel implementation');
+  assert.equal(parallel?.id, 'Naruto');
+  assert.equal(parallel?.task_profile, 'parallel-write');
+  assert.equal(routeRequiresSubagents(parallel, 'parallel implementation'), true);
 });

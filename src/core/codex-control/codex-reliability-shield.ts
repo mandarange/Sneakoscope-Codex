@@ -34,6 +34,7 @@ export interface CodexReliabilityReport {
   retry_count: number
   heartbeat_count: number
   repaired_tool_result_count: number
+  missing_tool_result_count: number
   no_duplicate_streamed_output: boolean
   model_capacity_retry_count: number
   selected_model_capacity_fallback: boolean
@@ -54,6 +55,7 @@ export interface CodexReliabilityAttemptReport {
   model_capacity_error: boolean
   capacity_fallback_hint: string | null
   repaired_tool_result_count: number
+  missing_tool_result_count: number
   heartbeat_count: number
   blockers: string[]
 }
@@ -91,18 +93,26 @@ export async function runWithCodexReliabilityShield(
 
   for (let attempt = 1; attempt <= policy.maxEmptyResultRetries + 1; attempt += 1) {
     const raw = await runAttempt(attempt, controls)
-    const repaired = repairToolCallSequence(Array.isArray(raw.events) ? raw.events : [])
-    const heartbeats = buildKeepaliveHeartbeats(repaired.events)
-    const evaluation = evaluateCodexReliabilityAttempt(raw, repaired.events, policy, attempt)
+    const continuity = auditToolOutputContinuity(Array.isArray(raw.events) ? raw.events : [])
+    const heartbeats = buildKeepaliveHeartbeats(continuity.events)
+    const evaluation = evaluateCodexReliabilityAttempt(raw, continuity.events, policy, attempt)
+    const missingToolOutput = continuity.missingToolResultCount > 0
     const report = {
       ...evaluation,
-      repaired_tool_result_count: repaired.repairedToolResultCount,
+      retryable: missingToolOutput ? false : evaluation.retryable,
+      retry_reason: missingToolOutput ? null : evaluation.retry_reason,
+      fatal_error: missingToolOutput || evaluation.fatal_error,
+      blockers: missingToolOutput
+        ? [...evaluation.blockers, 'codex_reliability_missing_tool_output_unrecoverable']
+        : evaluation.blockers,
+      repaired_tool_result_count: 0,
+      missing_tool_result_count: continuity.missingToolResultCount,
       heartbeat_count: heartbeats.length
     }
     attempts.push(report)
     selected = {
       ...raw,
-      events: repaired.events,
+      events: continuity.events,
       reliabilityHeartbeats: heartbeats,
       blockers: report.mcp_auth_error ? report.blockers : [...(raw.blockers || []), ...report.blockers]
     }
@@ -127,13 +137,17 @@ export async function runWithCodexReliabilityShield(
     retry_count: Math.max(0, selectedAttempt - 1),
     heartbeat_count: attempts.reduce((sum, attempt) => sum + attempt.heartbeat_count, 0),
     repaired_tool_result_count: attempts.reduce((sum, attempt) => sum + attempt.repaired_tool_result_count, 0),
+    missing_tool_result_count: attempts.reduce((sum, attempt) => sum + attempt.missing_tool_result_count, 0),
     no_duplicate_streamed_output: attempts.slice(0, -1).every((attempt) => attempt.meaningful_event_count === 0),
     model_capacity_retry_count: modelCapacityRetryCount,
     selected_model_capacity_fallback: selectedAttempt > 1 && modelCapacityRetryCount > 0,
     blockers
   }
+  const selectedResult = selected || { ok: false, events: [], blockers: ['codex_sdk_attempt_missing'] }
   return {
-    ...(selected || { ok: false, events: [], blockers: ['codex_sdk_attempt_missing'] }),
+    ...selectedResult,
+    ok: report.ok && selectedResult.ok === true,
+    blockers: [...new Set([...(selectedResult.blockers || []), ...(!report.ok ? report.blockers : [])])],
     reliabilityShield: report
   }
 }
@@ -147,7 +161,8 @@ export function evaluateCodexReliabilityAttempt(
   const meaningful = events.filter(isMeaningfulEvent)
   const modelCapacity = isCodexModelCapacityError(result, events)
   const mcpAuth = isMcpAuthError(result, events)
-  const fatal = !modelCapacity && !mcpAuth && hasFatalError(result, events)
+  const missingToolOutputProtocolError = isMissingToolOutputProtocolError(result, events)
+  const fatal = !modelCapacity && !mcpAuth && (missingToolOutputProtocolError || hasFatalError(result, events))
   const idle = hasIdleTimeout(events, policy.idleTimeoutMs)
   const empty = events.length === 0 || (!String(result.finalResponse || '').trim() && meaningful.length === 0)
   const partial = meaningful.length > 0 && !result.structuredOutput
@@ -159,7 +174,8 @@ export function evaluateCodexReliabilityAttempt(
   if (mcpAuth) blockers.push('codex_reliability_mcp_auth_error')
   if (!modelCapacity && idle && partial) blockers.push('codex_reliability_idle_after_partial_output')
   if (!modelCapacity && partial && !idle) blockers.push('codex_reliability_partial_output_without_structured_result')
-  if (fatal) blockers.push('codex_reliability_fatal_error_no_retry')
+  if (missingToolOutputProtocolError) blockers.push('codex_reliability_missing_tool_output_unrecoverable')
+  else if (fatal) blockers.push('codex_reliability_fatal_error_no_retry')
 
   if (mcpAuth) {
     retryable = true
@@ -186,6 +202,7 @@ export function evaluateCodexReliabilityAttempt(
     model_capacity_error: modelCapacity,
     capacity_fallback_hint: null,
     repaired_tool_result_count: 0,
+    missing_tool_result_count: 0,
     heartbeat_count: 0,
     blockers
   }
@@ -196,8 +213,12 @@ export function isCodexModelCapacityError(result: CodexReliabilityAttemptResult,
   return /selected model is at capacity|model(?:\s+[\w.-]+)?\s+is\s+at\s+capacity|try a different model|capacity(?:\s+is)?\s+exhausted|temporarily at capacity/i.test(text)
 }
 
-export function repairToolCallSequence(events: any[]) {
-  const repaired = [...events]
+export function isMissingToolOutputProtocolError(result: CodexReliabilityAttemptResult, events: any[]) {
+  return /\[No tool output found for (?:custom\s+)?tool call\s+[^\]]+\]/i.test(collectText(result, events))
+}
+
+export function auditToolOutputContinuity(events: any[]) {
+  const preserved = [...events]
   const openToolCalls = new Set<string>()
   for (const event of events) {
     const id = toolCallId(event)
@@ -205,18 +226,31 @@ export function repairToolCallSequence(events: any[]) {
     if (isToolCallStart(event)) openToolCalls.add(id)
     if (isToolCallResult(event)) openToolCalls.delete(id)
   }
-  for (const id of openToolCalls) {
-    repaired.push({
-      type: 'tool_result.stubbed',
-      item: {
-        id: `${id}:stub`,
-        type: 'tool_result',
-        tool_call_id: id,
-        text: 'SKS Reliability Shield inserted an explicit missing tool-result stub.'
-      }
-    })
+  return {
+    events: preserved,
+    missingToolResultCount: openToolCalls.size,
+    missingToolCallIds: [...openToolCalls]
   }
-  return { events: repaired, repairedToolResultCount: openToolCalls.size }
+}
+
+/**
+ * @deprecated Use auditToolOutputContinuity. Retained for one-release source
+ * compatibility; this helper only audits and never repairs protocol state.
+ */
+export function auditToolCallSequence(events: any[]) {
+  return auditToolOutputContinuity(events)
+}
+
+/**
+ * @deprecated This post-run helper cannot repair the Responses protocol. It now
+ * preserves the event stream and reports missing outputs for fail-closed callers.
+ */
+export function repairToolCallSequence(events: any[]) {
+  const audit = auditToolOutputContinuity(events)
+  return {
+    ...audit,
+    repairedToolResultCount: 0
+  }
 }
 
 export function buildKeepaliveHeartbeats(events: any[]) {
@@ -301,21 +335,54 @@ function eventTimeMs(event: any) {
 }
 
 function isToolCallStart(event: any) {
-  const type = String(event?.type || '')
-  const itemType = String(event?.item?.type || '')
-  return /tool_call|mcp_tool_call|command_execution/.test(type) || itemType === 'mcp_tool_call' || itemType === 'command_execution'
+  const type = String(event?.type || '').toLowerCase()
+  const itemType = String(toolEventItem(event)?.type || '').toLowerCase()
+  return isTrackedToolCallType(type) || isTrackedToolCallType(itemType)
 }
 
 function isToolCallResult(event: any) {
-  const type = String(event?.type || '')
-  const itemType = String(event?.item?.type || '')
-  return /tool_result|command_output|tool\.completed/.test(type) || itemType === 'tool_result' || itemType === 'command_output'
+  const type = String(event?.type || '').toLowerCase()
+  const itemType = String(toolEventItem(event)?.type || '').toLowerCase()
+  return isTrackedToolOutputType(type)
+    || isTrackedToolOutputType(itemType)
+    || /tool_result|tool\.completed/.test(type)
+    || itemType === 'tool_result'
+}
+
+function isTrackedToolCallType(type: string) {
+  return type === 'function_call'
+    || type === 'custom_tool_call'
+    || type === 'apply_patch_call'
+    || /(?:^|\.)function_call(?:\.added|\.started|\.completed)?$/.test(type)
+    || /(?:^|\.)custom_tool_call(?:\.added|\.started|\.completed)?$/.test(type)
+    || /(?:^|\.)apply_patch_call(?:\.added|\.started|\.completed)?$/.test(type)
+}
+
+function isTrackedToolOutputType(type: string) {
+  return type === 'function_call_output'
+    || type === 'custom_tool_call_output'
+    || type === 'apply_patch_call_output'
+    || type.endsWith('.function_call_output')
+    || type.endsWith('.custom_tool_call_output')
+    || type.endsWith('.apply_patch_call_output')
 }
 
 function toolCallId(event: any) {
-  const item = event?.item || {}
+  const item = toolEventItem(event) || {}
   const id = item.tool_call_id || item.call_id || item.id || event?.tool_call_id || event?.call_id
   return id ? String(id) : null
+}
+
+function toolEventItem(event: any): Record<string, any> | null {
+  const candidates = [
+    event?.item,
+    event?.type === 'response_item' ? event?.payload : null,
+    event?.response_item?.payload,
+    event?.response_item,
+    event?.raw?.response_item?.payload,
+    event?.raw?.type === 'response_item' ? event?.raw?.payload : null
+  ]
+  return candidates.find((candidate) => candidate && typeof candidate === 'object') || null
 }
 
 function clampInt(value: unknown, fallback: number, min: number, max: number) {

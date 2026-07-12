@@ -69,6 +69,18 @@ export async function consumeLightTurnStopBypass(root: string, input: ConsumeLig
   return { accepted: true, receipt: { ...receipt, consumed: true }, reason: 'accepted' };
 }
 
+export async function hasMatchingLightTurnStopBypass(root: string, input: ConsumeLightTurnInput): Promise<boolean> {
+  const turnId = String(input.turnId || '').trim();
+  if (!turnId) return false;
+  const sessionKeyHash = lightTurnSessionHash(input.sessionKey);
+  const receipt = await readJson<LightTurnReceipt | null>(lightTurnReceiptPath(root, sessionKeyHash), null).catch(() => null);
+  if (!receipt || receipt.schema !== 'sks.light-turn.v1' || receipt.consumed === true) return false;
+  if (receipt.session_key_hash !== sessionKeyHash) return false;
+  if (receipt.turn_id_hash !== sha256(turnId).slice(0, 32)) return false;
+  const expiresAt = Date.parse(receipt.expires_at);
+  return Number.isFinite(expiresAt) && expiresAt >= Date.now();
+}
+
 export async function clearLightTurnStopBypass(root: string, input: { sessionKey: unknown }): Promise<void> {
   await fsp.rm(lightTurnReceiptPath(root, input.sessionKey), { force: true }).catch(() => undefined);
 }

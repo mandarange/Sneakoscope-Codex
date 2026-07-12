@@ -327,6 +327,14 @@ async function syncSourcePackageVersion(root: any, version: any) {
       replace: (text: string) => text.replace(/const FAST_PACKAGE_VERSION = ['"][^'"]+['"];/, `const FAST_PACKAGE_VERSION = '${version}';`)
     },
     {
+      rel: 'src/core/managed-assets/managed-assets-manifest.ts',
+      replace: (text: string) => text.replace(/export const MANAGED_ASSET_VERSION = ['"][^'"]+['"]/, `export const MANAGED_ASSET_VERSION = '${version}'`)
+    },
+    {
+      rel: 'test/unit/agent-role-config.test.mjs',
+      replace: (text: string) => text.replace(/assert\.equal\(manifest\.MANAGED_ASSET_VERSION, ['"][^'"]+['"]\)/, `assert.equal(manifest.MANAGED_ASSET_VERSION, '${version}')`)
+    },
+    {
       rel: 'crates/sks-core/Cargo.toml',
       replace: (text: string) => text.replace(/^version\s*=\s*"[^"]+"/m, `version = "${version}"`)
     },

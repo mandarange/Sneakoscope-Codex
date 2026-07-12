@@ -185,7 +185,7 @@ export const COMMANDS = {
   wizard: entry('stable', 'Open setup wizard help', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
   usage: readOnly(entry('stable', 'Show focused usage topic', 'dist/core/commands/basic-cli.js', basicArgs('usageCommand'))),
   quickstart: entry('stable', 'Show quickstart flow', 'dist/core/commands/basic-cli.js', basicNoArgs('quickstartCommand')),
-  setup: entry('stable', 'Initialize SKS state', 'dist/core/commands/basic-cli.js', basicArgs('setupCommand')),
+  setup: skipMigrationGate(entry('stable', 'Initialize SKS state', 'dist/core/commands/basic-cli.js', basicArgs('setupCommand'))),
   bootstrap: entry('stable', 'Initialize SKS project files', 'dist/core/commands/basic-cli.js', basicArgs('bootstrapCommand')),
   init: entry('stable', 'Initialize local control surface', 'dist/core/commands/basic-cli.js', basicArgs('initCommand')),
   deps: entry('stable', 'Check local dependencies', 'dist/core/commands/basic-cli.js', subcommand(() => import(basicModule), 'depsCommand', 'dist/core/commands/basic-cli.js', 'check')),

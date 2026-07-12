@@ -93,14 +93,22 @@ export async function runFeatureFixture(feature: any, { root = process.cwd() }: 
   const missionIdFromOutput = extractMissionId(spawnResult.stdout);
   const latestMissionId = missionIdFromOutput
     ?? (kind === 'execute_and_validate_artifacts' ? await findLatestMission(root).catch(() => null) : null);
+  const stdoutJson = parseJsonOutput(spawnResult.stdout);
+  const stdoutFieldFailures = expectedFieldFailures('stdout', stdoutJson, fixture.expected_stdout_fields);
 
   const artifacts = kind === 'execute_and_validate_artifacts'
-    ? expected.map((artifact: any) => inspectArtifact(root, artifact, latestMissionId))
+    ? expected.map((artifact: any) => inspectArtifact(
+        root,
+        artifact,
+        latestMissionId,
+        fixture.expected_artifact_fields?.[artifact.path]
+      ))
     : [];
   const artifactFailures = artifacts.filter((artifact: any) => !artifact.ok).map((artifact: any) => `${id}:${artifact.path}:${artifact.failure || 'artifact_invalid'}`);
 
   const blockers: string[] = [];
   if (!exitOk) blockers.push(timedOut ? `${id}:command_timeout_${timeoutMs}` : `${id}:command_exit_${spawnResult.status}`);
+  blockers.push(...stdoutFieldFailures.map((failure) => `${id}:${failure}`));
   blockers.push(...artifactFailures);
 
   const ok = blockers.length === 0;
@@ -136,6 +144,13 @@ export async function runFeatureFixture(feature: any, { root = process.cwd() }: 
     stdout_bytes: Buffer.byteLength(spawnResult.stdout || ''),
     stderr_bytes: Buffer.byteLength(spawnResult.stderr || ''),
     stderr_tail: String(spawnResult.stderr || '').slice(-800),
+    completion_semantics: fixture.completion_semantics || null,
+    stdout_contract: {
+      expected_fields: fixture.expected_stdout_fields || null,
+      parsed: Boolean(stdoutJson),
+      ok: stdoutFieldFailures.length === 0,
+      failures: stdoutFieldFailures
+    },
     artifacts,
     blockers,
     resolved_mission_id: latestMissionId
@@ -177,7 +192,12 @@ function extractMissionId(stdout: string | null | undefined): string | null {
   return null;
 }
 
-function inspectArtifact(root: string, artifact: { path: string; schema: string | null; optional?: boolean }, latestMissionId: string | null) {
+function inspectArtifact(
+  root: string,
+  artifact: { path: string; schema: string | null; optional?: boolean },
+  latestMissionId: string | null,
+  expectedFields: Record<string, unknown> | undefined = undefined
+) {
   const file = resolveExpectedArtifactPath(root, artifact.path, { latestMissionId });
   const exists = fs.existsSync(file);
   const relPath = path.isAbsolute(artifact.path) ? artifact.path : artifact.path;
@@ -203,9 +223,45 @@ function inspectArtifact(root: string, artifact: { path: string; schema: string 
   } catch {
     return { path: relPath, schema: artifact.schema, exists: true, ok: false, failure: 'json_parse' };
   }
-  if (!artifact.schema) return { path: relPath, schema: null, exists: true, ok: true };
-  const schemaOk = parsed.schema === artifact.schema || parsed.schema_version != null;
-  return { path: relPath, schema: artifact.schema, exists: true, ok: schemaOk, failure: schemaOk ? undefined : 'schema_mismatch', actual_schema: parsed.schema || null };
+  const fieldFailures = expectedFieldFailures(`artifact:${artifact.path}`, parsed, expectedFields);
+  const schemaOk = !artifact.schema || parsed.schema === artifact.schema || parsed.schema_version != null;
+  const ok = schemaOk && fieldFailures.length === 0;
+  return {
+    path: relPath,
+    schema: artifact.schema,
+    exists: true,
+    ok,
+    failure: !schemaOk ? 'schema_mismatch' : fieldFailures[0],
+    actual_schema: parsed.schema || null,
+    expected_fields: expectedFields || null,
+    field_failures: fieldFailures
+  };
+}
+
+function parseJsonOutput(stdout: string | null | undefined): any | null {
+  const text = String(stdout || '').trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {}
+  const candidates: any[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) continue;
+    try { candidates.push(JSON.parse(trimmed)); } catch {}
+  }
+  return candidates.at(-1) || null;
+}
+
+function expectedFieldFailures(scope: string, actual: unknown, expected: unknown): string[] {
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)) return [];
+  if (!actual || typeof actual !== 'object' || Array.isArray(actual)) return [`${scope}:json_missing`];
+  const failures: string[] = [];
+  for (const [field, expectedValue] of Object.entries(expected as Record<string, unknown>)) {
+    const actualValue = field.split('.').reduce<any>((value, key) => value && typeof value === 'object' ? value[key] : undefined, actual);
+    if (JSON.stringify(actualValue) !== JSON.stringify(expectedValue)) failures.push(`${scope}:field_mismatch:${field}`);
+  }
+  return failures;
 }
 
 function normalizeExpectedArtifacts(items: any[] = []): Array<{ path: string; schema: string | null; optional?: boolean }> {

@@ -1,4 +1,4 @@
-export type StopGateStatus = 'passed' | 'blocked' | 'failed' | 'hard_blocked';
+export type StopGateStatus = 'passed' | 'not_applicable' | 'blocked' | 'failed' | 'hard_blocked';
 
 export type StopGateTerminalState =
   | 'completed'
@@ -50,6 +50,7 @@ export interface SksStopGateV1 {
   readonly gate_abs_path: string;
   readonly status: StopGateStatus;
   readonly passed: boolean;
+  readonly reason?: string | null;
   readonly terminal: boolean;
   readonly terminal_state: StopGateTerminalState;
   readonly evidence: SksStopGateEvidence;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { dispatch } from '../../../cli/router.js'
 import { setupCommand } from '../basic-cli.js'
 import { run as doctorRun } from '../../../commands/doctor.js'
 
@@ -47,6 +48,32 @@ test('setup conflict-blocks OMX before creating SKS files', async () => {
   })
 })
 
+test('setup dispatch reaches the conflict scan before any first-command migration write', async () => {
+  await withTempProject('sks-setup-dispatch-conflict-', async (root) => {
+    const oldGlobalRoot = process.env.SKS_GLOBAL_ROOT
+    const oldRequireReceipt = process.env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT
+    const oldGateDisabled = process.env.SKS_UPDATE_MIGRATION_GATE_DISABLED
+    const globalRoot = path.join(root, 'global-sks')
+    try {
+      process.env.SKS_GLOBAL_ROOT = globalRoot
+      process.env.SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT = '1'
+      delete process.env.SKS_UPDATE_MIGRATION_GATE_DISABLED
+      await fs.mkdir(path.join(root, '.omx'))
+
+      const result: any = await dispatch(['setup', '--local-only', '--skip-cli-tools', '--json'])
+      assert.equal(result.ok, false)
+      assert.equal(result.status, 'blocked_harness_conflict')
+      assert.equal(result.cleanup_prompt_command, 'sks conflicts prompt')
+      await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
+      await assert.rejects(fs.access(globalRoot))
+    } finally {
+      restoreEnv('SKS_GLOBAL_ROOT', oldGlobalRoot)
+      restoreEnv('SKS_REQUIRE_UPDATE_MIGRATION_RECEIPT', oldRequireReceipt)
+      restoreEnv('SKS_UPDATE_MIGRATION_GATE_DISABLED', oldGateDisabled)
+    }
+  })
+})
+
 test('doctor --fix conflict-blocks DCodex before repair writes', async () => {
   await withTempProject('sks-doctor-conflict-', async (root) => {
     await fs.mkdir(path.join(root, '.dcodex'))
@@ -54,6 +81,37 @@ test('doctor --fix conflict-blocks DCodex before repair writes', async () => {
     assert.equal(result.ok, false)
     assert.equal(result.status, 'blocked_harness_conflict')
     assert.equal(result.no_fix_writes_performed, true)
+    await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
+  })
+})
+
+test('setup conflict-blocks OMX markers from the active custom CODEX_HOME before writes', async () => {
+  await withTempProject('sks-setup-custom-codex-home-conflict-', async (root) => {
+    const customCodexHome = path.join(root, 'custom-codex-home')
+    process.env.CODEX_HOME = customCodexHome
+    await fs.mkdir(customCodexHome, { recursive: true })
+    await fs.writeFile(path.join(customCodexHome, 'config.toml'), '[harness]\nname = "omx"\n')
+
+    const result: any = await setupCommand(['--local-only', '--skip-cli-tools', '--json'])
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'blocked_harness_conflict')
+    assert.ok(result.conflicts.some((item: any) => item.path === path.join(customCodexHome, 'config.toml')))
+    await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
+  })
+})
+
+test('doctor --fix conflict-blocks DCodex markers from the active custom CODEX_HOME before writes', async () => {
+  await withTempProject('sks-doctor-custom-codex-home-conflict-', async (root) => {
+    const customCodexHome = path.join(root, 'custom-codex-home')
+    process.env.CODEX_HOME = customCodexHome
+    await fs.mkdir(customCodexHome, { recursive: true })
+    await fs.writeFile(path.join(customCodexHome, 'config.toml'), '[harness]\nname = "dcodex"\n')
+
+    const result: any = await doctorRun('doctor', ['--fix', '--json'])
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'blocked_harness_conflict')
+    assert.equal(result.no_fix_writes_performed, true)
+    assert.ok(result.conflicts.some((item: any) => item.path === path.join(customCodexHome, 'config.toml')))
     await assert.rejects(fs.access(path.join(root, '.sneakoscope')))
   })
 })
@@ -79,3 +137,52 @@ test('setup preserves a user worker TOML and reports the collision as failure', 
     await fs.access(path.join(agentsDir, 'expert.toml'))
   })
 })
+
+test('setup preserves invalid inherited global TOML and returns a manual blocker', async () => {
+  await withTempProject('sks-setup-invalid-global-config-', async (root) => {
+    const globalConfigPath = path.join(String(process.env.CODEX_HOME), 'config.toml')
+    const projectConfigPath = path.join(root, '.codex', 'config.toml')
+    const invalidGlobal = '[agents\nmax_threads = 20\n'
+    await fs.mkdir(path.dirname(globalConfigPath), { recursive: true })
+    await fs.writeFile(globalConfigPath, invalidGlobal)
+
+    const result: any = await setupCommand([
+      '--local-only',
+      '--install-scope', 'project',
+      '--skip-cli-tools',
+      '--json'
+    ])
+    assert.equal(result.ok, false)
+    assert.equal(result.status, 'manual_blocked')
+    assert.ok(result.blockers.includes('manual_invalid_inherited_global_codex_config'))
+    assert.equal(await fs.readFile(globalConfigPath, 'utf8'), invalidGlobal)
+    const backup = (await fs.readdir(path.dirname(globalConfigPath)))
+      .find((name) => name.startsWith('config.toml.sks-inherited-global-config-invalid-') && name.endsWith('.bak'))
+    assert.ok(backup)
+    assert.equal(await fs.readFile(path.join(path.dirname(globalConfigPath), String(backup)), 'utf8'), invalidGlobal)
+    await assert.rejects(fs.access(projectConfigPath))
+  })
+})
+
+test('default doctor fix creates only project worker and expert roles', async () => {
+  await withTempProject('sks-doctor-official-roles-', async (root) => {
+    const codexHome = String(process.env.CODEX_HOME)
+    const globalAgents = path.join(codexHome, 'agents')
+    await fs.mkdir(globalAgents, { recursive: true })
+    const userRole = path.join(globalAgents, 'user-role.toml')
+    await fs.writeFile(userRole, 'name = "user-role"\n')
+
+    await doctorRun('doctor', ['--fix', '--yes', '--local-only', '--machine-only', '--profile', 'fix', '--json'])
+
+    const projectFiles = (await fs.readdir(path.join(root, '.codex', 'agents'))).sort()
+    const globalFiles = (await fs.readdir(globalAgents)).sort()
+    assert.deepEqual(projectFiles, ['expert.toml', 'worker.toml'])
+    assert.deepEqual(globalFiles, ['user-role.toml'])
+    assert.equal(await fs.readFile(userRole, 'utf8'), 'name = "user-role"\n')
+  })
+})
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}

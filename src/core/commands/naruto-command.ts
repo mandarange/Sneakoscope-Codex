@@ -3,8 +3,10 @@ import { ui as cliUi } from '../../cli/cli-theme.js'
 import {
   createMission,
   findLatestMission,
+  getOrCreateSessionMission,
   loadStateForSession,
   loadMission,
+  sessionStateKey,
   setCurrent
 } from '../mission.js'
 import {
@@ -32,7 +34,9 @@ import { buildOfficialSubagentPrompt } from '../subagents/official-subagent-prom
 import { readOfficialSubagentConfig } from '../subagents/official-subagent-config.js'
 import {
   SUBAGENT_EVENT_LOG_FILENAME,
+  SUBAGENT_PARENT_SUMMARY_FILENAME,
   normalizeSubagentParentSummary,
+  persistOrReuseTrustworthySubagentParentSummary,
   readSubagentEvents,
   writeSubagentEvidence
 } from '../subagents/subagent-evidence.js'
@@ -50,6 +54,7 @@ const NARUTO_SUMMARY_FILENAME = 'naruto-summary.json'
 const NARUTO_GATE_FILENAME = 'naruto-gate.json'
 const LEGACY_FLAG_WARNING = 'SKS: --clones is deprecated; use --agents. Naruto now uses Codex subagents.'
 const LEGACY_WORKERS_WARNING = 'SKS: naruto workers is deprecated; use naruto subagents.'
+const REMOVED_LEGACY_SUBCOMMANDS = new Set(['dashboard'])
 
 type NarutoAction = 'run' | 'status' | 'subagents' | 'proof' | 'help'
 
@@ -175,7 +180,8 @@ async function narutoRun(parsed: NarutoArgs) {
     requestedSubagents: budget.requestedSubagents,
     parentSummaryPresent: false,
     workflowStatus: 'delegation_context_ready',
-    preparationOnly: true
+    preparationOnly: true,
+    additionalBlockers: configBlockers
   })
   await writeJsonAtomic(path.join(dir, NARUTO_SUMMARY_FILENAME), buildNarutoSummary({
     missionId: id,
@@ -218,6 +224,7 @@ async function narutoRun(parsed: NarutoArgs) {
     requestedSubagents: budget.requestedSubagents,
     maxThreads: budget.maxThreads,
     appSession,
+    missionId: id,
     sessionKey
   })
   const completedPlan = await readJson<any>(path.join(dir, SUBAGENT_PLAN_FILENAME), plan).catch(() => plan)
@@ -225,12 +232,15 @@ async function narutoRun(parsed: NarutoArgs) {
     requested: Number(completedPlan?.requested_subagents || budget.requestedSubagents),
     configuredMaxThreads: Number(completedPlan?.max_threads || budget.maxThreads)
   })
+  const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, run.parent_summary, {
+    workflowStatus: run.status
+  })
   const evidence = await writeSubagentEvidence(dir, {
     requestedSubagents: finalBudget.requestedSubagents,
-    parentSummary: run.parent_summary,
-    parentSummaryPresent: Boolean(run.parent_summary),
+    parentSummary: effectiveParentSummary,
     workflowStatus: run.status,
-    preparationOnly: appSession
+    preparationOnly: appSession,
+    additionalBlockers: configBlockers
   })
   const passed = run.ok === true && evidence.ok === true && appSession === false
   const blockers = uniqueStrings([
@@ -253,7 +263,7 @@ async function narutoRun(parsed: NarutoArgs) {
     verification,
     status,
     ok: passed,
-    parentSummary: run.parent_summary,
+    parentSummary: effectiveParentSummary,
     blockers,
     appSession,
     sessionKey
@@ -281,6 +291,7 @@ async function narutoRun(parsed: NarutoArgs) {
     artifacts: {
       plan: SUBAGENT_PLAN_FILENAME,
       events: SUBAGENT_EVENT_LOG_FILENAME,
+      parent_summary: evidence.parent_summary_trustworthy === true ? SUBAGENT_PARENT_SUMMARY_FILENAME : null,
       evidence: 'subagent-evidence.json',
       summary: NARUTO_SUMMARY_FILENAME,
       gate: NARUTO_GATE_FILENAME
@@ -368,6 +379,11 @@ function narutoHelp(parsed: NarutoArgs) {
   return emit(parsed, result, () => {
     console.log('$Naruto — Codex official subagent workflow')
     for (const line of result.usage) console.log(`  ${line}`)
+    console.log(`Parent: ${result.parent.model} / ${result.parent.model_reasoning_effort}`)
+    console.log(`Worker: ${result.agents.worker.model} / ${result.agents.worker.model_reasoning_effort}`)
+    console.log(`Expert: ${result.agents.expert.model} / ${result.agents.expert.model_reasoning_effort}`)
+    console.log(`Nesting: max_depth=${result.max_depth}; subagents must not spawn subagents`)
+    console.log('Evidence: SubagentStop is lifecycle-only; completion requires subagent-parent-summary.json with one structured outcome per thread.')
   })
 }
 
@@ -376,6 +392,7 @@ function buildNarutoSummary(input: any) {
   return {
     schema: NARUTO_RESULT_SCHEMA,
     ok: input.ok === true,
+    completion_evidence: input.ok === true,
     status: input.status,
     route: '$Naruto',
     workflow: 'official_codex_subagent',
@@ -410,14 +427,28 @@ function buildNarutoSummary(input: any) {
 }
 
 async function writeNarutoGate(dir: string, input: any) {
-  await writeJsonAtomic(path.join(dir, NARUTO_GATE_FILENAME), {
+  await writeJsonAtomic(path.join(dir, NARUTO_GATE_FILENAME), buildNarutoGateResult(input))
+}
+
+export function buildNarutoGateResult(input: any) {
+  const passed = input.passed === true
+  const requested = Number(input.evidence?.requested_subagents || 0)
+  const completed = Number(input.evidence?.completed_threads || 0)
+  const failed = Number(input.evidence?.failed_threads || 0)
+  return {
     schema: 'sks.naruto-gate.v1',
     route: '$Naruto',
     workflow: 'official_codex_subagent',
     mission_id: input.missionId,
-    passed: input.passed === true,
+    status: passed ? 'passed' : 'blocked',
+    passed,
+    terminal: passed,
+    terminal_state: passed ? 'completed' : 'blocked',
+    subagent_plan_ready: true,
+    official_subagent_evidence: input.evidence?.ok === true,
+    session_cleanup: failed === 0 && requested > 0 && completed >= requested,
     subagent_evidence_ready: input.evidence?.ok === true,
-    requested_subagents: input.evidence?.requested_subagents ?? null,
+    requested_subagents: requested || null,
     started_subagents: Number(input.evidence?.started_threads || 0),
     completed_subagents: Number(input.evidence?.completed_threads || 0),
     failed_subagents: Number(input.evidence?.failed_threads || 0),
@@ -426,8 +457,9 @@ async function writeNarutoGate(dir: string, input: any) {
     native_process_proof_required: false,
     legacy_process_swarm_used: false,
     blockers: uniqueStrings(input.blockers || input.evidence?.blockers || []),
+    missing_fields: uniqueStrings(input.blockers || input.evidence?.blockers || []),
     updated_at: nowIso()
-  })
+  }
 }
 
 async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: string | null = null) {
@@ -436,12 +468,19 @@ async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: s
     return loaded ? { id: parsed.missionId, dir: loaded.dir } : null
   }
   if (sessionKey) {
-    const state = await loadStateForSession(root, sessionKey).catch(() => null)
-    const route = String(state?.route || state?.route_command || state?.mode || '').replace(/^\$/, '').toUpperCase()
-    if (state?.mission_id && state?.route_closed !== true && route === 'NARUTO') {
-      const loaded = await loadMission(root, state.mission_id).catch(() => null)
-      if (loaded) return { id: state.mission_id, dir: loaded.dir }
-    }
+    const resolved = await getOrCreateSessionMission(root, {
+      mode: 'naruto',
+      prompt: parsed.prompt,
+      sessionKey,
+      selectMissionId: (state) => {
+        const route = String(state?.route || state?.route_command || state?.mode || '').replace(/^\$/, '').toUpperCase()
+        const sessionMatches = state?._session_key === sessionStateKey(sessionKey)
+        return sessionMatches && state?.mission_id && state?.route_closed !== true && route === 'NARUTO'
+          ? String(state.mission_id)
+          : null
+      }
+    })
+    return { id: resolved.id, dir: resolved.dir }
   }
   const created = await createMission(root, { mode: 'naruto', prompt: parsed.prompt, sessionKey })
   return { id: created.id, dir: created.dir }
@@ -449,9 +488,17 @@ async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: s
 
 async function resolveReadMission(parsed: NarutoArgs) {
   const root = await sksRoot()
-  const id = parsed.missionId && parsed.missionId !== 'latest'
-    ? parsed.missionId
-    : await findLatestMission(root, { mode: 'naruto' })
+  const explicitId = parsed.missionId && parsed.missionId !== 'latest' ? parsed.missionId : null
+  const sessionKey = detectCodexAppSession() ? codexAppSessionKey() : null
+  let id = explicitId
+  if (!id && sessionKey) {
+    const state = await loadStateForSession(root, sessionKey).catch(() => null)
+    const route = String(state?.route || state?.route_command || state?.mode || '').replace(/^\$/, '').toUpperCase()
+    if (state?._session_key === sessionStateKey(sessionKey) && state?.route_closed !== true && route === 'NARUTO') {
+      id = String(state.mission_id || '') || null
+    }
+  }
+  if (!id && !sessionKey) id = await findLatestMission(root, { mode: 'naruto' })
   if (!id) return null
   const loaded = await loadMission(root, id).catch(() => null)
   return loaded ? { root, id, dir: loaded.dir } : null
@@ -481,8 +528,12 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ...optionErrors('--mission', missionOption, false),
     ...optionErrors('--mission-id', missionIdOption, false),
     ...(agentsOption.present && clonesOption.present ? ['conflicting_options:--agents,--clones'] : []),
+    ...booleanOptionErrors(normalized),
     ...unknownOptionErrors(normalized)
   ])
+  if (REMOVED_LEGACY_SUBCOMMANDS.has(String(first || '').toLowerCase())) {
+    argumentErrors.push(`removed_legacy_subcommand:${String(first).toLowerCase()}`)
+  }
   const requestedSubagents = strictPositiveInteger(agentsOption.value ?? clonesOption.value)
   const maxThreads = strictPositiveInteger(maxThreadsOption.value)
   const missionFlag = missionOption.value ?? missionIdOption.value
@@ -493,6 +544,12 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
   const prompt = action === 'run'
     ? positional.join(' ').trim()
     : ''
+  const positionalHead = String(positional[0] || '').toLowerCase()
+  if (!explicitAction && REMOVED_LEGACY_SUBCOMMANDS.has(positionalHead)) {
+    argumentErrors.push(`removed_legacy_subcommand:${positionalHead}`)
+  } else if (!explicitAction && ['run', 'status', 'subagents', 'workers', 'proof', 'help'].includes(positionalHead)) {
+    argumentErrors.push(`misplaced_subcommand:${positionalHead}`)
+  }
   if (action === 'run' && !prompt) argumentErrors.push('empty_task')
   return {
     action,
@@ -623,6 +680,18 @@ function unknownOptionErrors(args: string[]): string[] {
     if (!arg.startsWith('-') || arg === '-') continue
     const name = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
     if (!canonical.has(name) && !legacy.has(name)) errors.push(`unsupported_argument:${name}`)
+  }
+  return errors
+}
+
+function booleanOptionErrors(args: string[]): string[] {
+  const booleanNames = new Set(['--json', '--readonly', '--read-only', '--help', '-h'])
+  const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args
+  const errors: string[] = []
+  for (const arg of optionArgs) {
+    if (!arg.includes('=')) continue
+    const name = arg.slice(0, arg.indexOf('='))
+    if (booleanNames.has(name)) errors.push(`boolean_option_value_not_supported:${name}`)
   }
   return errors
 }

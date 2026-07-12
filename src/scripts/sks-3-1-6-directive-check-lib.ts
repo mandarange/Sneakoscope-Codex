@@ -288,9 +288,11 @@ async function agentRoleContent(id: string): Promise<void> {
   try {
     const tmp = await tempRoot(id)
     const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
-    const report = await mod.syncCodexAgentRoles({ root: tmp, codexHome: path.join(tmp, 'codex-home'), apply: true })
-    const role = fs.readFileSync(path.join(tmp, 'codex-home', 'agents', 'sks-implementer.toml'), 'utf8')
-    assertGate(role.includes('Bounded ownership') && role.includes('Maker/checker separation') && role.includes('Required proof artifacts'), 'agent role content incomplete', { role, report })
+    const codexHome = path.join(tmp, 'codex-home')
+    const report = await mod.syncCodexAgentRoles({ root: tmp, codexHome, apply: true })
+    const role = fs.readFileSync(path.join(tmp, '.codex', 'agents', 'worker.toml'), 'utf8')
+    assertGate(role.includes('model = "gpt-5.6-luna"') && role.includes('Work only on the exact slice assigned by the parent agent.'), 'official worker role content incomplete', { role, report })
+    assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'agent role content gate must not create global directive roles', report)
   } finally {
     restoreEnv(previous)
   }

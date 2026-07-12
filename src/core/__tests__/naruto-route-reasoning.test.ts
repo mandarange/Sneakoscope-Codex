@@ -5,7 +5,7 @@ import { ROUTES, routeReasoning } from '../routes.js'
 const naruto = ROUTES.find((route) => route.id === 'Naruto')
 const teamAlias = ROUTES.find((route) => route.id === 'Team')
 
-test('Naruto route reasoning has no legacy low/medium path', () => {
+test('Naruto route reasoning always matches the Sol Max parent policy', () => {
   assert.ok(naruto)
   for (const prompt of [
     'tiny typo fix',
@@ -14,8 +14,9 @@ test('Naruto route reasoning has no legacy low/medium path', () => {
     'run browser e2e verification'
   ]) {
     const result = routeReasoning(naruto, prompt)
-    assert.equal(result.effort, 'xhigh', prompt)
-    assert.equal(result.profile, 'sks-research-xhigh', prompt)
+    assert.equal(result.effort, 'max', prompt)
+    assert.equal(result.profile, 'sks-research-max', prompt)
+    assert.equal(result.reason, 'naruto_parent_sol_max', prompt)
   }
 })
 

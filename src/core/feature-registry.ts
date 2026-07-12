@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { COMMAND_MANIFEST_LITE } from '../cli/command-manifest-lite.js';
 import { COMMANDS } from '../cli/command-registry.js';
 import { COMMAND_CATALOG, DOLLAR_COMMAND_ALIASES, DOLLAR_COMMANDS, ROUTES } from './routes.js';
 import { FEATURE_QUALITY_LEVELS, fixtureForFeature, fixtureSummary, validateFeatureFixtures } from './feature-fixtures.js';
@@ -31,13 +32,13 @@ const FEATURE_ACCEPTANCE_DEFAULTS = Object.freeze([
 ]);
 
 export async function buildFeatureRegistry({ root = packageRoot(), generatedAt = nowIso() }: any = {}): Promise<JsonData> {
-  const handlerKeys = await parseMainHandlerKeys(root);
+  const handlerKeys = actualCommandHandlerKeys();
   const skillNames = await listProjectSkillNames(root);
   const docRouteMentions = await collectDocRouteMentions(root);
   const handlerToFeature: Record<string, string> = mapHandlerKeysToFeatureIds(handlerKeys);
   const features: any[] = [];
 
-  for (const command of COMMAND_CATALOG) {
+  for (const command of featureCommandCatalog()) {
     const handlerAliases = Object.entries(handlerToFeature)
       .filter(([, featureId]: any) => featureId === `cli-${command.name}`)
       .map(([handler]: any) => handler)
@@ -70,7 +71,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
     generated_at: generatedAt,
     inventory_sources: {
       commands_json: 'sks commands --json',
-      main_handlers: 'src/cli/main.js',
+      main_handlers: 'src/cli/command-registry.ts COMMANDS',
       dollar_routes: 'src/core/routes.js',
       docs: ['README.md', '.codex/SNEAKOSCOPE.md', 'AGENTS.md', '.agents/skills/.sks-generated.json'],
       skills: '.agents/skills'
@@ -79,7 +80,7 @@ export async function buildFeatureRegistry({ root = packageRoot(), generatedAt =
     fixture_summary: fixtureSummary(features),
     feature_quality_summary: featureQualitySummary(features),
     source_inventory: {
-      cli_command_names: COMMAND_CATALOG.map((entry: any) => entry.name),
+      cli_command_names: COMMAND_MANIFEST_LITE.map((entry) => entry.name),
       handler_keys: handlerKeys,
       dollar_commands: DOLLAR_COMMANDS.map((entry: any) => entry.command),
       app_skill_aliases: DOLLAR_COMMAND_ALIASES.map((entry: any) => entry.app_skill),
@@ -599,8 +600,8 @@ export function renderFeatureInventoryMarkdown(registry: any) {
     lines.push(`- doc_route_mentions_without_route: ${coverage.doc_route_mentions_without_route.join(', ')}`);
   }
   lines.push('', '## Prompt Checklist Coverage', '');
-  lines.push('- [x] Collected `sks commands --json` command surface via `COMMAND_CATALOG`.');
-  lines.push('- [x] Parsed `src/cli/main.js` handler keys, including hidden handlers and aliases.');
+  lines.push('- [x] Collected the complete `sks commands --json` command surface via `COMMAND_MANIFEST_LITE`.');
+  lines.push('- [x] Collected the actual `src/cli/command-registry.ts` `COMMANDS` handler keys, including hidden handlers.');
   lines.push('- [x] Collected dollar routes and app skill aliases from `src/core/routes.js`.');
   lines.push('- [x] Scanned README, Codex quick reference, AGENTS, and generated skill manifest for dollar-route mentions.');
   lines.push('- [x] Mapped project skills from `.agents/skills` into the registry.');
@@ -620,7 +621,7 @@ function commandFeature(command: any, handlerAliases: any = []) {
     commands: [command.usage],
     aliases,
     category,
-    maturity,
+    maturity: command.maturity || maturity,
     intent: command.description,
     completion_proof_integration: proofContract(category),
     voxel_triwiki_integration: voxelContract(category),
@@ -858,7 +859,7 @@ function baseFeature(feature: any) {
 }
 
 function mapHandlerKeysToFeatureIds(handlerKeys: any = []) {
-  const catalogNames = new Set(COMMAND_CATALOG.map((entry: any) => entry.name));
+  const catalogNames = new Set(COMMAND_MANIFEST_LITE.map((entry) => entry.name));
   const out: Record<string, string> = {};
   for (const handler of handlerKeys) {
     const commandName = (HANDLER_ALIAS_TO_COMMAND as Record<string, string>)[handler] || handler;
@@ -867,19 +868,20 @@ function mapHandlerKeysToFeatureIds(handlerKeys: any = []) {
   return out;
 }
 
-async function parseMainHandlerKeys(root: any) {
-  const registryText = await readText(path.join(root, 'src', 'cli', 'command-registry.js'), '');
-  const registryMatch = registryText.match(/export const COMMANDS = \{([\s\S]*?)\n\};/);
-  if (registryMatch) return parseObjectKeys(registryMatch[1]);
-  return [];
+function featureCommandCatalog() {
+  const detailed = new Map(COMMAND_CATALOG.map((entry: any) => [entry.name, entry]));
+  return COMMAND_MANIFEST_LITE.map((entry) => {
+    const detail: any = detailed.get(entry.name);
+    return {
+      ...entry,
+      usage: detail?.usage || `sks ${entry.name}`,
+      description: detail?.description || entry.summary
+    };
+  });
 }
 
-function parseObjectKeys(text: any = '') {
-  const keys: any[] = [];
-  for (const keyMatch of text.matchAll(/^\s{2}(?:'([^']+)'|"([^"]+)"|([A-Za-z_$][\w$-]*))\s*:/gm)) {
-    keys.push(keyMatch[1] || keyMatch[2] || keyMatch[3]);
-  }
-  return [...new Set(keys)].sort();
+function actualCommandHandlerKeys() {
+  return Object.keys(COMMANDS).sort();
 }
 
 async function listProjectSkillNames(root: any) {
@@ -936,6 +938,7 @@ function isExternalPromptCommandMention(mention: any) {
   const normalized = String(mention || '').toUpperCase();
   return [
     '$CODEX_HOME',
+    '$HOME',
     '$CODEX_LB_API_KEY',
     '$SKS_CODEX_APP_IMAGEGEN_OUTPUT',
     '$SKS_CODEX_APP_IMAGEGEN_OUTPUT_ID',

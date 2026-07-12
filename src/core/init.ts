@@ -18,10 +18,11 @@ import { currentGeneratedFileInventory, installCodexAgents, installGlobalSkills,
 import {
   backupInvalidToml,
   inspectOfficialSubagentToml,
-  manifestProvesSksGeneratedPath,
   mergeOfficialSubagentConfig,
+  officialSubagentConfigOwnershipProof,
   officialSubagentConfigWarnings,
-  readInheritedOfficialSubagentConfigText
+  readInheritedOfficialSubagentConfigText,
+  resolveInheritedOfficialSubagentConfigPath
 } from './subagents/official-subagent-config.js';
 export { installGlobalSkills, installProjectSkills, installSkills } from './init/skills.js';
 
@@ -251,7 +252,16 @@ function isSksManagedHook(hook: any) {
 const AGENTS_BLOCK = "\n# Sneakoscope Codex Managed Rules\n\nThis repository uses Sneakoscope Codex.\n\n## Core Rules\n\n- Codex native `/goal` workflows are the persisted continuation surface; Ralph is removed from the user-facing SKS surface.\n- Keep runtime state bounded: raw logs go to files, prompts get tails/summaries, and `sks gc` may prune stale artifacts.\n- Codex App hooks, launch paths, and `sks doctor --fix` do not force SKS update prompts during ordinary work. Manual CLI update surfaces (`sks update-check`, `sks update check`, and `sks update now`) remain available when the operator explicitly asks for them.\n- Versioning is explicit: use `sks versioning bump` when preparing release metadata. SKS must not install Git pre-commit hooks.\n- Installed harness files are immutable to LLM edits: `.codex/*`, `.agents/skills/`, `.codex/agents/`, `.sneakoscope/*policy*.json`, `AGENTS.md`, and `node_modules/sneakoscope`. The Sneakoscope engine source repo is the only automatic exception.\n- OMX/DCodex conflicts block setup/doctor. Show `sks conflicts prompt`; cleanup requires explicit human approval.\n- Do not stop at a plan when implementation was requested. Finish, verify, or report the hard blocker.\n- Do not create unrequested fallback implementation code. If the requested path is impossible, block with evidence instead of inventing substitute behavior.\n\n## Routes\n\n- General execution/code-changing prompts default to `$Team`: native agent intake agents, TriWiki refresh/validate, read-only debate, consensus, concrete runtime task graph/inboxes, fresh executor team, minimum five-lane Team review, integration, Honest Mode.\n- `$Computer-Use` / `$CU` is the maximum-speed Codex Computer Use lane for native macOS, desktop-app, OS-settings, and non-web visual tasks only. Web, browser, localhost, website, webapp, and web-based app verification must use the Codex Chrome Extension path first and halt rapidly if the extension is not installed/enabled.\n- `$Goal` is a fast bridge/overlay for Codex native `/goal` create/pause/resume/clear persistence controls; implementation continues through the selected SKS execution route.\n- TriWiki recall must stay bounded. Use `sks wiki sweep` to record demote, soft-forget, archive, delete, promote-to-skill, and promote-to-rule candidates instead of injecting every old claim.\n- Team missions must keep schema-backed evidence current: `work-order-ledger.json`, `effort-decision.json`, `team-dashboard-state.json`, and route-specific visual/dogfood artifacts where applicable. Team completion requires at least five independent reviewer/QA validation lanes before integration or final, even when a prompt requests fewer reviewers. Use `sks validate-artifacts latest` before claiming those artifacts pass.\n- `$DFix` is Direct Fix: only tiny copy/config/docs/labels/spacing/translation/simple mechanical edits, bypassing the main pipeline, Team, TriWiki/TriFix/reflection recording, and persistent route state; it still uses a one-line DFix-specific Honest check before final. Broad implementation stays on `$Team`, while UI design specifics follow the relevant design/UI route rules. `$PPT` is the restrained, information-first HTML/PDF presentation route and must seal delivery context, audience profile, STP, decision context, and 3+ pain-point/solution/aha mappings before design/render work. It must avoid over-designed visuals, carry detail through hierarchy, spacing, alignment, thin rules, source clarity, and subtle accents, preserve editable source HTML under `source-html/`, record `ppt-parallel-report.json`, and clean PPT-only temporary build files before completion. `$Image-UX-Review` / `$UX-Review` is the imagegen/gpt-image-2 UI/UX review route: source screenshots must become generated annotated review images, those generated images must be extracted into issue ledgers, and text-only critique cannot pass the route gate. `$Answer`, `$Help`, and `$Wiki` stay lightweight.\n- For code work, surface route/guard/write scopes first, split independent worker scopes when available, and keep parent-owned integration and verification.\n- Design work reads `design.md` as the only design decision SSOT. If missing, create it through `design-system-builder` from `docs/Design-Sys-Prompt.md`; getdesign.md, getdesign-reference, and curated DESIGN.md examples from https://github.com/VoltAgent/awesome-design-md are source inputs to fuse into that SSOT or route-local style tokens, not parallel design authorities. Image/logo/raster assets use `imagegen`, which must prefer official Codex App built-in image generation via `$imagegen` / `gpt-image-2`; for newest-model image requests prompt explicitly for ChatGPT Images 2.0 / GPT Image 2.0 with `gpt-image-2`. Do not replace required raster evidence with placeholder SVG/HTML/CSS, prose-only reviews, or fabricated files.\n- Research, AutoResearch, performance, token, accuracy, SEO/GEO, or workflow-improvement claims need experiment/eval evidence. Do not claim live model accuracy without a scored dataset.\n- Treat handwritten files above 3000 lines as split-review risks. Run `sks code-structure scan` and prefer extraction before adding substantial logic.\n- Skill dreaming stays lightweight: route use records JSON counters in `.sneakoscope/skills/dream-state.json`, and full skill inventory/recommendation runs only after the configured 10-route-event threshold and cooldown. Reports are recommendation-only; deleting or merging skills needs explicit user approval.\n\n## Evidence And Context\n\n- Context7 is required for external libraries, APIs, MCPs, package managers, SDKs, and generated docs: resolve-library-id then query-docs.\n- When tech stack, framework, package, runtime, or deployment-platform versions change, use Context7 or official vendor web docs, record current syntax/security/limit guidance as high-priority TriWiki claims, then refresh and validate before coding.\n- TriWiki is the context-tracking SSOT for long-running missions, Team handoffs, and context-pressure recovery. Read `.sneakoscope/wiki/context-pack.json` before each stage, use `attention.use_first` for compact high-trust recall, hydrate `attention.hydrate_first` from source before risky or lower-trust decisions, refresh after findings or artifact changes, and validate before handoffs/final claims.\n- Source priority: current code/tests/config, decision contract, vgraph, beta, GX render/snapshot metadata, LLM Wiki coordinate index, then model knowledge only if allowed.\n- Final response before stop: summarize what was done, what changed for the user/repo, what was verified, and what remains unverified or blocked; then run Honest Mode. Say what passed and what was not verified.\n- `$From-Chat-IMG` uses forensic visual effort, not ordinary Team effort. Completion is blocked until source inventory, visual mapping, work-order coverage, scoped dogfood/QA, and post-fix verification artifacts are present and valid.\n\n## Safety\n\n- Database access is high risk. Use read-only inspection by default; live data mutation is out of scope unless a sealed contract allows local or branch-only migration files.\n- MAD and MAD-SKS widen only explicit scoped permissions; they still do not authorize unrequested fallback implementation code.\n- Task completion requires relevant tests or justification, zero unsupported critical claims, accepted visual/wiki drift, and final evidence.\n\n## Codex App\n\nUse `.codex/SNEAKOSCOPE.md`, generated `.agents/skills`, `.codex/hooks.json`, and SKS dollar commands (`$sks`, `$team`, `$computer-use`, `$cu`, `$ppt`, `$image-ux-review`, `$ux-review`, `$goal`, `$dfix`, `$qa-loop`, etc.) as the app control surface.\n";
 
 function agentsBlockText() {
-  return AGENTS_BLOCK;
+  return AGENTS_BLOCK
+    .replace(
+      'General execution/code-changing prompts default to `$Team`: native agent intake agents, TriWiki refresh/validate, read-only debate, consensus, concrete runtime task graph/inboxes, fresh executor team, minimum five-lane Team review, integration, Honest Mode.',
+      'General execution/code-changing prompts default to `$Team`, a compatibility alias for the `$Naruto` Codex official subagent workflow: parent-owned decomposition, official agent threads, disjoint write scopes, bounded TriWiki use, minimum five independent review/QA lanes for substantive release work, parent integration, and Honest Mode.'
+    )
+    .replace(
+      'Team missions must keep schema-backed evidence current: `work-order-ledger.json`, `effort-decision.json`, `team-dashboard-state.json`, and route-specific visual/dogfood artifacts where applicable. Team completion requires at least five independent reviewer/QA validation lanes before integration or final, even when a prompt requests fewer reviewers. Use `sks validate-artifacts latest` before claiming those artifacts pass.',
+      'New `$Team` execution redirects to the Naruto official subagent workflow and must keep `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, the work-order ledger, and route-specific visual/dogfood artifacts current where applicable. Substantive release completion requires at least five independent reviewer/QA validation lanes before final integration. Legacy Team observe/watch commands remain read-only for old missions. Use `sks validate-artifacts latest` before claiming artifacts pass.'
+    )
+    .replace('TriWiki is the context-tracking SSOT for long-running missions, Team handoffs, and context-pressure recovery.', 'TriWiki is the context-tracking SSOT for long-running missions, official subagent handoffs, and context-pressure recovery.');
 }
 
 export async function initProject(root: any, opts: any = {}) {
@@ -909,7 +919,12 @@ function upsertTomlTable(text: any, table: any, block: any) {
 
   const generatedCodexConfigPath = path.join(root, '.codex', 'config.toml');
   const existingCodexConfig = await readText(generatedCodexConfigPath, '') || preRepairCodexConfig;
-  const configPreviouslySksOwned = manifestProvesSksGeneratedPath(previousManifest, '.codex/config.toml');
+  const configOwnershipProof = officialSubagentConfigOwnershipProof({
+    text: existingCodexConfig,
+    manifest: previousManifest,
+    migrationReceipt: await readJson(path.join(root, '.sneakoscope', 'update', 'migration-receipt.json'), null)
+  });
+  const configPreviouslySksOwned = configOwnershipProof.owned;
   const configWasFresh = !String(existingCodexConfig || '').trim();
   const existingConfigValidation = inspectOfficialSubagentToml(existingCodexConfig);
   let codexConfigInstall: any;
@@ -932,39 +947,70 @@ function upsertTomlTable(text: any, table: any, block: any) {
       home: opts.home,
       codexHome: opts.codexHome
     });
-    const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
-      mergeManagedCodexConfigToml(existingCodexConfig, {
-        sksOwned: configPreviouslySksOwned,
-        inheritedText: inheritedCodexConfig
-      }),
-      generatedCodexConfigPath,
-      { home: opts.home, codexHome: opts.codexHome }
-    );
-    const managedConfigValidation = inspectOfficialSubagentToml(managedCodexConfig);
-    if (!managedConfigValidation.ok) {
-      await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
+    const inheritedConfigValidation = inspectOfficialSubagentToml(inheritedCodexConfig);
+    if (!inheritedConfigValidation.ok) {
+      // A malformed inherited CODEX_HOME config is an operator-owned blocker,
+      // not an empty layer. Do not derive or write a project config from it.
+      // Repair mode may have removed an SKS-generated project config earlier,
+      // so restore that project text byte-for-byte while leaving the inherited
+      // file untouched.
+      if (String(existingCodexConfig || '').length > 0) {
+        await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
+      }
+      const inheritedConfigPath = resolveInheritedOfficialSubagentConfigPath(generatedCodexConfigPath, {
+        home: opts.home,
+        codexHome: opts.codexHome
+      });
+      const backupPath = inheritedConfigPath
+        ? await backupInvalidToml(inheritedConfigPath, inheritedCodexConfig, 'inherited-global-config-invalid')
+        : null;
       codexConfigInstall = {
         ok: false,
-        status: 'unsafe_config_merge_preserved',
+        status: 'invalid_inherited_global_config_preserved',
         config_path: generatedCodexConfigPath,
-        backup_path: null,
-        manual_blockers: ['manual_project_codex_config_merge_invalid'],
+        backup_path: backupPath,
+        inherited_config_preserved: true,
+        inherited_config_error: inheritedConfigValidation.error,
+        manual_blockers: ['manual_invalid_inherited_global_codex_config'],
         warnings: []
       };
-      created.push('.codex/config.toml merge skipped (manual repair required)');
+      created.push('inherited global Codex config invalid and preserved (manual repair required)');
     } else {
-      await writeTextAtomic(generatedCodexConfigPath, managedCodexConfig);
-      codexConfigInstall = {
-        ok: true,
-        status: managedCodexConfig === existingCodexConfig ? 'present' : 'written',
-        config_path: generatedCodexConfigPath,
-        backup_path: null,
-        manual_blockers: [],
-        warnings: officialSubagentConfigWarnings(managedCodexConfig, inheritedCodexConfig)
-      };
-      created.push('.codex/config.toml');
+      const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
+        mergeManagedCodexConfigToml(existingCodexConfig, {
+          sksOwned: configPreviouslySksOwned,
+          inheritedText: inheritedCodexConfig
+        }),
+        generatedCodexConfigPath,
+        { home: opts.home, codexHome: opts.codexHome }
+      );
+      const managedConfigValidation = inspectOfficialSubagentToml(managedCodexConfig);
+      if (!managedConfigValidation.ok) {
+        await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
+        codexConfigInstall = {
+          ok: false,
+          status: 'unsafe_config_merge_preserved',
+          config_path: generatedCodexConfigPath,
+          backup_path: null,
+          manual_blockers: ['manual_project_codex_config_merge_invalid'],
+          warnings: []
+        };
+        created.push('.codex/config.toml merge skipped (manual repair required)');
+      } else {
+        await writeTextAtomic(generatedCodexConfigPath, managedCodexConfig);
+        codexConfigInstall = {
+          ok: true,
+          status: managedCodexConfig === existingCodexConfig ? 'present' : 'written',
+          config_path: generatedCodexConfigPath,
+          backup_path: null,
+          manual_blockers: [],
+          warnings: officialSubagentConfigWarnings(managedCodexConfig, inheritedCodexConfig)
+        };
+        created.push('.codex/config.toml');
+      }
     }
   }
+  codexConfigInstall.ownership_proof = configOwnershipProof;
 
   await writeTextAtomic(path.join(root, '.codex', 'SNEAKOSCOPE.md'), codexAppQuickReference(installScope, hookCommandPrefix));
   created.push('.codex/SNEAKOSCOPE.md');
@@ -1108,8 +1154,8 @@ function codexAppQuickReference(scope: any, commandPrefix: any) {
     `Context Tracking: TriWiki SSOT. Before each route phase read only the latest coordinate+voxel overlay pack at .sneakoscope/wiki/context-pack.json; coordinate-only legacy packs are invalid. Use attention.use_first for compact high-trust recall and hydrate attention.hydrate_first from source before risky/lower-trust decisions. During every stage hydrate low-trust claims from source/hash/RGBA anchors; after changes run ${commandPrefix} wiki refresh or pack; before handoff/final run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json.`,
     stackCurrentDocsPolicyText(commandPrefix),
     `Team review: ${MIN_TEAM_REVIEW_POLICY_TEXT}`,
-    `Team Zellij view: ${commandPrefix} team "task" prepares live watch/lane commands and reconciles managed Team panes inside the current SKS-owned Zellij session when available; add --no-open-zellij for artifact-only creation. Existing hook-created Team missions can be opened later with ${commandPrefix} team open-zellij latest. The view keeps the main Codex pane alive, adds an overview watch pane plus color-coded split per-agent lanes, and closes only SKS-managed Team panes as agent lanes finish or cleanup is requested; ${commandPrefix} team lane latest --agent native_agent_1 --follow shows one agent's status, assigned runtime tasks, recent agent events, direct messages, and fallback global tail; ${commandPrefix} team message latest --from native_agent_1 --to executor_1 --message "handoff note" mirrors bounded agent communication into transcript/lane panes; ${commandPrefix} team cleanup-zellij latest marks the SKS session record complete and asks managed panes/follow loops to close or show a cleanup summary.`,
-    `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Zellij is the interactive lane runtime for ${commandPrefix} --mad and Team lane UI; ${commandPrefix} bootstrap --yes, ${commandPrefix} deps check --yes, and ${commandPrefix} --mad --yes can install or repair Codex CLI/Zellij on macOS/Homebrew. npm postinstall reports missing CLI tools but does not mutate Homebrew/npm globals unless SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1 is set. Launch paths do not run sneakoscope npm update checks; use ${commandPrefix} update-check or ${commandPrefix} update now explicitly when you want that. Codex CLI latest checks remain dependency-readiness guidance and prompt Y/n only when the installed Codex CLI is missing or outdated. ${commandPrefix} doctor --fix repairs the local SKS/Codex setup without running a global SKS package update. ${commandPrefix} codex-app remote-control wraps the Codex CLI 0.130.0+ headless remote-control entrypoint. ${commandPrefix} team open-zellij latest is the explicit Team lane view command.`,
+    `Official subagents: ${commandPrefix} naruto run "task" [--agents N] [--max-threads N] prepares bounded Codex agent threads and requires subagent-plan.json, lifecycle events, a trustworthy subagent-parent-summary.json, and correlated evidence. Legacy ${commandPrefix} team watch|lane|open-zellij commands are observation-only for existing Team missions and are not the default execution runtime.`,
+    `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Zellij remains optional for ${commandPrefix} --mad and legacy Team observation; official Naruto execution uses Codex agent threads. ${commandPrefix} bootstrap --yes, ${commandPrefix} deps check --yes, and ${commandPrefix} --mad --yes can install or repair Codex CLI/Zellij on macOS/Homebrew. npm postinstall reports missing CLI tools but does not mutate Homebrew/npm globals unless SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1 is set. Launch paths do not run sneakoscope npm update checks; use ${commandPrefix} update-check or ${commandPrefix} update now explicitly when you want that. ${commandPrefix} doctor --fix repairs the local SKS/Codex setup without running a global SKS package update. ${commandPrefix} codex-app remote-control wraps the supported Codex CLI headless remote-control entrypoint.`,
     `Guard: generated harness files are immutable outside the engine source repo; check ${commandPrefix} guard check; conflicts use ${commandPrefix} conflicts prompt with human approval.`
   ].join('\n') + '\n';
 }

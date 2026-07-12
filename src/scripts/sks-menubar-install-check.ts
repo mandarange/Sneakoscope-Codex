@@ -95,6 +95,7 @@ const hasVisibleStatusSource = generatedSource.includes('NSStatusItem.variableLe
   && generatedSource.includes('configureStatusButton(button, title: state.title)')
   && generatedSource.includes('SKS ⚠')
   && generatedSource.includes('SKS ↑')
+  && generatedSource.includes('SKS ⬆')
   && generatedSource.includes('SKS ⋯')
   && generatedSource.includes('Timer.scheduledTimer(withTimeInterval: 30.0');
 const hasBackgroundReadonlyActions = generatedSource.includes('runSksBackground(["codex-lb", "fast-check"]')
@@ -102,6 +103,10 @@ const hasBackgroundReadonlyActions = generatedSource.includes('runSksBackground(
   && generatedSource.includes('runSksBackground(["fast-mode", "off", "--json"]')
   && generatedSource.includes('runSksSilent(["fast-mode", "status", "--json"]')
   && generatedSource.includes('runSksBackground(["update", "check"]')
+  && generatedSource.includes('runSksSilent(args)')
+  && generatedSource.includes('["codex", "update-status", "--json"]')
+  && generatedSource.includes('runSksBackground(["codex", "update", "--json"]')
+  && generatedSource.includes('runSksBackground(["doctor", "--fix", "--global-only", "--json"]')
   && generatedSource.includes('display notification')
   && !generatedSource.includes('runSksInTerminal')
   && !generatedSource.includes('runInTerminal');
@@ -173,6 +178,9 @@ const expectedMenuItems = [
   'Fast Check',
   'SKS Version Check',
   'Update SKS Now',
+  'Codex CLI Version',
+  'Update Codex CLI Now',
+  'Run sks doctor --fix',
   'View Last Log'
 ];
 const missingExpectedItems = expectedMenuItems.filter((item) => !result.menu_items.includes(item));

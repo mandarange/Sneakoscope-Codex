@@ -57,22 +57,21 @@ await writeTextAtomic(path.join(codexHome, 'agents', 'sks-checker.toml'), [
 ].join('\n'))
 
 const planned = await mod.runDoctorCodexStartupRepair({ root: tmp, codexHome, fix: false })
-assertGate(planned.configs.every((entry) => entry.warnings.some((warning) => warning.includes('agent_config_file_stale'))), 'dry inspect must detect stale agent config_file paths', planned)
+assertGate(planned.configs.every((entry) => !entry.warnings.some((warning) => warning.includes('agent_config_file_stale'))), 'structural startup inspection must ignore preserved legacy agent config_file paths', planned)
 
 const repaired = await mod.runDoctorCodexStartupRepair({ root: tmp, codexHome, fix: true, includeDefaultNodeReplCandidates: false })
 const projectText = await fs.readFile(path.join(tmp, '.codex', 'config.toml'), 'utf8')
 const globalText = await fs.readFile(path.join(codexHome, 'config.toml'), 'utf8')
 const checkerText = await fs.readFile(path.join(codexHome, 'agents', 'sks-checker.toml'), 'utf8')
-const projectScoutText = await fs.readFile(path.join(tmp, '.codex', 'agents', 'analysis-scout.toml'), 'utf8')
-const globalScoutText = await fs.readFile(path.join(codexHome, 'agents', 'analysis-scout.toml'), 'utf8')
+const projectScoutPresent = await fs.stat(path.join(tmp, '.codex', 'agents', 'analysis-scout.toml')).then(() => true).catch(() => false)
+const globalScoutPresent = await fs.stat(path.join(codexHome, 'agents', 'analysis-scout.toml')).then(() => true).catch(() => false)
 
-for (const [scope, text, expectedDir] of [
-  ['project', projectText, path.join(tmp, '.codex', 'agents')],
-  ['global', globalText, path.join(codexHome, 'agents')]
+for (const [scope, text] of [
+  ['project', projectText],
+  ['global', globalText]
 ]) {
-  assertGate(!text.includes('/Users/alfredo/'), `${scope} config must drop stale home path`, text)
-  assertGate(text.includes(`config_file = "${path.join(expectedDir, 'analysis-scout.toml').replace(/\\/g, '\\\\')}"`), `${scope} config_file must point at an existing absolute role file`, text)
-  assertGate(text.includes('description = "SKS scout with bounded write capability."'), `${scope} managed agent description must be write-capable`, text)
+  assertGate(text.includes('/Users/alfredo/.codex/agents/analysis-scout.toml'), `${scope} legacy config_file must be preserved`, text)
+  assertGate(text.includes('description = "Read-only SKS scout."'), `${scope} legacy agent description must be preserved`, text)
   assertGate(!text.includes('[mcp_servers.node_repl]'), `${scope} stale node_repl MCP block must be removed`, text)
   assertGate(!text.includes('[mcp_servers.node_repl.env]'), `${scope} stale node_repl child MCP block must be removed`, text)
   assertGate((text.match(/\[mcp_servers\.context7\]/g) || []).length === 1, `${scope} duplicate context7 MCP block must be deduped`, text)
@@ -81,15 +80,12 @@ for (const [scope, text, expectedDir] of [
   assertGate(text.includes('[features]') && text.includes('hooks = true'), `${scope} unrelated tables must be preserved`, text)
 }
 
-for (const [scope, text] of [['project', projectScoutText], ['global', globalScoutText]]) {
-  assertGate(text.includes('sandbox_mode = "workspace-write"'), `${scope} agent role file must be workspace-write`, text)
-  assertGate(!text.includes('Do not edit files.'), `${scope} agent role file must not preserve stale read-only instruction`, text)
-}
-
-assertGate(!checkerText.includes('message_role_prefix'), 'managed directive agent role must remove unsupported message_role_prefix', checkerText)
+assertGate(projectScoutPresent === false && globalScoutPresent === false, 'structural startup repair must not synthesize legacy role TOMLs', { projectScoutPresent, globalScoutPresent })
+assertGate(checkerText.includes('message_role_prefix'), 'legacy directive role TOMLs must be preserved byte-for-byte', checkerText)
 assertGate(repaired.ok === true, 'startup repair must pass when only optional sauron remains', repaired)
 assertGate(repaired.configs.every((entry) => entry.changed === true && entry.backup_path), 'startup repair must back up changed configs', repaired)
-assertGate(repaired.agent_role_files.created.length >= 10, 'startup repair must create missing project/global role configs', repaired)
+assertGate(repaired.agent_role_files.created.length === 0 && repaired.agent_role_files.sanitized.length === 0, 'startup repair must leave project/global agent role files untouched', repaired)
+assertGate(repaired.configs.every((entry) => entry.agent_config_files_repaired.length === 0), 'startup repair must not rewrite legacy agent config_file references', repaired)
 assertGate(repaired.configs.every((entry) => !entry.warnings.some((warning) => warning.includes('agent_config_file_stale'))), 'startup repair must not keep stale agent config warnings after repair', repaired)
 assertGate(repaired.configs.every((entry) => entry.duplicate_toml_blocks_removed.length === 0), 'valid startup repair fixture must not claim duplicate-invalid TOML repair', repaired)
 

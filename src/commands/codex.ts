@@ -6,6 +6,7 @@ import { codexSchemaSnapshotReport } from '../core/codex-compat/codex-schema-sna
 import { detectCodex0141Capability } from '../core/codex-control/codex-0141-capability.js';
 import { detectCodex0144Capability } from '../core/codex-control/codex-0144-capability.js';
 import { CURRENT_CODEX_RELEASE_MANIFEST } from '../core/codex-compat/codex-release-manifest.js';
+import { inspectCodexCliUpdate, updateCodexCliNow } from '../core/codex/codex-cli-update.js';
 
 export async function run(_command: any, args: any = []) {
   const action = args[0] || 'compatibility';
@@ -22,6 +23,34 @@ export async function run(_command: any, args: any = []) {
     const result = await codexVersionReport();
     if (flag(args, '--json')) return printJson(result);
     console.log(`Codex detected: ${result.detected.version || 'not installed'} (${result.policy.status})`);
+    return;
+  }
+  if (action === 'update-status' || action === 'update-check') {
+    const result = await inspectCodexCliUpdate({ force: flag(args, '--refresh') || flag(args, '--force') });
+    if (flag(args, '--json')) {
+      printJson(result);
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
+    console.log(`Codex CLI: ${result.current_version || 'not installed'}${result.latest_version ? ` (latest ${result.latest_version})` : ''}`);
+    console.log(`Update: ${result.update_available === true ? 'available' : result.update_available === false ? 'current' : 'unverified'}`);
+    for (const warning of result.warnings) console.log(`- warning: ${warning}`);
+    for (const actionLine of result.guidance) console.log(`- ${actionLine}`);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (action === 'update' || action === 'update-now') {
+    const result = await updateCodexCliNow();
+    if (flag(args, '--json')) {
+      printJson(result);
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
+    console.log(`Codex CLI update: ${result.status}${result.after_version ? ` (${result.before_version || 'unknown'} -> ${result.after_version})` : ''}`);
+    if (result.raw_output) console.log(result.raw_output);
+    for (const blocker of result.blockers) console.log(`- blocker: ${blocker}`);
+    for (const actionLine of result.guidance) console.log(`- ${actionLine}`);
+    if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === '0.141' || action === '0141' || action === 'rust-v0.141.0') {
@@ -56,6 +85,6 @@ export async function run(_command: any, args: any = []) {
     if (!result.ok) process.exitCode = 1;
     return;
   }
-  console.error('Usage: sks codex compatibility|version|doctor|schema|0.144|0.141 [--json]');
+  console.error('Usage: sks codex compatibility|version|update-status [--refresh]|update|doctor|schema|0.144|0.141 [--json]');
   process.exitCode = 1;
 }

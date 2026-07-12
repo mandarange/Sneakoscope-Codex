@@ -24,6 +24,10 @@ export function stateFileForSession(root: any, sessionKey: any) {
 }
 
 export async function createMission(root: any, { mode, prompt, sessionKey }: any): Promise<JsonData> {
+  return withStateLock(root, () => createMissionUnlocked(root, { mode, prompt, sessionKey }));
+}
+
+async function createMissionUnlocked(root: any, { mode, prompt, sessionKey }: any): Promise<JsonData> {
   const id = missionId();
   const dir = missionDir(root, id);
   await ensureDir(dir);
@@ -41,8 +45,30 @@ export async function createMission(root: any, { mode, prompt, sessionKey }: any
   };
   await writeJsonAtomic(path.join(dir, 'mission.json'), mission);
   await appendJsonl(path.join(dir, 'events.jsonl'), { ts: nowIso(), type: 'mission.created', mission: id, mode, prompt });
-  await setCurrent(root, { mission_id: id, mode: mode.toUpperCase(), phase: mission.phase }, { replace: true, sessionKey });
+  await setCurrentUnlocked(root, { mission_id: id, mode: mode.toUpperCase(), phase: mission.phase }, { replace: true, sessionKey });
   return { id, dir, mission };
+}
+
+export async function getOrCreateSessionMission(root: any, input: {
+  mode: string;
+  prompt: string;
+  sessionKey: string;
+  selectMissionId: (state: JsonData) => string | null;
+}): Promise<JsonData> {
+  return withStateLock(root, async () => {
+    const state = await loadStateForSessionUnlocked(root, input.sessionKey);
+    const selectedMissionId = String(input.selectMissionId(state) || '').trim();
+    if (selectedMissionId) {
+      const loaded = await loadMission(root, selectedMissionId).catch(() => null);
+      if (loaded) return { ...loaded, reused: true };
+    }
+    const created = await createMissionUnlocked(root, {
+      mode: input.mode,
+      prompt: input.prompt,
+      sessionKey: input.sessionKey
+    });
+    return { ...created, reused: false };
+  });
 }
 
 export async function loadMission(root: any, id: any): Promise<JsonData> {
@@ -213,6 +239,10 @@ function routePreemptions(current: any = {}, patch: any = {}, opts: any = {}) {
 }
 
 export async function loadStateForSession(root: any, sessionKey: any): Promise<JsonData> {
+  return loadStateForSessionUnlocked(root, sessionKey);
+}
+
+async function loadStateForSessionUnlocked(root: any, sessionKey: any): Promise<JsonData> {
   const hashed = sessionStateKey(sessionKey || 'default');
   const file = path.join(stateSessionsDir(root), `${hashed}.json`);
   const sessionState = await readJson(file, null).catch(() => null);

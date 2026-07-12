@@ -119,9 +119,13 @@ async function codexAppGate(id: string) {
     }
     if (id === 'codex-app:agent-role-sync') {
       const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
-      const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome: path.join(rootDir, 'codex-home'), apply: true, agentTypeSupported: true })
+      const codexHome = path.join(rootDir, 'codex-home')
+      const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true, agentTypeSupported: true })
       assertGate(report.fallback === 'agent_type', 'agent role sync should use agent_type when supported', report)
-      return emitGate(id, { roles: report.directive_roles.length })
+      assertGate(report.directive_roles.length === 0 && report.official_roles.join(',') === 'worker,expert', 'agent role sync must expose only official worker/expert roles', report)
+      assertGate(fs.existsSync(path.join(rootDir, '.codex', 'agents', 'worker.toml')) && fs.existsSync(path.join(rootDir, '.codex', 'agents', 'expert.toml')), 'official project agent roles missing', report)
+      assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'agent role sync must not create global directive roles', report)
+      return emitGate(id, { roles: report.official_roles.length })
     }
     if (id === 'codex-app:init-deep') {
       const mod = await importDist('core/codex-app/codex-init-deep.js')

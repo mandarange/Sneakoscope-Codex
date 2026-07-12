@@ -72,7 +72,7 @@ Final parent output:
 {
   "schema": "sks.subagent-parent-summary.v1",
   "status": "completed|blocked|failed",
-  "summary": "concise integrated result",
+  "summary": "Completion Summary: concise integrated result. Honest Mode: goal/evidence/checks/gaps assessment.",
   "thread_outcomes": [
     { "thread_id": "official agent/thread id", "status": "completed|blocked|failed", "summary": "slice result" }
   ],
@@ -81,6 +81,7 @@ Final parent output:
   "blockers": []
 }
 - include one thread_outcomes row for every requested subagent; a SubagentStop event alone never proves success
+- keep completion summary and Honest Mode wording inside the JSON fields; do not add prose outside the object
 `.trim()
 }
 

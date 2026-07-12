@@ -175,6 +175,9 @@ const MENU_ITEMS = [
   'Fast Check',
   'SKS Version Check',
   'Update SKS Now',
+  'Codex CLI Version',
+  'Update Codex CLI Now',
+  'Run sks doctor --fix',
   'Open Dashboard',
   'Open Codex Settings',
   'Restart Codex',
@@ -902,13 +905,22 @@ resolve_node_bin() {
     printf '%s\\n' "$NODE_BIN"
     return 0
   fi
+  # launchd does not initialize NVM, and a login shell can resolve a different
+  # global Node before the menu owner's current NVM install. Prefer the
+  # HOME-scoped runtime; run_node_entry prepends its bin directory to PATH.
+  for cand in "$HOME"/.nvm/versions/node/*/bin/node(Nn[-1]); do
+    if [ -x "$cand" ]; then
+      printf '%s\\n' "$cand"
+      return 0
+    fi
+  done
   local login_node
   login_node="$(/bin/zsh -lc 'command -v node' 2>/dev/null | /usr/bin/head -n 1 || true)"
   if [ -n "$login_node" ] && [ -x "$login_node" ]; then
     printf '%s\\n' "$login_node"
     return 0
   fi
-  for cand in "$HOME"/.nvm/versions/node/*/bin/node(Nn[-1]) /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+  for cand in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
     if [ -x "$cand" ]; then
       printf '%s\\n' "$cand"
       return 0
@@ -927,6 +939,11 @@ run_node_entry() {
   node_bin="$(resolve_node_bin || true)"
   if [ -z "$node_bin" ]; then
     return 1
+  fi
+  local node_bin_dir
+  node_bin_dir="$(/usr/bin/dirname "$node_bin")"
+  if [ -d "$node_bin_dir" ]; then
+    export PATH="$node_bin_dir:$PATH"
   fi
   exec "$node_bin" "$entry" "$@"
 }
@@ -1242,10 +1259,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var oauthItem: NSMenuItem!
     var fastModeOnItem: NSMenuItem!
     var fastModeOffItem: NSMenuItem!
+    var codexCliVersionItem: NSMenuItem!
+    var codexCliUpdateItem: NSMenuItem!
     var timer: Timer?
     var busy = false
     var lastFailure = false
     var quitWithCodex = false
+    var codexCliCurrentVersion: String?
+    var codexCliLatestVersion: String?
+    var codexCliUpdateAvailable = false
+    var codexCliMissing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -1273,6 +1296,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(menu, "SKS Version Check", #selector(sksVersionCheck))
         add(menu, "Update SKS Now", #selector(updateSksNow))
         menu.addItem(NSMenuItem.separator())
+        codexCliVersionItem = NSMenuItem(title: "Codex CLI: checking…", action: nil, keyEquivalent: "")
+        codexCliVersionItem.isEnabled = false
+        menu.addItem(codexCliVersionItem)
+        codexCliUpdateItem = add(menu, "Update Codex CLI Now", #selector(updateCodexCliNow))
+        add(menu, "Run sks doctor --fix", #selector(runDoctorFix))
+        menu.addItem(NSMenuItem.separator())
         add(menu, "Open Dashboard", #selector(openDashboard))
         add(menu, "Open Codex Settings", #selector(openCodexSettings))
         add(menu, "Restart Codex", #selector(restartCodex))
@@ -1282,6 +1311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
         configureCodexLifecycleSync()
         updateState()
+        updateCodexCliStatus()
         timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in self?.updateState() }
     }
 
@@ -1289,6 +1319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateState()
         updateAuthModeChecks()
         updateFastModeChecks()
+        updateCodexCliStatus()
     }
 
     func configureStatusButton(_ button: NSStatusBarButton, title: String) {
@@ -1344,10 +1375,19 @@ ${codexLifecycleSource}
         if lastFailure {
             return MenuState(title: "SKS ⚠", line: "SKS v\\(packageVersion) - last action failed")
         }
+        if codexCliMissing {
+            return MenuState(title: "SKS ⚠", line: "SKS v\\(packageVersion) · Codex CLI not installed")
+        }
+        if codexCliUpdateAvailable {
+            let current = codexCliCurrentVersion ?? "unknown"
+            let latest = codexCliLatestVersion ?? "latest"
+            return MenuState(title: "SKS ⬆", line: "SKS v\\(packageVersion) · Codex CLI \\(current) → \\(latest) update available")
+        }
         if updateAvailable() {
             return MenuState(title: "SKS ↑", line: "SKS v\\(packageVersion) - update available")
         }
-        return MenuState(title: "SKS", line: "SKS v\\(packageVersion) - OK")
+        let codexVersion = codexCliCurrentVersion.map { " · Codex CLI " + $0 } ?? ""
+        return MenuState(title: "SKS", line: "SKS v\\(packageVersion)\\(codexVersion) · OK")
     }
 
     func actionScriptUsable() -> Bool {
@@ -1458,6 +1498,41 @@ ${codexLifecycleSource}
         }
     }
 
+    func updateCodexCliStatus(refresh: Bool = false) {
+        var args = ["codex", "update-status", "--json"]
+        if refresh { args.append("--refresh") }
+        runSksSilent(args) { [weak self] _, output in
+            guard let self = self else { return }
+            guard let json = parseJsonObject(output) else {
+                self.codexCliVersionItem.title = "Codex CLI: status unavailable"
+                self.codexCliUpdateItem.title = "Update Codex CLI Now"
+                self.codexCliUpdateAvailable = false
+                self.codexCliMissing = false
+                self.updateState()
+                return
+            }
+            let current = json["current_version"] as? String
+            let latest = json["latest_version"] as? String
+            let updateAvailable = json["update_available"] as? Bool == true
+            let installed = json["installed"] as? Bool == true
+            self.codexCliCurrentVersion = current
+            self.codexCliLatestVersion = latest
+            self.codexCliUpdateAvailable = updateAvailable
+            self.codexCliMissing = !installed
+            if !installed {
+                self.codexCliVersionItem.title = "Codex CLI: not installed"
+            } else if updateAvailable {
+                self.codexCliVersionItem.title = "Codex CLI: \\(current ?? "unknown") → \\(latest ?? "latest")  ⬆"
+            } else if let current = current, let latest = latest {
+                self.codexCliVersionItem.title = current == latest ? "Codex CLI: \\(current) (current)" : "Codex CLI: \\(current) · latest \\(latest)"
+            } else {
+                self.codexCliVersionItem.title = "Codex CLI: \\(current ?? "unknown") (latest check unavailable)"
+            }
+            self.codexCliUpdateItem.title = updateAvailable ? "Update Codex CLI Now  ⬆" : "Update Codex CLI Now"
+            self.updateState()
+        }
+    }
+
     @objc func useCodexLb() {
         runSksBackground(["codex-lb", "use-codex-lb", "--restart-app", "--json"], title: "Use codex-lb") { [weak self] code, _ in
             if code == 0 { self?.updateAuthModeChecks() }
@@ -1505,6 +1580,22 @@ ${codexLifecycleSource}
 
     @objc func updateSksNow() {
         runSksBackground(["update"], title: "Update SKS Now")
+    }
+
+    @objc func updateCodexCliNow() {
+        runSksBackground(["codex", "update", "--json"], title: "Update Codex CLI Now") { [weak self] _, _ in
+            self?.updateCodexCliStatus(refresh: true)
+        }
+    }
+
+    @objc func runDoctorFix() {
+        runSksBackground(["doctor", "--fix", "--global-only", "--json"], title: "Run sks doctor --fix") { [weak self] code, _ in
+            if code == 0 {
+                self?.updateAuthModeChecks()
+                self?.updateFastModeChecks()
+                self?.updateCodexCliStatus(refresh: true)
+            }
+        }
     }
 
     @objc func openDashboard() {

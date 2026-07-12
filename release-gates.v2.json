@@ -1656,6 +1656,12 @@
         "inputs": [
           "package.json",
           "release-gates.v2.json",
+          "src/scripts/official-subagent-workflow-check.ts",
+          "src/core/commands/naruto-command.ts",
+          "src/core/subagents/official-subagent-prompt.ts",
+          "src/core/subagents/official-subagent-runner.ts",
+          "src/core/subagents/subagent-evidence.ts",
+          "src/core/subagents/thread-budget.ts",
           "src/**",
           "schemas/**"
         ]
@@ -2736,7 +2742,9 @@
           "package.json",
           "release-gates.v2.json",
           "src/core/commands/**",
-          "src/cli/__tests__/**"
+          "src/cli/**",
+          "src/bin/fast-inline.ts",
+          "src/bin/sks-dispatch.ts"
         ]
       },
       "isolation": {
@@ -2792,8 +2800,13 @@
         "inputs": [
           "package.json",
           "release-gates.v2.json",
+          "src/commands/doctor.ts",
+          "src/cli/install-helpers.ts",
           "src/core/codex-app/**",
-          "src/core/doctor/**"
+          "src/core/doctor/**",
+          "src/core/init.ts",
+          "src/core/init/**",
+          "src/core/subagents/official-subagent-config.ts"
         ]
       },
       "isolation": {
@@ -2805,6 +2818,90 @@
         "release"
       ],
       "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner falls back to legacy exit-code-only semantics for this gate."
+    },
+    {
+      "id": "test:official-subagent-policy",
+      "command": "node --test --test-concurrency=1 dist/core/subagents/__tests__/official-subagent-config.test.js dist/core/subagents/__tests__/model-policy.test.js dist/core/subagents/__tests__/task-profile.test.js dist/core/__tests__/naruto-route-reasoning.test.js dist/core/commands/__tests__/naruto-command-glm-block.test.js dist/cli/__tests__/router-active-naruto.test.js dist/core/release/__tests__/release-gate-affected-selector.test.js test/blackbox/naruto-shadow-clone-swarm-packed.test.mjs",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/subagents/official-subagent-config.ts",
+          "src/core/subagents/model-policy.ts",
+          "src/core/subagents/naruto-help-contract.ts",
+          "src/core/subagents/__tests__/official-subagent-config.test.ts",
+          "src/core/subagents/__tests__/model-policy.test.ts",
+          "src/core/subagents/__tests__/task-profile.test.ts",
+          "src/core/runtime/task-profile.ts",
+          "src/core/routes.ts",
+          "src/core/routes/**",
+          "src/core/__tests__/naruto-route-reasoning.test.ts",
+          "src/core/commands/naruto-command.ts",
+          "src/core/commands/__tests__/naruto-command-glm-block.test.ts",
+          "src/cli/router.ts",
+          "src/cli/__tests__/router-active-naruto.test.ts",
+          "src/bin/fast-inline.ts",
+          "src/bin/sks-dispatch.ts",
+          "src/core/release/release-gate-affected-selector.ts",
+          "src/core/release/__tests__/release-gate-affected-selector.test.ts",
+          "test/blackbox/naruto-shadow-clone-swarm-packed.test.mjs"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "contract_note": "node --test prints TAP/test-runner output only and does not emit the sks.gate-result.v1 JSON line as its final stdout; the DAG runner uses the focused suite exit code for this gate."
+    },
+    {
+      "id": "test:codex-runtime-recovery",
+      "command": "node ./dist/scripts/codex-control-tool-output-continuity-audit-check.js && node --test --test-concurrency=1 dist/core/codex-control/__tests__/*.test.js dist/core/codex-lb/__tests__/*.test.js dist/core/codex/__tests__/*.test.js dist/core/hooks-runtime/__tests__/official-light-turn-hooks.test.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/commands/codex.ts",
+          "src/commands/codex-lb.ts",
+          "src/commands/doctor.ts",
+          "src/cli/install-helpers.ts",
+          "src/core/codex-control/**",
+          "src/core/codex-lb/**",
+          "src/core/codex/**",
+          "src/core/hooks-runtime.ts",
+          "src/core/hooks-runtime/**",
+          "src/core/preflight/parallel-preflight-engine.ts",
+          "src/scripts/codex-control-tool-output-continuity-audit-check.ts"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ],
+      "contract_note": "The continuity audit emits sks.gate-result.v1 before the focused node:test suite; the DAG runner uses the command exit code for the combined gate."
     },
     {
       "id": "test:dfix-ppt-gate",
@@ -3941,7 +4038,7 @@
       "resource": ["cpu-light", "fs-read"],
       "side_effect": "hermetic",
       "timeout_ms": 300000,
-      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/core/feature-registry.ts", "src/core/feature-fixtures.ts", "src/scripts/all-feature-deep-completion-check.ts"] },
+      "cache": { "enabled": true, "inputs": ["package.json", "release-gates.v2.json", "src/cli/command-manifest-lite.ts", "src/cli/command-registry.ts", "src/core/routes.ts", "src/core/routes/dollar-manifest-lite.ts", "src/core/feature-registry.ts", "src/core/features/feature-registry.ts", "src/core/feature-fixtures.ts", "src/scripts/all-feature-deep-completion-check.ts", "docs/feature-inventory.md", "test/unit/feature-registry.test.mjs", "test/unit/all-feature-deep-completion.test.mjs", "test/integration/all-feature-deep-completion.test.mjs", "test/blackbox/all-feature-deep-completion-packed.test.mjs"] },
       "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
       "preset": ["release"],
       "output_contract": "sks.gate-result.v1"

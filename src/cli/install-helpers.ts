@@ -21,6 +21,13 @@ import {
   ensureCodexLbToolCatalog
 } from '../core/codex-lb/codex-lb-tool-catalog.js';
 import {
+  codexLbToolOutputRecoveryNotChecked,
+  codexLbToolOutputRecoveryNotSelected,
+  codexLbToolOutputRecoveryOverrideAcknowledged,
+  probeCodexLbToolOutputRecovery,
+  type CodexLbToolOutputRecoveryProbe
+} from '../core/codex-lb/codex-lb-tool-output-recovery.js';
+import {
   GLM_CODEX_CONFIG_PROFILE_ID,
   GLM_CODEX_CONFIG_PROVIDER_ID,
   GLM_CODEX_CONFIG_REASONING_PROFILES
@@ -111,6 +118,7 @@ export type CodexLbAuthInstallResult = {
   codex_login?: CodexLbLoginSyncResult;
   auth_reconcile?: CodexLbAuthReconcileResult;
   tool_catalog?: Record<string, unknown>;
+  tool_output_recovery?: CodexLbToolOutputRecoveryProbe;
   error?: string | null;
 };
 
@@ -134,6 +142,7 @@ export type ConfigureCodexLbResult = {
   codex_environment?: CodexLbEnvSyncResult;
   codex_login?: CodexLbLoginSyncResult;
   tool_catalog?: Record<string, unknown>;
+  tool_output_recovery?: CodexLbToolOutputRecoveryProbe;
   error?: string | null;
   chain_health?: { status?: string } & Record<string, unknown>;
   bypass_codex_lb?: boolean;
@@ -575,6 +584,26 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
   if (plan.blockers.length) return { ok: false, status: 'plan_blocked', plan: plan as any, drift: plan.blockers, config_path: configPath, env_path: envPath };
   if (/[\u0000-\u001f\u007f\s]/.test(rawHost.trim())) return { ok: false, status: 'invalid_host_or_base_url', config_path: configPath, env_path: envPath, error: 'host_or_base_url_contains_whitespace_or_control_character' };
   if (!apiKey) return { ok: false, status: 'missing_api_key', config_path: configPath, env_path: envPath };
+  const toolOutputRecovery = await probeCodexLbToolOutputRecovery({
+    baseUrl,
+    ...(typeof opts.toolOutputRecoveryFetch === 'function' ? { fetchImpl: opts.toolOutputRecoveryFetch } : {}),
+    timeoutMs: Number(opts.toolOutputRecoveryTimeoutMs || 4_000),
+    allowUnverified: opts.allowUnverifiedToolOutputRecovery === true
+      || codexLbToolOutputRecoveryOverrideAcknowledged({ env: opts.env || process.env })
+  });
+  if (!toolOutputRecovery.ok) {
+    return {
+      ok: false,
+      status: 'tool_output_recovery_blocked',
+      plan: plan as any,
+      config_path: configPath,
+      env_path: envPath,
+      base_url: baseUrl,
+      tool_output_recovery: toolOutputRecovery,
+      drift: toolOutputRecovery.blockers,
+      warnings: toolOutputRecovery.warnings
+    };
+  }
   const insecureLocalWarning = /^http:\/\//i.test(baseUrl) && !/^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(baseUrl) && !opts.allowInsecureHttp
     ? ['codex-lb base URL uses http outside localhost; prefer https or pass an explicit allow flag in the calling surface.']
     : [];
@@ -683,6 +712,7 @@ export async function configureCodexLb(opts: any = {}): Promise<ConfigureCodexLb
     codex_environment: codexEnvironment,
     codex_login: codexLogin,
     tool_catalog: toolCatalog,
+    tool_output_recovery: toolOutputRecovery,
     error: authReconcile.error || codexEnvironment.error || codexLogin.error || null
   };
 }
@@ -723,8 +753,22 @@ export async function codexLbStatus(opts: any = {}) {
     status: 'inspect_failed',
     error: err.message
   }));
+  const providerReady = providerContractOk && envKeyConfigured && Boolean(baseUrl) && authMode.codex_app_usable;
+  const probeToolOutputRecovery = opts.probeToolOutputRecovery === true;
+  const toolOutputRecovery = !selected
+    ? codexLbToolOutputRecoveryNotSelected()
+    : !probeToolOutputRecovery
+      ? codexLbToolOutputRecoveryNotChecked(true)
+      : await probeCodexLbToolOutputRecovery({
+          baseUrl,
+          ...(typeof opts.toolOutputRecoveryFetch === 'function' ? { fetchImpl: opts.toolOutputRecoveryFetch } : {}),
+          timeoutMs: Number(opts.toolOutputRecoveryTimeoutMs || 4_000),
+          allowUnverified: opts.allowUnverifiedToolOutputRecovery === true
+            || codexLbToolOutputRecoveryOverrideAcknowledged({ env: opts.env || process.env })
+        });
   return {
-    ok: providerContractOk && envKeyConfigured && Boolean(baseUrl) && authMode.codex_app_usable,
+    ok: providerReady && (!selected || !probeToolOutputRecovery || toolOutputRecovery.ok),
+    provider_ready: providerReady,
     config_path: configPath,
     env_path: envPath,
     provider_configured: providerConfigured,
@@ -755,7 +799,8 @@ export async function codexLbStatus(opts: any = {}) {
     auth_usable_for_codex_app: authMode.codex_app_usable || codexAppUsableWithCodexLb,
     auth_summary: codexAppUsableWithCodexLb ? `codex-lb provider uses ${authMode.mode} OpenAI-style auth through Codex App` : authMode.summary,
     fast_mode: fastMode,
-    launch_environment: launchEnvironment
+    launch_environment: launchEnvironment,
+    tool_output_recovery: toolOutputRecovery
   };
 }
 
@@ -771,6 +816,13 @@ export function formatCodexLbStatusText(status: any = {}, opts: any = {}) {
     `Provider OpenAI Auth: ${status.provider_requires_openai_auth ? 'required' : 'not required/drifted'} (${status.provider_name || 'missing'})`,
     `Codex App auth: ${status.auth_usable_for_codex_app ? 'ok' : 'needs sign-in/repair'} (${status.auth_mode || 'unknown'})`
   ];
+  if (status.tool_output_recovery?.status && status.tool_output_recovery.status !== 'not_selected') {
+    const recovery = status.tool_output_recovery;
+    lines.push(`Interrupted tool-output recovery: ${recovery.ok ? 'ready' : 'blocked'} (${recovery.observed_version || recovery.status}; minimum ${recovery.minimum_version})`);
+    if (!recovery.ok) {
+      for (const action of recovery.operator_actions || []) lines.push(`  action: ${action}`);
+    }
+  }
   if (status.auth_summary) lines.push(`Auth detail: ${status.auth_summary}`);
   if (status.fast_mode) {
     const fast = status.fast_mode;
@@ -1119,17 +1171,39 @@ function tomlTableString(text: any = '', table: string, key: string) {
 }
 
 export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInstallResult> {
-  let status = await codexLbStatus(opts);
+  let status = await codexLbStatus({
+    ...opts,
+    probeToolOutputRecovery: true,
+    allowUnverifiedToolOutputRecovery: opts.allowUnverifiedToolOutputRecovery === true
+  });
   let configRepaired = false;
   let legacyAuthMigrated = false;
   let legacyAuthPath = null;
+  const toolOutputRecovery = status.base_url
+    ? await probeCodexLbToolOutputRecovery({
+        baseUrl: status.base_url,
+        ...(typeof opts.toolOutputRecoveryFetch === 'function' ? { fetchImpl: opts.toolOutputRecoveryFetch } : {}),
+        timeoutMs: Number(opts.toolOutputRecoveryTimeoutMs || 4_000),
+        allowUnverified: opts.allowUnverifiedToolOutputRecovery === true
+          || codexLbToolOutputRecoveryOverrideAcknowledged({ env: opts.env || process.env })
+      })
+    : status.tool_output_recovery;
+  if (status.base_url && toolOutputRecovery?.ok !== true) {
+    return {
+      ok: false,
+      status: 'tool_output_recovery_blocked',
+      codex_lb: status,
+      tool_output_recovery: toolOutputRecovery,
+      error: toolOutputRecovery?.blockers?.join(', ') || 'codex-lb interrupted tool-output recovery is unverified'
+    };
+  }
   const currentConfig = await readText(status.config_path, '');
   if (!status.env_key_configured && status.base_url && (status.provider_configured || status.selected || status.env_base_url_configured)) {
     const legacyAuth = await restoreCodexLbEnvFromSharedLogin(status, opts);
     if (legacyAuth.ok) {
       legacyAuthMigrated = true;
       legacyAuthPath = legacyAuth.auth_path;
-      status = await codexLbStatus(opts);
+      status = await codexLbStatus({ ...opts, probeToolOutputRecovery: true });
     }
   }
   if (status.env_key_configured && status.base_url && (!status.provider_contract_ok || !status.selected || legacyAuthMigrated || hasTopLevelCodexModeLock(currentConfig) || (opts.forceCodexLbApiKeyAuth === true && !status.ok))) {
@@ -1140,7 +1214,7 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
     });
     const safeWrite = await safeWriteCodexConfigToml(status.config_path, currentConfig, next, 'codex-lb-repair');
     configRepaired = safeWrite.ok && safeWrite.changed === true;
-    status = await codexLbStatus(opts);
+    status = await codexLbStatus({ ...opts, probeToolOutputRecovery: true });
   }
   const canRepairAuthMode = opts.forceCodexLbApiKeyAuth === true && status.provider_contract_ok && status.env_key_configured && Boolean(status.base_url);
   if (!status.ok && !canRepairAuthMode) {
@@ -1166,7 +1240,7 @@ export async function repairCodexLbAuth(opts: any = {}): Promise<CodexLbAuthInst
   const codexLogin = forceCodexLbApiKeyAuth
     ? { ok: ['apikey_forced', 'apikey_auth_active'].includes(authReconcile.status), status: authReconcile.status, ...(authReconcile.reason ? { reason: authReconcile.reason } : {}), error: authReconcile.error || null }
     : await maybeSyncCodexLbSharedLogin(apiKey, { ...opts, home: opts.home || process.env.HOME || os.homedir(), force: true });
-  const finalStatus = await codexLbStatus(opts);
+  const finalStatus = await codexLbStatus({ ...opts, probeToolOutputRecovery: true });
   const ok = Boolean(codexEnvironment.ok && codexLogin.ok && (toolCatalog.required === false || toolCatalog.ok === true));
   return {
     ok,
@@ -1682,7 +1756,24 @@ async function rollbackCodexAuthRestore(input: { authPath: string; authExisted: 
 
 export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any = {}) {
   if (args.includes('--json') || args.includes('--skip-codex-lb') || process.env.SKS_SKIP_CODEX_LB_PROMPT === '1') return { status: 'skipped' };
-  let status = await codexLbStatus(opts);
+  const allowUnverifiedToolOutputRecovery = opts.allowUnverifiedToolOutputRecovery === true
+    || codexLbToolOutputRecoveryOverrideAcknowledged({ args, env: opts.env || process.env });
+  let status = await codexLbStatus({
+    ...opts,
+    probeToolOutputRecovery: true,
+    allowUnverifiedToolOutputRecovery
+  });
+  if (status.selected && status.tool_output_recovery?.ok !== true) {
+    return {
+      status: 'tool_output_recovery_blocked',
+      ok: false,
+      codex_lb: status,
+      tool_output_recovery: status.tool_output_recovery,
+      blockers: status.tool_output_recovery.blockers,
+      operator_actions: status.tool_output_recovery.operator_actions,
+      bypass_codex_lb: false
+    };
+  }
   if (status.env_key_configured && status.base_url && !status.selected && status.auth_mode === 'chatgpt_oauth') {
     return { status: 'continued_to_codex', ok: false, chain_health: null, codex_lb: status, reason: 'chatgpt_oauth_active_codex_lb_unselected' };
   }
@@ -1693,8 +1784,20 @@ export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any
       const restore = (await askPostinstallQuestion('\ncodex-lb provider section is missing, but stored auth exists. Restore and route Codex through codex-lb? [Y/n] ')).trim();
       if (/^(n|no|아니|아니요|ㄴ)$/i.test(restore)) return { status: 'continued_to_codex', codex_lb: status };
     }
-    const repaired = await repairCodexLbAuth(opts);
-    status = await codexLbStatus(opts);
+    const repaired = await repairCodexLbAuth({ ...opts, allowUnverifiedToolOutputRecovery });
+    status = await codexLbStatus({ ...opts, probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery });
+    if (status.selected && status.tool_output_recovery?.ok !== true) {
+      return {
+        status: 'tool_output_recovery_blocked',
+        ok: false,
+        repair: repaired,
+        codex_lb: status,
+        tool_output_recovery: status.tool_output_recovery,
+        blockers: status.tool_output_recovery.blockers,
+        operator_actions: status.tool_output_recovery.operator_actions,
+        bypass_codex_lb: false
+      };
+    }
     if (!status.ok) return { status: 'repair_failed', ok: false, repair: repaired, codex_lb: status };
     if (!repaired.ok && repaired.error && promptedRestore) console.log(`codex-lb provider restored, but launch environment sync reported: ${repaired.error}`);
     else if (!repaired.ok && promptedRestore) console.log(`codex-lb provider restored, but provider auth sync reported: ${repaired.status}`);
@@ -1753,7 +1856,7 @@ export async function maybePromptCodexLbSetupForLaunch(args: any = [], opts: any
   if (!/^(y|yes|예|네|응)$/i.test(useCodexLb)) return { status: 'continued_to_codex' };
   const host = (await askPostinstallQuestion('codex-lb host domain [http://127.0.0.1:2455]: ')).trim() || 'http://127.0.0.1:2455';
   const apiKey = (await askPostinstallQuestion('codex-lb API key: ')).trim();
-  const configured = await configureCodexLb({ ...opts, host, apiKey });
+  const configured = await configureCodexLb({ ...opts, host, apiKey, allowUnverifiedToolOutputRecovery });
   if (configured.ok) console.log(`codex-lb configured: ${configured.base_url}`);
   else console.log('codex-lb setup skipped: API key was empty.');
   return configured;

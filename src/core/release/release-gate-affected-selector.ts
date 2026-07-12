@@ -123,8 +123,8 @@ function selectionResult(all: ReleaseGateNode[], selected: ReleaseGateNode[], ch
   }
 }
 
-function resolveChangedFiles(root: string, changedSince: string) {
-  const base = changedSince === 'auto' ? 'HEAD' : changedSince
+export function resolveChangedFiles(root: string, changedSince: string) {
+  const base = changedSince === 'auto' ? autoChangedFilesBase(root) : changedSince
   const args = base === 'HEAD'
     ? ['diff', '--name-only', 'HEAD']
     : ['diff', '--name-only', String(base)]
@@ -135,6 +135,18 @@ function resolveChangedFiles(root: string, changedSince: string) {
     ...String(status.stdout || '').split(/\n/).map((line) => line.slice(3))
   ].map((file) => file.trim()).filter(Boolean)
   return [...new Set(files)].sort()
+}
+
+function autoChangedFilesBase(root: string) {
+  const upstream = spawnSync('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], {
+    cwd: root,
+    encoding: 'utf8'
+  })
+  const upstreamRef = upstream.status === 0 ? String(upstream.stdout || '').trim() : ''
+  if (!upstreamRef) return 'HEAD'
+  const mergeBase = spawnSync('git', ['merge-base', 'HEAD', upstreamRef], { cwd: root, encoding: 'utf8' })
+  const base = mergeBase.status === 0 ? String(mergeBase.stdout || '').trim() : ''
+  return base || 'HEAD'
 }
 
 function gateCommandReferencesScript(gate: ReleaseGateNode, file: string): boolean {

@@ -7,6 +7,10 @@ import { printJson } from '../cli/output.js';
 import { codexLbMetrics, readCodexLbCircuit, recordCodexLbHealthEvent, resetCodexLbCircuit, codexLbProofEvidence } from '../core/codex-lb-circuit.js';
 import { checkCodexLbResponseChain, codexLbStatus, configureCodexLb, formatCodexLbStatusText, releaseCodexLbAuthHold, repairCodexLbAuth, unselectCodexLbProvider } from '../cli/install-helpers.js';
 import { buildCodexLbSetupPlan, codexLbPersistenceSummary, renderCodexLbSetupPlan } from '../core/codex-lb/codex-lb-setup.js';
+import {
+  CODEX_LB_TOOL_OUTPUT_RECOVERY_OVERRIDE_FLAG,
+  codexLbToolOutputRecoveryOverrideAcknowledged
+} from '../core/codex-lb/codex-lb-tool-output-recovery.js';
 import { restartCodexApp } from '../core/codex-app/codex-app-restart.js';
 import { repairCodexAppFastUi } from '../core/codex-app/codex-app-fast-ui-repair.js';
 
@@ -21,14 +25,17 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'status' || action === 'check') {
-    const result = await codexLbStatus();
+    const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args });
+    const result = await codexLbStatus({ probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery });
     const shaped = shapeCodexLbStatus(result);
+    if (result.selected && result.tool_output_recovery?.ok !== true) process.exitCode = 1;
     if (flag(args, '--json')) return printJson(shaped);
     process.stdout.write(formatCodexLbStatusText(result));
     return;
   }
   if (action === 'doctor') {
-    const status = shapeCodexLbStatus(await codexLbStatus());
+    const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args });
+    const status = shapeCodexLbStatus(await codexLbStatus({ probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery }));
     const metrics = codexLbMetrics(await readCodexLbCircuit(root));
     const result = { schema: 'sks.codex-lb-doctor.v1', ok: Boolean(status.ok && metrics.ok), deep: flag(args, '--deep'), status, metrics };
     if (flag(args, '--json')) return printJson(result);
@@ -37,19 +44,27 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'health' || action === 'verify-chain' || action === 'chain') {
-    const status = await codexLbStatus();
+    const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args });
+    const status = await codexLbStatus({ probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery });
     const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : 'not_configured';
-    const result = status.ok ? await checkCodexLbResponseChain(status, { force: true, root, fastMode: flag(args, '--fast') || flag(args, '--priority') }) : { ok: false, status: blocker, codex_lb: status };
+    const result = status.selected && status.tool_output_recovery?.ok !== true
+      ? { ok: false, status: 'tool_output_recovery_blocked', codex_lb: status, tool_output_recovery: status.tool_output_recovery }
+      : status.ok
+        ? await checkCodexLbResponseChain(status, { force: true, root, fastMode: flag(args, '--fast') || flag(args, '--priority') })
+        : { ok: false, status: blocker, codex_lb: status };
     if (flag(args, '--json')) return printJson(result);
     console.log(`codex-lb response chain: ${result.ok ? 'ok' : `failed (${result.status})`}`);
     if (!result.ok) process.exitCode = 1;
     return;
   }
   if (action === 'fast-check' || action === 'fast' || action === 'verify-fast') {
-    const status = await codexLbStatus();
+    const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args });
+    const status = await codexLbStatus({ probeToolOutputRecovery: true, allowUnverifiedToolOutputRecovery });
     const blocker = !status.env_key_configured ? 'missing_env_key' : !status.base_url ? 'missing_base_url' : !status.provider_contract_ok ? 'provider_contract_drift' : 'not_configured';
     const modelSelection = await resolveCodexLbFastCheckModel(status);
-    const chain = status.env_key_configured && status.base_url && modelSelection.model
+    const chain = status.selected && status.tool_output_recovery?.ok !== true
+      ? { ok: false, status: 'tool_output_recovery_blocked', codex_lb: status, tool_output_recovery: status.tool_output_recovery }
+      : status.env_key_configured && status.base_url && modelSelection.model
       ? await checkCodexLbResponseChain(status, { force: true, cache: false, root, fastMode: true, model: modelSelection.model })
       : { ok: false, status: modelSelection.model ? blocker : 'model_unselected', codex_lb: status };
     const evidence = await fastEvidenceFromChain(chain, readOption(args, '--request-log', readOption(args, '--request-log-json', null)));
@@ -96,7 +111,9 @@ export async function run(command: any, args: any = []) {
     return;
   }
   if (action === 'repair' || action === 'resync' || action === 'login') {
-    const result = await repairCodexLbAuth();
+    const result = await repairCodexLbAuth({
+      allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
+    });
     const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
     const shaped = { ...result, ok: Boolean(result.ok && fastUi.ok), codex_app_fast_ui: fastUi };
     if (!shaped.ok) process.exitCode = 1;
@@ -143,7 +160,13 @@ export async function run(command: any, args: any = []) {
       process.exitCode = 1;
       return;
     }
-    const result = await configureCodexLb({ host, apiKey: newKey, authMode: flag(args, '--preserve-auth') ? 'preserve' : 'codex-lb', forceCodexLbApiKeyAuth: !flag(args, '--preserve-auth') });
+    const result = await configureCodexLb({
+      host,
+      apiKey: newKey,
+      authMode: flag(args, '--preserve-auth') ? 'preserve' : 'codex-lb',
+      forceCodexLbApiKeyAuth: !flag(args, '--preserve-auth'),
+      allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
+    });
     const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
     const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok));
     const ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false);
@@ -157,7 +180,12 @@ export async function run(command: any, args: any = []) {
   }
   if (action === 'use-codex-lb' || action === 'use-lb') {
     // Switch auth mode -> codex-lb (API key). Re-selects the provider and re-syncs auth.
-    const result = await repairCodexLbAuth({ forceCodexLbApiKeyAuth: true, authMode: 'codex-lb', forceFastMode: !flag(args, '--no-fast') });
+    const result = await repairCodexLbAuth({
+      forceCodexLbApiKeyAuth: true,
+      authMode: 'codex-lb',
+      forceFastMode: !flag(args, '--no-fast'),
+      allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
+    });
     const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
     const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok));
     const ok = Boolean(result.ok && fastUi.ok && restart?.ok !== false);
@@ -296,7 +324,8 @@ export async function run(command: any, args: any = []) {
       shellProfile: options.shellProfile,
       runHealth: options.health,
       apiKeySource: options.apiKeySource,
-      allowInsecureHttp: options.allowInsecureLocalhost
+      allowInsecureHttp: options.allowInsecureLocalhost,
+      allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args })
     });
     const fastUi = await repairCodexAppFastUiAfterMutation(root, Boolean(result.ok));
     const restart = await maybeRestartCodexAppForAuthSwitch(args, Boolean(result.ok && fastUi.ok) && !flag(args, '--preserve-auth'));
@@ -340,6 +369,7 @@ export async function run(command: any, args: any = []) {
     return;
   }
   console.error('Usage: sks codex-lb status|metrics|doctor --deep|health|setup|set-key|use-codex-lb|use-oauth|repair|release|unselect|circuit reset|circuit record-fixture|proof-evidence [--json]');
+  console.error(`  ${CODEX_LB_TOOL_OUTPUT_RECOVERY_OVERRIDE_FLAG}  explicitly acknowledge an old/unverified proxy for this command (unsafe)`);
   console.error('  set-key       swap the codex-lb API key (reuses the stored host): sks codex-lb set-key --api-key-stdin');
   console.error('  use-codex-lb  switch auth mode to codex-lb (API key)');
   console.error('  use-oauth     switch auth mode to ChatGPT OAuth (restores saved login, else: codex login)');
@@ -537,9 +567,10 @@ function shapeCodexLbStatus(status: any = {}) {
   return {
     schema: 'sks.codex-lb-status.v1',
     ...status,
-    configured: Boolean(status.ok),
-    setup_needed: !status.ok,
-    repair_available: !status.ok,
+    configured: Boolean(status.provider_ready ?? status.ok),
+    setup_needed: !Boolean(status.provider_ready ?? status.ok),
+    upgrade_needed: Boolean(status.selected && status.tool_output_recovery?.ok !== true),
+    repair_available: !Boolean(status.provider_ready ?? status.ok),
     api_key: {
       present: Boolean(status.env_key_configured),
       source: status.env_loader?.api_key?.source || null,
@@ -548,11 +579,13 @@ function shapeCodexLbStatus(status: any = {}) {
     persistence,
     env_loader: status.env_loader || null,
     env_auto_load: Boolean(status.env_file && status.env_key_configured),
-    guidance: status.ok ? [] : [
-      'codex-lb API key is not configured.',
-      'Run: sks codex-lb setup',
-      'Or: sks codex-lb setup --host <domain> --api-key-stdin --yes'
-    ]
+    guidance: status.selected && status.tool_output_recovery?.ok !== true
+      ? status.tool_output_recovery.operator_actions || []
+      : status.ok ? [] : [
+          'codex-lb API key is not configured.',
+          'Run: sks codex-lb setup',
+          'Or: sks codex-lb setup --host <domain> --api-key-stdin --yes'
+        ]
   };
 }
 

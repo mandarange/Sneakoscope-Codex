@@ -47,6 +47,7 @@ import {
   recordSubagentEvent,
   SUBAGENT_EVIDENCE_FILENAME,
   SUBAGENT_EVENT_LOG_FILENAME,
+  SUBAGENT_PARENT_SUMMARY_FILENAME,
   writeSubagentEvidence
 } from '../subagents/subagent-evidence.js';
 
@@ -109,8 +110,8 @@ export function buildPipelinePlan(input: any = {}) {
   const subagentsRequired = routeRequiresSubagents(route, task, taskProfile);
   const lane = selectPipelineLane(route, task, proof, taskProfile);
   const normalizedAgentPolicy = normalizeAgentPolicy(route, task, input.agents === undefined ? {} : input.agents);
-  const agentPolicy = route?.id === 'Naruto'
-    ? { ...normalizedAgentPolicy, required: false, reason: 'official_codex_subagent_workflow_replaces_legacy_five_agent_intake' }
+  const agentPolicy = subagentsRequired
+    ? { ...normalizedAgentPolicy, required: false, subagents_required: false, reason: 'official_codex_subagent_workflow_replaces_legacy_agent_intake' }
     : normalizedAgentPolicy;
   const verificationBudget: VerificationBudget = input.verificationBudget || chooseVerificationBudget({
     taskProfile,
@@ -760,7 +761,7 @@ export async function activeRouteContext(root: any, state: any) {
     return `Legacy Team mission ${state.mission_id || 'latest'} must keep its existing live transcript and compatibility artifacts current.${roles} New Team invocations redirect to the Naruto official Codex subagent workflow; this context is only for finishing a pre-6.1.1 Team mission. Preserve its original minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration and ${TEAM_SESSION_CLEANUP_ARTIFACT} contract before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
   }
   if (state.mode === 'NARUTO') {
-    return `Active Naruto mission ${state.mission_id || 'latest'} uses the official Codex subagent workflow. Read subagent-plan.json, keep ${SUBAGENT_EVENT_LOG_FILENAME} and ${SUBAGENT_EVIDENCE_FILENAME} current from SubagentStart/SubagentStop, wait for all requested agent threads, then write the integrated parent result to naruto-summary.json and pass naruto-gate.json. Do not substitute process counts, PID evidence, clone artifacts, or a custom active pool.${reasoningNote}${planNote}`;
+    return `Active Naruto mission ${state.mission_id || 'latest'} uses the official Codex subagent workflow. Read subagent-plan.json, keep ${SUBAGENT_EVENT_LOG_FILENAME} and ${SUBAGENT_EVIDENCE_FILENAME} current from SubagentStart/SubagentStop, wait for all requested agent threads, then return the exact sks.subagent-parent-summary.v1 JSON result so SKS can persist ${SUBAGENT_PARENT_SUMMARY_FILENAME} and derive naruto-summary.json/naruto-gate.json. Do not substitute process counts, PID evidence, clone artifacts, or a custom active pool.${reasoningNote}${planNote}`;
   }
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
     return `Active SKS route ${id} requires official subagent evidence before completion. Delegate independent slices to worker/expert custom agents, record matched SubagentStart/SubagentStop thread ids, wait for every requested agent thread, and provide the parent integration summary.${reasoningNote}${planNote}`;
@@ -1136,7 +1137,8 @@ async function materializeOfficialSubagentOverlay(root: any, prepared: any, rout
     events: [],
     parentSummaryPresent: false,
     workflowStatus: 'delegation_context_ready',
-    preparationOnly: true
+    preparationOnly: true,
+    additionalBlockers: officialConfig.blockers.map((item: any) => `official_subagent_config:${String(item)}`)
   });
   await setCurrent(root, {
     mission_id: id,
@@ -1144,6 +1146,7 @@ async function materializeOfficialSubagentOverlay(root: any, prepared: any, rout
     subagents_verified: false,
     native_sessions_required: false,
     native_sessions_verified: false,
+    agents_required: false,
     requested_subagents: budget.requestedSubagents,
     subagent_max_threads: budget.maxThreads,
     subagent_max_depth: budget.maxDepth,
@@ -1295,7 +1298,7 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
       subagent_plan: 'subagent-plan.json',
       subagent_events: SUBAGENT_EVENT_LOG_FILENAME,
       official_subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
-      parent_summary: 'naruto-summary.json'
+      parent_summary: SUBAGENT_PARENT_SUMMARY_FILENAME
     },
     ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
     blockers: initialBlockers,
@@ -1349,7 +1352,7 @@ function observedParentModelMatchesPolicy(model: any) {
 function routeState(id: any, route: any, phase: any, context7Required: any, extra: any = {}) {
   const reasoning = routeReasoning(route, extra.prompt || '');
   const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
-  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: !subagentsRequired, native_sessions_required: false, native_sessions_verified: false, agents_required: routeRequiresAgentIntake(route, { task: extra.prompt }), reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
+  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: !subagentsRequired, native_sessions_required: false, native_sessions_verified: false, agents_required: subagentsRequired ? false : routeRequiresAgentIntake(route, { task: extra.prompt }), reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
 }
 
 function routeContext(route: any, id: any, task: any, required: any, next: any) {
@@ -1490,45 +1493,37 @@ function legacySubagentStage(payload: any) {
   return 'subagent';
 }
 
-export async function subagentEvidence(root: any, state: any) {
+export async function subagentEvidence(root: any, state: any): Promise<any> {
   const id = state?.mission_id;
   if (!id) return { spawn: false, result: false, exception: false, ok: false, count: 0, workflow: 'official_codex_subagent' };
   const dir = missionDir(root, id);
-  const canonical = await readJson(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), null).catch(() => null);
-  if (canonical?.schema === 'sks.subagent-evidence.v1') {
-    return {
-      ...canonical,
-      spawn: Number(canonical.started_threads || 0) > 0,
-      result: Number(canonical.completed_threads || 0) > 0,
-      exception: Number(canonical.failed_threads || 0) > 0,
-      count: Number(canonical.started_threads || 0) + Number(canonical.completed_threads || 0) + Number(canonical.failed_threads || 0)
-    };
-  }
   const plan = await readJson(path.join(dir, 'subagent-plan.json'), null).catch(() => null);
   if (plan?.workflow === 'official_codex_subagent') {
-    const events = await readSubagentEvents(dir);
-    const summary = await readJson(path.join(dir, 'naruto-summary.json'), null).catch(() => null);
-    const structuredParentSummary = Array.isArray(summary?.parent_thread_outcomes)
-      ? {
-          schema: 'sks.subagent-parent-summary.v1',
-          status: summary?.status === 'completed' ? 'completed' : 'blocked',
-          summary: summary?.parent_summary || '',
-          thread_outcomes: summary.parent_thread_outcomes,
-          changed_files: summary?.changed_files || [],
-          verification: summary?.verification?.checks || [],
-          blockers: summary?.blockers || []
-        }
-      : summary?.parent_summary;
+    const [events, persistedParentSummary, summary, canonical] = await Promise.all([
+      readSubagentEvents(dir),
+      readJson(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME), null).catch(() => null),
+      readJson(path.join(dir, 'naruto-summary.json'), null).catch(() => null),
+      readJson(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), null).catch(() => null)
+    ]);
     const evidence = buildSubagentEvidence({
       requestedSubagents: Number(plan.requested_subagents || 0),
       events,
-      parentSummary: structuredParentSummary,
-      parentSummaryPresent: summary?.parent_summary_present === true,
+      parentSummary: persistedParentSummary,
       workflowStatus: summary?.status || null,
-      preparationOnly: summary?.status === 'delegation_context_ready'
+      preparationOnly: summary?.status === 'delegation_context_ready' || canonical?.preparation_only === true,
+      additionalBlockers: Array.isArray(plan.config_blockers)
+        ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
+        : []
     });
+    const canonicalMismatch = canonicalEvidenceMismatch(canonical, evidence);
+    const blockers = [...new Set([
+      ...(Array.isArray(evidence.blockers) ? evidence.blockers : []),
+      ...(canonicalMismatch ? [canonicalMismatch] : [])
+    ])];
     return {
       ...evidence,
+      ok: evidence.ok === true && blockers.length === 0,
+      blockers,
       spawn: evidence.started_threads > 0,
       result: evidence.completed_threads > 0,
       exception: evidence.failed_threads > 0,
@@ -1550,6 +1545,30 @@ export async function subagentEvidence(root: any, state: any) {
     } catch {}
   }
   return { spawn, result, exception, ok: spawn || exception, count: lines.length, workflow: 'legacy_process_swarm' };
+}
+
+function canonicalEvidenceMismatch(canonical: any, recomputed: any): string | null {
+  if (canonical?.schema !== 'sks.subagent-evidence.v1' || canonical?.workflow !== 'official_codex_subagent') {
+    return 'persisted_subagent_evidence_schema_invalid';
+  }
+  const scalarKeys = [
+    'requested_subagents', 'started_threads', 'completed_threads', 'failed_threads',
+    'parent_summary_present', 'parent_summary_trustworthy', 'parent_summary_status',
+    'preparation_only', 'status', 'ok'
+  ];
+  for (const key of scalarKeys) {
+    if (canonical?.[key] !== recomputed?.[key]) return `persisted_subagent_evidence_mismatch:${key}`;
+  }
+  const arrayKeys = [
+    'started_thread_ids', 'completed_thread_ids', 'failed_thread_ids', 'open_thread_ids',
+    'unmatched_stop_thread_ids', 'ambiguous_stop_thread_ids', 'event_sources', 'blockers'
+  ];
+  for (const key of arrayKeys) {
+    if (JSON.stringify(canonical?.[key] || []) !== JSON.stringify(recomputed?.[key] || [])) {
+      return `persisted_subagent_evidence_mismatch:${key}`;
+    }
+  }
+  return null;
 }
 
 export async function hasSubagentEvidence(root: any, state: any) {

@@ -83,7 +83,7 @@ export async function repairCodexNativeManagedAssets(input: {
     rows.push({
       asset: 'agent_roles',
       ok: recordOk(report) !== false,
-      changed: listLength(report, 'created') > 0,
+      changed: listLength(report, 'created') + listLength(report, 'updated') > 0,
       artifact_path: '.sneakoscope/reports/codex-agent-role-sync.json',
       blockers: blockersOf(report)
     })

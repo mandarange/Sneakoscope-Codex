@@ -5,6 +5,8 @@ import { inspectCodexConfigReadability } from '../codex/codex-config-readability
 import { repairCodexConfigEperm } from '../codex/codex-config-eperm-repair.js'
 import { splitCodexProjectConfigPolicy } from '../codex/codex-project-config-policy.js'
 import { checkZellijCapability } from '../zellij/zellij-capability.js'
+import { codexLbStatus } from '../../cli/install-helpers.js'
+import { codexLbToolOutputRecoveryOverrideAcknowledged } from '../codex-lb/codex-lb-tool-output-recovery.js'
 
 export const PARALLEL_PREFLIGHT_SCHEMA = 'sks.parallel-preflight.v1'
 
@@ -41,7 +43,8 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
   const probeCodex = opts.launchFast === true ? false : opts.actualCodex !== false
   const readonly = await runParallelPreflight([
     { id: 'codex_config_readability', run: () => inspectCodexConfigReadability(root, { ...opts, codexProbe: probeCodex, actualCodex: probeCodex, writeReport: false }) },
-    { id: 'codex_project_config_policy', run: () => splitCodexProjectConfigPolicy(root, { ...opts, writeReport: false }) }
+    { id: 'codex_project_config_policy', run: () => splitCodexProjectConfigPolicy(root, { ...opts, writeReport: false }) },
+    { id: 'codex_lb_tool_output_recovery', run: () => inspectCodexLbToolOutputRecoveryForLaunch(opts) }
   ])
   const repair = opts.fix === true || readonly.ok === false
     ? await repairCodexConfigEperm(root, { ...opts, codexProbe: probeCodex, actualCodex: probeCodex, fix: opts.fix !== false, writeReport: false })
@@ -69,6 +72,7 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
   }
   const blockers = [...new Set([...(readonly.blockers || []), ...(repair?.blockers || []), ...(zellijCapability?.blockers || []), ...(fastTierProof.ok ? [] : ['service_tier_not_passed_to_codex'])])]
   const operatorActions = [...new Set([...(readonly.operator_actions || []), ...(repair?.operator_actions || []), ...(zellijCapability?.operator_actions || [])])]
+  const codexLbToolOutputRecovery = readonly.results.find((result) => result.id === 'codex_lb_tool_output_recovery')?.value || null
   const report = {
     schema: 'sks.mad-launch-preflight.v1',
     generated_at: nowIso(),
@@ -77,10 +81,56 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
     readonly,
     repair,
     zellij_capability: zellijCapability,
+    codex_lb_tool_output_recovery: codexLbToolOutputRecovery,
     fast_tier_proof: fastTierProof,
     blockers,
     operator_actions: operatorActions
   }
   if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
   return report
+}
+
+export async function inspectCodexLbToolOutputRecoveryForLaunch(opts: any = {}) {
+  if (opts.skipCodexLbToolOutputRecovery === true) {
+    return {
+      schema: 'sks.codex-lb-launch-recovery-preflight.v1',
+      ok: true,
+      status: 'not_applicable',
+      selected: false,
+      blockers: [],
+      operator_actions: []
+    }
+  }
+  const allowUnverifiedToolOutputRecovery = opts.allowUnverifiedToolOutputRecovery === true
+    || codexLbToolOutputRecoveryOverrideAcknowledged({ env: opts.env || process.env })
+  const status = await codexLbStatus({
+    ...opts,
+    ...(opts.home ? { home: opts.home } : {}),
+    ...(opts.codexLbConfigPath ? { configPath: opts.codexLbConfigPath } : {}),
+    ...(opts.codexLbEnvPath ? { envPath: opts.codexLbEnvPath } : {}),
+    ...(typeof opts.codexLbToolOutputRecoveryFetch === 'function'
+      ? { toolOutputRecoveryFetch: opts.codexLbToolOutputRecoveryFetch }
+      : {}),
+    ...(opts.codexLbToolOutputRecoveryTimeoutMs
+      ? { toolOutputRecoveryTimeoutMs: opts.codexLbToolOutputRecoveryTimeoutMs }
+      : {}),
+    probeToolOutputRecovery: true,
+    allowUnverifiedToolOutputRecovery
+  })
+  const recovery = status.tool_output_recovery
+  const required = status.selected === true
+  const ok = !required || recovery?.ok === true
+  return {
+    schema: 'sks.codex-lb-launch-recovery-preflight.v1',
+    ok,
+    status: !required ? 'not_selected' : recovery?.status || 'version_unverified',
+    selected: required,
+    provider_ready: status.provider_ready === true,
+    base_url: status.base_url || null,
+    tool_output_recovery: recovery || null,
+    blockers: ok ? [] : recovery?.blockers || ['codex_lb_tool_output_recovery_version_unverified'],
+    operator_actions: ok ? [] : recovery?.operator_actions || [
+      'Upgrade codex-lb, or run `sks codex-lb use-oauth`; SKS will not switch providers silently.'
+    ]
+  }
 }
