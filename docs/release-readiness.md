@@ -1,10 +1,10 @@
 # Release Readiness
 
-SKS 6.1.0 is ready for publication only when package/lock/Rust/docs/dist versions agree; the active `rust-v0.144.1` manifest, exact `@openai/codex-sdk`/`@openai/codex` 0.144.1 dependency graph, generated App Server schema digest, package file allowlist, and current Codex compatibility evidence agree; the Voxel TriWiki coordinate/voxel, trust, wrongness, and bounded-context contracts validate; generation-aware GC preserves the active mission and durable evidence; Codex plugin repair proves Browser, Chrome, Computer Use, and ImageGen inventory; and the lifecycle-disabled publish gates pass from a clean build.
+SKS 6.1.1 is ready for publication only when package/lock/Rust/docs/dist versions agree; the active `rust-v0.144.1` manifest, exact `@openai/codex-sdk`/`@openai/codex` 0.144.1 dependency graph, generated App Server schema digest, package file allowlist, and current Codex compatibility evidence agree; the Voxel TriWiki coordinate/voxel, trust, wrongness, and bounded-context contracts validate; generation-aware GC preserves the active mission and durable evidence; Codex plugin repair proves Browser, Chrome, Computer Use, and ImageGen inventory; and the lifecycle-disabled publish gates pass from a clean build.
 
-Codex 0.142 references later in this document are historical release records and cannot authorize the 6.1.0 release.
+Codex 0.142 references later in this document are historical release records and cannot authorize the 6.1.1 release.
 
-6.1.0 release readiness also requires codex-lb repair to preserve `service_tier = "fast"` while removing only SKS-provenance model locks, a successful menu build/restart contract, duplicate-hook suppression, real native-tool probes, the 200-gate/100-script lean budgets, sequential tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. Desktop picker visibility remains a live post-restart visual check rather than being inferred from TOML or `/models` alone.
+6.1.1 release readiness requires `$Naruto` to use the Codex official subagent workflow, Sol Max parent orchestration, Luna Max bounded workers, Sol Max reasoning-sensitive experts, matched `SubagentStart`/`SubagentStop` thread evidence plus a parent summary, no native PID requirement, preserved user-owned agent/config files, the 200-gate/100-script lean budgets, focused tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. Live paid Naruto fan-out and npm publication remain operator-only checks.
 
 Retention and command-lifecycle readiness requires `sks agent --help` to leave mission state untouched, `route_closed` current/session records to be inactive, and recently updated non-closed sessions to remain protected for two hours. Mission compaction preserves durable JSON and visual/review evidence byte-for-byte, removes only known disposable runtime files, and retains verified read compatibility for legacy gzip archives; full storage-budget reports count every `.sneakoscope` top-level directory and root file with a per-directory 1,000,000-file scan safety ceiling; and release-gate run history keeps five run directories by default.
 
@@ -240,9 +240,9 @@ Publish mode treats main/tag/npm mismatches as blockers.
 runtime totals. Readiness blocks on unexpected applied mutations, global mutations
 without confirmation, or config/auth/skill mutations without backup or no-op proof.
 
-## Current publish authorization policy (6.1.0)
+## Current publish authorization policy (6.1.1)
 
-Publishing to npm starts with `npm run release:check:full`. In 6.1.0 that single
+Publishing to npm starts with `npm run release:check:full`. In 6.1.1 that single
 command performs a clean build, a repairing Doctor pass, the complete manifest-backed
 release DAG, the environment-dependent real check, and only then writes the
 `.sneakoscope/reports/release-check-stamp.json` v2 authorization stamp. The stamp is
@@ -281,7 +281,7 @@ npm run publish:ignore-scripts
 
 The actual-publication wrapper repeats `publish:prep-ignore-scripts` immediately
 before `npm publish --ignore-scripts`. The removed `publish:npm` and
-`release:publish` aliases are not supported 6.1.0 commands.
+`release:publish` aliases are not supported 6.1.1 commands.
 
 `prepublishOnly` also runs `release-registry-check.js --require-publish-auth`
 before `prepack`. That check uses the documented npm `whoami` identity and the

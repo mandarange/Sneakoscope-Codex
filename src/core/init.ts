@@ -15,6 +15,14 @@ import { buildSksCoreSkillManifest, isCoreSkillName } from './codex-native/core-
 import { syncCoreSkillsIntegrity } from './codex-native/core-skill-integrity.js';
 import { dbSafetyGuardSkillText, madDbSkillText } from './mad-db/mad-db-policy.js';
 import { currentGeneratedFileInventory, installCodexAgents, installGlobalSkills, installProjectSkills, installSkills, pruneStaleGeneratedFiles } from './init/skills.js';
+import {
+  backupInvalidToml,
+  inspectOfficialSubagentToml,
+  manifestProvesSksGeneratedPath,
+  mergeOfficialSubagentConfig,
+  officialSubagentConfigWarnings,
+  readInheritedOfficialSubagentConfigText
+} from './subagents/official-subagent-config.js';
 export { installGlobalSkills, installProjectSkills, installSkills } from './init/skills.js';
 
 const REFLECTION_MEMORY_PATH = '.sneakoscope/memory/q2_facts/post-route-reflection.md';
@@ -258,7 +266,10 @@ export async function initProject(root: any, opts: any = {}) {
   const previousManifest = await readJson(manifestPath, null);
   const preRepairCodexConfig = opts.repair ? await readText(path.join(root, '.codex', 'config.toml'), '') : '';
   if (opts.repair) {
-    const repair = await repairSksGeneratedArtifacts(root, { resetState: Boolean(opts.resetState) });
+    const repair = await repairSksGeneratedArtifacts(root, {
+      resetState: Boolean(opts.resetState),
+      preserveCodexAgents: true
+    });
     if (repair.removed.length) created.push(`repaired generated SKS files (${repair.removed.length})`);
   }
   const dirs = [
@@ -595,7 +606,7 @@ const REMOVED_CODEX_FEATURE_FLAGS = [
   'tool_suggest', 'plugins', 'codex_hooks'
 ];
 
-function mergeManagedCodexConfigToml(existingContent: any = '') {
+function mergeManagedCodexConfigToml(existingContent: any = '', opts: any = {}) {
   let next = String(existingContent || '').trimEnd();
   next = removeTomlTableKey(next, 'notice', 'fast_default_opt_out');
   next = removeTomlTableKey(next, 'features', 'codex_hooks');
@@ -610,11 +621,11 @@ function mergeManagedCodexConfigToml(existingContent: any = '') {
   }
   next = removeWholeTomlTable(next, 'user.fast_mode');
   next = removeWholeTomlTable(next, 'profiles.sks-fast-high');
-  if (process.env.SKS_ALLOW_HIGH_AGENT_CONCURRENCY !== '1') {
-    next = upsertTomlTableKey(next, 'agents', 'max_threads = 4');
-  }
   next = removeWholeTomlTable(next, 'features.multi_agent_v2');
-  next = upsertTomlTableKeyIfAbsent(next, 'agents', 'max_depth = 1');
+  next = mergeOfficialSubagentConfig(next, {
+    sksOwned: opts.sksOwned === true,
+    inheritedText: opts.inheritedText || ''
+  });
   for (const block of managedCodexConfigBlocks()) {
     if (block.preserveExisting === true && hasTomlTable(next, block.table)) continue;
     next = upsertTomlTable(next, block.table, block.text);
@@ -632,11 +643,12 @@ function mergeManagedCodexConfigToml(existingContent: any = '') {
   return `${next.trim()}\n`;
 }
 
-async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPath: any = '') {
+async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPath: any = '', opts: any = {}) {
   const selectedRe = /(^|\n)\s*model_provider\s*=\s*"codex-lb"\s*(?:#.*)?(?=\n|$)/;
-  const home = process.env.HOME || '';
+  const home = opts.home || process.env.HOME || '';
   if (!home) return configText;
-  const globalConfigPath = path.join(home, '.codex', 'config.toml');
+  const codexHome = opts.codexHome || process.env.CODEX_HOME || path.join(home, '.codex');
+  const globalConfigPath = path.join(codexHome, 'config.toml');
   if (configPath && path.resolve(configPath) === path.resolve(globalConfigPath)) return configText;
   const globalConfig = await readText(globalConfigPath, '');
   let next = mergeGlobalMcpServers(configText, globalConfig);
@@ -644,7 +656,7 @@ async function mergeGlobalCodexConfigIfAvailable(configText: any = '', configPat
   if (selectedRe.test(next) && /\[model_providers\.codex-lb\]/.test(next)) {
     return `${next.trim()}\n`;
   }
-  const envPath = path.join(home, '.codex', 'sks-codex-lb.env');
+  const envPath = path.join(codexHome, 'sks-codex-lb.env');
   if (!(await exists(envPath))) return next;
   const envText = await readText(envPath, '');
   const baseUrl = globalConfig.match(/(^|\n)\[model_providers\.codex-lb\][\s\S]*?\n\s*base_url\s*=\s*"([^"]+)"/)?.[2] || parseCodexLbEnvBaseUrl(envText);
@@ -818,11 +830,6 @@ function managedCodexConfigBlocks() {
     // with `url is not supported for stdio`. Remote is also the transport the doctor
     // migrates everyone to (local stdio can block interactive Codex launch).
     { table: 'mcp_servers.context7', text: context7ConfigToml('remote').trim(), preserveExisting: true },
-    { table: 'agents.native_agent', text: agentConfigBlock('native_agent', 'SKS native agent with bounded write capability.', './agents/native-agent-intake.toml', ['Analysis', 'Mapper']) },
-    { table: 'agents.team_consensus', text: agentConfigBlock('team_consensus', 'SKS planning/debate agent with bounded write capability.', './agents/team-consensus.toml', ['Consensus', 'Atlas']) },
-    { table: 'agents.implementation_worker', text: agentConfigBlock('implementation_worker', 'SKS bounded implementation worker.', './agents/implementation-worker.toml', ['Builder', 'Mason']) },
-    { table: 'agents.db_safety_reviewer', text: agentConfigBlock('db_safety_reviewer', 'DB safety reviewer with bounded write capability.', './agents/db-safety-reviewer.toml', ['Sentinel', 'Ledger']) },
-    { table: 'agents.qa_reviewer', text: agentConfigBlock('qa_reviewer', 'QA reviewer with bounded write capability.', './agents/qa-reviewer.toml', ['Verifier', 'Reviewer']) },
     // NOTE: SKS config profiles are NO LONGER emitted as `[profiles.sks-*]` tables.
     // Codex 0.134+ deprecated config-profile tables / the `profile=` selector (warns at
     // startup) in favor of per-file `$CODEX_HOME/<name>.config.toml` overlays loaded by
@@ -834,15 +841,6 @@ function managedCodexConfigBlocks() {
       text: '[auto_review]\npolicy = "In MAD-SKS launches, allow only the scoped non-MadDB high-risk surfaces approved for the active invocation and keep catastrophic DB wipe/all-row safeguards active. In first-class MAD-DB cycles, the explicit $MAD-DB or sks mad-db run|exec|apply-migration invocation is the SQL-plane approval boundary: execute requested execute_sql/apply_migration mutations with mission-local write transport, read-back proof, and final read-only restoration. Supabase project/account/billing/credential control-plane actions remain denied."'
     }
   ];
-}
-
-function agentConfigBlock(table: any, description: any, configFile: any, nicknames: any = []) {
-  return [
-    `[agents.${table}]`,
-    `description = "${description}"`,
-    `config_file = "${configFile}"`,
-    `nickname_candidates = [${nicknames.map((name: any) => `"${name}"`).join(', ')}]`
-  ].join('\n');
 }
 
 
@@ -911,12 +909,62 @@ function upsertTomlTable(text: any, table: any, block: any) {
 
   const generatedCodexConfigPath = path.join(root, '.codex', 'config.toml');
   const existingCodexConfig = await readText(generatedCodexConfigPath, '') || preRepairCodexConfig;
-  const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
-    mergeManagedCodexConfigToml(existingCodexConfig),
-    generatedCodexConfigPath
-  );
-  await writeTextAtomic(generatedCodexConfigPath, managedCodexConfig);
-  created.push('.codex/config.toml');
+  const configPreviouslySksOwned = manifestProvesSksGeneratedPath(previousManifest, '.codex/config.toml');
+  const configWasFresh = !String(existingCodexConfig || '').trim();
+  const existingConfigValidation = inspectOfficialSubagentToml(existingCodexConfig);
+  let codexConfigInstall: any;
+  if (!existingConfigValidation.ok) {
+    const backupPath = await backupInvalidToml(generatedCodexConfigPath, existingCodexConfig, 'project-config-invalid');
+    // repairSksGeneratedArtifacts may have removed the path before this stage;
+    // invalid user TOML is still restored byte-for-byte and never normalized.
+    await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
+    codexConfigInstall = {
+      ok: false,
+      status: 'unparseable_config_preserved',
+      config_path: generatedCodexConfigPath,
+      backup_path: backupPath,
+      manual_blockers: ['manual_invalid_project_codex_config'],
+      warnings: []
+    };
+    created.push('.codex/config.toml invalid TOML preserved (manual repair required)');
+  } else {
+    const inheritedCodexConfig = await readInheritedOfficialSubagentConfigText(generatedCodexConfigPath, {
+      home: opts.home,
+      codexHome: opts.codexHome
+    });
+    const managedCodexConfig = await mergeGlobalCodexConfigIfAvailable(
+      mergeManagedCodexConfigToml(existingCodexConfig, {
+        sksOwned: configPreviouslySksOwned,
+        inheritedText: inheritedCodexConfig
+      }),
+      generatedCodexConfigPath,
+      { home: opts.home, codexHome: opts.codexHome }
+    );
+    const managedConfigValidation = inspectOfficialSubagentToml(managedCodexConfig);
+    if (!managedConfigValidation.ok) {
+      await writeTextAtomic(generatedCodexConfigPath, existingCodexConfig);
+      codexConfigInstall = {
+        ok: false,
+        status: 'unsafe_config_merge_preserved',
+        config_path: generatedCodexConfigPath,
+        backup_path: null,
+        manual_blockers: ['manual_project_codex_config_merge_invalid'],
+        warnings: []
+      };
+      created.push('.codex/config.toml merge skipped (manual repair required)');
+    } else {
+      await writeTextAtomic(generatedCodexConfigPath, managedCodexConfig);
+      codexConfigInstall = {
+        ok: true,
+        status: managedCodexConfig === existingCodexConfig ? 'present' : 'written',
+        config_path: generatedCodexConfigPath,
+        backup_path: null,
+        manual_blockers: [],
+        warnings: officialSubagentConfigWarnings(managedCodexConfig, inheritedCodexConfig)
+      };
+      created.push('.codex/config.toml');
+    }
+  }
 
   await writeTextAtomic(path.join(root, '.codex', 'SNEAKOSCOPE.md'), codexAppQuickReference(installScope, hookCommandPrefix));
   created.push('.codex/SNEAKOSCOPE.md');
@@ -924,11 +972,13 @@ function upsertTomlTable(text: any, table: any, block: any) {
   const hooksPath = path.join(root, '.codex', 'hooks.json');
   await writeTextAtomic(hooksPath, mergeManagedHooksJson(await readText(hooksPath, ''), hookCommandPrefix));
   created.push(`.codex/hooks.json (${installScope})`);
-  await writeTextAtomic(
-    generatedCodexConfigPath,
-    mergeManagedHookTrustStateToml(await readText(generatedCodexConfigPath, ''), root, hookCommandPrefix)
-  );
-  created.push('.codex/config.toml hook trust state');
+  if (codexConfigInstall.ok) {
+    await writeTextAtomic(
+      generatedCodexConfigPath,
+      mergeManagedHookTrustStateToml(await readText(generatedCodexConfigPath, ''), root, hookCommandPrefix)
+    );
+    created.push('.codex/config.toml hook trust state');
+  }
 
   const skillInstall = installScope === 'project' ? await installProjectSkills(root) : await installGlobalSkills(root);
   created.push(installScope === 'project' ? '.agents/skills official residue reconciled' : '.agents/skills/*');
@@ -939,8 +989,12 @@ function upsertTomlTable(text: any, table: any, block: any) {
   if (removedAgentSkillAliases.length) created.push(`deprecated generated skill aliases removed (${removedAgentSkillAliases.length})`);
   if (removedCodexSkillMirrors.length) created.push(`.codex/skills generated mirrors removed (${removedCodexSkillMirrors.length})`);
   const agentInstall = await installCodexAgents(root);
-  created.push('.codex/agents/*');
-  const generatedFiles = currentGeneratedFileInventory(skillInstall, agentInstall);
+  created.push('.codex/agents/worker.toml + expert.toml');
+  if (agentInstall.manual_blockers?.length) created.push(`official subagent agent config manual blockers (${agentInstall.manual_blockers.length})`);
+  const configInventoryOwned = codexConfigInstall.ok && (configWasFresh || configPreviouslySksOwned);
+  const generatedFiles = currentGeneratedFileInventory(skillInstall, agentInstall, {
+    includeCodexConfig: configInventoryOwned
+  });
   const generatedCleanup = await pruneStaleGeneratedFiles(root, previousManifest, generatedFiles);
   if (generatedCleanup.pruned.length) created.push(`stale generated files pruned (${generatedCleanup.pruned.length})`);
   manifest.generated_files = {
@@ -957,12 +1011,27 @@ function upsertTomlTable(text: any, table: any, block: any) {
     pruned: generatedCleanup.pruned,
     already_absent: generatedCleanup.already_absent || []
   };
+  manifest.codex_app.official_subagents = {
+    config: codexConfigInstall,
+    agents: agentInstall,
+    manual_blockers: [
+      ...(codexConfigInstall.manual_blockers || []),
+      ...(agentInstall.manual_blockers || [])
+    ],
+    warnings: codexConfigInstall.warnings || []
+  };
   await writeJsonAtomic(manifestPath, manifest);
   await writeHarnessGuardPolicy(root);
   created.push('.sneakoscope/harness-guard.json');
   const versionHookCleanup = await disableVersionGitHook(root);
   created.push(versionHookCleanup.hook_removed ? '.git/hooks/pre-commit SKS version guard removed' : `version guard disabled (${versionHookCleanup.reason || 'policy updated'})`);
-  return { created, generated_cleanup: generatedCleanup, skill_install: skillInstall };
+  return {
+    created,
+    generated_cleanup: generatedCleanup,
+    skill_install: skillInstall,
+    agent_install: agentInstall,
+    codex_config_install: codexConfigInstall
+  };
 }
 
 async function ensureSharedGitIgnore(root: any) {

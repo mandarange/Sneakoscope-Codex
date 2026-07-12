@@ -65,10 +65,13 @@ const CORE_SKILL_DEFINITIONS: Array<{
     canonical_name: 'naruto',
     display_name: 'naruto',
     route: '$Naruto',
-    purpose: 'fan out bounded native worker lanes while parent integration remains owner.',
-    when: 'Use when the selected route explicitly requires high-scale parallel review or implementation.',
-    evidence: 'agent task graph, worker ledgers, leases, proof evidence, and cleanup artifacts.',
-    fallback: 'Degrade to parent-owned execution with blockers recorded if native lanes are unavailable.'
+    purpose: 'run a Codex official subagent workflow with official agent threads while parent integration remains owner.',
+    when: 'Use when the user explicitly invokes $Naruto or the selected route requires bounded parallel delegation.',
+    workflow: 'Use sks naruto run "<task>" [--agents N] [--max-threads N] [--json]. The parent runs on GPT-5.6 Sol Max; clear bounded worker slices use GPT-5.6 Luna Max; UI, review, debugging, planning, strategy, architecture, integration, security, DB, release, ambiguity, and other judgment-sensitive expert slices use GPT-5.6 Sol Max. Treat Codex [agents].max_threads as the concurrency authority, keep max_depth=1, avoid duplicate or overlapping write slices, wait for every requested subagent, accept official SubagentStart/SubagentStop events, and let the parent own integration and final judgment.',
+    safety: 'Preserve user-authored content, inherit the parent permission mode, do not spawn nested subagents, do not silently fall back to another model or process swarm, and stop with explicit blocker evidence when the official path is unavailable.',
+    cli: 'sks naruto run "<task>" [--agents N] [--max-threads N] [--json]; sks naruto status|subagents|proof [--mission <id>] [--json]',
+    evidence: 'subagent-plan.json, subagent-events.jsonl, subagent-evidence.json, verification-summary.json, and naruto-summary.json.',
+    fallback: 'Return explicit official-subagent availability blockers and continue parent-owned only when the sealed task still has meaningful in-scope work; never fabricate process, PID, or subagent evidence.'
   },
   {
     id: 'sks-core-qa-loop',

@@ -1,50 +1,44 @@
-# No-Subagent Scaling
+# Official Codex Subagent Scaling
 
-SKS 1.18.11 worker count is native process count, not Codex internal subagent/scout event count.
+`$Naruto` uses Codex official subagents as its default execution workflow.
+SKS no longer treats native child-process count, PID overlap, Zellij pane count,
+or a custom active pool as Naruto completion evidence.
 
-Codex official subagents and Codex App tool capabilities are allowed as helper
-lanes. They are useful for bounded parallel exploration and for official
-capabilities such as `$imagegen` / `gpt-image-2`, but they never increase native
-worker capacity.
+The canonical policy is:
 
-Policy artifact:
+- parent: GPT-5.6 Sol with `model_reasoning_effort="max"`
+- clear bounded worker: GPT-5.6 Luna with `model_reasoning_effort="max"`
+- reasoning-sensitive expert: GPT-5.6 Sol with `model_reasoning_effort="max"`
+- default `agents.max_threads`: 12 for fresh SKS-owned project config
+- `agents.max_depth`: 1
+- hard SKS request safety cap: 32, with larger requested work planned in waves
 
-```json
-{
-  "schema": "sks.no-subagent-scaling-policy.v1",
-  "main_orchestrator_scaling_primitive": "native_cli_process",
-  "subagent_events_counted_as_worker_sessions": false,
-  "scout_events_counted_as_worker_sessions": false,
-  "official_codex_subagent_helper_lane_allowed": true,
-  "official_helper_lane_worker_capacity_credit": 0,
-  "official_helper_lane_events_counted_as_worker_sessions": false
-}
+Completion requires matched thread evidence from official `SubagentStart` and
+`SubagentStop` events, zero failed requested threads, and a parent summary.
+`delegation_context_ready` is preparation only and cannot pass the gate.
+
+Canonical artifacts are:
+
+```text
+subagent-plan.json
+subagent-events.jsonl
+subagent-evidence.json
+naruto-summary.json
+naruto-gate.json
 ```
 
-Official Codex hook compatibility still supports `SubagentStart` and `SubagentStop`, but SKS-owned worker lifecycle UI records `NativeSessionStart` and `NativeSessionStop`. Subagent hook events never prove SKS worker capacity. The release gate requires `native-cli-session-proof.json` and `agent-native-cli-session-swarm.json` with real child process ids.
-
-Allowed helper behavior:
-
-- A native worker may use an internal scout as a helper.
-- The parent may ask Codex official subagents to run bounded helper work in
-  parallel with SKS native workers when the user explicitly asked for
-  subagents/parallel agents or when a Codex App capability lane is required.
-- Codex App `$imagegen` / `gpt-image-2` can be used through the helper lane for
-  generated raster evidence, but the real output still needs path, hash, byte
-  size, dimensions, and model/surface proof.
-- Helper scout/subagent events are recorded separately.
-- Helper scout/subagent events never increase `requested_agents`,
-  `target_active_slots`, `spawned_worker_process_count`, or
-  `max_observed_worker_process_count`.
-- Direct API image generation fallback does not count as Codex App imagegen
-  evidence unless the route explicitly accepts non-Codex API fallback proof.
-- Generated image reports must keep evidence classes explicit:
-  `codex_app_builtin` for Codex App `$imagegen` output and `api_fallback`
-  for OpenAI API fallback output.
-
-Release gate:
+The historical process swarm remains available for one compatibility window
+only when the operator explicitly sets:
 
 ```bash
-npm run agent:no-subagent-scaling
-npm run agent:official-subagent-helper-policy
+SKS_NARUTO_LEGACY_PROCESS_SWARM=1 sks naruto run "task"
 ```
+
+Without that opt-in, `sks naruto run` never launches one SKS-owned child process
+per requested subagent. A standalone terminal invocation launches at most one
+Sol Max `codex exec` parent, and a Codex App/Desktop invocation returns official
+delegation context to the current parent without nesting another Codex process.
+
+The retained release-gate ids `agent:native-cli-session-swarm-scaling`,
+`agent:fast-mode-policy`, and `naruto:canonical-stop-gate` now validate this
+official event-evidence contract for compatibility with existing gate tooling.

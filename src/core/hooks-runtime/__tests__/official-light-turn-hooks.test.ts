@@ -1,0 +1,371 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fsp from 'node:fs/promises';
+import { evaluateHookPayload, evaluateHookPayloadOnce } from '../../hooks-runtime.js';
+import { lightTurnReceiptPath } from '../light-turn.js';
+import { prepareRoute } from '../../pipeline.js';
+import { loadStateForSession, missionDir } from '../../mission.js';
+
+async function tempRoot(prefix: string) {
+  return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
+}
+
+function officialSubagentHookPayload(event: 'SubagentStart' | 'SubagentStop', agentId: string, lastAssistantMessage: string | null = null) {
+  const base = {
+    agent_id: agentId,
+    agent_type: 'worker',
+    cwd: '/tmp/project',
+    hook_event_name: event,
+    model: 'gpt-5.6-luna',
+    permission_mode: 'default',
+    session_id: 'official-parent',
+    transcript_path: null,
+    turn_id: 'turn-official-parent'
+  };
+  return event === 'SubagentStop'
+    ? {
+        ...base,
+        agent_transcript_path: null,
+        last_assistant_message: lastAssistantMessage,
+        stop_hook_active: false
+      }
+    : base;
+}
+
+function structuredParentSummary(threadIds: string[]) {
+  return JSON.stringify({
+    schema: 'sks.subagent-parent-summary.v1',
+    status: 'completed',
+    summary: 'Integrated every requested slice.',
+    thread_outcomes: threadIds.map((threadId) => ({
+      thread_id: threadId,
+      status: 'completed',
+      summary: `${threadId} completed`
+    })),
+    changed_files: [],
+    verification: ['affected checks passed'],
+    blockers: []
+  });
+}
+
+test('greeting fast path creates only a transient receipt and consumes it before stale route gates', async () => {
+  const root = await tempRoot('sks-light-greeting-');
+  const session = 'light-session';
+  const staleState = {
+    mission_id: 'M-stale',
+    mode: 'NARUTO',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    stop_gate: 'naruto-gate.json',
+    subagents_required: true
+  };
+  try {
+    const submitted: any = await evaluateHookPayloadOnce('user-prompt-submit', {
+      conversation_id: session,
+      turn_id: 'light-turn-1',
+      prompt: '안녕하세요'
+    }, { root, state: staleState });
+    assert.equal(submitted.continue, true);
+    assert.equal(submitted.sksTaskProfile, 'passthrough');
+    assert.equal(submitted.silent, true);
+    assert.equal(submitted.additionalContext, undefined);
+    await fsp.access(lightTurnReceiptPath(root, session));
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'state', 'hook-invocation-dedupe')));
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'missions')));
+
+    const stopped: any = await evaluateHookPayload('stop', {
+      conversation_id: session,
+      turn_id: 'light-turn-1',
+      last_assistant_message: '안녕하세요!'
+    }, { root, state: staleState });
+    assert.equal(stopped.continue, true);
+    assert.equal(stopped.action, 'light_turn');
+    assert.equal(stopped.silent, true);
+    await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('greeting fast path does not emit a session-id fallback warning artifact', async () => {
+  const root = await tempRoot('sks-light-no-session-warning-');
+  try {
+    const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+      cwd: root,
+      turn_id: 'turn-no-session-warning',
+      prompt: 'hi'
+    }, { root, state: {} });
+    assert.equal(submitted.sksTaskProfile, 'passthrough');
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'state', 'session-id-fallback-warning.jsonl')));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a later non-light prompt invalidates an older light receipt before Stop', async () => {
+  const root = await tempRoot('sks-light-stale-receipt-');
+  const session = 'stale-light-session';
+  try {
+    await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      turn_id: 'turn-light',
+      prompt: 'hi'
+    }, { root, state: {} });
+    await fsp.access(lightTurnReceiptPath(root, session));
+
+    await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      turn_id: 'turn-db',
+      prompt: 'DB migration 적용해줘'
+    }, { root, state: {} });
+    await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
+
+    const state: any = await loadStateForSession(root, session);
+    const stopped: any = await evaluateHookPayload('stop', {
+      conversation_id: session,
+      turn_id: 'turn-db',
+      last_assistant_message: 'DB work is not complete.'
+    }, { root, state });
+    assert.equal(stopped.action, undefined);
+    assert.equal(stopped.decision, 'block');
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('active continuation prompts keep the active mission context instead of arming answer bypass', async () => {
+  const root = await tempRoot('sks-active-continuation-');
+  const session = 'active-continuation-session';
+  const state = {
+    mission_id: 'M-active-continuation',
+    mode: 'NARUTO',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    stop_gate: 'naruto-gate.json',
+    route_closed: false
+  };
+  try {
+    await fsp.mkdir(missionDir(root, state.mission_id), { recursive: true });
+    for (const prompt of ['keep going', 'please continue', '계속 진행해줘', '이어서 해줘']) {
+      const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+        conversation_id: session,
+        turn_id: `turn-continue-${prompt}`,
+        prompt
+      }, { root, state });
+      assert.equal(submitted.sksTaskProfile, undefined);
+      assert.match(String(submitted.additionalContext || ''), /Active Naruto mission/i);
+      assert.doesNotMatch(String(submitted.additionalContext || ''), /answer-only pipeline active/i);
+      await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
+    }
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('plain answer fast path avoids mission, TriWiki, team digest, and code-pack preparation', async () => {
+  const root = await tempRoot('sks-light-answer-');
+  const session = 'answer-session';
+  try {
+    const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      prompt: '이 함수가 왜 이렇게 동작해?'
+    }, { root, state: {} });
+    assert.equal(submitted.continue, true);
+    assert.equal(submitted.sksTaskProfile, 'answer');
+    assert.match(submitted.additionalContext, /answer-only pipeline active \(light turn\)/i);
+    assert.doesNotMatch(submitted.additionalContext, /\$Team route prepared|Pipeline plan:|Mission:/i);
+    await assert.rejects(fsp.access(path.join(root, '.sneakoscope', 'missions')));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('light classifier never bypasses no-question mode', async () => {
+  const root = await tempRoot('sks-light-no-question-');
+  const session = 'no-question-session';
+  const missionId = 'M-no-question';
+  const state = {
+    mission_id: missionId,
+    mode: 'RESEARCH',
+    phase: 'RESEARCH_RUNNING_NO_QUESTIONS'
+  };
+  try {
+    await fsp.mkdir(missionDir(root, missionId), { recursive: true });
+    const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      prompt: 'hello'
+    }, { root, state });
+    assert.equal(submitted.decision, 'block');
+    assert.match(submitted.reason, /no-question/i);
+    await assert.rejects(fsp.access(lightTurnReceiptPath(root, session)));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('SubagentStart uses configured official max_threads and SubagentStop is evidence-only', async () => {
+  const root = await tempRoot('sks-official-hook-events-');
+  const missionId = 'M-official-events';
+  const state = { mission_id: missionId, mode: 'NARUTO', route: 'Naruto', stop_gate: 'naruto-gate.json' };
+  try {
+    await fsp.mkdir(path.join(root, '.codex'), { recursive: true });
+    await fsp.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_threads = 9\nmax_depth = 1\n');
+    await fsp.mkdir(missionDir(root, missionId), { recursive: true });
+    const started: any = await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', 'agent-a1'), { root, state });
+    assert.match(started.additionalContext, /max_threads is 9/i);
+    assert.doesNotMatch(started.additionalContext, /at most 4/i);
+
+    const stopped: any = await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', 'agent-a1', 'Bounded slice result.'), { root, state });
+    assert.equal(stopped.continue, true);
+    assert.equal(stopped.decision, undefined);
+    assert.equal(stopped.silent, true);
+    const events = await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-events.jsonl'), 'utf8');
+    assert.match(events, /SubagentStart/);
+    assert.match(events, /SubagentStop/);
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('official events plus parent summary pass Naruto without legacy process artifacts', async () => {
+  const root = await tempRoot('sks-official-naruto-stop-');
+  const session = 'official-parent';
+  try {
+    const prepared: any = await prepareRoute(root, '$Naruto --agents 2 implement two independent checks', {}, {
+      sessionKey: session,
+      parentModel: 'gpt-5.6-sol'
+    });
+    assert.match(prepared.additionalContext, /requested subagents: 2/i);
+    let state: any = await loadStateForSession(root, session);
+    assert.equal(state.native_sessions_required, false);
+    assert.equal(state.subagents_required, true);
+    const preparedDir = missionDir(root, state.mission_id);
+    await fsp.writeFile(path.join(preparedDir, 'work-order-ledger.json'), JSON.stringify({
+      schema_version: 1,
+      mission_id: state.mission_id,
+      route: 'Naruto',
+      source_inventory_complete: true,
+      all_customer_requests_preserved: true,
+      all_customer_requests_mapped: true,
+      all_work_items_verified: false,
+      items: [{ id: 'REQ-1', status: 'pending', implementation_tasks: [], implementation_evidence: [], verification_evidence: [] }]
+    }));
+
+    for (const threadId of ['agent-a1', 'agent-a2']) {
+      await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', threadId), { root, state });
+      await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', threadId, `${threadId} bounded result.`), { root, state });
+    }
+
+    const decision: any = await evaluateHookPayload('stop', {
+      conversation_id: session,
+      last_assistant_message: structuredParentSummary(['agent-a1', 'agent-a2'])
+    }, { root, state });
+    assert.equal(decision.decision, 'block');
+    assert.match(decision.reason, /Completion Proof/i);
+
+    state = await loadStateForSession(root, session);
+    const dir = missionDir(root, state.mission_id);
+    const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    const summary = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-summary.json'), 'utf8'));
+    const gate = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
+    assert.equal(evidence.ok, true);
+    assert.equal(evidence.started_threads, 2);
+    assert.equal(evidence.completed_threads, 2);
+    assert.equal(evidence.parent_summary_trustworthy, true);
+    assert.equal(summary.schema, 'sks.naruto-subagent-workflow.v1');
+    assert.equal(summary.parent_summary_present, true);
+    assert.equal(gate.passed, true);
+    const ledger = JSON.parse(await fsp.readFile(path.join(dir, 'work-order-ledger.json'), 'utf8'));
+    assert.equal(ledger.items[0].status, 'verified');
+    await assert.rejects(fsp.access(path.join(dir, 'agents', 'naruto-work-graph.json')));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('generic parallel route materializes and refreshes official evidence without Naruto artifacts', async () => {
+  const root = await tempRoot('sks-generic-subagent-overlay-');
+  const session = 'generic-db-parent';
+  try {
+    const prepared: any = await prepareRoute(root, '$DB --agents 2 audit all schemas in parallel', {}, {
+      sessionKey: session,
+      parentModel: 'gpt-5.6-sol'
+    });
+    const state: any = await loadStateForSession(root, session);
+    const dir = missionDir(root, state.mission_id);
+    assert.equal(state.mode, 'DB');
+    assert.equal(state.subagents_required, true);
+    assert.match(prepared.additionalContext, /generic overlay does not create naruto-summary\.json/i);
+    await fsp.access(path.join(dir, 'subagent-plan.json'));
+    await fsp.access(path.join(dir, 'subagent-events.jsonl'));
+    await fsp.access(path.join(dir, 'subagent-evidence.json'));
+    await fsp.writeFile(path.join(dir, 'work-order-ledger.json'), JSON.stringify({
+      schema_version: 1,
+      mission_id: state.mission_id,
+      route: 'DB',
+      source_inventory_complete: true,
+      all_customer_requests_preserved: true,
+      all_customer_requests_mapped: true,
+      all_work_items_verified: false,
+      items: [{ id: 'REQ-DB-1', status: 'pending', implementation_tasks: [], implementation_evidence: [], verification_evidence: [] }]
+    }));
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-summary.json')));
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
+
+    for (const threadId of ['db-a1', 'db-a2']) {
+      await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', threadId), { root, state });
+      await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', threadId, `${threadId} read-only result.`), { root, state });
+    }
+    const decision: any = await evaluateHookPayload('stop', {
+      conversation_id: session,
+      turn_id: 'turn-official-parent',
+      last_assistant_message: structuredParentSummary(['db-a1', 'db-a2'])
+    }, { root, state });
+    assert.equal(decision.decision, 'block');
+    const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    assert.equal(evidence.ok, true);
+    assert.equal(evidence.completed_threads, 2);
+    const ledger = JSON.parse(await fsp.readFile(path.join(dir, 'work-order-ledger.json'), 'utf8'));
+    assert.equal(ledger.items[0].status, 'pending');
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-summary.json')));
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('known non-Sol App parent is recorded as a blocker instead of claimed enforcement', async () => {
+  const root = await tempRoot('sks-official-parent-mismatch-');
+  const session = 'mismatch-parent';
+  try {
+    await prepareRoute(root, '$Naruto --agents 2 audit two packages', {}, {
+      sessionKey: session,
+      parentModel: 'gpt-5.6-luna'
+    });
+    const state: any = await loadStateForSession(root, session);
+    const gate = JSON.parse(await fsp.readFile(path.join(missionDir(root, state.mission_id), 'naruto-gate.json'), 'utf8'));
+    assert.equal(gate.parent_model_match, false);
+    assert.ok(gate.blockers.includes('parent_model_mismatch:gpt-5.6-luna'));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('automatic bounded work stays parent-owned and does not materialize Naruto artifacts', async () => {
+  const root = await tempRoot('sks-bounded-parent-owned-');
+  const session = 'bounded-parent';
+  try {
+    await prepareRoute(root, '로그인 버그 수정해줘', {}, { sessionKey: session });
+    const state: any = await loadStateForSession(root, session);
+    assert.equal(state.route, 'SKS');
+    assert.equal(state.subagents_required, false);
+    const dir = missionDir(root, state.mission_id);
+    await fsp.access(path.join(dir, 'pipeline-plan.json'));
+    await assert.rejects(fsp.access(path.join(dir, 'subagent-plan.json')));
+    await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});

@@ -1,0 +1,239 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { parse } from 'smol-toml'
+import {
+  MANAGED_OFFICIAL_SUBAGENT_ROLES,
+  managedOfficialSubagentRoleContent,
+  managedOfficialSubagentRoleOwnsText
+} from '../../managed-assets/managed-assets-manifest.js'
+import { initProject } from '../../init.js'
+import { pruneStaleGeneratedFiles } from '../../init/skills.js'
+import {
+  installOfficialSubagentAgentConfigs,
+  mergeOfficialSubagentConfig,
+  readOfficialSubagentConfig
+} from '../official-subagent-config.js'
+
+test('fresh project config receives the official Codex subagent defaults', () => {
+  const text = mergeOfficialSubagentConfig('')
+  const parsed = parse(text) as Record<string, any>
+
+  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.max_depth, 1)
+  assert.equal(parsed.agents.job_max_runtime_seconds, 1200)
+  assert.equal(parsed.agents.interrupt_message, true)
+  assert.equal(Object.hasOwn(parsed.agents, 'warn_on_max_threads'), false)
+})
+
+test('project and inherited user max_threads values are preserved', () => {
+  for (const value of [3, 20]) {
+    const project = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`)
+    assert.equal((parse(project) as Record<string, any>).agents.max_threads, value)
+
+    const inherited = mergeOfficialSubagentConfig('', {
+      inheritedText: `[agents]\nmax_threads = ${value}\n`
+    })
+    assert.doesNotMatch(inherited, /^max_threads\s*=/m)
+    assert.equal((parse(inherited) as Record<string, any>).agents.max_threads, undefined)
+  }
+})
+
+test('legacy 4/5/historical 6 migrate only with proven SKS ownership', () => {
+  for (const value of [4, 5, 6]) {
+    const userOwned = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`)
+    assert.equal((parse(userOwned) as Record<string, any>).agents.max_threads, value)
+
+    const sksOwned = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`, { sksOwned: true })
+    assert.equal((parse(sksOwned) as Record<string, any>).agents.max_threads, 12)
+  }
+})
+
+test('agents parent table is inserted safely before an existing custom child table', () => {
+  const merged = mergeOfficialSubagentConfig('[agents.custom]\ndescription = "user role"\n')
+  const parsed = parse(merged) as Record<string, any>
+
+  assert.equal(parsed.agents.max_threads, 12)
+  assert.equal(parsed.agents.custom.description, 'user role')
+  assert.ok(merged.indexOf('[agents]') < merged.indexOf('[agents.custom]'))
+})
+
+test('fresh agent install creates only worker Luna Max and expert Sol Max', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agents-'))
+  const legacy = path.join(root, '.codex', 'agents', 'analysis-scout.toml')
+  await fs.mkdir(path.dirname(legacy), { recursive: true })
+  await fs.writeFile(legacy, 'name = "user_legacy_role"\n')
+
+  const first = await installOfficialSubagentAgentConfigs(root)
+  const files = (await fs.readdir(path.dirname(legacy))).sort()
+  assert.deepEqual(files, ['analysis-scout.toml', 'expert.toml', 'worker.toml'])
+  assert.deepEqual(first.created.sort(), ['.codex/agents/expert.toml', '.codex/agents/worker.toml'])
+  assert.equal(await fs.readFile(legacy, 'utf8'), 'name = "user_legacy_role"\n')
+
+  const workerText = await fs.readFile(path.join(root, '.codex', 'agents', 'worker.toml'), 'utf8')
+  const expertText = await fs.readFile(path.join(root, '.codex', 'agents', 'expert.toml'), 'utf8')
+  const worker = parse(workerText) as Record<string, any>
+  const expert = parse(expertText) as Record<string, any>
+  assert.equal(worker.model, 'gpt-5.6-luna')
+  assert.equal(worker.model_reasoning_effort, 'max')
+  assert.deepEqual(worker.nickname_candidates, ['Kite', 'Moss', 'Pico', 'Reed', 'Vale', 'Wren'])
+  assert.equal(Object.hasOwn(worker, 'sandbox_mode'), false)
+  assert.equal(expert.model, 'gpt-5.6-sol')
+  assert.equal(expert.model_reasoning_effort, 'max')
+  assert.deepEqual(expert.nickname_candidates, ['Atlas', 'Delta', 'Helix', 'Orion', 'Sage', 'Vector'])
+  assert.equal(Object.hasOwn(expert, 'sandbox_mode'), false)
+
+  const second = await installOfficialSubagentAgentConfigs(root)
+  assert.deepEqual(second.created, [])
+  assert.deepEqual(second.updated, [])
+  assert.deepEqual(second.existing.sort(), ['.codex/agents/expert.toml', '.codex/agents/worker.toml'])
+})
+
+test('marker plus body hash owns generated files and detects user modification', () => {
+  for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
+    const managed = managedOfficialSubagentRoleContent(role)
+    assert.equal(managedOfficialSubagentRoleOwnsText(managed, role), true)
+    assert.equal(managedOfficialSubagentRoleOwnsText(managed.replace(role.model, `${role.model}-changed`), role), false)
+  }
+})
+
+test('user collisions and invalid TOML are preserved with manual blockers', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agent-collision-'))
+  const agentsDir = path.join(root, '.codex', 'agents')
+  await fs.mkdir(agentsDir, { recursive: true })
+  const workerPath = path.join(agentsDir, 'worker.toml')
+  const expertPath = path.join(agentsDir, 'expert.toml')
+  const customWorker = 'name = "worker"\ndescription = "my custom worker"\n'
+  const invalidExpert = 'name = "expert"\ndeveloper_instructions = """\nunterminated\n'
+  await fs.writeFile(workerPath, customWorker)
+  await fs.writeFile(expertPath, invalidExpert)
+
+  const result = await installOfficialSubagentAgentConfigs(root)
+  assert.equal(result.ok, false)
+  assert.equal(await fs.readFile(workerPath, 'utf8'), customWorker)
+  assert.equal(await fs.readFile(expertPath, 'utf8'), invalidExpert)
+  assert.ok(result.manual_blockers.includes('manual_user_owned_official_subagent_collision:.codex/agents/worker.toml'))
+  assert.ok(result.manual_blockers.includes('manual_invalid_official_subagent_toml:.codex/agents/expert.toml'))
+  assert.equal(result.backups.length, 1)
+  assert.equal(await fs.readFile(path.join(root, result.backups[0] || ''), 'utf8'), invalidExpert)
+})
+
+test('official config reader resolves project over global and preserves inherited values', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-read-'))
+  const codexHome = path.join(root, 'home', '.codex')
+  await fs.mkdir(path.join(root, '.codex'), { recursive: true })
+  await fs.mkdir(codexHome, { recursive: true })
+  await fs.writeFile(path.join(root, '.codex', 'config.toml'), '[agents]\nmax_depth = 1\n')
+  await fs.writeFile(path.join(codexHome, 'config.toml'), '[agents]\nmax_threads = 20\nmax_depth = 3\ninterrupt_message = false\n')
+
+  const config = await readOfficialSubagentConfig(root, { codexHome })
+  assert.equal(config.maxThreads, 20)
+  assert.equal(config.sources.maxThreads, 'global')
+  assert.equal(config.maxDepth, 1)
+  assert.equal(config.sources.maxDepth, 'project')
+  assert.equal(config.interruptMessage, false)
+  assert.equal(config.sources.interruptMessage, 'global')
+  assert.deepEqual(config.warnings, [])
+})
+
+test('max_depth above one is preserved and reported as a warning', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-depth-warning-'))
+  const codexHome = path.join(root, 'home', '.codex')
+  await fs.mkdir(path.join(root, '.codex'), { recursive: true })
+  await fs.mkdir(codexHome, { recursive: true })
+  const original = '[agents]\nmax_threads = 3\nmax_depth = 4\n'
+  await fs.writeFile(path.join(root, '.codex', 'config.toml'), original)
+
+  const merged = mergeOfficialSubagentConfig(original)
+  assert.equal((parse(merged) as Record<string, any>).agents.max_depth, 4)
+  const config = await readOfficialSubagentConfig(root, { codexHome })
+  assert.equal(config.maxDepth, 4)
+  assert.deepEqual(config.warnings, ['official_subagent_max_depth_above_one_preserved:4:project'])
+})
+
+test('project setup backs up and preserves invalid config TOML without overwriting it', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-config-invalid-'))
+  const home = path.join(root, 'home')
+  const configPath = path.join(root, '.codex', 'config.toml')
+  const invalid = '[agents\nmax_threads = 5\n'
+  await fs.mkdir(path.dirname(configPath), { recursive: true })
+  await fs.writeFile(configPath, invalid)
+
+  const result = await initProject(root, {
+    installScope: 'project',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+  assert.equal(result.codex_config_install.status, 'unparseable_config_preserved')
+  assert.equal(await fs.readFile(configPath, 'utf8'), invalid)
+  assert.equal(await fs.readFile(result.codex_config_install.backup_path, 'utf8'), invalid)
+})
+
+test('setup repair preserves user, invalid, and legacy Codex agent files', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agent-repair-preserve-'))
+  const home = path.join(root, 'home')
+  const agentsDir = path.join(root, '.codex', 'agents')
+  const workerPath = path.join(agentsDir, 'worker.toml')
+  const expertPath = path.join(agentsDir, 'expert.toml')
+  const legacyPath = path.join(agentsDir, 'analysis-scout.toml')
+  const customWorker = 'name = "worker"\ndescription = "custom user worker"\n'
+  const invalidExpert = 'name = "expert"\ndeveloper_instructions = """\ninvalid\n'
+  const legacy = 'name = "legacy_user_role"\n'
+  await fs.mkdir(agentsDir, { recursive: true })
+  await fs.writeFile(workerPath, customWorker)
+  await fs.writeFile(expertPath, invalidExpert)
+  await fs.writeFile(legacyPath, legacy)
+
+  const result = await initProject(root, {
+    installScope: 'project',
+    localOnly: true,
+    repair: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+  assert.equal(await fs.readFile(workerPath, 'utf8'), customWorker)
+  assert.equal(await fs.readFile(expertPath, 'utf8'), invalidExpert)
+  assert.equal(await fs.readFile(legacyPath, 'utf8'), legacy)
+  assert.ok(result.agent_install.manual_blockers.includes('manual_user_owned_official_subagent_collision:.codex/agents/worker.toml'))
+  assert.ok(result.agent_install.manual_blockers.includes('manual_invalid_official_subagent_toml:.codex/agents/expert.toml'))
+  assert.equal(result.agent_install.backups.length, 1)
+})
+
+test('generated Naruto and compatibility alias skills describe the official workflow', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-skill-copy-'))
+  const home = path.join(root, 'home')
+  await initProject(root, {
+    installScope: 'global',
+    localOnly: true,
+    home,
+    codexHome: path.join(home, '.codex')
+  })
+
+  const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'naruto', 'SKILL.md'), 'utf8')
+  const shadow = await fs.readFile(path.join(root, '.agents', 'skills', 'shadow-clone', 'SKILL.md'), 'utf8')
+  const kage = await fs.readFile(path.join(root, '.agents', 'skills', 'kage-bunshin', 'SKILL.md'), 'utf8')
+  assert.match(naruto, /Codex official subagent workflow/)
+  assert.match(naruto, /--agents N/)
+  assert.match(naruto, /GPT-5\.6 Sol Max/)
+  assert.match(naruto, /GPT-5\.6 Luna Max/)
+  assert.match(naruto, /subagent-plan\.json/)
+  assert.doesNotMatch(naruto, /native shadow-clone|up to 100|--backend codex-exec|--clones N/)
+  assert.match(shadow, /Deprecated \$ShadowClone compatibility alias/)
+  assert.match(kage, /Deprecated \$Kagebunshin compatibility alias/)
+})
+
+test('stale generated prune never deletes legacy or user Codex agent files', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agent-prune-'))
+  const legacy = path.join(root, '.codex', 'agents', 'analysis-scout.toml')
+  await fs.mkdir(path.dirname(legacy), { recursive: true })
+  await fs.writeFile(legacy, 'name = "legacy"\n')
+
+  const result = await pruneStaleGeneratedFiles(root, {
+    generated_files: { files: ['.codex/agents/analysis-scout.toml'] }
+  }, [])
+  assert.deepEqual(result.pruned, [])
+  assert.equal(await fs.readFile(legacy, 'utf8'), 'name = "legacy"\n')
+})

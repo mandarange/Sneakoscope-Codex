@@ -4,6 +4,7 @@ import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
+import { classifyTaskProfile, type TaskProfile } from './runtime/task-profile.js';
 
 export * from './routes/constants.js';
 export * from './routes/design-policy.js';
@@ -278,7 +279,7 @@ export const ROUTES = [
     command: '$Team',
     mode: 'TEAM',
     route: 'deprecated alias to Naruto',
-    description: 'Deprecated compatibility alias. New substantial work is routed to $Naruto, the native shadow-clone swarm SSOT.',
+    description: 'Deprecated compatibility alias. New substantial work is routed to $Naruto, the Codex official subagent workflow SSOT.',
     requiredSkills: ['team', 'pipeline-runner', 'context7-docs', 'prompt-pipeline', REFLECTION_SKILL_NAME, 'honest-mode'],
     dollarAliases: ['$From-Chat-IMG'],
     appSkillAliases: ['from-chat-img'],
@@ -298,25 +299,25 @@ export const ROUTES = [
     id: 'Naruto',
     command: '$Naruto',
     mode: 'NARUTO',
-    route: 'hardware-safe massive parallel work swarm',
-    description: '$Naruto mode launches a hardware-safe massive parallel work swarm. Clones may implement, modify, verify, test, research, document, and resolve conflicts according to role and lease policy; write-capable output is accepted only through patch envelopes, verification DAG, mutation guard, and GPT final arbiter.',
+    route: 'Codex official subagent workflow',
+    description: '$Naruto prepares an explicit Codex subagent workflow. The parent decomposes independent slices, delegates them to worker or expert custom agents, waits for every requested agent thread, integrates the results, and reports scoped verification.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$ShadowClone', '$Kagebunshin', '$Work', '$Swarm'],
     appSkillAliases: ['shadow-clone', 'kage-bunshin', 'work', 'swarm'],
-    lifecycle: ['clone_roster_build', 'massive_work_graph', 'hardware_safe_governor', 'dynamic_active_pool', 'lease_based_write_swarm', 'parallel_verification_dag', 'gpt_final_arbiter_pack', 'per_clone_proof', 'session_cleanup', 'honest_mode'],
+    lifecycle: ['task_profile', 'subagent_plan', 'official_delegation_context', 'subagent_events', 'parent_integration', 'scoped_verification', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
     coverage_required: true,
-    cliEntrypoint: 'sks naruto run "task" [--clones N] [--backend codex-sdk|fake|ollama] [--parallel-write] | sks naruto status',
-    examples: ['$Naruto run sweep the codebase for TODO comments with 50 clones', '$Work', '$Swarm "fix all lint errors"']
+    cliEntrypoint: 'sks naruto run "task" [--agents N] [--max-threads N] | sks naruto status|subagents|proof',
+    examples: ['$Naruto run review twelve independent packages with --agents 12', '$Work', '$Swarm "fix all lint errors"']
   },
   {
     id: 'ReleaseReview',
     command: '$Release-Review',
     mode: 'RELEASE_REVIEW',
     route: 'native release review',
-    description: 'Run release-readiness collaboration through native multi-session agents with explicit agent count, concurrency, route personas, leases, dynamic effort, proof, and cleanup artifacts.',
+    description: 'Run release-readiness collaboration through official Codex subagents with explicit thread budget, disjoint ownership, parent integration, scoped verification, and cleanup evidence.',
     requiredSkills: ['team', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
     lifecycle: ['native_agent_intake', 'release_fixture_matrix', 'five_lane_review', 'integration_evidence', 'session_cleanup', 'honest_mode'],
     context7Policy: 'optional',
@@ -647,7 +648,7 @@ export const COMMAND_CATALOG = [
   { name: 'codex-native', usage: 'sks codex-native status|feature-broker|invocation-plan|init-deep [--json]', description: 'Inspect Codex Native feature broker readiness, invocation routing, pattern evidence, and managed memory setup.' },
   { name: 'hooks', usage: 'sks hooks explain|status|trust-report|replay|codex-validate|warning-check ... [--json]', description: 'Explain Codex hook events, validate vendored latest 10-event output schemas, replay fixtures, and enforce warning-zero SKS hook policies under the 0.134 compatibility matrix.' },
   { name: 'codex-lb', usage: 'sks codex-lb status|health|metrics|doctor|circuit|repair|setup ...', description: 'Configure, health-check, repair, and record circuit evidence for codex-lb provider auth without confusing ChatGPT OAuth and proxy keys.' },
-  { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks naruto dashboard latest | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD and Naruto lane UI.' },
+  { name: 'zellij', usage: 'sks zellij status|repair [--json] | sks --mad', description: 'Inspect Zellij runtime status, explain repair (no auto-install), and open the SKS Zellij runtime used by MAD. Zellij panes are not official Naruto subagent evidence.' },
   { name: 'tmux', usage: 'removed-runtime migration notice (replacement: zellij)', description: 'Show the removed-runtime migration notice and point operators to Zellij.' },
   { name: 'mad-sks', usage: 'sks mad-sks plan|run|apply|sql|apply-migration|status|close|rollback-apply ... | sks --mad [--high]', description: 'Open or inspect MAD-SKS scoped permission workflows, merged SQL-plane execution, and the Zellij permission launcher.' },
   { name: 'auto-review', usage: 'sks auto-review status|enable|start [--high] | sks --Auto-review --high', description: 'Enable Codex automatic approval review and launch SKS Zellij with the auto-review profile.' },
@@ -699,7 +700,7 @@ export const COMMAND_CATALOG = [
   { name: 'wiki', usage: 'sks wiki coords|pack|refresh|publish|rebuild-index|validate|validate-shared|wrongness ...', description: 'Build, refresh, publish shared shards, rebuild ignored indexes, validate, and attach wrongness-memory context to RGBA/trig LLM Wiki packs with attention.use_first and attention.hydrate_first for compact recall plus source hydration.' },
   { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
-  { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or rollback native multi-session agent missions with agents as target active slots, work items as the route queue size, cleanup executor proof for stale runtime resources, and patch rollback proof for applied patch entries.' },
+  { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or roll back Codex subagent missions with an explicit requested-agent/thread budget, disjoint work ownership, official event evidence, and parent-owned integration.' },
   { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; observation subcommands remain for old Team missions.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
@@ -840,9 +841,12 @@ export function looksLikeSuperSearchRequest(prompt: any = '') {
 export function routePrompt(prompt: any): any {
   const text = stripVisibleDecisionAnswerBlocks(prompt);
   const intentScores = scorePromptIntent(text);
-  const select = (route: any) => withPromptIntentScores(route, intentScores);
+  const taskProfile = classifyTaskProfile(text);
+  const explicitCommand = Boolean(dollarCommand(text)) || /^\$?(?:plan|swarm)\b/i.test(text);
+  const select = (route: any) => withTaskProfile(withPromptIntentScores(route, intentScores), taskProfile, explicitCommand);
+  if (!explicitCommand && taskProfile === 'passthrough') return null;
   if (/^\$?plan\b/i.test(text)) return select(routeById('Planner'));
-  if (/^\$?work\b/i.test(text)) return select(routeById('Naruto'));
+  if (/^\$work\b/i.test(text)) return select(routeById('Naruto'));
   if (/^\$?swarm\b/i.test(text)) return select(routeById('Naruto'));
   const command = dollarCommand(text);
   if (command) {
@@ -868,6 +872,8 @@ export function routePrompt(prompt: any): any {
   if (looksLikeTinyDirectFix(text)) return select(routeById('DFix'));
   if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return select(routeById('DB'));
   if (looksLikeSuperSearchRequest(text) && !looksLikeCodeChangingWork(text)) return select(routeById('SuperSearch'));
+  if (taskProfile === 'answer' && !looksLikeSpecializedAnswerRouteSignal(text)) return select(routeById('Answer'));
+  if (taskProfile === 'parallel-read' || taskProfile === 'parallel-write') return select(routeById('Naruto'));
   if (looksLikeQuestionShapedDirective(text)) return select(routeById('Naruto'));
   if (looksLikeDirectWorkRequest(text)) return select(routeById('Naruto'));
   if (looksLikeAnswerOnlyRequest(text)) return select(routeById('Answer'));
@@ -882,7 +888,13 @@ export function routePrompt(prompt: any): any {
   if (/(wiki\s+(refresh|pack|validate|prune)|triwiki\s+(refresh|pack|validate)|위키\s*(갱신|리프레시|정리|검증|패킹)|트라이위키|triwiki)/i.test(text) && !looksLikeDirectWorkRequest(text)) return select(routeById('Wiki'));
   if (/\b(GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki)\b/i.test(text)) return select(routeById('GX'));
   if (looksLikeTeamDefaultWork(text)) return select(routeById('Naruto'));
+  if (taskProfile === 'answer') return select(routeById('Answer'));
   return select(routeById('SKS'));
+}
+
+function looksLikeSpecializedAnswerRouteSignal(prompt: any = '') {
+  const text = String(prompt || '');
+  return /\b(qa[-\s]?loop|qaloop|autoresearch|research|hypothesis|falsify|novelty|frontier|wiki|triwiki|GX|vgraph|visual context|render cartridge|wiki coordinate|rgba|trig|llm wiki|SEO|GEO|generative engine optimization)\b|조사|연구|위키|트라이위키|검색\s*엔진\s*최적화|생성형\s*엔진\s*최적화/i.test(text);
 }
 
 export function scorePromptIntent(prompt: any = ''): PromptIntentScores {
@@ -958,6 +970,11 @@ export function scorePromptIntent(prompt: any = ''): PromptIntentScores {
 function withPromptIntentScores(route: any, intentScores: PromptIntentScores) {
   if (!route) return route;
   return { ...route, intent_scores: intentScores };
+}
+
+function withTaskProfile(route: any, taskProfile: TaskProfile, explicitInvocation: boolean = false) {
+  if (!route) return route;
+  return { ...route, task_profile: taskProfile, explicit_invocation: explicitInvocation };
 }
 
 export function looksLikeComputerUseFastLane(prompt: any = '') {
@@ -1044,21 +1061,16 @@ export function routeNeedsContext7(route: any, prompt: any = '') {
   return /\b(package|library|framework|SDK|API|MCP|Supabase|React|Next|Vue|Svelte|Vite|Prisma|Drizzle|Knex|Postgres|npm|node_modules|docs?|documentation)\b/i.test(String(prompt || ''));
 }
 
-export function routeRequiresSubagents(route: any, prompt: any = '') {
+export function routeRequiresSubagents(route: any, prompt: any = '', profile: TaskProfile = classifyTaskProfile(prompt)) {
   if (!route) return false;
-  if (route.id === 'Team' || route.id === 'Naruto') return true;
-  if (route.id === 'SKS') return looksLikeTeamDefaultWork(prompt);
-  if (route.id === 'Help' || route.id === 'Answer' || route.id === 'Wiki' || route.id === 'ComputerUse' || route.id === 'Commit' || route.id === 'CommitAndPush') return false;
-  if (route.id === 'PPT') return false;
-  if (route.id === 'ImageUXReview') return false;
-  if (route.id === 'SuperSearch') return false;
-  if (route.id === 'SEOGEOOptimizer') return false;
-  if (route.id === 'MadDB') return false;
-  if (route.id === 'Research' || route.id === 'AutoResearch') return true;
-  if (route.id === 'Goal') return looksLikeExecutionWork(prompt) || looksLikeTeamDefaultWork(stripDollarCommand(prompt));
-  if (route.id === 'DB' || route.id === 'GX') return looksLikeExecutionWork(prompt);
-  if (route.id === 'DFix') return looksLikeCodeChangingWork(prompt) && !looksLikeTinyDirectFix(prompt);
-  return looksLikeExecutionWork(prompt);
+  if ((route.id === 'Team' || route.id === 'Naruto') && route.explicit_invocation !== false) return true;
+  if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change' || profile === 'bounded-work') return false;
+  if (profile === 'parallel-read' || profile === 'parallel-write') return true;
+  return profile === 'high-risk' && explicitlyParallelizable(prompt);
+}
+
+function explicitlyParallelizable(prompt: any = '') {
+  return /\b(parallel|subagents?|one agent per|fan out|independent slices?|multiple files|audit all)\b|병렬|하위\s*에이전트|서브\s*에이전트|독립\s*(?:작업|범위)|분담|여러\s*파일|전체\s*검토/i.test(String(prompt || ''));
 }
 
 export function simpleGitOnlyRouteId(prompt: any = '') {
@@ -1098,23 +1110,22 @@ export function looksLikeExecutionWork(prompt: any = '') {
 export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   const required = routeRequiresSubagents(route, prompt);
   if (route?.id === 'Goal') {
-    if (!required) return 'Native session policy: Goal itself is a lightweight native /goal persistence overlay; extra worker sessions are not required for bridge creation/control.';
+    if (!required) return 'Subagent policy: Goal is a lightweight native /goal persistence overlay; a subagent workflow is not required for bridge creation or control.';
     return [
-      'Native session policy: Goal itself remains a lightweight native /goal persistence overlay.',
-      'Because the prompt also asks for code-changing or execution work, continue that work through the selected SKS execution route and apply that route\'s worker/reviewer policy there.',
+      'Subagent policy: Goal remains a lightweight native /goal persistence overlay.',
+      'Because the prompt also requests explicitly parallel execution, continue through the selected SKS execution route and use that route\'s Codex subagent workflow.',
       noUnrequestedFallbackCodePolicyText()
     ].join(' ');
   }
   if (!required) {
-    return 'Native session policy: optional for this route; open extra native sessions only when parallel exploration materially helps.';
+    return 'Subagent policy: not required for this task profile. Keep the work parent-owned unless a later, concrete decomposition reveals independent slices.';
   }
   return [
-    'Native multi-session policy: REQUIRED for code-changing or execution work in this route.',
-	    'The selected SKS route itself authorizes route-owned worker/reviewer native sessions; the user does not need to separately ask for helper sessions when the default Naruto pipeline is active.',
-    'Before editing, the parent orchestrator must visibly state the SKS route, split independent write scopes, and run worker/reviewer native sessions whenever the route can be split safely.',
-    'Determine native tool availability from the callable tool manifest in the current turn and from actual call results. If functions.exec or functions.collaboration.spawn_agent is exposed, use it; never report those tools unavailable because an obsolete CLI alias is missing.',
-    'Run workers in parallel only with disjoint ownership. The parent owns integration, verification, and final evidence.',
-    'If native sessions are unavailable or the work cannot be safely split, record explicit unavailable/unsplittable native-session evidence before editing.',
+    'Codex subagent workflow: required for this explicit Naruto or parallel task.',
+    'The parent agent owns decomposition, integration, scoped verification, and the final answer.',
+    'Delegate only genuinely independent slices. Use worker for clear bounded work and expert for review, debugging, planning, architecture, integration, or risk-sensitive judgment.',
+    'Parallel writes require disjoint paths; serialize overlapping paths, prohibit nested delegation, avoid duplicate work, wait for all requested agent threads, and close completed threads after collecting results.',
+    'Completion evidence comes from official SubagentStart/SubagentStop events plus the parent integration summary, not process counts or PID evidence.',
     noUnrequestedFallbackCodePolicyText()
   ].join(' ');
 }

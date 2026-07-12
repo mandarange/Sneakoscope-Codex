@@ -1,3 +1,5 @@
+import { decideSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
+
 export type TaskCategory = 'quick' | 'standard' | 'agentic' | 'ultrabrain' | 'verify' | 'review' | 'e2e' | 'refactor' | 'strategy';
 export type ModelReasoning = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 export type ModelServiceTier = 'fast' | 'standard';
@@ -26,12 +28,11 @@ const CATEGORY_POLICY: Record<TaskCategory, Omit<ModelChoice, 'model'>> = {
   strategy: { reasoning: 'max', serviceTier: 'fast' }
 };
 
-export const NARUTO_GPT56_MODELS = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] as const;
-export type NarutoGpt56Model = typeof NARUTO_GPT56_MODELS[number];
+export const NARUTO_MODELS = ['gpt-5.6-luna', 'gpt-5.6-sol'] as const;
+const NARUTO_EXPLICIT_COMPATIBILITY_MODELS = [...NARUTO_MODELS, 'gpt-5.6-terra'] as const;
+export type NarutoGpt56Model = typeof NARUTO_EXPLICIT_COMPATIBILITY_MODELS[number];
 
-const NARUTO_LUNA_WORK_RE = /(e2e|end[-\s]?to[-\s]?end|test_execution|ux_review|browser|chrome|computer[-\s]?use|computer\s+use|gui|visual\s+(?:qa|test|check)|cross[-\s]?app|playwright|selenium|puppeteer|브라우저|컴퓨터\s*유즈|화면\s*검증)/i;
-const NARUTO_SOL_WORK_RE = /(refactor|re-?architect|architecture|architect|planning|\bplan\b|strategy|strategic|integrat|conflict[-_\s]?resolv|patch[-_\s]?rebase|rollback[-_\s]?plan|gpt[-_\s]?final|arbiter|리팩터|아키텍처|기획|전략|통합|충돌\s*해결|롤백\s*계획)/i;
-const NARUTO_MAX_WORK_RE = /(complex|critical|high[-\s]?risk|security|database|migration|release|publish|forensic|flaky|failure|cross[-\s]?app|multi[-\s]?step|복잡|고위험|보안|데이터베이스|마이그레이션|릴리즈|포렌식|실패)/i;
+const E2E_WORK_RE = /(e2e|end[-\s]?to[-\s]?end|test_execution|browser|chrome|computer[-\s]?use|computer\s+use|cross[-\s]?app|playwright|selenium|puppeteer|브라우저|컴퓨터\s*유즈)/i;
 
 export async function routeModel(category: TaskCategory, opts: {
   lbHealth?: LbHealth | null;
@@ -69,31 +70,26 @@ export function routeNarutoGpt56Model(input: {
   degradedModels?: string[];
 } = {}): ModelChoice {
   const category = input.category || 'agentic';
-  const text = `${category} ${String(input.taskText || '')}`;
-  const riskText = `${text} ${String(input.riskText || '')}`;
   const explicitRequested = String(input.explicitModel || '').trim();
   const explicit = normalizeNarutoGpt56Model(input.explicitModel);
   const invalidExplicit = Boolean(explicitRequested && !explicit);
-  const preferred: NarutoGpt56Model = explicit
-    || (category === 'refactor' || category === 'strategy' || category === 'ultrabrain' || NARUTO_SOL_WORK_RE.test(text)
-      ? 'gpt-5.6-sol'
-      : category === 'e2e' || NARUTO_LUNA_WORK_RE.test(text)
-        ? 'gpt-5.6-luna'
-        : 'gpt-5.6-terra');
+  const automatic = decideSubagentModel({
+    title: input.taskText,
+    description: input.riskText,
+    role: category,
+    requiresJudgment: category === 'review'
+      || category === 'refactor'
+      || category === 'strategy'
+      || category === 'ultrabrain'
+  });
+  const preferred: NarutoGpt56Model = explicit || automatic.model;
   const available = input.availableModels == null
-    ? [...NARUTO_GPT56_MODELS]
+    ? [...NARUTO_EXPLICIT_COMPATIBILITY_MODELS]
     : input.availableModels.map(normalizeNarutoGpt56Model).filter((model): model is NarutoGpt56Model => Boolean(model));
   const degraded = new Set((input.degradedModels || []).map((model) => String(model).toLowerCase()));
   const usable = available.filter((model) => !degraded.has(model));
-  const availableEfforts = input.availableModelEfforts == null ? null : input.availableModelEfforts[preferred] || [];
-  const maxWork = NARUTO_MAX_WORK_RE.test(riskText);
-  const intendedReasoning: ModelReasoning = preferred === 'gpt-5.6-sol'
-    ? 'max'
-    : preferred === 'gpt-5.6-luna'
-      ? maxWork ? 'max' : 'xhigh'
-      : preferred === 'gpt-5.6-terra'
-        ? maxWork || category === 'review' ? 'max' : 'xhigh'
-        : 'xhigh';
+  const availableEfforts = effortsForModel(input.availableModelEfforts, preferred);
+  const intendedReasoning: ModelReasoning = SUBAGENT_EFFORT;
   const model = !invalidExplicit && usable.includes(preferred) && (availableEfforts == null || availableEfforts.includes(intendedReasoning)) ? preferred : '';
   return { model, reasoning: intendedReasoning, serviceTier: 'fast' };
 }
@@ -102,20 +98,19 @@ export function isNarutoGpt56Model(value: unknown): value is NarutoGpt56Model {
   return normalizeNarutoGpt56Model(value) !== null;
 }
 
-function normalizeNarutoGpt56Model(value: unknown): NarutoGpt56Model | null {
+export function normalizeNarutoGpt56Model(value: unknown): NarutoGpt56Model | null {
   const model = String(value || '').trim().toLowerCase();
-  return (NARUTO_GPT56_MODELS as readonly string[]).includes(model) ? model as NarutoGpt56Model : null;
+  return (NARUTO_EXPLICIT_COMPATIBILITY_MODELS as readonly string[]).includes(model) ? model as NarutoGpt56Model : null;
 }
 
 export function categoryForWorkerRole(role: string, taskText = ''): TaskCategory {
   const text = `${String(role || '')} ${String(taskText || '')}`.toLowerCase();
-  if (NARUTO_LUNA_WORK_RE.test(text)) return 'e2e';
   if (/(refactor|re-?architect|리팩터|아키텍처)/i.test(text)) return 'refactor';
   if (/(planning|\bplan\b|strategy|strategic|기획|전략)/i.test(text)) return 'strategy';
+  if (decideSubagentModel({ description: text }).kind === 'expert') return 'review';
+  if (E2E_WORK_RE.test(text)) return 'e2e';
   if (/verif|test|qa/.test(text)) return 'verify';
-  if (/review|critic|judge/.test(text)) return 'review';
   if (/research|explore|read|scout/.test(text)) return 'quick';
-  if (/plan|architect|strategy/.test(text)) return 'ultrabrain';
   return 'agentic';
 }
 
@@ -123,7 +118,15 @@ export function modelRouteReason(category: TaskCategory, choice: ModelChoice, op
   const model = choice.model || 'codex-selected';
   if (opts.explicit && !choice.model) return `${category}->blocked (explicit model unavailable)`;
   if (opts.explicit) return `${category}->${model} (explicit model preserved)`;
-  if (isNarutoGpt56Model(choice.model)) return `${category}->${model}@${choice.reasoning} (Naruto GPT-5.6 family policy)`;
+  if (isNarutoGpt56Model(choice.model)) return `${category}->${model}@${choice.reasoning} (official subagent model policy)`;
   const suffix = opts.quotaLow ? 'quota discipline' : 'Codex catalog passthrough';
   return `${category}->${model} (${suffix})`;
+}
+
+function effortsForModel(catalog: Record<string, string[]> | null | undefined, model: string): string[] | null {
+  if (catalog == null) return null;
+  const direct = catalog[model];
+  if (direct) return direct.map((effort) => String(effort).toLowerCase());
+  const match = Object.entries(catalog).find(([key]) => key.trim().toLowerCase() === model);
+  return (match?.[1] || []).map((effort) => String(effort).toLowerCase());
 }

@@ -65,7 +65,8 @@ export async function runFeatureFixture(feature: any, { root = process.cwd() }: 
   }
 
   const tokens = tokenizeCommand(fixture.command);
-  const spawnEnv = { ...process.env, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_ENSURE_DIST_NO_REBUILD: '1' };
+  const fixtureEnv = fixture.codex_app_session === true ? { SKS_NARUTO_APP_SESSION: '1' } : {};
+  const spawnEnv = { ...process.env, ...fixtureEnv, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_ENSURE_DIST_NO_REBUILD: '1' };
   const isSksCommand = tokens[0] === 'sks';
   const [spawnCommand, spawnArgs] = isSksCommand
     ? [process.execPath, [resolveSksEntrypoint(root), ...tokens.slice(1)]]
@@ -182,6 +183,15 @@ function inspectArtifact(root: string, artifact: { path: string; schema: string 
   const relPath = path.isAbsolute(artifact.path) ? artifact.path : artifact.path;
   if (!exists) {
     return { path: relPath, schema: artifact.schema, exists: false, ok: Boolean(artifact.optional), failure: artifact.optional ? undefined : 'missing' };
+  }
+  if (file.endsWith('.jsonl')) {
+    const lines = fs.readFileSync(file, 'utf8').split('\n').map((line) => line.trim()).filter(Boolean);
+    try {
+      for (const line of lines) JSON.parse(line);
+      return { path: relPath, schema: artifact.schema, exists: true, ok: true, record_count: lines.length };
+    } catch {
+      return { path: relPath, schema: artifact.schema, exists: true, ok: false, failure: 'jsonl_parse' };
+    }
   }
   if (!file.endsWith('.json')) {
     const content = fs.readFileSync(file, 'utf8');

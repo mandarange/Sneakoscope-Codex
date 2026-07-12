@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { routePrompt } from '../routes.js';
+import { routePrompt, routeRequiresSubagents } from '../routes.js';
 
 const cases = [
   { prompt: '이거 왜 안 고쳐져? 로그인 버그 수정해줘', expectedRoute: 'Naruto', reason: 'direct_work' },
@@ -22,4 +22,23 @@ test('question-shaped prompts route by intent instead of question mark shape', (
       `${row.prompt} should expose route reason ${row.reason}`
     );
   }
+});
+
+test('greetings and bounded work avoid subagents while explicit parallel work requires them', () => {
+  assert.equal(routePrompt('hi'), null);
+  assert.equal(routePrompt('이 함수 설명해줘')?.id, 'Answer');
+  const bounded = routePrompt('로그인 버그 수정해줘');
+  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), false);
+  const parallel = routePrompt('여러 패키지를 병렬 검토해줘');
+  assert.equal(parallel?.id, 'Naruto');
+  assert.equal(routeRequiresSubagents(parallel, '여러 패키지를 병렬 검토해줘'), true);
+  for (const prompt of ['audit all packages', 'Review all files', 'one agent per package audit']) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'Naruto', prompt);
+    assert.equal(routeRequiresSubagents(route, prompt), true, prompt);
+  }
+  assert.equal(routeRequiresSubagents(routePrompt('$Naruto implement one fix'), '$Naruto implement one fix'), true);
+  assert.equal(routePrompt('$Work')?.id, 'Naruto');
+  assert.equal(routePrompt('$Work')?.explicit_invocation, true);
+  assert.notEqual(routePrompt('work on the parser')?.explicit_invocation, true);
 });

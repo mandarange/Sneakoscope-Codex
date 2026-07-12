@@ -23,13 +23,32 @@ import { validateRouteCompletionProof } from '../proof/route-proof-gate.js';
 import { routeFromState, routeRequiresCompletionProof } from '../proof/route-proof-policy.js';
 import { permissionGateSummary } from '../permission-gates.js';
 import { prepareMadDbMission } from '../mad-db/mad-db-coordinator.js';
-import { AGENT_INTAKE_STAGE_ID, AGENT_COUNT } from '../agents/agent-schema.js';
+import { AGENT_INTAKE_STAGE_ID } from '../agents/agent-schema.js';
 import { normalizeAgentPolicy, routeRequiresAgentIntake, agentPipelineStage } from '../agents/agent-plan.js';
 import { readAgentGateStatus } from '../agents/agent-gate.js';
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_EVIDENCE_SOURCE, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, SOLUTION_SCOUT_STAGE_ID, chatCaptureIntakeText, context7RequirementText, dollarCommand, evidenceMentionsForbiddenBrowserAutomation, getdesignReferencePolicyText, hasFromChatImgSignal, hasMadSksSignal, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, looksLikeProblemSolvingRequest, pptPipelineAllowlistPolicyText, reflectionRequiredForRoute, reasoningInstruction, routeNeedsContext7, routePrompt, routeReasoning, routeRequiresSubagents, solutionScoutPolicyText, stripDollarCommand, stripMadSksSignal, stripVisibleDecisionAnswerBlocks, subagentExecutionPolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from '../routes.js';
 import { normalizeLeanDecision, validateLeanDecision } from '../lean-engineering-policy.js';
 import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT } from '../team-review-policy.js';
-import { normalizeCodexMultiAgentEventName } from '../codex-control/codex-multi-agent-event-normalizer.js';
+import { classifyTaskProfile, gateProfileForTask, type GateProfile, type TaskProfile } from '../runtime/task-profile.js';
+import { chooseVerificationBudget, type VerificationBudget } from '../runtime/verification-budget.js';
+import { buildOfficialSubagentPrompt } from '../subagents/official-subagent-prompt.js';
+import { readOfficialSubagentConfig } from '../subagents/official-subagent-config.js';
+import {
+  DEFAULT_SUBAGENT_MODEL,
+  NARUTO_PARENT_EFFORT,
+  NARUTO_PARENT_MODEL,
+  SUBAGENT_EFFORT,
+  THINKING_SUBAGENT_MODEL
+} from '../subagents/model-policy.js';
+import { resolveSubagentThreadBudget } from '../subagents/thread-budget.js';
+import {
+  buildSubagentEvidence,
+  readSubagentEvents,
+  recordSubagentEvent,
+  SUBAGENT_EVIDENCE_FILENAME,
+  SUBAGENT_EVENT_LOG_FILENAME,
+  writeSubagentEvidence
+} from '../subagents/subagent-evidence.js';
 
 export { routePrompt };
 
@@ -57,27 +76,22 @@ const DEFAULT_COMPLIANCE_LOOP_LIMIT = 3;
 const CLARIFICATION_BYPASS_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse', 'Goal']);
 const QUESTION_GATE_ROUTES = new Set(['QALoop', 'PPT']);
 const LIGHTWEIGHT_ROUTES = new Set(['Answer', 'DFix', 'Help', 'Wiki']);
-const FULL_ROUTE_STAGES = Object.freeze([
-  'route_classification',
-  SOLUTION_SCOUT_STAGE_ID,
-  'skill_dream_counter',
-  'ambiguity_gate',
-  'pipeline_plan',
-  'proof_field_scan',
-  'triwiki_use_first',
-  'ssot_guard',
-  'context7_evidence',
-  AGENT_INTAKE_STAGE_ID,
-  'planning_debate',
-  'route_materialization',
-  'fresh_executor_team',
-  'broad_route_rework',
-  'focused_implementation',
-  'listed_verification',
-  'triwiki_validate_before_final',
-  'reflection',
-  'honest_mode'
-]);
+const GATE_PROFILE_STAGES = Object.freeze({
+  none: [],
+  minimal: ['route_classification', 'listed_verification'],
+  scoped: ['route_classification', 'ownership', 'listed_verification', 'honest_summary'],
+  full: ['route_classification', 'ambiguity_gate', 'safety_gate', 'ownership', 'listed_verification', 'honest_summary']
+} satisfies Readonly<Record<GateProfile, readonly string[]>>);
+
+const BLOCKING_GATE_LIMITS = Object.freeze({
+  passthrough: 0,
+  answer: 0,
+  'tiny-change': 1,
+  'bounded-work': 2,
+  'parallel-read': 2,
+  'parallel-write': 3,
+  'high-risk': 4
+} satisfies Readonly<Record<TaskProfile, number>>);
 
 function reflectionInstructionText(commandPrefix: any = 'sks') {
   return `Post-route reflection: full routes load \`reflection\` after work/tests and before final; DFix/Answer/Help/Wiki/SKS discovery are exempt. Write ${REFLECTION_ARTIFACT}; record only real misses/gaps, or no_issue_acknowledged. For lessons, append TriWiki claim rows to ${REFLECTION_MEMORY_PATH}. Run "${commandPrefix} wiki refresh" or pack, validate, then pass ${REFLECTION_GATE}.`;
@@ -86,24 +100,35 @@ function reflectionInstructionText(commandPrefix: any = 'sks') {
 export function buildPipelinePlan(input: any = {}) {
   const route = input.route || routePrompt(input.task || '$SKS');
   const task = String(input.task || '').trim();
+  const taskProfile: TaskProfile = input.taskProfile || taskProfileForRoute(route, task, classifyTaskProfile(task));
+  const gateProfile = gateProfileForTask(taskProfile);
   const requestIntake = input.requestIntake || null;
   const executionPrompt = String(requestIntake?.transformed_prompt || task || '').trim();
   const ambiguity = normalizeAmbiguity(input.ambiguity, route);
   const proof = normalizeProofField(input.proofField);
-  const lane = selectPipelineLane(route, task, proof);
-  const agentPolicy = normalizeAgentPolicy(route, task, input.agents === undefined ? {} : input.agents);
-  const stages = buildPipelineStages(route, task, ambiguity, lane, Boolean(input.required), agentPolicy);
-  const verification = planVerification(route, proof);
+  const subagentsRequired = routeRequiresSubagents(route, task, taskProfile);
+  const lane = selectPipelineLane(route, task, proof, taskProfile);
+  const normalizedAgentPolicy = normalizeAgentPolicy(route, task, input.agents === undefined ? {} : input.agents);
+  const agentPolicy = route?.id === 'Naruto'
+    ? { ...normalizedAgentPolicy, required: false, reason: 'official_codex_subagent_workflow_replaces_legacy_five_agent_intake' }
+    : normalizedAgentPolicy;
+  const verificationBudget: VerificationBudget = input.verificationBudget || chooseVerificationBudget({
+    taskProfile,
+    changedFiles: Array.isArray(input.changedFiles) ? input.changedFiles : []
+  });
+  const stages = buildPipelineStages(route, task, taskProfile, gateProfile, ambiguity, lane, Boolean(input.required), agentPolicy);
+  const verification = planVerification(route, proof, verificationBudget);
   const skipped = stages.filter((stage: any) => stage.status === 'skipped').map((stage: any) => stage.id);
   const kept = stages.filter((stage: any) => stage.status !== 'skipped' && stage.status !== 'not_applicable').map((stage: any) => stage.id);
   const routeEconomy = routeEconomyPlan(proof);
   const leanDecision = normalizeLeanDecision(input.leanDecision, {
-    selected_rung: ['Answer', 'Help', 'Wiki'].includes(route?.id) ? 'skip' : 'minimal-custom',
-    task_requires_change: !['Answer', 'Help', 'Wiki'].includes(route?.id),
+    selected_rung: gateProfile === 'none' ? 'skip' : 'minimal-custom',
+    task_requires_change: !['passthrough', 'answer'].includes(taskProfile),
     root_cause_target: route?.id ? `${route.id} route selected implementation surface` : null,
     expected_changed_paths: input.expectedChangedPaths || input.touchedFiles || [],
     verification_minimum: verification.slice(0, 3).map((item: any) => String(item || '').trim()).filter(Boolean)
   });
+  const invariants = pipelineInvariants({ taskProfile, gateProfile, stages, verificationBudget });
   return {
     schema_version: PIPELINE_PLAN_SCHEMA_VERSION,
     generated_at: nowIso(),
@@ -115,9 +140,14 @@ export function buildPipelinePlan(input: any = {}) {
       stop_gate: route?.stopGate || 'honest_mode',
       required_skills: route?.requiredSkills || [],
       context7_required: Boolean(input.required),
-      subagents_required: false,
-      native_sessions_required: routeRequiresSubagents(route, task),
+      subagents_required: subagentsRequired,
+      native_sessions_required: false,
       reflection_required: reflectionRequiredForRoute(route)
+    },
+    task_profile: taskProfile,
+    gate_profile: gateProfile,
+    gate_budget: {
+      blocking_gate_limit: BLOCKING_GATE_LIMITS[taskProfile]
     },
     task,
     request_intake: requestIntake ? {
@@ -143,8 +173,9 @@ export function buildPipelinePlan(input: any = {}) {
     },
     skipped_stages: skipped,
     kept_stages: kept,
+    verification_budget: verificationBudget,
     verification,
-    invariants: ['no_unrequested_fallback_code', 'ssot_guard', 'listed_verification', 'triwiki_validate_before_final', 'honest_mode'],
+    invariants,
     proof_field: proof,
     lean_decision: leanDecision,
     ssot_guard: buildSsotGuard({ route: route?.id || 'SKS', mode: route?.mode || 'SKS', task }),
@@ -152,14 +183,27 @@ export function buildPipelinePlan(input: any = {}) {
     agent_intake: agentPolicy,
     skill_dream: input.skillDream || { attached: false, reason: 'skill dreaming uses cheap counters and only runs inventory at threshold' },
     goal_continuation: ambientGoalContinuation(),
-    next_actions: planNextActions(route, task, ambiguity, lane, agentPolicy, input.missionId),
+    next_actions: planNextActions(route, task, taskProfile, ambiguity, lane, agentPolicy, input.missionId),
     no_unrequested_fallback_code: true
   };
 }
 
+function taskProfileForRoute(route: any, task: string, classified: TaskProfile): TaskProfile {
+  if (classified !== 'answer' && classified !== 'passthrough') return classified;
+  const routeId = String(route?.id || '');
+  if (['DB', 'MadDB', 'ReleaseReview'].includes(routeId) && /\b(apply|execute|run|fix|change|migrate|deploy|release|publish)\b|적용|실행|수정|변경|마이그레이션|배포|릴리즈|출시/i.test(task)) return 'high-risk';
+  if (['Research', 'AutoResearch', 'QALoop', 'PPT', 'ImageUXReview', 'GX', 'DB', 'MadDB', 'ReleaseReview'].includes(routeId)) return 'bounded-work';
+  return classified;
+}
+
 export async function writePipelinePlan(dir: any, input: any = {}) {
+  const route = input.route || routePrompt(input.task || '$SKS');
+  const taskProfile: TaskProfile = input.taskProfile || taskProfileForRoute(route, String(input.task || ''), classifyTaskProfile(input.task || ''));
+  if ((taskProfile === 'passthrough' || taskProfile === 'answer') && input.forceLightweightPlan !== true) {
+    return buildPipelinePlan({ ...input, taskProfile, requestIntake: input.requestIntake || null });
+  }
   const requestIntake = input.requestIntake || await writeRequestIntakeArtifact(dir, input);
-  const plan = buildPipelinePlan({ ...input, requestIntake });
+  const plan = buildPipelinePlan({ ...input, taskProfile, requestIntake });
   await writeJsonAtomic(path.join(dir, PIPELINE_PLAN_ARTIFACT), plan);
   return plan;
 }
@@ -192,21 +236,33 @@ function rootFromMissionDir(dir: any) {
 
 export function validatePipelinePlan(plan: any = {}) {
   const issues: any[] = [];
+  const taskProfile: TaskProfile = plan.task_profile || classifyTaskProfile(plan.task || '');
+  const gateProfile = plan.gate_profile || gateProfileForTask(plan.task_profile || taskProfile);
+  const verificationBudget: VerificationBudget = plan.verification_budget || chooseVerificationBudget({ taskProfile, changedFiles: [] });
   if (plan.schema_version !== PIPELINE_PLAN_SCHEMA_VERSION) issues.push('schema_version');
   if (!plan.route?.id || !plan.route?.command) issues.push('route');
   if (!plan.runtime_lane?.lane) issues.push('runtime_lane');
-  if (!Array.isArray(plan.stages) || !plan.stages.length) issues.push('stages');
-  if (!Array.isArray(plan.verification) || !plan.verification.length) issues.push('verification');
+  if (!Array.isArray(plan.stages) || (gateProfile !== 'none' && !plan.stages.length)) issues.push('stages');
+  if (!Array.isArray(plan.verification) || (verificationBudget !== 'none' && !plan.verification.length)) issues.push('verification');
   if (!plan.route_economy?.mode) issues.push('route_economy');
   const routeEconomyLatticeIssues = validateRouteEconomyDecisionLattice(plan.route_economy, plan.proof_field);
   if (routeEconomyLatticeIssues.length) issues.push(...routeEconomyLatticeIssues.map((issue: any) => `route_economy.decision_lattice:${issue}`));
   const leanDecision = validateLeanDecision(plan.lean_decision);
   if (!leanDecision.ok) issues.push(...leanDecision.issues.map((issue: any) => `lean_decision:${issue}`));
   if (plan.no_unrequested_fallback_code !== true || !plan.invariants?.includes('no_unrequested_fallback_code')) issues.push('fallback_guard');
-  if (!plan.ssot_guard?.required || !plan.invariants?.includes('ssot_guard')) issues.push('ssot_guard');
-  if (!plan.stages?.some((stage: any) => stage.id === 'ssot_guard' && !['skipped', 'not_applicable'].includes(stage.status))) issues.push('ssot_guard_stage');
-  if (!plan.next_actions?.length) issues.push('next_actions');
-  if (plan.agent_intake?.required && !plan.stages?.some((stage: any) => stage.id === AGENT_INTAKE_STAGE_ID && stage.agent_count === AGENT_COUNT && stage.read_only === false && /bounded workspace-write/i.test(String(stage.write_policy || '')) && /lease/i.test(String(stage.write_policy || '')))) issues.push('agent_intake_stage');
+  if (plan.invariants?.includes('ssot_guard')) {
+    if (!plan.ssot_guard?.required) issues.push('ssot_guard');
+    if (!plan.stages?.some((stage: any) => stage.id === 'ssot_guard' && !['skipped', 'not_applicable'].includes(stage.status))) issues.push('ssot_guard_stage');
+  }
+  if (gateProfile !== 'none' && !plan.next_actions?.length) issues.push('next_actions');
+  if (plan.agent_intake?.required && !plan.stages?.some((stage: any) => stage.id === AGENT_INTAKE_STAGE_ID
+    && stage.workflow === 'official_codex_subagent'
+    && Number(stage.requested_subagents || 0) === Number(plan.agent_intake.requested_subagents || 0)
+    && Number(stage.requested_subagents || 0) > 0
+    && Number(stage.max_threads || 0) > 0
+    && Number(stage.max_depth || 0) === 1
+    && Array.isArray(stage.outputs)
+    && stage.outputs.includes(SUBAGENT_EVIDENCE_FILENAME))) issues.push('agent_intake_stage');
   return { ok: issues.length === 0, issues };
 }
 
@@ -300,7 +356,7 @@ function routeEconomyPlan(proof: any = {}) {
   };
 }
 
-function selectPipelineLane(route: any, task: any, proof: any) {
+function selectPipelineLane(route: any, task: any, proof: any, taskProfile: TaskProfile = classifyTaskProfile(task)) {
   if (proof.attached && proof.lane) {
     return {
       lane: proof.lane,
@@ -312,53 +368,78 @@ function selectPipelineLane(route: any, task: any, proof: any) {
       keep: proof.keep || SPEED_LANE_POLICY.always_keep
     };
   }
+  if (taskProfile === 'passthrough' || taskProfile === 'answer') return { lane: 'no_pipeline', source: 'task_profile', fast_lane_allowed: true, reason: 'Light conversation does not create an execution pipeline.', blockers: [], skip_when_fast: [], keep: [] };
   if (route?.id === 'ComputerUse') return { lane: 'computer_use_fast_lane', source: 'route_policy', fast_lane_allowed: true, reason: 'Computer Use route is intentionally direct and defers wiki/honest checks to closeout.', blockers: [], skip_when_fast: ['native_agent_intake', 'planning_debate', 'fresh_executor_team'], keep: ['focused_implementation', 'triwiki_validate_before_final', 'honest_mode'] };
+  if (taskProfile === 'tiny-change') return { lane: 'minimal_change_lane', source: 'task_profile', fast_lane_allowed: true, reason: 'Tiny change uses one blocking gate and one focused check at most.', blockers: [], skip_when_fast: SPEED_LANE_POLICY.skip_when_fast, keep: ['listed_verification'] };
   if (LIGHTWEIGHT_ROUTES.has(route?.id)) return { lane: `${String(route.id).toLowerCase()}_lightweight_lane`, source: 'route_policy', fast_lane_allowed: true, reason: 'Lightweight route bypasses full mission orchestration by design.', blockers: [], skip_when_fast: SPEED_LANE_POLICY.skip_when_fast, keep: ['focused_implementation', 'listed_verification', 'honest_mode'] };
-  if (routeRequiresSubagents(route, task)) return { lane: SPEED_LANE_POLICY.full_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'No Proof Field attached and this route normally requires full Naruto evidence.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
+  if (routeRequiresSubagents(route, task, taskProfile)) return { lane: 'official_subagent_lane', source: 'task_profile', fast_lane_allowed: false, reason: 'Explicit Naruto or parallel work uses the Codex subagent workflow.', blockers: [], skip_when_fast: [], keep: ['subagent_plan', 'official_subagent_execution', 'parent_integration', 'listed_verification', 'honest_summary'] };
+  if (taskProfile === 'high-risk') return { lane: SPEED_LANE_POLICY.full_lane, source: 'task_profile', fast_lane_allowed: false, reason: 'High-risk work uses the full risk gate profile.', blockers: [], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
   return { lane: SPEED_LANE_POLICY.balanced_lane, source: 'route_policy', fast_lane_allowed: false, reason: 'Balanced parent-owned route until Proof Field proves a narrower lane.', blockers: ['proof_field_not_attached'], skip_when_fast: [], keep: SPEED_LANE_POLICY.always_keep };
 }
 
-function buildPipelineStages(route: any, task: any, ambiguity: any, lane: any, context7Required: any, agentPolicy: any = normalizeAgentPolicy(route, task, {})) {
-  return FULL_ROUTE_STAGES.map((id: any) => {
-    const optional = optionalStage(route, task, ambiguity, context7Required, id);
-    const skippedByFast = lane.fast_lane_allowed && SPEED_LANE_POLICY.skip_when_fast.includes(id);
-    const skipped = skippedByFast || optional.skip;
-    if (id === AGENT_INTAKE_STAGE_ID) {
-      if (!agentPolicy.required) return agentPipelineStage(agentPolicy);
-      return { ...agentPipelineStage(agentPolicy), status: skipped ? 'skipped' : 'required', reason: skippedByFast ? 'proof_field_fast_lane' : agentPolicy.reason };
-    }
-    return {
-      id,
-      status: skipped ? (optional.notApplicable ? 'not_applicable' : 'skipped') : (id === 'ambiguity_gate' && ambiguity.passed ? 'passed' : 'keep'),
-      reason: skippedByFast ? 'proof_field_fast_lane' : optional.reason
-    };
+function buildPipelineStages(
+  route: any,
+  task: any,
+  taskProfile: TaskProfile,
+  gateProfile: GateProfile,
+  ambiguity: any,
+  lane: any,
+  context7Required: any,
+  agentPolicy: any = normalizeAgentPolicy(route, task, {})
+) {
+  if (gateProfile === 'none') return [];
+  const ids: string[] = [...GATE_PROFILE_STAGES[gateProfile]];
+  const specializedRoute = Boolean(route?.id && !LIGHTWEIGHT_ROUTES.has(route.id) && route.id !== 'SKS');
+  if (looksLikeProblemSolvingRequest(task) && !['Answer', 'Help', 'Wiki'].includes(route?.id)) ids.push(SOLUTION_SCOUT_STAGE_ID);
+  if (gateProfile === 'scoped' || gateProfile === 'full' || specializedRoute) ids.push('pipeline_plan', 'focused_implementation');
+  if ((gateProfile === 'full' || specializedRoute) && !ids.includes('ssot_guard')) ids.push('ssot_guard');
+  if (context7Required) ids.push('context7_evidence');
+  if ((gateProfile === 'scoped' || gateProfile === 'full') && !LIGHTWEIGHT_ROUTES.has(route?.id)) {
+    ids.push('triwiki_use_first', 'triwiki_validate_before_final');
+  }
+  if (routeRequiresSubagents(route, task, taskProfile)) ids.push('subagent_plan', 'official_subagent_execution', 'parent_integration');
+  if (agentPolicy.required) ids.push(AGENT_INTAKE_STAGE_ID);
+  if (specializedRoute) ids.push('route_materialization');
+  if (reflectionRequiredForRoute(route)) ids.push('reflection');
+
+  return [...new Set(ids)].map((id: any) => {
+    if (id === AGENT_INTAKE_STAGE_ID) return { ...agentPipelineStage(agentPolicy), status: 'required', reason: agentPolicy.reason };
+    if (id === 'ambiguity_gate' && ambiguity?.required === false) return { id, status: 'not_applicable', reason: 'ambiguity_gate_not_required_for_entrypoint' };
+    if (id === 'ambiguity_gate' && ambiguity?.passed) return { id, status: 'passed', reason: 'ambiguity_contract_already_sealed' };
+    return { id, status: 'keep', reason: lane.fast_lane_allowed ? 'task_profile_minimal_lane' : 'required_by_task_and_route_profile' };
   });
 }
 
-function optionalStage(route: any, task: any, ambiguity: any, context7Required: any, id: any) {
-  if (id === AGENT_INTAKE_STAGE_ID && !routeRequiresAgentIntake(route, { task })) return { skip: true, notApplicable: true, reason: 'five_agent_intake_not_required_for_route' };
-  if (id === AGENT_INTAKE_STAGE_ID) return { skip: false, reason: 'serious_route_requires_five_agent_intake' };
-  if (id === SOLUTION_SCOUT_STAGE_ID && !looksLikeProblemSolvingRequest(task)) return { skip: true, notApplicable: true, reason: 'no_problem_solving_signal' };
-  if (id === SOLUTION_SCOUT_STAGE_ID && ['Answer', 'Help', 'Wiki'].includes(route?.id)) return { skip: true, notApplicable: true, reason: 'route_not_code_repair' };
-  if (id === SOLUTION_SCOUT_STAGE_ID) return { skip: false, reason: 'problem_solving_request_requires_web_similarity_agent' };
-  if (id === 'ambiguity_gate' && ambiguity?.required === false) return { skip: true, notApplicable: true, reason: 'ambiguity_gate_not_required_for_entrypoint' };
-  if (id === 'ambiguity_gate' && CLARIFICATION_BYPASS_ROUTES.has(route?.id)) return { skip: true, notApplicable: true, reason: 'route_bypasses_clarification' };
-  if (id === 'context7_evidence' && !context7Required) return { skip: true, notApplicable: true, reason: 'context7_not_required_by_route' };
-  if (id === 'reflection' && !reflectionRequiredForRoute(route)) return { skip: true, notApplicable: true, reason: 'reflection_not_required_for_route' };
-  if (['native_agent_intake', 'planning_debate', 'fresh_executor_team'].includes(id) && !routeRequiresSubagents(route, task)) return { skip: true, notApplicable: true, reason: 'native_session_team_not_required_by_route' };
-  return { skip: false, reason: 'required_by_lane' };
-}
-
-function planVerification(route: any, proof: any) {
+function planVerification(route: any, proof: any, budget: VerificationBudget) {
+  if (budget === 'none') return [];
   const out = new Set(proof.verification || []);
+  if (budget === 'single-check') out.add('run one focused check for the changed surface');
+  if (budget === 'affected') out.add('run affected tests or checks for changed files');
+  if (budget === 'confidence') {
+    out.add('run the focused build or typecheck for the affected package');
+    out.add('run affected regression tests and the risk-specific safety check');
+  }
+  if (budget === 'release') {
+    out.add('npm run packcheck');
+    out.add('sks selftest --mock --json');
+  }
+  if (route?.id === 'Naruto' || route?.id === 'Team') out.add('validate official subagent evidence and the parent integration summary');
   if (route?.id === 'Team') out.add('sks validate-artifacts latest --json');
   if (reflectionRequiredForRoute(route)) out.add('sks wiki validate .sneakoscope/wiki/context-pack.json');
-  out.add('npm run packcheck');
-  out.add('sks selftest --mock --json');
   return [...out];
 }
 
-function planNextActions(route: any, task: any, ambiguity: any, lane: any, agentPolicy: any = normalizeAgentPolicy(route, task, {}), missionId: any = null) {
+function pipelineInvariants(input: { taskProfile: TaskProfile; gateProfile: GateProfile; stages: any[]; verificationBudget: VerificationBudget }) {
+  const out = ['no_unrequested_fallback_code'];
+  if (input.verificationBudget !== 'none') out.push('listed_verification');
+  if (input.stages.some((stage: any) => stage.id === 'ssot_guard' && stage.status !== 'not_applicable')) out.push('ssot_guard');
+  if (input.stages.some((stage: any) => stage.id === 'triwiki_validate_before_final')) out.push('triwiki_validate_before_final');
+  if (input.gateProfile !== 'none') out.push('honest_summary');
+  return out;
+}
+
+function planNextActions(route: any, task: any, taskProfile: TaskProfile, ambiguity: any, lane: any, agentPolicy: any = normalizeAgentPolicy(route, task, {}), missionId: any = null) {
+  if (taskProfile === 'passthrough' || taskProfile === 'answer') return [];
   if (ambiguity.required && !ambiguity.passed) {
     return [
       `read ${REQUEST_INTAKE_ARTIFACT} and preserve its source-order requirements`,
@@ -371,12 +452,12 @@ function planNextActions(route: any, task: any, ambiguity: any, lane: any, agent
   if (agentPolicy.required) {
     const missionArg = String(missionId || '').trim() || '<mission-id>';
     const routeArg = String(route?.command || route?.id || '$Agent');
-    actions.splice(1, 0, `run sks agent run --mission ${shellQuote(missionArg)} --route ${shellQuote(routeArg)} --agents ${Number(agentPolicy.agent_count || AGENT_COUNT)} --json before implementation`);
+    actions.splice(1, 0, `run sks agent run --mission ${shellQuote(missionArg)} --route ${shellQuote(routeArg)} --agents ${Number(agentPolicy.requested_subagents || agentPolicy.agent_count || 1)} --json before implementation`);
   }
-  if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task)) {
+  if (!lane.fast_lane_allowed && routeRequiresSubagents(route, task, taskProfile)) {
     actions.splice(1, 0, route?.id === 'Naruto'
-      ? 'materialize Naruto clone roster, work graph, worker proof, and naruto-gate.json before implementation'
-      : 'materialize full Team artifacts before implementation');
+      ? 'read subagent-plan.json, create independent disjoint slices, run the official Codex subagent workflow, wait for all requested agent threads, and integrate their results'
+      : 'materialize the route-specific subagent plan before implementation');
   }
   if (looksLikeProblemSolvingRequest(task)) actions.splice(1, 0, 'run Solution Scout web search for similar fixes before editing');
   actions.push('refresh/validate TriWiki when required', 'finish with completion summary and Honest Mode');
@@ -390,6 +471,7 @@ function shellQuote(value: unknown) {
 export function promptPipelineContext(prompt: any, route: any = null) {
   const cleanPrompt = stripVisibleDecisionAnswerBlocks(prompt);
   route = route || routePrompt(cleanPrompt);
+  if (!route) return '';
   const required = routeNeedsContext7(route, cleanPrompt);
   const reasoning = routeReasoning(route, cleanPrompt);
   const directFix = route?.id === 'DFix';
@@ -410,7 +492,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     'Question-shaped directive policy: before using Answer, decide whether a question is a real information request or an implicit instruction/complaint about broken behavior. Rhetorical bug reports, mandatory-policy statements, and "why is this not happening?" execution complaints must route to Naruto, not Answer.',
     'Best-practice prompt shape: extract Goal, Context, Constraints, and Done-when before implementation; keep questions compact and only ask for answers that can change scope, safety, user-facing behavior, or acceptance criteria.',
     chatCaptureIntakeText(),
-    'Default execution routing: general implementation/code-changing prompts promote to Naruto so the normal path is shadow-clone fan-out, hardware-safe concurrency, patch envelopes, verification DAG, and GPT final arbitration. Answer, DFix, Help, Wiki maintenance, and safety-specific routes are intentional exceptions.',
+    'Default execution routing: general implementation/code-changing prompts use the profile-selected parent-owned path; explicit Naruto or parallel work uses the Codex subagent workflow with disjoint slices, official agent threads, parent integration, and scoped verification. Answer, DFix, Help, Wiki maintenance, and safety-specific routes remain intentional exceptions.',
     'Stance: infer the user intent aggressively from rough wording, local context, TriWiki, and conservative defaults; do not surface prequestion sheets before work.',
     subagentExecutionPolicyText(route, cleanPrompt),
     solutionScoutPolicyText(cleanPrompt),
@@ -429,7 +511,7 @@ export function promptPipelineContext(prompt: any, route: any = null) {
     'Before final answer, include a user-visible completion summary that explains what changed and how it was verified, then run SKS Honest Mode: verify evidence/tests, state gaps, and confirm the goal is genuinely complete.'
   ];
   if (reflectionRequiredForRoute(route)) lines.push(reflectionInstructionText());
-  if (route?.id === 'Naruto') lines.push(`Naruto route: build clone roster, massive work graph, hardware-safe governor, active pool, allocation/rebalance policy, parallel verification DAG, GPT final pack, per-clone proof, session cleanup, reflection, and Honest Mode. $Team is deprecated for new execution missions.`);
+  if (route?.id === 'Naruto') lines.push('Naruto route: prepare subagent-plan.json, delegate independent slices through official Codex worker/expert agent threads, record SubagentStart/SubagentStop events, wait for every requested thread, integrate the parent summary, run scoped verification, and pass naruto-gate.json. Process counts, PID evidence, clone rosters, custom active pools, and verification DAGs are not completion evidence.');
   if (route?.id === 'Team') lines.push(`Team route is a deprecated compatibility surface; use $Naruto for new execution missions. Existing Team mission observation commands remain available.`);
   if (route?.id === 'Goal') lines.push('Goal route: write SKS goal bridge artifacts, then use Codex native /goal persistence for create, pause, resume, and clear continuation controls.');
   if (route?.id === 'PPT') lines.push(`PPT route: before design or PDF work, infer and seal delivery context, audience profile including average age/job/industry, STP strategy, decision context, and at least three pain-point to solution mappings from the prompt, TriWiki/current-code defaults, and conservative policy. Keep the visual system simple, restrained, and information-first; design detail should come from hierarchy, spacing, alignment, rules, and subtle accents rather than decorative overdesign. ${pptPipelineAllowlistPolicyText()} If generated image assets or slide visual critique are needed, actively invoke the loaded imagegen skill through Codex App $imagegen/gpt-image-2 (${CODEX_APP_IMAGE_GENERATION_DOC_URL}), save the selected raster output into the mission assets/review evidence path, and record that real path before build/final. Direct API fallback, placeholders, HTML/CSS stand-ins, and prose-only substitutes do not satisfy the route gate. ${CODEX_IMAGEGEN_REQUIRED_POLICY} Then build source ledger, fact ledger, image asset ledger, storyboard with aha moments, style tokens, editable source HTML under source-html/, PDF artifact, render QA, bounded review ledger/iteration report, PPT-only temporary build file cleanup, and ppt-parallel-report.json so independent strategy/render/file-write phases stay parallel-friendly, then reflection and Honest Mode.`);
@@ -486,28 +568,51 @@ export async function prepareRoute(root: any, prompt: any, state: any = {}, opts
   const explicit = Boolean(dollarCommand(cleanPrompt));
   if (!route) return { route: null, additionalContext: promptPipelineContext(prompt, null) };
   const dreamContext = await routeSkillDreamContext(root, route, task);
-  if (route.id === 'DFix') return withSkillDreamContext(await prepareDfixQuickRoute(route, task), dreamContext);
-  if (route.id === 'Answer') return withSkillDreamContext(await prepareAnswerOnlyRoute(route, task), dreamContext);
-  if (route.id === 'ComputerUse') return withSkillDreamContext(await prepareComputerUseFastRoute(route, task), dreamContext);
-  if (route.id === 'Wiki') return withSkillDreamContext(await prepareWikiQuickRoute(route, task), dreamContext);
-  if (route.id === 'Goal') return withSkillDreamContext(await prepareGoal(root, route, task, routeNeedsContext7(route, cleanPrompt), { sessionKey }), dreamContext);
-  if (route.id === 'ImageUXReview') return withSkillDreamContext(await prepareImageUxReview(root, route, task, routeNeedsContext7(route, cleanPrompt), { sessionKey }), dreamContext);
-  if (route.id === 'MadDB') return withSkillDreamContext(await prepareMadDb(root, route, task, routeNeedsContext7(route, cleanPrompt), { sessionKey }), dreamContext);
   const required = routeNeedsContext7(route, cleanPrompt);
   const reasoning = routeReasoning(route, cleanPrompt);
-  const nativeSessionsRequired = routeRequiresSubagents(route, cleanPrompt);
-  if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return withSkillDreamContext(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }), dreamContext);
-  if (route.id === 'Naruto') return withSkillDreamContext(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey }), dreamContext);
-  if (route.id === 'Team') return withSkillDreamContext(await prepareNaruto(root, { ...route, id: 'Naruto', command: '$Naruto', mode: 'NARUTO', stopGate: 'naruto-gate.json', requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'] }, task, required, { madSksAuthorization, teamAlias: true, sessionKey }), dreamContext);
-  if (route.id === 'Research') return withSkillDreamContext(await prepareResearch(root, route, task, required, { sessionKey }), dreamContext);
-  if (route.id === 'AutoResearch') return withSkillDreamContext(await prepareAutoResearch(root, route, task, required, { sessionKey }), dreamContext);
-  if (route.id === 'DB') return withSkillDreamContext(await prepareDb(root, route, task, required, { sessionKey }), dreamContext);
-  if (route.id === 'GX') return withSkillDreamContext(await prepareGx(root, route, task, required, { sessionKey }), dreamContext);
-  if (explicit || required) return withSkillDreamContext(await prepareLightRoute(root, route, task, required, { sessionKey }), dreamContext);
-  return withSkillDreamContext({
+  const subagentsRequired = routeRequiresSubagents(route, cleanPrompt);
+  const finish = async (prepared: any) => {
+    const materialized = subagentsRequired && !['Naruto', 'Team', 'Goal'].includes(route.id)
+      ? await materializeOfficialSubagentOverlay(root, prepared, route, task, { sessionKey, parentModel: opts.parentModel || null })
+      : prepared;
+    return withSkillDreamContext(materialized, dreamContext);
+  };
+  if (route.id === 'DFix') return finish(await prepareDfixQuickRoute(route, task));
+  if (route.id === 'Answer') return finish(await prepareAnswerOnlyRoute(route, task));
+  if (route.id === 'ComputerUse') return finish(await prepareComputerUseFastRoute(route, task));
+  if (route.id === 'Wiki') return finish(await prepareWikiQuickRoute(route, task));
+  if (route.id === 'Goal') return finish(await prepareGoal(root, route, task, required, { sessionKey }));
+  if (route.id === 'ImageUXReview') return finish(await prepareImageUxReview(root, route, task, required, { sessionKey }));
+  if (route.id === 'MadDB') return finish(await prepareMadDb(root, route, task, required, { sessionKey }));
+  if (QUESTION_GATE_ROUTES.has(route.id) || route.id === 'MadSKS') return finish(await prepareClarificationGate(root, route, task, required, { madSksAuthorization, sessionKey }));
+  if (route.id === 'Naruto' && subagentsRequired) return finish(await prepareNaruto(root, route, task, required, { madSksAuthorization, sessionKey, parentModel: opts.parentModel || null }));
+  if (route.id === 'Naruto') return finish(await prepareLightRoute(root, parentOwnedProfileRoute(route), task, required, { sessionKey }));
+  if (route.id === 'Team') return finish(await prepareNaruto(root, { ...route, id: 'Naruto', command: '$Naruto', mode: 'NARUTO', stopGate: 'naruto-gate.json', requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'] }, task, required, { madSksAuthorization, teamAlias: true, sessionKey, parentModel: opts.parentModel || null }));
+  if (route.id === 'Research') return finish(await prepareResearch(root, route, task, required, { sessionKey }));
+  if (route.id === 'AutoResearch') return finish(await prepareAutoResearch(root, route, task, required, { sessionKey }));
+  if (route.id === 'DB') return finish(await prepareDb(root, route, task, required, { sessionKey }));
+  if (route.id === 'GX') return finish(await prepareGx(root, route, task, required, { sessionKey }));
+  if (explicit || required) return finish(await prepareLightRoute(root, route, task, required, { sessionKey }));
+  return finish({
     route,
-    additionalContext: `${promptPipelineContext(prompt, route)}\n\nReasoning: ${reasoning.effort} (${reasoning.reason}); temporary profile ${reasoning.profile}.\nRequired skills: ${route.requiredSkills.join(', ')}.\nNative sessions required: ${nativeSessionsRequired ? 'yes' : 'no'}.`
-  }, dreamContext);
+    additionalContext: `${promptPipelineContext(prompt, route)}\n\nReasoning: ${reasoning.effort} (${reasoning.reason}); temporary profile ${reasoning.profile}.\nRequired skills: ${route.requiredSkills.join(', ')}.\nOfficial subagents required: ${subagentsRequired ? 'yes' : 'no'}.`
+  });
+}
+
+function parentOwnedProfileRoute(route: any) {
+  return {
+    ...route,
+    id: 'SKS',
+    command: '$SKS',
+    mode: 'SKS',
+    route: 'profiled parent-owned execution',
+    description: 'Parent-owned bounded execution selected by the task profile; no subagent workflow is required.',
+    requiredSkills: ['pipeline-runner', 'prompt-pipeline', 'honest-mode'],
+    lifecycle: ['task_profile', 'ownership', 'focused_implementation', 'listed_verification', 'honest_summary'],
+    stopGate: 'honest_mode',
+    coverage_required: false,
+    explicit_invocation: false
+  };
 }
 
 async function routeSkillDreamContext(root: any, route: any, task: any) {
@@ -652,14 +757,13 @@ export async function activeRouteContext(root: any, state: any) {
       ? ' Context7 evidence is still required before completion: use resolve-library-id, then query-docs (or legacy get-library-docs).'
       : '';
     const roles = state.role_counts ? ` Role counts: ${formatLegacyRoleCounts(state.role_counts)}.` : '';
-    return `Active Team mission ${state.mission_id || 'latest'} must keep the user-visible live transcript updated. Native session budget: ${state.agent_sessions || MIN_TEAM_REVIEWER_LANES}.${roles} Run native sessions, TriWiki refresh, debate, consensus, fresh development, minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration, then close or account for every Team native session and write ${TEAM_SESSION_CLEANUP_ARTIFACT} before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} After each native-session status/result/handoff, run: sks team event ${state.mission_id || 'latest'} --agent <name> --phase <phase> --message "...". Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
+    return `Legacy Team mission ${state.mission_id || 'latest'} must keep its existing live transcript and compatibility artifacts current.${roles} New Team invocations redirect to the Naruto official Codex subagent workflow; this context is only for finishing a pre-6.1.1 Team mission. Preserve its original minimum ${MIN_TEAM_REVIEWER_LANES}-lane review/integration and ${TEAM_SESSION_CLEANUP_ARTIFACT} contract before reflection/final. ${MIN_TEAM_REVIEW_POLICY_TEXT} Inspect with sks team log/watch ${state.mission_id || 'latest'}.${reasoningNote}${context7}${planNote}`;
   }
   if (state.mode === 'NARUTO') {
-    const clones = state.clone_count ? ` Clone count: ${state.clone_count}.` : '';
-    return `Active Naruto mission ${state.mission_id || 'latest'} must keep clone/worker evidence current.${clones} Use sks naruto status ${state.mission_id || 'latest'} --json, inspect .sneakoscope/missions/${state.mission_id || 'latest'}/naruto-gate.json and agents/agent-proof-evidence.json, then continue until the Naruto gate passes or a hard blocker is recorded.${reasoningNote}${planNote}`;
+    return `Active Naruto mission ${state.mission_id || 'latest'} uses the official Codex subagent workflow. Read subagent-plan.json, keep ${SUBAGENT_EVENT_LOG_FILENAME} and ${SUBAGENT_EVIDENCE_FILENAME} current from SubagentStart/SubagentStop, wait for all requested agent threads, then write the integrated parent result to naruto-summary.json and pass naruto-gate.json. Do not substitute process counts, PID evidence, clone artifacts, or a custom active pool.${reasoningNote}${planNote}`;
   }
   if (state.subagents_required && !(await hasSubagentEvidence(root, state))) {
-    return `Active SKS route ${id} requires native multi-session evidence before code-changing work can be considered complete. Run worker/reviewer native sessions for disjoint write scopes, or record explicit unavailable/unsplittable native-session evidence before editing.${reasoningNote}${planNote}`;
+    return `Active SKS route ${id} requires official subagent evidence before completion. Delegate independent slices to worker/expert custom agents, record matched SubagentStart/SubagentStop thread ids, wait for every requested agent thread, and provide the parent integration summary.${reasoningNote}${planNote}`;
   }
   if (state.mode === 'GOAL') return `Active Goal mission ${state.mission_id || 'latest'} uses Codex native /goal continuation. Inspect .sneakoscope/missions/${state.mission_id || 'latest'}/${GOAL_WORKFLOW_ARTIFACT}, then use /goal create, pause, resume, or clear in the Codex runtime as appropriate.${planNote}`;
   if (state.context7_required && !(await hasContext7DocsEvidence(root, state))) {
@@ -765,6 +869,7 @@ async function prepareClarificationGate(root: any, route: any, task: any, requir
     const materializedLine = materialized.phase ? `\nRoute artifacts were materialized immediately; state advanced to ${materialized.phase}.` : '';
     return {
       route,
+      mission_id: id,
       additionalContext: `${promptPipelineContext(task, route)}
 
 Route contract auto-sealed for ${route.command}: contract answers were inferred from the prompt, TriWiki/current-code defaults, and conservative SKS safety policy.
@@ -978,9 +1083,104 @@ async function prepareLightRoute(root: any, route: any, task: any, required: any
   return routeContext(route, id, task, required, 'Load the route skill context, execute the smallest matching action, and finish with Honest Mode.');
 }
 
+async function materializeOfficialSubagentOverlay(root: any, prepared: any, route: any, task: any, opts: any = {}) {
+  const id = String(prepared?.mission_id || '').trim();
+  if (!id) throw new Error(`official_subagent_overlay_mission_missing:${route?.id || 'unknown'}`);
+  const dir = missionDir(root, id);
+  const cleanTask = stripDollarCommand(task) || String(task || '').trim();
+  const taskProfile = classifyTaskProfile(cleanTask);
+  const officialConfig = await readOfficialSubagentConfig(root);
+  const budget = resolveSubagentThreadBudget({
+    requested: requestedSubagentsFromTask(cleanTask),
+    configuredMaxThreads: officialConfig.maxThreads
+  });
+  const delegationPrompt = buildOfficialSubagentPrompt({
+    goal: cleanTask,
+    slices: [],
+    requestedSubagents: budget.requestedSubagents,
+    maxThreads: budget.maxThreads,
+    decompositionStatus: 'parent_required'
+  });
+  const observedParentModel = typeof opts.parentModel === 'string' && opts.parentModel.trim()
+    ? opts.parentModel.trim()
+    : null;
+  const plan = {
+    schema: 'sks.subagent-plan.v1',
+    workflow: 'official_codex_subagent',
+    mission_id: id,
+    route: route?.command || route?.id || null,
+    goal: cleanTask,
+    task_profile: taskProfile,
+    decomposition_status: 'parent_required',
+    requested_subagents: budget.requestedSubagents,
+    max_threads: budget.maxThreads,
+    first_wave: budget.firstWave,
+    wave_count: budget.waveCount,
+    max_depth: budget.maxDepth,
+    slices: [],
+    parent_model_policy: NARUTO_PARENT_MODEL,
+    observed_parent_model: observedParentModel,
+    verification_budget: chooseVerificationBudget({ taskProfile, changedFiles: [] }),
+    verification_checks: [],
+    config_sources: officialConfig.sources,
+    config_blockers: officialConfig.blockers,
+    delegation_prompt: delegationPrompt,
+    created_at: nowIso()
+  };
+  await writeJsonAtomic(path.join(dir, 'subagent-plan.json'), plan);
+  if (!(await exists(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME)))) {
+    await writeTextAtomic(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME), '');
+  }
+  await writeSubagentEvidence(dir, {
+    requestedSubagents: budget.requestedSubagents,
+    events: [],
+    parentSummaryPresent: false,
+    workflowStatus: 'delegation_context_ready',
+    preparationOnly: true
+  });
+  await setCurrent(root, {
+    mission_id: id,
+    subagents_required: true,
+    subagents_verified: false,
+    native_sessions_required: false,
+    native_sessions_verified: false,
+    requested_subagents: budget.requestedSubagents,
+    subagent_max_threads: budget.maxThreads,
+    subagent_max_depth: budget.maxDepth,
+    subagent_plan_file: 'subagent-plan.json',
+    subagent_evidence_file: SUBAGENT_EVIDENCE_FILENAME
+  }, { sessionKey: opts.sessionKey });
+  return {
+    ...prepared,
+    mission_id: id,
+    additionalContext: [
+      prepared.additionalContext,
+      `Official Codex subagent overlay for ${route?.command || route?.id || 'this route'}: use subagent-plan.json, record matched SubagentStart/SubagentStop events in ${SUBAGENT_EVENT_LOG_FILENAME}, and provide the required structured parent thread-outcome summary before this route's own gate can pass. This generic overlay does not create naruto-summary.json, naruto-gate.json, or close the work-order ledger.`,
+      delegationPrompt
+    ].filter(Boolean).join('\n\n')
+  };
+}
+
 async function prepareNaruto(root: any, route: any, task: any, required: any, opts: any = {}) {
   const cleanTask = stripDollarCommand(task) || String(task || '').trim();
   const fromChatImgRequired = hasFromChatImgSignal(cleanTask);
+  const taskProfile = classifyTaskProfile(cleanTask);
+  const officialConfig = await readOfficialSubagentConfig(root);
+  const budget = resolveSubagentThreadBudget({
+    requested: requestedSubagentsFromTask(cleanTask),
+    configuredMaxThreads: officialConfig.maxThreads
+  });
+  const delegationPrompt = buildOfficialSubagentPrompt({
+    goal: cleanTask,
+    slices: [],
+    requestedSubagents: budget.requestedSubagents,
+    maxThreads: budget.maxThreads,
+    decompositionStatus: 'parent_required'
+  });
+  const observedParentModel = typeof opts.parentModel === 'string' && opts.parentModel.trim()
+    ? opts.parentModel.trim()
+    : null;
+  const parentModelMatch = observedParentModel ? observedParentModelMatchesPolicy(observedParentModel) : null;
   const { id, dir } = await createMission(root, { mode: 'naruto', prompt: cleanTask, sessionKey: opts.sessionKey });
   const routeContextPayload = {
     route: 'Naruto',
@@ -991,33 +1191,118 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     context7_required: required,
     context_tracking: triwikiContextTracking(),
     stop_gate: 'naruto-gate.json',
+    workflow: 'official_codex_subagent',
+    requested_subagents: budget.requestedSubagents,
+    max_threads: budget.maxThreads,
+    max_depth: budget.maxDepth,
+    parent_model_policy: NARUTO_PARENT_MODEL,
+    observed_parent_model: observedParentModel,
+    parent_model_match: parentModelMatch,
+    config_sources: officialConfig.sources,
+    config_blockers: officialConfig.blockers,
     team_alias: opts.teamAlias === true,
     from_chat_img_required: fromChatImgRequired,
     mad_sks_authorization: Boolean(opts.madSksAuthorization)
   };
   await writeJsonAtomic(path.join(dir, 'route-context.json'), routeContextPayload);
-  await writeJsonAtomic(path.join(dir, 'naruto-gate.json'), {
-    schema: 'sks.naruto-gate.v1',
-    passed: false,
+  await writeJsonAtomic(path.join(dir, 'subagent-plan.json'), {
+    schema: 'sks.subagent-plan.v1',
+    workflow: 'official_codex_subagent',
     mission_id: id,
-    clone_roster_built: false,
-    work_graph_ready: false,
-    role_distribution_ready: false,
-    allocation_ready: false,
-    rebalance_ready: false,
-    concurrency_governor_ready: false,
-    active_pool_ready: false,
-    verification_dag_ready: false,
-    gpt_final_pack_ready: false,
-    zellij_dashboard_ready: false,
-    native_agent_proof: false,
-    final_arbiter_accepted: false,
-    session_cleanup: false,
-    ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
-    blockers: ['naruto_run_not_started'],
+    goal: cleanTask,
+    task_profile: taskProfile,
+    decomposition_status: 'parent_required',
+    requested_subagents: budget.requestedSubagents,
+    max_threads: budget.maxThreads,
+    first_wave: budget.firstWave,
+    wave_count: budget.waveCount,
+    max_depth: budget.maxDepth,
+    slices: [],
+    parent_model_policy: NARUTO_PARENT_MODEL,
+    observed_parent_model: observedParentModel,
+    parent_model_match: parentModelMatch,
+    verification_budget: chooseVerificationBudget({ taskProfile, changedFiles: [] }),
+    verification_checks: [],
+    delegation_prompt: delegationPrompt,
+    created_at: nowIso()
+  });
+  await writeTextAtomic(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME), '');
+  const initialEvidence = await writeSubagentEvidence(dir, {
+    requestedSubagents: budget.requestedSubagents,
+    events: [],
+    parentSummaryPresent: false,
+    workflowStatus: 'delegation_context_ready',
+    preparationOnly: true
+  });
+  const initialBlockers = [
+    'official_subagent_workflow_not_completed',
+    ...officialConfig.blockers,
+    ...(parentModelMatch === false ? [`parent_model_mismatch:${observedParentModel}`] : [])
+  ];
+  await writeJsonAtomic(path.join(dir, 'naruto-summary.json'), {
+    schema: 'sks.naruto-subagent-workflow.v1',
+    ok: false,
+    workflow: 'official_codex_subagent',
+    mission_id: id,
+    route: '$Naruto',
+    status: 'delegation_context_ready',
+    parent: {
+      model: NARUTO_PARENT_MODEL,
+      model_reasoning_effort: NARUTO_PARENT_EFFORT,
+      observed_model: observedParentModel,
+      observed_model_match: parentModelMatch
+    },
+    requested_subagents: budget.requestedSubagents,
+    max_threads: budget.maxThreads,
+    max_depth: budget.maxDepth,
+    started_subagents: 0,
+    completed_subagents: 0,
+    failed_subagents: 0,
+    agents: {
+      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
+      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
+    },
+    verification: {
+      budget: chooseVerificationBudget({ taskProfile, changedFiles: [] }),
+      checks: []
+    },
+    legacy_process_swarm_used: false,
+    parent_summary_present: false,
+    parent_summary: null,
+    subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
+    blockers: initialBlockers,
     updated_at: nowIso()
   });
-  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, required, ambiguity: { required: false, status: opts.teamAlias ? 'team_alias_to_naruto' : 'direct_naruto' } });
+  await writeJsonAtomic(path.join(dir, 'naruto-gate.json'), {
+    schema: 'sks.naruto-gate.v1',
+    workflow: 'official_codex_subagent',
+    status: 'blocked',
+    passed: false,
+    terminal: false,
+    terminal_state: 'blocked',
+    mission_id: id,
+    subagent_plan_ready: true,
+    official_subagent_evidence: initialEvidence.ok,
+    parent_summary_present: false,
+    session_cleanup: false,
+    requested_subagents: budget.requestedSubagents,
+    max_threads: budget.maxThreads,
+    parent_model_policy: NARUTO_PARENT_MODEL,
+    observed_parent_model: observedParentModel,
+    parent_model_match: parentModelMatch,
+    config_blockers: officialConfig.blockers,
+    evidence: {
+      subagent_plan: 'subagent-plan.json',
+      subagent_events: SUBAGENT_EVENT_LOG_FILENAME,
+      official_subagent_evidence: SUBAGENT_EVIDENCE_FILENAME,
+      parent_summary: 'naruto-summary.json'
+    },
+    ...(fromChatImgRequired ? { from_chat_img_required: true, from_chat_img_request_coverage: false } : {}),
+    blockers: initialBlockers,
+    missing_fields: initialBlockers,
+    updated_at: nowIso()
+  });
+  const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task: cleanTask, taskProfile, required, ambiguity: { required: false, status: opts.teamAlias ? 'team_alias_to_naruto' : 'direct_naruto' } });
   await setCurrent(root, routeState(id, route, 'NARUTO_READY', required, {
     prompt: cleanTask,
     route: 'Naruto',
@@ -1029,25 +1314,49 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
     stop_gate: 'naruto-gate.json',
     required_skills: routeContextPayload.required_skills,
     subagents_required: true,
-    native_sessions_required: true,
+    native_sessions_required: false,
+    agents_required: false,
+    requested_subagents: budget.requestedSubagents,
+    subagent_max_threads: budget.maxThreads,
+    subagent_max_depth: budget.maxDepth,
+    subagent_plan_file: 'subagent-plan.json',
+    subagent_evidence_file: SUBAGENT_EVIDENCE_FILENAME,
+    observed_parent_model: observedParentModel,
+    parent_model_match: parentModelMatch,
     from_chat_img_required: fromChatImgRequired,
     naruto_gate_file: 'naruto-gate.json',
     pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok,
     pipeline_plan_path: PIPELINE_PLAN_ARTIFACT
   }), { sessionKey: opts.sessionKey });
-  return routeContext(route, id, cleanTask, required, `Run sks naruto run ${JSON.stringify(cleanTask)} --json (or continue with Codex native workers for the same mission), then update naruto-gate.json from the worker proof and verification DAG.`);
+  return routeContext(route, id, cleanTask, required, `Use the delegation context below in the current Codex parent session. First replace parent_required with a defensible independent/disjoint decomposition, then spawn and wait for every requested agent thread. Record official events and integrate the parent summary before passing naruto-gate.json.\n\n${delegationPrompt}`);
+}
+
+function requestedSubagentsFromTask(task: any) {
+  const text = String(task || '');
+  const value = text.match(/(?:^|\s)--(?:agents|clones)(?:=|\s+)(\d+)\b/i)?.[1]
+    || text.match(/(?:^|\s)(\d+)\s*(?:subagents?|agents?|agent\s*threads?|개\s*(?:서브\s*에이전트|하위\s*에이전트|에이전트))/i)?.[1]
+    || text.match(/^\s*(\d+)\b/)?.[1];
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function observedParentModelMatchesPolicy(model: any) {
+  const value = String(model || '').trim();
+  return value.toLowerCase() === NARUTO_PARENT_MODEL || /gpt[-_. ]?5\.6[-_. ]?sol|\bsol(?:\s+max)?\b/i.test(value);
 }
 
 function routeState(id: any, route: any, phase: any, context7Required: any, extra: any = {}) {
   const reasoning = routeReasoning(route, extra.prompt || '');
-  const nativeSessionsRequired = routeRequiresSubagents(route, extra.prompt || '');
-  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: false, subagents_verified: true, native_sessions_required: nativeSessionsRequired, native_sessions_verified: false, agents_required: routeRequiresAgentIntake(route, { task: extra.prompt }), agent_count: AGENT_COUNT, reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
+  const subagentsRequired = routeRequiresSubagents(route, extra.prompt || '');
+  return { mission_id: id, route: route.id, route_command: route.command, mode: route.mode, phase, context7_required: context7Required, context7_verified: false, subagents_required: subagentsRequired, subagents_verified: !subagentsRequired, native_sessions_required: false, native_sessions_verified: false, agents_required: routeRequiresAgentIntake(route, { task: extra.prompt }), reflection_required: reflectionRequiredForRoute(route), visible_progress_required: true, context_tracking: 'triwiki', required_skills: route.requiredSkills, stop_gate: route.stopGate, reasoning_effort: reasoning.effort, reasoning_profile: reasoning.profile, reasoning_temporary: true, goal_continuation: ambientGoalContinuation(), ...extra };
 }
 
 function routeContext(route: any, id: any, task: any, required: any, next: any) {
   const visibleTask = stripVisibleDecisionAnswerBlocks(task);
   return {
     route,
+    mission_id: id,
     additionalContext: `${promptPipelineContext(visibleTask, route)}
 
 ${route.command} route prepared.
@@ -1058,7 +1367,7 @@ Execution prompt: request-intake.transformed_prompt
 Pipeline plan: .sneakoscope/missions/${id}/${PIPELINE_PLAN_ARTIFACT}
 Required skills: ${route.requiredSkills.join(', ')}
 Stop gate: ${route.stopGate}
-Native sessions: ${routeRequiresSubagents(route, visibleTask) ? 'required before code-changing execution; run parallel workers/reviewers with disjoint ownership or record explicit unavailable/unsplittable evidence.' : 'optional'}
+Official subagents: ${routeRequiresSubagents(route, visibleTask) ? 'required for this explicit Naruto/parallel task; use independent disjoint slices, official agent threads, matched SubagentStart/SubagentStop events, and a parent integration summary.' : 'not required by this task profile; keep the work parent-owned unless a concrete independent decomposition emerges.'}
 TriWiki: use only the latest coordinate+voxel-overlay context pack before each route phase, hydrate low-trust claims during the phase, refresh after new findings or artifact changes, and validate before handoffs/final claims. Coordinate-only legacy packs are invalid and must be refreshed before pipeline decisions.
 Final closeout: every pipeline final answer must summarize what was done, what changed for the user/repo, what was verified, and any remaining gaps.
 ${reflectionRequiredForRoute(route) ? `Reflection: ${reflectionInstructionText()}` : 'Reflection: not required for this lightweight route.'}
@@ -1140,17 +1449,22 @@ export async function recordContext7Evidence(root: any, state: any, payload: any
 }
 
 export async function recordSubagentEvidence(root: any, state: any, payload: any) {
-  const stage = subagentStage(payload);
-  if (!stage) return null;
   if (!await shouldWritePipelineEvidence(root, state)) return null;
-  const record = { ts: nowIso(), stage, tool: subagentToolName(payload), payload_keys: Object.keys(payload || {}).sort() };
   const id = state?.mission_id;
-  const file = id ? path.join(missionDir(root, id), 'subagent-evidence.jsonl') : path.join(root, '.sneakoscope', 'state', 'subagent-evidence.jsonl');
-  await appendJsonl(file, record);
-  if (id) {
-    const evidence = await subagentEvidence(root, state);
-    await setCurrent(root, { subagents_spawned: evidence.spawn, subagents_reported: evidence.result, subagents_verified: evidence.ok }, { sessionKey: state._session_key });
-  }
+  const dir = id ? missionDir(root, id) : path.join(root, '.sneakoscope', 'state', 'subagents');
+  const explicitEventName = payload?.hook_event_name
+    || payload?.hookEventName
+    || payload?.event_name
+    || payload?.eventName
+    || payload?.event
+    || null;
+  const officialEvent = await recordSubagentEvent(dir, payload, explicitEventName);
+  if (officialEvent) return officialEvent;
+  if (!legacySubagentWorkflowEnabled(state)) return null;
+  const stage = legacySubagentStage(payload);
+  if (!stage) return null;
+  const record = { ts: nowIso(), stage, tool: legacySubagentToolName(payload), payload_keys: Object.keys(payload || {}).sort(), workflow: 'legacy_process_swarm' };
+  await appendJsonl(path.join(dir, 'subagent-evidence.jsonl'), record);
   return record;
 }
 
@@ -1159,29 +1473,70 @@ async function shouldWritePipelineEvidence(root: any, state: any = {}) {
   return exists(path.join(root, '.sneakoscope', 'state', 'current.json'));
 }
 
-function subagentToolName(payload: any) {
+function legacySubagentToolName(payload: any) {
   const obj = payload || {};
   return String(obj.tool_name || obj.name || obj.tool?.name || obj.mcp_tool || obj.command || obj.type || '');
 }
 
-function subagentStage(payload: any) {
+function legacySubagentStage(payload: any) {
   const hay = JSON.stringify(payload || {});
   // Codex 0.139 renamed multi-agent v2 `close_agent` to `interrupt_agent`;
   // accept both so cockpit evidence keeps classifying on newer CLIs.
   if (!/(spawn_agent|send_input|wait_agent|close_agent|interrupt_agent|subagent|worker|explorer)/i.test(hay)) return null;
   if (/subagent[_ -]?unavailable|subagents unavailable|unsafe to split|unsplittable|cannot safely split/i.test(hay)) return 'exception';
   if (/spawn_agent/i.test(hay)) return 'spawn_agent';
-  for (const name of ['interrupt_agent', 'close_agent']) {
-    if (hay.includes(name) && normalizeCodexMultiAgentEventName(name).stage === 'result') return 'result';
-  }
+  if (/interrupt_agent|close_agent/i.test(hay)) return 'result';
   if (/wait_agent|completed|final/i.test(hay)) return 'result';
   return 'subagent';
 }
 
 export async function subagentEvidence(root: any, state: any) {
   const id = state?.mission_id;
-  if (!id) return { spawn: false, result: false, exception: false, ok: false, count: 0 };
-  const text = await readText(path.join(missionDir(root, id), 'subagent-evidence.jsonl'), '');
+  if (!id) return { spawn: false, result: false, exception: false, ok: false, count: 0, workflow: 'official_codex_subagent' };
+  const dir = missionDir(root, id);
+  const canonical = await readJson(path.join(dir, SUBAGENT_EVIDENCE_FILENAME), null).catch(() => null);
+  if (canonical?.schema === 'sks.subagent-evidence.v1') {
+    return {
+      ...canonical,
+      spawn: Number(canonical.started_threads || 0) > 0,
+      result: Number(canonical.completed_threads || 0) > 0,
+      exception: Number(canonical.failed_threads || 0) > 0,
+      count: Number(canonical.started_threads || 0) + Number(canonical.completed_threads || 0) + Number(canonical.failed_threads || 0)
+    };
+  }
+  const plan = await readJson(path.join(dir, 'subagent-plan.json'), null).catch(() => null);
+  if (plan?.workflow === 'official_codex_subagent') {
+    const events = await readSubagentEvents(dir);
+    const summary = await readJson(path.join(dir, 'naruto-summary.json'), null).catch(() => null);
+    const structuredParentSummary = Array.isArray(summary?.parent_thread_outcomes)
+      ? {
+          schema: 'sks.subagent-parent-summary.v1',
+          status: summary?.status === 'completed' ? 'completed' : 'blocked',
+          summary: summary?.parent_summary || '',
+          thread_outcomes: summary.parent_thread_outcomes,
+          changed_files: summary?.changed_files || [],
+          verification: summary?.verification?.checks || [],
+          blockers: summary?.blockers || []
+        }
+      : summary?.parent_summary;
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: Number(plan.requested_subagents || 0),
+      events,
+      parentSummary: structuredParentSummary,
+      parentSummaryPresent: summary?.parent_summary_present === true,
+      workflowStatus: summary?.status || null,
+      preparationOnly: summary?.status === 'delegation_context_ready'
+    });
+    return {
+      ...evidence,
+      spawn: evidence.started_threads > 0,
+      result: evidence.completed_threads > 0,
+      exception: evidence.failed_threads > 0,
+      count: events.length
+    };
+  }
+  if (!legacySubagentWorkflowEnabled(state)) return { spawn: false, result: false, exception: false, ok: false, count: 0, workflow: 'official_codex_subagent' };
+  const text = await readText(path.join(dir, 'subagent-evidence.jsonl'), '');
   const lines = text.split(/\n/).filter(Boolean);
   let spawn = false;
   let result = false;
@@ -1194,11 +1549,17 @@ export async function subagentEvidence(root: any, state: any) {
       if (entry.stage === 'exception') exception = true;
     } catch {}
   }
-  return { spawn, result, exception, ok: spawn || exception, count: lines.length };
+  return { spawn, result, exception, ok: spawn || exception, count: lines.length, workflow: 'legacy_process_swarm' };
 }
 
 export async function hasSubagentEvidence(root: any, state: any) {
   return (await subagentEvidence(root, state)).ok;
+}
+
+function legacySubagentWorkflowEnabled(state: any = {}) {
+  return process.env.SKS_NARUTO_LEGACY_PROCESS_SWARM === '1'
+    || state?.legacy_subagent_workflow === true
+    || state?.workflow === 'legacy_process_swarm';
 }
 
 function context7ToolName(payload: any) {

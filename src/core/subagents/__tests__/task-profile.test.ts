@@ -1,0 +1,48 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  classifyTaskProfile,
+  gateProfileForTask
+} from '../../runtime/task-profile.js'
+import { chooseVerificationBudget } from '../../runtime/verification-budget.js'
+import { DEPRECATED_AGENT_TERMS, SUBAGENT_TERMS } from '../terminology.js'
+
+test('task profiles keep greetings and answers off execution routes', () => {
+  assert.equal(classifyTaskProfile(''), 'passthrough')
+  assert.equal(classifyTaskProfile('안녕하세요!'), 'passthrough')
+  assert.equal(classifyTaskProfile('How does the parser work?'), 'answer')
+  assert.equal(classifyTaskProfile('How do I fix a typo in README?'), 'answer')
+  assert.equal(classifyTaskProfile('How do we review multiple files in parallel?'), 'answer')
+  assert.equal(classifyTaskProfile('Can you explain how to fix this typo?'), 'answer')
+  assert.equal(classifyTaskProfile('Can you fix the typo in README?'), 'tiny-change')
+  assert.equal(gateProfileForTask('answer'), 'none')
+})
+
+test('task profiles distinguish tiny, bounded, parallel, and high-risk work', () => {
+  assert.equal(classifyTaskProfile('Fix the typo in README'), 'tiny-change')
+  assert.equal(classifyTaskProfile('Implement the route parser'), 'bounded-work')
+  assert.equal(classifyTaskProfile('Audit all files in parallel'), 'parallel-read')
+  assert.equal(classifyTaskProfile('Edit multiple files in parallel'), 'parallel-write')
+  assert.equal(classifyTaskProfile('Fix the database migration'), 'high-risk')
+  assert.equal(classifyTaskProfile('DB migration 적용해줘'), 'high-risk')
+  assert.equal(classifyTaskProfile('Delete database records'), 'high-risk')
+
+  assert.equal(gateProfileForTask('tiny-change'), 'minimal')
+  assert.equal(gateProfileForTask('bounded-work'), 'scoped')
+  assert.equal(gateProfileForTask('parallel-write'), 'scoped')
+  assert.equal(gateProfileForTask('high-risk'), 'full')
+})
+
+test('verification budgets follow task risk instead of decorative gate count', () => {
+  assert.equal(chooseVerificationBudget({ taskProfile: 'passthrough', changedFiles: [] }), 'none')
+  assert.equal(chooseVerificationBudget({ taskProfile: 'answer', changedFiles: [] }), 'none')
+  assert.equal(chooseVerificationBudget({ taskProfile: 'tiny-change', changedFiles: ['README.md'] }), 'single-check')
+  assert.equal(chooseVerificationBudget({ taskProfile: 'bounded-work', changedFiles: ['src/a.ts'] }), 'affected')
+  assert.equal(chooseVerificationBudget({ taskProfile: 'high-risk', changedFiles: ['src/release.ts'] }), 'confidence')
+})
+
+test('official terminology has one canonical public vocabulary', () => {
+  assert.equal(SUBAGENT_TERMS.workflow, 'subagent workflow')
+  assert.equal(SUBAGENT_TERMS.thread, 'agent thread')
+  assert.ok(DEPRECATED_AGENT_TERMS.includes('shadow clone'))
+})

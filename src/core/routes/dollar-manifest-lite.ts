@@ -9,7 +9,7 @@ export interface DollarCommandAliasLiteEntry {
   app_skill: string;
 }
 
-const NARUTO_DESCRIPTION = '$Naruto mode launches a hardware-safe massive parallel work swarm. Clones may implement, modify, verify, test, research, document, and resolve conflicts according to role and lease policy; write-capable output is accepted only through patch envelopes, verification DAG, mutation guard, and GPT final arbiter.';
+const NARUTO_DESCRIPTION = '$Naruto is the SKS alias for the Codex official subagent workflow. The parent uses GPT-5.6 Sol Max, bounded clear work uses GPT-5.6 Luna Max, and reasoning-sensitive work uses GPT-5.6 Sol Max. Official SubagentStart/SubagentStop events and the parent summary are the execution evidence.';
 const COMPUTER_USE_DESCRIPTION = 'Maximum-speed Codex Computer Use lane for native macOS, desktop-app, OS-settings, and non-web visual tasks only. Browser, localhost, website, webapp, and web-based app verification must route through Codex Chrome Extension readiness first.';
 
 export const DOLLAR_COMMANDS_LITE = [
@@ -23,11 +23,11 @@ export const DOLLAR_COMMANDS_LITE = [
   { command: '$Fast-Off', route: 'fast-mode toggle', description: 'Turn the SKS Fast mode default on or off for project-local dollar-command and native-agent routes. Explicit --fast, --no-fast, and --service-tier flags still override it.' },
   { command: '$with-local-llm-on', route: 'local Ollama worker toggle', description: 'Turn the optional local Ollama worker backend on or off. Default off keeps SKS GPT-only; enabled mode lets eligible simple code/collection worker slices use Ollama while GPT/Codex owns strategy, design, review, verification, and integration.' },
   { command: '$with-local-llm-off', route: 'local Ollama worker toggle', description: 'Turn the optional local Ollama worker backend on or off. Default off keeps SKS GPT-only; enabled mode lets eligible simple code/collection worker slices use Ollama while GPT/Codex owns strategy, design, review, verification, and integration.' },
-  { command: '$Naruto', route: 'hardware-safe massive parallel work swarm', description: NARUTO_DESCRIPTION },
-  { command: '$ShadowClone', route: 'hardware-safe massive parallel work swarm', description: NARUTO_DESCRIPTION },
-  { command: '$Kagebunshin', route: 'hardware-safe massive parallel work swarm', description: NARUTO_DESCRIPTION },
-  { command: '$Work', route: 'hardware-safe massive parallel work swarm', description: NARUTO_DESCRIPTION },
-  { command: '$Swarm', route: 'hardware-safe massive parallel work swarm', description: NARUTO_DESCRIPTION },
+  { command: '$Naruto', route: 'Codex official subagent workflow', description: NARUTO_DESCRIPTION },
+  { command: '$ShadowClone', route: 'deprecated alias to the Codex official subagent workflow', description: NARUTO_DESCRIPTION },
+  { command: '$Kagebunshin', route: 'deprecated alias to the Codex official subagent workflow', description: NARUTO_DESCRIPTION },
+  { command: '$Work', route: 'compatibility alias to the Codex official subagent workflow', description: NARUTO_DESCRIPTION },
+  { command: '$Swarm', route: 'compatibility alias to the Codex official subagent workflow', description: NARUTO_DESCRIPTION },
   { command: '$Release-Review', route: 'native release review', description: 'Run release-readiness collaboration through native multi-session agents with explicit agent count, concurrency, route personas, leases, dynamic effort, proof, and cleanup artifacts.' },
   { command: '$QA-LOOP', route: 'QA loop', description: 'Dogfood UI/API as human proxy with safety gates, Codex Chrome Extension-first web UI evidence, safe fixes, rechecks, Honest Mode.' },
   { command: '$PPT', route: 'HTML/PDF presentation pipeline', description: 'Create restrained, information-first HTML/PDF presentation artifacts after delivery context, audience profile, STP, decision context, pain-point, research, design-system, and verification questions are sealed.' },

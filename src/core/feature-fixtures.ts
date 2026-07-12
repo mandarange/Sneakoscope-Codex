@@ -119,8 +119,8 @@ const FIXTURES = Object.freeze({
   'cli-init': fixture('execute', 'sks init --local-only --dry-run', [], 'pass'),
   'cli-eval': fixture('execute', 'sks eval run --mock --json', [], 'pass'),
   'cli-harness': fixture('execute', 'sks harness fixture --mock --json', [], 'pass'),
-  'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['completion-proof.json', 'naruto-gate.json'], 'pass'),
-  'cli-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --clones 4 --backend fake --work-items 4 --json', ['naruto-gate.json', 'team-alias-to-naruto.json'], 'pass', { timeout_ms: 90000 }),
+  'cli-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', { codex_app_session: true }),
+  'cli-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000, codex_app_session: true }),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
   'cli-profile': fixture('execute', 'sks profile status --json', [], 'pass'),
   'skill-db-safety-guard': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['db-operation-report.json', 'completion-proof.json'], 'pass'),
@@ -138,18 +138,18 @@ const FIXTURES = Object.freeze({
   'cli-proof': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['.sneakoscope/proof/latest.json'], 'pass'),
   'cli-trust': fixture('execute_and_validate_artifacts', 'sks trust report latest --json', ['trust-report.json'], 'pass'),
   'cli-wrongness': fixture('execute_and_validate_artifacts', 'sks wrongness add --kind missing_evidence --claim "fixture wrongness" --json', ['.sneakoscope/wiki/wrongness-ledger.json'], 'pass'),
-  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --clones 4 --backend fake --work-items 4 --json', ['naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000 }),
-  'route-team-alias': fixture('execute_and_validate_artifacts', 'sks team "fixture" --mock --clones 4 --backend fake --work-items 4 --json', ['naruto-gate.json', 'team-alias-to-naruto.json'], 'pass'),
-  'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --clones 4 --backend fake --work-items 4 --json', ['agents/agent-proof-evidence.json', 'agents/agent-scheduler-state.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000 }),
-  'route-work': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 285000, reason: 'naruto-command.ts never invokes the route-finalizer/completion-proof pipeline; naruto-gate.json is the real artifact it writes.' }),
-  'route-swarm': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 285000, reason: 'Same as route-work: naruto-command.ts never invokes the completion-proof pipeline.' }),
+  'route-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000, codex_app_session: true }),
+  'route-team-alias': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json'], 'pass', { codex_app_session: true }),
+  'route-naruto': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'work-order-ledger.json'], 'pass', { timeout_ms: 90000, codex_app_session: true }),
+  'route-work': fixture('static', '$Work compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
+  'route-swarm': fixture('static', '$Swarm compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', { quality: 'wiring_only', reason: 'Pure alias of $Naruto; official workflow execution is covered by route-naruto.' }),
   'route-plan': fixture('execute', 'sks plan "fixture" --json', [], 'pass'),
   'route-review': fixture('execute', 'sks review --diff HEAD --json', [], 'pass'),
-  'route-shadowclone': fixture('static', '$ShadowClone alias of $Naruto shadow-clone swarm route', [], 'pass', {
+  'route-shadowclone': fixture('static', '$ShadowClone compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', {
     quality: 'wiring_only',
     reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
   }),
-  'route-kagebunshin': fixture('static', '$Kagebunshin alias of $Naruto shadow-clone swarm route', [], 'pass', {
+  'route-kagebunshin': fixture('static', '$Kagebunshin compatibility alias for the Naruto Codex official subagent workflow', [], 'pass', {
     quality: 'wiring_only',
     reason: 'Pure alias of $Naruto; no independent behavior to verify beyond route-naruto\'s own execute_and_validate_artifacts fixture.'
   }),
@@ -221,7 +221,7 @@ const FIXTURES = Object.freeze({
   }),
   'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 4 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
   'route-native-agent-intake': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 4 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
-  'proof-agent-evidence': fixture('execute_and_validate_artifacts', 'sks naruto run "fixture" --backend fake --work-items 4 --json', ['naruto-gate.json', 'agents/agent-proof-evidence.json'], 'pass', { timeout_ms: 240000 })
+  'proof-agent-evidence': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --mock --json', ['agents/agent-proof-evidence.json'], 'pass', { timeout_ms: 120000 })
 });
 
 const STATIC_CONTRACT_FEATURES = new Set([

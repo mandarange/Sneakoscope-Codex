@@ -70,7 +70,7 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'team', summary: 'Deprecated alias. New execution redirects to Naruto; legacy observe/watch remains.', maturity: 'beta', mutatesRouteState: true, deprecated: true },
   { name: 'agent', summary: 'Run native multi-session agent missions', maturity: 'beta', mutatesRouteState: true },
   { name: 'with-local-llm', summary: 'Enable or inspect local Ollama worker backend', maturity: 'beta' },
-  { name: 'naruto', summary: 'Run $Naruto shadow-clone swarm (up to 100 parallel sessions)', maturity: 'labs', mutatesRouteState: true },
+  { name: 'naruto', summary: 'Run the $Naruto Codex official subagent workflow', maturity: 'labs', mutatesRouteState: true },
   { name: 'stop-gate', summary: 'Check canonical stop-gate resolution for a route/mission', maturity: 'beta', readonly: true, skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'route', summary: 'Inspect or close active route state', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },
   { name: 'loop', summary: 'Dynamic Loop Runtime: plan/run/status/proof loop graphs.', maturity: 'labs', mutatesRouteState: true },

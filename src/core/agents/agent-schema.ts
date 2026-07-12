@@ -1,5 +1,11 @@
 import type { NarutoWorkGraph } from '../naruto/naruto-work-item.js'
 
+export {
+  DEFAULT_NARUTO_MAX_THREADS,
+  DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
+  HARD_NARUTO_MAX_THREADS
+} from '../subagents/thread-budget.js'
+
 export const AGENT_KERNEL_SCHEMA = 'sks.native-agent-kernel.v1'
 export const AGENT_RESULT_SCHEMA = 'sks.agent-result.v1'
 export const AGENT_LEDGER_EVENT_SCHEMA = 'sks.agent-ledger-event.v1'
@@ -11,9 +17,9 @@ export const AGENT_COUNT = DEFAULT_AGENT_COUNT
 export const AGENT_INTAKE_STAGE_ID = 'native_agent_intake'
 export const MAX_AGENT_COUNT = 20
 export const DEFAULT_AGENT_CONCURRENCY = 4
-// Naruto may queue a large roster, but active workers are governed separately and
-// remain bounded by live CPU, memory, load, and I/O pressure.
+/** @deprecated Legacy process-swarm queue ceiling; never an official thread cap. */
 export const MAX_NARUTO_AGENT_COUNT = 100
+/** @deprecated Legacy clone default; official workflows default to six requested subagents. */
 export const DEFAULT_NARUTO_CLONES = 8
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 
@@ -94,6 +100,9 @@ export interface AgentRunOptions {
   promptExplicit?: boolean
   route?: string
   agents?: number
+  requestedSubagents?: number
+  maxThreads?: number
+  subagentWorkflow?: boolean
   concurrency?: number
   targetActiveSlots?: number
   desiredWorkItemCount?: number
@@ -120,6 +129,7 @@ export interface AgentRunOptions {
   serviceTier?: AgentServiceTier
   env?: NodeJS.ProcessEnv
   noFast?: boolean
+  /** @deprecated Legacy process-swarm rollback option. */
   nativeCliSwarm?: boolean
   ollamaEnabled?: boolean
   noOllama?: boolean
@@ -136,7 +146,9 @@ export interface AgentRunOptions {
   } | null
   maxAgentCount?: number
   visualLaneCount?: number
+  /** @deprecated Use requestedSubagents. */
   clones?: number
+  /** @deprecated Use subagentWorkflow. */
   narutoMode?: boolean
   narutoWorkGraph?: NarutoWorkGraph | null
   narutoAllocationPolicy?: unknown

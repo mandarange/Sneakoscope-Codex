@@ -31,6 +31,8 @@ export function positionalArgs(args: any = []) {
     '--project-ref',
     '--agent',
     '--agents',
+    '--clones',
+    '--max-threads',
     '--target-active-slots',
     '--work-items',
     '--minimum-work-items',

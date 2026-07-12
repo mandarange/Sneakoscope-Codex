@@ -1,3 +1,5 @@
+import { buildNarutoHelpResult } from '../core/subagents/naruto-help-contract.js';
+
 export function rootJsonFastInline(fs: { existsSync(path: string): boolean }, cwd = process.cwd()): void {
   const project = findProjectRootSync(fs, cwd);
   const global = joinPath(process.env.HOME || process.env.USERPROFILE || cwd, '.sneakoscope');
@@ -45,14 +47,7 @@ export function doctorJsonFastInline(): void {
 }
 
 export function narutoHelpJsonFastInline(): void {
-  process.stdout.write(`${JSON.stringify({
-    schema: 'sks.naruto-command-result.v1',
-    ok: true,
-    action: 'help',
-    fast_path: true,
-    usage: 'sks naruto run "<prompt>" [--json] [--mock] [--readonly] [--clones N]',
-    commands: ['help', 'status', 'dashboard', 'workers', 'proof', 'run']
-  }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(buildNarutoHelpResult(), null, 2)}\n`);
 }
 
 export async function hookUserPromptSubmitPerfInline(): Promise<void> {

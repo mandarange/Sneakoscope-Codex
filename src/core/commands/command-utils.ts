@@ -59,7 +59,7 @@ export function positionalArgs(args: any = []) {
     '--lines', '--intent', '--changed', '--route', '--skills', '--prompt-signature',
     '--mission-id', '--source', '--image-id', '--bbox', '--label', '--evidence',
     '--claim-id', '--type', '--before', '--after', '--anchors', '--verification',
-    '--status', '--agents', '--target-active-slots', '--work-items', '--minimum-work-items',
+    '--status', '--agents', '--clones', '--max-threads', '--target-active-slots', '--work-items', '--minimum-work-items',
     '--max-queue-expansion', '--engine', '--kind', '--severity', '--claim',
     '--prior-status', '--artifact', '--reason', '--root-cause', '--corrective-action',
     '--required-evidence', '--patch-status', '--avoid', '--applies-to', '--files',

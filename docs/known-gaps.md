@@ -10,10 +10,13 @@ Bounded 1.0.8 claims:
 - Codex 0.133 plugin discovery and marketplace config are P1 warning-only unless a route explicitly depends on those surfaces.
 - Real UX-Review verification requires a real generated gpt-image-2 annotated callout image and post-fix recapture/re-review evidence for changed screens. Fixture, mock, and unavailable/unlinked imagegen loops are `verified_partial`; unavailable/unlinked imagegen may close as `verified_partial/reference-only` only with source screenshots plus hashes, docs evidence, source Image Voxel anchors, and Honest Mode evidence.
 - If Codex App imagegen or Computer Use is unavailable, SKS records a structured blocker such as `imagegen_capability_missing` or `live_capture_blocked`; it does not fabricate screenshots, generated callouts, or fixed-screen evidence.
-- Codex official subagents may be used as helper lanes beside SKS native
-  workers for Codex App capabilities such as `$imagegen` / `gpt-image-2`.
-  Their events are recorded as helper/capability evidence only and do not
-  increase native worker process counts or prove parallel worker capacity.
+- Naruto now uses Codex official subagents as execution lanes. Matched official
+  `SubagentStart`/`SubagentStop` events prove thread lifecycle, but a stop is not
+  classified as successful without a trustworthy structured parent summary
+  containing an explicit outcome for that thread. Ambiguous, prose-only, or
+  failed parent results fail closed; native process counts are legacy-runtime
+  evidence only. Codex App capabilities such as `$imagegen`
+  / `gpt-image-2` retain their own route-specific evidence requirements.
   API image fallback remains `api_fallback` evidence and does not satisfy
   Codex App `$imagegen` output proof unless a route explicitly accepts it.
 - The README architecture image replacement is a project-bound imagegen handoff, not generic release readiness. It remains blocked until Codex App exposes a real `$imagegen`/`gpt-image-2` output file created after the current prompt contract; `npm run imagegen:readme-architecture` records the blocker and refuses old generated files, API/codex-lb fallbacks, and moved files without Codex output metadata.

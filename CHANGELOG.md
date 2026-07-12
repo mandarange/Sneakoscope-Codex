@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [6.1.1] - 2026-07-11
+
+### Changed
+
+- Make `$Naruto` a thin facade over the Codex official subagent workflow: Codex App/Desktop turns return delegation context to the current parent, while standalone `sks naruto run` launches at most one Sol Max `codex exec` parent.
+- Route clear bounded subagent work to GPT-5.6 Luna Max and reasoning-sensitive UI, review, debugging, planning, architecture, integration, security, database, and release work to GPT-5.6 Sol Max; automatic Terra selection is removed from the Naruto path.
+- Replace clone/process terminology with canonical parent, subagent, thread, wave, and official event evidence while retaining `--clones`, `workers`, and the legacy process runtime as explicit one-release compatibility surfaces.
+
+### Fixed
+
+- Remove the hard-coded four/five-subagent ceiling, honor `--agents 8`, `--agents 12`, and wave-planned `--agents 20 --max-threads 12`, and cap malformed oversized requests at 32 instead of 100 custom processes.
+- Preserve user-owned Codex config and custom agent TOML files while generating or migrating only SKS-owned `[agents]`, `worker.toml`, and `expert.toml` settings.
+- Treat `SubagentStop` as lifecycle evidence rather than success evidence. Naruto completion now requires a trustworthy `sks.subagent-parent-summary.v1` object with one unambiguous outcome per stopped thread; missing, prose-only, ambiguous, blocked, or failed outcomes fail closed.
+- Make Naruto CLI parsing fail closed for empty tasks, malformed or missing `--agents`/`--max-threads` values, and every legacy backend/scheduler/pool/model flag while accepting both `--key value` and `--key=value`; App delegation preparation reports `ok: false` and cannot be mistaken for completion.
+- Clear stale light-turn receipts on every later prompt, bind receipts to the current turn, resume active continuations directly, keep greeting fast paths warning-free, and recognize `$Work` only as an explicit dollar command rather than ordinary prose such as “work on …”.
+
+### Performance
+
+- Add greeting and answer fast paths that bypass mission, TriWiki, skill-reconciliation, and stop-gate work when no execution route is required.
+- Replace fixed full-route and verification stages with task-profile gate and verification budgets, and remove the legacy Naruto orchestrator from the default eager import graph.
+
 ## [6.1.0] - 2026-07-11
 
 ### Added

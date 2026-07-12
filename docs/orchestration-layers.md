@@ -1,22 +1,45 @@
 # Orchestration Layers
 
-SKS has four orchestration surfaces. New work should choose the highest layer that matches the user concern.
+SKS separates the public Codex workflow from compatibility runtimes and visual
+harness surfaces.
 
 ## User Entry Points
 
-- `$Team` / `sks agent run`: default code-changing and multi-step execution route. It owns task decomposition, worker scheduling, integration, verification, and final proof.
-- `$Naruto` / `sks naruto run`: high-throughput Team-derived route for many parallel work items. It should use the native agent kernel and canonical stop-gate evaluation rather than carrying separate gate logic.
+- `$Naruto` / `sks naruto run`: the canonical Codex official subagent workflow.
+- `$Team`, `$Work`, `$Swarm`, `$ShadowClone`, and `$Kagebunshin`: compatibility
+  aliases that route new work to the same Naruto workflow.
+- `sks agent run`: a separate agent-runtime command retained for its documented
+  mission and patch-queue surfaces; its process evidence is not Naruto proof.
 
-## Internal Implementations
+## Official Naruto Path
 
-- `src/core/agents/**`: native worker kernel, scheduler, lifecycle, ledgers, patch queue, worktree handling, and trust reports. New execution mechanics usually belong here.
-- `src/core/zellij/**`: terminal UI/harness visibility for workers. Zellij gates are harness gates and must not block the release preset unless the user-facing concern is specifically terminal UX.
+- `src/core/subagents/**`: task profiles, model selection, thread budgets,
+  official delegation prompts, event correlation, and completion evidence.
+- `src/core/hooks-runtime.ts`: records official `SubagentStart` and
+  `SubagentStop` events and evaluates them at the parent Stop boundary.
+- `src/core/commands/naruto-command.ts`: a thin facade for argument parsing,
+  official configuration, delegation context, mission artifacts, and status.
+
+The current parent agent owns decomposition, integration, verification, and the
+final answer. Codex owns the agent threads. App sessions do not create a nested
+Codex process; standalone CLI use may create one parent process only.
+
+## Compatibility Implementations
+
+- `src/core/commands/naruto-command-legacy.ts` and `src/core/agents/**` retain
+  historical process-swarm and agent-kernel behavior where still supported.
+- Legacy Naruto behavior is loaded only with
+  `SKS_NARUTO_LEGACY_PROCESS_SWARM=1`; it is never an automatic fallback.
+- `src/core/zellij/**` is terminal UI and harness support. Pane count is not
+  official subagent execution evidence.
 
 ## Placement Rule
 
-- User-visible workflow behavior belongs in Team/Naruto commands and route policy.
-- Worker lifecycle, retry, timeout, and patch mechanics belong in `agents`.
-- Visual pane rendering, launch layout, and telemetry presentation belong in `zellij`.
-- A new feature must document whether it is user-facing orchestration or internal harness support before adding a gate.
-
-Long term, Naruto should continue converging on the native Team/agents kernel so stop-gates, lifecycle, telemetry, and proof contracts are shared instead of duplicated.
+- Public Naruto behavior belongs in the thin command, subagent policy modules,
+  route policy, and hook evidence handling.
+- Official model, budget, prompt, and event semantics belong in
+  `src/core/subagents/**`.
+- Legacy scheduler, patch, and process mechanics stay isolated from the default
+  Naruto hot path.
+- Visual pane rendering and telemetry presentation belong in `src/core/zellij/**`
+  and must not become a default release blocker.

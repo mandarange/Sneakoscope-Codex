@@ -1643,7 +1643,7 @@
     },
     {
       "id": "naruto:canonical-stop-gate",
-      "command": "node ./dist/scripts/naruto-ssot-gate-aliases-check.js && node ./dist/scripts/naruto-real-active-pool-runtime-check.js",
+      "command": "node ./dist/scripts/official-subagent-workflow-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -3116,7 +3116,7 @@
     },
     {
       "id": "agent:fast-mode-policy",
-      "command": "node ./dist/scripts/agent-fast-mode-default-check.js && node ./dist/scripts/agent-fast-mode-worker-propagation-check.js",
+      "command": "node ./dist/scripts/official-subagent-workflow-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -3145,7 +3145,7 @@
     },
     {
       "id": "agent:native-cli-session-swarm-scaling",
-      "command": "node ./dist/scripts/agent-native-cli-session-swarm-check.js && node ./dist/scripts/agent-native-cli-session-swarm-10-check.js && node ./dist/scripts/agent-native-cli-session-swarm-20-check.js",
+      "command": "node ./dist/scripts/official-subagent-workflow-check.js",
       "deps": [],
       "resource": [
         "cpu-light",

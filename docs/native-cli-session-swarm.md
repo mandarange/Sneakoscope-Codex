@@ -1,4 +1,10 @@
-# Native CLI Session Swarm
+# Legacy Native CLI Session Swarm
+
+> Compatibility reference only. The default Naruto path in SKS 6.1.1 does not
+> launch or count these worker processes. Naruto completion now requires
+> matched official `SubagentStart`/`SubagentStop` events and a parent summary.
+> Enable historical Naruto process behavior only with the explicit legacy
+> environment switch documented in `docs/naruto.md`.
 
 SKS 1.18.11 treats `--agents N` as a target native CLI worker session count. The main orchestrator does not scale by counting Codex internal subagents or scout events. It opens child processes with the worker entrypoint:
 

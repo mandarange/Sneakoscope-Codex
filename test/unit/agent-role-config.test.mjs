@@ -17,9 +17,34 @@ test('managed Codex 0.144.1 agent roles contain only supported rendered policy k
     assert.equal(Object.hasOwn(parsed, 'permission_profile'), false);
     assert.equal(Object.hasOwn(parsed, 'legacy_sandbox_projection'), false);
   }
+
+  for (const role of manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES) {
+    const text = manifest.managedOfficialSubagentRoleContent(role);
+    const parsed = parse(text);
+    assert.equal(parsed.name, role.codex_name);
+    assert.equal(parsed.model, role.model);
+    assert.equal(parsed.model_reasoning_effort, 'max');
+    assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), false);
+    assert.equal(manifest.managedOfficialSubagentRoleOwnsText(text, role), true);
+  }
 });
 
-test('agent role repair replaces stale managed content with the exact 6.1.0 manifest', async () => {
+test('fresh agent role repair requires only official worker and expert files', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-role-official-default-'));
+  const codexHome = path.join(root, 'codex-home');
+  const roles = await import('../../dist/core/agents/agent-role-config.js');
+
+  const plan = await roles.repairAgentRoleConfigs({ root, codexHome, apply: false });
+  assert.deepEqual(plan.missing.sort(), ['expert.toml', 'worker.toml']);
+  assert.equal(plan.missing.includes('analysis-scout.toml'), false);
+
+  const repair = await roles.repairAgentRoleConfigs({ root, codexHome, apply: true });
+  assert.equal(repair.ok, true);
+  const files = (await fs.readdir(path.join(root, '.codex', 'agents'))).sort();
+  assert.deepEqual(files, ['expert.toml', 'worker.toml']);
+});
+
+test('agent role repair preserves legacy role TOMLs without creating or overwriting them', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-role-exact-repair-'));
   const codexHome = path.join(root, 'codex-home');
   const roleFile = path.join(root, '.codex', 'agents', 'analysis-scout.toml');
@@ -42,12 +67,12 @@ test('agent role repair replaces stale managed content with the exact 6.1.0 mani
 
   const roles = await import('../../dist/core/agents/agent-role-config.js');
   const plan = await roles.repairAgentRoleConfigs({ root, codexHome, apply: false });
-  assert.ok(plan.stale.includes('analysis-scout.toml'));
+  assert.equal(plan.stale.includes('analysis-scout.toml'), false);
+  assert.ok(plan.existing.includes('.codex/agents/analysis-scout.toml'));
 
   const repair = await roles.repairAgentRoleConfigs({ root, codexHome, apply: true });
-  assert.ok(repair.repaired.includes('.codex/agents/analysis-scout.toml'));
-  const repaired = await fs.readFile(roleFile, 'utf8');
-  assert.equal(repaired, roles.managedAgentRoleConfigForFile('analysis-scout.toml'));
-  assert.equal(Object.hasOwn(parse(repaired), 'permission_profile'), false);
-  assert.equal(Object.hasOwn(parse(repaired), 'legacy_sandbox_projection'), false);
+  assert.equal(repair.repaired.includes('.codex/agents/analysis-scout.toml'), false);
+  const preserved = await fs.readFile(roleFile, 'utf8');
+  assert.match(preserved, /permission_profile = "sks-workspace-write"/);
+  assert.match(preserved, /legacy_sandbox_projection = "workspace-write"/);
 });

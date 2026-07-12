@@ -204,6 +204,7 @@ export async function repairSksGeneratedArtifacts(root: any, opts: any = {}) {
     '.sneakoscope/harness-guard.json'
   ];
   for (const rel of rels) {
+    if (rel === '.codex/agents' && opts.preserveCodexAgents === true) continue;
     const abs = path.join(root, rel);
     if (!(await exists(abs))) continue;
     await fsp.rm(abs, { recursive: true, force: true });

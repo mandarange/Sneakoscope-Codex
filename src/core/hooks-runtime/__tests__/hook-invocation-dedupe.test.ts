@@ -43,6 +43,8 @@ test('a later Stop payload with different assistant output is not collapsed', as
 test('duplicate hook normalization is silent and cannot inject repeated feedback', () => {
   assert.deepEqual(normalizeHookResult('stop', { continue: true, suppressedDuplicate: true }), { continue: true });
   assert.deepEqual(normalizeHookResult('user-prompt-submit', { continue: true, suppressedDuplicate: true }), { continue: true });
+  assert.deepEqual(normalizeHookResult('user-prompt-submit', { continue: true, silent: true }), { continue: true });
+  assert.deepEqual(normalizeHookResult('stop', { continue: true, silent: true }), { continue: true });
 });
 
 test('daemon and inline dispatchers both use the deduplicating evaluator', () => {
@@ -67,7 +69,7 @@ test('dedupe refuses a symlinked state directory and never prunes external files
     await fsp.symlink(externalDedupe, path.join(state, 'hook-invocation-dedupe'));
 
     await assert.rejects(
-      () => claimHookInvocation(root, 'user-prompt-submit', { session_id: 's', turn_id: 't', prompt: 'task' }),
+      () => claimHookInvocation(root, 'user-prompt-submit', { session_id: 's', turn_id: 't', prompt: 'implement task' }),
       /unsafe_hook_dedupe_directory/
     );
     assert.equal(await fsp.readFile(precious, 'utf8'), 'keep\n');

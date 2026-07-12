@@ -4,9 +4,9 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 
 | Gate | Preset | Command | Package Script |
 |---|---|---|---|
-| `agent:fast-mode-policy` | `release` | `node ./dist/scripts/agent-fast-mode-default-check.js && node ./dist/scripts/agent-fast-mode-worker-propagation-check.js` | direct |
+| `agent:fast-mode-policy` | `release` | `node ./dist/scripts/official-subagent-workflow-check.js` | direct |
 | `agent:message-bus-reader` | `release` | `node ./dist/scripts/agent-message-bus-reader-check.js` | direct |
-| `agent:native-cli-session-swarm-scaling` | `release` | `node ./dist/scripts/agent-native-cli-session-swarm-check.js && node ./dist/scripts/agent-native-cli-session-swarm-10-check.js && node ./dist/scripts/agent-native-cli-session-swarm-20-check.js` | direct |
+| `agent:native-cli-session-swarm-scaling` | `release` | `node ./dist/scripts/official-subagent-workflow-check.js` | direct |
 | `all-features:deep-completion` | `release` | `node ./dist/scripts/all-feature-deep-completion-check.js` | direct |
 | `appshots:thread-attachment-discovery` | `release` | `node ./dist/scripts/appshots-thread-attachment-discovery-check.js` | direct |
 | `certificate:sla` | `release` | `node ./dist/scripts/certificate-sla-check.js` | direct |
@@ -80,7 +80,7 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 | `mcp:plugin-inventory` | `release` | `node ./dist/scripts/mcp-plugin-inventory-check.js` | direct |
 | `migration:upgrade-safety` | `release` | `node ./dist/scripts/legacy-upgrade-matrix-check.js` | `migration:upgrade-safety` |
 | `model-call:concurrency` | `release` | `node ./dist/scripts/model-call-concurrency-check.js` | direct |
-| `naruto:canonical-stop-gate` | `release` | `node ./dist/scripts/naruto-ssot-gate-aliases-check.js && node ./dist/scripts/naruto-real-active-pool-runtime-check.js` | direct |
+| `naruto:canonical-stop-gate` | `release` | `node ./dist/scripts/official-subagent-workflow-check.js` | direct |
 | `naruto:worktree-coding:blackbox` | `release` | `node ./dist/scripts/naruto-worktree-coding-blackbox.js` | direct |
 | `native-capability:repair-matrix` | `release` | `node ./dist/scripts/native-capability-repair-matrix-check.js` | direct |
 | `native:image-generation-repair` | `release` | `node ./dist/scripts/native-image-generation-repair-check.js` | direct |

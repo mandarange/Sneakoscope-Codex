@@ -68,9 +68,10 @@ function executeCommand(sourceRoot: any, projectRoot: any, spec: any, fixture: a
     ...(fixture.root_mode === 'source_checkout_required' ? [] : [['setup', '--local-only', '--json']]),
     ...(normalized.setup || [])
   ];
-  const setupResults = setup.map((args: any) => spawnSks(sourceRoot, projectRoot, args));
+  const fixtureEnv = fixture.codex_app_session === true ? { SKS_NARUTO_APP_SESSION: '1' } : {};
+  const setupResults = setup.map((args: any) => spawnSks(sourceRoot, projectRoot, args, fixtureEnv));
   const command = normalized.command || normalized.args || [];
-  const result: any = command.length ? spawnSks(sourceRoot, projectRoot, command) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
+  const result: any = command.length ? spawnSks(sourceRoot, projectRoot, command, fixtureEnv) : { status: 0, signal: null, ok: true, stdout_bytes: 0, stderr_bytes: 0, args: [] };
   const missionId = result.mission_id || [...setupResults].reverse().find((row: any) => row.mission_id)?.mission_id || null;
   return {
     args: command,
@@ -84,13 +85,13 @@ function executeCommand(sourceRoot: any, projectRoot: any, spec: any, fixture: a
   };
 }
 
-function spawnSks(sourceRoot: any, projectRoot: any, args: any = []) {
+function spawnSks(sourceRoot: any, projectRoot: any, args: any = [], fixtureEnv: Record<string, string> = {}) {
   const entrypoint = resolveSksEntrypoint(sourceRoot);
   const result = spawnSync(process.execPath, [entrypoint, ...args], {
     cwd: projectRoot,
     encoding: 'utf8',
     timeout: FEATURE_FIXTURE_COMMAND_TIMEOUT_MS,
-    env: { ...process.env, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
+    env: { ...process.env, ...fixtureEnv, CI: 'true', SKS_SKIP_NPM_FRESHNESS_CHECK: '1' }
   });
   const parsed = parseJsonOutput(result.stdout || '');
   const timedOut = (result.error as any)?.code === 'ETIMEDOUT';
@@ -177,6 +178,15 @@ function inspectExpectedArtifact(root: any, tempRoot: any, artifact: any, ctx: a
   };
   if (!exists) return { ...result, failure: 'missing' };
   if (file.endsWith('.md')) return { ...result, schema_ok: true, content_ok: fs.readFileSync(file, 'utf8').trim().length > 0 };
+  if (file.endsWith('.jsonl')) {
+    const lines = fs.readFileSync(file, 'utf8').split('\n').map((line: string) => line.trim()).filter(Boolean);
+    try {
+      for (const line of lines) JSON.parse(line);
+      return { ...result, schema_ok: true, content_ok: true, record_count: lines.length };
+    } catch {
+      return { ...result, failure: 'jsonl_parse' };
+    }
+  }
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));

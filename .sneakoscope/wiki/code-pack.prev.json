@@ -1,6 +1,6 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-11T07:22:39.513Z",
+  "generated_at": "2026-07-11T07:28:08.743Z",
   "git_head_sha": "44422d4d9b01f5c6b5efa0351958815433472e58",
   "source_file_count": 2781,
   "index_digest": "3c272d08521ff65ddda74cc2a6a2d5d0ffb4935c621323afb9b37a6b9fd97f4e",
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (89 files, 30332 loc, high risk). Key exports: const ARTIFACT_SCHEMA_VERSION = 1;; const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);; const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);; const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);; const ARTIFACT_FILES =, and 499 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (89 files, 30347 loc, high risk). Key exports: const ARTIFACT_SCHEMA_VERSION = 1;; const EFFORTS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'forensic_vision', 'recovery']);; const WORK_ORDER_STATUSES = new Set(['pending', 'in_progress', 'implemented', 'verified', 'blocked']);; const GATE_STATUSES = new Set(['pass', 'fail', 'blocked', 'unknown']);; const ARTIFACT_FILES =, and 499 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"

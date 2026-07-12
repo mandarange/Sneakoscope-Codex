@@ -23,9 +23,9 @@ sneakoscope is a proof-first Codex trust layer for bounded agent workflows, sear
 
 </div>
 
-Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, a dynamic worker swarm, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
+Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, an official subagent workflow, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **6.1.0**. Normal Codex sessions continue to inherit the complete Codex catalog without silent replacement. Naruto workers now use a scoped, live-catalog-verified GPT-5.6 policy: Terra `xhigh/max` for coding, Sol `max` for refactoring/planning/strategy/integration, and Luna `xhigh/max` for E2E/browser/Computer Use/GUI verification. This release restores the Codex Desktop Fast selector under codex-lb; its `1.5x` multiplier follows the [official Codex Speed documentation](https://learn.chatgpt.com/docs/agent-configuration/speed), not an SKS benchmark. It also self-repairs native capability plugins and hardens Voxel TriWiki retention: command help stays read-only, closed routes are not kept active, recent sessions receive a two-hour grace window, mission compaction preserves durable evidence byte-for-byte and deletes only known disposable runtime files, legacy gzip archives are transparently SHA-256-verified when read, full state-budget scans cover the complete top-level state surface, and release-gate history retains five runs by default. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **6.1.1**. `$Naruto` is the SKS alias for the Codex official subagent workflow. The parent runs on GPT-5.6 Sol Max, clear bounded subagents use GPT-5.6 Luna Max, and reasoning-sensitive work such as UI, review, debugging, planning, integration, security, database, and release judgment uses GPT-5.6 Sol Max. Official `SubagentStart`/`SubagentStop` events prove lifecycle only; successful completion additionally requires a structured parent summary with an explicit outcome for every thread. Preparation context alone is never completion proof. Normal non-Naruto Codex sessions continue to preserve explicit user model choices. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -47,8 +47,8 @@ sks doctor --fix
 | Command | What it does |
 | --- | --- |
 | `$Plan "task"` | Planning only. Writes `.sneakoscope/plans/<slug>.md`; no code edits. |
-| `$Work` | Executes the latest plan through evidence-gated SKS work. |
-| `$Swarm "task"` | Runs the Naruto dynamic parallel swarm with machine verification. |
+| Explicit `$Work` | Executes the latest plan through evidence-gated SKS work. Ordinary prose containing “work” is not treated as this alias. |
+| `$Swarm "task"` | Compatibility alias for the Naruto Codex official subagent workflow. |
 | `$Team "task"` | Deprecated v5 compatibility alias. New execution redirects to `$Naruto`; legacy Team observe/watch commands remain available for old missions. |
 | `$MAD-SKS` / `sks mad-sks` | Single high-risk MAD route for scoped permission widening plus SQL-plane execution, including read-back proof and profile closure. |
 | `$MAD-DB` / `sks mad-db` | Deprecated compatibility alias. Translates to `$MAD-SKS` sql-plane commands for one release. |
@@ -88,7 +88,7 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 
 ## Proof Surfaces
 
-- Dynamic swarm: `sks naruto run "task" --clones 14 --json`
+- Official subagents: `sks naruto run "task" --agents 14 --max-threads 12 --json`
 - Review report: `.sneakoscope/reports/review-report.json`
 - Harness benchmark: `.sneakoscope/reports/harness-benchmark.json`
 - Project memory: `sks memory build`
@@ -96,7 +96,7 @@ It shows the v5 flow: one-line install, `$Plan`, `$Work`/`$Swarm`, `sks review`,
 - Native capability repair: `sks doctor --fix` (imagegen/Computer Use/Browser Use), `.sneakoscope/reports/native-capability-readiness.json`
 - Agent bridge for any agent system: `sks mcp-server`, `sks agent-bridge setup`, `SKS_AGENT_MODE=1` — see [docs/AGENT-BRIDGE.md](docs/AGENT-BRIDGE.md)
 - Release gates: `node ./dist/scripts/release-gate-dag-runner.js --preset release --full`
-- Lifecycle-disabled npm release: run `npm run release:check:full`, then `npm run publish:prep-ignore-scripts`, and verify with `npm publish --dry-run --ignore-scripts --json` before the intentional `npm run publish:ignore-scripts` publication wrapper.
+- Lifecycle-disabled npm release: run `npm run release:check:full`, inspect the package with `npm pack --dry-run --ignore-scripts --json`, then let the repository owner publish intentionally with `npm publish --ignore-scripts`.
 - Release readiness notes: [docs/release-readiness.md](docs/release-readiness.md) and [CHANGELOG.md](CHANGELOG.md)
 - Image generation review routes require Codex App `$imagegen`/`gpt-image-2` evidence with recorded output hashes; direct API fallback and mock fixtures do not satisfy full route gates.
 

@@ -202,6 +202,27 @@ export async function updateCommand(sub: any = 'now', args: any = []) {
 export async function setupCommand(args: any = []) {
   if (flag(args, '--help') || flag(args, '-h')) return usageCommand(['setup']);
   const root = await projectRoot();
+  const { formatHarnessConflictReport, scanHarnessConflicts } = await import('../harness-conflicts.js');
+  const conflictScan = await scanHarnessConflicts(root);
+  if (conflictScan.hard_block) {
+    const blocked = {
+      schema: 'sks.setup.v1',
+      ok: false,
+      status: 'blocked_harness_conflict',
+      root,
+      blockers: conflictScan.hard.map((item: any) => `${item.name || 'harness'}:${item.path}`),
+      conflicts: conflictScan.conflicts,
+      cleanup_prompt_command: 'sks conflicts prompt'
+    };
+    process.exitCode = 1;
+    if (flag(args, '--json')) {
+      printJson(blocked);
+      return blocked;
+    }
+    console.error(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
+    console.error('Run `sks conflicts prompt` and obtain explicit human approval before cleanup.');
+    return blocked;
+  }
   const installScope = installScopeFromArgs(args);
   let res: any = null;
   let cliTools: any = null;
@@ -215,22 +236,37 @@ export async function setupCommand(args: any = []) {
     const { ensureRelatedCliTools } = await import('../../cli/install-helpers.js');
     cliTools = await ensureRelatedCliTools(args);
   });
+  const blockers = [
+    ...(res.codex_config_install?.manual_blockers || []),
+    ...(res.agent_install?.manual_blockers || [])
+  ];
+  const warnings = res.codex_config_install?.warnings || [];
   const result = {
     schema: 'sks.setup.v1',
-    ok: true,
+    ok: blockers.length === 0 && res.codex_config_install?.ok !== false && res.agent_install?.ok !== false,
+    status: blockers.length ? 'manual_blocked' : 'completed',
     root,
     install_scope: installScope,
     command_prefix: sksCommandPrefix(installScope, { globalCommand: 'sks' }),
     created: res.created || [],
     local_only: flag(args, '--local-only'),
-    cli_tools: cliTools
+    cli_tools: cliTools,
+    blockers,
+    warnings
   };
-  if (flag(args, '--json')) return printJson(result);
-  console.log(`Setup complete: ${root}`);
+  if (!result.ok) process.exitCode = 1;
+  if (flag(args, '--json')) {
+    printJson(result);
+    return result;
+  }
+  console.log(`${result.ok ? 'Setup complete' : 'Setup blocked'}: ${root}`);
   console.log(`Install scope: ${installScope}`);
   console.log(`Codex CLI: ${cliTools.codex.status}${cliTools.codex.version ? ` ${cliTools.codex.version}` : ''}`);
   console.log(`Zellij: ${cliTools.zellij.ok ? 'ok' : cliTools.zellij.repair.status}${cliTools.zellij.version ? ` ${cliTools.zellij.version}` : ''}`);
   for (const file of result.created) console.log(`- ${file}`);
+  for (const warning of warnings) console.log(`Warning: ${warning}`);
+  for (const blocker of blockers) console.error(`Blocker: ${blocker}`);
+  return result;
 }
 
 export async function bootstrapCommand(args: any = []) {

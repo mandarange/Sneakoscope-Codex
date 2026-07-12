@@ -158,7 +158,7 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
     return { ok: true, status: 'allowed' };
   }
   if (entry.mutatesRouteState !== true) return { ok: true, status: 'allowed' };
-  if (safeReadOnlySubcommand(args)) return { ok: true, status: 'allowed_status_subcommand' };
+  if (safeReadOnlySubcommand(command, args)) return { ok: true, status: 'allowed_status_subcommand' };
   if (safeActiveRouteVisualQuery(command, args)) return { ok: true, status: 'allowed_visual_query' };
   if (safeActiveRouteRecoverySubcommand(command, args)) return { ok: true, status: 'allowed_active_route_recovery' };
   const [{ projectRoot, readJson }, { stateFile }] = await Promise.all([
@@ -208,8 +208,11 @@ function printHandledCommandBlock(result: any) {
   for (const line of Array.isArray(result?.guidance) ? result.guidance : []) console.error(`- ${line}`);
 }
 
-function safeReadOnlySubcommand(args: readonly string[]) {
+export function safeReadOnlySubcommand(command: CommandNameLite, args: readonly string[]) {
   const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
+  if (command === 'naruto' && ['status', 'subagents', 'workers', 'proof'].includes(sub)) {
+    return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
+  }
   if (!['status', 'show', 'list', 'observe', 'watch', 'doctor', 'help'].includes(sub)) return false;
   return !args.some((arg) => ['--fix', '--yes', '-y', '--write', '--apply', '--execute', '--force', '--real'].includes(String(arg)));
 }

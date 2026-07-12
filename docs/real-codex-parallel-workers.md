@@ -1,4 +1,9 @@
-# Real Codex Parallel Workers 1.18.11
+# Legacy Real Codex Process Workers 1.18.11
+
+> Compatibility reference only. The default Naruto path in SKS 6.1.1 uses
+> Codex official subagent threads and official event evidence. The process
+> worker proof described below applies only to the retained legacy runtime and
+> must not be used as Naruto completion evidence.
 
 SKS 1.18.11 separates native worker process proof from real Codex child task proof.
 

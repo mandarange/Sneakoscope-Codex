@@ -32,6 +32,9 @@ const results = [];
     '',
     '[mcp_servers.custom]',
     'command = "npx"',
+    '',
+    '[agents]',
+    'max_threads = 20',
     ''
   ].join('\n');
   await fs.writeFile(cfg, userConfig);
@@ -45,6 +48,7 @@ const results = [];
     /^model_reasoning_effort = "high"/m.test(after) &&  // user effort NOT stripped
     /# my hand-tuned Codex config/.test(after) &&       // user comment preserved
     /\[mcp_servers\.custom\]/.test(after) &&            // user table preserved
+    /\[agents\][\s\S]*max_threads = 20/.test(after) &&  // user concurrency preserved
     !/\[profiles\.sks-fast-high\]/.test(after) &&       // legacy profile table stripped
     !/\[user\.fast_mode\]/.test(after) &&               // legacy fast UI table stripped
     backups.length >= 1 &&                              // backup created
@@ -64,7 +68,8 @@ const results = [];
     && !/^model\s*=/m.test(topLevel)
     && !/^model_reasoning_effort\s*=/m.test(topLevel)
     && !/^service_tier = "fast"/m.test(topLevel)
-    && /\[features\]/.test(after);
+    && /\[features\]/.test(after)
+    && !/^max_threads\s*=/m.test(after);
   results.push({ case: 'fresh_config_seeds_defaults', ok, status: res.status });
 }
 

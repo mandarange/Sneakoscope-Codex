@@ -539,8 +539,10 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-daemon': ['daemon', 'status', '--json'],
   'cli-dfix': ['dfix', 'fixture', '--json'],
   'cli-all-features': ['all-features', 'complete', '--json'],
-  'route-team': ['team', 'fixture', '--mock', '--clones', '4', '--backend', 'fake', '--work-items', '4', '--json'],
-  'route-naruto': ['naruto', 'run', 'fixture', '--clones', '4', '--backend', 'fake', '--work-items', '4', '--json'],
+  'cli-naruto': ['naruto', 'run', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
+  'cli-team': ['team', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
+  'route-team': ['team', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
+  'route-naruto': ['naruto', 'run', 'fixture', '--agents', '4', '--max-threads', '4', '--json'],
   'route-qa-loop': { setup: [['qa-loop', 'prepare', 'fixture API QA', '--json']], command: ['qa-loop', 'run', 'latest', '--mock', '--json'] },
   'route-research': { setup: [['research', 'prepare', 'fixture research topic', '--json']], command: ['research', 'run', 'latest', '--mock', '--json'] },
   'route-ppt': ['ppt', 'fixture', '--mock', '--json'],
@@ -605,7 +607,6 @@ export function renderFeatureInventoryMarkdown(registry: any) {
   lines.push('- [x] Exposed the registry through `sks features list --json`.');
   lines.push('- [x] Added a release coverage check through `sks features check --json`.');
   lines.push('- [x] Documented fixture status for every registry feature.');
-  lines.push('');
   return `${lines.join('\n')}\n`;
 }
 
@@ -683,10 +684,10 @@ function nativeAgentIntakeFeature() {
   return baseFeature({
     id: 'route-native-agent-intake',
     commands: ['sks agent run "task" --route "$Team" --agents 5 --concurrency 4 --mock --json'],
-    aliases: ['sks team "task" [executor:5 reviewer:6 user:1]'],
+    aliases: [],
     category: 'proof-route',
     maturity: 'stable',
-    intent: 'Default bounded workspace-write native multi-session agent intake before serious route implementation.',
+    intent: 'Separate bounded workspace-write agent-runtime intake for explicit sks agent missions; it is not the default Naruto workflow.',
     voxel_triwiki_integration: 'native agent findings are TriWiki-ready and can require image voxel evidence for visual routes',
     completion_proof_integration: 'Completion Proof evidence.agents records agent_count, route, leases, no-overlap proof, cleanup, proof graph, and dynamic effort policy',
     known_gaps: ['real speedup claims require runtime timing/eval evidence; mock/static timing is not enough'],

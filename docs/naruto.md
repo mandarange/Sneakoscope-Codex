@@ -1,160 +1,125 @@
-# $Naruto — Massive Parallel Work Swarm
+# $Naruto — Codex Official Subagent Workflow
 
-`$Naruto` is SKS's hardware-safe massive parallel work mode. It is not a validation-only
-route. A Naruto run decomposes the user goal into a mixed work graph and keeps a safe
-active pool full while workers implement, modify, generate tests, verify, research,
-document, resolve conflicts, prepare rollback metadata, support integration, and build
-the GPT final arbiter input pack.
-
-The standard native-agent ceiling remains 20 for ordinary routes. `$Naruto` can plan up
-to 100 total clone generations for this route, while active workers are capped by live
-hardware and policy signals.
+`$Naruto` is the SKS alias for a Codex official subagent workflow. The default
+path no longer treats a custom child-process swarm, PID count, Zellij panes, or
+a custom active pool as proof that subagents ran.
 
 ## Usage
 
 ```bash
-sks naruto run "implement this addendum" --clones 100
-sks naruto run "demo" --clones 24 --backend fake --work-items 24 --json
-sks naruto status
+sks naruto run "implement this addendum"
+sks naruto run "review twenty packages" --agents 20 --max-threads 12
+sks naruto status latest
+sks naruto subagents latest
+sks naruto proof latest
 ```
 
-Aliases: `$ShadowClone`, `$Kagebunshin`, and the CLI flag form `sks --naruto`.
+`--agents` is the canonical requested-subagent flag. `--clones` remains a
+deprecated compatibility alias and emits one warning. Likewise, `workers` is a
+deprecated alias for `subagents`.
 
-## Core Contract
+`$ShadowClone`, `$Kagebunshin`, `$Work`, and `$Swarm` remain compatibility
+aliases for the same official workflow. `$Work` is recognized only when the
+dollar command is explicit; a sentence such as “work on the parser” is routed
+from its actual task intent instead of being treated as an alias invocation.
 
-`$Naruto mode: launching hardware-safe massive parallel work swarm.`
+The run parser accepts both `--agents 8` and `--agents=8` (and the equivalent
+`--max-threads` forms). Empty tasks, missing or malformed values, duplicate or
+conflicting count flags, and legacy backend/scheduler/pool/model options are
+rejected before any parent or paid subagent workflow can start.
 
-Clones may implement, modify, verify, test, research, document, and resolve conflicts
-according to lease and role policy. Write-capable clone output is accepted only through
-patch envelopes, the verification DAG, mutation guard, and GPT final arbiter review.
+## Model Policy
 
-## Work Graph
+- parent agent: GPT-5.6 Sol, maximum reasoning effort
+- `worker`: GPT-5.6 Luna, maximum reasoning effort, for clear bounded work
+- `expert`: GPT-5.6 Sol, maximum reasoning effort, for reasoning-sensitive work
 
-Naruto creates `naruto-work-graph.json` under the mission's `agents/` directory. The graph
-contains mixed work kinds:
+UI, review, debugging, planning, strategy, architecture, integration, security,
+database, release, ambiguity, and other judgment-sensitive slices use the
+expert role. SKS does not silently fall back to Terra or another model.
 
-- `implementation`
-- `code_modification`
-- `refactor`
-- `test_generation`
-- `test_execution`
-- `verification`
-- `research`
-- `documentation`
-- `ux_review`
-- `ppt_review`
-- `image_review`
-- `conflict_resolution`
-- `patch_rebase`
-- `rollback_preparation`
-- `integration_support`
-- `final_review_input_pack`
+## Agent Configuration
 
-When the route is write-capable, the graph must include `write_allowed=true` work items.
-Each write item carries write leases and acceptance rules requiring a patch envelope,
-verification, and GPT final review. Active waves are planned so two workers in the same
-wave do not hold overlapping write leases.
+Fresh SKS-owned project configuration uses:
 
-## Role Distribution
+```toml
+[agents]
+max_threads = 12
+max_depth = 1
+job_max_runtime_seconds = 1200
+interrupt_message = true
+```
 
-Naruto writes `naruto-role-distribution.json` and the status output includes the same
-distribution. Default write-capable Naruto runs include implementation-like workers:
+Explicit user project or global values are preserved. Only recognized
+SKS-owned legacy thread defaults are migrated. The SKS request safety cap is 32;
+requests larger than the configured concurrent limit are divided into waves.
 
-- `implementer`
-- `modifier`
-- `test_writer`
-- `conflict_resolver`
-- `rollback_planner`
-- `integrator`
-- `verifier`
-- `researcher`
-- `gpt_final_arbiter`
+Custom agent files are limited to two managed roles:
 
-Verifier-only distribution is valid only for `--readonly` or an explicit verification
-route. Default write-capable Naruto keeps at least 40% implementation/modification/test
-style roles.
+- `.codex/agents/worker.toml` for Luna Max bounded work
+- `.codex/agents/expert.toml` for Sol Max judgment work
 
-## Hardware-Safe Governor
+User-authored collisions or invalid TOML are preserved and reported as manual
+blockers instead of being overwritten.
 
-`naruto-concurrency-governor.json` records the live decision:
+## Delegation Contract
 
-- requested clone count
-- total work item count
-- safe active workers
-- safe visible Zellij panes
-- headless workers
-- local LLM parallel request cap
-- remote Codex/API parallel budget
-- verification parallel cap
-- backpressure state and reasons
+The parent agent owns decomposition, integration, verification, and the final
+answer. Delegated slices must be independent, non-duplicative, and use disjoint
+write scopes. Nested subagent delegation is prohibited by `max_depth = 1`.
+The parent waits for all requested agent threads and closes completed threads
+after collecting their results.
 
-The governor considers CPU load, free memory, Node heap, process count, file descriptor
-budget, Zellij pane count, terminal size, local LLM max parallel requests, remote API
-budget, GPU/VRAM hints, disk IO pressure, pending queue size, and active lease conflicts.
+Codex Desktop/App sessions do not launch a nested `codex exec`. SKS returns the
+official delegation context to the current parent session. A standalone
+`sks naruto run` may launch exactly one Sol Max Codex parent; Codex itself owns
+the official subagent threads. App preparation returns `prepared: true` with
+`ok: false`; the active `CODEX_THREAD_ID` is reused as the session scope, so
+preparing delegation cannot look like completed work or create a duplicate
+same-session mission.
 
-## Dynamic Active Pool
+While a Naruto mission is active, its read-only `status`, `subagents`,
+deprecated `workers`, and `proof` commands remain available.
 
-`naruto-active-pool.json` proves the scheduler refills active slots while runnable work
-remains. When a worker completes, the parent ingests the result, validates patch
-envelopes, enqueues verification/follow-up work, and backfills the slot. Failed work is
-bounded by retry policy or converted into conflict-resolution work.
+## Completion Evidence
 
-## Parallel Patch Apply
+Preparation is not completion. A run passes only when all of the following are
+present and consistent:
 
-Write-capable workers produce patch envelopes. Patch envelopes include lease id, work
-item id, generation id, target files, before/after hashes, and rollback data.
-Non-overlapping patch envelopes are grouped into parallel transaction batches. Overlaps
-serialize or route to conflict resolution. Failed batches roll back only the affected
-batch.
+- unique official `SubagentStart` and `SubagentStop` thread IDs
+- every started thread is stopped
+- no failed or open thread remains
+- the completed thread count satisfies the final requested-subagent plan
+- a trustworthy `sks.subagent-parent-summary.v1` object is present
+- that parent summary contains one explicit `completed`, `blocked`, or `failed`
+  outcome for every stopped thread, with an overall completed status
 
-## Parallel Verification
+The official `SubagentStop` hook payload does not supply a trustworthy success
+status by itself. A stop without a matching structured parent outcome remains
+ambiguous and fails closed; prose-only summaries and failed-result text also do
+not satisfy the gate.
 
-`naruto-verification-dag.json` expands candidate work into verification shards such as
-typecheck, unit test, route gate, static scan, schema validation, patch-specific test,
-docs/changelog check, side-effect check, mutation ledger check, Zellij proof check, and
-local LLM structured output checks. Verification can start as soon as its dependencies
-are ready and uses a separate safe concurrency cap.
+Canonical mission artifacts are:
 
-## Zellij UI
+- `subagent-plan.json`
+- `subagent-events.jsonl`
+- `subagent-evidence.json`
+- `naruto-summary.json`
+- `naruto-gate.json`
 
-Naruto does not create hundreds of panes. `naruto-zellij-dashboard.json` plans visible
-active worker panes up to the UI cap and tracks remaining active workers as headless.
-Pane titles include slot, generation, role, backend, and status.
+The result schema is `sks.naruto-subagent-workflow.v1`. Native process counts,
+Zellij panes, and legacy `.jsonl` heuristics are not completion evidence on the
+default path.
 
-## GPT Final Arbiter
+## Legacy Compatibility
 
-Local worker output is a draft. `naruto-gpt-final-pack.json` compresses the work graph,
-role distribution, changed files, patch envelopes, verification results, failed shards,
-conflict map, rollback plan, side-effect report, local LLM metrics, and representative
-logs. Secrets are redacted. Final accepted output comes only from deterministic no-local
-finalization or the GPT final arbiter.
-
-## Placeholder Guard
-
-Write-capable Naruto blocks before work graph creation when unresolved placeholders are
-present, including `@filename`, `<file>`, `TODO_PATH`, `INSERT_PATH_HERE`, `/path/to/file`,
-or empty target paths.
-
-## Release Gates
+The historical process-swarm implementation remains available only when the
+operator explicitly sets:
 
 ```bash
-npm run naruto:work-graph
-npm run naruto:concurrency-governor
-npm run naruto:active-pool
-npm run naruto:role-distribution
-npm run naruto:parallel-patch-apply
-npm run naruto:verification-pool
-npm run naruto:zellij-massive-ui
-npm run naruto:gpt-final-pack
-npm run prompt:placeholder-guard
-npm run local-collab:gpt-final-arbiter
-npm run local-collab:no-local-only-final
-npm run release:check
+SKS_NARUTO_LEGACY_PROCESS_SWARM=1 sks naruto run "task" --clones 8
 ```
 
-Optional real checks:
-
-```bash
-SKS_REQUIRE_ZELLIJ=1 npm run naruto:zellij-massive-ui -- --require-real
-SKS_REQUIRE_LOCAL_LLM=1 SKS_REQUIRE_GPT_FINAL=1 npm run naruto:real-local-gpt-final-smoke
-```
+Legacy backend, scheduler, work-item, patch-pool, and dashboard flags are
+blocked on the default official path. This compatibility switch is not an
+automatic fallback.

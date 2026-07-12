@@ -7,6 +7,8 @@ import { checkStopGate } from '../stop-gate-check.js';
 import { resolveStopGate } from '../stop-gate-resolver.js';
 import { writeFinalStopGate } from '../stop-gate-writer.js';
 import { evaluateStop } from '../../pipeline-internals/runtime-gates.js';
+import { hasSubagentEvidence } from '../../pipeline-internals/runtime-core.js';
+import { writeRouteCompletionProof } from '../../proof/route-adapter.js';
 
 async function makeTempRoot(): Promise<string> {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-sg-root-'));
@@ -137,6 +139,37 @@ test('regression: naruto-gate passed but hook blocked — resolver finds mission
   assert.ok(result.gate_path!.includes(missionId), 'should select mission dir gate, not root gate');
 });
 
+test('passed legacy Naruto gate is not accepted as official evidence without a legacy marker', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-legacy-unmarked';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({
+    schema: 'sks.naruto-gate.v1',
+    passed: true,
+    status: 'passed',
+    terminal: true,
+    blockers: [],
+    missing_fields: []
+  }));
+  const state = { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false };
+  const decision: any = await evaluateStop(root, state, { message: 'done' });
+  assert.equal(decision?.decision, 'block');
+  assert.match(decision?.reason, /Official subagent evidence/i);
+  assert.match(decision?.reason, /subagent-plan\.json/);
+});
+
+test('legacy subagent-evidence.jsonl is ignored by default and accepted only with an explicit legacy marker', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-legacy-jsonl';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'subagent-evidence.jsonl'), [
+    JSON.stringify({ stage: 'spawn_agent', workflow: 'legacy_process_swarm' }),
+    JSON.stringify({ stage: 'result', workflow: 'legacy_process_swarm' })
+  ].join('\n') + '\n');
+  assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, subagents_required: true, native_sessions_required: false }), false);
+  assert.equal(await hasSubagentEvidence(root, { mission_id: missionId, legacy_subagent_workflow: true }), true);
+});
+
 test('stop hook does not hidden-block after canonical Naruto allow_stop', async () => {
   const root = await makeTempRoot();
   const missionId = 'M-test-007';
@@ -152,6 +185,65 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     all_customer_requests_mapped: true,
     all_work_items_verified: true,
     items: []
+  }));
+  await fsp.writeFile(path.join(dir, 'subagent-plan.json'), JSON.stringify({
+    schema: 'sks.subagent-plan.v1',
+    workflow: 'official_codex_subagent',
+    requested_subagents: 2,
+    max_threads: 12,
+    max_depth: 1,
+    delegation_prompt: 'delegate two independent slices and wait for both'
+  }));
+  await fsp.writeFile(path.join(dir, 'subagent-events.jsonl'), [
+    JSON.stringify({ event_name: 'SubagentStart', thread_id: 'a1' }),
+    JSON.stringify({ event_name: 'SubagentStart', thread_id: 'a2' }),
+    JSON.stringify({ event_name: 'SubagentStop', thread_id: 'a1', outcome: 'stopped' }),
+    JSON.stringify({ event_name: 'SubagentStop', thread_id: 'a2', outcome: 'stopped' })
+  ].join('\n') + '\n');
+  await fsp.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify({
+    schema: 'sks.subagent-evidence.v1',
+    workflow: 'official_codex_subagent',
+    requested_subagents: 2,
+    started_threads: 2,
+    completed_threads: 2,
+    failed_threads: 0,
+    parent_summary_present: true,
+    parent_summary_trustworthy: true,
+    ok: true,
+    blockers: []
+  }));
+  await fsp.writeFile(path.join(dir, 'naruto-summary.json'), JSON.stringify({
+    schema: 'sks.naruto-subagent-workflow.v1',
+    ok: true,
+    status: 'completed',
+    route: '$Naruto',
+    workflow: 'official_codex_subagent',
+    parent: { model: 'gpt-5.6-sol', model_reasoning_effort: 'max', observed_model_match: null },
+    requested_subagents: 2,
+    max_threads: 12,
+    max_depth: 1,
+    started_subagents: 2,
+    completed_subagents: 2,
+    failed_subagents: 0,
+    verification: { budget: 'affected', checks: [] },
+    legacy_process_swarm_used: false,
+    parent_summary_present: true,
+    parent_summary: 'Both independent slices completed and were integrated.'
+  }));
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({
+    schema: 'sks.naruto-gate.v1',
+    workflow: 'official_codex_subagent',
+    status: 'passed',
+    passed: true,
+    terminal: true,
+    terminal_state: 'completed',
+    mission_id: missionId,
+    subagent_plan_ready: true,
+    official_subagent_evidence: true,
+    parent_summary_present: true,
+    session_cleanup: true,
+    blockers: [],
+    missing_fields: []
   }));
   await fsp.writeFile(path.join(dir, 'stop-gate.json'), JSON.stringify({
     schema: 'sks.stop-gate.v1',
@@ -169,9 +261,26 @@ test('stop hook does not hidden-block after canonical Naruto allow_stop', async 
     missing_fields: [],
     created_at: new Date().toISOString()
   }));
-  await writeCurrent(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: true });
+  await writeRouteCompletionProof(root, {
+    missionId,
+    route: '$Naruto',
+    status: 'verified',
+    executionClass: 'real',
+    lightweightEvidence: true,
+    summary: { manual_review_required: false }
+  });
+  await fsp.writeFile(path.join(dir, 'reflection.md'), '# Reflection\n\nNo issue found.\n');
+  await fsp.writeFile(path.join(dir, 'reflection-gate.json'), JSON.stringify({
+    passed: true,
+    created_at: new Date().toISOString(),
+    reflection_artifact: true,
+    no_issue_acknowledged: true,
+    wiki_refreshed_or_packed: true,
+    wiki_validated: true
+  }));
+  await writeCurrent(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, subagents_required: true, proof_required: false, reflection_required: true });
 
-  const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: true }, { message: 'done' });
+  const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'stop-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, subagents_required: true, proof_required: false, reflection_required: true }, { message: 'done' });
   assert.equal(decision?.continue, true);
   assert.match(decision?.systemMessage, /canonical stop-gate passed/);
 });
@@ -194,6 +303,30 @@ test('generic route stop hook accepts recorded hard blocker before completion pr
   assert.equal(decision?.action, 'hard_blocked');
   assert.equal(decision?.gate, 'hard-blocker.json');
   assert.match(decision?.systemMessage, /managed_config_requires_human_remedy/);
+});
+
+test('a not_applicable active gate is satisfied without bypassing independent gates', async () => {
+  const root = await makeTempRoot();
+  const missionId = 'M-test-not-applicable';
+  const dir = await setupMission(root, missionId);
+  await fsp.writeFile(path.join(dir, 'optional-gate.json'), JSON.stringify({
+    schema: 'sks.optional-gate.v1',
+    status: 'not_applicable',
+    reason: 'task_profile_passthrough'
+  }));
+  const state = {
+    mission_id: missionId,
+    stop_gate: 'optional-gate.json',
+    mode: 'SKS',
+    route: 'SKS',
+    route_command: '$SKS',
+    proof_required: false,
+    reflection_required: true
+  };
+  const decision: any = await evaluateStop(root, state, { message: 'done' });
+  assert.equal(decision?.decision, 'block');
+  assert.match(decision?.reason || decision?.systemMessage || '', /reflection/i);
+  assert.doesNotMatch(decision?.reason || decision?.systemMessage || '', /Pass optional-gate\.json/i);
 });
 
 test('explicitly closed route bypasses stale native agent intake requirements', async () => {

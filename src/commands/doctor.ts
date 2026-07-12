@@ -26,10 +26,35 @@ import { inspectSksMenuBarStatus, installSksMenuBar } from '../core/codex-app/sk
 import { sweepSksTempDirs } from '../core/retention.js';
 import { detectImagegenCapability } from '../core/imagegen/imagegen-capability.js';
 import { CURRENT_CODEX_RELEASE_MANIFEST } from '../core/codex-compat/codex-release-manifest.js';
+import { formatHarnessConflictReport, scanHarnessConflicts } from '../core/harness-conflicts.js';
 
 export async function run(_command: any, args: any = []) {
   const root = await projectRoot();
   const doctorFix = flag(args, '--fix');
+  if (doctorFix) {
+    const conflictScan = await scanHarnessConflicts(root);
+    if (conflictScan.hard_block) {
+      const blocked = {
+        schema: 'sks.doctor-status.v3',
+        ok: false,
+        status: 'blocked_harness_conflict',
+        diagnostic_depth: 'fix',
+        root,
+        blockers: conflictScan.hard.map((item: any) => `${item.name || 'harness'}:${item.path}`),
+        conflicts: conflictScan.conflicts,
+        cleanup_prompt_command: 'sks conflicts prompt',
+        no_fix_writes_performed: true
+      };
+      process.exitCode = 1;
+      if (flag(args, '--json')) {
+        printJson(blocked);
+        return blocked;
+      }
+      console.error(formatHarnessConflictReport(conflictScan, { includePrompt: false }));
+      console.error('Run `sks conflicts prompt` and obtain explicit human approval before cleanup.');
+      return blocked;
+    }
+  }
   const doctorProfile = doctorProfileFromArgs(args, doctorFix);
   if (!flag(args, '--json')) {
     cliUi.banner('doctor');
@@ -771,6 +796,14 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     warnings_suppressed: false,
     blockers: [err?.message || String(err)]
   }));
+  const officialSubagentConfig = await (await import('../core/subagents/official-subagent-config.js'))
+    .readOfficialSubagentConfig(root)
+    .catch((err: any) => ({
+      maxThreads: null,
+      maxDepth: null,
+      blockers: [`official_subagent_config_read_failed:${err?.message || String(err)}`],
+      warnings: []
+    }));
   const globalSksInstallCleanup = flag(args, '--fix') && !flag(args, '--local-only')
     ? await (await import('../core/doctor/global-sks-install-cleanup.js')).cleanDuplicateGlobalSksInstalls({ root, fix: true }).catch((err: any) => ({ schema: 'sks.global-sks-install-cleanup.v1', ok: false, fix: true, error: err?.message || String(err), blockers: ['global_sks_install_cleanup_exception'] }))
     : null;
@@ -1055,7 +1088,12 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }
   const zellijReadiness = buildZellijReadiness(root, zellij as any, ready as any);
   const runtimeReadiness = buildRuntimeReadiness(zellijReadiness, codexNativeFeatureMatrix as any);
-  const resultOk = ready.ready && (!sksUpdate || (sksUpdate as any).ok !== false) && (commandAliasCleanup as any).ok !== false && (codexStartupRepair as any).ok !== false;
+  const resultOk = ready.ready
+    && (!sksUpdate || (sksUpdate as any).ok !== false)
+    && (commandAliasCleanup as any).ok !== false
+    && (codexStartupRepair as any).ok !== false
+    && (agentRoleConfigRepair as any).ok !== false
+    && ((officialSubagentConfig as any).blockers || []).length === 0;
   const result = {
     schema: 'sks.doctor-status.v3',
     elapsed_ms: Date.now() - startedAtMs,
@@ -1098,6 +1136,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
     } : null,
     local_model: localModel,
     agent_role_config: agentRoleConfigRepair,
+    official_subagent_config: officialSubagentConfig,
     zellij_readiness: zellijReadiness,
     codex_permission_profiles: permissionProfiles,
     command_aliases: commandAliasCleanup,
@@ -1146,6 +1185,7 @@ async function runDoctor(args: any = [], root: string, doctorFix: boolean) {
   }
   console.log('SKS Doctor');
   for (const warning of argWarnings) console.log(`Argument warning: ${warning}`);
+  for (const warning of (officialSubagentConfig as any).warnings || []) console.log(`Official subagent warning: ${warning}`);
   console.log(`Root:      ${root}`);
   console.log(`Node:      ${result.node.ok ? 'ok' : 'fail'} ${result.node.version}`);
   console.log(`Codex:     ${codex.bin ? 'ok' : 'missing'} ${codex.version || ''}`);

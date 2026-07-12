@@ -23,6 +23,6 @@ Type "sks ui --once"
 Enter
 Sleep 1s
 
-Type "sks naruto run \"demo no-op swarm\" --backend fake --clones 4 --work-items 4 --no-open-zellij --json"
+Type "sks naruto run \"demo official subagent workflow\" --agents 4 --max-threads 4 --json"
 Enter
 Sleep 2s

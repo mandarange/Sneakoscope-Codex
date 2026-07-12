@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildAgentRoster } from '../../dist/core/agents/agent-roster.js';
-import { decideAgentEffort, decideAgentWorkerModel } from '../../dist/core/agents/agent-effort-policy.js';
+import { decideAgentEffort, decideAgentWorkerModel, decideNarutoCloneEffort, decideOfficialSubagentModel } from '../../dist/core/agents/agent-effort-policy.js';
 
 test('native agent effort policy assigns high effort to safety and release lanes', () => {
   const safety = decideAgentEffort({
@@ -97,4 +97,14 @@ test('native agent model policy keeps GLM mode on GLM 5.2 with GLM efforts', () 
   assert.equal(risky.model, 'z-ai/glm-5.2');
   assert.equal(risky.model_reasoning_effort, 'high');
   assert.equal(risky.model_tier, 'glm-5.2-high');
+});
+
+test('official subagents use Luna or Sol at max and keep the legacy alias', () => {
+  assert.equal(decideNarutoCloneEffort, decideOfficialSubagentModel);
+  const bounded = decideOfficialSubagentModel({ persona: { role: 'implementer' }, prompt: 'bounded mechanical edit' });
+  const review = decideOfficialSubagentModel({ persona: { role: 'ux' }, prompt: 'review the UI' });
+  assert.equal(bounded.model, 'gpt-5.6-luna');
+  assert.equal(bounded.model_reasoning_effort, 'max');
+  assert.equal(review.model, 'gpt-5.6-sol');
+  assert.equal(review.model_reasoning_effort, 'max');
 });

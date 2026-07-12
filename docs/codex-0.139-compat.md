@@ -12,7 +12,7 @@ baseline evidence for older SKS gates and release-history continuity.
 
 ## Current Release Note
 
-SKS 6.1.0 keeps the historical Codex 0.139 notes only as compatibility evidence while binding the active release manifest, exact SDK/CLI dependency graph, and generated App Server schema proof to `rust-v0.144.1`. Normal sessions retain catalog passthrough; Naruto workers use live-catalog-verified GPT-5.6 Terra/Sol/Luna routing; Fast repair preserves the documented fast tier while removing only SKS-provenance locks; and repaired plugins require a new task or App restart before availability is claimed.
+SKS 6.1.1 keeps the historical Codex 0.139 notes only as compatibility evidence while binding the active release manifest, exact SDK/CLI dependency graph, and generated App Server schema proof to `rust-v0.144.1`. Normal sessions retain catalog passthrough; Naruto uses an official subagent workflow with a Sol Max parent, Luna Max bounded workers, and Sol Max reasoning-sensitive experts, while Terra remains explicit compatibility only. Official `SubagentStart`/`SubagentStop` events and the parent summary replace native process counts as completion evidence.
 
 SKS 5.10.0 keeps the historical Codex 0.139 compatibility notes as a fallback baseline while adding local dominance performance evidence for cold starts, hook latency, fs/import hot paths, doctor/update read-only fast paths, Super-Search local HTTP smoke, Naruto E2E tiers, retention performance smoke, release runner efficiency, and lifecycle-disabled `npm publish --ignore-scripts` readiness.
 

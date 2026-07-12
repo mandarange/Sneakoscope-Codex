@@ -84,9 +84,8 @@ function normalizeCodexFastModeUiConfigOnce(text: any = '', opts: any = {}) {
   ]) {
     next = upsertTomlTableKeyIfAbsent(next, 'features', featureLine);
   }
-  if (process.env.SKS_ALLOW_HIGH_AGENT_CONCURRENCY !== '1') {
-    next = upsertTomlTableKey(next, 'agents', 'max_threads = 4');
-  }
+  // Global postinstall must not impose a project concurrency policy. Existing
+  // user [agents] values are preserved verbatim; project setup owns defaults.
   next = removeTomlTable(next, 'features.multi_agent_v2');
   if (process.env.SKS_MANAGE_CODEX_APP_PLUGINS === '1') {
     for (const [name, marketplace] of DEFAULT_CODEX_APP_PLUGINS as any) {

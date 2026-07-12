@@ -6,20 +6,19 @@ import type { CodexTaskInput } from '../../codex-control/codex-control-plane.js'
 import { buildCodexExecutionPolicy, buildCodexSdkConfig } from '../../codex-control/codex-sdk-config-policy.js';
 import { normalizeCodexModelEffortCatalogPayload } from '../../codex-lb/codex-lb-env.js';
 
-const models = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'];
+const models = ['gpt-5.6-luna', 'gpt-5.6-sol'];
 const modelEfforts = {
   'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
-  'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
   'gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
 };
 
-test('Naruto GPT-5.6 policy maps coding, strategy, and GUI verification exactly', () => {
+test('Naruto GPT-5.6 policy maps bounded work to Luna Max and judgment work to Sol Max', () => {
   const available = { availableModels: models, availableModelEfforts: modelEfforts };
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'implementation code_modification' }), {
-    model: 'gpt-5.6-terra', reasoning: 'xhigh', serviceTier: 'fast'
+    model: 'gpt-5.6-luna', reasoning: 'max', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'implementation', riskText: 'critical security migration' }), {
-    model: 'gpt-5.6-terra', reasoning: 'max', serviceTier: 'fast'
+    model: 'gpt-5.6-sol', reasoning: 'max', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'refactor architecture integration_support browser' }), {
     model: 'gpt-5.6-sol', reasoning: 'max', serviceTier: 'fast'
@@ -27,18 +26,18 @@ test('Naruto GPT-5.6 policy maps coding, strategy, and GUI verification exactly'
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'conflict_resolution patch_rebase' }), {
     model: 'gpt-5.6-sol', reasoning: 'max', serviceTier: 'fast'
   });
-  assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'test_execution browser Computer Use GUI' }), {
-    model: 'gpt-5.6-luna', reasoning: 'xhigh', serviceTier: 'fast'
+  assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'test_execution browser' }), {
+    model: 'gpt-5.6-luna', reasoning: 'max', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'test_execution GUI', riskText: 'forensic cross-app failure' }), {
-    model: 'gpt-5.6-luna', reasoning: 'max', serviceTier: 'fast'
+    model: 'gpt-5.6-sol', reasoning: 'max', serviceTier: 'fast'
   });
 });
 
 test('Naruto GPT-5.6 policy fails closed for missing model or unadvertised effort', () => {
   assert.equal(routeNarutoGpt56Model({
     taskText: 'implementation',
-    availableModels: ['gpt-5.6-luna', 'gpt-5.6-sol'],
+    availableModels: ['gpt-5.6-sol'],
     availableModelEfforts: modelEfforts
   }).model, '');
   assert.equal(routeNarutoGpt56Model({
@@ -86,7 +85,7 @@ test('native Naruto worker routing passes exact model and max effort into SDK co
   }).sandbox, 'workspace-write');
 });
 
-test('native Naruto worker routing blocks non-family explicit overrides', async () => {
+test('legacy native Naruto worker routing still blocks non-family explicit overrides', async () => {
   const routing = await resolveWorkerModelRouting({
     agent: { id: 'naruto_1', role: 'implementer', naruto_role: 'implementer' },
     slice: { id: 'W1', kind: 'implementation', title: 'Implement feature' },

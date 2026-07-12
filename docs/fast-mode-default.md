@@ -53,7 +53,7 @@ sks agent run "fixture" --no-fast
 sks agent run "fixture" --service-tier standard
 ```
 
-The `agent:fast-mode-policy` release gate runs the default-policy and worker-propagation checks. Execute it through the canonical release preset:
+The historical `agent:fast-mode-policy` release-gate id is retained for compatibility, but Naruto now validates the official Sol/Luna Max model policy and `SubagentStart`/`SubagentStop` evidence instead of custom worker-process Fast propagation. Execute it through the canonical release preset:
 
 ```bash
 npm run release:check:full
