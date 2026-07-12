@@ -85,10 +85,6 @@ async function workOrderCoverageGateStatus(root: any, state: any = {}) {
   if (!id) return { ok: true, blockers: [] };
   const ledger = await readWorkOrderLedger(missionDir(root, id));
   if (!ledger) {
-    if (String(state?.mode || '').toUpperCase() === 'NARUTO' && state?.from_chat_img_required !== true) {
-      const plan = await readJson(path.join(missionDir(root, id), 'subagent-plan.json'), null);
-      if (plan?.workflow === 'official_codex_subagent') return { ok: true, blockers: [] };
-    }
     const route = routeById(routeFromState(state));
     if (route?.coverage_required) return { ok: false, blockers: ['work_order_ledger_missing'] };
     return { ok: true, blockers: [] };

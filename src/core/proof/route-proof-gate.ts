@@ -25,12 +25,19 @@ export async function validateRouteCompletionProof(root: any, { missionId = null
     const anchors = proof.evidence?.image_voxels?.anchors ?? proof.evidence?.image_voxels?.anchor_count ?? 0;
     if (Number(anchors) <= 0) issues.push('image_voxel_anchors_missing');
   }
-  if (routeRequiresAgentIntake(route || proof.route, { task: state.prompt, noAgents: state.agents_required === false })) {
+  const normalizedRoute = normalizeProofRoute(route || proof.route);
+  const officialSubagentWorkflow = normalizedRoute === '$Naruto' && (
+    state.subagents_required === true
+    || state.native_sessions_required === false
+    || proof.evidence?.route_gate?.workflow === 'official_codex_subagent'
+  );
+  const legacyAgentProofRequired = normalizedRoute === '$Release-Review'
+    || (!officialSubagentWorkflow && routeRequiresAgentIntake(route || proof.route, { task: state.prompt, noAgents: state.agents_required === false }));
+  if (legacyAgentProofRequired) {
     const agents = proof.evidence?.agents;
     if (!agents) issues.push('agent_proof_evidence_missing');
     else {
       if (agents.status !== 'passed' || agents.ok !== true) issues.push('agent_gate_not_passed');
-      const normalizedRoute = normalizeProofRoute(route || proof.route);
       const maxAgentCount = normalizedRoute === '$Naruto' ? 100 : 20;
       const agentCount = Number(agents.agent_count || 0);
       if (agentCount < 5) issues.push('agent_count_below_5');

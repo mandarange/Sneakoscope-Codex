@@ -13,6 +13,8 @@ import {
   closeWorkOrderLedgerForRouteResult,
 } from '../work-order-ledger.js';
 import { evaluateStop } from '../pipeline-internals/runtime-gates.js';
+import { buildSubagentEvidence } from '../subagents/subagent-evidence.js';
+import { writeRouteCompletionProof } from '../proof/route-adapter.js';
 
 async function makeTempRoot(): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), 'sks-wo-coverage-'));
@@ -28,6 +30,72 @@ async function writeCurrent(root: string, patch: Record<string, unknown>): Promi
   const stateDir = path.join(root, '.sneakoscope', 'state');
   await fsp.mkdir(stateDir, { recursive: true });
   await fsp.writeFile(path.join(stateDir, 'current.json'), JSON.stringify({ ...patch, updated_at: new Date().toISOString() }, null, 2));
+}
+
+async function writePassingOfficialNarutoArtifacts(dir: string, missionId: string): Promise<void> {
+  const threadId = `${missionId}-thread-1`;
+  const parentSummary = {
+    schema: 'sks.subagent-parent-summary.v1',
+    status: 'completed',
+    summary: 'The bounded work-order coverage fixture completed.',
+    thread_outcomes: [{ thread_id: threadId, status: 'completed', summary: 'Fixture slice completed.' }],
+    changed_files: [],
+    verification: ['fixture verification passed'],
+    blockers: []
+  };
+  const events = [
+    { event_name: 'SubagentStart', thread_id: threadId },
+    { event_name: 'SubagentStop', thread_id: threadId }
+  ];
+  await fsp.writeFile(path.join(dir, 'subagent-plan.json'), JSON.stringify({
+    schema: 'sks.subagent-plan.v1',
+    workflow: 'official_codex_subagent',
+    requested_subagents: 1,
+    max_threads: 12,
+    max_depth: 1,
+    delegation_prompt: 'Delegate the bounded fixture and wait for completion.'
+  }));
+  await fsp.writeFile(path.join(dir, 'subagent-events.jsonl'), events.map((event) => JSON.stringify(event)).join('\n') + '\n');
+  await fsp.writeFile(path.join(dir, 'subagent-parent-summary.json'), JSON.stringify(parentSummary));
+  await fsp.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify(buildSubagentEvidence({
+    requestedSubagents: 1,
+    events,
+    parentSummary
+  })));
+  await fsp.writeFile(path.join(dir, 'naruto-summary.json'), JSON.stringify({
+    schema: 'sks.naruto-subagent-workflow.v1',
+    ok: true,
+    status: 'completed',
+    route: '$Naruto',
+    workflow: 'official_codex_subagent',
+    parent: { model: 'gpt-5.6-sol', model_reasoning_effort: 'max', observed_model_match: null },
+    requested_subagents: 1,
+    max_threads: 12,
+    max_depth: 1,
+    started_subagents: 1,
+    completed_subagents: 1,
+    failed_subagents: 0,
+    verification: { budget: 'affected', checks: [] },
+    legacy_process_swarm_used: false,
+    parent_summary_present: true,
+    parent_summary: parentSummary.summary,
+    parent_thread_outcomes: parentSummary.thread_outcomes
+  }));
+  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({
+    schema: 'sks.naruto-gate.v1',
+    workflow: 'official_codex_subagent',
+    mission_id: missionId,
+    status: 'passed',
+    passed: true,
+    terminal: true,
+    terminal_state: 'completed',
+    subagent_plan_ready: true,
+    official_subagent_evidence: true,
+    parent_summary_present: true,
+    session_cleanup: true,
+    blockers: [],
+    missing_fields: []
+  }));
 }
 
 test('createWorkOrderLedger maps requests to WO-00N items with verbatim source text preserved', () => {
@@ -250,7 +318,7 @@ test('evaluateStop blocks a Naruto mission with unresolved work-order-ledger ite
   const root = await makeTempRoot();
   const missionId = 'M-wo-block';
   const dir = await setupMission(root, missionId);
-  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ passed: true, schema: 'sks.naruto-gate.v1', terminal: true }));
+  await writePassingOfficialNarutoArtifacts(dir, missionId);
   await writeWorkOrderLedger(dir, createWorkOrderLedger({
     missionId,
     route: 'Naruto',
@@ -264,11 +332,11 @@ test('evaluateStop blocks a Naruto mission with unresolved work-order-ledger ite
   assert.match(decision?.reason, /unresolved work-order-ledger items/);
 });
 
-test('evaluateStop allows a Naruto mission to stop once every work-order-ledger item resolves', async () => {
+test('evaluateStop allows a Naruto mission to stop once its official, proof, and work-order gates resolve', async () => {
   const root = await makeTempRoot();
   const missionId = 'M-wo-allow';
   const dir = await setupMission(root, missionId);
-  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ passed: true, schema: 'sks.naruto-gate.v1', terminal: true }));
+  await writePassingOfficialNarutoArtifacts(dir, missionId);
   let ledger = createWorkOrderLedger({
     missionId,
     route: 'Naruto',
@@ -282,10 +350,18 @@ test('evaluateStop allows a Naruto mission to stop once every work-order-ledger 
     verification_evidence: ['naruto-gate.json']
   });
   await writeWorkOrderLedger(dir, ledger);
+  await writeRouteCompletionProof(root, {
+    missionId,
+    route: '$Naruto',
+    status: 'verified',
+    executionClass: 'real',
+    lightweightEvidence: true,
+    summary: { manual_review_required: false }
+  });
   await writeCurrent(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false });
 
   const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false }, { message: 'done' });
-  assert.equal(decision?.continue, true, 'evaluateStop allows stop once every route/coverage gate passes');
+  assert.equal(decision?.continue, true, 'evaluateStop allows stop once every independent route/proof/coverage gate passes');
   assert.match(decision?.systemMessage, /canonical stop-gate passed/);
 });
 
@@ -293,7 +369,7 @@ test('evaluateStop blocks a coverage_required route entirely missing its work-or
   const root = await makeTempRoot();
   const missionId = 'M-wo-missing';
   const dir = await setupMission(root, missionId);
-  await fsp.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ passed: true, schema: 'sks.naruto-gate.v1', terminal: true }));
+  await writePassingOfficialNarutoArtifacts(dir, missionId);
   await writeCurrent(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false });
 
   const decision: any = await evaluateStop(root, { mission_id: missionId, stop_gate: 'naruto-gate.json', mode: 'NARUTO', route: 'Naruto', route_command: '$Naruto', agents_required: false, proof_required: false, reflection_required: false }, { message: 'done' });

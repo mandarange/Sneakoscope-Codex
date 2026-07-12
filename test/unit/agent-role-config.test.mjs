@@ -8,7 +8,7 @@ import { parse } from 'smol-toml';
 test('managed Codex 0.144.1 agent roles contain only supported rendered policy keys', async () => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
 
-  assert.equal(manifest.MANAGED_ASSET_VERSION, '6.1.0');
+  assert.equal(manifest.MANAGED_ASSET_VERSION, '6.1.1');
   for (const role of manifest.MANAGED_AGENT_ROLES) {
     const text = manifest.managedAgentRoleContent(role);
     const parsed = parse(text);

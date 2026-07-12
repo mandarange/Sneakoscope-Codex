@@ -32,6 +32,29 @@ test('route proof gate requires agent evidence for Team routes', async () => {
   assert.ok(gate.issues.includes('agent_proof_evidence_missing'));
 });
 
+test('official Naruto proof uses correlated subagent evidence instead of legacy native agent proof', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-proof-official-naruto-'));
+  await writeRouteProof(root, 'M-naruto', {
+    route: '$Naruto',
+    status: 'verified_partial',
+    summary: { files_changed: 0, commands_run: 0, tests_passed: 1, tests_failed: 0, manual_review_required: true },
+    evidence: {
+      route_gate: {
+        workflow: 'official_codex_subagent',
+        official_subagent_evidence: true,
+        parent_summary_present: true
+      }
+    }
+  });
+  const gate = await validateRouteCompletionProof(root, {
+    missionId: 'M-naruto',
+    route: '$Naruto',
+    state: { subagents_required: true, native_sessions_required: false }
+  });
+  assert.equal(gate.ok, true);
+  assert.ok(!gate.issues.includes('agent_proof_evidence_missing'));
+});
+
 test('route proof gate accepts scaled Team agent counts within policy', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-route-proof-scaled-agents-'));
   await writeRouteProof(root, 'M-team', {

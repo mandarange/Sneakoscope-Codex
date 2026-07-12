@@ -38,6 +38,7 @@ test('App Naruto reuses the active mission bound to the current Codex thread sta
     assert.equal(result.artifacts.parent_summary, null)
     assert.equal(sessionState.mission_id, result.mission_id)
     assert.equal(sessionState.subagents_required, true)
+    assert.equal(sessionState.agents_required, false)
     assert.equal(sessionState.phase, 'NARUTO_DELEGATION_CONTEXT_READY')
   } finally {
     process.chdir(oldCwd)

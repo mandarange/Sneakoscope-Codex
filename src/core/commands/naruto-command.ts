@@ -210,6 +210,7 @@ async function narutoRun(parsed: NarutoArgs) {
     subagents_verified: false,
     native_sessions_required: false,
     native_sessions_verified: false,
+    agents_required: false,
     requested_subagents: budget.requestedSubagents,
     max_threads: budget.maxThreads,
     max_depth: budget.maxDepth,

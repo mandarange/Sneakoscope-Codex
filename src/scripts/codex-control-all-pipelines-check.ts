@@ -20,9 +20,11 @@ const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToN
 assertGate(teamCreateRedirectsToNaruto, 'Team create must route through Naruto codex control backend SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex control backend');
 assertGate(sources.research.includes("mock ? 'fake' : 'codex-sdk'"), 'Research must route native agents through codex control backend');
-assertGate(sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto defaults must name codex-sdk control backend');
+assertGate(sources.naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must invoke the official Codex subagent runner');
+assertGate(sources.naruto.includes("workflow: 'official_codex_subagent'"), 'Naruto must persist the official subagent workflow contract');
+assertGate(!sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto must not fall back to the legacy codex-sdk backend selector');
 assertGate(sources.workerRouter.includes('runCodexTask({'), 'native worker router must call runCodexTask');
 const fixture = await runFakeCodexSdkTaskFixture('control-all-pipelines');
 assertGate(fixture.result.ok === true, 'all pipeline control fixture must pass', fixture.result);
 assertGate(fixture.proof.reliability_shield?.ok === true, 'all pipeline fixture must include reliability shield proof', fixture.proof);
-emitGate('codex-control:all-pipelines', { gates: required.length, sdk_thread_id: fixture.result.sdkThreadId });
+emitGate('codex-control:all-pipelines', { gates: required.length, naruto_workflow: 'official_codex_subagent', sdk_thread_id: fixture.result.sdkThreadId });

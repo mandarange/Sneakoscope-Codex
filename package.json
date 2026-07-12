@@ -1,7 +1,7 @@
 {
   "name": "sneakoscope",
   "displayName": "ㅅㅋㅅ",
-  "version": "6.1.0",
+  "version": "6.1.1",
   "description": "Proof-first Codex trust layer for bounded agent workflows, search visibility evidence, and release integrity gates.",
   "type": "module",
   "homepage": "https://github.com/mandarange/Sneakoscope-Codex#readme",
