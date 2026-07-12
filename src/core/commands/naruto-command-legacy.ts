@@ -405,6 +405,7 @@ async function narutoRun(parsed: NarutoArgs) {
     }
   }
   const result = await withNarutoSwarmInterruptCleanup({ missionId: mission.id, zellijSessionName: liveZellij?.session_name || null }, () => runNativeAgentOrchestrator({
+    root,
     missionId: mission.id,
     prompt: parsed.prompt,
     route: NARUTO_ROUTE,

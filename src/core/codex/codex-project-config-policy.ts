@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { ensureDir, nowIso, readText, writeJsonAtomic } from '../fsx.js'
-import { writeCodexConfigGuarded } from './codex-config-guard.js'
+import { hasSksManagedCodexConfigMarker, writeCodexConfigGuarded } from './codex-config-guard.js'
 import { cleanupCodexConfigBackups } from './codex-config-toml.js'
 
 export const CODEX_PROJECT_CONFIG_POLICY_SCHEMA = 'sks.codex-project-config-policy.v1'
@@ -100,7 +100,7 @@ export async function splitCodexProjectConfigPolicy(rootInput: string = process.
     if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
     return report
   }
-  if (opts.apply && isCodexConfigToml(configPath) && !hasSksManagedCodexMarker(String(original))) {
+  if (opts.apply && isCodexConfigToml(configPath) && !hasSksManagedCodexConfigMarker(String(original))) {
     const report = {
       schema: CODEX_PROJECT_CONFIG_POLICY_SCHEMA,
       generated_at: nowIso(),
@@ -216,7 +216,7 @@ export async function repairCodexConfigStructure(configPathInput: string, opts: 
   if (original === null) {
     return { config_path: configPath, ok: true, status: 'config_missing', changed: false, applied: false, hoisted_keys: [], backup_path: null }
   }
-  if (opts.apply && isCodexConfigToml(configPath) && !hasSksManagedCodexMarker(String(original))) {
+  if (opts.apply && isCodexConfigToml(configPath) && !hasSksManagedCodexConfigMarker(String(original))) {
     return {
       config_path: configPath,
       ok: false,
@@ -257,10 +257,6 @@ export async function repairCodexConfigStructure(configPathInput: string, opts: 
 
 function isCodexConfigToml(file: string): boolean {
   return path.basename(file) === 'config.toml' && path.basename(path.dirname(file)) === '.codex'
-}
-
-function hasSksManagedCodexMarker(text: string): boolean {
-  return /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(text)
 }
 
 function hoistMisplacedMachineLocalKeys(text: string) {

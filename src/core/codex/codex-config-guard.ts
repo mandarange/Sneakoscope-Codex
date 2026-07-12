@@ -177,7 +177,11 @@ export function isProjectCodexConfig(root: string, configPath: string): boolean 
 }
 
 export function hasSksManagedCodexConfigMarker(text: string): boolean {
-  return /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(String(text || ''))
+  const source = String(text || '')
+  return /(?:SKS managed|Sneakoscope|sneakoscope|sks_|agents\.native_agent|agents\.implementation_worker|multi_agent)/i.test(source)
+    || /^\s*model_provider\s*=\s*["']codex-lb["']\s*(?:#.*)?$/mi.test(source)
+    || /^\s*default_profile\s*=\s*["']sks-fast-high["']\s*(?:#.*)?$/mi.test(source)
+    || /^\s*\[(?:user\.fast_mode|model_providers\.(?:"codex-lb"|codex-lb)|profiles\.(?:"sks-fast-high"|sks-fast-high))\]\s*(?:#.*)?$/mi.test(source)
 }
 
 export function isUnmanagedProjectCodexConfig(root: string, configPath: string, text: string): boolean {
