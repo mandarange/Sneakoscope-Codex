@@ -24,12 +24,14 @@ The current parent agent owns decomposition, integration, verification, and the
 final answer. Codex owns the agent threads. App sessions do not create a nested
 Codex process; standalone CLI use may create one parent process only.
 
-## Compatibility Implementations
+## Separate Runtime And Historical Evidence
 
-- `src/core/commands/naruto-command-legacy.ts` and `src/core/agents/**` retain
-  historical process-swarm and agent-kernel behavior where still supported.
-- Legacy Naruto behavior is loaded only with
-  `SKS_NARUTO_LEGACY_PROCESS_SWARM=1`; it is never an automatic fallback.
+- The historical Naruto process-swarm command and its environment opt-in are
+  removed. Public Naruto cannot load a custom scheduler, pool, process swarm,
+  patch queue, or alternate model fanout.
+- `src/core/agents/**` supports the separate explicit `sks agent` and MAD-SKS
+  runtimes plus read-only interpretation of old mission artifacts; it is not a
+  Naruto execution fallback.
 - `src/core/zellij/**` is terminal UI and harness support. Pane count is not
   official subagent execution evidence.
 
@@ -39,7 +41,7 @@ Codex process; standalone CLI use may create one parent process only.
   route policy, and hook evidence handling.
 - Official model, budget, prompt, and event semantics belong in
   `src/core/subagents/**`.
-- Legacy scheduler, patch, and process mechanics stay isolated from the default
-  Naruto hot path.
+- Scheduler, patch, and process mechanics used by separate explicit runtimes
+  must remain unreachable from the Naruto hot path.
 - Visual pane rendering and telemetry presentation belong in `src/core/zellij/**`
   and must not become a default release blocker.

@@ -462,7 +462,7 @@ class NativeCliSessionSwarmRecorder {
             headless_by_design_viewport_ui: process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1' ? 0 : this.input.targetActiveSlots
           },
           active_workers: this.input.targetActiveSlots,
-          visible_panes: Number(process.env.SKS_ZELLIJ_VIEWPORTS || 4),
+          visible_panes: Number(process.env.SKS_ZELLIJ_VIEWPORTS || 1),
           headless_workers: process.env.SKS_ZELLIJ_LEGACY_WORKER_PANES === '1' ? Math.max(0, this.input.targetActiveSlots - this.zellijVisiblePaneCap(input.ctx.opts)) : this.input.targetActiveSlots,
           queue_depth: Math.max(0, this.input.requestedAgents - this.input.targetActiveSlots),
           local_llm: { tps: 0, queue: 0 },

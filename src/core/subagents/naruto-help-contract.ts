@@ -1,11 +1,13 @@
 import {
-  DEFAULT_SUBAGENT_MODEL,
   NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL,
-  SUBAGENT_EFFORT,
-  THINKING_SUBAGENT_MODEL
+  NARUTO_PARENT_MODEL
 } from './model-policy.js'
 import { DEFAULT_NARUTO_REQUESTED_SUBAGENTS } from './thread-budget.js'
+import {
+  MAX_AUTOMATIC_REVIEWER_COUNT,
+  MAX_AUTOMATIC_SUBAGENT_COUNT,
+  officialSubagentRolePlan
+} from './agent-catalog.js'
 
 export const NARUTO_HELP_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 
@@ -24,7 +26,10 @@ export function buildNarutoHelpResult() {
     ],
     commands: ['help', 'status', 'subagents', 'proof', 'run'],
     default_requested_subagents: DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
-    scaling_policy: 'one_safe_direct_child_by_default_explicit_agents_for_wider_parallelism',
+    scaling_policy: 'one_safe_direct_child_by_default_parent_owned_risk_based_expansion',
+    automatic_subagent_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
+    automatic_reviewer_ceiling: MAX_AUTOMATIC_REVIEWER_COUNT,
+    critical_multi_domain_reviewer_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
     max_depth: 1,
     triwiki_context: 'bounded_attention_use_first_with_on_demand_hydration',
     completion_evidence: {
@@ -38,9 +43,6 @@ export function buildNarutoHelpResult() {
     },
     legacy_process_runtime_available: false,
     parent: { model: NARUTO_PARENT_MODEL, model_reasoning_effort: NARUTO_PARENT_EFFORT },
-    agents: {
-      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
-      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
-    }
+    agents: officialSubagentRolePlan()
   }
 }

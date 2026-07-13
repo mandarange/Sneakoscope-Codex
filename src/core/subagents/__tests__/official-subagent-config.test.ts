@@ -5,7 +5,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'smol-toml'
 import {
+  MANAGED_AGENT_ROLES,
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
+  managedAgentRoleContent,
   managedOfficialSubagentRoleContent,
   managedOfficialSubagentRoleOwnsText
 } from '../../managed-assets/managed-assets-manifest.js'
@@ -52,6 +54,53 @@ test('legacy 4/5/historical 6 migrate only with proven SKS ownership', () => {
 
     const sksOwned = mergeOfficialSubagentConfig(`[agents]\nmax_threads = ${value}\n`, { sksOwned: true })
     assert.equal((parse(sksOwned) as Record<string, any>).agents.max_threads, 12)
+  }
+})
+
+test('owned config migration removes only exact legacy agent child tables', () => {
+  const source = [
+    '# SKS-MANAGED-CODEX-CONFIG',
+    '[agents]',
+    'max_threads = 4',
+    '',
+    '[agents.analysis_scout]',
+    'description = "operator modified scout"',
+    'config_file = "./agents/analysis-scout.toml"',
+    'nickname_candidates = ["Scout", "Mapper"]',
+    '',
+    '[agents.native_agent]',
+    'description = "SKS native agent with bounded write capability."',
+    'config_file = "/tmp/project/.codex/agents/native-agent-intake.toml"',
+    'nickname_candidates = ["Analysis", "Mapper"]',
+    '',
+    '[agents.team_consensus]',
+    'description = "SKS planning/debate agent with bounded write capability."',
+    'config_file = "./agents/team-consensus.toml"',
+    'nickname_candidates = ["Consensus", "Atlas"]',
+    '',
+    '[agents.implementation_worker]',
+    'description = "SKS bounded implementation worker."',
+    'config_file = "./agents/implementation-worker.toml"',
+    'nickname_candidates = ["Builder", "Mason"]',
+    '',
+    '[agents.db_safety_reviewer]',
+    'description = "DB safety reviewer with bounded write capability."',
+    'config_file = "./agents/db-safety-reviewer.toml"',
+    'nickname_candidates = ["Sentinel", "Ledger"]',
+    '',
+    '[agents.qa_reviewer]',
+    'description = "QA reviewer with bounded write capability."',
+    'config_file = "./agents/qa-reviewer.toml"',
+    'nickname_candidates = ["Verifier", "Reviewer"]',
+    ''
+  ].join('\n')
+
+  const merged = mergeOfficialSubagentConfig(source, { sksOwned: true })
+  const agents = (parse(merged) as Record<string, any>).agents
+  assert.equal(agents.max_threads, 12)
+  assert.equal(agents.analysis_scout.description, 'operator modified scout')
+  for (const name of ['native_agent', 'team_consensus', 'implementation_worker', 'db_safety_reviewer', 'qa_reviewer']) {
+    assert.equal(Object.hasOwn(agents, name), false, name)
   }
 })
 
@@ -184,7 +233,7 @@ test('official doctor repair backs up invalid project TOML before unmanaged reje
   assert.equal(await fs.readFile(String(result.backup_path), 'utf8'), invalid)
 })
 
-test('fresh agent install creates only worker Luna Max and expert Sol Max', async () => {
+test('fresh agent install materializes the complete project-scoped custom agent catalog', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-official-agents-'))
   const legacy = path.join(root, '.codex', 'agents', 'analysis-scout.toml')
   await fs.mkdir(path.dirname(legacy), { recursive: true })
@@ -192,27 +241,51 @@ test('fresh agent install creates only worker Luna Max and expert Sol Max', asyn
 
   const first = await installOfficialSubagentAgentConfigs(root)
   const files = (await fs.readdir(path.dirname(legacy))).sort()
-  assert.deepEqual(files, ['analysis-scout.toml', 'expert.toml', 'worker.toml'])
-  assert.deepEqual(first.created.sort(), ['.codex/agents/expert.toml', '.codex/agents/worker.toml'])
+  const expectedRoleFiles = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename).sort()
+  assert.deepEqual(files, ['analysis-scout.toml', ...expectedRoleFiles].sort())
+  assert.deepEqual(first.created.sort(), expectedRoleFiles.map((filename) => `.codex/agents/${filename}`).sort())
+  assert.deepEqual(first.generated_files.sort(), expectedRoleFiles.map((filename) => `.codex/agents/${filename}`).sort())
   assert.equal(await fs.readFile(legacy, 'utf8'), 'name = "user_legacy_role"\n')
 
-  const workerText = await fs.readFile(path.join(root, '.codex', 'agents', 'worker.toml'), 'utf8')
-  const expertText = await fs.readFile(path.join(root, '.codex', 'agents', 'expert.toml'), 'utf8')
-  const worker = parse(workerText) as Record<string, any>
-  const expert = parse(expertText) as Record<string, any>
-  assert.equal(worker.model, 'gpt-5.6-luna')
-  assert.equal(worker.model_reasoning_effort, 'max')
-  assert.deepEqual(worker.nickname_candidates, ['Kite', 'Moss', 'Pico', 'Reed', 'Vale', 'Wren'])
-  assert.equal(Object.hasOwn(worker, 'sandbox_mode'), false)
-  assert.equal(expert.model, 'gpt-5.6-sol')
-  assert.equal(expert.model_reasoning_effort, 'max')
-  assert.deepEqual(expert.nickname_candidates, ['Atlas', 'Delta', 'Helix', 'Orion', 'Sage', 'Vector'])
-  assert.equal(Object.hasOwn(expert, 'sandbox_mode'), false)
+  for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
+    const text = await fs.readFile(path.join(root, '.codex', 'agents', role.filename), 'utf8')
+    const parsed = parse(text) as Record<string, any>
+    assert.equal(parsed.name, role.codex_name)
+    assert.equal(parsed.model, role.model)
+    assert.equal(parsed.model_reasoning_effort, 'max')
+    assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), role.sandbox === 'read-only')
+    assert.equal(parsed.sandbox_mode, role.sandbox)
+  }
 
   const second = await installOfficialSubagentAgentConfigs(root)
   assert.deepEqual(second.created, [])
   assert.deepEqual(second.updated, [])
-  assert.deepEqual(second.existing.sort(), ['.codex/agents/expert.toml', '.codex/agents/worker.toml'])
+  assert.deepEqual(second.existing.sort(), expectedRoleFiles.map((filename) => `.codex/agents/${filename}`).sort())
+})
+
+test('legacy 4/5/6 SKS role sets are removed only when their exact managed templates are intact', async () => {
+  for (const legacyCount of [4, 5, 6]) {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), `sks-official-agent-legacy-${legacyCount}-`))
+    const agentsDir = path.join(root, '.codex', 'agents')
+    await fs.mkdir(agentsDir, { recursive: true })
+    for (const role of MANAGED_AGENT_ROLES.slice(0, legacyCount)) {
+      await fs.writeFile(path.join(agentsDir, role.filename), managedAgentRoleContent(role))
+    }
+    const modifiedRole = MANAGED_AGENT_ROLES[legacyCount]
+    assert.ok(modifiedRole)
+    const modifiedPath = path.join(agentsDir, modifiedRole.filename)
+    await fs.writeFile(modifiedPath, managedAgentRoleContent(modifiedRole).replace(modifiedRole.description, 'operator modified role'))
+
+    const result = await installOfficialSubagentAgentConfigs(root)
+    assert.equal(result.ok, true)
+    assert.equal(result.removed_legacy.length, legacyCount)
+    assert.equal(result.legacy_stale.length, legacyCount)
+    for (const role of MANAGED_AGENT_ROLES.slice(0, legacyCount)) {
+      await assert.rejects(fs.access(path.join(agentsDir, role.filename)))
+    }
+    assert.equal(await fs.readFile(modifiedPath, 'utf8'), managedAgentRoleContent(modifiedRole).replace(modifiedRole.description, 'operator modified role'))
+    assert.ok(result.preserved_legacy.includes(`.codex/agents/${modifiedRole.filename}`))
+  }
 })
 
 test('marker plus body hash owns generated files and detects user modification', () => {
@@ -312,7 +385,10 @@ test('doctor repair migrates an SKS-owned legacy thread value and preserves max_
   assert.equal(parsed.agents.job_max_runtime_seconds, 1200)
   assert.equal(parsed.agents.interrupt_message, true)
   assert.ok(result.config_file_repair.warnings.includes('official_subagent_max_depth_above_one_preserved:4:project'))
-  assert.deepEqual((await fs.readdir(path.join(root, '.codex', 'agents'))).sort(), ['expert.toml', 'worker.toml'])
+  assert.deepEqual(
+    (await fs.readdir(path.join(root, '.codex', 'agents'))).sort(),
+    MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename).sort()
+  )
 })
 
 test('project setup backs up and preserves invalid config TOML without overwriting it', async () => {

@@ -69,12 +69,13 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   const clipboard = await writeZellijClipboardConfig(root, missionId)
   const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path, ...clipboard.optionFlags]
   const attachCommand = ['attach', sessionName]
-  const zellijEnv = resolveZellijProcessEnvMeta()
+  const launchProcessEnv = launchRecoveryEnv(opts.launchEnv)
+  const zellijEnv = resolveZellijProcessEnvMeta(launchProcessEnv)
   const willCreateSession = opts.dryRun !== true && capability.status === 'ok'
   const codexLaunchRecovery = layout.main_pane_kind === 'codex_interactive' && willCreateSession
     ? await inspectCodexLbCliLaunchRecovery({
         root: opts.cwd || root,
-        env: launchRecoveryEnv(opts.launchEnv),
+        env: launchProcessEnv,
         cliArgs: layout.codex_args,
         ...(typeof opts.recoveryFetch === 'function' ? { fetchImpl: opts.recoveryFetch } : {}),
         ...(opts.recoveryTimeoutMs === undefined ? {} : { timeoutMs: opts.recoveryTimeoutMs }),
@@ -91,12 +92,12 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     && codexLaunchRecovery.ok
     && process.env.SKS_ZELLIJ_KEEP_SESSION !== '1'
   const sessionReset = resetSession
-    ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, timeoutMs: 200, optional: true })
+    ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, env: launchProcessEnv, timeoutMs: 200, optional: true })
     : null
   const launch: any = !willCreateSession || !codexLaunchRecovery.ok
     ? null
     : {
-        create_background: await runZellij(createCommand, { cwd: opts.cwd || root, timeoutMs: 5000, optional: opts.requireZellij !== true })
+        create_background: await runZellij(createCommand, { cwd: opts.cwd || root, env: launchProcessEnv, timeoutMs: 5000, optional: opts.requireZellij !== true })
       }
   const paneProofOpts: ZellijPaneProofOptions = {
     missionId,

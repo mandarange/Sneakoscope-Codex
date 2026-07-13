@@ -4,6 +4,7 @@ import { projectRoot, readJson } from '../core/fsx.js'
 import { readZellijSlotTelemetrySnapshot } from '../core/zellij/zellij-slot-telemetry.js'
 import { bindViewports, type ViewportPin } from '../core/zellij/zellij-viewport-binder.js'
 import { renderZellijSlotPaneFromArtifacts } from '../core/zellij/zellij-slot-pane-renderer.js'
+import { refreshOfficialSubagentZellijActivity } from '../core/zellij/zellij-official-subagent-activity.js'
 import { ANSI_CODES, paint, resolveZellijTheme } from '../core/zellij/zellij-theme.js'
 
 let previousBindings: Array<string | null> = []
@@ -12,7 +13,7 @@ export async function run(_cmd: string = 'zellij-viewport-pane', args: string[] 
   const mission = String(readOption(args, '--mission', 'latest') || 'latest')
   const index = Math.max(1, Number(readOption(args, '--index', '1')) || 1)
   const of = Math.max(index, Number(readOption(args, '--of', '4')) || 4)
-  const intervalMs = Math.max(500, Number(process.env.SKS_ZELLIJ_REFRESH_MS || 1000))
+  const intervalMs = Math.max(500, Number(readOption(args, '--interval-ms', String(process.env.SKS_ZELLIJ_REFRESH_MS || '1000')) || 1000))
   const root = await projectRoot()
   previousBindings = Array.from({ length: of }, () => null)
   const once = !flag(args, '--watch')
@@ -26,6 +27,7 @@ export async function run(_cmd: string = 'zellij-viewport-pane', args: string[] 
 
 async function renderViewportFrame(root: string, mission: string, index: number, of: number): Promise<string> {
   const theme = resolveZellijTheme()
+  await refreshOfficialSubagentZellijActivity({ root, missionId: mission }).catch(() => null)
   const snapshot = await readZellijSlotTelemetrySnapshot(root, mission).catch(() => null)
   const missionId = snapshot?.mission_id || mission
   const pins = await readJson<{ pins: ViewportPin[] }>(pinsPath(root, missionId), { pins: [] })

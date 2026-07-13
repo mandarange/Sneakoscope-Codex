@@ -49,6 +49,8 @@ export interface ZellijSlotTelemetryEvent {
   backend?: string
   provider?: string
   service_tier?: string
+  model?: string
+  reasoning_effort?: string
   worktree_id?: string | null
   worktree_path?: string | null
   task_id?: string
@@ -63,6 +65,8 @@ export interface ZellijSlotTelemetryEvent {
   artifact_paths?: string[]
   log_tail?: string
   blockers?: string[]
+  activity_source?: string
+  activity_hash?: string
 }
 
 export interface ZellijSlotTelemetrySnapshot {
@@ -79,6 +83,8 @@ export interface ZellijSlotTelemetrySnapshot {
     backend: string
     provider: string
     service_tier: string
+    model: string
+    reasoning_effort: string
     worktree_id: string | null
     worktree_path: string | null
     task_title: string
@@ -91,6 +97,8 @@ export interface ZellijSlotTelemetrySnapshot {
     artifact_paths: string[]
     blockers: string[]
     log_tail: string
+    activity_source?: string | null
+    activity_hash?: string | null
   }>
   counts: {
     queued: number
@@ -116,7 +124,11 @@ export async function appendZellijSlotTelemetry(root: string, event: ZellijSlotT
   const normalized = normalizeTelemetryEvent(event)
   const file = slotTelemetryEventPath(root, missionId)
   await ensureDir(path.dirname(file))
-  await appendJsonlBounded(file, normalized)
+  await withFileLock({
+    lockPath: `${file}.append.lock`,
+    timeoutMs: 30_000,
+    staleMs: 2 * 60 * 1000
+  }, async () => appendJsonlBounded(file, normalized))
   const previous = await readZellijSlotTelemetrySnapshotNoRebuild(root, missionId)
   if (previous) {
     const snapshotPath = slotTelemetrySnapshotPath(root, missionId)
@@ -277,6 +289,8 @@ function normalizeTelemetryEvent(event: ZellijSlotTelemetryEvent): ZellijSlotTel
     ...(event.backend ? { backend: String(event.backend) } : {}),
     ...(event.provider ? { provider: String(event.provider) } : {}),
     ...(event.service_tier ? { service_tier: String(event.service_tier) } : {}),
+    ...(event.model ? { model: String(event.model) } : {}),
+    ...(event.reasoning_effort ? { reasoning_effort: String(event.reasoning_effort) } : {}),
     worktree_id: event.worktree_id == null ? null : String(event.worktree_id),
     worktree_path: event.worktree_path == null ? null : String(event.worktree_path),
     ...(event.task_id ? { task_id: String(event.task_id) } : {}),
@@ -289,7 +303,9 @@ function normalizeTelemetryEvent(event: ZellijSlotTelemetryEvent): ZellijSlotTel
     })() : {}),
     ...(Array.isArray(event.artifact_paths) ? { artifact_paths: event.artifact_paths.map(String).filter(Boolean) } : {}),
     ...(event.log_tail ? { log_tail: tail(event.log_tail, 1200) } : {}),
-    ...(Array.isArray(event.blockers) ? { blockers: event.blockers.map(String).filter(Boolean) } : {})
+    ...(Array.isArray(event.blockers) ? { blockers: event.blockers.map(String).filter(Boolean) } : {}),
+    ...(event.activity_source ? { activity_source: String(event.activity_source) } : {}),
+    ...(event.activity_hash ? { activity_hash: String(event.activity_hash) } : {})
   }
 }
 
@@ -313,6 +329,8 @@ function mergeSlotTelemetry(previous: ZellijSlotTelemetrySnapshot['slots'][strin
     backend: event.backend || previous?.backend || 'unknown',
     provider: event.provider || previous?.provider || 'unknown',
     service_tier: event.service_tier || previous?.service_tier || 'unknown',
+    model: event.model || previous?.model || 'unknown',
+    reasoning_effort: event.reasoning_effort || previous?.reasoning_effort || 'unknown',
     worktree_id: event.worktree_id ?? previous?.worktree_id ?? null,
     worktree_path: event.worktree_path ?? previous?.worktree_path ?? null,
     task_title: event.task_title || previous?.task_title || event.task_id || 'waiting for task',
@@ -324,7 +342,9 @@ function mergeSlotTelemetry(previous: ZellijSlotTelemetrySnapshot['slots'][strin
     progress: stale ? previous!.progress || (terminalRegression ? null : event.progress || null) : event.progress || previous?.progress || null,
     artifact_paths: unique([...(previous?.artifact_paths || []), ...(event.artifact_paths || [])]),
     blockers: unique([...(previous?.blockers || []), ...(event.blockers || [])]),
-    log_tail: stale ? previous!.log_tail || (terminalRegression ? '' : event.log_tail || '') : event.log_tail || previous?.log_tail || ''
+    log_tail: stale ? previous!.log_tail || (terminalRegression ? '' : event.log_tail || '') : event.log_tail || previous?.log_tail || '',
+    activity_source: stale ? previous!.activity_source ?? null : event.activity_source || previous?.activity_source || null,
+    activity_hash: stale ? previous!.activity_hash ?? null : event.activity_hash || previous?.activity_hash || null
   }
 }
 

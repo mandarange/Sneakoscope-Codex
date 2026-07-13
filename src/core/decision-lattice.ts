@@ -73,13 +73,13 @@ const DEFAULT_ACTIONS = Object.freeze([
     notes: ['Checks syntax and behavior for the changed module.']
   },
   {
-    id: 'five_lane_review',
-    label: 'Collect five-lane Team review',
+    id: 'risk_scoped_review',
+    label: 'Collect risk-scoped official review',
     delta: { review: 1 },
     risk: 0.2,
-    friction: 1.1,
+    friction: 0.55,
     info_gain: 1,
-    notes: ['Satisfies Team review gate for broad missions.']
+    notes: ['Starts with one reviewer and expands only for independent risk domains.']
   },
   {
     id: 'honest_mode',
@@ -102,13 +102,13 @@ const DEFAULT_ROUTE_PATHS = Object.freeze([
   {
     id: 'balanced_team_lane',
     label: 'Balanced Team Lane',
-    action_ids: ['seal_contract', 'read_triwiki', 'proof_field_scan', 'minimal_patch', 'focused_verification', 'five_lane_review', 'honest_mode'],
+    action_ids: ['seal_contract', 'read_triwiki', 'proof_field_scan', 'minimal_patch', 'focused_verification', 'risk_scoped_review', 'honest_mode'],
     notes: ['Adds review evidence while preserving a compact change surface.']
   },
   {
     id: 'full_team_honest_path',
     label: 'Full Team Honest Path',
-    action_ids: ['seal_contract', 'read_triwiki', 'proof_field_scan', 'five_lane_review', 'minimal_patch', 'focused_verification', 'five_lane_review', 'honest_mode'],
+    action_ids: ['seal_contract', 'read_triwiki', 'proof_field_scan', 'risk_scoped_review', 'minimal_patch', 'focused_verification', 'risk_scoped_review', 'honest_mode'],
     notes: ['Heaviest default for broad or release-sensitive missions.']
   }
 ]);

@@ -10,6 +10,13 @@ import {
   runResearchAdversarialReviewLoop
 } from '../research-adversarial-review.js'
 import { recordSubagentEvent } from '../../subagents/subagent-evidence.js'
+import { writeVerifiedSuperSearchFixture } from './research-source-evidence-fixture.js'
+
+const reviewerIds = ['einstein', 'von_neumann', 'skeptic'] as const
+
+function mockSource(id: string) {
+  return { id, kind: 'selftest' }
+}
 
 const digestFixture = {
   schema: 'sks.research-review-artifact-digest.v1' as const,
@@ -24,26 +31,28 @@ const digestFixture = {
   blockers: []
 }
 
-test('mock adversarial loop records five structured outcomes without making genius or novelty guarantees', async () => {
+test('mock adversarial loop records three composite structured outcomes without making genius or novelty guarantees', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-research-adversarial-'))
   const plan = { mission_id: 'M-RESEARCH-ADVERSARIAL', prompt: 'bounded evidence research', artifacts: { research_paper: 'research-paper.md' } }
-  const sources = Array.from({ length: 8 }, (_unused, index) => ({ id: `source-${index + 1}` }))
+  const sources = Array.from({ length: 8 }, (_unused, index) => mockSource(`source-${index + 1}`))
   await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources, counterevidence_sources: [] }))
   await fsp.writeFile(path.join(dir, 'claim-evidence-matrix.json'), JSON.stringify({ schema: 'sks.claim-evidence-matrix.v1', claims: [] }))
   await fsp.writeFile(path.join(dir, 'research-report.md'), '# Report\n\nEvidence-bound fixture.')
   await fsp.writeFile(path.join(dir, 'research-paper.md'), '# Paper\n\nEvidence-bound fixture.')
   const result = await runResearchAdversarialReviewLoop({ root: dir, dir, plan, timeoutMs: 1000, mock: true })
   assert.equal(result.gate.passed, true)
-  assert.equal(result.gate.reviewer_count_observed, 5)
+  assert.equal(result.plan.reviewer_count, reviewerIds.length)
+  assert.deepEqual([...new Set(result.plan.reviewers.map((reviewer: any) => reviewer.custom_agent))], ['research_reviewer'])
+  assert.equal(result.gate.reviewer_count_observed, reviewerIds.length)
   assert.equal(result.gate.genius_level_guaranteed, false)
   assert.equal(result.gate.novelty_guaranteed, false)
   const debate = JSON.parse(await fsp.readFile(path.join(dir, 'debate-ledger.json'), 'utf8'))
   assert.equal(debate.unanimous_consensus, true)
-  assert.equal(debate.exchanges.length, 5)
+  assert.equal(debate.exchanges.length, reviewerIds.length)
 })
 
 test('structured reviewer convergence fails closed on a critical objection', () => {
-  const reviewers = ['einstein', 'feynman', 'turing', 'von_neumann', 'skeptic'].map((personaId, index) => ({
+  const reviewers = reviewerIds.map((personaId, index) => ({
     schema: 'sks.research-adversarial-reviewer-outcome.v1',
     persona_id: personaId,
     verdict: index === 0 ? 'revise' : 'approve',
@@ -82,7 +91,7 @@ test('official parent summary parser rejects prose-only thread outcomes', () => 
 })
 
 test('official reviewer parser rejects prose-wrapped parent JSON, wrong reviewer schema, and duplicate threads', () => {
-  const ids = ['einstein', 'feynman', 'turing', 'von_neumann', 'skeptic']
+  const ids = reviewerIds
   const outcome = (personaId: string) => ({
     schema: 'wrong.schema',
     persona_id: personaId,
@@ -125,7 +134,7 @@ test('official reviewer parser rejects prose-wrapped parent JSON, wrong reviewer
 })
 
 test('approve with a major objection remains blocked and revisable', () => {
-  const reviewers = ['einstein', 'feynman', 'turing', 'von_neumann', 'skeptic'].map((personaId, index) => ({
+  const reviewers = reviewerIds.map((personaId, index) => ({
     schema: 'sks.research-adversarial-reviewer-outcome.v1' as const,
     persona_id: personaId,
     verdict: 'approve' as const,
@@ -151,7 +160,7 @@ test('approve with a major objection remains blocked and revisable', () => {
 })
 
 test('review convergence rejects stale artifact digests and source IDs outside the current ledger', () => {
-  const reviewers = ['einstein', 'feynman', 'turing', 'von_neumann', 'skeptic'].map((personaId, index) => ({
+  const reviewers = reviewerIds.map((personaId, index) => ({
     schema: 'sks.research-adversarial-reviewer-outcome.v1' as const,
     persona_id: personaId,
     verdict: 'approve' as const,
@@ -175,16 +184,17 @@ test('review convergence rejects stale artifact digests and source IDs outside t
   assert.ok(result.blockers.includes('reviewer_evidence_source_unknown:einstein:unknown-source'))
 })
 
-test('real review convergence requires five distinct lifecycle-correlated official threads', async () => {
+test('real review convergence requires three distinct lifecycle-correlated official research_reviewer threads', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-research-adversarial-real-'))
   await fsp.mkdir(path.join(dir, '.codex', 'agents'), { recursive: true })
-  await fsp.writeFile(path.join(dir, '.codex', 'agents', 'expert.toml'), [
-    'name = "expert"',
+  await fsp.writeFile(path.join(dir, '.codex', 'agents', 'research-reviewer.toml'), [
+    'name = "research_reviewer"',
     'model = "gpt-5.6-sol"',
-    'model_reasoning_effort = "max"'
+    'model_reasoning_effort = "max"',
+    'sandbox_mode = "read-only"'
   ].join('\n'))
   const plan = { mission_id: 'M-RESEARCH-LIFECYCLE', prompt: 'bounded evidence research', artifacts: { research_paper: 'research-paper.md' } }
-  const sources = Array.from({ length: 8 }, (_unused, index) => ({ id: `source-${index + 1}` }))
+  const sources = await writeVerifiedSuperSearchFixture(dir, Array.from({ length: 8 }, (_unused, index) => `source-${index + 1}`), 'lifecycle')
   await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources, counterevidence_sources: [] }))
   await fsp.writeFile(path.join(dir, 'claim-evidence-matrix.json'), JSON.stringify({ schema: 'sks.claim-evidence-matrix.v1', claims: [] }))
   await fsp.writeFile(path.join(dir, 'research-report.md'), '# Report\n\nEvidence-bound fixture.')
@@ -200,7 +210,9 @@ test('real review convergence requires five distinct lifecycle-correlated offici
       const subagentPlan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'))
       const artifactBundle = subagentPlan.review_artifacts.bundle_sha256
       assert.match(workflow.prompt, new RegExp(artifactBundle))
-      const ids = ['einstein', 'feynman', 'turing', 'von_neumann', 'skeptic']
+      assert.ok(subagentPlan.slices.every((slice: any) => slice.agent === 'research_reviewer'))
+      assert.match(workflow.prompt, /use custom agent `research_reviewer`/)
+      const ids = reviewerIds
       const threadOutcomes = []
       for (const [index, personaId] of ids.entries()) {
         const threadId = `official-thread-${index + 1}`
@@ -237,7 +249,7 @@ test('real review convergence requires five distinct lifecycle-correlated offici
         parent_summary: JSON.stringify({
           schema: 'sks.subagent-parent-summary.v1',
           status: 'completed',
-          summary: 'All five independent reviewer threads completed.',
+          summary: 'All three independent composite reviewer threads completed.',
           thread_outcomes: threadOutcomes,
           changed_files: [],
           verification: [],
@@ -248,16 +260,45 @@ test('real review convergence requires five distinct lifecycle-correlated offici
   })
   assert.equal(result.gate.passed, true, JSON.stringify(result.gate))
   assert.equal(result.gate.official_subagent_evidence_ok, true)
-  assert.equal(result.review_cycles[0].subagent_evidence.completed_threads, 5)
-  assert.equal(new Set(result.review_cycles[0].reviewers.map((reviewer: any) => reviewer.thread_id)).size, 5)
+  assert.equal(result.review_cycles[0].subagent_evidence.completed_threads, reviewerIds.length)
+  assert.equal(new Set(result.review_cycles[0].reviewers.map((reviewer: any) => reviewer.thread_id)).size, reviewerIds.length)
+})
+
+test('real adversarial review fails closed when the project research_reviewer config is missing', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-research-adversarial-config-'))
+  const plan = { mission_id: 'M-RESEARCH-CONFIG', prompt: 'bounded evidence research', artifacts: { research_paper: 'research-paper.md' } }
+  const sources = await writeVerifiedSuperSearchFixture(dir, ['source-1'], 'config-missing')
+  await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources, counterevidence_sources: [] }))
+  await fsp.writeFile(path.join(dir, 'claim-evidence-matrix.json'), JSON.stringify({ schema: 'sks.claim-evidence-matrix.v1', claims: [] }))
+  await fsp.writeFile(path.join(dir, 'research-report.md'), '# Report\n\nEvidence-bound fixture.')
+  await fsp.writeFile(path.join(dir, 'research-paper.md'), '# Paper\n\nEvidence-bound fixture.')
+  let workflowCalled = false
+  const result = await runResearchAdversarialReviewLoop({
+    root: dir,
+    dir,
+    plan,
+    timeoutMs: 1000,
+    maxCycles: 1,
+    appSession: false,
+    runWorkflowImpl: async () => {
+      workflowCalled = true
+      return { status: 'parent_completed' }
+    }
+  })
+  assert.equal(workflowCalled, false)
+  assert.equal(result.gate.passed, false)
+  assert.ok(result.gate.blockers.includes('research_reviewer_agent_config_missing'), JSON.stringify(result.gate))
+  assert.ok(result.gate.blockers.includes('research_reviewer_name_mismatch:missing'), JSON.stringify(result.gate))
+  assert.ok(result.gate.blockers.includes('research_reviewer_sandbox_mismatch:missing'), JSON.stringify(result.gate))
 })
 
 test('adversarial review uses one absolute cycle deadline and fails closed after it expires', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-research-adversarial-timeout-'))
   await fsp.mkdir(path.join(dir, '.codex', 'agents'), { recursive: true })
-  await fsp.writeFile(path.join(dir, '.codex', 'agents', 'expert.toml'), 'model = "gpt-5.6-sol"\nmodel_reasoning_effort = "max"\n')
+  await fsp.writeFile(path.join(dir, '.codex', 'agents', 'research-reviewer.toml'), 'name = "research_reviewer"\nmodel = "gpt-5.6-sol"\nmodel_reasoning_effort = "max"\nsandbox_mode = "read-only"\n')
   const plan = { mission_id: 'M-RESEARCH-TIMEOUT', prompt: 'bounded evidence research', artifacts: { research_paper: 'research-paper.md' } }
-  await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources: [{ id: 'source-1' }], counterevidence_sources: [] }))
+  const sources = await writeVerifiedSuperSearchFixture(dir, ['source-1'], 'timeout')
+  await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources, counterevidence_sources: [] }))
   await fsp.writeFile(path.join(dir, 'claim-evidence-matrix.json'), JSON.stringify({ schema: 'sks.claim-evidence-matrix.v1', claims: [] }))
   await fsp.writeFile(path.join(dir, 'research-report.md'), '# Report\n\nEvidence-bound fixture.')
   await fsp.writeFile(path.join(dir, 'research-paper.md'), '# Paper\n\nEvidence-bound fixture.')

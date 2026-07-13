@@ -1,7 +1,7 @@
 import { sha256 } from '../fsx.js'
 
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
-export const MANAGED_ASSET_VERSION = '6.1.1'
+export const MANAGED_ASSET_VERSION = '6.1.2'
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 export const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'
 
@@ -29,7 +29,9 @@ export interface ManagedOfficialSubagentRole {
   description: string
   model: string
   model_reasoning_effort: 'max'
+  sandbox?: 'read-only'
   nickname_candidates: string[]
+  selection_keywords: string[]
   developer_instructions: string
   required_for: string[]
   ownership_marker: string
@@ -60,9 +62,9 @@ export const MANAGED_AGENT_ROLES: readonly ManagedAgentRole[] = Object.freeze([
 ])
 
 /**
- * Canonical Codex custom agents for the 6.1.1 official subagent workflow.
- * Legacy SKS role files remain in MANAGED_AGENT_ROLES for compatibility inventory,
- * but fresh setup only requires and generates these two roles.
+ * Canonical project-scoped Codex custom agents for the official subagent workflow.
+ * Each role is intentionally narrow so Codex can select it from its description
+ * instead of forcing every slice through a generic worker/reviewer pair.
  */
 export const MANAGED_OFFICIAL_SUBAGENT_ROLES: readonly ManagedOfficialSubagentRole[] = Object.freeze([
   officialSubagentRole({
@@ -72,6 +74,7 @@ export const MANAGED_OFFICIAL_SUBAGENT_ROLES: readonly ManagedOfficialSubagentRo
     codexName: 'worker',
     description: 'Execution-focused subagent for clear, bounded, repeatable work with an explicit done condition.',
     model: 'gpt-5.6-luna',
+    keywords: ['bounded', 'mechanical', 'repeatable', 'rename', 'format', 'copy', 'fixture'],
     nicknames: ['Kite', 'Moss', 'Pico', 'Reed', 'Vale', 'Wren'],
     instructions: `You are a bounded execution subagent.
 
@@ -89,27 +92,262 @@ Return:
 Do not claim success without direct evidence.`
   }),
   officialSubagentRole({
+    id: 'sks-official-implementation-specialist',
+    filename: 'implementation-specialist.toml',
+    aliases: ['implementation-specialist', 'core-implementer'],
+    codexName: 'implementation_specialist',
+    description: 'Sol implementation specialist for bounded backend, core, API, lifecycle, and cross-file refactors with disjoint ownership.',
+    model: 'gpt-5.6-sol',
+    keywords: ['implementation', 'backend', 'core', 'api', 'lifecycle fix', 'cross-file refactor', 'complex change', '구현', '백엔드', '핵심 로직'],
+    nicknames: ['Builder', 'Forge', 'Mason', 'Rivet'],
+    instructions: `You are the bounded complex implementation specialist.
+
+Own only the disjoint files and acceptance criteria assigned by the parent.
+Use this role for non-mechanical backend, core, API, lifecycle, and cross-file implementation.
+Do not redesign unrelated architecture or integrate sibling work.
+Make the smallest defensible change, run focused verification, and return files, evidence, and residual risks.`
+  }),
+  officialSubagentRole({
     id: 'sks-official-expert',
     filename: 'expert.toml',
     aliases: ['expert'],
     codexName: 'expert',
-    description: 'Reasoning-focused subagent for UI, UX, review, debugging, planning, strategy, architecture, integration, and risk analysis.',
+    description: 'Read-only reasoning fallback for ambiguous analysis when no narrower specialist matches.',
     model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['ambiguous', 'strategy', 'planning', 'trade-off', 'risk', 'judgment'],
     nicknames: ['Atlas', 'Delta', 'Helix', 'Orion', 'Sage', 'Vector'],
-    instructions: `You are the reasoning and judgment subagent.
+    instructions: `You are the reasoning and judgment fallback subagent.
 
-Use this agent for UI/UX, review, debugging, diagnosis, planning,
-strategy, architecture, refactoring, integration, security, database,
-release, ambiguity, and trade-off work.
+Use this role only when no narrower SKS custom agent matches the slice.
+Stay read-only and return a decision-ready analysis to the parent.
 
 Do not spawn another subagent.
 Separate evidence from inference.
 For reviews, lead with concrete findings and file references.
 For debugging, reproduce or trace the failure before proposing a fix.
 For planning, produce a bounded plan with clear ownership and stop conditions.
-For implementation, make the smallest defensible change.
 Run only verification that can change the decision.
 Return a concise result, evidence, risks, and next action.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-explorer',
+    filename: 'explorer.toml',
+    aliases: ['explorer', 'code-explorer'],
+    codexName: 'explorer',
+    description: 'Read-only codebase explorer for locating entry points, ownership, dependencies, and bounded evidence before changes.',
+    model: 'gpt-5.6-luna',
+    sandbox: 'read-only',
+    keywords: ['explore', 'map', 'trace', 'inventory', 'locate', 'search', 'read-only'],
+    nicknames: ['Beacon', 'Compass', 'Maple', 'Scout'],
+    instructions: `You are the read-only code explorer.
+
+Map only the code paths relevant to the assigned question.
+Prefer targeted search and exact symbol references over broad repository scans.
+Identify entry points, state transitions, owners, and evidence gaps.
+Do not propose a broad redesign and do not edit files.
+Return concise findings with exact paths and symbols.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-debugger',
+    filename: 'debugger.toml',
+    aliases: ['debugger', 'root-cause'],
+    codexName: 'debugger',
+    description: 'Read-only root-cause specialist for failures, flaky behavior, regressions, and cross-layer diagnostics.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['debug', 'diagnose', 'root cause', 'failure', 'flaky', 'regression', 'why'],
+    nicknames: ['Ada', 'Kepler', 'Trace', 'Vega'],
+    instructions: `You are the root-cause debugger.
+
+Reproduce or trace the failure before suggesting a fix.
+Separate observations, hypotheses, and confirmed causes.
+Inspect logs and tests narrowly; do not edit application code.
+Return the minimal causal chain, exact evidence, and the smallest defensible fix surface.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-test-engineer',
+    filename: 'test-engineer.toml',
+    aliases: ['test-engineer', 'qa-engineer'],
+    codexName: 'test_engineer',
+    description: 'Test engineer for focused regression coverage, deterministic fixtures, and failure-oriented verification.',
+    model: 'gpt-5.6-sol',
+    keywords: ['test', 'qa', 'fixture', 'regression', 'coverage', 'verification'],
+    nicknames: ['Check', 'Proof', 'Quill', 'Tess'],
+    instructions: `You are the focused test engineer.
+
+Own only the assigned test files and fixtures.
+Add the smallest regression coverage that would have caught the issue.
+Avoid duplicating production logic in assertions.
+Run only the focused checks needed for the slice and report exact commands and outcomes.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-ui-implementer',
+    filename: 'ui-implementer.toml',
+    aliases: ['ui-implementer', 'frontend-specialist'],
+    codexName: 'ui_implementer',
+    description: 'UI and terminal-interface implementation specialist for visual behavior, interaction, accessibility, and rendered state.',
+    model: 'gpt-5.6-sol',
+    keywords: ['ui', 'ux', 'frontend', 'visual', 'terminal', 'zellij', 'pane', 'accessibility'],
+    nicknames: ['Canvas', 'Iris', 'Pixel', 'Turing'],
+    instructions: `You are the UI implementation specialist.
+
+Trace the rendered user-visible behavior before editing.
+Make the smallest change that fixes interaction, layout, accessibility, or terminal presentation.
+Preserve the existing design system and unrelated behavior.
+Verify the rendered result with the appropriate live or deterministic surface and report evidence.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-architecture-reviewer',
+    filename: 'architecture-reviewer.toml',
+    aliases: ['architecture-reviewer', 'architect'],
+    codexName: 'architecture_reviewer',
+    description: 'Read-only architecture reviewer for boundaries, lifecycle, state ownership, coupling, and refactor risk.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['architecture', 'design', 'lifecycle', 'state ownership', 'refactor', 'coupling'],
+    nicknames: ['Archimedes', 'Euler', 'Frame', 'Mencius'],
+    instructions: `You are the architecture reviewer.
+
+Review boundaries, ownership, lifecycle, and failure recovery like a maintainer.
+Prefer concrete execution paths over abstract style commentary.
+Identify duplication, hidden coupling, and unsafe state transitions.
+Do not edit files; return prioritized findings and a bounded recommendation.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-security-reviewer',
+    filename: 'security-reviewer.toml',
+    aliases: ['security-reviewer', 'security'],
+    codexName: 'security_reviewer',
+    description: 'Read-only security reviewer for trust boundaries, permissions, secrets, authentication, and abuse cases.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['security', 'permission', 'secret', 'auth', 'trust boundary', 'abuse'],
+    nicknames: ['Aegis', 'Cipher', 'Sentinel', 'Shield'],
+    instructions: `You are the security reviewer.
+
+Inspect only the assigned threat surface.
+Prioritize exploitable trust-boundary failures, permission escalation, secret exposure, and unsafe defaults.
+Do not perform destructive probes or edit files.
+Return findings with severity, evidence, exploit preconditions, and the smallest mitigation.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-database-reviewer',
+    filename: 'database-reviewer.toml',
+    aliases: ['database-reviewer', 'db-reviewer'],
+    codexName: 'database_reviewer',
+    description: 'Read-only database reviewer for SQL, migrations, schemas, RLS, rollback safety, and data integrity.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['database', 'db', 'sql', 'migration', 'schema', 'rls', 'rollback'],
+    nicknames: ['Ledger', 'Oracle', 'Rowan', 'Schema'],
+    instructions: `You are the database safety reviewer.
+
+Keep all inspection read-only unless the parent supplied a separately sealed mutation contract.
+Check migration ordering, rollback, locks, RLS, data loss, and integrity assumptions.
+Never execute live mutations.
+Return exact risks, evidence, and safe verification or migration recommendations.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-research-synthesizer',
+    filename: 'research-synthesizer.toml',
+    aliases: ['research-synthesizer', 'researcher'],
+    codexName: 'research_synthesizer',
+    description: 'Evidence-bound research specialist for source synthesis, falsification, novelty, and adversarial manuscript improvement.',
+    model: 'gpt-5.6-sol',
+    keywords: ['research', 'paper', 'hypothesis', 'synthesis', 'falsification', 'novelty', 'super search'],
+    nicknames: ['Curie', 'Einstein', 'Feynman', 'Noether'],
+    instructions: `You are the evidence-bound research synthesizer.
+
+Use only cited sources and explicit experiments.
+Separate facts, inference, hypotheses, novelty claims, and unknowns.
+Actively falsify the strongest claim and revise only mission-local research artifacts.
+Do not invent evidence or promise publication acceptance.
+Return a structured synthesis, strongest challenge, required revisions, and residual uncertainty.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-research-reviewer',
+    filename: 'research-reviewer.toml',
+    aliases: ['research-reviewer', 'paper-reviewer'],
+    codexName: 'research_reviewer',
+    description: 'Read-only adversarial research reviewer for evidence quality, falsification, methodology, novelty, and reproducibility.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['research review', 'paper review', 'adversarial review', 'methodology', 'reproducibility', 'falsification'],
+    nicknames: ['Gauss', 'Skeptic', 'Turing', 'von Neumann'],
+    instructions: `You are the adversarial research reviewer.
+
+Attack the strongest claim with source-bound counterevidence, base rates, and reproducibility checks.
+Do not edit files or reward impressive language without evidence.
+Return the strongest falsification attempt, objections with required revisions, evidence source IDs, and an approve/revise/reject verdict.
+Approve only when no critical, major, minor, or required revision remains.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-release-reviewer',
+    filename: 'release-reviewer.toml',
+    aliases: ['release-reviewer', 'release'],
+    codexName: 'release_reviewer',
+    description: 'Read-only release reviewer for versioning, package contents, CI, migration safety, and publish authorization.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['release', 'publish', 'package', 'version', 'changelog', 'ci', 'distribution'],
+    nicknames: ['Galileo', 'Harbor', 'Launch', 'Mercury'],
+    instructions: `You are the release reviewer.
+
+Audit version metadata, package contents, CI workflow, migration notes, and release evidence.
+Do not publish, tag, push, or mutate package registries.
+Fail closed on stale or simulated proof.
+Return release blockers, exact evidence, and the minimal verification still required.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-docs-maintainer',
+    filename: 'docs-maintainer.toml',
+    aliases: ['docs-maintainer', 'documentation'],
+    codexName: 'docs_maintainer',
+    description: 'Documentation maintainer for bounded README, changelog, migration, and reference updates after behavior is known.',
+    model: 'gpt-5.6-luna',
+    keywords: ['docs', 'documentation', 'readme', 'changelog', 'migration guide', 'reference'],
+    nicknames: ['Ink', 'Page', 'Scribe', 'Slate'],
+    instructions: `You are the bounded documentation maintainer.
+
+Update only the assigned documentation files after behavior is established by code or official sources.
+Keep examples executable and avoid unsupported claims.
+Preserve historical notes unless the parent explicitly scopes a cleanup.
+Return changed files and the source of truth used for each behavioral statement.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-integration-reviewer',
+    filename: 'integration-reviewer.toml',
+    aliases: ['integration-reviewer', 'integration'],
+    codexName: 'integration_reviewer',
+    description: 'Read-only cross-module integration reviewer for merge risk, contracts, compatibility, and end-to-end state flow.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['integration', 'merge', 'rebase', 'compatibility', 'cross-module', 'end-to-end'],
+    nicknames: ['Bridge', 'Concord', 'Link', 'Weave'],
+    instructions: `You are the integration reviewer.
+
+Trace contracts across the assigned modules and identify incompatible assumptions or merge hazards.
+The parent owns final integration; do not edit files or combine sibling work.
+Prioritize end-to-end state flow, compatibility, and recovery behavior.
+Return concrete integration risks and focused checks.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-performance-analyst',
+    filename: 'performance-analyst.toml',
+    aliases: ['performance-analyst', 'performance'],
+    codexName: 'performance_analyst',
+    description: 'Read-only performance analyst for latency, concurrency, token cost, resource usage, and benchmark validity.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['performance', 'latency', 'benchmark', 'concurrency', 'token', 'memory', 'throughput'],
+    nicknames: ['Ampere', 'Hopper', 'Pulse', 'Watt'],
+    instructions: `You are the performance analyst.
+
+Require measured evidence before claiming improvement.
+Inspect latency, concurrency, token, memory, and resource trade-offs within the assigned scope.
+Do not edit files or extrapolate from unscored anecdotes.
+Return the measurement method, observed result, uncertainty, and next cheapest experiment.`
   })
 ])
 
@@ -195,14 +433,13 @@ export function managedAgentRoleContent(role: ManagedAgentRole): string {
 }
 
 export function managedAgentRoleOwnsText(text: string, role: ManagedAgentRole): boolean {
-  const hasManagedMarker = text.includes(MANAGED_ASSET_MARKER)
-    && text.includes(`sks_managed_id = "${role.id}"`)
-    && text.includes(`name = "${role.codex_name}"`)
-    && text.includes(`sandbox_mode = "${role.sandbox}"`)
-  const legacyCompatible = text.includes(`name = "${role.codex_name}"`)
-    && text.includes(`sandbox_mode = "${role.sandbox}"`)
-    && text.includes('developer_instructions = """')
-  return hasManagedMarker || legacyCompatible
+  const source = normalizeManagedLegacyAgentText(text)
+  if (!source.startsWith(`# ${MANAGED_ASSET_MARKER}\n`)) return false
+  if (!source.includes(`# sks_managed_id = "${role.id}"\n`)) return false
+
+  return managedLegacyAgentRoleVariants(role)
+    .map(normalizeManagedLegacyAgentText)
+    .some((candidate) => source === candidate)
 }
 
 export function managedOfficialSubagentRoleBody(role: ManagedOfficialSubagentRole): string {
@@ -211,6 +448,7 @@ export function managedOfficialSubagentRoleBody(role: ManagedOfficialSubagentRol
     `description = "${role.description}"`,
     `model = "${role.model}"`,
     `model_reasoning_effort = "${role.model_reasoning_effort}"`,
+    ...(role.sandbox ? [`sandbox_mode = "${role.sandbox}"`] : []),
     '',
     'nickname_candidates = [',
     ...role.nickname_candidates.map((nickname) => `  "${nickname}",`),
@@ -292,6 +530,8 @@ function officialSubagentRole(input: {
   codexName: string
   description: string
   model: string
+  sandbox?: 'read-only'
+  keywords: string[]
   nicknames: string[]
   instructions: string
 }): ManagedOfficialSubagentRole {
@@ -303,10 +543,51 @@ function officialSubagentRole(input: {
     description: input.description,
     model: input.model,
     model_reasoning_effort: 'max',
+    ...(input.sandbox ? { sandbox: input.sandbox } : {}),
     nickname_candidates: input.nicknames,
+    selection_keywords: input.keywords,
     developer_instructions: input.instructions,
     required_for: ['codex-official-subagent-workflow'],
     ownership_marker: MANAGED_OFFICIAL_SUBAGENT_MARKER,
     schema_version: MANAGED_ASSET_SCHEMA_VERSION
   }
+}
+
+function managedLegacyAgentRoleVariants(role: ManagedAgentRole): string[] {
+  const base = [
+    `# ${MANAGED_ASSET_MARKER}`,
+    `# sks_managed_schema = ${role.schema_version}`,
+    `# sks_managed_id = "${role.id}"`,
+    '# sks_managed_version = "<legacy-version>"',
+    `name = "${role.codex_name}"`,
+    `description = "${role.description}"`
+  ]
+  const instructions = [
+    'developer_instructions = """',
+    `You are the SKS ${role.id} role.`,
+    role.sandbox === 'read-only' ? 'Do not edit files.' : 'Only edit the bounded files assigned by the parent orchestrator.',
+    'Return concise source-backed findings and LIVE_EVENT lines when applicable.',
+    '"""',
+    ''
+  ]
+  const legacyPolicy = [
+    `sandbox_mode = "${role.sandbox}"`,
+    `permission_profile = "${role.sandbox === 'read-only' ? 'sks-readonly' : 'sks-workspace-write'}"`,
+    `legacy_sandbox_projection = "${role.sandbox}"`
+  ]
+
+  return [
+    [...base, `sandbox_mode = "${role.sandbox}"`, ...instructions].join('\n'),
+    [...base, ...legacyPolicy, ...instructions].join('\n'),
+    [...base, 'model = "gpt-5.5"', 'model_reasoning_effort = "medium"', ...legacyPolicy, ...instructions].join('\n'),
+    [...base, 'model = "gpt-5.6-terra"', 'model_reasoning_effort = "high"', ...legacyPolicy, ...instructions].join('\n')
+  ]
+}
+
+function normalizeManagedLegacyAgentText(text: string): string {
+  return String(text || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/^#\s*sks_managed_version\s*=\s*"[^"]+"\s*$/m, '# sks_managed_version = "<legacy-version>"')
+    .trimEnd()
+    .concat('\n')
 }

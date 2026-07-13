@@ -23,7 +23,7 @@ export const SKS_OWNED_AGENT_CONFIGS = new Map<string, {
 }>([
   ...MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => [
     role.filename,
-    { name: role.codex_name, sandbox: null, content: managedOfficialSubagentRoleContent(role), id: role.id }
+    { name: role.codex_name, sandbox: role.sandbox ?? null, content: managedOfficialSubagentRoleContent(role), id: role.id }
   ] as const),
   ...MANAGED_AGENT_ROLES.map((role) => [
     role.filename,
@@ -57,12 +57,15 @@ export async function repairAgentRoleConfigs(input: {
   const officialRepair = await installOfficialSubagentAgentConfigs(root, { apply: input.apply === true })
   const missing: string[] = [...officialRepair.missing]
   const stale: string[] = [...officialRepair.stale]
+  stale.push(...officialRepair.legacy_stale)
   const created: string[] = [...officialRepair.created]
   const repaired: string[] = [...officialRepair.updated]
+  const removed: string[] = [...officialRepair.removed_legacy]
   const existing: string[] = [...officialRepair.existing]
   const manualBlockers: string[] = [...officialRepair.manual_blockers]
-  // Legacy role TOMLs are compatibility/user surfaces only in 6.1.1. Inventory
-  // them when present, but never create, normalize, or overwrite them.
+  // Exact historical SKS templates are removed by the official installer.
+  // Any user-authored or modified legacy TOML remains an extension surface and
+  // is only inventoried here; it is never normalized, overwritten, or deleted.
   for (const role of MANAGED_AGENT_ROLES) {
     const file = role.filename
     const foundPaths = candidates.map((dir) => path.join(dir, file)).filter((filePath) => fs.existsSync(filePath))
@@ -71,7 +74,7 @@ export async function repairAgentRoleConfigs(input: {
     }
   }
   const requiredFixes = missing.length + stale.length
-  const appliedFixes = created.length + repaired.length
+  const appliedFixes = created.length + repaired.length + removed.length
   const report = {
     schema: AGENT_ROLE_CONFIG_REPAIR_SCHEMA,
     generated_at: nowIso(),
@@ -82,6 +85,7 @@ export async function repairAgentRoleConfigs(input: {
     existing,
     created,
     repaired,
+    removed,
     backups: officialRepair.backups,
     manual_blockers: manualBlockers,
     manifest_role_ids: MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.id),

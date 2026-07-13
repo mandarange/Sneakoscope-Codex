@@ -9,6 +9,8 @@ The canonical policy is:
 - parent: GPT-5.6 Sol with `model_reasoning_effort="max"`
 - clear bounded worker: GPT-5.6 Luna with `model_reasoning_effort="max"`
 - reasoning-sensitive expert: GPT-5.6 Sol with `model_reasoning_effort="max"`
+- automatic requested children: 1 by default, 2 for explicit parallel work or independent risk domains, and at most 3 for critical multi-domain risk
+- explicit `--agents N` remains authoritative when the operator supplies it
 - default `agents.max_threads`: 12 for fresh SKS-owned project config
 - `agents.max_depth`: 1
 - hard SKS request safety cap: 32, with larger requested work planned in waves
@@ -29,18 +31,16 @@ naruto-summary.json
 naruto-gate.json
 ```
 
-The historical process swarm remains available for one compatibility window
-only when the operator explicitly sets:
+The historical Naruto process swarm and its environment opt-in are removed.
+Legacy backend, scheduler, pool, and model flags fail closed. A standalone
+terminal invocation launches at most one Sol Max `codex exec` parent, and a
+Codex App/Desktop invocation returns official delegation context to the current
+parent without nesting another Codex process.
 
-```bash
-SKS_NARUTO_LEGACY_PROCESS_SWARM=1 sks naruto run "task"
-```
+The parent reuses only bounded TriWiki `attention.use_first` anchors and hydrates
+their source hints on demand. It does not inject the full context pack into each
+child or require repeated repository-wide context discovery.
 
-Without that opt-in, `sks naruto run` never launches one SKS-owned child process
-per requested subagent. A standalone terminal invocation launches at most one
-Sol Max `codex exec` parent, and a Codex App/Desktop invocation returns official
-delegation context to the current parent without nesting another Codex process.
-
-The retained release-gate ids `agent:native-cli-session-swarm-scaling`,
-`agent:fast-mode-policy`, and `naruto:canonical-stop-gate` now validate this
-official event-evidence contract for compatibility with existing gate tooling.
+The legacy release-gate ids `agent:native-cli-session-swarm-scaling` and
+`agent:fast-mode-policy` are retired. `naruto:canonical-stop-gate` validates
+the official event-evidence contract once.

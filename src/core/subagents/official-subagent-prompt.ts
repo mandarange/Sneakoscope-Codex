@@ -1,11 +1,18 @@
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
 import type { BoundedTriwikiAttention } from './triwiki-attention.js'
+import {
+  MAX_AUTOMATIC_REVIEWER_COUNT,
+  MAX_AUTOMATIC_SUBAGENT_COUNT,
+  officialSubagentRoleCatalog,
+  selectOfficialSubagentRole
+} from './agent-catalog.js'
 
 export interface OfficialSubagentSlice {
   id: string
   title: string
   description: string
   kind: 'worker' | 'expert'
+  agent?: string
   paths?: string[]
   readOnly?: boolean
 }
@@ -18,6 +25,7 @@ export function buildOfficialSubagentPrompt(input: {
   requestedSubagentsExplicit?: boolean
   decompositionStatus?: 'ready' | 'parent_required'
   triwikiAttention?: BoundedTriwikiAttention
+  recommendedAgents?: readonly string[]
 }): string {
   const maxThreads = clampThreads(input.maxThreads)
   const requestedSubagents = normalizeRequestedSubagents(input.requestedSubagents, input.slices.length)
@@ -25,10 +33,18 @@ export function buildOfficialSubagentPrompt(input: {
   const parentDecompositionRequired = input.decompositionStatus === 'parent_required'
   const requestedPolicy = input.requestedSubagentsExplicit === true
     ? `${requestedSubagents} (explicit operator request)`
-    : `${requestedSubagents} (safe default; increase only after parent-owned decomposition finds defensible independent slices)`
+    : `${requestedSubagents} (risk-based automatic count; one child is the safe default; keep the plan and evidence count exact)`
   const triwiki = renderBoundedTriwikiAttention(input.triwikiAttention)
+  const catalog = renderAgentCatalog(input.recommendedAgents)
   const rows = input.slices.map((slice, index) => {
-    const agentName = slice.kind === 'expert' ? 'expert' : 'worker'
+    const agentName = slice.agent || selectOfficialSubagentRole({
+      title: slice.title,
+      description: slice.description,
+      role: slice.kind,
+      ...(slice.paths === undefined ? {} : { paths: slice.paths }),
+      readOnly: slice.readOnly === true,
+      requiresWrite: slice.readOnly !== true
+    })
     const mode = slice.readOnly ? 'read-only' : 'use the parent permission mode'
     const paths = (slice.paths || []).map((entry) => String(entry).trim()).filter(Boolean)
 
@@ -51,9 +67,12 @@ Parent agent:
 
 Subagent rules:
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
-- use \`worker\` (gpt-5.6-luna, max reasoning) for clear, bounded, repeatable work
-- use \`expert\` (gpt-5.6-sol, max reasoning) for UI, review, debugging, strategy, planning,
-  architecture, refactoring, integration, security, database, release, risk, or ambiguity
+- select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
+- use \`worker\` with gpt-5.6-luna and max reasoning only for clear, bounded, repeatable work
+- use \`expert\` with gpt-5.6-sol and max reasoning only as the read-only judgment fallback
+- automatic fan-out is selected before execution: one by default, two only for explicit parallel work or independent risk domains,
+  and at most ${MAX_AUTOMATIC_SUBAGENT_COUNT} for critical multi-domain risk; never spawn beyond the requested count
+- automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work; critical multi-domain review may use the overall cap of ${MAX_AUTOMATIC_SUBAGENT_COUNT}
 - requested subagents: ${requestedPolicy}
 - max open agent threads: ${maxThreads}
 - planned waves: ${waveCount}
@@ -66,10 +85,15 @@ Subagent rules:
 ${parentDecompositionRequired ? `- decomposition status: parent_required
 - before spawning, decompose the goal into independent, non-overlapping slices
 - do not invent write scopes merely to reach the requested count
-- if the defensible independent slice count differs, update the delegation plan and requested count before execution` : '- decomposition status: ready'}
+${input.requestedSubagentsExplicit === true
+    ? '- the explicit operator count is authoritative; if it cannot be defended safely, block and report instead of silently changing it'
+    : '- if fewer defensible slices exist, reduce the delegation plan and requested count before execution; never increase automatically beyond the selected count'}` : '- decomposition status: ready'}
 
 Central TriWiki context:
 ${triwiki}
+
+Project custom agent catalog:
+${catalog}
 
 Goal:
 ${String(input.goal || '').trim()}
@@ -115,6 +139,18 @@ function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefine
     '- do not inject the full context pack or make each subagent repeat repository-wide context discovery',
     `- bounded anchors: ${JSON.stringify(anchors)}`
   ].join('\n')
+}
+
+function renderAgentCatalog(recommended: readonly string[] | undefined): string {
+  const preferred = new Set((recommended || []).map(String))
+  const included = new Set(['worker', 'implementation_specialist', 'expert', ...preferred])
+  return officialSubagentRoleCatalog()
+    .filter((role) => included.has(role.name))
+    .map((role) => {
+      const marker = preferred.has(role.name) ? ' [suggested for this goal]' : ''
+      return `- \`${role.name}\`${marker}: ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
+    })
+    .join('\n')
 }
 
 function clampThreads(value: unknown): number {

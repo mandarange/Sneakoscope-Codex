@@ -104,8 +104,9 @@ function trustedLinkedEvidence(row: any): boolean {
   return String(row?.acquisition_verdict || '') === 'verified_content'
     && /^verified_content:/i.test(String(row?.credibility || ''))
     && Boolean(String(row?.content_artifact || '').trim())
-    && /^[a-f0-9]{32,}$/i.test(String(row?.content_sha256 || '').trim())
+    && /^[a-f0-9]{64}$/i.test(String(row?.content_sha256 || '').trim())
     && Number(row?.content_length || 0) > 0
+    && row?.super_search_provenance?.validated === true
 }
 
 export async function readSourceQualityReport(dir: string) {

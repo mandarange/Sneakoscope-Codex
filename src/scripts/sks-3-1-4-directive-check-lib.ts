@@ -119,11 +119,13 @@ async function codexAppGate(id: string) {
     }
     if (id === 'codex-app:agent-role-sync') {
       const mod = await importDist('core/codex-app/codex-agent-role-sync.js')
+      const manifest = await importDist('core/managed-assets/managed-assets-manifest.js')
       const codexHome = path.join(rootDir, 'codex-home')
       const report = await mod.syncCodexAgentRoles({ root: rootDir, codexHome, apply: true, agentTypeSupported: true })
+      const expectedRoles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role: any) => role.codex_name)
       assertGate(report.fallback === 'agent_type', 'agent role sync should use agent_type when supported', report)
-      assertGate(report.directive_roles.length === 0 && report.official_roles.join(',') === 'worker,expert', 'agent role sync must expose only official worker/expert roles', report)
-      assertGate(fs.existsSync(path.join(rootDir, '.codex', 'agents', 'worker.toml')) && fs.existsSync(path.join(rootDir, '.codex', 'agents', 'expert.toml')), 'official project agent roles missing', report)
+      assertGate(report.directive_roles.length === 0 && report.official_roles.join(',') === expectedRoles.join(','), 'agent role sync must expose the official project custom-agent catalog', report)
+      assertGate(manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.every((role: any) => fs.existsSync(path.join(rootDir, '.codex', 'agents', role.filename))), 'official project agent catalog missing', report)
       assertGate(!fs.existsSync(path.join(codexHome, 'agents')), 'agent role sync must not create global directive roles', report)
       return emitGate(id, { roles: report.official_roles.length })
     }

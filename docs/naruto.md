@@ -4,6 +4,12 @@
 path no longer treats a custom child-process swarm, PID count, Zellij panes, or
 a custom active pool as proof that subagents ran.
 
+An implicit run starts with one direct child so a plain task cannot trigger an
+accidental paid fanout. The parent may select two children only for explicit
+parallel work or independent risk domains, and three only for critical
+multi-domain work. Explicit `--agents N` remains authoritative, but every
+delegated slice must still be defensible and independent.
+
 ## Usage
 
 ```bash
@@ -54,10 +60,18 @@ Explicit user project or global values are preserved. Only recognized
 SKS-owned legacy thread defaults are migrated. The SKS request safety cap is 32;
 requests larger than the configured concurrent limit are divided into waves.
 
-Custom agent files are limited to two managed roles:
+SKS materializes a project-scoped catalog of narrow official agents so Codex can
+select by description instead of routing every task through one generic pair:
 
-- `.codex/agents/worker.toml` for Luna Max bounded work
-- `.codex/agents/expert.toml` for Sol Max judgment work
+- bounded execution: `worker`, `explorer`, `docs_maintainer`
+- implementation and diagnosis: `implementation_specialist`, `debugger`, `test_engineer`, `ui_implementer`
+- independent review: `expert`, `architecture_reviewer`, `security_reviewer`, `database_reviewer`, `integration_reviewer`, `performance_analyst`, `release_reviewer`
+- Research: `research_synthesizer`, `research_reviewer`
+
+Clear bounded roles use Luna Max. Implementation, UI, debugging, test/root-cause,
+Research, integration, safety, and release judgment use Sol Max. Write-capable
+roles inherit the parent sandbox; only read-only roles declare a read-only
+sandbox explicitly.
 
 User-authored collisions or invalid TOML are preserved and reported as manual
 blockers instead of being overwritten.
@@ -69,6 +83,12 @@ answer. Delegated slices must be independent, non-duplicative, and use disjoint
 write scopes. Nested subagent delegation is prohibited by `max_depth = 1`.
 The parent waits for all requested agent threads and closes completed threads
 after collecting their results.
+
+The parent reads a bounded set of central TriWiki `attention.use_first` anchors
+and passes only those identifiers, hashes, and on-demand hydration hints into
+the delegation context. Subagents hydrate a cited source only when it is
+relevant to their slice or a risky decision; the full context pack is not
+injected and every child is not asked to repeat repository-wide discovery.
 
 Codex Desktop/App sessions do not launch a nested `codex exec`. SKS returns the
 official delegation context to the current parent session. A standalone
@@ -120,15 +140,19 @@ The result schema is `sks.naruto-subagent-workflow.v1`. Native process counts,
 Zellij panes, and legacy `.jsonl` heuristics are not completion evidence on the
 default path.
 
+In CLI Zellij sessions, those panes are nevertheless useful observability
+surfaces: official start/stop hooks populate the monitor and viewports, and a
+version-gated exact-agent rollout tail supplies redacted live phase/task/file
+updates without exposing raw reasoning, command arguments, or tool output.
+The rollout is display-only; stop remains `verifying`, and only the same
+trustworthy parent outcomes used by this gate produce terminal `completed` or
+`failed` telemetry.
+
 ## Legacy Compatibility
 
-The historical process-swarm implementation remains available only when the
-operator explicitly sets:
-
-```bash
-SKS_NARUTO_LEGACY_PROCESS_SWARM=1 sks naruto run "task" --clones 8
-```
-
-Legacy backend, scheduler, work-item, patch-pool, and dashboard flags are
-blocked on the default official path. This compatibility switch is not an
-automatic fallback.
+The historical Naruto process-swarm command implementation and its environment
+switch have been removed. Legacy backend, scheduler, work-item, patch-pool,
+model, and dashboard flags fail closed and cannot reactivate that runtime.
+`--clones` and read-only `workers` remain temporary spelling aliases only; they
+map to official `--agents` and `subagents` behavior and never select a custom
+scheduler, worker pool, process swarm, or alternate model fanout.

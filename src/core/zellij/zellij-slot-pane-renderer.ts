@@ -51,7 +51,7 @@ export function renderZellijSlotPane(input: ZellijSlotPaneRenderInput): string {
   const stderr = (input.stderrTail || []).filter(Boolean).slice(-1)
   const fullDebug = mode === 'full-debug'
   const fixtureLoopProof = String(input.backend || '').includes('fixture') || String(input.patchStatus || '').includes('fixture')
-  const meta = [input.model || input.provider || '?', input.serviceTier || '?'].filter(Boolean).join('·')
+  const meta = [input.model || input.provider || '?', input.reasoningEffort || '?', input.serviceTier || '?'].filter(Boolean).join('·')
   const head = `${statusBadge(theme, input.status || 'queued')}  ${paint(theme, ANSI_CODES.bold, input.slotId)}` +
     `  ${t(input.role || 'worker', 12)}  ${paint(theme, ANSI_CODES.dim, t(meta, 28))}`
   const prog = input.progress && input.progress.total > 0
@@ -148,15 +148,27 @@ function mergeRenderInputWithLiveTelemetry(detail: ZellijSlotPaneRenderInput, li
     currentTask: live.task_title || detail.currentTask || null,
     currentFile: live.current_file || detail.currentFile || null,
     role: live.role || detail.role || null,
-    backend: live.backend || detail.backend || null,
-    provider: live.provider || detail.provider || null,
-    serviceTier: live.service_tier || detail.serviceTier || null,
+    backend: preferKnownTelemetryValue(live.backend, detail.backend),
+    provider: preferKnownTelemetryValue(live.provider, detail.provider),
+    model: preferKnownTelemetryValue(live.model, detail.model),
+    serviceTier: preferKnownTelemetryValue(live.service_tier, detail.serviceTier),
+    reasoningEffort: preferKnownTelemetryValue(live.reasoning_effort, detail.reasoningEffort),
     progress: live.progress ?? null,
     blockers: live.blockers || [],
     telemetryTs: live.latest_ts || null,
     heartbeatAgeMs: live.latest_ts ? Math.max(0, Date.now() - Date.parse(live.latest_ts)) : detail.heartbeatAgeMs ?? null,
-    worktreeId: live.worktree_id || detail.worktreeId || null
+    worktreeId: live.worktree_id || detail.worktreeId || null,
+    stdoutTail: live.log_tail
+      ? [...(detail.stdoutTail || []), ...String(live.log_tail).split(/\r?\n/).filter(Boolean)].slice(-6)
+      : detail.stdoutTail || []
   }
+}
+
+function preferKnownTelemetryValue(live: unknown, fallback: unknown): string | null {
+  const liveText = String(live || '').trim()
+  if (liveText && liveText.toLowerCase() !== 'unknown' && liveText !== '?') return liveText
+  const fallbackText = String(fallback || '').trim()
+  return fallbackText && fallbackText.toLowerCase() !== 'unknown' && fallbackText !== '?' ? fallbackText : null
 }
 
 async function renderZellijSlotPaneFromArtifactDir(input: {

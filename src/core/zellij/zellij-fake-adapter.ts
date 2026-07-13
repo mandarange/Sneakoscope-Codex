@@ -96,7 +96,9 @@ export async function runFakeZellij(args: readonly string[] = [], opts: {
     session_name: sessionName,
     version,
     exit_code: result.code,
-    duration_ms: Date.now() - startedAt
+    duration_ms: Date.now() - startedAt,
+    sks_zellij_viewports: env.SKS_ZELLIJ_VIEWPORTS || null,
+    sks_zellij_refresh_ms: env.SKS_ZELLIJ_REFRESH_MS || null
   })
   return result
 }

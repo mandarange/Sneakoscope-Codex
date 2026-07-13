@@ -45,3 +45,15 @@ test('MAD native swarm can be explicitly disabled for emergency launch fallback'
   assert.equal(options.enabled, false);
   assert.equal(options.disabled_reason, 'operator_disabled_mad_native_swarm');
 });
+
+test('MAD native swarm is disabled by default and requires an explicit compatibility opt-in', async () => {
+  const mod = await import('../../dist/core/commands/mad-sks-command.js');
+  const disabled = mod.resolveMadNativeSwarmOptions([]);
+  assert.equal(disabled.enabled, false);
+  assert.equal(disabled.disabled_reason, 'official_subagent_runtime_default');
+
+  const enabled = mod.resolveMadNativeSwarmOptions(['--mad-native-swarm']);
+  assert.equal(enabled.enabled, true);
+  assert.equal(enabled.disabled_reason, null);
+  assert.equal(enabled.agents, 1);
+});

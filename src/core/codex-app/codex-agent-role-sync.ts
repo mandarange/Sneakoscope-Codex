@@ -2,10 +2,11 @@ import path from 'node:path'
 import os from 'node:os'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import { repairAgentRoleConfigs } from '../agents/agent-role-config.js'
+import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../managed-assets/managed-assets-manifest.js'
 import { agentRolePayloadFor, probeCodexAgentTypeSupport } from './codex-agent-type-probe.js'
 import type { CodexAgentRolePayload, CodexAgentTypeProbe } from './codex-app-types.js'
 
-const OFFICIAL_ROLES = ['worker', 'expert'] as const
+const OFFICIAL_ROLES = MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.codex_name)
 
 interface CodexAgentRoleSyncReport {
   schema: 'sks.codex-agent-role-sync.v1'

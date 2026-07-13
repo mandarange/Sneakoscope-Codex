@@ -12,7 +12,7 @@ import { writeResearchWorkGraph } from './research-work-graph.js';
 import { analyzeResearchReportQuality } from './research-report-quality.js';
 import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research-realistic-report.js';
 import { buildResearchReviewArtifactDigest } from './research-review-artifact-digest.js';
-import { defaultAgentLedger, defaultResearchGate, defaultSourceLedger, evaluateResearchGate, researchAgentAgentName, RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_PAPER_SECTION_GROUPS, researchPaperArtifactForPlan, RESEARCH_SOURCE_LAYER_IDS, RESEARCH_SOURCE_LAYERS, RESEARCH_SOURCE_SKILL_ARTIFACT, researchSourceSkillMarkdown } from '../research.js';
+import { defaultAgentLedger, defaultResearchGate, defaultSourceLedger, evaluateResearchGate, researchAgentAgentName, RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_PAPER_SECTION_GROUPS, researchPaperArtifactForPlan, RESEARCH_REVIEWER_CUSTOM_AGENT, RESEARCH_SOURCE_LAYER_IDS, RESEARCH_SOURCE_LAYERS, RESEARCH_SOURCE_SKILL_ARTIFACT, researchSourceSkillMarkdown } from '../research.js';
 
 export async function writeMockResearchResult(dir: any, plan: any) {
   const paperArtifact = researchPaperArtifactForPlan(plan);
@@ -174,7 +174,7 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       role: agent.role,
       mandate: agent.mandate,
       model_policy: {
-        custom_agent: 'expert',
+        custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
         model: 'gpt-5.6-sol',
         reasoning_effort: 'max',
         enforcement_source: 'mock_fixture'
@@ -221,11 +221,9 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       source_ids: ['mock-source-1', 'mock-counter-1']
     })),
     exchanges: [
-      { id: 'mock-debate-1', from: 'einstein', to: 'feynman', stance: 'challenge', claim: 'A toy probe is not enough unless it preserves the invariant.', source_ids: ['mock-source-1'] },
-      { id: 'mock-debate-2', from: 'feynman', to: 'turing', stance: 'challenge', claim: 'A formal gate must still be explainable as a cheap experiment.', source_ids: ['mock-source-1'] },
-      { id: 'mock-debate-3', from: 'turing', to: 'von_neumann', stance: 'challenge', claim: 'The system model needs explicit inputs, outputs, and adversarial cases.', source_ids: ['mock-source-1'] },
-      { id: 'mock-debate-4', from: 'von_neumann', to: 'skeptic', stance: 'response', claim: 'A scaling risk survives only if the skeptic cannot find a base-rate failure.', source_ids: ['mock-counter-1'] },
-      { id: 'mock-debate-5', from: 'skeptic', to: 'einstein', stance: 'challenge', claim: 'The invariant must be downgraded if no counterevidence source is recorded.', source_ids: ['mock-counter-1'] }
+      { id: 'mock-debate-1', from: 'einstein', to: 'von_neumann', stance: 'challenge', claim: 'The plain-language toy probe must preserve the invariant and expose explicit inputs and outputs.', source_ids: ['mock-source-1'] },
+      { id: 'mock-debate-2', from: 'von_neumann', to: 'skeptic', stance: 'challenge', claim: 'The formal system model must survive scaling, adversarial cases, and base-rate comparison.', source_ids: ['mock-source-1', 'mock-counter-1'] },
+      { id: 'mock-debate-3', from: 'skeptic', to: 'einstein', stance: 'challenge', claim: 'The simplifying frame must be downgraded if counterevidence or replication checks fail.', source_ids: ['mock-counter-1'] }
     ],
     synthesis_pressure: {
       strongest_disagreement: 'Whether a falsifiable novelty gate should optimize for formal criteria or cheap experiments first.',

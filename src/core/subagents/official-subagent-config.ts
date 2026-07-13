@@ -1,9 +1,12 @@
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { parse } from 'smol-toml'
 import { ensureDir, exists, PACKAGE_VERSION, readText, sha256, writeTextAtomic } from '../fsx.js'
 import {
+  MANAGED_AGENT_ROLES,
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
+  managedAgentRoleOwnsText,
   managedOfficialSubagentRoleContent,
   managedOfficialSubagentRoleOwnsText,
   type ManagedOfficialSubagentRole
@@ -56,6 +59,9 @@ export interface OfficialSubagentAgentInstallResult {
   preserved: string[]
   invalid: string[]
   backups: string[]
+  legacy_stale: string[]
+  removed_legacy: string[]
+  preserved_legacy: string[]
   manual_blockers: string[]
   generated_files: string[]
 }
@@ -77,6 +83,7 @@ export function mergeOfficialSubagentConfig(
   const inheritedAgents = objectValue(inherited?.agents)
   let next = source.trimEnd()
   if (!next.trim()) next = '# SKS-MANAGED-CODEX-CONFIG'
+  if (opts.sksOwned === true) next = removeExactLegacyManagedAgentBlocks(next)
   const targetMaxThreads = positiveInteger(opts.defaultMaxThreads) || DEFAULT_OFFICIAL_SUBAGENT_MAX_THREADS
   const currentMaxThreads = readTomlTableInteger(next, 'agents', 'max_threads')
 
@@ -214,10 +221,30 @@ export async function installOfficialSubagentAgentConfigs(
   const preserved: string[] = []
   const invalid: string[] = []
   const backups: string[] = []
+  const legacyStale: string[] = []
+  const removedLegacy: string[] = []
+  const preservedLegacy: string[] = []
   const manualBlockers: string[] = []
   const generatedFiles: string[] = []
 
   if (apply) await ensureDir(agentsDir)
+  for (const role of MANAGED_AGENT_ROLES) {
+    const absolute = path.join(agentsDir, role.filename)
+    const relative = `.codex/agents/${role.filename}`
+    if (!(await exists(absolute))) continue
+    const current = await readText(absolute, '')
+    if (!managedAgentRoleOwnsText(current, role)) {
+      preserved.push(relative)
+      preservedLegacy.push(relative)
+      continue
+    }
+    legacyStale.push(relative)
+    if (apply) {
+      await fs.rm(absolute, { force: true })
+      removedLegacy.push(relative)
+    }
+  }
+
   for (const role of MANAGED_OFFICIAL_SUBAGENT_ROLES) {
     const absolute = path.join(agentsDir, role.filename)
     const relative = `.codex/agents/${role.filename}`
@@ -282,6 +309,9 @@ export async function installOfficialSubagentAgentConfigs(
     preserved,
     invalid,
     backups,
+    legacy_stale: legacyStale,
+    removed_legacy: removedLegacy,
+    preserved_legacy: preservedLegacy,
     manual_blockers: manualBlockers,
     generated_files: [...new Set(generatedFiles)].sort()
   }
@@ -452,22 +482,48 @@ function migrationStageProvesManagedMaxThreads(value: unknown): boolean {
 
 function exactLegacyManagedAgentBlockCount(text: string): number {
   const agents = objectValue(parsedToml(text)?.agents)
-  const specs = [
-    ['analysis_scout', 'analysis-scout.toml', 'SKS scout with bounded write capability.', ['Scout', 'Mapper']],
-    ['native_agent', 'native-agent-intake.toml', 'SKS native agent with bounded write capability.', ['Analysis', 'Mapper']],
-    ['team_consensus', 'team-consensus.toml', 'SKS planning/debate agent with bounded write capability.', ['Consensus', 'Atlas']],
-    ['implementation_worker', 'implementation-worker.toml', 'SKS bounded implementation worker.', ['Builder', 'Mason']],
-    ['db_safety_reviewer', 'db-safety-reviewer.toml', 'DB safety reviewer with bounded write capability.', ['Sentinel', 'Ledger']],
-    ['qa_reviewer', 'qa-reviewer.toml', 'QA reviewer with bounded write capability.', ['Verifier', 'Reviewer']]
-  ] as const
-  return specs.filter(([name, filename, description, nicknames]) => {
-    const row = objectValue(agents[name])
-    const configFile = String(row.config_file || '')
-    return row.description === description
-      && path.basename(configFile) === filename
-      && Array.isArray(row.nickname_candidates)
-      && JSON.stringify(row.nickname_candidates) === JSON.stringify(nicknames)
-  }).length
+  return LEGACY_SKS_AGENT_TABLE_SPECS.filter((spec) => exactLegacyManagedAgentRow(agents[spec.name], spec)).length
+}
+
+function removeExactLegacyManagedAgentBlocks(text: string): string {
+  const agents = objectValue(parsedToml(text)?.agents)
+  let next = String(text || '')
+  for (const spec of LEGACY_SKS_AGENT_TABLE_SPECS) {
+    if (!exactLegacyManagedAgentRow(agents[spec.name], spec)) continue
+    next = removeTomlTable(next, `agents.${spec.name}`)
+  }
+  return next
+}
+
+function exactLegacyManagedAgentRow(
+  value: unknown,
+  spec: typeof LEGACY_SKS_AGENT_TABLE_SPECS[number]
+): boolean {
+  const row = objectValue(value)
+  const keys = Object.keys(row).sort()
+  const configFile = String(row.config_file || '')
+  const configFilename = configFile.replaceAll('\\', '/').split('/').pop() || ''
+  return JSON.stringify(keys) === JSON.stringify(['config_file', 'description', 'nickname_candidates'])
+    && row.description === spec.description
+    && configFilename === spec.filename
+    && Array.isArray(row.nickname_candidates)
+    && JSON.stringify(row.nickname_candidates) === JSON.stringify(spec.nicknames)
+}
+
+function removeTomlTable(text: string, table: string): string {
+  const lines = String(text || '').split('\n')
+  const header = new RegExp(`^\\s*\\[${escapeRegExp(table)}\\]\\s*(?:#.*)?$`)
+  const start = lines.findIndex((line) => header.test(line))
+  if (start === -1) return text
+  let end = lines.length
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^\s*\[.+\]\s*(?:#.*)?$/.test(lines[index] || '')) {
+      end = index
+      break
+    }
+  }
+  lines.splice(start, end - start)
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()
 }
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
@@ -558,3 +614,12 @@ function uniqueStrings(values: string[]): string[] {
 function escapeRegExp(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+const LEGACY_SKS_AGENT_TABLE_SPECS = [
+  { name: 'analysis_scout', filename: 'analysis-scout.toml', description: 'SKS scout with bounded write capability.', nicknames: ['Scout', 'Mapper'] },
+  { name: 'native_agent', filename: 'native-agent-intake.toml', description: 'SKS native agent with bounded write capability.', nicknames: ['Analysis', 'Mapper'] },
+  { name: 'team_consensus', filename: 'team-consensus.toml', description: 'SKS planning/debate agent with bounded write capability.', nicknames: ['Consensus', 'Atlas'] },
+  { name: 'implementation_worker', filename: 'implementation-worker.toml', description: 'SKS bounded implementation worker.', nicknames: ['Builder', 'Mason'] },
+  { name: 'db_safety_reviewer', filename: 'db-safety-reviewer.toml', description: 'DB safety reviewer with bounded write capability.', nicknames: ['Sentinel', 'Ledger'] },
+  { name: 'qa_reviewer', filename: 'qa-reviewer.toml', description: 'QA reviewer with bounded write capability.', nicknames: ['Verifier', 'Reviewer'] }
+] as const

@@ -4,9 +4,7 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 
 | Gate | Preset | Command | Package Script |
 |---|---|---|---|
-| `agent:fast-mode-policy` | `release` | `node ./dist/scripts/official-subagent-workflow-check.js` | direct |
 | `agent:message-bus-reader` | `release` | `node ./dist/scripts/agent-message-bus-reader-check.js` | direct |
-| `agent:native-cli-session-swarm-scaling` | `release` | `node ./dist/scripts/official-subagent-workflow-check.js` | direct |
 | `all-features:deep-completion` | `release` | `node ./dist/scripts/all-feature-deep-completion-check.js` | direct |
 | `appshots:thread-attachment-discovery` | `release` | `node ./dist/scripts/appshots-thread-attachment-discovery-check.js` | direct |
 | `certificate:sla` | `release` | `node ./dist/scripts/certificate-sla-check.js` | direct |
@@ -135,7 +133,7 @@ Generated from `release-gates.v2.json`; release gate IDs and commands are the ma
 | `test:triwiki-voxel-integrity` | `release` | `node --test --test-concurrency=1 dist/core/__tests__/triwiki-voxel-integrity.test.js` | direct |
 | `triwiki:cache-key` | `release` | `node ./dist/scripts/triwiki-cache-key-check.js` | direct |
 | `triwiki:proof-comprehensive` | `release` | `node ./dist/scripts/triwiki-proof-card-check.js && node ./dist/scripts/triwiki-proof-bank-check.js && node ./dist/scripts/triwiki-proof-bank-blackbox.js` | direct |
-| `trust:check` | `release` | `node ./dist/bin/sks.js trust validate latest --json \|\| node ./dist/scripts/trust-fixture-check.js` | direct |
+| `trust:check` | `release` | `node ./dist/scripts/trust-fixture-check.js` | direct |
 | `type-surface:codex-app` | `release` | `node ./dist/scripts/type-surface-codex-app-check.js` | direct |
 | `typecheck` | `release` | `tsc -p tsconfig.json --noEmit` | `typecheck` |
 | `ultra-router:auto-router` | `release` | `node ./dist/scripts/ultra-router-auto-router-check.js` | direct |

@@ -16,18 +16,13 @@ sks mad-sks proof --json
 
 MAD-SKS starts disabled. Write-capable operation requires an authorization manifest with user intent, target root, allowed scopes, forbidden scopes, timestamp, and hash. `run` is dry-run by default; `apply` performs the guarded executor action only with a valid manifest. Separate consent is required for system access, DB writes, package installation, service control, admin operations, network operations, Computer Use, destructive delete, browser automation, generated asset edits, and file permission changes. Broad authority is assembled from those explicit scopes instead of inferred from a single "database mode."
 
-## Native Swarm Cockpit
+## Official Subagent Cockpit
 
-`sks --mad` starts a bounded native `sks agent run` swarm in the same MAD mission before opening the Zellij cockpit. The swarm writes to the MAD mission's `agents/` ledger and may use workspace-write profiles only inside assigned MAD leases; the cockpit lane count follows the swarm's requested active slots, so a MAD session is no longer just one orchestrator pane plus passive lane renderers. Startup writes `mad-sks-native-swarm.json` plus stdout/stderr logs in the mission directory.
+`sks --mad` opens the Zellij cockpit without starting a second custom worker runtime by default. Codex official subagent lifecycle events from work launched in the orchestrator pane are mirrored into the MAD host mission, so the right-side monitor and viewport panes show the actual official thread role, model, state, and bounded result tail instead of occupying static empty space.
 
-Default MAD fan-out is five workers. Operators can tune it with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`; `--no-mad-swarm` or `SKS_MAD_NATIVE_SWARM=0` disables the background swarm for emergency UI-only launches.
+The historical native `sks agent run` swarm is an explicit compatibility/debug opt-in only. Enable it with `--mad-native-swarm`, `--mad-swarm`, or `SKS_MAD_NATIVE_SWARM=1`; then tune it with `--mad-agents`, `--mad-swarm-work-items`, and `--mad-swarm-backend`. Without that opt-in, no paid or local worker fan-out is created merely to populate panes.
 
-Zellij lanes are now runtime-backed rather than name-only. Each slot records a
-per-lane state directory, JSONL command inbox/ack/outbox, pane-id record,
-dispatch throttle, and nice level under the MAD mission's `agents/lanes/<slot>/`
-tree. `zellij-pane-proof.json` reconciles live `list-panes --json --all` ids
-back into `agent-zellij-lane-supervisor.json`, and `sks zellij dispatch` can
-queue lane commands without FIFO writer blocking.
+The cockpit uses one monitor plus one viewport by default and allows at most three viewports. `SubagentStart` is shown as running, `SubagentStop` as verifying, and a terminal success/failure state is shown only after the parent emits a trustworthy structured thread outcome. Recent completed threads remain visible briefly so a fast child does not disappear before the operator can inspect it.
 
 ## Evidence
 

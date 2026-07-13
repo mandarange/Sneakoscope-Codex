@@ -19,6 +19,7 @@ export interface ViewportBinding {
 
 const ACTIVE = new Set(['running', 'verifying', 'launching'])
 const ATTENTION = new Set(['failed', 'blocked', 'timed_out'])
+const RECENT_COMPLETED_GRACE_MS = 60_000
 
 function scoreSlot(s: any, now: number): number {
   const ts = Date.parse(String(s.latest_ts || '')) || 0
@@ -28,6 +29,7 @@ function scoreSlot(s: any, now: number): number {
   if (st === 'running') return 3_000_000 - age / 1000
   if (st === 'verifying') return 2_000_000 - age / 1000
   if (st === 'queued' || st === 'launching') return 1_000_000 - age / 1000
+  if ((st === 'completed' || st === 'done' || st === 'drained') && age < RECENT_COMPLETED_GRACE_MS) return 500_000 - age / 1000
   return -1
 }
 

@@ -206,7 +206,7 @@ export async function evaluateRecallPulseFixtures(root: any, opts: any = {}) {
       fixture('repeated-stop-hook-blocker', true, 'Duplicate suppression keys collapse repeated blocker text into one durable status row.'),
       fixture('hook-only-status-visibility', true, 'mission-status-ledger.json preserves recoverable user-visible status.'),
       fixture('research-persona-missing', true, 'Research validation blocks missing agent display_name/persona/persona_boundary.'),
-      fixture('research-model-policy-not-sol-max', true, 'Research validation blocks reviewer rows that are not bound to the expert GPT-5.6 Sol Max policy.'),
+      fixture('research-model-policy-not-sol-max', true, 'Research validation blocks reviewer rows that are not bound to the research_reviewer GPT-5.6 Sol Max policy.'),
       fixture('research-eureka-missing', true, 'Research validation blocks missing literal Eureka! ideas.'),
       fixture('research-impersonation', true, 'Research validation blocks persona-boundary violations.'),
       fixture('oversized-l1', true, 'L1 token and item limits reject oversized active recall.'),
@@ -377,7 +377,7 @@ export async function buildRecallPulseGovernanceReport(root: any, opts: any = {}
       ],
       migration_paths: {
         existing_missions: 'Run sks recallpulse run <mission-id> and sks recallpulse governance <mission-id> to add report-only artifacts.',
-        existing_research_artifacts: 'Research gates now require agent display_name/persona/persona_boundary fields; old ledgers should be migrated by adding those fields before claiming pass.',
+        existing_research_artifacts: 'Research gates require agent display_name/persona/persona_boundary fields and the research_reviewer GPT-5.6 Sol Max binding; old ledgers must be migrated before claiming pass.',
         generated_skills: 'Do not edit generated installed skills directly; rerun init/bootstrap from engine source when generated text needs refreshing.'
       },
       release_gate: '0.8.0 remains report-only unless packcheck, selftest, sizecheck, registry metadata check, TriWiki validate, and RecallPulse fixture eval pass.'
@@ -403,7 +403,7 @@ export function validateResearchAgentPersonas(agentLedger: any = {}, geniusSumma
     if (!row.persona_boundary) issues.push(`${expected.id}:persona_boundary_missing`);
     if (row.persona_boundary && !/do not impersonate|not impersonat|lens only/i.test(row.persona_boundary)) issues.push(`${expected.id}:persona_boundary_not_enforced`);
     const modelPolicy = row.model_policy && typeof row.model_policy === 'object' ? row.model_policy : row;
-    if (modelPolicy.custom_agent !== 'expert') issues.push(`${expected.id}:custom_agent_not_expert`);
+    if (modelPolicy.custom_agent !== 'research_reviewer') issues.push(`${expected.id}:custom_agent_not_research_reviewer`);
     if (modelPolicy.model !== 'gpt-5.6-sol') issues.push(`${expected.id}:model_not_sol`);
     if (modelPolicy.reasoning_effort !== 'max' && modelPolicy.model_reasoning_effort !== 'max') issues.push(`${expected.id}:effort_not_max`);
     if (row.service_tier && row.service_tier !== 'fast') issues.push(`${expected.id}:service_tier_not_fast`);
@@ -905,13 +905,13 @@ function preservedRoutePersonality(routeId: any = '', routeName: any = '') {
     DFix: 'ultralight direct-fix path stays tiny and does not start the full pipeline',
     Answer: 'answer-only path stays conversational and does not start implementation',
     SKS: 'general SKS discovery/help personality stays simple',
-    Team: 'Team keeps analysis, debate, executor, and five-lane review identity',
+    Team: 'Team redirects to the bounded official Naruto workflow with parent-owned integration and risk-scoped review',
     QALoop: 'QA-LOOP keeps dogfood, checklist, remediation, and reverification identity',
     PPT: 'PPT keeps restrained information-first HTML/PDF delivery identity',
     ImageUXReview: 'Image UX Review keeps gpt-image-2 annotated raster review identity',
     ComputerUse: 'Computer Use keeps maximum-speed native Mac/non-web visual lane identity',
     Goal: 'Goal stays a native /goal persistence bridge, not a heavyweight route',
-    Research: 'Research keeps named xhigh persona agent council, Eureka, debate, paper, and falsification identity',
+    Research: 'Research keeps Super Search evidence, three composite Sol Max adversarial lenses, bounded revision, paper, and falsification identity',
     AutoResearch: 'AutoResearch keeps iterative experiment loop identity',
     DB: 'DB keeps conservative read-first destructive-operation safety identity',
     MadSKS: 'MAD-SKS keeps explicit scoped high-risk authorization identity',

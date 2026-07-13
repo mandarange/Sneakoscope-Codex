@@ -294,6 +294,18 @@ test('semantic links preserve original source stance and acquisition class', () 
   assert.equal(buildSourceQualityReport(linked, matrix).ok, true)
 })
 
+test('semantic links reject a real source whose Super Search provenance was not validated', () => {
+  const source = {
+    ...verifiedSource('s-unvalidated', 'academic_literature', 'Unvalidated source row', 'academic.example'),
+    super_search_provenance: { validated: false }
+  }
+  const ledger = { sources: [source], counterevidence_sources: [] }
+  const matrix = singleClaimMatrix(['s-unvalidated'], [], 'medium')
+  const linked = linkSourceLedgerToClaimMatrix(ledger, matrix)
+  assert.deepEqual(linked.sources[0]?.supports, [])
+  assert.ok(linked.claim_link_blockers.includes('claim_support_source_untrusted:claim-1:s-unvalidated'))
+})
+
 test('synthesis validation rejects global references without claim-local semantics and citations', () => {
   const sourceIds = ['source-1', 'source-2', 'source-3', 'source-4']
   const headings = ['Question', 'Methodology', 'Source Map', 'Key Claims', 'Evidence Matrix Summary', 'Counterevidence', 'Falsification', 'Implementation Blueprint', 'Experiment / Validation Plan', 'Limitations', 'References']
@@ -364,6 +376,7 @@ function verifiedSource(id: string, layer: string, text: string, domain: string)
     domain,
     authority_tier: 'A1',
     primary_source: true,
-    independence_cluster_id: domain
+    independence_cluster_id: domain,
+    super_search_provenance: { validated: true }
   }
 }

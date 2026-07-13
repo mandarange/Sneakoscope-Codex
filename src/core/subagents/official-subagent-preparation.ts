@@ -6,12 +6,14 @@ import { chooseVerificationBudget } from '../runtime/verification-budget.js'
 import { buildOfficialSubagentPrompt } from './official-subagent-prompt.js'
 import { readOfficialSubagentConfig } from './official-subagent-config.js'
 import {
-  DEFAULT_SUBAGENT_MODEL,
   NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL,
-  SUBAGENT_EFFORT,
-  THINKING_SUBAGENT_MODEL
+  NARUTO_PARENT_MODEL
 } from './model-policy.js'
+import {
+  officialSubagentFanoutPolicy,
+  officialSubagentRolePlan,
+  recommendOfficialSubagentRoles
+} from './agent-catalog.js'
 import { resolveSubagentThreadBudget } from './thread-budget.js'
 import { readBoundedTriwikiAttention } from './triwiki-attention.js'
 import {
@@ -48,16 +50,32 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
   const goal = String(input.goal || '').trim()
   const mode = input.mode === 'naruto' ? 'naruto' : 'generic'
   const taskProfile = classifyTaskProfile(goal)
+  const suggestedAgents = recommendOfficialSubagentRoles({
+    description: goal,
+    readOnly: input.readOnly === true,
+    requiresWrite: input.readOnly !== true
+  })
   const officialConfig = await readOfficialSubagentConfig(input.root)
   const triwikiAttention = await readBoundedTriwikiAttention(input.root)
+  const requestedExplicit = input.requestedSubagentsExplicit ?? input.requestedSubagents !== undefined
+  const selectedFanoutPolicy = officialSubagentFanoutPolicy({
+    ...(input.requestedSubagents === undefined ? {} : { requestedSubagents: input.requestedSubagents }),
+    requestedExplicit,
+    taskProfile,
+    suggestedRoles: suggestedAgents,
+    goal
+  })
   const budget = resolveSubagentThreadBudget({
-    requested: input.requestedSubagents,
+    requested: selectedFanoutPolicy.requested_subagents,
     configuredMaxThreads: input.maxThreads ?? officialConfig.maxThreads
   })
   const verification = chooseVerificationBudget({ taskProfile, changedFiles: [] })
   const workflowRunId = String(input.workflowRunId || '').trim()
     || `${mode === 'naruto' ? 'naruto' : 'official'}-${Date.now().toString(36)}-${randomId(8)}`
-  const requestedExplicit = input.requestedSubagentsExplicit ?? input.requestedSubagents !== undefined
+  const fanoutPolicy = {
+    ...selectedFanoutPolicy,
+    requested_subagents: budget.requestedSubagents
+  }
   const observedParentModel = String(input.observedParentModel || '').trim() || null
   const parentModelMatch = observedParentModel ? observedParentModelMatchesPolicy(observedParentModel) : null
   const delegationGoal = input.readOnly
@@ -70,7 +88,8 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     requestedSubagentsExplicit: requestedExplicit,
     maxThreads: budget.maxThreads,
     decompositionStatus: 'parent_required',
-    triwikiAttention
+    triwikiAttention,
+    recommendedAgents: suggestedAgents
   })
   const configBlockers = officialConfig.blockers.map((blocker) => `official_subagent_config:${blocker}`)
   const plan = {
@@ -95,6 +114,8 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     config_sources: officialConfig.sources,
     config_blockers: officialConfig.blockers,
     triwiki_attention: triwikiAttention,
+    suggested_agents: suggestedAgents,
+    fanout_policy: fanoutPolicy,
     slices: [],
     parent_model_policy: NARUTO_PARENT_MODEL,
     observed_parent_model: observedParentModel,
@@ -103,10 +124,7 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
       model: NARUTO_PARENT_MODEL,
       model_reasoning_effort: NARUTO_PARENT_EFFORT
     },
-    agents: {
-      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
-      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
-    },
+    agents: officialSubagentRolePlan(),
     verification_budget: verification,
     verification_checks: [],
     verification: { budget: verification },
@@ -178,6 +196,8 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     workflowRunId,
     officialConfig,
     triwikiAttention,
+    suggestedAgents,
+    fanoutPolicy,
     configBlockers,
     observedParentModel,
     parentModelMatch
@@ -207,10 +227,7 @@ export function buildNarutoSummary(input: any) {
     started_subagents: Number(input.evidence?.started_threads || 0),
     completed_subagents: Number(input.evidence?.completed_threads || 0),
     failed_subagents: Number(input.evidence?.failed_threads || 0),
-    agents: {
-      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
-      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
-    },
+    agents: officialSubagentRolePlan(),
     verification: {
       budget: input.verification,
       checks: []

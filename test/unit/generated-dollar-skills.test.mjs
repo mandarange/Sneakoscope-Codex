@@ -73,9 +73,21 @@ test('generated Naruto skill keeps official threads lightweight and TriWiki-boun
   await installSkills(root);
 
   const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'naruto', 'SKILL.md'), 'utf8');
-  assert.match(naruto, /implicit run starts with one safe direct child/i);
+  assert.match(naruto, /Automatic fan-out is one by default, two only .* at most three for critical multi-domain risk/i);
   assert.match(naruto, /historical Naruto process runtime is removed/i);
   assert.match(naruto, /custom scheduler, or worker pool/i);
   assert.match(naruto, /bounded TriWiki attention\.use_first anchors/);
   assert.match(naruto, /do not inject the full pack/);
+});
+
+test('generated Research skills use three official research reviewers without the legacy five-agent scheduler', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-research-official-skills-'));
+  await installSkills(root);
+
+  for (const name of ['research', 'research-discovery']) {
+    const content = await fs.readFile(path.join(root, '.agents', 'skills', name, 'SKILL.md'), 'utf8');
+    assert.match(content, /three independent official .*research_reviewer/i);
+    assert.match(content, /GPT-5\.6 Sol Max/i);
+    assert.doesNotMatch(content, /Feynman Agent|Turing Agent|five-agent|effort=xhigh|repeat agent\/debate/i);
+  }
 });

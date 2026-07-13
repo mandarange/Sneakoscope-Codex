@@ -6,6 +6,7 @@ import path from 'node:path'
 import { dispatch } from '../../../cli/router.js'
 import { setupCommand } from '../basic-cli.js'
 import { run as doctorRun } from '../../../commands/doctor.js'
+import { MANAGED_OFFICIAL_SUBAGENT_ROLES } from '../../managed-assets/managed-assets-manifest.js'
 
 async function withTempProject(prefix: string, fn: (root: string) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
@@ -164,7 +165,7 @@ test('setup preserves invalid inherited global TOML and returns a manual blocker
   })
 })
 
-test('default doctor fix creates only project worker and expert roles', async () => {
+test('default doctor fix creates the project-scoped official custom agent catalog', async () => {
   await withTempProject('sks-doctor-official-roles-', async (root) => {
     const codexHome = String(process.env.CODEX_HOME)
     const globalAgents = path.join(codexHome, 'agents')
@@ -176,7 +177,7 @@ test('default doctor fix creates only project worker and expert roles', async ()
 
     const projectFiles = (await fs.readdir(path.join(root, '.codex', 'agents'))).sort()
     const globalFiles = (await fs.readdir(globalAgents)).sort()
-    assert.deepEqual(projectFiles, ['expert.toml', 'worker.toml'])
+    assert.deepEqual(projectFiles, MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename).sort())
     assert.deepEqual(globalFiles, ['user-role.toml'])
     assert.equal(await fs.readFile(userRole, 'utf8'), 'name = "user-role"\n')
   })

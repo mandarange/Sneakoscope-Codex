@@ -261,9 +261,9 @@ function trustworthyVerifiedEvidence(source: any): boolean {
   const verified = String(source?.acquisition_verdict || '') === 'verified_content'
     && /^verified_content:/i.test(String(source?.credibility || ''))
   const hydrated = Boolean(String(source?.content_artifact || '').trim())
-    && /^[a-f0-9]{32,}$/i.test(String(source?.content_sha256 || '').trim())
+    && /^[a-f0-9]{64}$/i.test(String(source?.content_sha256 || '').trim())
     && Number(source?.content_length || 0) > 0
-  return verified && hydrated
+  return verified && hydrated && source?.super_search_provenance?.validated === true
 }
 
 function authoritativeSupportingEvidence(source: any): boolean {

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
+import { RESEARCH_AGENT_PERSONA_CONTRACT } from '../recallpulse/policy.js'
 import type { NarutoWorkGraph, NarutoWorkItem, NarutoWorkKind } from '../naruto/naruto-work-item.js'
 import { RESEARCH_SOURCE_LAYERS } from './research-source-layer-catalog.js'
 
@@ -153,7 +154,7 @@ function workItem(stage: ResearchGraphStage, index: number, allStages: ResearchG
 
 export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph & Record<string, unknown> {
   const stages = researchStages()
-  const requestedReviewers = 5
+  const requestedReviewers = RESEARCH_AGENT_PERSONA_CONTRACT.length
   const workItems = stages.map((stage, index) => workItem(stage, index, stages, plan))
   const sourceShardIds = workItems.filter((item: any) => item.stage_kind === 'source_shard').map((item) => item.id)
   const closeoutIds = workItems.filter((item: any) => item.stage_kind !== 'source_shard').map((item) => item.id)

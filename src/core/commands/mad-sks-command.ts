@@ -23,6 +23,7 @@ import { writeCodex0138CapabilityArtifacts } from '../codex-control/codex-0138-c
 import { writeCodex0139CapabilityArtifacts } from '../codex-control/codex-0139-capability.js';
 import { resolveCodexNativeInvocationPlan } from '../codex-native/codex-native-invocation-router.js';
 import { repairZellijForSks } from '../zellij/zellij-self-heal.js';
+import { SKS_ZELLIJ_HOST_MISSION_ENV } from '../zellij/zellij-official-subagent-telemetry.js';
 import {
   buildMadGlmLaunchArtifact,
   buildMadGlmLaunchProfileNoWrite,
@@ -283,14 +284,15 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   console.log('Scoped high-power maintenance authority active; add explicit --allow-* flags for packages, services, network, browser/Computer Use, generated assets, file permissions, or system/admin scopes. SQL-plane execution is available through MAD-SKS sql-plane and still requires control-plane denial, read-back proof, and read-only restoration.');
   const launchLb = lb.status === 'present' ? { ...lb, status: 'configured' } : lb;
   const zellijVisiblePaneSetting = readOption(cleanArgs, '--zellij-visible-panes', process.env.SKS_ZELLIJ_VISIBLE_PANES || process.env.SKS_ZELLIJ_VISIBLE_PANE_CAP || '8');
-  const zellijViewportSetting = readOption(cleanArgs, '--zellij-viewports', process.env.SKS_ZELLIJ_VIEWPORTS || '4');
+  const zellijViewportSetting = readOption(cleanArgs, '--zellij-viewports', process.env.SKS_ZELLIJ_VIEWPORTS || '1');
   const zellijRefreshMsSetting = readOption(cleanArgs, '--zellij-refresh-ms', process.env.SKS_ZELLIJ_REFRESH_MS || '1000');
   const madSksEnv = {
     SKS_PROTECTED_CORE_POLICY: madLaunch.gate.protected_core_policy,
     SKS_MAD_SKS_TARGET_ROOT: madLaunch.gate.cwd,
     SKS_MAD_SKS_PROTECTED_CORE_DIGEST: madLaunch.gate.protected_core_digest,
+    [SKS_ZELLIJ_HOST_MISSION_ENV]: madLaunch.mission_id,
     SKS_ZELLIJ_VISIBLE_PANES: String(zellijVisiblePaneSetting),
-    SKS_ZELLIJ_VIEWPORTS: String(Math.max(0, Math.min(Number(zellijViewportSetting || 4), 6))),
+    SKS_ZELLIJ_VIEWPORTS: String(Math.max(0, Math.min(Number(zellijViewportSetting || 1), 3))),
     SKS_ZELLIJ_REFRESH_MS: String(zellijRefreshMsSetting),
   };
   const explicitWorkspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', null));
@@ -620,17 +622,25 @@ export async function startMadNativeSwarm(root: string, madLaunch: any, args: an
 
 export function resolveMadNativeSwarmOptions(args: any[] = [], profile: any = {}, opts: any = {}) {
   const list = (args || []).map((arg: any) => String(arg));
+  const operatorEnabled = list.includes('--mad-native-swarm')
+    || list.includes('--mad-swarm')
+    || list.includes('--mad-agents')
+    || list.includes('--mad-swarm-agents')
+    || list.includes('--mad-swarm-prompt')
+    || process.env.SKS_MAD_NATIVE_SWARM === '1';
   const operatorDisabled = list.includes('--no-swarm') || list.includes('--no-mad-swarm') || process.env.SKS_MAD_NATIVE_SWARM === '0';
   const glmRequested = list.includes('--glm') || opts.glmLaunch?.provider === 'openrouter';
   const glmNativeSwarmDisabled = glmRequested && process.env.SKS_GLM_MAD_ALLOW_GPT_SWARM !== '1';
-  const disabled = operatorDisabled || glmNativeSwarmDisabled;
-  const agents = clampInt(readOption(list, '--mad-agents', readOption(list, '--mad-swarm-agents', process.env.SKS_MAD_SWARM_AGENTS || opts.agents || 5)), 1, 20);
+  const disabled = !operatorEnabled || operatorDisabled || glmNativeSwarmDisabled;
+  const agents = clampInt(readOption(list, '--mad-agents', readOption(list, '--mad-swarm-agents', process.env.SKS_MAD_SWARM_AGENTS || opts.agents || 1)), 1, 20);
   const workItems = clampInt(readOption(list, '--mad-swarm-work-items', process.env.SKS_MAD_SWARM_WORK_ITEMS || opts.workItems || agents), agents, 100);
   const backend = defaultMadSwarmBackend(list, opts);
   return {
     enabled: !disabled,
     disabled_reason: operatorDisabled
       ? 'operator_disabled_mad_native_swarm'
+      : !operatorEnabled
+      ? 'official_subagent_runtime_default'
       : glmNativeSwarmDisabled ? 'glm_mad_native_swarm_disabled_to_block_gpt_fallback' : null,
     agents,
     workItems,
@@ -861,6 +871,8 @@ function baseMadLaunchOnlyFlags() {
     '--confirm-destructive-delete',
     '--no-swarm',
     '--no-mad-swarm',
+    '--mad-native-swarm',
+    '--mad-swarm',
     '--mad-agents',
     '--mad-swarm-agents',
     '--mad-swarm-work-items',
@@ -905,6 +917,7 @@ function madLaunchValueFlags(includeGlmFlags = false) {
     '--mad-swarm-backend',
 	    '--mad-swarm-prompt',
     '--zellij-visible-panes',
+    '--zellij-viewports',
     '--zellij-refresh-ms',
 	    '--ack'
   ]);

@@ -53,8 +53,9 @@ sks agent run "fixture" --no-fast
 sks agent run "fixture" --service-tier standard
 ```
 
-The historical `agent:fast-mode-policy` release-gate id is retained for compatibility, but Naruto now validates the official Sol/Luna Max model policy and `SubagentStart`/`SubagentStop` evidence instead of custom worker-process Fast propagation. Execute it through the canonical release preset:
+The historical `agent:fast-mode-policy` release-gate id is retired. Naruto's single `naruto:canonical-stop-gate` now validates the official Sol/Luna Max model policy and `SubagentStart`/`SubagentStop` evidence instead of repeating the same custom-worker compatibility check. Execute ordinary change-aware verification through the bounded release checks:
 
 ```bash
-npm run release:check:full
+npm run release:check:affected
+npm run release:check:confidence
 ```

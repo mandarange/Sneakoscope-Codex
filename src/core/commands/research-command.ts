@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { appendJsonlBounded, exists, nowIso, readJson, readText, runProcess, sksRoot, writeJsonAtomic } from '../fsx.js';
 import { initProject } from '../init.js';
 import { createMission, findLatestMission, loadMission, setCurrent, stateFile } from '../mission.js';
-import { RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_SOURCE_SKILL_ARTIFACT, countGeniusOpinionSummaries, countResearchPaperSections, evaluateResearchGate, findResearchPaperArtifact, researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
+import { RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_REVIEWER_CUSTOM_AGENT, RESEARCH_SOURCE_SKILL_ARTIFACT, countGeniusOpinionSummaries, countResearchPaperSections, evaluateResearchGate, findResearchPaperArtifact, researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
 import { ROUTES, reflectionRequiredForRoute, routeNeedsContext7, routePrompt, routeReasoning } from '../routes.js';
 import { PIPELINE_PLAN_ARTIFACT, validatePipelinePlan, writePipelinePlan } from '../pipeline.js';
 import { enforceRetention } from '../retention.js';
@@ -31,7 +31,7 @@ import {
 } from '../research/research-adversarial-review.js';
 
 const RESEARCH_DEFAULT_MAX_CYCLES = 3;
-const RESEARCH_REVIEWER_COUNT = 5;
+const RESEARCH_REVIEWER_COUNT = RESEARCH_AGENT_COUNCIL.length;
 const RESEARCH_DEFAULT_CYCLE_TIMEOUT_MINUTES = 20;
 const RESEARCH_MIN_CYCLE_TIMEOUT_MINUTES = 15;
 const RESEARCH_MAX_CYCLE_TIMEOUT_MINUTES = 60;
@@ -223,7 +223,7 @@ async function researchRun(args: any) {
   args = parsed.args;
   const root = await sksRoot();
   const id = await resolveResearchRunMissionId(root, parsed.positionals[0]);
-  if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--agents 5] [--max-threads 1..5] [--max-cycles 1..3] [--cycle-timeout-minutes 15..60]');
+  if (!id) throw new Error('Usage: sks research run <mission-id|latest> [--mock] [--agents 3] [--max-threads 1..3] [--max-cycles 1..3] [--cycle-timeout-minutes 15..60]');
   const { dir, mission } = await loadMission(root, id);
   const planPath = path.join(dir, 'research-plan.json');
   if (!(await exists(planPath))) await writeResearchPlan(dir, mission.prompt || '', { root, missionId: id, autoresearch: flag(args, '--autoresearch') });
@@ -425,7 +425,7 @@ async function researchStatus(args: any) {
     xhigh_agents: 0,
     sol_max_policy_agents: agentRows.length ? agentRows.filter((agent: any) => {
       const policy = agent?.model_policy && typeof agent.model_policy === 'object' ? agent.model_policy : agent;
-      return policy.custom_agent === 'expert' && policy.model === 'gpt-5.6-sol' && (policy.reasoning_effort === 'max' || policy.model_reasoning_effort === 'max');
+      return policy.custom_agent === RESEARCH_REVIEWER_CUSTOM_AGENT && policy.model === 'gpt-5.6-sol' && (policy.reasoning_effort === 'max' || policy.model_reasoning_effort === 'max');
     }).length : null,
     eureka_moments: agentRows.length ? agentRows.filter((agent: any) => agent.eureka?.exclamation === 'Eureka!' && String(agent.eureka?.idea || '').trim()).length : null,
     agent_findings: agentRows.length ? agentRows.reduce((sum: any, agent: any) => sum + (Array.isArray(agent.findings) ? agent.findings.length : 0), 0) : null,

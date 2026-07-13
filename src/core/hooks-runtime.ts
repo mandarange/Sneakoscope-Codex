@@ -27,12 +27,14 @@ import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
 import { withFileLock } from './locks/file-lock.js';
 import {
-  DEFAULT_SUBAGENT_MODEL,
   NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL,
-  SUBAGENT_EFFORT,
-  THINKING_SUBAGENT_MODEL
+  NARUTO_PARENT_MODEL
 } from './subagents/model-policy.js';
+import { officialSubagentRolePlan } from './subagents/agent-catalog.js';
+import {
+  recordOfficialSubagentParentOutcomesTelemetry,
+  recordOfficialSubagentZellijTelemetry
+} from './zellij/zellij-official-subagent-telemetry.js';
 import {
   bindTrustworthySubagentParentSummaryToRun,
   normalizeSubagentParentSummary,
@@ -153,7 +155,7 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
 
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
-  await recordAndRefreshSubagentEvidence(artifactDir, state, payload, 'SubagentStart').catch(() => null);
+  await recordAndRefreshSubagentEvidence(root, artifactDir, state, payload, 'SubagentStart').catch(() => null);
   const config = await readOfficialSubagentConfig(root);
   const budget = resolveSubagentThreadBudget({ configuredMaxThreads: config.maxThreads });
   const active = subagentRouteContext(state);
@@ -183,7 +185,7 @@ function subagentRouteContext(state: any = {}) {
 
 async function hookSubagentStop(root: any, state: any, payload: any = {}, sessionKey: any = null) {
   const artifactDir = officialSubagentArtifactDir(root, state, sessionKey);
-  await recordAndRefreshSubagentEvidence(artifactDir, state, payload, 'SubagentStop').catch(() => null);
+  await recordAndRefreshSubagentEvidence(root, artifactDir, state, payload, 'SubagentStop').catch(() => null);
   // SubagentStop is evidence collection only. It must never reuse the parent
   // Stop hook's route gate or block a child thread from returning its result.
   return { continue: true, silent: true };
@@ -194,7 +196,7 @@ function officialSubagentArtifactDir(root: any, state: any = {}, sessionKey: any
   return path.join(root, '.sneakoscope', 'state', 'subagents', sha256(String(sessionKey || 'default')).slice(0, 32));
 }
 
-async function recordAndRefreshSubagentEvidence(artifactDir: string, state: any, payload: any, eventName: 'SubagentStart' | 'SubagentStop') {
+async function recordAndRefreshSubagentEvidence(root: string, artifactDir: string, state: any, payload: any, eventName: 'SubagentStart' | 'SubagentStop') {
   return withFileLock({
     lockPath: path.join(artifactDir, '.subagent-evidence.lock'),
     timeoutMs: 5_000,
@@ -207,6 +209,32 @@ async function recordAndRefreshSubagentEvidence(artifactDir: string, state: any,
       : payload;
     const event = await recordSubagentEvent(artifactDir, eventPayload, eventName);
     if (!event) return null;
+    const zellijTelemetry = await recordOfficialSubagentZellijTelemetry({
+      root,
+      routeMissionId: plan?.mission_id || state?.mission_id || null,
+      event,
+      payload: eventPayload,
+      plan
+    }).catch(async (error: any) => {
+      await appendJsonl(path.join(artifactDir, 'zellij-telemetry-warnings.jsonl'), {
+        ts: nowIso(),
+        warning: 'official_subagent_zellij_telemetry_failed',
+        event_name: eventName,
+        thread_id: event.thread_id,
+        error: String(error?.message || error)
+      }).catch(() => null);
+      return null;
+    });
+    if (zellijTelemetry?.blocker) {
+      await appendJsonl(path.join(artifactDir, 'zellij-telemetry-warnings.jsonl'), {
+        ts: nowIso(),
+        warning: 'official_subagent_zellij_telemetry_incomplete',
+        event_name: eventName,
+        thread_id: event.thread_id,
+        blocker: zellijTelemetry.blocker,
+        failed_mission_ids: 'failed_mission_ids' in zellijTelemetry ? zellijTelemetry.failed_mission_ids : []
+      }).catch(() => null);
+    }
     const existing: any = await readJson(path.join(artifactDir, SUBAGENT_EVIDENCE_FILENAME), {});
     const parentSummary: any = await readJson(path.join(artifactDir, SUBAGENT_PARENT_SUMMARY_FILENAME), null);
     const requestedSubagents = Number(
@@ -790,6 +818,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     workflowStatus: 'parent_completed',
     runId: workflowRunId || null
   });
+  const structuredParentSummary = normalizeSubagentParentSummary(effectiveParentSummary);
   const evidence = await writeSubagentEvidence(dir, {
     requestedSubagents,
     events,
@@ -801,6 +830,30 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
       ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
       : []
   });
+  if (structuredParentSummary.trustworthy) {
+    const parentTelemetry = await recordOfficialSubagentParentOutcomesTelemetry({
+      root,
+      routeMissionId: id,
+      parentSummary: structuredParentSummary.raw,
+      plan
+    }).catch(async (error: any) => {
+      await appendJsonl(path.join(dir, 'zellij-telemetry-warnings.jsonl'), {
+        ts: nowIso(),
+        warning: 'official_subagent_parent_outcome_telemetry_failed',
+        error: String(error?.message || error)
+      }).catch(() => null);
+      return null;
+    });
+    if (parentTelemetry?.blocker) {
+      await appendJsonl(path.join(dir, 'zellij-telemetry-warnings.jsonl'), {
+        ts: nowIso(),
+        warning: 'official_subagent_parent_outcome_telemetry_incomplete',
+        blocker: parentTelemetry.blocker,
+        failed_mission_ids: 'failed_mission_ids' in parentTelemetry ? parentTelemetry.failed_mission_ids : [],
+        skipped_thread_ids: 'skipped_thread_ids' in parentTelemetry ? parentTelemetry.skipped_thread_ids : []
+      }).catch(() => null);
+    }
+  }
   const isNaruto = String(state?.mode || '').toUpperCase() === 'NARUTO'
     || String(state?.route || state?.route_command || '').replace(/^\$/, '').toUpperCase() === 'NARUTO';
   if (!isNaruto) {
@@ -824,7 +877,6 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
   ])];
   const passed = evidence.ok === true && blockers.length === 0;
   const updatedAt = nowIso();
-  const structuredParentSummary = normalizeSubagentParentSummary(effectiveParentSummary);
   const summary = {
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: passed,
@@ -845,10 +897,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     started_subagents: evidence.started_threads,
     completed_subagents: evidence.completed_threads,
     failed_subagents: evidence.failed_threads,
-    agents: {
-      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
-      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
-    },
+    agents: officialSubagentRolePlan(),
     verification: {
       budget: plan.verification?.budget || plan.verification_budget || 'affected',
       checks: Array.isArray(plan.verification?.checks)

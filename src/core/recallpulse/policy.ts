@@ -49,7 +49,7 @@ export const RECALLPULSE_POLICY = Object.freeze({
     'generated_skill_installation',
     'codex_app_stop_hooks',
     'dfix_ultralight_behavior',
-    'team_minimum_five_lane_review',
+    'official_subagent_risk_scoped_review_with_legacy_team_compatibility',
     'research_xhigh_agent_requirements',
     'db_destructive_operation_blocking',
     'imagegen_evidence_requirements'
@@ -178,37 +178,19 @@ export const RESEARCH_AGENT_PERSONA_CONTRACT = Object.freeze([
     id: 'einstein',
     display_name: 'Einstein Agent',
     historical_inspiration: 'Albert Einstein',
-    persona: 'first-principles reframer',
-    role: 'first_principles_reframer',
-    mandate: 'Strip assumptions, identify invariants, and build decisive thought experiments.',
-    required_outputs: ['eureka_moment', 'assumptions_removed', 'invariant_or_simplifying_frame', 'decisive_thought_experiment']
-  },
-  {
-    id: 'feynman',
-    display_name: 'Feynman Agent',
-    historical_inspiration: 'Richard Feynman',
-    persona: 'explanation experimentalist',
-    role: 'explanation_experimentalist',
-    mandate: 'Make the idea teachable, testable, and hard to hide behind jargon.',
-    required_outputs: ['eureka_moment', 'plain_language_mechanism', 'toy_model', 'cheap_empirical_probe']
-  },
-  {
-    id: 'turing',
-    display_name: 'Turing Agent',
-    historical_inspiration: 'Alan Turing',
-    persona: 'formalization and adversarial cases',
-    role: 'formalization_and_adversarial_cases',
-    mandate: 'Formalize inputs, outputs, algorithms, limits, and countercases.',
-    required_outputs: ['eureka_moment', 'formal_definition', 'algorithmic_shape', 'adversarial_case']
+    persona: 'first-principles reframer and explanation experimentalist',
+    role: 'first_principles_experimental_reframer',
+    mandate: 'Strip assumptions, identify invariants, explain the mechanism plainly, and build decisive thought experiments and cheap probes.',
+    required_outputs: ['eureka_moment', 'assumptions_removed', 'invariant_or_simplifying_frame', 'plain_language_mechanism', 'decisive_thought_experiment', 'cheap_empirical_probe']
   },
   {
     id: 'von_neumann',
     display_name: 'von Neumann Agent',
     historical_inspiration: 'John von Neumann',
-    persona: 'systems strategy agent',
-    role: 'systems_strategy_agent',
-    mandate: 'Map system dynamics, scaling behavior, incentives, and worst-case interactions.',
-    required_outputs: ['eureka_moment', 'system_model', 'scaling_risk', 'robustness_condition']
+    persona: 'formal systems and strategy agent',
+    role: 'formal_systems_strategy_agent',
+    mandate: 'Formalize inputs, outputs, algorithms, limits, system dynamics, scaling behavior, incentives, and worst-case interactions.',
+    required_outputs: ['eureka_moment', 'formal_definition', 'algorithmic_shape', 'adversarial_case', 'system_model', 'scaling_risk', 'robustness_condition']
   },
   {
     id: 'skeptic',
@@ -222,7 +204,7 @@ export const RESEARCH_AGENT_PERSONA_CONTRACT = Object.freeze([
 ].map((agent: any) => Object.freeze({
   ...agent,
   persona_boundary: 'persona-inspired cognitive lens only; do not impersonate the historical person',
-  custom_agent: 'expert',
+  custom_agent: 'research_reviewer',
   model: 'gpt-5.6-sol',
   reasoning_effort: 'max',
   service_tier: 'fast'

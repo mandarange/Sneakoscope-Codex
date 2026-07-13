@@ -12,18 +12,18 @@ if (!freshness.ok) fail('dist_not_fresh', { freshness });
 const layoutMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-layout-builder.js')).href);
 const capabilityMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-capability.js')).href);
 const commandMod = await import(pathToFileURL(path.join(root, 'dist', 'core', 'zellij', 'zellij-command.js')).href);
-process.env.SKS_ZELLIJ_VIEWPORTS = '4';
+process.env.SKS_ZELLIJ_VIEWPORTS = '3';
 const built = layoutMod.buildZellijLayoutKdl({ missionId: 'M-layout-check', ledgerRoot: path.join(root, '.sneakoscope', 'tmp', 'layout-check'), cwd: root, kind: 'mad', slotCount: 2, codexArgs: ['--profile', 'sks-mad-high', '-c', 'service_tier=fast'] });
 const staticValidation = layoutMod.validateZellijLayoutKdl(built.layout_kdl);
 const viewportLayoutOk = built.initial_worker_panes === 0
-  && built.viewport_count === 4
+  && built.viewport_count === 3
   && built.ui_architecture === 'monitor_plus_viewports'
   && built.lane_runtime_policies.length === 0
   && built.layout_kdl.includes('pane name="orchestrator"')
   && built.layout_kdl.includes('pane size="35%" name="sks-monitor"')
   && !built.layout_kdl.includes('zellij-lane')
   && !built.layout_kdl.includes('zellij-slot-pane')
-  && (built.layout_kdl.match(/pane name="sks-viewport-/g) || []).length === 4
+  && (built.layout_kdl.match(/pane name="sks-viewport-/g) || []).length === 3
   && built.lane_dispatch_policy?.mode === 'jsonl_nonblocking'
   && built.lane_dispatch_policy?.fifo_policy === 'disabled_to_avoid_writer_blocking'
   && built.lane_dispatch_policy?.pane_transport === 'monitor_plus_viewports';
@@ -47,7 +47,7 @@ const kindsValidated = ['mad', 'agent', 'team', 'naruto'].map((kind) => {
   const hasCodexPane = kind !== 'mad' || (b.main_pane_kind === 'codex_interactive' && /exec\s+'?codex'?/.test(b.layout_kdl) && b.layout_kdl.includes('sks-mad-high') && b.layout_kdl.includes('--no-alt-screen'));
   const viewportPaneCount = (b.layout_kdl.match(/pane name="sks-viewport-/g) || []).length;
   const noLanePane = !b.layout_kdl.includes('zellij-lane');
-  return { kind, ok: layoutMod.validateZellijLayoutKdl(b.layout_kdl).ok && hasCodexPane && noLanePane && viewportPaneCount === 4 && b.initial_worker_panes === 0 && b.viewport_count === 4, main_pane_kind: b.main_pane_kind, has_codex_pane: hasCodexPane, no_lane_pane: noLanePane, viewport_pane_count: viewportPaneCount };
+  return { kind, ok: layoutMod.validateZellijLayoutKdl(b.layout_kdl).ok && hasCodexPane && noLanePane && viewportPaneCount === 3 && b.initial_worker_panes === 0 && b.viewport_count === 3, main_pane_kind: b.main_pane_kind, has_codex_pane: hasCodexPane, no_lane_pane: noLanePane, viewport_pane_count: viewportPaneCount };
 });
 const allKindsOk = kindsValidated.every((k) => k.ok);
 const invalidValidation = layoutMod.validateZellijLayoutKdl('layout { pane command="zellij-lane" {');
@@ -81,7 +81,7 @@ const ok = staticValidation.ok
   && viewportLayoutOk
   && allKindsOk
   && layoutMod.validateZellijLayoutKdl(narutoFanoutLayout.layout_kdl).ok
-  && narutoFanoutPaneCount === 4
+  && narutoFanoutPaneCount === 3
   && invalidValidation.ok === false
   && capability.ok
   && (requireReal ? realRun?.ok === true : true);

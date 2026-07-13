@@ -348,7 +348,49 @@ async function syncSourcePackageVersion(root: any, version: any) {
     },
     {
       rel: 'README.md',
-      replace: (text: string) => text.replace(/SKS \*\*\d+\.\d+\.\d+\*\*/, `SKS **${version}**`)
+      replace: (text: string) => text
+        .replace(/SKS \*\*\d+\.\d+\.\d+\*\*/, `SKS **${version}**`)
+        .replace(/^## Naruto In \d+\.\d+\.\d+$/m, `## Naruto In ${version}`)
+    },
+    {
+      rel: 'docs/release-readiness.md',
+      replace: (text: string) => text
+        .replace(/^SKS \d+\.\d+\.\d+ is ready/m, `SKS ${version} is ready`)
+        .replace(/^Codex 0\.142 references later in this document are historical release records and cannot authorize the \d+\.\d+\.\d+ release\./m, `Codex 0.142 references later in this document are historical release records and cannot authorize the ${version} release.`)
+        .replace(/^\d+\.\d+\.\d+ release readiness requires/m, `${version} release readiness requires`)
+        .replace(/^## Current publish authorization policy \(\d+\.\d+\.\d+\)$/m, `## Current publish authorization policy (${version})`)
+        .replace(/^The \d+\.\d+\.\d+ implementation handoff uses this bounded verification sequence:/m, `The ${version} implementation handoff uses this bounded verification sequence:`)
+        .replace(/^the \d+\.\d+\.\d+ command surface;/m, `the ${version} command surface;`)
+        .replace(/^not the \d+\.\d+\.\d+ release procedure\./m, `not the ${version} release procedure.`)
+        .replace(/do not satisfy the \d+\.\d+\.\d+ official-subagent gate\. Current \d+\.\d+\.\d+ proof/g, `do not satisfy the ${version} official-subagent gate. Current ${version} proof`)
+        .replace(/not represented as current \d+\.\d+\.\d+ completion proof\./g, `not represented as current ${version} completion proof.`)
+        .replace(/^For \d+\.\d+\.\d+, a selected codex-lb/m, `For ${version}, a selected codex-lb`)
+        .replace(/^The \d+\.\d+\.\d+ SKS menu bar/m, `The ${version} SKS menu bar`)
+    },
+    {
+      rel: 'docs/release-proof-truth.md',
+      replace: (text: string) => text
+        .replace(/^SKS \d+\.\d+\.\d+ release proof truth/m, `SKS ${version} release proof truth`)
+        .replace(/^SKS \d+\.\d+\.\d+ must not claim/m, `SKS ${version} must not claim`)
+        .replace(/cannot serve as \d+\.\d+\.\d+ evidence\./m, `cannot serve as ${version} evidence.`)
+    },
+    {
+      rel: 'docs/official-docs-compat.md',
+      replace: (text: string) => text
+        .replace(/^SKS \d+\.\d+\.\d+ keeps release-gated behavior/m, `SKS ${version} keeps release-gated behavior`)
+        .replace(/official-docs-compat-\d+\.\d+\.\d+\.(json|md)/g, `official-docs-compat-${version}.$1`)
+    },
+    {
+      rel: 'docs/codex-0.139-compat.md',
+      replace: (text: string) => text.replace(/^SKS \d+\.\d+\.\d+ keeps the historical/m, `SKS ${version} keeps the historical`)
+    },
+    {
+      rel: 'docs/codex-cli-compat.md',
+      replace: (text: string) => text.replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)
+    },
+    {
+      rel: 'docs/codex-app.md',
+      replace: (text: string) => text.replace(/^SKS \d+\.\d+\.\d+ targets/m, `SKS ${version} targets`)
     }
   ];
   for (const { rel, replace } of replacements) {

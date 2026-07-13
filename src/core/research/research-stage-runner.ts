@@ -17,7 +17,7 @@ import { buildResearchSourceShardPrompt, defaultResearchSourceShardOutput, resea
 import { linkSourceLedgerToClaimMatrix, mergeResearchSourceShards } from './research-source-ledger-merge.js'
 import { writeSourceQualityReport } from './source-quality-report.js'
 import { runResearchFalsification } from './research-falsification-runner.js'
-import { evaluateResearchGate, researchPaperArtifactForPlan, RESEARCH_PAPER_SECTION_GROUPS } from '../research.js'
+import { evaluateResearchGate, researchPaperArtifactForPlan, RESEARCH_PAPER_SECTION_GROUPS, RESEARCH_REVIEWER_CUSTOM_AGENT } from '../research.js'
 import { runResearchSuperSearchShard } from './research-super-search.js'
 import {
   RESEARCH_ADVERSARIAL_PLAN_ARTIFACT,
@@ -581,7 +581,7 @@ async function buildResearchGateSeed(dir: string, plan: any, input: StageInput) 
     xhigh_agents: 0,
     sol_max_policy_agents: agents.filter((agent: any) => {
       const policy = agent?.model_policy && typeof agent.model_policy === 'object' ? agent.model_policy : agent
-      return policy.custom_agent === 'expert' && policy.model === 'gpt-5.6-sol' && (policy.reasoning_effort === 'max' || policy.model_reasoning_effort === 'max')
+      return policy.custom_agent === RESEARCH_REVIEWER_CUSTOM_AGENT && policy.model === 'gpt-5.6-sol' && (policy.reasoning_effort === 'max' || policy.model_reasoning_effort === 'max')
     }).length,
     eureka_moments: agents.filter((agent: any) => agent.eureka?.exclamation === 'Eureka!' && String(agent.eureka?.idea || '').trim()).length,
     agent_findings: agents.reduce((sum: number, agent: any) => sum + (Array.isArray(agent.findings) ? agent.findings.length : 0), 0),

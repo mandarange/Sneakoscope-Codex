@@ -8,7 +8,7 @@ import { parse } from 'smol-toml';
 test('managed Codex 0.144.1 agent roles contain only supported rendered policy keys', async () => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
 
-  assert.equal(manifest.MANAGED_ASSET_VERSION, '6.1.1');
+  assert.equal(manifest.MANAGED_ASSET_VERSION, '6.1.2');
   for (const role of manifest.MANAGED_AGENT_ROLES) {
     const text = manifest.managedAgentRoleContent(role);
     const parsed = parse(text);
@@ -24,24 +24,27 @@ test('managed Codex 0.144.1 agent roles contain only supported rendered policy k
     assert.equal(parsed.name, role.codex_name);
     assert.equal(parsed.model, role.model);
     assert.equal(parsed.model_reasoning_effort, 'max');
-    assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), false);
+    assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), role.sandbox === 'read-only');
+    assert.equal(parsed.sandbox_mode, role.sandbox);
     assert.equal(manifest.managedOfficialSubagentRoleOwnsText(text, role), true);
   }
 });
 
-test('fresh agent role repair requires only official worker and expert files', async () => {
+test('fresh agent role repair requires the complete official custom agent catalog', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-agent-role-official-default-'));
   const codexHome = path.join(root, 'codex-home');
   const roles = await import('../../dist/core/agents/agent-role-config.js');
+  const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
+  const expected = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => role.filename).sort();
 
   const plan = await roles.repairAgentRoleConfigs({ root, codexHome, apply: false });
-  assert.deepEqual(plan.missing.sort(), ['expert.toml', 'worker.toml']);
+  assert.deepEqual(plan.missing.sort(), expected);
   assert.equal(plan.missing.includes('analysis-scout.toml'), false);
 
   const repair = await roles.repairAgentRoleConfigs({ root, codexHome, apply: true });
   assert.equal(repair.ok, true);
   const files = (await fs.readdir(path.join(root, '.codex', 'agents'))).sort();
-  assert.deepEqual(files, ['expert.toml', 'worker.toml']);
+  assert.deepEqual(files, expected);
 });
 
 test('agent role repair preserves legacy role TOMLs without creating or overwriting them', async () => {

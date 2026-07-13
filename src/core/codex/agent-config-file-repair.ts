@@ -32,9 +32,9 @@ export interface AgentConfigFileRepairReport {
 }
 
 /**
- * Compatibility entrypoint retained for doctor callers. In 6.1.1 it repairs
- * only the official project [agents] settings. Legacy [agents.*] tables and
- * role TOMLs are compatibility/user surfaces and are never created or edited.
+ * Compatibility entrypoint retained for doctor callers. It repairs the
+ * official project [agents] settings and removes only exact legacy SKS child
+ * tables after ownership has been proven. User-authored child tables remain.
  */
 export async function repairAgentConfigFileReferences(input: {
   root: string

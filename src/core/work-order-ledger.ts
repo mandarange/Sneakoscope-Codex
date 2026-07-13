@@ -98,9 +98,47 @@ export async function createAndWriteWorkOrderLedgerForPrompt(dir: any, { mission
     acceptance_criteria: item.acceptance_context ? [item.acceptance_context] : [],
     location: `prompt:${item.id}`
   }));
-  const ledger = createWorkOrderLedger({ missionId, route, requests, sourcesComplete: !truncated });
+  const candidate = createWorkOrderLedger({ missionId, route, requests, sourcesComplete: !truncated });
+  const existing = await readWorkOrderLedger(dir);
+  const ledger = mergeWorkOrderLedger(existing, candidate);
   await writeWorkOrderLedger(dir, ledger);
   return ledger;
+}
+
+export function mergeWorkOrderLedger(existing: any, candidate: any) {
+  if (!existing || !Array.isArray(existing.items)) return candidate;
+  const seen = new Set(existing.items.map(workOrderRequirementKey).filter(Boolean));
+  const appended = (candidate?.items || [])
+    .filter((item: any) => {
+      const key = workOrderRequirementKey(item);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((item: any, index: number) => ({
+      ...item,
+      id: `WO-${String(existing.items.length + index + 1).padStart(3, '0')}`
+    }));
+  if (appended.length === 0) return existing;
+  const items = [...existing.items, ...appended];
+  return {
+    ...existing,
+    mission_id: existing.mission_id || candidate.mission_id,
+    route: existing.route || candidate.route,
+    source_inventory_complete: Boolean(existing.source_inventory_complete && candidate.source_inventory_complete),
+    all_customer_requests_preserved: items.every((item: any) => Boolean(item.source?.verbatim)),
+    all_customer_requests_mapped: items.every((item: any) => (item.implementation_tasks || []).length > 0 || item.blocker?.blocked === true),
+    all_work_items_verified: items.length > 0 && items.every(workOrderItemResolved),
+    items
+  };
+}
+
+function workOrderRequirementKey(item: any) {
+  return String(item?.source?.verbatim || item?.normalized_requirement || '')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 const SEMANTIC_SLICE_ITEM_CEILING = 128;

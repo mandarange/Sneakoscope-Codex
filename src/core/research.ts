@@ -16,6 +16,7 @@ import { writeResearchHandoffArtifacts } from './research/research-handoff.js';
 import { RESEARCH_WORK_GRAPH_ARTIFACT, writeResearchWorkGraph } from './research/research-work-graph.js';
 import { buildResearchReviewArtifactDigest, validateResearchReviewArtifactDigest } from './research/research-review-artifact-digest.js';
 import { RESEARCH_SOURCE_LAYER_IDS, RESEARCH_SOURCE_LAYERS } from './research/research-source-layer-catalog.js';
+import { eligibleResearchSourceIdSet } from './research/research-source-evidence.js';
 import { resolveCodexAppExecutionProfile } from './codex-app/codex-app-execution-profile.js';
 import { resolveCodexNativeInvocationPlan } from './codex-native/codex-native-invocation-router.js';
 import {
@@ -31,6 +32,8 @@ export { RESEARCH_SOURCE_LAYER_IDS, RESEARCH_SOURCE_LAYERS } from './research/re
 export const RESEARCH_PAPER_ARTIFACT = 'research-paper.md';
 export const RESEARCH_SOURCE_SKILL_ARTIFACT = 'research-source-skill.md';
 export const RESEARCH_GENIUS_SUMMARY_ARTIFACT = 'genius-opinion-summary.md';
+export const RESEARCH_REVIEWER_CUSTOM_AGENT = 'research_reviewer';
+export const RESEARCH_REVIEWER_CONFIG_ARTIFACT = '.codex/agents/research-reviewer.toml';
 const RESEARCH_ADVERSARIAL_REVIEW_LEDGER_ARTIFACT = 'research-adversarial-review.json';
 const RESEARCH_ADVERSARIAL_CONVERGENCE_ARTIFACT = 'research-adversarial-convergence.json';
 const RESEARCH_ADVERSARIAL_REVISION_LEDGER_ARTIFACT = 'research-revision-ledger.json';
@@ -115,7 +118,7 @@ export function researchNativeAgentPlan(prompt: any = '', opts: any = {}) {
     persona_boundary: persona.persona_boundary,
     role: persona.role,
     mandate: persona.mandate,
-    custom_agent: 'expert',
+    custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
     model: 'gpt-5.6-sol',
     reasoning_effort: 'max',
     read_only: true
@@ -151,7 +154,7 @@ export function researchNativeAgentPlan(prompt: any = '', opts: any = {}) {
     autoresearch_cycle_policy: {
       uses_agent_batches: true,
       batch_template: batches.map((batch) => ({ id: batch.id, agents: batch.agents, outputs: batch.outputs })),
-      rule: 'Every AutoResearch synthesis is challenged by five distinct official expert subagent threads; revisions are bounded and followed by a fresh review cycle.'
+      rule: 'Every AutoResearch synthesis is challenged by three distinct composite official reviewer threads; revisions are bounded and followed by a fresh full review cycle.'
     }
   };
 }
@@ -219,11 +222,11 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       mode: 'persona_inspired_agents_not_impersonation',
       policy: 'Use historical genius-inspired lenses as cognitive roles only. Do not claim to be, simulate private thoughts of, or speak as the real people.',
       effort_policy: {
-        custom_agent: 'expert',
+        custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
         required_model: 'gpt-5.6-sol',
         required_effort: 'max',
         applies_to: 'every_official_adversarial_reviewer',
-        rule: 'Every adversarial reviewer uses the verified expert agent configuration with GPT-5.6 Sol Max. Bounded source extraction may use Luna Max; synthesis, falsification, and review use Sol Max.'
+        rule: 'Every adversarial reviewer uses the verified research_reviewer custom agent configuration with GPT-5.6 Sol Max. Bounded source extraction may use Luna Max; synthesis, falsification, and review use Sol Max.'
       },
       eureka_policy: {
         exclamation: 'Eureka!',
@@ -231,15 +234,15 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       },
       debate_policy: {
         mode: 'independent_adversarial_reviews_with_bounded_revision',
-        rule: 'Five distinct official reviewer threads independently attack the synthesized manuscript. Any objection triggers a bounded revision and a fresh full review; ambiguous lifecycle or outcomes fail closed.'
+        rule: 'Three distinct composite official reviewer threads independently attack the synthesized manuscript. Any objection triggers a bounded revision and a fresh full review; ambiguous lifecycle or outcomes fail closed.'
       },
       agents: RESEARCH_AGENT_COUNCIL,
       protocol: [
         'Super Search and semantic claim synthesis complete before the official reviewer threads start.',
-        'Each official expert reviewer records one source-linked "Eureka!" idea, nonempty falsifiers, and a cheap decisive probe.',
+        'Each official composite reviewer records one source-linked "Eureka!" idea, nonempty falsifiers, and a cheap decisive probe.',
         'Every reviewer attempts rejection independently; no reviewer lifecycle completion is treated as approval.',
         'Any critical, major, minor, or required revision prevents convergence and triggers a bounded revision when evidence integrity is intact.',
-        'A fresh five-thread review must approve after every successful revision.'
+        'A fresh three-thread review must approve after every successful revision.'
       ]
     },
     web_research_policy: {
@@ -296,8 +299,8 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       'Do not modify code or project source files during Research. Research writes only route-local mission artifacts; implementation belongs to $Team or another execution route.',
       'Do not claim novelty without a novelty ledger entry.',
       'Separate facts, inferences, hypotheses, and speculations.',
-      'Run five distinct evidence-correlated official expert subagent reviews after synthesis.',
-      'Every reviewer must use the verified GPT-5.6 Sol Max expert policy, record one literal "Eureka!" idea, and return an exact structured outcome.',
+      'Run three distinct evidence-correlated official composite reviewer subagent reviews after synthesis.',
+      'Every reviewer must use the verified GPT-5.6 Sol Max research_reviewer policy, record one literal "Eureka!" idea, and return an exact structured outcome.',
       'Project official reviewer outcomes into debate-ledger.json for compatibility only; the canonical proof is the lifecycle-correlated adversarial review and convergence artifacts.',
       'Maximize safe web/source search as layered source retrieval and record queries, source layers, citations, quality notes, triangulation checks, and blockers in source-ledger.json.',
       `Create ${RESEARCH_SOURCE_SKILL_ARTIFACT} as a route-local source collection skill before synthesis; do not edit generated .agents/skills during the research run.`,
@@ -312,8 +315,8 @@ export function createResearchPlan(prompt: any, opts: any = {}) {
       { id: 'R0_FRAME', goal: 'Frame the target outcome, constraints, and what would make the idea useful.' },
       { id: 'R1_SOURCE_SKILL', goal: `Create ${RESEARCH_SOURCE_SKILL_ARTIFACT} with layer-specific search routes, quality fields, and blockers before source gathering.` },
       { id: 'R2_SOURCE_SEARCH', goal: 'Run layered web/source retrieval across papers, official data, standards, news, public discourse, developer knowledge, and counterevidence.' },
-      { id: 'R3_EUREKA', goal: 'Have each official Sol Max expert reviewer record one non-obvious source-linked Eureka idea without claiming historical-person identity or genius-level performance.' },
-      { id: 'R4_DEBATE', goal: 'Collect five independent adversarial reviewer outcomes, revise on any open objection, and require a fresh unanimous review before convergence.' },
+      { id: 'R3_EUREKA', goal: 'Have each official Sol Max composite reviewer record one non-obvious source-linked Eureka idea without claiming historical-person identity or genius-level performance.' },
+      { id: 'R4_DEBATE', goal: 'Collect three independent composite adversarial reviewer outcomes, revise on any open objection, and require a fresh unanimous review before convergence.' },
       { id: 'R5_FALSIFY', goal: 'Attack each mechanism with counterexamples, missing evidence, source conflicts, and failure modes.' },
       { id: 'R6_APPLY', goal: 'Keep the smallest surviving mechanism, define a cheap probe, and write all ledgers.' },
       { id: 'R7_PAPER', goal: 'Convert the final research result into a concise paper manuscript with abstract, method, findings, limitations, and references.' },
@@ -357,7 +360,7 @@ export function researchPlanMarkdown(plan: any) {
   }
   if (plan.execution_policy) {
     lines.push(`Execution: ${plan.execution_policy.normal_run}; default cycle timeout ${plan.execution_policy.default_cycle_timeout_minutes} minutes`);
-    if (plan.execution_policy.default_max_cycles) lines.push(`Consensus loop: repeat until unanimous agent consensus; default safety cap ${plan.execution_policy.default_max_cycles} cycles`);
+    if (plan.execution_policy.default_max_cycles) lines.push(`Adversarial review loop: run three independent official research_reviewer threads, revise on any objection, then run a fresh three-thread cycle; default safety cap ${plan.execution_policy.default_max_cycles} cycles`);
     lines.push(`Mock policy: ${plan.execution_policy.mock_policy}`);
   }
   if (plan.mutation_policy) lines.push(`Mutation policy: ${plan.mutation_policy.rule}`);
@@ -377,7 +380,7 @@ export function researchPlanMarkdown(plan: any) {
     lines.push('');
   }
   if (plan.native_agent_plan) {
-    lines.push('## Native Agent Plan');
+    lines.push('## Official Subagent Review Plan');
     lines.push(`Backend: ${plan.native_agent_plan.backend}`);
     lines.push(`Sessions: ${plan.native_agent_plan.session_count}`);
     lines.push(`AutoResearch batches: ${plan.native_agent_plan.autoresearch_cycle_policy?.uses_agent_batches ? 'enabled' : 'disabled'}`);
@@ -431,7 +434,7 @@ export function researchSourceSkillMarkdown(plan: any) {
   lines.push('Real-run policy: collect live sources for as long as needed within the mission timeout; mock or fixture evidence is valid only for explicit --mock selftests.');
   lines.push('');
   lines.push('## Trigger');
-  lines.push('- Any `$Research` run that must collect broad public evidence before creative synthesis, debate, falsification, or paper writing.');
+  lines.push('- Any `$Research` run that must collect broad public evidence before synthesis, adversarial review, falsification, or paper writing.');
   lines.push('');
   lines.push('## Source Layers');
   for (const layer of layers) {
@@ -447,10 +450,12 @@ export function researchSourceSkillMarkdown(plan: any) {
   lines.push('- If a layer cannot be searched with the available runtime or credentials, record the blocker and keep research-gate.json unpassed.');
   lines.push('- Do not modify repository source code or generated harness files during Research; write only route-local mission artifacts.');
   lines.push('');
-  lines.push('## Debate Use');
-  lines.push('- Every agent must cite source-ledger ids in findings and Eureka ideas.');
+  lines.push('## Official Reviewer Use');
+  lines.push('- Only source-ledger ids with correlated verified-content Super Search proof may support a real-run reviewer finding or Eureka idea.');
+  lines.push('- Run exactly three independent official `research_reviewer` threads on GPT-5.6 Sol Max: Einstein, von Neumann, and Skeptic composite lenses.');
   lines.push('- The skeptic lens must challenge the strongest claim using counterevidence or source-quality downgrades.');
-  lines.push('- Continue agent/debate/falsification cycles until every agent agrees to the surviving mechanism. Record `unanimous_consensus=true`, `consensus_iterations`, and per-agent agreement in debate-ledger.json.');
+  lines.push('- Any objection triggers a mission-local `research_synthesizer` revision followed by a fresh three-thread review cycle; do not launch a custom scheduler or debate pool.');
+  lines.push('- `agent-ledger.json` and `debate-ledger.json` are compatibility projections from official reviewer outcomes. Canonical convergence requires three trustworthy parent outcomes and zero unresolved objections.');
   lines.push('- Synthesis keeps only claims that survive cross-layer triangulation and falsification.');
   lines.push('');
   return `${lines.join('\n')}\n`;
@@ -620,10 +625,10 @@ export function defaultAgentLedger(plan: any = null) {
       role: agent.role,
       mandate: agent.mandate,
       model_policy: {
-        custom_agent: 'expert',
+        custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
         model: 'gpt-5.6-sol',
         reasoning_effort: 'max',
-        enforcement_source: '.codex/agents/expert.toml'
+        enforcement_source: RESEARCH_REVIEWER_CONFIG_ARTIFACT
       },
       observed_model: null,
       observed_reasoning_effort: null,
@@ -830,10 +835,7 @@ export async function validateCanonicalResearchAdversarialEvidence(dir: any) {
   if (String(convergenceGate?.review_artifact_bundle_sha256 || '') !== reviewedArtifactBundle) blockers.push('canonical_adversarial_convergence_artifact_bundle_mismatch');
   if (String(convergenceGate?.current_artifact_bundle_sha256 || '') !== currentReviewArtifacts.bundle_sha256) blockers.push('canonical_adversarial_convergence_current_artifact_bundle_mismatch');
   if (convergenceGate?.review_artifact_hashes_ok !== true) blockers.push('canonical_adversarial_artifact_hashes_not_ok');
-  const currentSourceIds = new Set([
-    ...(Array.isArray(sourceLedger?.sources) ? sourceLedger.sources : []),
-    ...(Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources : [])
-  ].map((source: any) => String(source?.id || '')).filter(Boolean));
+  const currentSourceIds = await eligibleResearchSourceIdSet(dir, sourceLedger, executionClass);
   const personaIds = reviewers.map((reviewer: any) => String(reviewer?.persona_id || '').trim()).filter(Boolean);
   const threadIds = reviewers.map((reviewer: any) => String(reviewer?.thread_id || '').trim()).filter(Boolean);
   if (reviewers.length !== expectedReviewerCount) blockers.push(`canonical_adversarial_reviewer_count:${reviewers.length}/${expectedReviewerCount}`);
@@ -1094,7 +1096,7 @@ export async function evaluateResearchGate(dir: any) {
   const independentAgents = agentRows.filter((agent: any) => Array.isArray(agent.findings) && agent.findings.length > 0).length;
   const solMaxPolicyAgents = agentRows.filter((agent: any) => {
     const policy = agent?.model_policy && typeof agent.model_policy === 'object' ? agent.model_policy : agent;
-    return policy.custom_agent === 'expert'
+    return policy.custom_agent === RESEARCH_REVIEWER_CUSTOM_AGENT
       && policy.model === 'gpt-5.6-sol'
       && (policy.reasoning_effort === 'max' || policy.model_reasoning_effort === 'max');
   }).length;
@@ -1135,7 +1137,7 @@ export async function evaluateResearchGate(dir: any) {
   if (Math.max(Number(gate.sol_max_policy_agents || 0), solMaxPolicyAgents) < RESEARCH_AGENT_COUNCIL.length) reasons.push('agent_model_policy_not_sol_max');
   if (Math.max(Number(gate.eureka_moments || 0), eurekaMoments) < RESEARCH_AGENT_COUNCIL.length) reasons.push('eureka_missing');
   if (!personaValidation.ok) reasons.push(...personaValidation.issues.map((issue: any) => `agent_persona:${issue}`));
-  if (Math.max(Number(gate.agent_findings || 0), agentFindings) < 4) reasons.push('agent_findings_missing');
+  if (Math.max(Number(gate.agent_findings || 0), agentFindings) < RESEARCH_AGENT_COUNCIL.length) reasons.push('agent_findings_missing');
   if (Math.max(Number(gate.debate_participants || 0), debateParticipants) < RESEARCH_AGENT_COUNCIL.length) reasons.push('debate_participants_missing');
   if (Math.max(Number(gate.debate_exchanges || 0), debateExchanges) < RESEARCH_AGENT_COUNCIL.length) reasons.push('debate_exchanges_missing');
   if (Math.max(Number(gate.consensus_iterations || 0), consensus.iterations) < 1) reasons.push('consensus_iteration_missing');

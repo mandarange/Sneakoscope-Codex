@@ -6,15 +6,16 @@ import path from 'node:path'
 import { validateCanonicalResearchAdversarialEvidence } from '../../research.js'
 import { recordSubagentEvent, writeSubagentEvidence } from '../../subagents/subagent-evidence.js'
 import { buildResearchReviewArtifactDigest } from '../research-review-artifact-digest.js'
+import { writeVerifiedSuperSearchFixture } from './research-source-evidence-fixture.js'
 
-const personas = ['einstein', 'feynman', 'turing', 'von_neumann', 'skeptic']
+const personas = ['einstein', 'von_neumann', 'skeptic']
 
-test('canonical Research gate validates five lifecycle-correlated official reviewer threads', async () => {
+test('canonical Research gate validates three lifecycle-correlated official reviewer threads', async () => {
   const fixture = await writeCanonicalFixture()
   const result = await validateCanonicalResearchAdversarialEvidence(fixture.dir)
   assert.equal(result.ok, true, JSON.stringify(result))
   assert.equal(result.official_subagent_evidence_ok, true)
-  assert.equal(result.reviewer_thread_ids.length, 5)
+  assert.equal(result.reviewer_thread_ids.length, personas.length)
 })
 
 test('canonical Research gate fails closed on ambiguous parent outcome text', async () => {
@@ -68,7 +69,8 @@ async function writeCanonicalFixture() {
   await fsp.writeFile(path.join(dir, 'research-plan.json'), JSON.stringify({ mission_id: 'M-canonical', artifacts: { research_paper: 'research-paper.md' } }))
   await fsp.writeFile(path.join(dir, 'research-report.md'), '# Research report\n\nEvidence-bound fixture.\n')
   await fsp.writeFile(path.join(dir, 'research-paper.md'), '# Research paper\n\nEvidence-bound fixture.\n')
-  await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources: personas.map((_persona, index) => ({ id: `source-${index + 1}` })), counterevidence_sources: [] }))
+  const verifiedSources = await writeVerifiedSuperSearchFixture(dir, personas.map((_persona, index) => `source-${index + 1}`), 'canonical')
+  await fsp.writeFile(path.join(dir, 'source-ledger.json'), JSON.stringify({ sources: verifiedSources, counterevidence_sources: [] }))
   await fsp.writeFile(path.join(dir, 'claim-evidence-matrix.json'), JSON.stringify({ schema: 'sks.claim-evidence-matrix.v1', mission_id: 'M-canonical', claims: [], key_claim_ids: [], unsupported_claims: [], triangulated_claim_count: 0, blockers: [] }))
   const reviewArtifacts = await buildResearchReviewArtifactDigest(dir, { artifacts: { research_paper: 'research-paper.md' } })
   const reviewers = personas.map((personaId, index) => ({
@@ -92,7 +94,7 @@ async function writeCanonicalFixture() {
   const parent = {
     schema: 'sks.subagent-parent-summary.v1',
     status: 'completed',
-    summary: 'All five reviewer threads completed with structured outcomes.',
+    summary: 'All three composite reviewer threads completed with structured outcomes.',
     run_id: runId,
     thread_outcomes: reviewers.map(({ thread_id, thread_status: _threadStatus, ...outcome }) => ({
       thread_id,
@@ -108,7 +110,7 @@ async function writeCanonicalFixture() {
     await recordSubagentEvent(dir, { thread_id: reviewer.thread_id, workflow_run_id: runId }, 'SubagentStart')
     await recordSubagentEvent(dir, { thread_id: reviewer.thread_id, workflow_run_id: runId }, 'SubagentStop')
   }
-  await writeSubagentEvidence(dir, { requestedSubagents: 5, parentSummary: parent, parentSummaryPresent: true, workflowStatus: 'parent_completed', runId })
+  await writeSubagentEvidence(dir, { requestedSubagents: personas.length, parentSummary: parent, parentSummaryPresent: true, workflowStatus: 'parent_completed', runId })
   await fsp.writeFile(path.join(dir, 'research-adversarial-review.json'), JSON.stringify({
     schema: 'sks.research-adversarial-review-ledger.v1',
     generated_at: reviewedAt,
@@ -121,7 +123,7 @@ async function writeCanonicalFixture() {
   await fsp.writeFile(path.join(dir, 'research-adversarial-convergence.json'), JSON.stringify({
     schema: 'sks.research-adversarial-convergence.v1', checked_at: reviewedAt, execution_class: 'real', passed: true,
     official_subagent_workflow: true, official_subagent_evidence_ok: true, workflow_run_id: runId,
-    reviewer_count_required: 5, reviewer_count_observed: 5, review_cycles: 1, revision_cycles: 0,
+    reviewer_count_required: personas.length, reviewer_count_observed: personas.length, review_cycles: 1, revision_cycles: 0,
     review_artifacts: reviewArtifacts, review_artifact_bundle_sha256: reviewArtifacts.bundle_sha256,
     current_artifact_bundle_sha256: reviewArtifacts.bundle_sha256, review_artifact_hashes_ok: true,
     all_reviewers_approved: true, unresolved_critical_objections: 0, unresolved_objections: 0, honest_mode_ok: true,

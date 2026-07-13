@@ -213,6 +213,33 @@ test('createAndWriteWorkOrderLedgerForPrompt keeps an ordinary single requiremen
   assert.equal(ledger.items[0].source.verbatim, prompt);
 });
 
+test('reused session missions append new work-order prompts without duplicating repeated prompts', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-work-order-session-merge-'));
+  const dir = path.join(root, '.sneakoscope', 'missions', 'M-wo-session');
+  await fsp.mkdir(dir, { recursive: true });
+
+  await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: 'M-wo-session',
+    route: 'Naruto',
+    prompt: 'Define the official custom agent catalog.'
+  });
+  await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: 'M-wo-session',
+    route: 'Naruto',
+    prompt: 'Define the official custom agent catalog.'
+  });
+  const merged = await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: 'M-wo-session',
+    route: 'Naruto',
+    prompt: 'Show official subagent activity in the Zellij viewports.'
+  });
+
+  assert.equal(merged.items.length, 2);
+  assert.deepEqual(merged.items.map((item: any) => item.id), ['WO-001', 'WO-002']);
+  assert.match(merged.items[0].source.verbatim, /custom agent catalog/i);
+  assert.match(merged.items[1].source.verbatim, /Zellij viewports/i);
+});
+
 test('semantic slice parsing also respects numbered and sentence boundaries', async () => {
   const root = await makeTempRoot();
   const numberedDir = path.join(root, 'numbered');

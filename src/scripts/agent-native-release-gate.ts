@@ -286,7 +286,7 @@ function assertRouteNativeBlackbox(routeName) {
         }
       };
       const prepared = runSksJson(['research', 'prepare', 'native backend fixture', '--json'], options);
-      const result = runSksJson(['research', 'run', prepared.mission_id, '--agents', '5', '--max-threads', '5', '--max-cycles', '1', '--cycle-timeout-minutes', '15', '--mock', '--json'], options);
+      const result = runSksJson(['research', 'run', prepared.mission_id, '--agents', '3', '--max-threads', '3', '--max-cycles', '1', '--cycle-timeout-minutes', '15', '--mock', '--json'], options);
       assertGate(result.ok === true, 'Research mock blackbox did not pass', result);
       assertGate(result.official_subagent_review?.passed === true, 'Research proof missing official subagent adversarial convergence', result);
       assertGate(result.honest_mode?.guarantees?.genius_level === false && result.honest_mode?.guarantees?.novelty === false, 'Research Honest Mode must reject genius/novelty guarantees', result);

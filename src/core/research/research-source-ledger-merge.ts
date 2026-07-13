@@ -1,7 +1,8 @@
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
+import { nowIso, readJson, sha256, writeJsonAtomic } from '../fsx.js'
 import { writeSourceQualityReport } from './source-quality-report.js'
+import { validateResearchSourceProvenance } from './research-source-evidence.js'
 import { RESEARCH_SOURCE_LAYERS, validateResearchSourceShardOutput } from './research-source-shards.js'
 
 interface MergeResult {
@@ -18,13 +19,17 @@ export async function mergeResearchSourceShards(input: {
 }): Promise<MergeResult> {
   const shardDir = path.join(input.dir, 'research', `cycle-${input.cycle}`, 'source-shards')
   const shardFiles = await listJsonFiles(shardDir)
-  const shardOutputs = []
+  const shardOutputs: any[] = []
+  const superSearchRuns: any[] = []
   const blockers: string[] = []
   for (const file of shardFiles) {
     const shard = await readJson(file, null)
     const validation = validateResearchSourceShardOutput(shard)
     if (!validation.ok) blockers.push(...validation.blockers.map((blocker) => `${path.basename(file)}:${blocker}`))
-    shardOutputs.push(shard)
+    const materialized = await materializeShardSuperSearchProvenance(input.dir, shard)
+    blockers.push(...materialized.blockers.map((blocker) => `${path.basename(file)}:${blocker}`))
+    shardOutputs.push(materialized.shard)
+    if (materialized.run) superSearchRuns.push(materialized.run)
   }
   const requiredLayers = sourceLayersForPlan(input.plan)
   const rows = dedupeSources(shardOutputs.flatMap((shard) => Array.isArray(shard?.sources) ? shard.sources : []))
@@ -51,6 +56,7 @@ export async function mergeResearchSourceShards(input: {
       status: 'created'
     },
     web_search_passes: shardOutputs.length ? 1 : 0,
+    super_search_runs: superSearchRuns,
     source_layers: requiredLayers.map((layer) => {
       const sourceIds = rows.filter((row) => row.layer === layer.id && !counterRowIds.has(String(row.id || ''))).map((row) => row.id)
       const counterIds = rows.filter((row) => row.layer === layer.id && counterRowIds.has(String(row.id || ''))).map((row) => row.id)
@@ -198,6 +204,91 @@ export function linkSourceLedgerToClaimMatrix(sourceLedger: any, claimMatrix: an
   }
 }
 
+async function materializeShardSuperSearchProvenance(dir: string, shard: any): Promise<{
+  shard: any
+  run: any | null
+  blockers: string[]
+}> {
+  const sources = Array.isArray(shard?.sources) ? shard.sources : []
+  const verifiedSources = sources.filter((source: any) => String(source?.acquisition_verdict || '') === 'verified_content')
+  const link = shard?.super_search
+  if (link?.schema !== 'sks.research-super-search-link.v1') {
+    return {
+      shard,
+      run: null,
+      blockers: verifiedSources.map((source: any) => `super_search_provenance_missing:${String(source?.id || 'unknown')}`)
+    }
+  }
+
+  const [proofArtifact, sourceLedgerArtifact] = await Promise.all([
+    readMissionArtifact(dir, link.proof_artifact),
+    readMissionArtifact(dir, link.source_ledger_artifact)
+  ])
+  const shared = {
+    schema: 'sks.research-super-search-source-provenance.v1',
+    layer_id: String(shard?.layer_id || ''),
+    proof_artifact: String(link?.proof_artifact || ''),
+    proof_sha256: proofArtifact?.sha256 || null,
+    source_ledger_artifact: String(link?.source_ledger_artifact || ''),
+    source_ledger_sha256: sourceLedgerArtifact?.sha256 || null
+  }
+  const validationBlockers: string[] = []
+  const enrichedSources = await Promise.all(sources.map(async (source: any) => {
+    const provenance: any = {
+      ...shared,
+      source_id: String(source?.id || source?.source_id || ''),
+      validated: false,
+      blockers: []
+    }
+    const enriched = { ...source, super_search_provenance: provenance }
+    const validation = await validateResearchSourceProvenance(dir, enriched)
+    provenance.validated = validation.ok
+    provenance.blockers = validation.blockers
+    if (String(source?.acquisition_verdict || '') === 'verified_content' && !validation.ok) validationBlockers.push(...validation.blockers)
+    return enriched
+  }))
+  const verifiedSourceIds = enrichedSources
+    .filter((source: any) => source?.super_search_provenance?.validated === true)
+    .map((source: any) => String(source?.id || source?.source_id || ''))
+    .filter(Boolean)
+  const run = {
+    schema: 'sks.research-super-search-run-provenance.v1',
+    layer_id: shared.layer_id,
+    proof_artifact: shared.proof_artifact,
+    proof_sha256: shared.proof_sha256,
+    source_ledger_artifact: shared.source_ledger_artifact,
+    source_ledger_sha256: shared.source_ledger_sha256,
+    proof_ok: proofArtifact?.json?.schema === 'sks.super-search-proof.v1'
+      && proofArtifact.json.ok === true
+      && normalizeStringList(proofArtifact.json.blockers).length === 0,
+    verified_source_ids: verifiedSourceIds,
+    validated: verifiedSources.length > 0 && verifiedSourceIds.length === verifiedSources.length && validationBlockers.length === 0,
+    blockers: [...new Set(validationBlockers)]
+  }
+  return {
+    shard: { ...shard, sources: enrichedSources },
+    run,
+    blockers: run.blockers
+  }
+}
+
+async function readMissionArtifact(dir: string, artifact: unknown): Promise<{ sha256: string; json: any | null } | null> {
+  const raw = String(artifact || '').trim()
+  if (!raw || path.isAbsolute(raw)) return null
+  const root = path.resolve(dir)
+  const resolved = path.resolve(root, raw)
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return null
+  const bytes = await fsp.readFile(resolved).catch(() => null)
+  if (!bytes) return null
+  let json: any | null = null
+  try {
+    json = JSON.parse(bytes.toString('utf8'))
+  } catch {
+    json = null
+  }
+  return { sha256: sha256(bytes), json }
+}
+
 async function listJsonFiles(dir: string): Promise<string[]> {
   try {
     const entries = await fsp.readdir(dir, { withFileTypes: true })
@@ -232,6 +323,9 @@ function dedupeSources(rows: any[]): any[] {
       existing.counterevidence_target_claim_id ||= normalized.counterevidence_target_claim_id
       existing.counterevidence_target_claim_ids = [...new Set([...(existing.counterevidence_target_claim_ids || []), ...(normalized.counterevidence_target_claim_ids || [])])]
       existing.contradiction_rationale ||= normalized.contradiction_rationale
+      if (normalized.super_search_provenance?.validated === true && existing.super_search_provenance?.validated !== true) {
+        existing.super_search_provenance = normalized.super_search_provenance
+      }
       byKey.set(existing.id, existing)
       byKey.set(key, existing)
     } else {
@@ -270,7 +364,10 @@ function normalizeSourceRow(row: any) {
     domain: row?.domain ? String(row.domain) : null,
     authority_tier: row?.authority_tier ? String(row.authority_tier) : null,
     primary_source: row?.primary_source === true,
-    independence_cluster_id: row?.independence_cluster_id ? String(row.independence_cluster_id) : null
+    independence_cluster_id: row?.independence_cluster_id ? String(row.independence_cluster_id) : null,
+    super_search_provenance: row?.super_search_provenance && typeof row.super_search_provenance === 'object'
+      ? { ...row.super_search_provenance }
+      : null
   }
 }
 
@@ -282,8 +379,9 @@ function verifiedEvidence(source: any): boolean {
   return String(source?.acquisition_verdict || '') === 'verified_content'
     && /^verified_content:/i.test(String(source?.credibility || ''))
     && Boolean(String(source?.content_artifact || '').trim())
-    && /^[a-f0-9]{32,}$/i.test(String(source?.content_sha256 || '').trim())
+    && /^[a-f0-9]{64}$/i.test(String(source?.content_sha256 || '').trim())
     && Number(source?.content_length || 0) > 0
+    && source?.super_search_provenance?.validated === true
 }
 
 function supportLinkAllowed(source: any, isCounterSource: boolean): boolean {

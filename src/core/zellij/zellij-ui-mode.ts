@@ -18,7 +18,7 @@ export function resolveZellijUiConfig(args: string[] = [], env: NodeJS.ProcessEn
     mode: resolveZellijUiMode(args, env),
     color: env.SKS_ZELLIJ_COLOR !== '0' && env.NO_COLOR !== '1',
     visiblePanes: Number(env.SKS_ZELLIJ_VISIBLE_PANES) || null,
-    viewports: boundedInt(env.SKS_ZELLIJ_VIEWPORTS, 4, 0, 6),
+    viewports: boundedInt(env.SKS_ZELLIJ_VIEWPORTS, 1, 0, 3),
     monitorRows: Math.max(4, Number(env.SKS_ZELLIJ_MONITOR_ROWS || 12)),
     monitor: env.SKS_ZELLIJ_MONITOR_PANE !== '0',
     intervalMs: Math.max(500, Number(env.SKS_ZELLIJ_REFRESH_MS) || 1000)

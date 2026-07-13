@@ -6,7 +6,7 @@ import { buildZellijLayoutKdl, validateZellijLayoutKdl, writeZellijLayout } from
 
 const root = packageRoot()
 const tmpRoot = path.join(root, '.sneakoscope', 'tmp', 'spawn-on-demand-layout-check')
-process.env.SKS_ZELLIJ_VIEWPORTS = '4'
+process.env.SKS_ZELLIJ_VIEWPORTS = '3'
 const built = buildZellijLayoutKdl({ missionId: 'M-spawn-on-demand-layout', ledgerRoot: tmpRoot, cwd: root, kind: 'naruto', slotCount: 24 })
 const validation = validateZellijLayoutKdl(built.layout_kdl)
 const writeBuilt = await writeZellijLayout(root, { missionId: 'M-spawn-on-demand-layout-write', ledgerRoot: tmpRoot, cwd: root, kind: 'agent', slotCount: 5 })
@@ -16,11 +16,11 @@ const viewportPaneMatches = built.layout_kdl.match(/pane name="sks-viewport-/g) 
 const laneCommandMatches = built.layout_kdl.match(/\bzellij-lane\b/g) || []
 const ok = validation.ok
   && built.initial_worker_panes === 0
-  && built.viewport_count === 4
+  && built.viewport_count === 3
   && built.ui_architecture === 'monitor_plus_viewports'
   && built.lane_runtime_policies.length === 0
   && workerPaneMatches.length === 0
-  && viewportPaneMatches.length === 4
+  && viewportPaneMatches.length === 3
   && laneCommandMatches.length === 0
   && manifest.lanes.length === 0
   && writeBuilt.initial_worker_panes === 0

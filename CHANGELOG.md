@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+
+## [6.1.2] - 2026-07-13
+
+### Added
+
+- Add a shared official-subagent preparation owner for Naruto, Team compatibility, and specialized parallel routes, with bounded TriWiki attention, canonical plan/event/parent-summary/evidence artifacts, and generic overlays that never fabricate Naruto-only completion.
+- Add an eight-layer Research source catalog, Super Search acquisition, semantic claim/counterevidence linking, three composite official Sol Max review threads, bounded revision cycles, replication artifacts, and explicit Honest Mode guarantees that never promise genius, novelty, or publication acceptance.
+- Add an independent versioned full release-gate contract, content-bound npm pack proof IDs and hashes, exact packlist/package-contract cache validation, and source/dist authorization snapshots.
+- Add SKS menu bar controls for the current Codex CLI version, update-needed indicator, `Update Codex CLI Now`, and `Run sks doctor --fix`, with pinned action-integrity checks and operator-install detection.
+- Add sixteen project-scoped official custom-agent roles plus risk-based automatic fan-out: one by default, two for explicit parallel or independent risk domains, and three only for critical multi-domain work.
+- Add an official-subagent Zellij telemetry bridge that mirrors route and host missions, tails exact supported child rollouts for redacted live activity, shows running/verifying/parent-verdict states, preserves reused thread generations, and keeps recent completions visible.
+
+### Changed
+
+- Make the Codex official subagent workflow the only default Naruto execution model. QA-Loop remains route-owned, Release Review delegates through official Naruto execution, and the historical native runtime is available only behind an explicit legacy-only flag where still required for observation compatibility.
+- Route clear bounded tasks to Luna Max and UI implementation, debugging/root-cause analysis, review, architecture, integration, security, database, Research synthesis, and release judgment to Sol Max; Terra remains explicit compatibility only and is never selected automatically.
+- Keep setup and `doctor --fix` conflict-blocked before writes when OMX/DCodex is present, migrate only SKS-owned official agent config, preserve user TOMLs, warn without overwriting `max_depth > 1`, and use the supported `max_threads`, `max_depth`, runtime, and interrupt fields.
+- Reuse one clean build across affected/confidence release checks, run the canonical recursive test corpus in the full release workflow, and reject lifecycle-enabled `npm publish` before `prepack` can rebuild an already authorized package.
+- Reduce the default Zellij cockpit to one monitor plus one viewport, with an explicit maximum of three viewports, and make the historical MAD native swarm opt-in instead of a pane-population default.
+
+### Fixed
+
+- Quarantine same-thread continuation after a missing `custom_tool_call_output`, detect missing-output placeholders across assistant/error payloads, and require a selected codex-lb origin to expose recovery version `1.21.0-beta.3` or later before setup, doctor, or launch proceeds.
+- Clear stale light-turn receipts on every later prompt, bind receipts to `turn_id`, load active state directly for English and Korean continuation prompts, and keep greeting fast paths free of session-fallback warning artifacts.
+- Make Naruto and Research parsers reject empty tasks, missing or malformed values, and every removed backend/scheduler/pool/model option while accepting supported split and `--key=value` forms; read-only Naruto status/subagent/worker/proof surfaces remain available during active missions.
+- Treat `SubagentStop` as lifecycle evidence only. Completion now requires a trustworthy structured parent outcome for every correlated thread and fails closed for ambiguous, prose-wrapped, stale, duplicated, contradictory, or failed results.
+- Reuse the active Codex App mission for the same `CODEX_THREAD_ID`, prevent duplicate mission creation, record incompatible parent-model observations as blockers, and keep preparation results explicitly non-completing.
+- Keep `not_applicable` scoped to its active route gate so independent proof, reflection, and work-order gates still run, and keep task-profile gate budgets aligned with every canonical blocker group.
+- Repair deterministic Research fixtures so structured counterevidence targets survive normalization, all key claims remain evidence-linked, and Research/AutoResearch mock runs exercise the full official adversarial convergence contract.
+- Require real Research source eligibility to revalidate the linked Super Search proof, source ledger, source ID, hydrated content path, SHA-256, and length; self-declared `verified_content` rows now fail closed.
+- Bind active 6.1.2 version references across package, lockfile, Rust, managed assets, README, current release documents, and changelog while preserving historical release sections.
+
+### Removed
+
+- Remove the public legacy `sks db` command and its command modules; database prompts now materialize internal read-only safety artifacts through supported routes and MAD-SKS remains the explicit high-risk SQL-plane surface.
+- Remove the default legacy Naruto process-swarm implementation, stale Team mutation commands, obsolete Research scout/native-agent runtime options, and redundant install/release helper code that duplicated official Codex behavior.
+
 ## [6.1.1] - 2026-07-11
 
 ### Changed

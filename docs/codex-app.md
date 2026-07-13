@@ -2,9 +2,9 @@
 
 SKS uses Codex App as the app-facing control surface for dollar-command skills, managed hooks, image generation, Codex Chrome Extension web verification, and native macOS Computer Use evidence.
 
-## 1.18.8 Compatibility Notes
+## Current Compatibility Baseline
 
-Codex CLI/App runtime compatibility targets OpenAI Codex CLI `rust-v0.134.0`. Hook output validation uses the vendored OpenAI Codex `latest` generated schemas plus the SKS zero-warning strict subset documented in [codex-cli-compat.md](codex-cli-compat.md). Codex 0.134 profile selection, local history search, MCP modernization, subagent hook context, and managed proxy propagation are represented in the SKS compatibility matrix; Codex 0.133 behavior remains inherited compatibility.
+SKS 6.1.2 targets OpenAI Codex CLI/App `rust-v0.144.1`, with the exact 0.144.1 SDK/CLI dependency graph, active release manifest, and generated App Server v2 schemas kept in lockstep. Hook output validation uses the vendored OpenAI Codex `latest` generated schemas plus the SKS zero-warning strict subset documented in [codex-cli-compat.md](codex-cli-compat.md). Codex 0.134-0.139 notes remain inherited historical compatibility evidence; they are not the current release baseline.
 
 Useful checks:
 
@@ -14,12 +14,10 @@ sks codex-app set-openrouter-key --api-key-stdin
 sks codex-app glm-profile install
 sks codex-lb status
 sks codex-app chrome-extension --json
-sks codex compatibility --json
-npm run codex:0.134-compat
-npm run codex:profile-primary
-npm run codex:managed-proxy-env
-sks hooks warning-check --json
-sks hooks codex-validate --json
+sks codex compatibility --require rust-v0.144.1 --json
+sks codex 0.144 --json
+sks codex schema --json
+sks codex update-status --json
 sks computer-use status --json
 sks computer-use require --route '$QA-LOOP' --json
 sks computer-use smoke --json

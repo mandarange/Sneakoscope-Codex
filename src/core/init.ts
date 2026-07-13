@@ -6,7 +6,7 @@ import { DEFAULT_DB_SAFETY_POLICY } from './db-safety.js';
 import { isHarnessSourceProject, writeHarnessGuardPolicy } from './harness-guard.js';
 import { repairSksGeneratedArtifacts } from './harness-conflicts.js';
 import { disableVersionGitHook } from './version-manager.js';
-import { MIN_TEAM_REVIEWER_LANES, MIN_TEAM_REVIEW_POLICY_TEXT } from './team-review-policy.js';
+import { OFFICIAL_SUBAGENT_REVIEW_POLICY_TEXT } from './team-review-policy.js';
 import { AWESOME_DESIGN_MD_REFERENCE, CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, DEFAULT_CODEX_APP_PLUGINS, DESIGN_SYSTEM_SSOT, DOLLAR_COMMANDS, DOLLAR_COMMAND_ALIASES, DOLLAR_SKILL_NAMES, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_IMG_COVERAGE_ARTIFACT, FROM_CHAT_IMG_QA_LOOP_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS, GETDESIGN_REFERENCE, IMAGEGEN_SOCIAL_SOURCE_POLICY, OPENAI_CHATGPT_IMAGES_2_DOC_URL, OPENAI_GPT_IMAGE_2_MODEL_DOC_URL, OPENAI_IMAGE_GENERATION_DOC_URL, PPT_CONDITIONAL_SKILL_ALLOWLIST, PPT_PIPELINE_MCP_ALLOWLIST, PPT_PIPELINE_SKILL_ALLOWLIST, RECOMMENDED_DESIGN_REFERENCES, RECOMMENDED_MCP_SERVERS, RECOMMENDED_SKILLS, RESERVED_CODEX_PLUGIN_SKILL_NAMES, SOLUTION_SCOUT_SKILL_NAME, chatCaptureIntakeText, context7ConfigToml, getdesignReferencePolicyText, imageUxReviewPipelinePolicyText, leanEngineeringCompactText, outcomeRubricPolicyText, pptPipelineAllowlistPolicyText, productDesignPluginPolicyText, solutionScoutPolicyText, speedLanePolicyText, stackCurrentDocsPolicyText, triwikiContextTracking, triwikiContextTrackingText, triwikiStagePolicyText } from './routes.js';
 import { SKILL_DREAM_POLICY, skillDreamPolicyText } from './skill-forge.js';
 import { CODEX_HOOK_EVENT_STATE_KEYS } from './codex-compat/codex-hook-events.js';
@@ -255,11 +255,11 @@ function agentsBlockText() {
   return AGENTS_BLOCK
     .replace(
       'General execution/code-changing prompts default to `$Team`: native agent intake agents, TriWiki refresh/validate, read-only debate, consensus, concrete runtime task graph/inboxes, fresh executor team, minimum five-lane Team review, integration, Honest Mode.',
-      'General execution/code-changing prompts default to `$Team`, a compatibility alias for the `$Naruto` Codex official subagent workflow: parent-owned decomposition, official agent threads, disjoint write scopes, bounded TriWiki use, minimum five independent review/QA lanes for substantive release work, parent integration, and Honest Mode.'
+      'General execution/code-changing prompts default to `$Team`, a compatibility alias for the `$Naruto` Codex official subagent workflow: parent-owned decomposition, project-scoped custom agents, disjoint write scopes, bounded TriWiki use, one child by default, risk-scoped expansion to at most three automatic children, parent integration, and Honest Mode.'
     )
     .replace(
       'Team missions must keep schema-backed evidence current: `work-order-ledger.json`, `effort-decision.json`, `team-dashboard-state.json`, and route-specific visual/dogfood artifacts where applicable. Team completion requires at least five independent reviewer/QA validation lanes before integration or final, even when a prompt requests fewer reviewers. Use `sks validate-artifacts latest` before claiming those artifacts pass.',
-      'New `$Team` execution redirects to the Naruto official subagent workflow and must keep `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, the work-order ledger, and route-specific visual/dogfood artifacts current where applicable. Substantive release completion requires at least five independent reviewer/QA validation lanes before final integration. Legacy Team observe/watch commands remain read-only for old missions. Use `sks validate-artifacts latest` before claiming artifacts pass.'
+      'New `$Team` execution redirects to the Naruto official subagent workflow and must keep `subagent-plan.json`, `subagent-events.jsonl`, `subagent-parent-summary.json`, `subagent-evidence.json`, the work-order ledger, and route-specific visual/dogfood artifacts current where applicable. New work uses one focused reviewer by default, two only for independent review domains, and at most three automatic reviewers for critical multi-domain risk. Legacy Team observe/watch commands remain read-only for old missions. Use `sks validate-artifacts latest` before claiming artifacts pass.'
     )
     .replace('TriWiki is the context-tracking SSOT for long-running missions, Team handoffs, and context-pressure recovery.', 'TriWiki is the context-tracking SSOT for long-running missions, official subagent handoffs, and context-pressure recovery.');
 }
@@ -1035,7 +1035,8 @@ function upsertTomlTable(text: any, table: any, block: any) {
   if (removedAgentSkillAliases.length) created.push(`deprecated generated skill aliases removed (${removedAgentSkillAliases.length})`);
   if (removedCodexSkillMirrors.length) created.push(`.codex/skills generated mirrors removed (${removedCodexSkillMirrors.length})`);
   const agentInstall = await installCodexAgents(root);
-  created.push('.codex/agents/worker.toml + expert.toml');
+  created.push(`.codex/agents official subagent catalog (${agentInstall.installed_agents?.length || 0})`);
+  if (agentInstall.removed_legacy?.length) created.push(`legacy SKS agent TOMLs removed (${agentInstall.removed_legacy.length})`);
   if (agentInstall.manual_blockers?.length) created.push(`official subagent agent config manual blockers (${agentInstall.manual_blockers.length})`);
   const configInventoryOwned = codexConfigInstall.ok && (configWasFresh || configPreviouslySksOwned);
   const generatedFiles = currentGeneratedFileInventory(skillInstall, agentInstall, {
@@ -1153,7 +1154,7 @@ function codexAppQuickReference(scope: any, commandPrefix: any) {
     `Runtime root: ${commandPrefix} root shows whether SKS is using the nearest project root or the per-user global SKS runtime root; outside any project marker, runtime commands use the global root instead of writing .sneakoscope into the current random directory.`,
     `Context Tracking: TriWiki SSOT. Before each route phase read only the latest coordinate+voxel overlay pack at .sneakoscope/wiki/context-pack.json; coordinate-only legacy packs are invalid. Use attention.use_first for compact high-trust recall and hydrate attention.hydrate_first from source before risky/lower-trust decisions. During every stage hydrate low-trust claims from source/hash/RGBA anchors; after changes run ${commandPrefix} wiki refresh or pack; before handoff/final run ${commandPrefix} wiki validate .sneakoscope/wiki/context-pack.json.`,
     stackCurrentDocsPolicyText(commandPrefix),
-    `Team review: ${MIN_TEAM_REVIEW_POLICY_TEXT}`,
+    `Team review: ${OFFICIAL_SUBAGENT_REVIEW_POLICY_TEXT}`,
     `Official subagents: ${commandPrefix} naruto run "task" [--agents N] [--max-threads N] prepares bounded Codex agent threads and requires subagent-plan.json, lifecycle events, a trustworthy subagent-parent-summary.json, and correlated evidence. Legacy ${commandPrefix} team log|tail|watch|lane|status commands are read-only observation for existing Team missions and are not the default execution runtime.`,
     `Runtime: open Codex App once, then run ${commandPrefix} bootstrap and ${commandPrefix} deps check. Zellij remains optional for ${commandPrefix} --mad only. Official Naruto execution uses Codex agent threads. ${commandPrefix} bootstrap --yes, ${commandPrefix} deps check --yes, and ${commandPrefix} --mad --yes can install or repair Codex CLI/Zellij on macOS/Homebrew. npm postinstall reports missing CLI tools but does not mutate Homebrew/npm globals unless SKS_POSTINSTALL_AUTO_INSTALL_CLI_TOOLS=1 is set. Launch paths do not run sneakoscope npm update checks; use ${commandPrefix} update-check or ${commandPrefix} update now explicitly when you want that. ${commandPrefix} doctor --fix repairs the local SKS/Codex setup without running a global SKS package update. ${commandPrefix} codex-app remote-control wraps the supported Codex CLI headless remote-control entrypoint.`,
     'Team compatibility: existing Team observation is file-based and read-only; it does not use Zellij as an execution runtime.',

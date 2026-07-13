@@ -1,12 +1,12 @@
 # Legacy Native CLI Session Swarm
 
-> Compatibility reference only. The default Naruto path in SKS 6.1.1 does not
+> Compatibility reference only. The Naruto path in SKS 6.1.2 does not
 > launch or count these worker processes. Naruto completion now requires
 > matched official `SubagentStart`/`SubagentStop` events and a parent summary.
-> Enable historical Naruto process behavior only with the explicit legacy
-> environment switch documented in `docs/naruto.md`.
+> There is no legacy environment switch or supported opt-in that re-enables
+> this process runtime; the details below are migration archaeology only.
 
-SKS 1.18.11 treats `--agents N` as a target native CLI worker session count. The main orchestrator does not scale by counting Codex internal subagents or scout events. It opens child processes with the worker entrypoint:
+Historical SKS builds treated `--agents N` as a target native CLI worker session count. The main orchestrator did not scale by counting Codex internal subagents or scout events. It opened child processes with the worker entrypoint:
 
 ```bash
 node dist/bin/sks.js --agent worker --intake <worker-intake.json> --json
@@ -38,13 +38,13 @@ Naruto release criteria):
 - `--agents 20` with enough work must observe at least 20 native worker processes.
 - Missing process ids, missing process-report close fields, missing heartbeats, or subagent-only proof block the release.
 
-The npm commands that previously checked PID/process scaling were removed in
-6.1.1. Current release validation uses the canonical official-subagent gate:
+The npm commands that previously checked PID/process scaling are removed.
+Current release validation uses the canonical official-subagent gate:
 
 ```bash
 node ./dist/scripts/official-subagent-workflow-check.js
 ```
 
-The retained manifest id `agent:native-cli-session-swarm-scaling` is a
-compatibility label for that official event/structured-parent-summary check; it
-does not restore PID counting as completion evidence.
+The former manifest id `agent:native-cli-session-swarm-scaling` is retired.
+Use the single `naruto:canonical-stop-gate` official event and structured-parent-summary
+check; no PID counting is treated as completion evidence.

@@ -31,6 +31,8 @@ import { THINKING_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-pol
 import {
   RESEARCH_AGENT_COUNCIL,
   RESEARCH_GENIUS_SUMMARY_ARTIFACT,
+  RESEARCH_REVIEWER_CONFIG_ARTIFACT,
+  RESEARCH_REVIEWER_CUSTOM_AGENT,
   researchAgentAgentName,
   researchPaperArtifactForPlan
 } from '../research.js'
@@ -40,6 +42,7 @@ import {
   validateResearchReviewArtifactDigest,
   type ResearchReviewArtifactDigest
 } from './research-review-artifact-digest.js'
+import { eligibleResearchSourceIdSet, type ResearchEvidenceExecutionClass } from './research-source-evidence.js'
 
 export const RESEARCH_ADVERSARIAL_PLAN_ARTIFACT = 'research-adversarial-plan.json'
 export const RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT = 'research-adversarial-review.json'
@@ -98,7 +101,7 @@ export async function runResearchAdversarialReviewLoop(input: ResearchAdversaria
   const configuredThreads = Math.max(1, Math.floor(Number(input.maxThreads || config?.maxThreads || RESEARCH_AGENT_COUNCIL.length)))
   const maxThreads = Math.min(RESEARCH_AGENT_COUNCIL.length, configuredThreads)
   const executionClass = input.mock ? 'mock_fixture' : 'real'
-  const modelPolicyEvidence = input.mock ? mockResearchModelPolicyEvidence() : await verifyResearchExpertRoleConfig(input.root)
+  const modelPolicyEvidence = input.mock ? mockResearchModelPolicyEvidence() : await verifyResearchReviewerRoleConfig(input.root)
   const plan = buildResearchAdversarialPlan(input.plan, maxCycles, maxThreads, config, modelPolicyEvidence)
   await writeJsonAtomic(path.join(input.dir, RESEARCH_ADVERSARIAL_PLAN_ARTIFACT), plan)
 
@@ -127,7 +130,7 @@ export async function runResearchAdversarialReviewLoop(input: ResearchAdversaria
     reviewCycles.push(review)
     await writeJsonAtomic(path.join(input.dir, 'research', 'adversarial', `cycle-${cycle}`, 'review.json'), review)
     const currentReviewArtifacts = await buildResearchReviewArtifactDigest(input.dir, input.plan)
-    const convergence = evaluateReviewCycle(review, await sourceIdSet(input.dir), currentReviewArtifacts)
+    const convergence = evaluateReviewCycle(review, await sourceIdSet(input.dir, executionClass), currentReviewArtifacts)
     if (remainingTimeoutMs(deadlineMs) <= 0) runtimeBlockers.push('research_cycle_timeout_exceeded')
     if (convergence.ok) break
     if (cycle >= maxCycles || !convergence.revisable) break
@@ -286,12 +289,12 @@ export function buildResearchAdversarialPlan(plan: any, maxCycles = 3, maxThread
       display_name: researchAgentAgentName(agent),
       persona: agent.persona,
       persona_boundary: agent.persona_boundary,
-      custom_agent: 'expert',
+      custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
       model_policy: `${THINKING_SUBAGENT_MODEL} ${SUBAGENT_EFFORT}`,
-      model_policy_source: modelPolicyEvidence?.source || '.codex/agents/expert.toml',
+      model_policy_source: modelPolicyEvidence?.source || RESEARCH_REVIEWER_CONFIG_ARTIFACT,
       model_policy_sha256: modelPolicyEvidence?.sha256 || null
     })),
-    convergence_policy: 'five distinct evidence-correlated official threads completed; every exact-schema verdict approve; zero critical, major, minor, or required revisions',
+    convergence_policy: 'three distinct evidence-correlated official threads completed; every exact-schema verdict approve; zero critical, major, minor, or required revisions',
     revision_policy: 'bounded mission-artifact-only revision followed by a fresh independent review cycle',
     guarantees: {
       genius_level: false,
@@ -314,6 +317,7 @@ async function runOfficialReviewCycle(
     id: String(agent.id),
     title: `${researchAgentAgentName(agent)} adversarial paper review`,
     kind: 'expert',
+    agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
     readOnly: true,
     paths: researchReviewArtifacts(input.plan),
     description: reviewerTaskDescription(agent, cycle, reviewArtifacts.bundle_sha256)
@@ -371,7 +375,7 @@ async function runOfficialReviewCycle(
 }
 
 async function mockReviewCycle(input: ResearchAdversarialReviewLoopInput, cycle: number, reviewArtifacts: ResearchReviewArtifactDigest) {
-  const sourceIds = [...await sourceIdSet(input.dir)]
+  const sourceIds = [...await sourceIdSet(input.dir, 'mock_fixture')]
   const reviewers: ResearchReviewerOutcome[] = RESEARCH_AGENT_COUNCIL.map((agent: any, index: number) => ({
     schema: 'sks.research-adversarial-reviewer-outcome.v1',
     persona_id: String(agent.id),
@@ -412,6 +416,7 @@ async function runOfficialRevisionCycle(input: ResearchAdversarialReviewLoopInpu
     id: `research_revision_${cycle}`,
     title: `Evidence-bound manuscript revision cycle ${cycle}`,
     kind: 'expert',
+    agent: 'research_synthesizer',
     readOnly: false,
     paths: researchReviewArtifacts(input.plan),
     description: [
@@ -502,7 +507,7 @@ async function finalizeResearchAdversarialArtifacts(
 ) {
   const finalReview = reviewCycles.at(-1) || null
   const currentReviewArtifacts = await buildResearchReviewArtifactDigest(input.dir, input.plan)
-  const convergence = evaluateReviewCycle(finalReview, await sourceIdSet(input.dir), currentReviewArtifacts)
+  const convergence = evaluateReviewCycle(finalReview, await sourceIdSet(input.dir, executionClass), currentReviewArtifacts)
   const honest = await buildResearchHonestMode(input.dir, input.plan, executionClass)
   const blockers = unique([
     ...initialBlockers,
@@ -535,10 +540,10 @@ async function finalizeResearchAdversarialArtifacts(
     novelty_guaranteed: false,
     publication_acceptance_guaranteed: false,
     reviewer_model_policy: {
-      custom_agent: 'expert',
+      custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
       model: THINKING_SUBAGENT_MODEL,
       reasoning_effort: SUBAGENT_EFFORT,
-      enforcement_source: plan?.model_policy_evidence?.source || '.codex/agents/expert.toml',
+      enforcement_source: plan?.model_policy_evidence?.source || RESEARCH_REVIEWER_CONFIG_ARTIFACT,
       config_sha256: plan?.model_policy_evidence?.sha256 || null,
       observed_model_exposed_by_hook: false
     },
@@ -584,15 +589,15 @@ async function writeCompatibilityCouncilArtifacts(dir: string, plan: any, finalR
       role: agent.role,
       mandate: agent.mandate,
       model_policy: {
-        custom_agent: 'expert',
+        custom_agent: RESEARCH_REVIEWER_CUSTOM_AGENT,
         model: THINKING_SUBAGENT_MODEL,
         reasoning_effort: SUBAGENT_EFFORT,
-        enforcement_source: gate?.reviewer_model_policy?.enforcement_source || '.codex/agents/expert.toml',
+        enforcement_source: gate?.reviewer_model_policy?.enforcement_source || RESEARCH_REVIEWER_CONFIG_ARTIFACT,
         config_sha256: gate?.reviewer_model_policy?.config_sha256 || null
       },
       observed_model: null,
       observed_reasoning_effort: null,
-      model_observation_status: 'official_hook_schema_does_not_expose_model; enforced by verified expert.toml',
+      model_observation_status: 'official_hook_schema_does_not_expose_model; enforced by verified research-reviewer.toml',
       official_subagent_thread_id: review.thread_id,
       review_verdict: review.verdict,
       eureka: review.eureka,
@@ -717,8 +722,9 @@ function auditStructuredResearchClaims(text: string, claimMatrix: any, noveltyLe
   const verifiedSourceIds = new Set(sourceRows
     .filter((source: any) => String(source?.acquisition_verdict || '') === 'verified_content'
       && Boolean(String(source?.content_artifact || '').trim())
-      && /^[a-f0-9]{32,}$/i.test(String(source?.content_sha256 || ''))
-      && Number(source?.content_length || 0) > 0)
+      && /^[a-f0-9]{64}$/i.test(String(source?.content_sha256 || ''))
+      && Number(source?.content_length || 0) > 0
+      && source?.super_search_provenance?.validated === true)
     .map((source: any) => String(source?.id || source?.source_id || '')).filter(Boolean))
   const entriesByClaim = new Map(entries.map((entry: any) => [String(entry?.claim_id || entry?.id || ''), entry]))
   const claimLevelChecks = claims.map((claim: any) => {
@@ -991,14 +997,15 @@ async function prepareResearchSubagentRun(
       id: slice.id,
       title: slice.title,
       kind: slice.kind,
+      agent: slice.agent || null,
       read_only: slice.readOnly === true,
       paths: slice.paths || []
     })),
     model_policy: {
-      custom_agent: 'expert',
+      custom_agent: plan.phase === 'review' ? RESEARCH_REVIEWER_CUSTOM_AGENT : 'research_synthesizer',
       model: THINKING_SUBAGENT_MODEL,
       reasoning_effort: SUBAGENT_EFFORT,
-      config: '.codex/agents/expert.toml'
+      config: plan.phase === 'review' ? RESEARCH_REVIEWER_CONFIG_ARTIFACT : '.codex/agents/research-synthesizer.toml'
     }
   })
   await writeTextAtomic(path.join(input.dir, SUBAGENT_EVENT_LOG_FILENAME), '')
@@ -1033,21 +1040,27 @@ async function finalizeResearchSubagentRun(input: ResearchAdversarialReviewLoopI
   return { parent_summary: parentSummary, evidence }
 }
 
-async function verifyResearchExpertRoleConfig(root: string) {
-  const source = '.codex/agents/expert.toml'
+async function verifyResearchReviewerRoleConfig(root: string) {
+  const source = RESEARCH_REVIEWER_CONFIG_ARTIFACT
   const text = await readText(path.join(root, source), '')
+  const name = /^\s*name\s*=\s*"([^"]+)"\s*$/m.exec(text)?.[1] || ''
   const model = /^\s*model\s*=\s*"([^"]+)"\s*$/m.exec(text)?.[1] || ''
   const effort = /^\s*model_reasoning_effort\s*=\s*"([^"]+)"\s*$/m.exec(text)?.[1] || ''
+  const sandbox = /^\s*sandbox_mode\s*=\s*"([^"]+)"\s*$/m.exec(text)?.[1] || ''
   const blockers = [
-    ...(text.trim() ? [] : ['research_expert_agent_config_missing']),
-    ...(model === THINKING_SUBAGENT_MODEL ? [] : [`research_expert_model_mismatch:${model || 'missing'}`]),
-    ...(effort === SUBAGENT_EFFORT ? [] : [`research_expert_effort_mismatch:${effort || 'missing'}`])
+    ...(text.trim() ? [] : ['research_reviewer_agent_config_missing']),
+    ...(name === RESEARCH_REVIEWER_CUSTOM_AGENT ? [] : [`research_reviewer_name_mismatch:${name || 'missing'}`]),
+    ...(model === THINKING_SUBAGENT_MODEL ? [] : [`research_reviewer_model_mismatch:${model || 'missing'}`]),
+    ...(effort === SUBAGENT_EFFORT ? [] : [`research_reviewer_effort_mismatch:${effort || 'missing'}`]),
+    ...(sandbox === 'read-only' ? [] : [`research_reviewer_sandbox_mismatch:${sandbox || 'missing'}`])
   ]
   return {
     ok: blockers.length === 0,
     source,
+    name,
     model,
     reasoning_effort: effort,
+    sandbox_mode: sandbox,
     sha256: text ? sha256(text) : null,
     observed_model: null,
     observed_reasoning_effort: null,
@@ -1058,9 +1071,11 @@ async function verifyResearchExpertRoleConfig(root: string) {
 function mockResearchModelPolicyEvidence() {
   return {
     ok: true,
-    source: 'mock_fixture',
+    source: 'mock_fixture:research_reviewer',
+    name: RESEARCH_REVIEWER_CUSTOM_AGENT,
     model: THINKING_SUBAGENT_MODEL,
     reasoning_effort: SUBAGENT_EFFORT,
+    sandbox_mode: 'read-only',
     sha256: null,
     observed_model: null,
     observed_reasoning_effort: null,
@@ -1093,12 +1108,9 @@ function parseJsonObject(value: unknown): any | null {
   }
 }
 
-async function sourceIdSet(dir: string): Promise<Set<string>> {
+async function sourceIdSet(dir: string, executionClass: ResearchEvidenceExecutionClass): Promise<Set<string>> {
   const ledger = await readJson<any>(path.join(dir, 'source-ledger.json'), null)
-  return new Set([
-    ...(Array.isArray(ledger?.sources) ? ledger.sources : []),
-    ...(Array.isArray(ledger?.counterevidence_sources) ? ledger.counterevidence_sources : [])
-  ].map((source: any) => String(source?.id || '')).filter(Boolean))
+  return eligibleResearchSourceIdSet(dir, ledger, executionClass)
 }
 
 async function manuscriptHashes(dir: string, plan: any): Promise<Record<string, string>> {

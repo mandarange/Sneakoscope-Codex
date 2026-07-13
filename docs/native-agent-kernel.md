@@ -9,10 +9,12 @@ SKS 1.16 routes Team, Research, AutoResearch, QA-Loop, and review-style work thr
 ```bash
 sks agent run "map this change" --mock --json
 sks agent run "map this change" --agents 8 --concurrency 4 --mock --json
-sks agent run "release audit" --route '$Release-Review' --agents 10 --concurrency 4 --mock --json
+sks agent run "release audit" --route '$Release-Review' --agents 10 --concurrency 4 --legacy-native-runtime --mock --json
 sks agent status latest --json
 sks --agent "map this change" --mock --json
 ```
+
+The Release-Review line is a legacy fixture-only compatibility path. Public `$Release-Review` uses `sks naruto run "$Release-Review release audit" --agents <n> --read-only --json` and must not start the native kernel for the same mission.
 
 The agent kernel writes route-local evidence under `.sneakoscope/missions/<mission-id>/agents/`:
 

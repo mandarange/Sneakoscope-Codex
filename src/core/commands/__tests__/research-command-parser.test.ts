@@ -10,8 +10,8 @@ test('Research command parser is strict, supports equals values, and rejects opt
     args: ['bounded', 'topic', '--depth', 'frontier', '--json'],
     positionals: ['bounded', 'topic']
   })
-  assert.deepEqual(parseResearchCommandArgs('run', ['--max-threads=3', 'latest', '--agents', '5']), {
-    args: ['--max-threads', '3', 'latest', '--agents', '5'],
+  assert.deepEqual(parseResearchCommandArgs('run', ['--max-threads=3', 'latest', '--agents', '3']), {
+    args: ['--max-threads', '3', 'latest', '--agents', '3'],
     positionals: ['latest']
   })
   assert.throws(() => parseResearchCommandArgs('prepare', ['--depth=frontier']), /Missing research topic/)
@@ -32,14 +32,15 @@ test('Research command parser fails closed on every legacy runtime selector fami
 })
 
 test('Research integer flags accept split and equals forms but reject ambiguous values', () => {
-  assert.equal(readStrictResearchIntegerFlag(['--max-threads', '1'], '--max-threads', 5, 1, 5), 1)
-  assert.equal(readStrictResearchIntegerFlag(['--max-threads=1'], '--max-threads', 5, 1, 5), 1)
-  assert.equal(readStrictResearchIntegerFlag(['--agents=5'], '--agents', 5, 5, 5), 5)
-  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads'], '--max-threads', 5, 1, 5), /Missing value/)
-  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads='], '--max-threads', 5, 1, 5), /Invalid value/)
-  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads=fast'], '--max-threads', 5, 1, 5), /Invalid value/)
-  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads=0'], '--max-threads', 5, 1, 5), /Out-of-range/)
-  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads=1', '--max-threads', '2'], '--max-threads', 5, 1, 5), /Duplicate/)
+  assert.equal(readStrictResearchIntegerFlag(['--max-threads', '1'], '--max-threads', 3, 1, 3), 1)
+  assert.equal(readStrictResearchIntegerFlag(['--max-threads=1'], '--max-threads', 3, 1, 3), 1)
+  assert.equal(readStrictResearchIntegerFlag(['--agents=3'], '--agents', 3, 3, 3), 3)
+  assert.throws(() => readStrictResearchIntegerFlag(['--agents=5'], '--agents', 3, 3, 3), /Out-of-range/)
+  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads'], '--max-threads', 3, 1, 3), /Missing value/)
+  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads='], '--max-threads', 3, 1, 3), /Invalid value/)
+  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads=fast'], '--max-threads', 3, 1, 3), /Invalid value/)
+  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads=0'], '--max-threads', 3, 1, 3), /Out-of-range/)
+  assert.throws(() => readStrictResearchIntegerFlag(['--max-threads=1', '--max-threads', '2'], '--max-threads', 3, 1, 3), /Duplicate/)
 })
 
 test('Research latest binds to the active Research mission instead of the global newest mission', async () => {

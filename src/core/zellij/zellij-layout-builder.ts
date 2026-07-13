@@ -54,7 +54,8 @@ export interface ZellijLayoutBuild {
 }
 
 export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuild {
-  const viewportCount = boundedInt(process.env.SKS_ZELLIJ_VIEWPORTS, 4, 0, 6)
+  const viewportCount = boundedInt(layoutEnvValue(input, 'SKS_ZELLIJ_VIEWPORTS'), 1, 0, 3)
+  const refreshMs = boundedInt(layoutEnvValue(input, 'SKS_ZELLIJ_REFRESH_MS'), 1000, 500, 60_000)
   const sessionName = input.sessionName || `sks-${input.missionId}`
   const cwd = path.resolve(input.cwd || process.cwd())
   const ledgerRoot = path.resolve(input.ledgerRoot)
@@ -63,12 +64,13 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
   const sksEntry = path.join(packageRoot(), 'dist', 'bin', 'sks.js')
   const mainPane = buildMainPaneCommand(input, sksCommand)
   const laneRuntimes: ZellijLaneRuntimePolicy[] = []
-  const monitorPaneEnabled = process.env.SKS_ZELLIJ_MONITOR_PANE !== '0'
-    && (input.kind === 'mad' || input.kind === 'naruto' || process.env.SKS_ZELLIJ_MONITOR_PANE === '1')
+  const monitorPaneSetting = layoutEnvValue(input, 'SKS_ZELLIJ_MONITOR_PANE')
+  const monitorPaneEnabled = monitorPaneSetting !== '0'
+    && (input.kind === 'mad' || input.kind === 'naruto' || monitorPaneSetting === '1')
   const monitorBlock = monitorPaneEnabled ? [
     '            pane size="35%" name="sks-monitor" {',
     `                command ${kdlString(process.execPath)}`,
-    `                args ${kdlArgs([sksEntry, 'zellij-monitor-pane', '--mission', input.missionId, '--watch'])}`,
+    `                args ${kdlArgs([sksEntry, 'zellij-monitor-pane', '--mission', input.missionId, '--interval-ms', String(refreshMs), '--watch'])}`,
     '            }'
   ].join('\n') : ''
   const viewportBlocks = Array.from({ length: viewportCount }, (_, i) => {
@@ -76,7 +78,7 @@ export function buildZellijLayoutKdl(input: ZellijLayoutInput): ZellijLayoutBuil
     return [
       `            pane name=${kdlString(`sks-viewport-${viewportIndex}`)} {`,
       `                    command ${kdlString(process.execPath)}`,
-      `                    args ${kdlArgs([sksEntry, 'zellij-viewport-pane', '--mission', input.missionId, '--index', viewportIndex, '--of', String(viewportCount), '--watch'])}`,
+      `                    args ${kdlArgs([sksEntry, 'zellij-viewport-pane', '--mission', input.missionId, '--index', viewportIndex, '--of', String(viewportCount), '--interval-ms', String(refreshMs), '--watch'])}`,
       '            }'
     ].join('\n')
   }).join('\n')
@@ -185,6 +187,13 @@ function boundedInt(value: unknown, fallback: number, min: number, max: number):
   const parsed = Math.floor(Number(value ?? fallback))
   const n = Number.isFinite(parsed) ? parsed : fallback
   return Math.max(min, Math.min(n, max))
+}
+
+function layoutEnvValue(input: ZellijLayoutInput, key: string): string | undefined {
+  const launchValue = input.launchEnv?.[key]
+  if (launchValue !== undefined && launchValue !== null && String(launchValue).trim()) return String(launchValue).trim()
+  const inherited = process.env[key]
+  return inherited === undefined ? undefined : String(inherited)
 }
 
 function shellQuote(value: string): string {

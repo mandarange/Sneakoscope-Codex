@@ -48,7 +48,7 @@ export async function runDoctorCodexStartupRepair(input: {
 }): Promise<DoctorCodexStartupRepairResult> {
   const root = path.resolve(input.root || process.cwd())
   const codexHome = input.codexHome || process.env.CODEX_HOME || path.join(process.env.HOME || os.homedir(), '.codex')
-  // Official worker/expert installation is owned by repairAgentRoleConfigs.
+  // Project-scoped official custom-agent installation is owned by repairAgentRoleConfigs.
   // This startup repair remains structural/MCP-only and never touches legacy
   // or user agent TOMLs in project or global directories.
   const roleFiles = { sanitized: [], created: [], blockers: [] }

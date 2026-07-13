@@ -4,17 +4,19 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-helper.mjs';
 
+const EXPECTED_REVIEWER_COUNT = 3;
+
 test('Research prepare/status expose official subagent adversarial convergence', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'research-native-agents' });
   const prepared = await runSksInRoot(root, ['research', 'prepare', 'native research batch fixture', '--json']);
   assert.equal(prepared.official_subagent_plan.workflow, 'official_codex_subagent');
-  assert.equal(prepared.official_subagent_plan.reviewer_count, 5);
+  assert.equal(prepared.official_subagent_plan.reviewer_count, EXPECTED_REVIEWER_COUNT);
   assert.equal(prepared.official_subagent_plan.guarantees.genius_level, false);
 
   const run = await runSksInRoot(root, ['research', 'run', prepared.mission_id, '--mock', '--json']);
   assert.equal(run.ok, true);
   assert.equal(run.official_subagent_review.passed, true);
-  assert.equal(run.official_subagent_review.reviewer_count_observed, 5);
+  assert.equal(run.official_subagent_review.reviewer_count_observed, EXPECTED_REVIEWER_COUNT);
   await fs.access(path.join(root, '.sneakoscope', 'missions', prepared.mission_id, 'research-adversarial-review.json'));
 
   const status = await runSksInRoot(root, ['research', 'status', prepared.mission_id, '--json']);
@@ -28,7 +30,7 @@ test('AutoResearch prepare and run inherit official adversarial review cycles', 
   const prepared = await runSksInRoot(root, ['autoresearch', 'prepare', 'agent batch experiment loop', '--json']);
   assert.equal(prepared.schema, 'sks.autoresearch-prepare.v1');
   assert.match(prepared.methodology, /super-search/);
-  assert.equal(prepared.official_subagent_plan.reviewer_count, 5);
+  assert.equal(prepared.official_subagent_plan.reviewer_count, EXPECTED_REVIEWER_COUNT);
 
   const run = await runSksInRoot(root, ['autoresearch', 'run', prepared.mission_id, '--mock', '--json']);
   assert.equal(run.schema, 'sks.autoresearch-run.v1');

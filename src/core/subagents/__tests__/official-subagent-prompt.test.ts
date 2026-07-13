@@ -35,7 +35,7 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   assert.match(prompt, /parallel writes require disjoint paths/)
   assert.match(prompt, /wait for every requested subagent/)
   assert.match(prompt, /\[A\].*`worker`/)
-  assert.match(prompt, /\[B\].*`expert`/)
+  assert.match(prompt, /\[B\].*`architecture_reviewer`/)
   assert.match(prompt, /mode: read-only/)
 })
 

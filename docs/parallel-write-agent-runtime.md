@@ -29,6 +29,6 @@ agent-runtime mission, but they are not substituted for official Naruto event
 evidence.
 
 Historical Naruto process-swarm flags such as `--write-mode`, `--apply-patches`,
-`--work-items`, and custom backends are rejected on the default path. Operators
-who explicitly need the retained compatibility runtime must set
-`SKS_NARUTO_LEGACY_PROCESS_SWARM=1`; SKS never enables it automatically.
+`--work-items`, and custom backends are rejected. The historical Naruto process
+swarm and its environment opt-in are removed; no flag or environment variable
+can reactivate that runtime.

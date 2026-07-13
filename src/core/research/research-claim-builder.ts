@@ -134,7 +134,9 @@ function usableEvidenceSource(source: any): boolean {
   if (!source || !String(source.id || '').trim()) return false
   if (source.stance !== 'supports' && source.stance !== 'undermines') return false
   if (deterministicFixtureSource(source)) return true
-  return /^verified_content:/i.test(String(source.credibility || ''))
+  return String(source?.acquisition_verdict || '') === 'verified_content'
+    && /^verified_content:/i.test(String(source.credibility || ''))
+    && source?.super_search_provenance?.validated === true
 }
 
 function deterministicFixtureSource(source: any): boolean {

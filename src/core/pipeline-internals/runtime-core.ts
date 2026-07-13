@@ -6,12 +6,13 @@ import { buildQuestionSchemaForRoute, buildRequestIntake, REQUEST_INTAKE_ARTIFAC
 import { sealContract } from '../decision-contract.js';
 import { scanDbSafety } from '../db-safety.js';
 import { GOAL_WORKFLOW_ARTIFACT, writeGoalWorkflow } from '../goal-workflow.js';
+import { createAndWriteWorkOrderLedgerForPrompt } from '../work-order-ledger.js';
 import { writeCodeStructureReport } from '../code-structure.js';
 import { writeMemorySweepReport } from '../memory-governor.js';
 import { writeMistakeMemoryReport } from '../mistake-memory.js';
 import { MISTAKE_RECALL_ARTIFACT, mistakeRecallGateStatus } from '../mistake-recall.js';
 import { recordSkillDreamEvent, SKILL_DREAM_POLICY, skillDreamPolicyText, writeSkillForgeReport } from '../skill-forge.js';
-import { evaluateResearchGate, writeResearchPlan } from '../research.js';
+import { evaluateResearchGate, researchPaperArtifactForPlan, writeResearchPlan } from '../research.js';
 import { PPT_REQUIRED_GATE_FIELDS, writePptRouteArtifacts } from '../ppt.js';
 import { writeQaLoopArtifacts } from '../qa-loop.js';
 import { IMAGE_UX_REVIEW_GATE_ARTIFACT, IMAGE_UX_REVIEW_POLICY_ARTIFACT, IMAGE_UX_REVIEW_SCREEN_INVENTORY_ARTIFACT, IMAGE_UX_REVIEW_GENERATED_REVIEW_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ISSUE_LEDGER_ARTIFACT, IMAGE_UX_REVIEW_ITERATION_REPORT_ARTIFACT, IMAGE_UX_REVIEW_REQUIRED_GATE_FIELDS, writeImageUxReviewRouteArtifacts } from '../image-ux-review.js';
@@ -1114,10 +1115,10 @@ async function materializeMadSksAuthorization(dir: any, id: any, route: any, rou
 
 async function prepareResearch(root: any, route: any, task: any, required: any, opts: any = {}) {
   const { id, dir } = await createMission(root, { mode: 'research', prompt: task, sessionKey: opts.sessionKey });
-  await writeResearchPlan(dir, task, {});
+  const researchPlan = await writeResearchPlan(dir, task, {});
   const pipelinePlan = await writePipelinePlan(dir, { missionId: id, route, task, required, ambiguity: { required: false, status: 'direct_route' } });
   await setCurrent(root, routeState(id, route, 'RESEARCH_PREPARED', required, { prompt: task, pipeline_plan_ready: validatePipelinePlan(pipelinePlan).ok, pipeline_plan_path: PIPELINE_PLAN_ARTIFACT }), { sessionKey: opts.sessionKey });
-  return routeContext(route, id, task, required, 'Run sks research run latest as a real long-running source-gathering pass, never an automatic mock fallback; do not modify repository source code; create research-source-skill.md, maximize layered public source search, require every agent effort=xhigh plus one Eureka! idea, repeat agent/debate/falsification cycles until unanimous_consensus=true for every agent or the explicit safety cap pauses the run, fill source-ledger.json, agent-ledger.json, debate-ledger.json, novelty-ledger.json, falsification-ledger.json, research-report.md, research-paper.md, genius-opinion-summary.md, and pass research-gate.json.');
+  return routeContext(route, id, task, required, `Run sks research run latest as a real long-running source-gathering pass, never an automatic mock fallback; do not modify repository source code. Run layered Super Search first and allow only correlated verified-content rows to support real claims. Then run exactly three independent official research_reviewer threads on GPT-5.6 Sol Max. Any objection requires a mission-local research_synthesizer revision and a fresh three-thread review cycle; do not launch a custom scheduler or debate pool. Treat agent-ledger.json and debate-ledger.json as compatibility projections, write research-report.md and ${researchPaperArtifactForPlan(researchPlan)}, and pass the adversarial convergence, Honest Mode, and research-gate.json checks.`);
 }
 
 async function prepareAutoResearch(root: any, route: any, task: any, required: any, opts: any = {}) {
@@ -1198,6 +1199,11 @@ async function materializeOfficialSubagentOverlay(root: any, prepared: any, rout
   if (!id) throw new Error(`official_subagent_overlay_mission_missing:${route?.id || 'unknown'}`);
   const dir = missionDir(root, id);
   const cleanTask = stripDollarCommand(task) || String(task || '').trim();
+  await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: id,
+    route: route?.command || route?.id || 'official-subagent-overlay',
+    prompt: cleanTask
+  });
   const requestedSubagents = requestedSubagentsFromTask(cleanTask);
   const observedParentModel = typeof opts.parentModel === 'string' && opts.parentModel.trim()
     ? opts.parentModel.trim()
@@ -1264,6 +1270,11 @@ async function prepareNaruto(root: any, route: any, task: any, required: any, op
       })
     : await createMission(root, { mode: 'naruto', prompt: cleanTask, sessionKey: opts.sessionKey });
   const { id, dir } = mission;
+  await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: id,
+    route: 'Naruto',
+    prompt: cleanTask
+  });
   const preparation = await prepareOfficialSubagentMission({
     root,
     dir,

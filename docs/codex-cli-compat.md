@@ -1,6 +1,6 @@
 # Codex CLI Compatibility
 
-SKS 1.21.6 targets the OpenAI Codex CLI `rust-v0.136.0` runtime compatibility baseline and validates hook outputs against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The latest hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
+SKS 6.1.2 targets the OpenAI Codex CLI `rust-v0.144.1` runtime compatibility baseline. Package metadata pins `@openai/codex-sdk` and its resolved `@openai/codex` CLI to 0.144.1, while the active release manifest and generated App Server v2 schemas bind the same baseline. Hook outputs are validated against the vendored OpenAI Codex `latest` generated hook schemas plus the stricter SKS zero-warning strict subset. The current hook snapshot has 10 events and 20 schema files, including `SubagentStart` and `SubagentStop`.
 
 Computer Use and codex-lb compatibility notes are bounded: native Mac/non-web Computer Use live evidence can be `probe_only`, `live_capture_success`, or a structured blocker depending on the local Codex App/macOS capability, while web/browser/webapp verification uses the Codex Chrome Extension gate first; codex-lb can be durable or `process_only_ephemeral` depending on setup choices. Recovery commands are `sks computer-use smoke --json` for a probe-only native status and `sks codex-lb setup --write-env-file --keychain --launchctl` for durable persistence. Local screenshots and secrets stay private/redacted by default.
 
@@ -8,29 +8,27 @@ Computer Use and codex-lb compatibility notes are bounded: native Mac/non-web Co
 
 ```bash
 sks codex compatibility --json
+sks codex compatibility --require rust-v0.144.1 --json
 sks codex version --json
+sks codex update-status --json
 sks codex doctor --json
 sks codex schema --json
-npm run codex:0.136-compat
-npm run codex:0.136-compat:require-real
-npm run codex:0.135-compat
-npm run codex:0.134-compat
-npm run codex:0.134-official-compat
-npm run codex:profile-primary
-npm run codex:managed-proxy-env
-npm run codex:exec-output-schema-actual-syntax
-npm run codex:output-schema-fixture
-sks hooks codex-validate --json
-sks hooks warning-check --json
-npm run hooks:semantic-check
-npm run hooks:strict-subset-check
+sks codex 0.144 --json
 ```
 
 Version detection checks `codex --version`, `codex exec --help`, `codex exec resume --help`, `codex --help`, installed `@openai/codex`, Homebrew cask metadata, and finally the vendored snapshot metadata. A missing live Codex binary is `integration_optional`; release hook validation uses the vendored snapshot, not the local binary.
 
-## Codex 0.136 Capabilities
+## Current Codex 0.144.1 Release Contract
 
-The 1.21.6 compatibility matrix records these 0.136 capability ids:
+- `config/codex-releases/rust-v0.144.1.json` is the active manifest and must agree with the exact SDK/CLI dependency graph.
+- Binary identity, App Server v2 schema, thread-store behavior, and runtime policy are separate release gates; a version string alone is not sufficient evidence.
+- Official subagent lifecycle uses `SubagentStart` and `SubagentStop`, but completion additionally requires a trustworthy structured parent outcome for every thread.
+- Missing or malformed tool-output correlation fails closed instead of being treated as a successful continuation.
+- Older compatibility matrices below remain inherited regression evidence and cannot authorize the current release by themselves.
+
+## Inherited Codex 0.136 Capabilities
+
+The inherited 0.136 compatibility matrix records these capability ids:
 
 - `tui_hyperlink_markdown_tables`: TUI output preserves OSC 8 links and keeps cramped markdown tables readable.
 - `session_archive_restore`: `codex archive`, `codex unarchive`, and `/archive` are tracked as first-class session lifecycle surfaces.
@@ -77,7 +75,7 @@ The inherited 0.133 compatibility matrix records these capability ids:
 - `extension_lifecycle_events`: extension lifecycle events for turn/tool/model/item phases are tracked separately from hook schema validation.
 - `remote_executor_standard_auth`, `python_sdk_auth`, and `python_sdk_turn_result`: P1 warning-only review items unless a route explicitly uses those SDK surfaces.
 
-Unknown newer Codex fields are warning-only. Codex versions below 0.136 are degraded but supported for inherited surfaces, and output-schema fallbacks cannot support claims above `verified_partial`.
+The active release contract requires the exact 0.144.1 package, manifest, and schema baseline. Older 0.134-0.136 rows are historical regression context, and unknown newer fields are not automatic release evidence. Output-schema fallbacks cannot support claims above `verified_partial`.
 
 Fresh `codex exec` and `codex exec resume` are checked independently because a release gate that only inspects resume help can miss syntax drift in new sessions. Native agent output-schema fixtures must record which command form was exercised.
 
@@ -122,23 +120,14 @@ SKS strict-subset examples:
 
 ## Release Invariant
 
-`npm run release:check` runs:
+Current local compatibility verification uses:
 
 ```bash
-npm run codex:compat
-npm run codex:0.136-compat
-npm run codex:0.135-compat
-npm run codex:0.134-compat
-npm run codex:0.134-official-compat
-npm run codex:profile-primary
-npm run codex:managed-proxy-env
-npm run codex:0.133-compat
-npm run codex:exec-output-schema-actual-syntax
-npm run codex:output-schema-fixture
-npm run hooks:codex-validate
-npm run hooks:warning-check
-npm run hooks:semantic-check
-npm run hooks:strict-subset-check
+sks codex compatibility --require rust-v0.144.1 --json
+sks codex 0.144 --json
+sks codex schema --json
+npm run release:check:affected
+npm run release:check:confidence
 ```
 
-Hook warning count must be `0`.
+The release DAG owns the `codex:0144:*` manifest, binary-identity, policy, App Server v2, thread-store, and capability gates. Hook warning count must be `0`.

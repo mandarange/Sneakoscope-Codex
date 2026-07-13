@@ -21,6 +21,8 @@ function snapshot(rows: Array<[string, string, number]>): ZellijSlotTelemetrySna
       backend: 'fixture',
       provider: 'fixture',
       service_tier: 'fast',
+      model: 'gpt-fixture',
+      reasoning_effort: 'max',
       worktree_id: null,
       worktree_path: null,
       task_title: key,

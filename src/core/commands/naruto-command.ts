@@ -14,7 +14,9 @@ import {
   createAndWriteWorkOrderLedgerForPrompt
 } from '../work-order-ledger.js'
 import {
+  appendJsonl,
   exists,
+  nowIso,
   readJson,
   sksRoot,
   writeJsonAtomic
@@ -45,6 +47,7 @@ import {
   prepareOfficialSubagentMission,
   writeNarutoGate
 } from '../subagents/official-subagent-preparation.js'
+import { recordOfficialSubagentParentOutcomesTelemetry } from '../zellij/zellij-official-subagent-telemetry.js'
 
 export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
 
@@ -128,13 +131,11 @@ async function narutoRunTransaction(
     const pending = await readPendingAppNarutoRun(root, { id, dir }, sessionKey)
     if (pending) return emit(parsed, pending, () => renderRunResult(pending))
   }
-  if (!(await exists(path.join(dir, 'work-order-ledger.json')))) {
-    await createAndWriteWorkOrderLedgerForPrompt(dir, {
-      missionId: id,
-      route: 'Naruto',
-      prompt: parsed.prompt
-    })
-  }
+  await createAndWriteWorkOrderLedgerForPrompt(dir, {
+    missionId: id,
+    route: 'Naruto',
+    prompt: parsed.prompt
+  })
 
   const preparation = await withFileLock({
     lockPath: path.join(dir, '.naruto-preparation.lock'),
@@ -213,6 +214,30 @@ async function narutoRunTransaction(
     runId: workflowRunId,
     additionalBlockers: configBlockers
   })
+  if (!appSession) {
+    const parentTelemetry = await recordOfficialSubagentParentOutcomesTelemetry({
+      root,
+      routeMissionId: id,
+      parentSummary: effectiveParentSummary,
+      plan: completedPlan
+    }).catch(async (error: any) => {
+      await appendJsonl(path.join(dir, 'zellij-telemetry-warnings.jsonl'), {
+        ts: nowIso(),
+        warning: 'official_subagent_parent_outcome_telemetry_failed',
+        error: String(error?.message || error)
+      }).catch(() => undefined)
+      return null
+    })
+    if (parentTelemetry?.blocker) {
+      await appendJsonl(path.join(dir, 'zellij-telemetry-warnings.jsonl'), {
+        ts: nowIso(),
+        warning: 'official_subagent_parent_outcome_telemetry_incomplete',
+        blocker: parentTelemetry.blocker,
+        failed_mission_ids: 'failed_mission_ids' in parentTelemetry ? parentTelemetry.failed_mission_ids : [],
+        skipped_thread_ids: 'skipped_thread_ids' in parentTelemetry ? parentTelemetry.skipped_thread_ids : []
+      }).catch(() => undefined)
+    }
+  }
   const passed = run.ok === true && evidence.ok === true && appSession === false
   const blockers = uniqueStrings([
     ...(Array.isArray(evidence.blockers) ? evidence.blockers : []),
@@ -417,8 +442,10 @@ function narutoHelp(parsed: NarutoArgs) {
     console.log('$Naruto — Codex official subagent workflow')
     for (const line of result.usage) console.log(`  ${line}`)
     console.log(`Parent: ${result.parent.model} / ${result.parent.model_reasoning_effort}`)
-    console.log(`Worker: ${result.agents.worker.model} / ${result.agents.worker.model_reasoning_effort}`)
-    console.log(`Expert: ${result.agents.expert.model} / ${result.agents.expert.model_reasoning_effort}`)
+    const worker = result.agents.worker
+    const expert = result.agents.expert
+    if (worker) console.log(`Worker: ${worker.model} / ${worker.model_reasoning_effort}`)
+    if (expert) console.log(`Expert: ${expert.model} / ${expert.model_reasoning_effort}`)
     console.log(`Default children: ${result.default_requested_subagents}; use explicit --agents N for wider parallelism`)
     console.log(`Nesting: max_depth=${result.max_depth}; subagents must not spawn subagents`)
     console.log('Context: bounded TriWiki attention.use_first anchors with on-demand source hydration')
