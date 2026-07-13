@@ -123,6 +123,13 @@ export interface SuperSearchProof {
   mode: SuperSearchMode
   intent: SearchIntent
   provider_independent: boolean
+  provider_independence_basis: 'distinct_verified_provider_families_and_independence_clusters'
+  verified_provider_count: number
+  verified_provider_ids: string[]
+  verified_provider_family_count: number
+  verified_provider_families: string[]
+  verified_independence_cluster_count: number
+  verified_independence_clusters: string[]
   xai_runtime_dependency: false
   snippet_only_final_claims: number
   weak_content_final_claims: number
@@ -146,6 +153,19 @@ export interface SuperSearchResult {
   intent: SearchIntent
   axes: SuperSearchAxis[]
   query_variants: string[]
+  query_execution: {
+    schema: 'sks.super-search-query-execution.v1'
+    planned: number
+    completed: number
+    failed: number
+    rows: Array<{
+      query: string
+      status: 'completed' | 'failed' | 'skipped'
+      source_count: number
+      blockers: string[]
+      warnings: string[]
+    }>
+  }
   provider_plan: {
     selected_capabilities: string[]
     selected_providers: string[]

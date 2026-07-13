@@ -36,8 +36,16 @@ export function makeSource(opts: {
   const now = nowIso()
   const canonical = opts.url ? canonicalizeUrl(opts.url) : null
   const domain = canonical ? safeDomain(canonical) : null
-  const content = `${opts.title}\n${opts.snippet}`
-  const verified = opts.verdict === 'verified_content'
+  const verifiedArtifact = Boolean(opts.contentArtifact)
+    && /^[a-f0-9]{32,}$/i.test(String(opts.contentSha256 || ''))
+    && Number(opts.contentLength || 0) > 0
+  const requestedVerified = opts.verdict === 'verified_content'
+  const verdict: AcquisitionVerdict = requestedVerified && !verifiedArtifact ? 'weak_content' : opts.verdict
+  const verified = verdict === 'verified_content'
+  const blockers = [
+    ...(opts.blockers || []),
+    ...(requestedVerified && !verifiedArtifact ? ['verified_content_artifact_missing'] : [])
+  ]
   return {
     source_id: `src-${sha256(`${opts.providerId}:${canonical || opts.title}:${opts.snippet}`).slice(0, 12)}`,
     provider_id: opts.providerId,
@@ -54,22 +62,53 @@ export function makeSource(opts: {
     language: null,
     snippet: opts.snippet,
     content_artifact: opts.contentArtifact ?? null,
-    content_sha256: opts.contentSha256 ?? (content.trim() ? sha256(content) : null),
-    content_length: opts.contentLength ?? (content.trim().length || null),
-    acquisition_verdict: opts.verdict,
+    content_sha256: opts.contentSha256 ?? null,
+    content_length: opts.contentLength ?? null,
+    acquisition_verdict: verdict,
     acquisition_path: opts.path,
     authority_tier: opts.authority,
     freshness_score: 0.5,
     relevance_score: 0.6,
-    trust_score: verified ? 0.9 : opts.verdict === 'weak_content' ? 0.55 : 0.35,
+    trust_score: verified ? 0.9 : verdict === 'weak_content' ? 0.55 : 0.35,
     primary_source: opts.primary,
     authenticated_source: false,
     local_only_raw: false,
     duplicate_cluster_id: null,
-    independence_cluster_id: domain || opts.providerId,
+    independence_cluster_id: independenceClusterForDomain(domain) || opts.providerId,
     warnings: opts.warnings || [],
-    blockers: opts.blockers || []
+    blockers
   }
+}
+
+export function independenceClusterForDomain(value: string | null): string | null {
+  const host = String(value || '').trim().toLowerCase().replace(/^\.+|\.+$/g, '')
+  if (!host) return null
+  const ownership = knownOwnershipCluster(host)
+  if (ownership) return ownership
+  const labels = host.split('.').filter(Boolean)
+  if (labels.length <= 2) return host
+  const publicSuffix = labels.slice(-2).join('.')
+  const multiLabelSuffixes = new Set([
+    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'org.au',
+    'co.jp', 'ne.jp', 'or.jp', 'com.br', 'com.cn', 'com.sg', 'co.kr', 'co.nz'
+  ])
+  return multiLabelSuffixes.has(publicSuffix)
+    ? labels.slice(-3).join('.')
+    : labels.slice(-2).join('.')
+}
+
+function knownOwnershipCluster(host: string): string | null {
+  const groups: Array<[string, string[]]> = [
+    ['owner:openai', ['openai.com', 'chatgpt.com']],
+    ['owner:x', ['x.com', 'twitter.com']],
+    ['owner:github', ['github.com', 'githubusercontent.com', 'githubassets.com']],
+    ['owner:google', ['google.com', 'youtube.com', 'googleusercontent.com']],
+    ['owner:microsoft', ['microsoft.com', 'azure.com', 'visualstudio.com']]
+  ]
+  for (const [cluster, domains] of groups) {
+    if (domains.some((domain) => host === domain || host.endsWith(`.${domain}`))) return cluster
+  }
+  return null
 }
 
 function canonicalizeUrl(raw: string): string {

@@ -14,19 +14,69 @@ export async function densifyImplementationBlueprint(input: {
 }): Promise<any> {
   const fileMap = await repositoryFileMap(input.root)
   const likelyFiles = likelyTargetFiles(fileMap, input.plan, input.claimMatrix)
-  const possibleNewFiles = possibleNewResearchFiles(fileMap)
   const base = input.existingBlueprint || defaultImplementationBlueprint(input.plan)
   const claims = Array.isArray(input.claimMatrix?.claims) ? input.claimMatrix.claims : []
   const keyClaimIds = Array.isArray(input.claimMatrix?.key_claim_ids) ? input.claimMatrix.key_claim_ids : claims.slice(0, 8).map((claim: any) => claim.id)
+  const prompt = String(input.plan?.prompt || base.prompt || '')
+  const repositoryScoped = likelyFiles.length >= 3 && repositoryIntent(prompt, claims)
+  const evidenceArtifacts = ['research-plan.json', 'source-ledger.json', 'claim-evidence-matrix.json', 'falsification-ledger.json', 'research-report.md', String(input.plan?.artifacts?.research_paper || input.plan?.paper_artifact || 'research-paper.md')]
+  if (!repositoryScoped) {
+    const sections = [
+      section('problem', 'Research Question And Boundary', `The validation handoff addresses “${prompt}” without converting a general scientific or strategic question into an SKS code-maintenance task. It preserves ${keyClaimIds.length} key claim ids, distinguishes facts from hypotheses, and treats missing evidence as a blocker rather than inventing a repository patch.`, keyClaimIds, evidenceArtifacts.slice(0, 4), ['The question, scope boundary, and disallowed overclaims are explicit.']),
+      section('decision', 'Surviving Decision', `Carry forward only claims that remain source-linked after counterevidence and falsification. The handoff is a research-validation plan, not an implementation promise; any claim that lacks independent confirmation is downgraded or removed before the final paper is used.`, keyClaimIds, evidenceArtifacts.slice(1, 5), ['Every retained key claim has known source ids and a decisive probe.']),
+      section('architecture', 'Evidence Structure', `Organize the result as a dependency chain from source ledger to semantic claim matrix, falsification cases, experiment steps, manuscript synthesis, and independent adversarial review. Each downstream conclusion must remain traceable to the upstream source and claim identifiers.`, keyClaimIds, evidenceArtifacts, ['No conclusion bypasses source, claim, and falsification artifacts.']),
+      section('interfaces', 'Inputs And Outputs', `Inputs are the research question, source locators/content notes, claim-evidence links, and explicit counterevidence. Outputs are a dated paper, an experiment plan, a replication pack, and a list of unresolved limitations that another researcher can independently inspect.`, keyClaimIds, evidenceArtifacts, ['Inputs and outputs are named with reproducible artifact paths.']),
+      section('data_contracts', 'Evidence Contracts', `Each source retains locator, publisher or author, date, credibility, hydrated notes or content hash, and semantic claim links. Each claim retains supporting and undermining source ids, confidence, falsifiability, and the next decisive test; context-only sources never count as support.`, keyClaimIds, ['source-ledger.json', 'claim-evidence-matrix.json'], ['High and critical claims cannot pass on titles, snippets, or duplicated identifiers alone.']),
+      section('execution_plan', 'Step By Step Validation', `1. Reproduce the strongest supporting source for each key claim.\n2. Reproduce the strongest counterevidence and check source independence.\n3. Execute or specify the cheapest decisive falsification test.\n4. Compare observed results with the acceptance threshold.\n5. Downgrade, refute, or retain the claim and update the paper with remaining uncertainty.`, keyClaimIds, ['falsification-ledger.json', 'experiment-plan.json', 'replication-pack.json'], ['Every step produces evidence that can change the claim verdict.']),
+      section('verification_plan', 'Independent Verification', `Use separate reviewers for source integrity, semantic claim linkage, methodology, statistical or logical validity, and replication feasibility. Verification passes only when every reviewer has a distinct completed official thread outcome and no critical, major, minor, or required revision remains.`, keyClaimIds, ['research-adversarial-review.json', 'research-adversarial-convergence.json'], ['Five distinct evidence-correlated reviewer outcomes approve with zero open objections.']),
+      section('risks_and_rollbacks', 'Risks, Retractions, And Rollback', `Primary risks are false triangulation, topic drift, publication or novelty overclaim, inaccessible evidence, and an experiment that cannot distinguish the proposed mechanism from a simpler explanation. Rollback means withdrawing the affected claim, restoring the previous manuscript snapshot, and recording the failed assumption in the ledger.`, keyClaimIds, ['research-honest-mode.json', 'research-revision-ledger.json'], ['Unsupported claims are withdrawn without weakening evidence gates.'])
+    ]
+    return {
+      ...base,
+      schema: 'sks.research-implementation-blueprint.v1',
+      generated_at: nowIso(),
+      prompt,
+      implementation_allowed_in_research: false,
+      handoff_route: 'research_validation',
+      handoff_type: 'research_validation',
+      repository_aware: false,
+      domain_research: true,
+      existing_files: evidenceArtifacts,
+      possible_new_files: [],
+      validation_targets: keyClaimIds.length ? keyClaimIds : ['supporting evidence', 'counterevidence', 'falsification result', 'replication feasibility'],
+      api_schema_changes: [],
+      test_commands: [
+        'procedure: reproduce supporting evidence from source-ledger.json',
+        'procedure: run the decisive falsification test from experiment-plan.json',
+        'procedure: independently audit claim links and unresolved objections'
+      ],
+      rollback_steps: [
+        'Withdraw or downgrade claims that fail reproduction or falsification.',
+        'Restore the prior source-linked manuscript and record the invalidated assumption.'
+      ],
+      parallel_work_decomposition: [
+        'Lane A supporting-evidence reproduction.',
+        'Lane B counterevidence and alternative explanations.',
+        'Lane C falsification and experiment design.',
+        'Lane D citation, logic, and replication audit.'
+      ],
+      sections,
+      dependencies: ['source-ledger.json', 'claim-evidence-matrix.json', 'falsification-ledger.json'],
+      out_of_scope: ['Repository source mutation during $Research runs.', 'Guaranteed novelty, genius-level quality, or publication acceptance.'],
+      open_questions: []
+    }
+  }
+
+  const possibleNewFiles: string[] = []
   const sections = [
-    section('problem', 'Problem', `Research currently must prove it executes stage-aware source shard runtime instead of relying on summary-style final.md output. The handoff should preserve ${keyClaimIds.length} key claim ids and all source-ledger evidence before code work begins.`, keyClaimIds, likelyFiles.slice(0, 8), ['Confirm the follow-up route reads claim-evidence-matrix.json and source-ledger.json before implementation.']),
-    section('decision', 'Decision', 'Use a dependency-aware research cycle with source_shard, source_merge, claim_matrix_build, falsification, implementation_blueprint, experiment_plan, synthesis, final_review, and verification stages. Keep Research read-only against repository source and write only mission artifacts.', keyClaimIds, likelyFiles.slice(0, 8), ['Default research run calls runResearchCycle; legacy final.md loop is opt-in only.']),
-    section('architecture', 'Architecture', 'The runtime is split into source shard generation, source-ledger merge, claim builder, blueprint densifier, final reviewer, blackbox scripts, and CLI status output. Each stage writes a ResearchStageResult under research/cycle-N/stages.', keyClaimIds, likelyFiles, ['Stage result artifacts list concrete output_artifacts for every passed stage.']),
-    section('interfaces', 'API And Schema Changes', `Existing files should expose typed contracts for shard outputs, stage results, merged source ledgers, Codex final review outputs, and concrete blueprint fields. Possible new files: ${possibleNewFiles.join(', ')}.`, keyClaimIds, likelyFiles, ['Schemas exist for research-source-shard and research-final-review.']),
-    section('data_contracts', 'Data Contracts', 'Source rows must preserve id, layer, kind, title, locator, publisher_or_author, accessed_at, reliability, credibility, stance, and claim_ids. Claim rows must preserve source_ids, counterevidence_ids, triangulation layers, confidence, and test_or_probe.', keyClaimIds, ['schemas/research/research-source-shard.schema.json', 'schemas/research/claim-evidence-matrix.schema.json'], ['Source quality report returns ok only when source metadata and citation coverage are complete.']),
-    section('execution_plan', 'Step By Step Implementation', implementationSteps(likelyFiles, possibleNewFiles).join('\n'), keyClaimIds, likelyFiles, ['Run research stage runtime blackbox, short-report rejection, complete-package fixture, and codex-sdk research pipeline gates.']),
-    section('verification_plan', 'Verification Plan', 'Run the release truth, research quality, source shard, source merge, claim builder, blueprint densifier, final reviewer, codex-sdk research pipeline, release DAG, and release check commands listed in the directive.', keyClaimIds, ['package.json', 'release-gates.v2.json', 'src/scripts/release-dag-full-coverage-check.ts'], ['All directive final checklist commands either pass or have a documented blocker.']),
-    section('risks_and_rollbacks', 'Risks And Rollbacks', 'The main risk is accepting deterministic fixture text as public-ready proof. Roll back by disabling new release gates only if the gate itself is wrong, not if implementation is incomplete. Research must block when live Codex/GPT final review is unavailable outside mock fixtures.', keyClaimIds, likelyFiles, ['A rollback keeps source mutation outside Research and restores package version metadata consistently.'])
+    section('problem', 'Problem', `The repository-scoped handoff addresses “${prompt}” and preserves ${keyClaimIds.length} source-linked key claims before implementation. It names only files whose paths match the research question or claim language and avoids substituting generic SKS Research internals.`, keyClaimIds, likelyFiles.slice(0, 8), ['Every proposed file is relevant to the stated repository problem.']),
+    section('decision', 'Decision', 'Use the smallest repository change that follows from the surviving evidence, while keeping Research itself read-only. If the evidence does not justify a code change, return a blocked implementation handoff instead of inventing one.', keyClaimIds, likelyFiles.slice(0, 8), ['The decision is traceable to key claim and source ids.']),
+    section('architecture', 'Architecture', `Map the proposed behavior through the relevant current modules: ${likelyFiles.slice(0, 12).join(', ')}. Preserve existing ownership boundaries, remove duplicate paths only when current references prove they are dead, and keep integration parent-owned.`, keyClaimIds, likelyFiles, ['Module ownership and dependency impact are explicit.']),
+    section('interfaces', 'API And Schema Changes', 'List only interfaces, commands, schemas, or configuration fields required by the supported claim. Compatibility shims remain only when an active public caller exists; otherwise the implementation route may remove them with focused tests.', keyClaimIds, likelyFiles, ['Public and internal compatibility effects are enumerated.']),
+    section('data_contracts', 'Data Contracts', 'Carry source and claim identifiers into acceptance criteria so implementation cannot pass on artifact existence alone. State failure, ambiguity, stale evidence, and rollback behavior for every changed contract.', keyClaimIds, likelyFiles, ['Success and failure schemas are both covered.']),
+    section('execution_plan', 'Step By Step Implementation', implementationSteps(likelyFiles).join('\n'), keyClaimIds, likelyFiles, ['Each numbered step has bounded files and a decision-relevant check.']),
+    section('verification_plan', 'Verification Plan', 'Run the smallest affected type, unit, integration, or contract checks that could change the implementation decision. Reserve release-wide checks for the release route and do not repeat clean builds inside a development loop.', keyClaimIds, likelyFiles, ['Verification is scoped, non-duplicative, and tied to changed behavior.']),
+    section('risks_and_rollbacks', 'Risks And Rollbacks', 'Risks include overgeneralizing research evidence, changing unrelated files, preserving dead compatibility code, and claiming success from stale proof. Roll back the bounded implementation patch and restore the prior contract if the affected checks or read-back evidence fail.', keyClaimIds, likelyFiles, ['Rollback paths and invalidation conditions are explicit.'])
   ]
   return {
     ...base,
@@ -35,35 +85,30 @@ export async function densifyImplementationBlueprint(input: {
     prompt: input.plan?.prompt || base.prompt || '',
     implementation_allowed_in_research: false,
     handoff_route: '$Naruto',
+    handoff_type: 'repository_implementation',
     repository_aware: true,
+    domain_research: false,
     existing_files: likelyFiles,
     possible_new_files: possibleNewFiles,
+    validation_targets: keyClaimIds,
     api_schema_changes: [
-      'ResearchStageResult contract for every executed stage.',
-      'ResearchSourceShardOutput contract for source layer partials.',
-      'Codex/GPT final reviewer merged with static review.'
+      'Only evidence-supported public or internal contracts named in the sections above.'
     ],
     test_commands: [
-      'npm run research:stage-cycle-runtime-blackbox',
-      'npm run research:short-report-rejection',
-      'npm run research:complete-package-fixture',
-      'npm run codex-sdk:research-pipeline',
-      'npm run release:check'
+      'affected typecheck for the named files',
+      'focused unit or contract tests for the changed behavior',
+      'one integration or read-back check that exercises the supported claim'
     ],
     rollback_steps: [
       'Revert only the files listed in the follow-up patch plan.',
-      'Restore package version metadata with npm install --package-lock-only if package-lock drift occurs.',
-      'Run npm run release:version-truth and the research blackbox gates after rollback.'
+      'Restore the previous public/internal contract when the affected verification fails.',
+      'Record which research assumption was invalidated before retrying.'
     ],
     parallel_work_decomposition: [
-      'WS-A stage runtime and research run integration.',
-      'WS-B source shards and ledger merge.',
-      'WS-C claim matrix builder.',
-      'WS-D blueprint and handoff densifier.',
-      'WS-E final reviewer.',
-      'WS-F blackbox gates and release DAG.',
-      'WS-G CLI/docs.',
-      'WS-H integration and verification.'
+      'WS-A contract and architecture review.',
+      'WS-B bounded implementation in disjoint files.',
+      'WS-C focused test and failure-path review.',
+      'WS-D parent integration, rollback, and final verification.'
     ],
     sections,
     dependencies: ['claim-evidence-matrix.json', 'source-ledger.json', 'falsification-ledger.json'],
@@ -80,37 +125,16 @@ async function repositoryFileMap(root: string): Promise<string[]> {
 function likelyTargetFiles(files: string[], plan: any, claimMatrix: any): string[] {
   const promptTerms = new Set(String(plan?.prompt || '').toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length > 3))
   const guidanceTerms = new Set<string>((Array.isArray(claimMatrix?.claims) ? claimMatrix.claims : []).flatMap((claim: any) => String(claim?.claim || '').toLowerCase().split(/[^a-z0-9]+/)).filter((term: string) => term.length > 5))
-  const preferred = [
-    'src/core/research/research-cycle-runner.ts',
-    'src/core/research/research-stage-runner.ts',
-    'src/core/research/research-work-graph.ts',
-    'src/core/commands/research-command.ts',
-    'src/core/research/claim-evidence-matrix.ts',
-    'src/core/research/implementation-blueprint.ts',
-    'src/core/research/research-final-reviewer.ts',
-    'package.json',
-    'release-gates.v2.json',
-    'docs/research-pipeline.md',
-    'docs/research-artifacts.md',
-    'docs/research-implementation-handoff.md'
-  ].filter((file) => files.includes(file))
   const matched = files.filter((file) => {
     const lower = file.toLowerCase()
-    return lower.includes('research') || [...promptTerms, ...guidanceTerms].some((term: string) => lower.includes(term))
+    return [...promptTerms, ...guidanceTerms].some((term: string) => lower.includes(term))
   }).slice(0, 30)
-  return [...new Set([...preferred, ...matched])].slice(0, 40)
+  return [...new Set(matched)].slice(0, 40)
 }
 
-function possibleNewResearchFiles(files: string[]): string[] {
-  return [
-    'src/core/research/research-source-shards.ts',
-    'src/core/research/research-source-ledger-merge.ts',
-    'src/core/research/research-claim-builder.ts',
-    'src/core/research/implementation-blueprint-densifier.ts',
-    'src/scripts/research-stage-cycle-runtime-blackbox.ts',
-    'src/scripts/research-short-report-rejection-check.ts',
-    'schemas/research/research-source-shard.schema.json'
-  ].filter((file) => !files.includes(file))
+function repositoryIntent(prompt: string, claims: any[]): boolean {
+  const text = `${prompt}\n${claims.map((claim: any) => String(claim?.claim || '')).join('\n')}`
+  return /\b(?:code|repository|repo|package|module|function|class|api|cli|command|config|schema|test|bug|implementation|refactor|migration|release|deploy|typescript|javascript|rust|python)\b|(?:코드|저장소|리포지토리|패키지|모듈|함수|클래스|명령|설정|스키마|테스트|버그|구현|리팩터|마이그레이션|배포)/i.test(text)
 }
 
 function section(id: string, title: string, detail: string, claimIds: string[], targetPaths: string[], acceptanceChecks: string[]) {
@@ -125,13 +149,12 @@ function section(id: string, title: string, detail: string, claimIds: string[], 
   }
 }
 
-function implementationSteps(existingFiles: string[], newFiles: string[]): string[] {
+function implementationSteps(existingFiles: string[]): string[] {
   return [
-    `1. Update runtime files: ${existingFiles.filter((file) => file.includes('research-cycle-runner') || file.includes('research-stage-runner') || file.includes('research-work-graph')).join(', ')}.`,
-    `2. Add or verify source/claim/blueprint helper files: ${newFiles.filter((file) => file.includes('research')).join(', ')}.`,
-    '3. Wire sks research run so default execution uses runResearchCycle and the final.md Codex exec loop is legacy-only.',
-    '4. Add blackbox scripts that create temporary missions and verify rejection/pass/runtime behavior.',
-    '5. Update package scripts, release-gates.v2.json, docs, changelog, and version metadata.',
-    '6. Run the directive final checklist and record any hard blocker instead of claiming completion.'
+    `1. Inspect the current contract and references in: ${existingFiles.slice(0, 8).join(', ')}.`,
+    '2. Seal one bounded change whose behavior is directly supported by the claim-evidence matrix.',
+    '3. Remove or consolidate duplicate code only after current imports, commands, and generated surfaces prove it is unused.',
+    '4. Run affected checks for the changed contract, including a failure-path or ambiguity case.',
+    '5. Integrate parent-owned results, record rollback conditions, and leave unsupported follow-up work blocked.'
   ]
 }

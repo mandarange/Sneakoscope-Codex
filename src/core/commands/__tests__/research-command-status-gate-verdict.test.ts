@@ -53,3 +53,21 @@ test('research status prints the gate verdict word as the first line for a faili
   }
   assert.equal(logs[0], 'fail');
 });
+
+test('research status --json emits one parseable JSON result without a verdict prefix', async () => {
+  const { root, missionId } = await makeResearchMission({ passed: true, ok: true, blockers: [], execution_class: 'mock_fixture' });
+  const originalCwd = process.cwd();
+  const logs: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: any[]) => { logs.push(args.map(String).join(' ')); };
+  try {
+    process.chdir(root);
+    await researchCommand('status', [missionId, '--json']);
+  } finally {
+    console.log = originalLog;
+    process.chdir(originalCwd);
+  }
+  assert.equal(logs.length, 1);
+  const parsed = JSON.parse(logs[0] as string);
+  assert.equal(parsed.gate_verdict.verdict, 'mock_only');
+});

@@ -14,10 +14,14 @@ const graph = workGraph.buildResearchWorkGraph(plan)
 await cycleRunner.runResearchCycle({ root: process.cwd(), dir, plan, graph, cycle: 1, backend: 'mock', timeoutMs: 120000, maxParallelStages: 4, mock: true })
 const blueprint = JSON.parse(fs.readFileSync(path.join(dir, 'implementation-blueprint.json'), 'utf8'))
 
-assertGate(blueprint.repository_aware === true, 'blueprint must be repository-aware', blueprint)
+assertGate(
+  blueprint.repository_aware === true || (blueprint.domain_research === true && blueprint.handoff_route === 'research_validation'),
+  'blueprint must preserve either a repository-aware implementation boundary or an explicit domain-research validation boundary',
+  blueprint
+)
 assertGate((blueprint.existing_files || []).length > 0, 'blueprint must list concrete existing files', blueprint)
 assertGate((blueprint.sections || []).length >= 8, 'blueprint must keep required sections', blueprint)
-assertGate((blueprint.test_commands || []).some((cmd) => String(cmd).includes('research:stage-cycle-runtime-blackbox')), 'blueprint must include concrete test commands', blueprint)
+assertGate((blueprint.test_commands || []).some((cmd) => /^(?:procedure:|npm |node |cargo )/.test(String(cmd))), 'blueprint must include concrete verification commands or procedures', blueprint)
 assertGate(fs.existsSync(path.join(dir, 'team-handoff-goal.md')), 'team handoff goal must exist')
 
 emitGate('research:blueprint-densifier', { dir, sections: blueprint.sections.length, files: blueprint.existing_files.length })

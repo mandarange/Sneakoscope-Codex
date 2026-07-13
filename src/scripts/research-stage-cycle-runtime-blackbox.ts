@@ -32,7 +32,11 @@ assertGate(sourceQuality.ok === true, 'source-quality-report must pass', sourceQ
 assertGate(fs.existsSync(path.join(dir, 'claim-evidence-matrix.json')), 'claim matrix must exist')
 assertGate(claimMatrix.key_claim_ids.length >= 8, 'claim matrix must include at least 8 key claims', claimMatrix)
 assertGate(fs.existsSync(path.join(dir, 'implementation-blueprint.json')), 'blueprint must exist')
-assertGate(blueprint.repository_aware === true, 'blueprint must be repository aware', blueprint)
+assertGate(
+  blueprint.repository_aware === true || (blueprint.domain_research === true && blueprint.handoff_route === 'research_validation'),
+  'blueprint must preserve either a repository-aware implementation boundary or an explicit domain-research validation boundary',
+  blueprint
+)
 assertGate(fs.existsSync(path.join(dir, 'research-synthesis-output.json')), 'synthesis output must exist')
 assertGate(reportQuality.ok === true, 'research report must pass repetition detector and density checks', reportQuality)
 assertGate(fs.existsSync(path.join(dir, 'research-final-review.json')), 'final review must exist')

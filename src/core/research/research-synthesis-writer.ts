@@ -2,6 +2,7 @@ import path from 'node:path'
 import { readJson, writeJsonAtomic, writeTextAtomic, nowIso } from '../fsx.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import { researchPaperArtifactForPlan } from '../research.js'
+import { THINKING_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
 import { analyzeResearchReportQuality, countWords } from './research-report-quality.js'
 import { analyzeResearchRepetition } from './research-repetition-detector.js'
 import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research-realistic-report.js'
@@ -74,6 +75,7 @@ export async function runResearchCodexSynthesisWriter(input: {
   cycle: number
   backendPreference?: Array<'codex-sdk' | 'python-codex-sdk'>
   timeoutMs?: number
+  deadlineMs?: number
   mock?: boolean
 }): Promise<ResearchSynthesisOutput> {
   const artifacts = await readSynthesisInputs(input.dir)
@@ -86,7 +88,7 @@ export async function runResearchCodexSynthesisWriter(input: {
   }
   const result = await runCodexTask({
     route: '$Research',
-    tier: 'worker',
+    tier: 'orchestrator',
     missionId: String(input.plan?.mission_id || 'research-synthesis'),
     workItemId: 'research_synthesis',
     cwd: input.root,
@@ -107,7 +109,16 @@ export async function runResearchCodexSynthesisWriter(input: {
     allowLocalLlm: false,
     localLlmPolicy: { mode: 'disabled', requiresGptFinal: true },
     mutationLedgerRoot: path.join(input.dir, 'research', 'synthesis-codex-control'),
-    reliabilityPolicy: { timeoutClass: 'standard', idleTimeoutMs: input.timeoutMs || 120000 }
+    reliabilityPolicy: {
+      timeoutClass: 'standard',
+      idleTimeoutMs: input.timeoutMs || 120000,
+      hardTimeoutMs: input.timeoutMs || 120000,
+      ...(input.deadlineMs === undefined ? {} : { deadlineEpochMs: input.deadlineMs })
+    },
+    model: THINKING_SUBAGENT_MODEL,
+    reasoningEffort: SUBAGENT_EFFORT,
+    modelReasoningEffort: SUBAGENT_EFFORT,
+    serviceTier: 'fast'
   })
   const worker = await readJson(result.workerResultPath as string, null)
   const output = normalizeResearchSynthesisOutput(worker)
@@ -163,7 +174,8 @@ export function validateResearchSynthesisOutput(output: ResearchSynthesisOutput,
   const report = output.report_markdown
   const paper = output.paper_markdown
   const sourceIdsCited = sourceIds.filter((id) => report.includes(id))
-  const keyClaimsCovered = keyClaims.filter((id: string) => report.includes(id) || claimSourceIds(claimMatrix, id).some((sourceId: string) => report.includes(sourceId)))
+  const claimCoverage: ClaimLocalReportCoverage[] = keyClaims.map((id: string) => claimLocalReportCoverage(report, claimMatrix, id))
+  const keyClaimsCovered = claimCoverage.filter((row: ClaimLocalReportCoverage) => row.ok).map((row: ClaimLocalReportCoverage) => row.claim_id)
   const paperSections = ['Abstract', 'Introduction', 'Methodology', 'Findings', 'Discussion', 'Limitations', 'Conclusion', 'References']
   const blockers = [
     ...(output.schema === 'sks.research-synthesis-output.v1' ? [] : ['research_synthesis_schema_invalid']),
@@ -174,6 +186,9 @@ export function validateResearchSynthesisOutput(output: ResearchSynthesisOutput,
     ...reportQuality.blockers,
     ...repetition.blockers,
     ...(sourceIdsCited.length >= Math.min(8, sourceIds.length) ? [] : ['research_synthesis_unique_sources_below_contract']),
+    ...claimCoverage.filter((row: ClaimLocalReportCoverage) => !row.id_present).map((row: ClaimLocalReportCoverage) => `research_synthesis_key_claim_id_missing:${row.claim_id}`),
+    ...claimCoverage.filter((row: ClaimLocalReportCoverage) => !row.semantics_present).map((row: ClaimLocalReportCoverage) => `research_synthesis_key_claim_semantics_missing:${row.claim_id}`),
+    ...claimCoverage.filter((row: ClaimLocalReportCoverage) => !row.local_citation_present).map((row: ClaimLocalReportCoverage) => `research_synthesis_key_claim_local_citation_missing:${row.claim_id}`),
     ...(keyClaimsCovered.length >= Number(contract?.min_key_claims || 8) ? [] : ['research_synthesis_key_claims_below_contract']),
     ...(repetition.repeated_paragraph_ratio <= 0.18 ? [] : ['research_synthesis_repeated_paragraph_ratio_high']),
     ...(repetition.template_phrase_hits.length ? ['research_synthesis_template_phrase_hits'] : []),
@@ -181,6 +196,82 @@ export function validateResearchSynthesisOutput(output: ResearchSynthesisOutput,
     ...output.blockers
   ]
   return { ok: blockers.length === 0, blockers: [...new Set(blockers)] }
+}
+
+interface ClaimLocalReportCoverage {
+  claim_id: string
+  id_present: boolean
+  semantics_present: boolean
+  local_citation_present: boolean
+  ok: boolean
+}
+
+function claimLocalReportCoverage(report: string, claimMatrix: any, claimId: string): ClaimLocalReportCoverage {
+  const claim = (Array.isArray(claimMatrix?.claims) ? claimMatrix.claims : []).find((row: any) => String(row?.id || '') === claimId)
+  const claimText = String(claim?.claim || '').trim()
+  const linkedSourceIds = normalizeStringList(claim?.source_ids)
+  const blocks = markdownSection(report, 'Key Claims').split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean)
+  let idPresent = false
+  let semanticsPresent = false
+  let localCitationPresent = false
+  for (const block of blocks) {
+    const hasId = block.includes(claimId)
+    const hasSemantics = semanticallyContainsClaim(block, claimText)
+    const hasLocalCitation = linkedSourceIds.some((sourceId) => block.includes(sourceId))
+    idPresent ||= hasId
+    semanticsPresent ||= hasSemantics
+    localCitationPresent ||= hasId && hasSemantics && hasLocalCitation
+  }
+  return {
+    claim_id: claimId,
+    id_present: idPresent,
+    semantics_present: semanticsPresent,
+    local_citation_present: localCitationPresent,
+    ok: idPresent && semanticsPresent && localCitationPresent
+  }
+}
+
+function markdownSection(markdown: string, heading: string): string {
+  const target = normalizeHeading(heading)
+  const lines = String(markdown || '').split(/\r?\n/)
+  const out: string[] = []
+  let capture = false
+  let level = 0
+  for (const line of lines) {
+    const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line)
+    if (match) {
+      const nextLevel = match[1]?.length || 0
+      const normalized = normalizeHeading(match[2] || '')
+      if (capture && nextLevel <= level) break
+      if (!capture && normalized.includes(target)) {
+        capture = true
+        level = nextLevel
+      }
+      continue
+    }
+    if (capture) out.push(line)
+  }
+  return out.join('\n')
+}
+
+function semanticallyContainsClaim(block: string, claimText: string): boolean {
+  const claimTokens = semanticTokens(claimText)
+  if (!claimTokens.length) return false
+  const blockTokens = new Set(semanticTokens(block))
+  const overlap = claimTokens.filter((token) => blockTokens.has(token)).length
+  const minimumOverlap = claimTokens.length <= 2 ? claimTokens.length : claimTokens.length <= 5 ? 2 : 3
+  const minimumCoverage = claimTokens.length <= 3 ? 1 : 0.3
+  return overlap >= minimumOverlap && overlap / claimTokens.length >= minimumCoverage
+}
+
+function semanticTokens(value: unknown): string[] {
+  const stop = new Set(['about', 'after', 'before', 'been', 'being', 'could', 'evidence', 'finding', 'from', 'have', 'into', 'research', 'result', 'should', 'source', 'study', 'that', 'their', 'there', 'these', 'this', 'through', 'using', 'with'])
+  return normalizeStringList(String(value || '').toLowerCase().normalize('NFKC').match(/[\p{L}\p{N}]{4,}/gu) || [])
+    .filter((token) => !stop.has(token))
+}
+
+function normalizeHeading(value: string): string {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
 async function readSynthesisInputs(dir: string) {
@@ -199,8 +290,9 @@ function mockResearchSynthesisOutput(plan: any, artifacts: any): ResearchSynthes
   const claims = Array.isArray(artifacts.claimMatrix?.claims) ? artifacts.claimMatrix.claims : []
   const sourceIds = sourceIdsFromLedger(artifacts.sourceLedger)
   const counterIds = counterevidenceIdsFromLedger(artifacts.sourceLedger)
-  const report = buildRealisticResearchReport({ plan, claims, sourceIds, counterevidenceIds: counterIds, blueprint: artifacts.implementationBlueprint, falsificationLedger: artifacts.falsificationLedger, experimentPlan: artifacts.experimentPlan, replicationPack: artifacts.replicationPack })
-  const paper = buildRealisticResearchPaper({ plan, claims, sourceIds, counterevidenceIds: counterIds })
+  const keyClaimIds = Array.isArray(artifacts.claimMatrix?.key_claim_ids) ? artifacts.claimMatrix.key_claim_ids.map(String) : []
+  const report = buildRealisticResearchReport({ plan, claims, keyClaimIds, sourceIds, counterevidenceIds: counterIds, blueprint: artifacts.implementationBlueprint, falsificationLedger: artifacts.falsificationLedger, experimentPlan: artifacts.experimentPlan, replicationPack: artifacts.replicationPack })
+  const paper = buildRealisticResearchPaper({ plan, claims, keyClaimIds, sourceIds, counterevidenceIds: counterIds })
   return normalizeResearchSynthesisOutput({
     schema: 'sks.research-synthesis-output.v1',
     mission_id: String(plan?.mission_id || ''),

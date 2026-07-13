@@ -17,40 +17,39 @@ const DEFAULT_SECTION_IDS = Object.freeze([
 export function defaultImplementationBlueprint(plan: any = null) {
   const prompt = String(plan?.prompt || 'research mission')
   const existingFiles = [
-    'src/core/research/research-stage-runner.ts',
-    'src/core/research/research-report-quality.ts',
-    'src/core/research/research-final-reviewer.ts',
-    'package.json',
-    'release-gates.v2.json',
-    'docs/research-pipeline.md'
+    'research-plan.json',
+    'source-ledger.json',
+    'claim-evidence-matrix.json',
+    'falsification-ledger.json',
+    'research-report.md',
+    researchArtifactName(plan)
   ]
   return {
     schema: 'sks.research-implementation-blueprint.v1',
     generated_at: nowIso(),
     prompt,
     implementation_allowed_in_research: false,
-    handoff_route: '$Naruto',
-    repository_aware: true,
+    handoff_route: 'research_validation',
+    handoff_type: 'research_validation',
+    repository_aware: false,
+    domain_research: true,
     existing_files: existingFiles,
-    possible_new_files: [
-      'src/core/research/research-synthesis-writer.ts',
-      'src/core/research/research-repetition-detector.ts',
-      'src/scripts/research-handoff-consumability-check.ts'
-    ],
+    possible_new_files: [],
+    validation_targets: ['key claims', 'counterevidence', 'falsification outcomes', 'replication procedure'],
     test_commands: [
-      'npm run research:implementation-blueprint',
-      'npm run research:blueprint-densifier',
-      'npm run research:handoff-consumability'
+      'procedure: reproduce the primary evidence acquisition from source-ledger.json',
+      'procedure: execute the cheapest decisive test from falsification-ledger.json',
+      'procedure: compare the observed result with the claim-evidence matrix acceptance threshold'
     ],
     rollback_steps: [
-      'Revert the research blueprint and handoff changes as one bounded patch.',
-      'Rerun the blueprint, handoff, and release DAG checks after rollback.'
+      'Withdraw or downgrade any claim whose cited evidence cannot be reproduced.',
+      'Restore the last source-linked manuscript snapshot and record the failed assumption.'
     ],
     parallel_work_decomposition: [
-      'WS-A synthesis writer and schema wiring.',
-      'WS-B report quality and repetition checks.',
-      'WS-C final reviewer and gate validation.',
-      'WS-D CLI, release, and documentation closure.'
+      'WS-A independently reproduce the strongest supporting evidence.',
+      'WS-B independently reproduce the strongest counterevidence.',
+      'WS-C execute or design the decisive falsification probe.',
+      'WS-D audit citations, assumptions, and remaining uncertainty.'
     ],
     sections: DEFAULT_SECTION_IDS.map((id, index) => ({
       id,
@@ -86,12 +85,16 @@ export function validateImplementationBlueprint(blueprint: any = null, contract:
     .map((section: any) => String(section?.id || section?.title || 'unknown'))
   const executionPlan = sections.find((section: any) => String(section?.id || '').trim() === 'execution_plan' || /execution|step/i.test(String(section?.title || '')))
   const executionPlanHasNumberedSteps = /(?:^|\n)\s*(?:\d+\.|[-*]\s+\d+\.)\s+/.test(String(executionPlan?.detail || ''))
+  const repositoryAware = blueprint?.repository_aware === true
+  const domainResearch = blueprint?.domain_research === true || blueprint?.handoff_type === 'research_validation'
+  const validationTargets = normalizeStringList(blueprint?.validation_targets)
   const blockers = [
     ...(blueprint ? [] : ['implementation_blueprint_missing']),
     ...(sections.length < minSections ? ['implementation_blueprint_sections_below_contract'] : []),
     ...(completeSections.length < minSections ? ['implementation_blueprint_incomplete_sections'] : []),
-    ...(blueprint?.repository_aware === true ? [] : ['implementation_blueprint_not_repository_aware']),
-    ...(existingFiles.length >= 3 && existingFiles.some((file) => /^src\/|^package\.json$|^release-gates|^docs\//.test(file)) ? [] : ['implementation_blueprint_file_map_too_thin']),
+    ...(repositoryAware || domainResearch ? [] : ['implementation_blueprint_scope_missing']),
+    ...(repositoryAware && !(existingFiles.length >= 3 && existingFiles.some((file) => /^src\/|^package\.json$|^release-gates|^docs\//.test(file))) ? ['implementation_blueprint_file_map_too_thin'] : []),
+    ...(domainResearch && validationTargets.length < 3 ? ['implementation_blueprint_validation_targets_too_thin'] : []),
     ...(testCommands.length >= 3 ? [] : ['implementation_blueprint_test_plan_too_thin']),
     ...(rollbackSteps.length >= 2 ? [] : ['implementation_blueprint_rollback_too_thin']),
     ...(parallelWork.length >= 4 ? [] : ['implementation_blueprint_parallel_work_missing']),
@@ -128,7 +131,11 @@ function normalizeStringList(value: any): string[] {
 function sectionDetail(id: string, prompt: string, files: string[]): string {
   const fileList = files.slice(0, 4).join(', ')
   if (id === 'execution_plan') {
-    return `1. Inspect the cited research artifacts for ${prompt}. 2. Apply the smallest implementation patch across ${fileList}. 3. Run the listed research and release gates. 4. Keep rollback scoped to the files named in this blueprint.`
+    return `1. Reproduce the cited evidence for ${prompt}.\n2. Run the cheapest decisive falsification probe named in ${fileList}.\n3. Compare observed results with the claim matrix acceptance threshold.\n4. Downgrade or withdraw any claim that does not survive.`
   }
-  return `For ${prompt}, the ${id} section links source-backed claims to concrete repository files such as ${fileList}, names the acceptance evidence expected from tests, and keeps Research itself read-only while preparing a Naruto handoff.`
+  return `For ${prompt}, the ${id} section links source-backed claims to reproducible research artifacts such as ${fileList}, states the evidence needed to accept or reject the claim, preserves counterevidence and uncertainty, and keeps the Research route read-only while preparing an independent validation handoff.`
+}
+
+function researchArtifactName(plan: any): string {
+  return String(plan?.artifacts?.research_paper || plan?.paper_artifact || 'research-paper.md')
 }

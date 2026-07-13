@@ -222,7 +222,8 @@ export const RESEARCH_AGENT_PERSONA_CONTRACT = Object.freeze([
 ].map((agent: any) => Object.freeze({
   ...agent,
   persona_boundary: 'persona-inspired cognitive lens only; do not impersonate the historical person',
-  reasoning_effort: 'xhigh',
+  custom_agent: 'expert',
+  model: 'gpt-5.6-sol',
+  reasoning_effort: 'max',
   service_tier: 'fast'
 })));
-

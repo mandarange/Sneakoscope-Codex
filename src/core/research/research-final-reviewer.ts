@@ -1,12 +1,15 @@
 import path from 'node:path'
 import { nowIso, readJson, readText, writeJsonAtomic } from '../fsx.js'
-import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import { analyzeResearchReportQuality } from './research-report-quality.js'
 import { validateClaimEvidenceMatrix } from './claim-evidence-matrix.js'
 import { validateImplementationBlueprint } from './implementation-blueprint.js'
 import { validateExperimentPlan } from './experiment-plan.js'
 import { validateReplicationPack } from './replication-pack.js'
 import { validateFalsificationCoverage } from './falsification.js'
+import {
+  RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT,
+  RESEARCH_CONVERGENCE_GATE_ARTIFACT
+} from './research-adversarial-review.js'
 
 export const RESEARCH_FINAL_REVIEW_ARTIFACT = 'research-final-review.json'
 export const RESEARCH_STATIC_FINAL_REVIEW_ARTIFACT = 'research-final-review.static.json'
@@ -92,56 +95,40 @@ export async function runResearchCodexFinalReviewer(input: {
     await writeJsonAtomic(path.join(input.dir, RESEARCH_CODEX_FINAL_REVIEW_ARTIFACT), skipped)
     return skipped
   }
-  if (input.mock === true) {
-    const approved = {
-      schema: 'sks.research-codex-final-review.v1',
-      reviewed_at: nowIso(),
-      verdict: 'approve',
-      unsupported_claim_ids: [],
-      missing_evidence: [],
-      blueprint_findings: ['mock final reviewer approves the complete package fixture'],
-      falsification_findings: ['mock counterevidence and falsification cases are present'],
-      template_like_prose: false,
-      source_density_ok: true,
-      implementation_concreteness_ok: true,
-      evidence_bound_synthesis_ok: true,
-      required_revisions: [],
-      confidence: 'high',
-      mock: true
-    }
-    await writeJsonAtomic(path.join(input.dir, RESEARCH_CODEX_FINAL_REVIEW_ARTIFACT), approved)
-    return approved
+  const convergence = await readJson<any>(path.join(input.dir, RESEARCH_CONVERGENCE_GATE_ARTIFACT), null)
+  const ledger = await readJson<any>(path.join(input.dir, RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT), null)
+  const finalCycle = Array.isArray(ledger?.review_cycles) ? ledger.review_cycles.at(-1) : null
+  const reviewers = Array.isArray(finalCycle?.reviewers) ? finalCycle.reviewers : []
+  const objections = reviewers.flatMap((reviewer: any) => [
+    ...(Array.isArray(reviewer?.critical_objections) ? reviewer.critical_objections : []),
+    ...(Array.isArray(reviewer?.major_objections) ? reviewer.major_objections : [])
+  ])
+  const requiredRevisions = [...new Set([
+    ...reviewers.flatMap((reviewer: any) => Array.isArray(reviewer?.required_revisions) ? reviewer.required_revisions : []),
+    ...objections.map((objection: any) => objection?.required_revision).filter(Boolean),
+    ...(Array.isArray(convergence?.blockers) ? convergence.blockers : [])
+  ].map(String))]
+  const approved = convergence?.passed === true
+  const review = {
+    schema: 'sks.research-codex-final-review.v1',
+    reviewed_at: nowIso(),
+    verdict: approved ? 'approve' : 'revise',
+    unsupported_claim_ids: [...new Set(objections.flatMap((objection: any) => Array.isArray(objection?.claim_ids) ? objection.claim_ids.map(String) : []))],
+    missing_evidence: objections.filter((objection: any) => !Array.isArray(objection?.source_ids) || objection.source_ids.length === 0).map((objection: any) => String(objection?.id || 'unknown')),
+    blueprint_findings: approved ? ['official subagent reviewers accepted the evidence-bound implementation handoff'] : [],
+    falsification_findings: reviewers.map((reviewer: any) => String(reviewer?.strongest_challenge || '')).filter(Boolean),
+    template_like_prose: objections.some((objection: any) => /template|boilerplate|repet/i.test(String(objection?.reason || ''))),
+    source_density_ok: approved,
+    implementation_concreteness_ok: input.staticReview?.checks?.implementation_blueprint?.ok === true,
+    evidence_bound_synthesis_ok: approved,
+    required_revisions: requiredRevisions,
+    confidence: approved ? 'high' : reviewers.length ? 'medium' : 'low',
+    official_subagent_review: true,
+    reviewer_count: reviewers.length,
+    review_cycles: Number(convergence?.review_cycles || 0),
+    unresolved_critical_objections: Number(convergence?.unresolved_critical_objections || 0),
+    ...(input.mock === true ? { mock: true } : {})
   }
-  const result = await runCodexTask({
-    route: '$Research',
-    tier: 'worker',
-    missionId: String(input.plan?.mission_id || 'research-final-review'),
-    workItemId: 'research_final_review',
-    cwd: input.root,
-    prompt: buildResearchFinalReviewPrompt(input.plan, input.staticReview),
-    outputSchema: researchCodexFinalReviewSchema,
-    outputSchemaId: 'sks.research-codex-final-review.v1',
-    sandboxPolicy: 'read-only',
-    requestedScopeContract: {
-      id: 'research-final-review',
-      route: '$Research',
-      read_only: true,
-      allowed_paths: [`.sneakoscope/missions/${input.plan?.mission_id || ''}/`],
-      write_paths: [],
-      allowed_write_prefixes: [`.sneakoscope/missions/${input.plan?.mission_id || ''}/`],
-      source_mutation_allowed: false
-    },
-    backendPreference: input.backendPreference || ['codex-sdk', 'python-codex-sdk'],
-    localLlmPolicy: { mode: 'disabled', requiresGptFinal: true },
-    allowLocalLlm: false,
-    mutationLedgerRoot: path.join(input.dir, 'research', 'final-review-codex-control'),
-    reliabilityPolicy: {
-      timeoutClass: 'standard',
-      idleTimeoutMs: input.timeoutMs || 120000
-    }
-  })
-  const worker = await readJson(result.workerResultPath, null)
-  const review = normalizeCodexReview(worker, result)
   await writeJsonAtomic(path.join(input.dir, RESEARCH_CODEX_FINAL_REVIEW_ARTIFACT), review)
   return review
 }
@@ -149,13 +136,14 @@ export async function runResearchCodexFinalReviewer(input: {
 export async function runResearchFinalReviewer(dir: string, input: any = {}) {
   const staticReview = await runResearchStaticFinalReview(dir, input)
   const existingCodex = await readJson(path.join(dir, RESEARCH_CODEX_FINAL_REVIEW_ARTIFACT), null)
-  const codexReview = existingCodex || (input.mock === true ? await runResearchCodexFinalReviewer({
+  const codexReview = existingCodex || await runResearchCodexFinalReviewer({
     root: input.root || process.cwd(),
     dir,
     plan: input.plan || await readJson(path.join(dir, 'research-plan.json'), null),
     staticReview,
-    mock: true
-  }) : null)
+    mock: input.mock === true
+  })
+  const adversarialGate = await readJson<any>(path.join(dir, RESEARCH_CONVERGENCE_GATE_ARTIFACT), null)
   const codexApproved = codexReview?.verdict === 'approve'
   const codexRequired = input.codexRequired !== false
   const blockers = [
@@ -166,88 +154,19 @@ export async function runResearchFinalReviewer(dir: string, input: any = {}) {
     ...(codexReview && codexReview.source_density_ok === false ? ['research_codex_source_density_not_ok'] : []),
     ...(codexReview && codexReview.implementation_concreteness_ok === false ? ['research_codex_implementation_concreteness_not_ok'] : []),
     ...(codexReview && codexReview.evidence_bound_synthesis_ok === false ? ['research_codex_evidence_bound_synthesis_not_ok'] : []),
-    ...(Array.isArray(codexReview?.required_revisions) ? codexReview.required_revisions.map((revision: any) => `codex_revision:${revision}`) : [])
+    ...(Array.isArray(codexReview?.required_revisions) ? codexReview.required_revisions.map((revision: any) => `codex_revision:${revision}`) : []),
+    ...(adversarialGate?.passed === true ? [] : ['research_adversarial_convergence_not_passed'])
   ]
   const review = {
     schema: 'sks.research-final-reviewer.v2',
     reviewed_at: nowIso(),
-    approved: staticReview?.approved === true && (!codexRequired || codexApproved) && blockers.length === 0,
+    approved: staticReview?.approved === true && adversarialGate?.passed === true && (!codexRequired || codexApproved) && blockers.length === 0,
     blockers: [...new Set(blockers)],
     static_review: staticReview,
     codex_review: codexReview,
-    reviewer: 'research_final_reviewer_static_plus_codex_gate'
+    adversarial_convergence: adversarialGate,
+    reviewer: 'research_final_reviewer_static_plus_official_subagents'
   }
   await writeJsonAtomic(path.join(dir, RESEARCH_FINAL_REVIEW_ARTIFACT), review)
   return review
-}
-
-function buildResearchFinalReviewPrompt(plan: any, staticReview: any): string {
-  return [
-    'You are the Codex/GPT final reviewer for an SKS Research package.',
-    `Mission: ${plan?.mission_id || 'unknown'}`,
-    `Prompt: ${plan?.prompt || ''}`,
-    '',
-    'Review the mission artifacts read-only. Reject if claims lack evidence, blueprint steps are template-like, falsification is missing, or the package is only a short summary.',
-    'Reject repeated paragraphs, template-like prose, unsupported synthesis, source IDs that do not exist in source-ledger, and implementation blueprints that lack concrete files/tests.',
-    'Set template_like_prose=true for repeated or boilerplate reports. Set source_density_ok=false for sparse source ids. Set implementation_concreteness_ok=false for weak file/test/rollback plans. Set evidence_bound_synthesis_ok=false when recommendations are not tied to evidence.',
-    'Return only JSON matching sks.research-codex-final-review.v1 with verdict approve, revise, or reject.',
-    '',
-    `Static review summary:\n${JSON.stringify(staticReview, null, 2).slice(0, 12000)}`
-  ].join('\n')
-}
-
-function normalizeCodexReview(worker: any, result: any) {
-  if (!result?.ok) {
-    return {
-      schema: 'sks.research-codex-final-review.v1',
-      reviewed_at: nowIso(),
-      verdict: 'revise',
-      unsupported_claim_ids: [],
-      missing_evidence: [],
-      blueprint_findings: [],
-      falsification_findings: [],
-      template_like_prose: false,
-      source_density_ok: false,
-      implementation_concreteness_ok: false,
-      evidence_bound_synthesis_ok: false,
-      required_revisions: Array.isArray(result?.blockers) ? result.blockers : ['codex_final_reviewer_unavailable'],
-      confidence: 'low',
-      worker_result_path: result?.workerResultPath || null
-    }
-  }
-  return {
-    schema: 'sks.research-codex-final-review.v1',
-    reviewed_at: nowIso(),
-    verdict: ['approve', 'revise', 'reject'].includes(worker?.verdict) ? worker.verdict : 'revise',
-    unsupported_claim_ids: Array.isArray(worker?.unsupported_claim_ids) ? worker.unsupported_claim_ids.map(String) : [],
-    missing_evidence: Array.isArray(worker?.missing_evidence) ? worker.missing_evidence.map(String) : [],
-    blueprint_findings: Array.isArray(worker?.blueprint_findings) ? worker.blueprint_findings.map(String) : [],
-    falsification_findings: Array.isArray(worker?.falsification_findings) ? worker.falsification_findings.map(String) : [],
-    template_like_prose: worker?.template_like_prose === true,
-    source_density_ok: worker?.source_density_ok === true,
-    implementation_concreteness_ok: worker?.implementation_concreteness_ok === true,
-    evidence_bound_synthesis_ok: worker?.evidence_bound_synthesis_ok === true,
-    required_revisions: Array.isArray(worker?.required_revisions) ? worker.required_revisions.map(String) : [],
-    confidence: ['low', 'medium', 'high'].includes(worker?.confidence) ? worker.confidence : 'medium',
-    worker_result_path: result.workerResultPath
-  }
-}
-
-export const researchCodexFinalReviewSchema = {
-  type: 'object',
-  required: ['schema', 'verdict', 'unsupported_claim_ids', 'missing_evidence', 'blueprint_findings', 'falsification_findings', 'template_like_prose', 'source_density_ok', 'implementation_concreteness_ok', 'evidence_bound_synthesis_ok', 'required_revisions', 'confidence'],
-  properties: {
-    schema: { const: 'sks.research-codex-final-review.v1' },
-    verdict: { enum: ['approve', 'revise', 'reject'] },
-    unsupported_claim_ids: { type: 'array' },
-    missing_evidence: { type: 'array' },
-    blueprint_findings: { type: 'array' },
-    falsification_findings: { type: 'array' },
-    template_like_prose: { type: 'boolean' },
-    source_density_ok: { type: 'boolean' },
-    implementation_concreteness_ok: { type: 'boolean' },
-    evidence_bound_synthesis_ok: { type: 'boolean' },
-    required_revisions: { type: 'array' },
-    confidence: { enum: ['low', 'medium', 'high'] }
-  }
 }

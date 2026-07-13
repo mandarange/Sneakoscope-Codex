@@ -11,7 +11,8 @@ import { writeResearchHandoffArtifacts } from './research-handoff.js';
 import { writeResearchWorkGraph } from './research-work-graph.js';
 import { analyzeResearchReportQuality } from './research-report-quality.js';
 import { buildRealisticResearchPaper, buildRealisticResearchReport } from './research-realistic-report.js';
-import { defaultAgentLedger, defaultResearchGate, defaultSourceLedger, evaluateResearchGate, researchAgentAgentName, RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_PAPER_SECTION_GROUPS, researchPaperArtifactForPlan, RESEARCH_SOURCE_LAYER_IDS, RESEARCH_SOURCE_LAYERS, RESEARCH_SOURCE_SKILL_ARTIFACT, researchSourceSkillMarkdown, writeResearchNativeAgentBatchCompletion } from '../research.js';
+import { buildResearchReviewArtifactDigest } from './research-review-artifact-digest.js';
+import { defaultAgentLedger, defaultResearchGate, defaultSourceLedger, evaluateResearchGate, researchAgentAgentName, RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, RESEARCH_PAPER_SECTION_GROUPS, researchPaperArtifactForPlan, RESEARCH_SOURCE_LAYER_IDS, RESEARCH_SOURCE_LAYERS, RESEARCH_SOURCE_SKILL_ARTIFACT, researchSourceSkillMarkdown } from '../research.js';
 
 export async function writeMockResearchResult(dir: any, plan: any) {
   const paperArtifact = researchPaperArtifactForPlan(plan);
@@ -31,6 +32,10 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     supports: layer.id === 'counterevidence_factcheck' ? [] : [mockClaimIds[index % mockClaimIds.length]],
     undermines: layer.id === 'counterevidence_factcheck' ? [mockClaimIds[0]] : [],
     claim_ids: [mockClaimIds[index % mockClaimIds.length]],
+    ...(layer.id === 'counterevidence_factcheck' ? {
+      counterevidence_target_claim_id: mockClaimIds[0],
+      contradiction_rationale: `Mock-only fixture explicitly challenges ${mockClaimIds[0]}.`
+    } : {}),
     notes: `Selftest fixture for the ${layer.id} source layer; no live web call is made in --mock mode.`
   }));
   const supplementalMockSources = RESEARCH_SOURCE_LAYERS.map((layer: any, index: any) => ({
@@ -48,6 +53,10 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     supports: layer.id === 'counterevidence_factcheck' ? [] : [mockClaimIds[(index + 1) % mockClaimIds.length]],
     undermines: layer.id === 'counterevidence_factcheck' ? [mockClaimIds[(index + 2) % mockClaimIds.length]] : [],
     claim_ids: [mockClaimIds[(index + 1) % mockClaimIds.length]],
+    ...(layer.id === 'counterevidence_factcheck' ? {
+      counterevidence_target_claim_id: mockClaimIds[(index + 2) % mockClaimIds.length],
+      contradiction_rationale: `Mock-only fixture explicitly challenges ${mockClaimIds[(index + 2) % mockClaimIds.length]}.`
+    } : {}),
     notes: `Second selftest source for ${layer.id}; it makes source-count and triangulation checks non-trivial.`
   }));
   const mockLayerSources = [...primaryMockSources, ...supplementalMockSources];
@@ -101,6 +110,8 @@ export async function writeMockResearchResult(dir: any, plan: any) {
         stance: 'undermines',
         undermines: [mockClaimIds[0]],
         claim_ids: [mockClaimIds[0]],
+        counterevidence_target_claim_id: mockClaimIds[0],
+        contradiction_rationale: `Mock-only fixture explicitly challenges ${mockClaimIds[0]}.`,
         notes: 'Shows the gate must fail if a run produces no tests or falsifiers.'
       },
       {
@@ -117,6 +128,8 @@ export async function writeMockResearchResult(dir: any, plan: any) {
         stance: 'undermines',
         undermines: [mockClaimIds[1]],
         claim_ids: [mockClaimIds[1]],
+        counterevidence_target_claim_id: mockClaimIds[1],
+        contradiction_rationale: `Mock-only fixture explicitly challenges ${mockClaimIds[1]}.`,
         notes: 'Shows the gate must fail if replication commands and experiment steps are absent.'
       }
     ],
@@ -160,9 +173,12 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       persona_boundary: agent.persona_boundary,
       role: agent.role,
       mandate: agent.mandate,
-      effort: 'xhigh',
-      reasoning_effort: 'xhigh',
-      service_tier: agent.service_tier || 'fast',
+      model_policy: {
+        custom_agent: 'expert',
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'max',
+        enforcement_source: 'mock_fixture'
+      },
       eureka: {
         exclamation: 'Eureka!',
         idea: `${agent.display_name || agent.label} spots a non-obvious, testable angle for ${plan.prompt}.`,
@@ -256,8 +272,13 @@ export async function writeMockResearchResult(dir: any, plan: any) {
       confidence: 2,
       falsifiability: 2,
       source_ids: [`mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`, `mock-source-${((index + 1) % RESEARCH_SOURCE_LAYERS.length) + 1}`],
-      counterevidence_ids: [index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2'],
-      evidence: [`mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`, `mock-source-${((index + 1) % RESEARCH_SOURCE_LAYERS.length) + 1}`],
+     counterevidence_ids: [index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2'],
+      counterevidence_links: [{
+        source_id: index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2',
+        target_claim_id: claimId,
+        contradiction_rationale: `Mock counterevidence challenges ${claimId} by testing whether the cited support survives a negative result.`
+      }],
+     evidence: [`mock-source-${(index % RESEARCH_SOURCE_LAYERS.length) + 1}`, `mock-source-${((index + 1) % RESEARCH_SOURCE_LAYERS.length) + 1}`],
       falsifiers: [index % 2 === 0 ? 'mock-counter-1' : 'mock-counter-2'],
       next_experiment: `Run the same topic through summary-only and discovery-loop prompts, then compare claim ${index + 1} support, falsification, and reproducibility.`
     }))
@@ -309,6 +330,7 @@ export async function writeMockResearchResult(dir: any, plan: any) {
   const researchReportText = buildRealisticResearchReport({
     plan,
     claims: claimMatrix.claims,
+    keyClaimIds: claimMatrix.key_claim_ids,
     sourceIds: mockSourceIds,
     counterevidenceIds: mockCounterIds,
     blueprint,
@@ -319,6 +341,7 @@ export async function writeMockResearchResult(dir: any, plan: any) {
   const researchPaperText = buildRealisticResearchPaper({
     plan,
     claims: claimMatrix.claims,
+    keyClaimIds: claimMatrix.key_claim_ids,
     sourceIds: mockSourceIds,
     counterevidenceIds: mockCounterIds
   });
@@ -369,7 +392,8 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     source_layers_covered: RESEARCH_SOURCE_LAYER_IDS.length,
     triangulation_checks: sourceLedger.triangulation.cross_layer_checks.length,
     independent_agents: RESEARCH_AGENT_COUNCIL.length,
-    xhigh_agents: RESEARCH_AGENT_COUNCIL.length,
+    xhigh_agents: 0,
+    sol_max_policy_agents: RESEARCH_AGENT_COUNCIL.length,
     eureka_moments: RESEARCH_AGENT_COUNCIL.length,
     agent_findings: RESEARCH_AGENT_COUNCIL.length,
     debate_participants: RESEARCH_AGENT_COUNCIL.length,
@@ -401,6 +425,95 @@ export async function writeMockResearchResult(dir: any, plan: any) {
     confidence: 'high',
     mock: true
   });
-  await writeResearchNativeAgentBatchCompletion(dir, plan);
+  const adversarialReviewedAt = nowIso();
+  const reviewArtifacts = await buildResearchReviewArtifactDigest(dir, plan);
+  const adversarialReviewers = RESEARCH_AGENT_COUNCIL.map((agent: any, index: number) => ({
+    schema: 'sks.research-adversarial-reviewer-outcome.v1',
+    persona_id: String(agent.id),
+    verdict: 'approve',
+    strongest_challenge: `${researchAgentAgentName(agent)} mock fixture challenges unsupported claims and missing replication evidence.`,
+    evidence_source_ids: [`mock-source-${(index % mockLayerSources.length) + 1}`],
+    critical_objections: [],
+    major_objections: [],
+    minor_objections: [],
+    required_revisions: [],
+    eureka: {
+      exclamation: 'Eureka!',
+      idea: `${researchAgentAgentName(agent)} records a bounded mock-only source-linked insight.`,
+      source_ids: [`mock-source-${(index % mockLayerSources.length) + 1}`]
+    },
+    falsifiers: ['Remove the cited mock source or leave a required revision unresolved.'],
+    cheap_probes: ['Run the canonical adversarial validation fixture.'],
+    confidence: 'high',
+    review_artifact_bundle_sha256: reviewArtifacts.bundle_sha256,
+    thread_id: `mock-review-1-${agent.id}`,
+    thread_status: 'completed'
+  }));
+  await writeJsonAtomic(path.join(dir, 'research-adversarial-review.json'), {
+    schema: 'sks.research-adversarial-review-ledger.v1',
+    generated_at: adversarialReviewedAt,
+    execution_class: 'mock_fixture',
+    review_cycles: [{
+      schema: 'sks.research-adversarial-review-cycle.v1',
+      cycle: 1,
+      execution_class: 'mock_fixture',
+      reviewed_at: adversarialReviewedAt,
+      workflow: { status: 'mock_fixture', workflow: 'official_codex_subagent_contract_fixture' },
+      review_artifacts: reviewArtifacts,
+      reviewers: adversarialReviewers,
+      blockers: []
+    }],
+    final_cycle: 1,
+    convergence_artifact: 'research-adversarial-convergence.json',
+    blockers: []
+  });
+  await writeJsonAtomic(path.join(dir, 'research-revision-ledger.json'), {
+    schema: 'sks.research-revision-ledger.v1',
+    generated_at: adversarialReviewedAt,
+    bounded_max_cycles: 3,
+    revisions: [],
+    blockers: []
+  });
+  await writeJsonAtomic(path.join(dir, 'research-adversarial-convergence.json'), {
+    schema: 'sks.research-adversarial-convergence.v1',
+    checked_at: adversarialReviewedAt,
+    execution_class: 'mock_fixture',
+    passed: true,
+    official_subagent_workflow: true,
+    official_subagent_evidence_ok: true,
+    workflow_run_id: null,
+    reviewer_count_required: RESEARCH_AGENT_COUNCIL.length,
+    reviewer_count_observed: RESEARCH_AGENT_COUNCIL.length,
+    review_cycles: 1,
+    revision_cycles: 0,
+    all_reviewers_approved: true,
+    review_artifacts: reviewArtifacts,
+    review_artifact_bundle_sha256: reviewArtifacts.bundle_sha256,
+    current_artifact_bundle_sha256: reviewArtifacts.bundle_sha256,
+    review_artifact_hashes_ok: reviewArtifacts.blockers.length === 0,
+    unresolved_critical_objections: 0,
+    unresolved_objections: 0,
+    honest_mode_ok: true,
+    genius_level_guaranteed: false,
+    novelty_guaranteed: false,
+    publication_acceptance_guaranteed: false,
+    blockers: []
+  });
+  await writeJsonAtomic(path.join(dir, 'research-honest-mode.json'), {
+    schema: 'sks.research-honest-mode.v1',
+    checked_at: adversarialReviewedAt,
+    execution_class: 'mock_fixture',
+    ok: true,
+    guarantees: {
+      genius_level: false,
+      novelty: false,
+      breakthrough: false,
+      publication_acceptance: false
+    },
+    verified_claim: 'Only artifact shape and fail-closed gate behavior were exercised.',
+    unverified: ['live model intelligence level', 'scientific novelty', 'publication acceptance'],
+    overclaims: [],
+    blockers: []
+  });
   return evaluateResearchGate(dir);
 }

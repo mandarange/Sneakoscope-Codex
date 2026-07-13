@@ -4,13 +4,20 @@ import { assertGate, emitGate, readText } from './sks-1-18-gate-lib.js'
 
 const source = readText('src/core/commands/research-command.ts')
 const defaultIndex = source.indexOf('const cycleResult = await runResearchCycle({')
-const legacyIndex = source.indexOf('const legacyResearchCycle')
-const legacyExecIndex = source.indexOf('runCodexExec({')
 
 assertGate(defaultIndex > 0, 'default research run must call runResearchCycle with object input')
-assertGate(source.includes('--legacy-research-cycle'), 'legacy research cycle flag must exist')
-assertGate(source.includes('SKS_RESEARCH_LEGACY_CYCLE'), 'legacy research cycle env flag must exist')
-assertGate(source.includes('legacy_final_md_loop'), 'legacy final.md loop must be explicitly marked')
-assertGate(legacyExecIndex > legacyIndex, 'runCodexExec final.md path must live after legacy gate')
+for (const removed of ['SKS_RESEARCH_LEGACY_CYCLE', 'legacy_final_md_loop', 'runCodexExec({', 'runNativeAgentOrchestrator']) {
+  assertGate(!source.includes(removed), `legacy Research runtime token must be absent: ${removed}`)
+}
+assertGate(
+  source.includes('REMOVED_RESEARCH_RUNTIME_FLAGS')
+    && source.includes('Unsupported legacy Research runtime option:'),
+  'removed Research flags must fail closed'
+)
+for (const removedFlag of ['--legacy-research-cycle', '--native-proof-only']) {
+  assertGate(source.includes(removedFlag), `removed Research flag blocker missing: ${removedFlag}`)
+}
+assertGate(source.includes("source_acquisition: 'super-search'"), 'Research run must record Super Search acquisition')
+assertGate(source.includes("reviewer_workflow: 'official_codex_subagent'"), 'Research run must record official subagent review')
 
-emitGate('research:real-cycle-no-legacy-final-md', { defaultIndex, legacyIndex, legacyExecIndex })
+emitGate('research:real-cycle-no-legacy-final-md', { defaultIndex, legacy_runtime_removed: true, official_subagents: true, super_search: true })

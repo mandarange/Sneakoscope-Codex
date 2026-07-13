@@ -12,7 +12,7 @@ import {
   buildXDiscoverySources,
   dedupeSources,
   extractFirstUrl,
-  normalizeGenericSourceRows,
+  materializeContext7SourceRows,
   renderSynthesis,
   sourceFromUrlFetch,
   sourceFromWebRow
@@ -37,10 +37,16 @@ export interface RunSuperSearchInput {
   context7?: SuperSearchSourceFunction
   codexWebSearch?: CodexWebSearchFunction
   allowLocalFetch?: boolean
+  maxQueryVariants?: number
+  maxHydratedSources?: number
+  hardTimeoutMs?: number
+  deadlineEpochMs?: number
   env?: NodeJS.ProcessEnv
 }
 
 export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperSearchResult> {
+  const operationDeadlineMs = resolveSuperSearchDeadline(input)
+  if (operationDeadlineMs <= Date.now()) throw new Error('research_cycle_timeout_exceeded')
   const root = path.resolve(input.root || process.cwd())
   const missionDir = path.resolve(input.missionDir)
   const missionId = input.missionId || path.basename(missionDir)
@@ -65,6 +71,7 @@ export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperS
   const sourceRows: SuperSearchSourceRecord[] = []
   const warnings = [...providerPlan.warnings]
   const blockers = [...providerPlan.blockers]
+  const queryExecutionRows: SuperSearchResult['query_execution']['rows'] = []
   let providerSelfHeal: SuperSearchResult['provider_self_heal'] | undefined
   if (!providerPlan.selected_providers.length && mode !== 'url_acquisition') {
     if (!input.offline) {
@@ -90,28 +97,70 @@ export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperS
   }
 
   if (input.context7 && providerPlan.selected_providers.includes('context7')) {
-    const raw = await input.context7(queryVariants[0] || input.query)
-    sourceRows.push(...normalizeGenericSourceRows(raw, 'context7', 'official_docs', intent, 'A0'))
+    try {
+      const query = queryVariants[0] || input.query
+      const raw = await raceSuperSearchOperation(input.context7(query), operationDeadlineMs)
+      const normalized = await materializeContext7SourceRows(raw, artifactDir, intent)
+      sourceRows.push(...normalized)
+      queryExecutionRows.push({ query, status: 'completed', source_count: normalized.length, blockers: [], warnings: [] })
+    } catch (error) {
+      const blocker = `context7_query_failed:${error instanceof Error ? error.message : String(error)}`
+      blockers.push(blocker)
+      queryExecutionRows.push({ query: queryVariants[0] || input.query, status: 'failed', source_count: 0, blockers: [blocker], warnings: [] })
+    }
   } else if (intent === 'official_documentation' && !input.offline) {
     warnings.push('context7_not_invoked_for_docs_query')
   }
 
   if (providerPlan.selected_providers.includes('codex_web')) {
-    const webEvidence = await runCodexWebSearch(queryVariants[0] || input.query, {
-      ...(input.codexWebSearch ? { search: input.codexWebSearch } : {}),
-      artifactDir,
-      ...(input.offline === undefined ? {} : { offline: input.offline }),
-      ...(input.env ? { env: input.env } : {})
+    const queries = queryVariants.slice(0, queryBudget(mode, input.maxQueryVariants))
+    const webRows = await raceSuperSearchOperation(Promise.all(queries.map(async (query) => {
+      try {
+        const evidence = await runCodexWebSearch(query, {
+          ...(input.codexWebSearch ? { search: input.codexWebSearch } : {}),
+          artifactDir,
+          ...(input.offline === undefined ? {} : { offline: input.offline }),
+          ...(input.env ? { env: input.env } : {})
+        })
+        return { query, evidence, error: null as string | null }
+      } catch (error) {
+        return { query, evidence: null, error: error instanceof Error ? error.message : String(error) }
+      }
+    })), operationDeadlineMs)
+    for (const row of webRows) {
+      if (!row.evidence) {
+        const blocker = `codex_web_query_failed:${row.error || 'unknown'}`
+        blockers.push(blocker)
+        queryExecutionRows.push({ query: row.query, status: 'failed', source_count: 0, blockers: [blocker], warnings: [] })
+        continue
+      }
+      if (row.evidence.blockers.length) blockers.push(...row.evidence.blockers)
+      warnings.push(...row.evidence.warnings)
+      const normalized = row.evidence.normalized_results.map((result, index) => sourceFromWebRow(result, index, intent))
+      sourceRows.push(...normalized)
+      queryExecutionRows.push({
+        query: row.query,
+        status: row.evidence.status === 'completed' ? 'completed' : 'skipped',
+        source_count: normalized.length,
+        blockers: [...row.evidence.blockers],
+        warnings: [...row.evidence.warnings]
+      })
+    }
+    const hydrated = await hydrateDiscoverySources(sourceRows, artifactDir, intent, {
+      allowLocal: input.allowLocalFetch === true,
+      limit: hydrationBudget(mode, input.maxHydratedSources),
+      deadlineEpochMs: operationDeadlineMs
     })
-    if (webEvidence.blockers.length) blockers.push(...webEvidence.blockers)
-    warnings.push(...webEvidence.warnings)
-    sourceRows.push(...webEvidence.normalized_results.map((row, index) => sourceFromWebRow(row, index, intent)))
+    sourceRows.push(...hydrated.sources)
+    if (hydrated.sources.length) warnings.push(...hydrated.blockers.map((blocker) => `partial_hydration:${blocker}`))
+    else blockers.push(...hydrated.blockers)
+    warnings.push(...hydrated.warnings)
   }
 
   if (mode === 'url_acquisition') {
     const url = extractFirstUrl(input.query)
     if (url) {
-      const fetched = await sourceFromUrlFetch(url, artifactDir, intent, { allowLocal: input.allowLocalFetch === true })
+      const fetched = await sourceFromUrlFetch(url, artifactDir, intent, { allowLocal: input.allowLocalFetch === true, deadlineEpochMs: operationDeadlineMs })
       sourceRows.push(fetched.source)
       blockers.push(...fetched.blockers)
       warnings.push(...fetched.warnings)
@@ -142,6 +191,13 @@ export async function runSuperSearch(input: RunSuperSearchInput): Promise<SuperS
     intent,
     axes,
     query_variants: queryVariants,
+    query_execution: {
+      schema: 'sks.super-search-query-execution.v1',
+      planned: queryExecutionRows.length,
+      completed: queryExecutionRows.filter((row) => row.status === 'completed').length,
+      failed: queryExecutionRows.filter((row) => row.status === 'failed').length,
+      rows: queryExecutionRows
+    },
     provider_plan: providerPlan,
     sources: deduped,
     leads,
@@ -286,6 +342,7 @@ async function writeArtifacts(artifactDir: string, result: SuperSearchResult): P
   await writeJsonAtomic(path.join(artifactDir, 'intent.json'), { schema: 'sks.super-search-intent.v1', intent: result.intent, mode: result.mode })
   await writeJsonAtomic(path.join(artifactDir, 'axes.json'), { schema: 'sks.super-search-axes.v1', axes: result.axes })
   await writeJsonAtomic(path.join(artifactDir, 'query-variants.json'), { schema: 'sks.super-search-query-variants.v1', query_variants: result.query_variants })
+  await writeJsonAtomic(path.join(artifactDir, 'query-execution.json'), result.query_execution)
   await writeJsonAtomic(path.join(artifactDir, 'provider-plan.json'), { schema: 'sks.super-search-provider-plan.v1', ...result.provider_plan })
   await writeJsonAtomic(path.join(artifactDir, 'source-ledger.json'), { schema: 'sks.super-search-source-ledger.v1', sources: result.sources })
   await writeJsonAtomic(path.join(artifactDir, 'lead-ledger.json'), { schema: 'sks.super-search-lead-ledger.v1', leads: result.leads })
@@ -307,7 +364,9 @@ async function writeArtifacts(artifactDir: string, result: SuperSearchResult): P
     passed: result.proof.ok,
     execution_class: 'production',
     mock_only: false,
-    replacement_state: result.proof.ok ? 'usable_provider_independent_runtime' : 'replacement_incomplete',
+    replacement_state: result.proof.ok
+      ? (result.proof.provider_independent ? 'usable_provider_independent_runtime' : 'usable_verified_runtime')
+      : 'replacement_incomplete',
     blockers: result.proof.blockers,
     human_summary: blockerDiagnostics.human_summary,
     next_actions: [
@@ -333,11 +392,77 @@ async function readCache(artifactDir: string, query: string, mode: SuperSearchMo
   age_ms: number | null
   result: SuperSearchResult | null
 }> {
-  const key = sha256(JSON.stringify({ query: query.trim().toLowerCase(), mode, adapter: 'super-search-runtime-v1' })).slice(0, 16)
+  const key = sha256(JSON.stringify({ query: query.trim().toLowerCase(), mode, adapter: 'super-search-runtime-v2' })).slice(0, 16)
   const artifact = path.join(artifactDir, 'cache', `${key}.json`)
   const ttl_ms = mode === 'x_search' ? 2 * 60 * 1000 : mode === 'offline_cache' ? 7 * 24 * 60 * 60 * 1000 : 10 * 60 * 1000
   const cached = await readJson<SuperSearchResult | null>(artifact, null)
   if (!cached?.generated_at) return { key, artifact, ttl_ms, hit: false, stale: false, age_ms: null, result: null }
   const age_ms = Date.now() - Date.parse(cached.generated_at)
   return { key, artifact, ttl_ms, hit: true, stale: age_ms > ttl_ms, age_ms, result: cached }
+}
+
+function queryBudget(mode: SuperSearchMode, explicit?: number): number {
+  if (Number.isFinite(Number(explicit))) return Math.max(1, Math.min(8, Math.floor(Number(explicit))))
+  if (mode === 'fast' || mode === 'url_acquisition' || mode === 'offline_cache') return 1
+  if (mode === 'balanced' || mode === 'x_search') return 3
+  if (mode === 'deep') return 5
+  return 8
+}
+
+function hydrationBudget(mode: SuperSearchMode, explicit?: number): number {
+  if (Number.isFinite(Number(explicit))) return Math.max(0, Math.min(8, Math.floor(Number(explicit))))
+  if (mode === 'fast' || mode === 'url_acquisition' || mode === 'offline_cache') return 1
+  if (mode === 'balanced' || mode === 'x_search') return 3
+  if (mode === 'deep') return 5
+  return 8
+}
+
+async function hydrateDiscoverySources(
+  sources: SuperSearchSourceRecord[],
+  artifactDir: string,
+  intent: SearchIntent,
+  opts: { allowLocal: boolean; limit: number; deadlineEpochMs: number }
+): Promise<{ sources: SuperSearchSourceRecord[]; blockers: string[]; warnings: string[] }> {
+  const urls = [...new Set(sources
+    .filter((source) => source.acquisition_verdict !== 'verified_content')
+    .map((source) => source.canonical_url || source.original_url)
+    .filter((url): url is string => Boolean(url)))]
+    .slice(0, opts.limit)
+  if (!urls.length) return { sources: [], blockers: [], warnings: [] }
+  const rows = await raceSuperSearchOperation(
+    Promise.all(urls.map((url) => sourceFromUrlFetch(url, artifactDir, intent, { allowLocal: opts.allowLocal, deadlineEpochMs: opts.deadlineEpochMs }))),
+    opts.deadlineEpochMs
+  )
+  const verified = rows.filter((row) => row.source.acquisition_verdict === 'verified_content').map((row) => row.source)
+  const blockers = rows.flatMap((row) => row.source.acquisition_verdict === 'verified_content' ? [] : row.blockers)
+  const warnings = rows.flatMap((row) => row.warnings)
+  return { sources: verified, blockers, warnings }
+}
+
+function resolveSuperSearchDeadline(input: RunSuperSearchInput): number {
+  const hard = Number(input.hardTimeoutMs)
+  const absolute = Number(input.deadlineEpochMs)
+  const candidates = [
+    Number.isFinite(hard) && hard > 0 ? Date.now() + hard : Number.POSITIVE_INFINITY,
+    Number.isFinite(absolute) && absolute > 0 ? absolute : Number.POSITIVE_INFINITY
+  ]
+  const deadline = Math.min(...candidates)
+  return Number.isFinite(deadline) ? deadline : Date.now() + 120_000
+}
+
+async function raceSuperSearchOperation<T>(promise: Promise<T>, deadlineEpochMs: number): Promise<T> {
+  const remainingMs = Math.max(0, Math.floor(deadlineEpochMs - Date.now()))
+  if (remainingMs <= 0) throw new Error('research_cycle_timeout_exceeded')
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('research_cycle_timeout_exceeded')), remainingMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }

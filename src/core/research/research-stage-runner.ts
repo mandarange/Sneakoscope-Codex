@@ -1,20 +1,32 @@
 import path from 'node:path'
-import { appendJsonlBounded, nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
+import { appendJsonlBounded, exists, nowIso, readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import type { CodexControlBackend } from '../codex-control/codex-control-plane.js'
 import { buildClaimEvidenceMatrixFromSourceShards } from './research-claim-builder.js'
 import { writeClaimEvidenceMatrix, validateClaimEvidenceMatrix } from './claim-evidence-matrix.js'
+import { synthesizeResearchClaimEvidenceMatrix } from './research-claim-synthesizer.js'
 import { defaultExperimentPlan, writeExperimentPlan } from './experiment-plan.js'
 import { defaultReplicationPack, writeReplicationPack } from './replication-pack.js'
 import { densifyImplementationBlueprint } from './implementation-blueprint-densifier.js'
 import { renderImplementationBlueprintMarkdown } from './implementation-blueprint-markdown.js'
 import { readImplementationBlueprint, validateImplementationBlueprint, writeImplementationBlueprint } from './implementation-blueprint.js'
 import { writeResearchHandoffArtifacts } from './research-handoff.js'
-import { runResearchCodexFinalReviewer, runResearchFinalReviewer, runResearchStaticFinalReview } from './research-final-reviewer.js'
+import { runResearchFinalReviewer, runResearchStaticFinalReview } from './research-final-reviewer.js'
 import { runResearchCodexSynthesisWriter, validateResearchSynthesisOutput, type ResearchSynthesisOutput } from './research-synthesis-writer.js'
 import { buildResearchSourceShardPrompt, defaultResearchSourceShardOutput, researchSourceLayerById, researchSourceShardOutputSchema, validateResearchSourceShardOutput } from './research-source-shards.js'
-import { mergeResearchSourceShards } from './research-source-ledger-merge.js'
-import { evaluateResearchGate, researchPaperArtifactForPlan, RESEARCH_AGENT_COUNCIL, RESEARCH_GENIUS_SUMMARY_ARTIFACT, researchAgentAgentName, RESEARCH_PAPER_SECTION_GROUPS } from '../research.js'
+import { linkSourceLedgerToClaimMatrix, mergeResearchSourceShards } from './research-source-ledger-merge.js'
+import { writeSourceQualityReport } from './source-quality-report.js'
+import { runResearchFalsification } from './research-falsification-runner.js'
+import { evaluateResearchGate, researchPaperArtifactForPlan, RESEARCH_PAPER_SECTION_GROUPS } from '../research.js'
+import { runResearchSuperSearchShard } from './research-super-search.js'
+import {
+  RESEARCH_ADVERSARIAL_PLAN_ARTIFACT,
+  RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT,
+  RESEARCH_CONVERGENCE_GATE_ARTIFACT,
+  RESEARCH_HONEST_MODE_ARTIFACT,
+  RESEARCH_REVISION_LEDGER_ARTIFACT,
+  runResearchAdversarialReviewLoop
+} from './research-adversarial-review.js'
 
 export type ResearchStageKind =
   | 'source_shard'
@@ -55,9 +67,12 @@ export async function runResearchStage(inputOrDir: {
   cycle: number
   backend: ResearchStageBackend
   timeoutMs: number
+  cycleDeadlineMs?: number
+  maxReviewCycles?: number
+  maxReviewThreads?: number
   mock?: boolean
 } | string, legacyStage: any = null, legacyOpts: any = {}): Promise<ResearchStageResult> {
-  const input = typeof inputOrDir === 'string'
+  let input = typeof inputOrDir === 'string'
     ? {
         root: process.cwd(),
         dir: inputOrDir,
@@ -70,12 +85,21 @@ export async function runResearchStage(inputOrDir: {
         mock: legacyOpts.mock === true
       }
     : inputOrDir
+  if (Number.isFinite(Number(input.cycleDeadlineMs))) {
+    input = {
+      ...input,
+      timeoutMs: Math.max(0, Math.min(Number(input.timeoutMs || 0), Number(input.cycleDeadlineMs) - Date.now()))
+    }
+  }
   const startedAt = nowIso()
   const stageKind = inferStageKind(input.stage)
   const stageId = String(input.stage?.id || `${stageKind}-${input.cycle}`)
   let result: ResearchStageResult
-  try {
-    switch (stageKind) {
+  if (input.timeoutMs <= 0) {
+    result = baseResult(input, startedAt, stageKind, 'failed', [], ['research_cycle_timeout_exceeded'])
+  } else {
+    try {
+      switch (stageKind) {
       case 'source_shard':
         result = await runSourceShardStage(input, startedAt)
         break
@@ -105,9 +129,10 @@ export async function runResearchStage(inputOrDir: {
         break
       default:
         result = baseResult(input, startedAt, stageKind, 'blocked', [], [`unknown_stage_kind:${stageKind}`])
+      }
+    } catch (err: unknown) {
+      result = baseResult(input, startedAt, stageKind, 'failed', [], [err instanceof Error ? err.message : String(err)])
     }
-  } catch (err: unknown) {
-    result = baseResult(input, startedAt, stageKind, 'failed', [], [err instanceof Error ? err.message : String(err)])
   }
   if (result.status === 'passed' && result.output_artifacts.length === 0) {
     result = { ...result, status: 'blocked', blockers: [...result.blockers, 'stage_output_artifacts_missing'] }
@@ -135,6 +160,40 @@ async function runSourceShardStage(input: StageInput, startedAt: string): Promis
     await writeTextAtomic(path.join(input.dir, 'research', `cycle-${input.cycle}`, 'source-notes', `${layer.id}.md`), `# Source shard: ${layer.label}\n\n${output.sources.map((source) => `- ${source.id}: ${source.title}`).join('\n')}\n`)
     return baseResult(input, startedAt, 'source_shard', validation.ok ? 'passed' : 'blocked', [artifact, `research/cycle-${input.cycle}/source-notes/${layer.id}.md`], validation.blockers, { layer_id: layer.id, source_count: output.sources.length, source_tool_route: researchSourceToolRoute(input.plan) })
   }
+  if (layer.id !== 'local_project_evidence') {
+    const output = await runResearchSuperSearchShard({
+      root: input.root,
+      dir: input.dir,
+      plan: input.plan,
+      layer,
+      cycle: input.cycle,
+      timeoutMs: input.timeoutMs,
+      ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs })
+    })
+    const validation = validateResearchSourceShardOutput(output)
+    const blockers = [...new Set([...validation.blockers, ...output.blockers])]
+    await writeJsonAtomic(path.join(input.dir, artifact), output)
+    await writeTextAtomic(
+      path.join(input.dir, 'research', `cycle-${input.cycle}`, 'source-notes', `${layer.id}.md`),
+      `# Super Search source shard: ${layer.label}\n\n${output.sources.map((source) => `- ${source.id}: ${source.title} (${source.locator})`).join('\n')}\n\nBlockers: ${blockers.join(', ') || 'none'}\n`
+    )
+    return baseResult(
+      input,
+      startedAt,
+      'source_shard',
+      blockers.length ? 'blocked' : 'passed',
+      [artifact, `research/cycle-${input.cycle}/source-notes/${layer.id}.md`, output.super_search?.proof_artifact || ''].filter(Boolean),
+      blockers,
+      {
+        layer_id: layer.id,
+        source_count: output.sources.length,
+        verified_source_count: output.super_search?.verified_sources || 0,
+        source_tool_route: output.super_search?.provider_independent
+          ? 'super-search-provider-independent'
+          : 'super-search-verified-runtime'
+      }
+    )
+  }
   const codex = await runResearchCodexStage({
     root: input.root,
     dir: input.dir,
@@ -144,7 +203,8 @@ async function runSourceShardStage(input: StageInput, startedAt: string): Promis
     outputSchema: researchSourceShardOutputSchema,
     outputArtifact: artifact,
     backendPreference: input.backend === 'python-codex-sdk' ? ['python-codex-sdk', 'codex-sdk'] : input.backend === 'local-llm' ? ['local-llm', 'codex-sdk'] : ['codex-sdk', 'python-codex-sdk'],
-    timeoutMs: input.timeoutMs
+    timeoutMs: input.timeoutMs,
+    ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs })
   })
   return codex
 }
@@ -158,15 +218,57 @@ async function runClaimMatrixStage(input: StageInput, startedAt: string): Promis
   const sourceLedger = await readJson(path.join(input.dir, 'source-ledger.json'), null)
   const noveltyLedger = await readJson(path.join(input.dir, 'novelty-ledger.json'), null)
   const falsificationLedger = await readJson(path.join(input.dir, 'falsification-ledger.json'), null)
-  const matrix = await buildClaimEvidenceMatrixFromSourceShards({ dir: input.dir, cycle: input.cycle, plan: input.plan, sourceLedger, noveltyLedger, falsificationLedger })
+  const generated = input.mock || input.backend === 'mock' || input.backend === 'deterministic'
+    ? {
+        matrix: await buildClaimEvidenceMatrixFromSourceShards({ dir: input.dir, cycle: input.cycle, plan: input.plan, sourceLedger, noveltyLedger, falsificationLedger }),
+        blockers: [] as string[],
+        worker_result_path: null as string | null
+      }
+    : await synthesizeResearchClaimEvidenceMatrix({
+        root: input.root,
+        dir: input.dir,
+        plan: input.plan,
+        sourceLedger,
+        timeoutMs: input.timeoutMs,
+        ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs }),
+        backendPreference: input.backend === 'python-codex-sdk' ? ['python-codex-sdk', 'codex-sdk'] : ['codex-sdk', 'python-codex-sdk']
+      })
+  const matrix = generated.matrix
   await writeClaimEvidenceMatrix(input.dir, matrix)
-  const validation = validateClaimEvidenceMatrix(matrix, sourceLedger, falsificationLedger)
-  return baseResult(input, startedAt, 'claim_matrix_build', validation.ok ? 'passed' : 'blocked', ['claim-evidence-matrix.json'], validation.blockers, { key_claims: matrix.key_claim_ids.length, triangulated_claims: matrix.triangulated_claim_count })
+  const linkedSourceLedger = linkSourceLedgerToClaimMatrix(sourceLedger, matrix)
+  await writeJsonAtomic(path.join(input.dir, 'source-ledger.json'), linkedSourceLedger)
+  await writeSourceQualityReport(input.dir, linkedSourceLedger, matrix)
+  const validation = validateClaimEvidenceMatrix(matrix, linkedSourceLedger, falsificationLedger)
+  const blockers = [...new Set([...(generated.blockers || []), ...validation.blockers])]
+  return baseResult(input, startedAt, 'claim_matrix_build', blockers.length ? 'blocked' : 'passed', ['claim-evidence-matrix.json', 'source-ledger.json', 'source-quality-report.json'], blockers, {
+    key_claims: matrix.key_claim_ids.length,
+    triangulated_claims: matrix.triangulated_claim_count,
+    semantic_claim_synthesis: !(input.mock || input.backend === 'mock' || input.backend === 'deterministic'),
+    worker_result_path: generated.worker_result_path
+  })
 }
 
 async function runFalsificationStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
   const matrix = await readJson(path.join(input.dir, 'claim-evidence-matrix.json'), null)
   const sourceLedger = await readJson(path.join(input.dir, 'source-ledger.json'), null)
+  if (!(input.mock || input.backend === 'mock' || input.backend === 'deterministic')) {
+    const ledger = await runResearchFalsification({
+      root: input.root,
+      dir: input.dir,
+      plan: input.plan,
+      claimMatrix: matrix,
+      sourceLedger,
+      timeoutMs: input.timeoutMs,
+      ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs }),
+      backendPreference: input.backend === 'python-codex-sdk' ? ['python-codex-sdk', 'codex-sdk'] : ['codex-sdk', 'python-codex-sdk']
+    })
+    await writeJsonAtomic(path.join(input.dir, 'falsification-ledger.json'), ledger)
+    return baseResult(input, startedAt, 'falsification', ledger.blockers.length ? 'blocked' : 'passed', ['falsification-ledger.json'], ledger.blockers, {
+      cases: ledger.cases.length,
+      execution_class: 'real',
+      worker_result_path: ledger.worker_result_path
+    })
+  }
   const counterIds = (Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources : []).map((source: any) => source.id).filter(Boolean)
   const claims = Array.isArray(matrix?.claims) ? matrix.claims : []
   const cases = claims.slice(0, 4).map((claim: any, index: number) => ({
@@ -174,19 +276,22 @@ async function runFalsificationStage(input: StageInput, startedAt: string): Prom
     target_claim: claim.id,
     attack: `Stress ${claim.id} against missing layer coverage, counterevidence absence, and replication failure.`,
     source_ids: [counterIds[index % Math.max(1, counterIds.length)] || claim.counterevidence_ids?.[0] || claim.source_ids?.[0]].filter(Boolean),
-    result: 'survives_with_explicit_gate_requirement',
+    result: 'survives',
+    reasoning: 'Deterministic mock fixture only; no live scientific conclusion is implied.',
+    limitations: ['mock_fixture'],
     next_decisive_test: claim.test_or_probe || `Run decisive falsification probe ${index + 1}.`
   }))
   const ledger = {
     schema_version: 1,
     schema: 'sks.falsification-ledger.v1',
     created_at: nowIso(),
+    execution_class: 'mock_fixture',
     cases,
     unresolved_failures: [],
     next_decisive_tests: cases.map((row: any) => row.next_decisive_test)
   }
   await writeJsonAtomic(path.join(input.dir, 'falsification-ledger.json'), ledger)
-  return baseResult(input, startedAt, 'falsification', cases.length >= 4 ? 'passed' : 'blocked', ['falsification-ledger.json'], cases.length >= 4 ? [] : ['falsification_cases_below_contract'], { cases: cases.length })
+  return baseResult(input, startedAt, 'falsification', cases.length >= 4 ? 'passed' : 'blocked', ['falsification-ledger.json'], cases.length >= 4 ? [] : ['falsification_cases_below_contract'], { cases: cases.length, execution_class: 'mock_fixture' })
 }
 
 async function runImplementationBlueprintStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
@@ -210,8 +315,10 @@ async function runImplementationBlueprintStage(input: StageInput, startedAt: str
 }
 
 async function runExperimentPlanStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
-  const experimentPlan = defaultExperimentPlan(input.plan)
-  const replicationPack = defaultReplicationPack(input.plan)
+  const claimMatrix = await readJson(path.join(input.dir, 'claim-evidence-matrix.json'), null)
+  const sourceLedger = await readJson(path.join(input.dir, 'source-ledger.json'), null)
+  const experimentPlan = defaultExperimentPlan(input.plan, { claimMatrix, sourceLedger })
+  const replicationPack = defaultReplicationPack(input.plan, { experimentPlan, claimMatrix })
   await writeExperimentPlan(input.dir, experimentPlan)
   await writeReplicationPack(input.dir, replicationPack)
   return baseResult(input, startedAt, 'experiment_plan', 'passed', ['experiment-plan.json', 'experiment-plan.md', 'replication-pack.json'], [], { steps: experimentPlan.steps.length, replication_commands: replicationPack.commands.length })
@@ -237,15 +344,13 @@ async function runSynthesisStage(input: StageInput, startedAt: string): Promise<
       falsifiability: 3,
       source_ids: claim.source_ids || [],
       counterevidence_ids: claim.counterevidence_ids || [],
+      counterevidence_links: claim.counterevidence_links || [],
       evidence: claim.source_ids || [],
       falsifiers: claim.counterevidence_ids || [],
       next_experiment: claim.test_or_probe || `Replicate ${claim.id} against source shard evidence.`
     }))
   }
   await writeJsonAtomic(path.join(input.dir, 'novelty-ledger.json'), noveltyLedger)
-  await writeJsonAtomic(path.join(input.dir, 'agent-ledger.json'), buildAgentLedger(input.plan, sourceIds))
-  await writeJsonAtomic(path.join(input.dir, 'debate-ledger.json'), buildDebateLedger(sourceIds))
-  await writeTextAtomic(path.join(input.dir, RESEARCH_GENIUS_SUMMARY_ARTIFACT), buildGeniusSummary(input.plan))
   if (input.mock || input.backend === 'mock' || input.backend === 'deterministic') {
     return runDeterministicMockSynthesisStage(input, startedAt, { claimMatrix, sourceLedger, contract, claims, sourceIds })
   }
@@ -255,6 +360,7 @@ async function runSynthesisStage(input: StageInput, startedAt: string): Promise<
     plan: input.plan,
     cycle: input.cycle,
     timeoutMs: input.timeoutMs,
+    ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs }),
     backendPreference: input.backend === 'python-codex-sdk' ? ['python-codex-sdk', 'codex-sdk'] : ['codex-sdk', 'python-codex-sdk']
   })
   const validation = validateResearchSynthesisOutput(synthesis, contract, claimMatrix, sourceLedger)
@@ -268,6 +374,7 @@ async function runDeterministicMockSynthesisStage(input: StageInput, startedAt: 
     plan: { ...input.plan, backend: input.backend },
     cycle: input.cycle,
     timeoutMs: input.timeoutMs,
+    ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs }),
     mock: true
   })
   const validation = validateResearchSynthesisOutput(synthesis, artifacts.contract, artifacts.claimMatrix, artifacts.sourceLedger)
@@ -275,7 +382,7 @@ async function runDeterministicMockSynthesisStage(input: StageInput, startedAt: 
 }
 
 function synthesisStageResult(input: StageInput, startedAt: string, synthesis: ResearchSynthesisOutput, validation: { ok: boolean; blockers: string[] }, writer: 'codex' | 'mock' | 'deterministic'): ResearchStageResult {
-  const artifacts = ['research-synthesis-output.json', 'research-report.md', researchPaperArtifactForPlan(input.plan), RESEARCH_GENIUS_SUMMARY_ARTIFACT, 'agent-ledger.json', 'debate-ledger.json', 'novelty-ledger.json']
+  const artifacts = ['research-synthesis-output.json', 'research-report.md', researchPaperArtifactForPlan(input.plan), 'novelty-ledger.json']
   const blockers = [...new Set([...(validation.blockers || []), ...(synthesis.blockers || [])])]
   return baseResult(input, startedAt, 'synthesis', validation.ok && blockers.length === 0 ? 'passed' : 'blocked', artifacts, blockers, {
     synthesis_writer: writer === 'codex' ? 'codex-sdk' : writer,
@@ -287,22 +394,43 @@ function synthesisStageResult(input: StageInput, startedAt: string, synthesis: R
 
 async function runFinalReviewStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
   const staticReview = await runResearchStaticFinalReview(input.dir, { plan: input.plan })
-  const codexReview = await runResearchCodexFinalReviewer({
+  const adversarial = await runResearchAdversarialReviewLoop({
     root: input.root,
     dir: input.dir,
     plan: input.plan,
-    staticReview,
-    backendPreference: input.backend === 'python-codex-sdk' ? ['python-codex-sdk', 'codex-sdk'] : ['codex-sdk', 'python-codex-sdk'],
     timeoutMs: input.timeoutMs,
-    mock: input.mock || input.backend === 'mock' || input.backend === 'deterministic'
+    ...(input.cycleDeadlineMs === undefined ? {} : { deadlineMs: input.cycleDeadlineMs }),
+    ...(input.maxReviewCycles === undefined ? {} : { maxCycles: input.maxReviewCycles }),
+    ...(input.maxReviewThreads === undefined ? {} : { maxThreads: input.maxReviewThreads }),
+    mock: input.mock || input.backend === 'mock' || input.backend === 'deterministic',
+    preliminaryBlockers: staticReview.approved === true ? [] : staticReview.blockers
   })
   const merged = await runResearchFinalReviewer(input.dir, { plan: input.plan, root: input.root, mock: input.mock || input.backend === 'mock' || input.backend === 'deterministic' })
-  const status = merged.approved === true && codexReview?.verdict === 'approve' ? 'passed' : 'blocked'
-  return baseResult(input, startedAt, 'final_review', status, ['research-final-review.static.json', 'research-final-review.codex.json', 'research-final-review.json'], merged.blockers || [], { approved: merged.approved === true, codex_verdict: codexReview?.verdict || null })
+  const status = merged.approved === true && adversarial.gate?.passed === true ? 'passed' : 'blocked'
+  return baseResult(input, startedAt, 'final_review', status, [
+    'research-final-review.static.json',
+    'research-final-review.codex.json',
+    'research-final-review.json',
+    RESEARCH_ADVERSARIAL_PLAN_ARTIFACT,
+    RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT,
+    RESEARCH_REVISION_LEDGER_ARTIFACT,
+    RESEARCH_CONVERGENCE_GATE_ARTIFACT,
+    RESEARCH_HONEST_MODE_ARTIFACT,
+    'agent-ledger.json',
+    'debate-ledger.json',
+    'genius-opinion-summary.md'
+  ], merged.blockers || [], {
+    approved: merged.approved === true,
+    official_subagent_review: true,
+    review_cycles: adversarial.gate?.review_cycles || 0,
+    revision_cycles: adversarial.gate?.revision_cycles || 0,
+    unresolved_critical_objections: adversarial.gate?.unresolved_critical_objections ?? null,
+    all_reviewers_approved: adversarial.gate?.all_reviewers_approved === true
+  })
 }
 
 async function runVerificationStage(input: StageInput, startedAt: string): Promise<ResearchStageResult> {
-  const gateSeed = await buildResearchGateSeed(input.dir, input.plan)
+  const gateSeed = await buildResearchGateSeed(input.dir, input.plan, input)
   await writeJsonAtomic(path.join(input.dir, 'research-gate.json'), gateSeed)
   const evaluated = await evaluateResearchGate(input.dir)
   return baseResult(input, startedAt, 'verification', evaluated.passed ? 'passed' : 'blocked', ['research-gate.json', 'research-gate.evaluated.json'], evaluated.reasons || [], evaluated.metrics || {})
@@ -318,6 +446,7 @@ export async function runResearchCodexStage(input: {
   outputArtifact: string
   backendPreference: Array<'codex-sdk' | 'python-codex-sdk' | 'local-llm'>
   timeoutMs: number
+  deadlineMs?: number
 }): Promise<ResearchStageResult> {
   const startedAt = nowIso()
   const stageKind = inferStageKind(input.stage)
@@ -348,7 +477,12 @@ export async function runResearchCodexStage(input: {
     allowLocalLlm: input.backendPreference.includes('local-llm'),
     localLlmPolicy: input.backendPreference.includes('local-llm') ? { mode: 'local_preferred', requiresGptFinal: true } : { mode: 'disabled', requiresGptFinal: true },
     mutationLedgerRoot: path.join(input.dir, 'research', 'codex-stage-control', stageId),
-    reliabilityPolicy: { timeoutClass: 'standard', idleTimeoutMs: input.timeoutMs }
+    reliabilityPolicy: {
+      timeoutClass: 'standard',
+      idleTimeoutMs: input.timeoutMs,
+      hardTimeoutMs: input.timeoutMs,
+      ...(input.deadlineMs === undefined ? {} : { deadlineEpochMs: input.deadlineMs })
+    }
   })
   const worker = await readJson(result.workerResultPath, null)
   if (Array.isArray(worker?.patch_envelopes) && worker.patch_envelopes.length) {
@@ -400,210 +534,82 @@ function researchSourceToolRoute(plan: any): string {
   return plan?.web_research_policy?.source_tool_routing?.mode || (plan?.codex_app_execution_profile?.plugin_mcp_inventory_ready ? 'plugin-mcp-inventory-first' : 'codex-cli-or-web-fallback')
 }
 
-async function buildResearchGateSeed(dir: string, plan: any) {
+async function buildResearchGateSeed(dir: string, plan: any, input: StageInput) {
   const sourceLedger = await readJson(path.join(dir, 'source-ledger.json'), null)
   const claimMatrix = await readJson(path.join(dir, 'claim-evidence-matrix.json'), null)
   const finalReview = await readJson(path.join(dir, 'research-final-review.json'), null)
+  const adversarialGate = await readJson(path.join(dir, RESEARCH_CONVERGENCE_GATE_ARTIFACT), null)
+  const honest = await readJson(path.join(dir, RESEARCH_HONEST_MODE_ARTIFACT), null)
+  const agentLedger = await readJson(path.join(dir, 'agent-ledger.json'), null)
+  const debateLedger = await readJson(path.join(dir, 'debate-ledger.json'), null)
+  const falsificationLedger = await readJson(path.join(dir, 'falsification-ledger.json'), null)
+  const experimentPlan = await readJson(path.join(dir, 'experiment-plan.json'), null)
   const paper = researchPaperArtifactForPlan(plan)
+  const sourceRows = [
+    ...(Array.isArray(sourceLedger?.sources) ? sourceLedger.sources : []),
+    ...(Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources : [])
+  ]
+  const agents = Array.isArray(agentLedger?.agents) ? agentLedger.agents : []
+  const exchanges = Array.isArray(debateLedger?.exchanges) ? debateLedger.exchanges : []
+  const sourceLayers = Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : []
+  const falsificationCases = Array.isArray(falsificationLedger?.cases) ? falsificationLedger.cases : []
+  const experimentSteps = Array.isArray(experimentPlan?.steps) ? experimentPlan.steps : []
+  const reportPresent = await exists(path.join(dir, 'research-report.md'))
+  const paperText = await readText(path.join(dir, paper), '')
+  const summaryPresent = await exists(path.join(dir, 'genius-opinion-summary.md'))
   return {
-    passed: finalReview?.approved === true,
-    report_present: true,
+    passed: finalReview?.approved === true && adversarialGate?.passed === true,
+    execution_class: input.mock || input.backend === 'mock' || input.backend === 'deterministic' ? 'mock_fixture' : 'real',
+    report_present: reportPresent,
     research_paper_artifact: paper,
-    paper_present: true,
-    paper_sections: RESEARCH_PAPER_SECTION_GROUPS.length,
-    genius_opinion_summary_present: true,
-    genius_opinion_summaries: RESEARCH_AGENT_COUNCIL.length,
-    research_source_skill_present: true,
-    source_ledger_present: true,
-    agent_ledger_present: true,
-    debate_ledger_present: true,
-    novelty_ledger_present: true,
-    falsification_ledger_present: true,
-    web_search_passes: 1,
-    source_entries: (Array.isArray(sourceLedger?.sources) ? sourceLedger.sources.length : 0) + (Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources.length : 0),
-    source_layers_required: Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers.length : 0,
-    source_layers_covered: Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers.filter((layer: any) => layer.status === 'covered').length : 0,
+    paper_present: Boolean(paperText.trim()),
+    paper_sections: RESEARCH_PAPER_SECTION_GROUPS.filter((group: readonly string[]) => group.some((heading) => paperText.toLowerCase().includes(heading))).length,
+    genius_opinion_summary_present: summaryPresent,
+    genius_opinion_summaries: agents.length,
+    research_source_skill_present: await exists(path.join(dir, 'research-source-skill.md')),
+    source_ledger_present: Boolean(sourceLedger),
+    agent_ledger_present: Boolean(agentLedger),
+    debate_ledger_present: Boolean(debateLedger),
+    novelty_ledger_present: await exists(path.join(dir, 'novelty-ledger.json')),
+    falsification_ledger_present: Boolean(falsificationLedger),
+    web_search_passes: Number(sourceLedger?.web_search_passes || 0),
+    source_entries: sourceRows.length,
+    source_layers_required: sourceLayers.length,
+    source_layers_covered: sourceLayers.filter((layer: any) => layer.status === 'covered').length,
     triangulation_checks: Array.isArray(sourceLedger?.triangulation?.cross_layer_checks) ? sourceLedger.triangulation.cross_layer_checks.length : 0,
-    independent_agents: RESEARCH_AGENT_COUNCIL.length,
-    xhigh_agents: RESEARCH_AGENT_COUNCIL.length,
-    eureka_moments: RESEARCH_AGENT_COUNCIL.length,
-    agent_findings: RESEARCH_AGENT_COUNCIL.length,
-    debate_participants: RESEARCH_AGENT_COUNCIL.length,
-    debate_exchanges: RESEARCH_AGENT_COUNCIL.length,
-    consensus_iterations: 1,
-    unanimous_consensus: true,
+    independent_agents: agents.filter((agent: any) => Array.isArray(agent.findings) && agent.findings.length > 0).length,
+    xhigh_agents: 0,
+    sol_max_policy_agents: agents.filter((agent: any) => {
+      const policy = agent?.model_policy && typeof agent.model_policy === 'object' ? agent.model_policy : agent
+      return policy.custom_agent === 'expert' && policy.model === 'gpt-5.6-sol' && (policy.reasoning_effort === 'max' || policy.model_reasoning_effort === 'max')
+    }).length,
+    eureka_moments: agents.filter((agent: any) => agent.eureka?.exclamation === 'Eureka!' && String(agent.eureka?.idea || '').trim()).length,
+    agent_findings: agents.reduce((sum: number, agent: any) => sum + (Array.isArray(agent.findings) ? agent.findings.length : 0), 0),
+    debate_participants: new Set(exchanges.flatMap((exchange: any) => [exchange?.from, exchange?.to].filter(Boolean))).size,
+    debate_exchanges: exchanges.length,
+    consensus_iterations: Number(debateLedger?.consensus_iterations || adversarialGate?.review_cycles || 0),
+    unanimous_consensus: adversarialGate?.passed === true && debateLedger?.unanimous_consensus === true,
     counterevidence_sources: Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources.length : 0,
     candidate_insights: Array.isArray(claimMatrix?.claims) ? claimMatrix.claims.length : 0,
-    falsification_passes: 1,
-    falsification_cases: 4,
-    testable_predictions: 5,
-    citation_coverage: true,
-    web_search_blockers: [],
+    falsification_passes: falsificationCases.length ? 1 : 0,
+    falsification_cases: falsificationCases.length,
+    testable_predictions: experimentSteps.length,
+    citation_coverage: sourceLedger?.citation_coverage?.all_key_claims_cited === true,
+    web_search_blockers: Array.isArray(sourceLedger?.blockers) ? sourceLedger.blockers : [],
     unsafe_or_destructive_actions: false,
-    unsupported_breakthrough_claims: 0,
-    evidence: ['stage-aware research cycle artifacts'],
-    notes: ['Research gate seed is re-evaluated deterministically before completion.']
+    unsupported_breakthrough_claims: Array.isArray(honest?.overclaims) ? honest.overclaims.length : 1,
+    official_subagent_review: adversarialGate,
+    honest_mode: honest,
+    evidence: [
+      'source-ledger.json',
+      'claim-evidence-matrix.json',
+      RESEARCH_ADVERSARIAL_REVIEW_ARTIFACT,
+      RESEARCH_REVISION_LEDGER_ARTIFACT,
+      RESEARCH_CONVERGENCE_GATE_ARTIFACT,
+      RESEARCH_HONEST_MODE_ARTIFACT
+    ],
+    notes: ['Counts and consensus are projected from recorded artifacts; no reviewer success is inferred from lifecycle completion alone.']
   }
-}
-
-function buildAgentLedger(plan: any, sourceIds: string[]) {
-  return {
-    schema_version: 1,
-    council_mode: 'persona_inspired_agents_not_impersonation',
-    created_at: nowIso(),
-    agents: RESEARCH_AGENT_COUNCIL.map((agent: any, index: number) => ({
-      id: agent.id,
-      agent_name: researchAgentAgentName(agent),
-      display_name: agent.display_name || agent.label,
-      historical_inspiration: agent.historical_inspiration || null,
-      persona: agent.persona || agent.role,
-      persona_boundary: agent.persona_boundary || 'persona-inspired cognitive lens only',
-      role: agent.role,
-      mandate: agent.mandate,
-      effort: 'xhigh',
-      reasoning_effort: 'xhigh',
-      service_tier: 'fast',
-      eureka: {
-        exclamation: 'Eureka!',
-        idea: `${researchAgentAgentName(agent)} links source shard ${sourceIds[index % Math.max(1, sourceIds.length)] || 'source'} to a falsifiable research runtime claim.`,
-        why_it_matters: 'It keeps synthesis tied to evidence rather than summary length.',
-        source_ids: [sourceIds[index % Math.max(1, sourceIds.length)]].filter(Boolean)
-      },
-      query_set: [],
-      findings: [{ id: `${agent.id}-stage-finding`, claim: `Stage-aware research runtime requires cited source shards for ${plan?.prompt || 'the mission'}.`, source_ids: [sourceIds[index % Math.max(1, sourceIds.length)]].filter(Boolean), status: 'supported' }],
-      falsifiers: ['A summary-only report without source shard evidence must fail.'],
-      cheap_probes: ['Run the stage-cycle runtime blackbox and check source shard outputs.'],
-      challenge_or_response: 'Participated in the evidence-bound stage runtime debate.'
-    })),
-    synthesis: {
-      surviving_claims: ['stage-aware-runtime'],
-      downgraded_claims: [],
-      unresolved_conflicts: []
-    }
-  }
-}
-
-function buildDebateLedger(sourceIds: string[]) {
-  return {
-    schema_version: 1,
-    created_at: nowIso(),
-    mode: 'vigorous_evidence_bound_debate_until_unanimous_consensus',
-    required_participants: RESEARCH_AGENT_COUNCIL.map((agent: any) => agent.id),
-    participant_display_names: RESEARCH_AGENT_COUNCIL.map((agent: any) => researchAgentAgentName(agent)),
-    consensus_iterations: 1,
-    unanimous_consensus: true,
-    agent_agreements: RESEARCH_AGENT_COUNCIL.map((agent: any) => ({
-      agent_id: agent.id,
-      agent_name: researchAgentAgentName(agent),
-      display_name: agent.display_name || agent.label,
-      agrees: true,
-      final_position: 'Agrees that source-shard runtime evidence is required before synthesis.',
-      source_ids: sourceIds.slice(0, 2)
-    })),
-    exchanges: RESEARCH_AGENT_COUNCIL.map((agent: any, index: number) => ({
-      id: `stage-debate-${index + 1}`,
-      from: agent.id,
-      to: RESEARCH_AGENT_COUNCIL[(index + 1) % RESEARCH_AGENT_COUNCIL.length]?.id || 'research_verifier',
-      stance: index % 2 ? 'response' : 'challenge',
-      claim: 'The research package must fail if source shards, claim matrix, or final review are missing.',
-      source_ids: [sourceIds[index % Math.max(1, sourceIds.length)]].filter(Boolean)
-    })),
-    synthesis_pressure: {
-      strongest_disagreement: 'Whether deterministic gates are enough without a Codex/GPT reviewer.',
-      changed_minds: ['Accepted that final review must include static plus Codex/GPT evidence.'],
-      unresolved_conflicts: []
-    }
-  }
-}
-
-function buildGeniusSummary(plan: any) {
-  return [
-    '# Genius Opinion Summary',
-    '',
-    `Prompt: ${plan?.prompt || ''}`,
-    '',
-    ...RESEARCH_AGENT_COUNCIL.flatMap((agent: any) => [
-      `## ${researchAgentAgentName(agent)} (${agent.id})`,
-      'Final opinion: stage-aware research must produce source shard evidence before synthesis.',
-      'Strongest evidence: merged source-ledger and claim-evidence matrix.',
-      'Disagreement: deterministic gates still need Codex/GPT final reviewer in real mode.',
-      'Changed mind: accepted blackbox rejection of summary-only reports as a release requirement.',
-      ''
-    ])
-  ].join('\n')
-}
-
-function buildDeterministicMockResearchReport(plan: any, claims: any[], sourceIds: string[]) {
-  return [
-    '# SKS Research Report',
-    '',
-    `Prompt: ${plan?.prompt || ''}`,
-    '',
-    '## Question',
-    'Can Research close only after a real stage-aware cycle executes source shards, merges evidence, builds a claim matrix, produces a blueprint, and passes final review?',
-    '',
-    '## Methodology',
-    'The cycle executes dependency-aware stages. Source shards run before merge, claim matrix follows merged source evidence, falsification attacks key claims, blueprint densification uses repository file maps, and final review combines deterministic checks with Codex/GPT review.',
-    '',
-    '## Source Map',
-    `Merged source ids: ${sourceIds.join(', ')}.`,
-    '',
-    '## Key Claims',
-    ...claims.slice(0, 8).map((claim: any) => `- ${claim.id}: ${claim.claim} Sources: ${(claim.source_ids || []).join(', ')}. Counterevidence: ${(claim.counterevidence_ids || []).join(', ')}.`),
-    '',
-    '## Evidence Matrix Summary',
-    'The claim-evidence matrix separates facts, inferences, hypotheses, implementation guidance, source ids, counterevidence ids, triangulation layers, and test probes.',
-    '',
-    '## Counterevidence',
-    'Counterevidence rows are merged from the counterevidence_factcheck source shard and later used by falsification cases.',
-    '',
-    '## Falsification',
-    'The falsification stage records at least four attacks against missing layer coverage, missing counterevidence, missing replication, and summary-only synthesis.',
-    '',
-    '## Implementation Blueprint',
-    'The blueprint is repository-aware and lists existing files, possible new files, API/schema changes, implementation steps, test commands, rollback steps, and parallel work decomposition.',
-    '',
-    '## Experiment / Validation Plan',
-    'The experiment and replication artifacts define commands and expected outputs for rerunning the research package gates.',
-    '',
-    '## Limitations',
-    'Deterministic or mock stages prove runtime contract behavior only. Real non-mock runs must keep the gate blocked if Codex/GPT reviewer or source access is unavailable.',
-    '',
-    '## References',
-    ...sourceIds.map((id) => `- ${id}`),
-    ''
-  ].join('\n\n') + '\n'
-}
-
-function buildDeterministicMockResearchPaper(plan: any, sourceIds: string[]) {
-  return [
-    `# Research Paper: ${plan?.prompt || 'Stage-aware research runtime'}`,
-    '',
-    '## Abstract',
-    'A research runtime is public-ready only when source evidence and final review are executed as stages rather than inferred from long prose.',
-    '',
-    '## Introduction',
-    `This paper summarizes the stage-aware research package with references such as ${sourceIds.slice(0, 3).join(', ')}.`,
-    '',
-    '## Methodology',
-    'Source shard stages run in parallel, source merge deduplicates rows, claim matrix construction uses merged sources, and final review follows synthesis.',
-    '',
-    '## Findings',
-    'The core finding is that a summary-only report must remain blocked even if it is fluent or long.',
-    '',
-    '## Discussion',
-    'Parallel source shard execution gives the gate concrete evidence to inspect, while the blueprint keeps implementation separate from Research.',
-    '',
-    '## Limitations and Falsification',
-    'The claim fails if the run lacks counterevidence, missing-source blockers, or Codex/GPT review evidence.',
-    '',
-    '## Conclusion and Next Experiment',
-    'Run the blackbox fixtures and compare summary-only rejection against a complete package pass.',
-    '',
-    '## References',
-    ...sourceIds.slice(0, 12).map((id) => `- [${id}] Source ledger row.`),
-    ''
-  ].join('\n')
 }
 
 function normalizeStringList(value: any): string[] {
@@ -619,5 +625,8 @@ type StageInput = {
   cycle: number
   backend: ResearchStageBackend
   timeoutMs: number
+  cycleDeadlineMs?: number
+  maxReviewCycles?: number
+  maxReviewThreads?: number
   mock?: boolean
 }

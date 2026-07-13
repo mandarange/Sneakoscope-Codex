@@ -9,9 +9,14 @@ export interface ClaimEvidenceMatrix {
     claim: string
     claim_type: 'fact' | 'inference' | 'hypothesis' | 'recommendation' | 'implementation_guidance'
     importance: 'low' | 'medium' | 'high' | 'critical'
-    source_ids: string[]
-    local_evidence_ids: string[]
-    counterevidence_ids: string[]
+   source_ids: string[]
+   local_evidence_ids: string[]
+   counterevidence_ids: string[]
+    counterevidence_links: Array<{
+      source_id: string
+      target_claim_id: string
+      contradiction_rationale: string
+    }>
     triangulation: {
       source_layers: string[]
       independent_confirmation_count: number
@@ -74,20 +79,27 @@ export function validateClaimEvidenceMatrix(matrix: ClaimEvidenceMatrix, sourceL
   const normalized = normalizeClaimEvidenceMatrix(matrix);
   const claimIds = new Set(normalized.claims.map((claim) => claim.id));
   const sourceIds = sourceIdSet(sourceLedger);
-  const counterIds = new Set([
-    ...Array.from(sourceIds).filter((id) => /counter/i.test(id)),
-    ...(Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources.map((row: any) => String(row?.id || '')).filter(Boolean) : []),
-    ...(Array.isArray(falsificationLedger?.cases) ? falsificationLedger.cases.flatMap((row: any) => [row?.id, ...(Array.isArray(row?.counterevidence_source_ids) ? row.counterevidence_source_ids : []), ...(Array.isArray(row?.source_ids) ? row.source_ids : [])]).map(String).filter(Boolean) : [])
-  ]);
   const blockers: string[] = [];
   for (const id of normalized.key_claim_ids) if (!claimIds.has(id)) blockers.push(`key_claim_missing:${id}`);
   for (const claim of normalized.claims) {
     const important = claim.importance === 'high' || claim.importance === 'critical';
     if (important && !claim.source_ids.length) blockers.push(`claim_source_missing:${claim.id}`);
     if (claim.importance === 'critical' && !claim.counterevidence_ids.length) blockers.push(`critical_claim_counterevidence_missing:${claim.id}`);
-    for (const sourceId of claim.source_ids) if (!sourceIds.has(sourceId)) blockers.push(`claim_source_unknown:${claim.id}:${sourceId}`);
-    for (const counterId of claim.counterevidence_ids) if (!counterIds.has(counterId)) blockers.push(`claim_counterevidence_unknown:${claim.id}:${counterId}`);
-    if (claim.claim_type === 'hypothesis' && !claim.test_or_probe.trim()) blockers.push(`hypothesis_probe_missing:${claim.id}`);
+   for (const sourceId of claim.source_ids) if (!sourceIds.has(sourceId)) blockers.push(`claim_source_unknown:${claim.id}:${sourceId}`);
+   for (const counterId of claim.counterevidence_ids) if (!sourceIds.has(counterId)) blockers.push(`claim_counterevidence_unknown:${claim.id}:${counterId}`);
+    const linkedCounterIds = new Set(claim.counterevidence_links
+      .filter((link) => link.target_claim_id === claim.id && link.contradiction_rationale.trim())
+      .map((link) => link.source_id));
+    for (const counterId of claim.counterevidence_ids) {
+      if (!linkedCounterIds.has(counterId)) blockers.push(`claim_counterevidence_link_missing:${claim.id}:${counterId}`);
+    }
+    for (const link of claim.counterevidence_links) {
+      if (link.target_claim_id !== claim.id) blockers.push(`claim_counterevidence_target_mismatch:${claim.id}:${link.source_id}`);
+      if (!sourceIds.has(link.source_id)) blockers.push(`claim_counterevidence_link_source_unknown:${claim.id}:${link.source_id}`);
+      if (!claim.counterevidence_ids.includes(link.source_id)) blockers.push(`claim_counterevidence_link_unlisted:${claim.id}:${link.source_id}`);
+      if (!link.contradiction_rationale.trim()) blockers.push(`claim_counterevidence_rationale_missing:${claim.id}:${link.source_id}`);
+    }
+   if (claim.claim_type === 'hypothesis' && !claim.test_or_probe.trim()) blockers.push(`hypothesis_probe_missing:${claim.id}`);
   }
   for (const id of normalized.unsupported_claims) {
     const claim = normalized.claims.find((row) => row.id === id);
@@ -134,9 +146,14 @@ export function buildClaimEvidenceMatrixFromLedgers(input: {
       claim: entry.claim || entry.title || id,
       claim_type: 'hypothesis',
       importance: index < 2 ? 'critical' : 'high',
-      source_ids: sourceIds.length ? sourceIds : fallbackSourceIds.slice(0, 2),
-      counterevidence_ids: counterIds.length ? counterIds : fallbackCounterIds.slice(0, 1),
-      triangulation: {
+     source_ids: sourceIds.length ? sourceIds : fallbackSourceIds.slice(0, 2),
+     counterevidence_ids: counterIds.length ? counterIds : fallbackCounterIds.slice(0, 1),
+      counterevidence_links: (counterIds.length ? counterIds : fallbackCounterIds.slice(0, 1)).map((sourceId: string) => ({
+        source_id: sourceId,
+        target_claim_id: id,
+        contradiction_rationale: `The structured counterevidence row challenges ${id}.`
+      })),
+     triangulation: {
         source_layers: sourceLayersForSourceIds(input.sourceLedger, sourceIds.length ? sourceIds : fallbackSourceIds),
         independent_confirmation_count: Math.max(1, sourceIds.length || fallbackSourceIds.length),
         conflicts: []
@@ -166,10 +183,11 @@ function normalizeClaim(value: any) {
     claim: String(value?.claim || '').trim(),
     claim_type: claimType,
     importance,
-    source_ids: normalizeStringList(value?.source_ids),
-    local_evidence_ids: normalizeStringList(value?.local_evidence_ids),
-    counterevidence_ids: normalizeStringList(value?.counterevidence_ids),
-    triangulation: {
+   source_ids: normalizeStringList(value?.source_ids),
+   local_evidence_ids: normalizeStringList(value?.local_evidence_ids),
+   counterevidence_ids: normalizeStringList(value?.counterevidence_ids),
+    counterevidence_links: normalizeCounterevidenceLinks(value?.counterevidence_links),
+   triangulation: {
       source_layers: normalizeStringList(value?.triangulation?.source_layers),
       independent_confirmation_count: Math.max(0, Math.floor(Number(value?.triangulation?.independent_confirmation_count || 0))),
       conflicts: normalizeStringList(value?.triangulation?.conflicts)
@@ -178,6 +196,22 @@ function normalizeClaim(value: any) {
     falsifiable: value?.falsifiable !== false,
     test_or_probe: String(value?.test_or_probe || '').trim()
   };
+}
+
+function normalizeCounterevidenceLinks(value: any) {
+  const rows = Array.isArray(value) ? value : [];
+  const seen = new Set<string>();
+  return rows.map((row: any) => ({
+    source_id: String(row?.source_id || '').trim(),
+    target_claim_id: String(row?.target_claim_id || '').trim(),
+    contradiction_rationale: String(row?.contradiction_rationale || '').trim()
+  })).filter((row) => {
+    if (!row.source_id || !row.target_claim_id || !row.contradiction_rationale) return false;
+    const key = `${row.source_id}\0${row.target_claim_id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function sourceIdSet(sourceLedger: any): Set<string> {

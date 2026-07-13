@@ -31,6 +31,10 @@ function sourceRows(sourceLedger: any = null): any[] {
 function missingFields(row: any): string[] {
   return REQUIRED_SOURCE_FIELDS.filter((field) => {
     const value = row?.[field]
+    if (field === 'claim_ids') {
+      if (!Array.isArray(value)) return true
+      return ['supports', 'undermines'].includes(String(row?.stance || '')) && value.length === 0
+    }
     if (Array.isArray(value)) return value.length === 0
     return value === undefined || value === null || String(value).trim() === ''
   })
@@ -59,8 +63,14 @@ export function buildSourceQualityReport(sourceLedger: any = null, claimMatrix: 
   const keyClaimIds = asArray(claimMatrix?.key_claim_ids).map(String)
   const citedClaimIds = new Set(rows.flatMap((row) => asArray(row?.claim_ids).map(String)))
   const uncitedKeyClaimIds = keyClaimIds.filter((id) => !citedClaimIds.has(id))
+  const untrustedClaimLinks = rows.flatMap((row) => {
+    const linked = asArray(row?.supports).length > 0 || asArray(row?.undermines).length > 0
+    return linked && !trustedLinkedEvidence(row) ? [`source_claim_link_untrusted:${String(row?.id || 'unknown')}`] : []
+  })
   const blockers = [
     ...rowReports.flatMap((row) => row.ok ? [] : [`source_metadata_incomplete:${row.id || 'unknown'}`]),
+    ...asArray(sourceLedger?.claim_link_blockers).map(String),
+    ...untrustedClaimLinks,
     ...(keyClaimIds.length && uncitedKeyClaimIds.length ? ['key_claim_citation_coverage_incomplete'] : []),
     ...(sourceLedger?.citation_coverage?.all_key_claims_cited === false ? ['source_ledger_reports_uncited_key_claims'] : [])
   ]
@@ -87,6 +97,15 @@ export function buildSourceQualityReport(sourceLedger: any = null, claimMatrix: 
     },
     sources: rowReports
   }
+}
+
+function trustedLinkedEvidence(row: any): boolean {
+  if (/^(?:deterministic_fixture|mock|selftest(?:-|$))/i.test(String(row?.kind || ''))) return true
+  return String(row?.acquisition_verdict || '') === 'verified_content'
+    && /^verified_content:/i.test(String(row?.credibility || ''))
+    && Boolean(String(row?.content_artifact || '').trim())
+    && /^[a-f0-9]{32,}$/i.test(String(row?.content_sha256 || '').trim())
+    && Number(row?.content_length || 0) > 0
 }
 
 export async function readSourceQualityReport(dir: string) {

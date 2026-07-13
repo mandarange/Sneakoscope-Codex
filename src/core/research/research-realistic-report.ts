@@ -5,6 +5,7 @@ export interface RealisticResearchReportInput {
   claims?: any[]
   sourceIds?: string[]
   counterevidenceIds?: string[]
+  keyClaimIds?: string[]
   blueprint?: any
   falsificationLedger?: any
   experimentPlan?: any
@@ -13,17 +14,18 @@ export interface RealisticResearchReportInput {
 
 export function buildRealisticResearchReport(input: RealisticResearchReportInput): string {
   const plan = input.plan || {}
-  const claims = normalizeClaims(input.claims)
+  const claims = normalizeClaims(prioritizeKeyClaims(input.claims, input.keyClaimIds))
   const sourceIds = normalizeIds(input.sourceIds).length ? normalizeIds(input.sourceIds) : fallbackIds('source', 14)
   const counterIds = normalizeIds(input.counterevidenceIds).length ? normalizeIds(input.counterevidenceIds) : fallbackIds('counter', 2)
   const sections = Array.isArray(input.blueprint?.sections) ? input.blueprint.sections : []
   const experimentSteps = Array.isArray(input.experimentPlan?.steps) ? input.experimentPlan.steps : []
   const falsificationCases = Array.isArray(input.falsificationLedger?.cases) ? input.falsificationLedger.cases : []
   const claimBullets = claims.slice(0, 8).map((claim, index) => {
-    const sourceA = sourceIds[index % sourceIds.length]
-    const sourceB = sourceIds[(index + 3) % sourceIds.length]
-    const counter = counterIds[index % counterIds.length]
-    return `- ${claim.id}: ${claim.claim} The claim is supported by ${sourceA} and ${sourceB}, challenged by ${counter}, and kept falsifiable through "${claim.test_or_probe || 'the next listed validation probe'}".`
+    const linkedSources = normalizeIds(claim.source_ids)
+    const linkedCounterevidence = normalizeIds(claim.counterevidence_ids)
+    const citedSources = (linkedSources.length ? linkedSources : [sourceIds[index % sourceIds.length], sourceIds[(index + 3) % sourceIds.length]]).filter(Boolean).slice(0, 3)
+    const citedCounterevidence = (linkedCounterevidence.length ? linkedCounterevidence : [counterIds[index % counterIds.length]]).filter(Boolean).slice(0, 2)
+    return `- ${claim.id}: ${claim.claim} Claim-local support: ${citedSources.join(', ')}. Claim-local counterevidence: ${citedCounterevidence.join(', ')}. Falsifiable probe: "${claim.test_or_probe || 'the next listed validation probe'}".`
   })
   const blueprintTargets = [...new Set(sections.flatMap((section: any) => Array.isArray(section?.target_paths) ? section.target_paths : []))].slice(0, 12)
   return [
@@ -108,7 +110,7 @@ export function buildRealisticResearchReport(input: RealisticResearchReportInput
 }
 
 export function buildRealisticResearchPaper(input: RealisticResearchReportInput): string {
-  const claims = normalizeClaims(input.claims)
+  const claims = normalizeClaims(prioritizeKeyClaims(input.claims, input.keyClaimIds))
   const sourceIds = normalizeIds(input.sourceIds).length ? normalizeIds(input.sourceIds) : fallbackIds('source', 14)
   const counterIds = normalizeIds(input.counterevidenceIds).length ? normalizeIds(input.counterevidenceIds) : fallbackIds('counter', 2)
   return [
@@ -140,6 +142,14 @@ export function buildRealisticResearchPaper(input: RealisticResearchReportInput)
     ...counterIds.map((id) => `- [${id}] Counterevidence row.`),
     ''
   ].join('\n')
+}
+
+function prioritizeKeyClaims(claims: any[] | undefined, keyClaimIds: string[] | undefined): any[] {
+  const rows = Array.isArray(claims) ? claims : []
+  const byId = new Map(rows.map((claim) => [String(claim?.id || ''), claim]))
+  const prioritized = normalizeIds(keyClaimIds).map((id) => byId.get(id)).filter(Boolean)
+  const prioritizedIds = new Set(prioritized.map((claim: any) => String(claim?.id || '')))
+  return [...prioritized, ...rows.filter((claim) => !prioritizedIds.has(String(claim?.id || '')))]
 }
 
 export function requiredResearchReportHeadings(): string[] {

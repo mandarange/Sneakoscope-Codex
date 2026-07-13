@@ -3,7 +3,7 @@ import dns from 'node:dns/promises'
 import net from 'node:net'
 import { nowIso, sha256, writeTextAtomic } from '../fsx.js'
 import { evaluateRealEvidencePolicy } from '../verification/real-evidence-policy.js'
-import { classifyAuthority, isOfficialUrl, makeSource, sourceFromKnownUrl } from './source-records.js'
+import { classifyAuthority, independenceClusterForDomain, isOfficialUrl, makeSource, sourceFromKnownUrl } from './source-records.js'
 import type {
   LeadRaisedEvent,
   SearchIntent,
@@ -28,12 +28,48 @@ export function normalizeGenericSourceRows(raw: unknown, providerId: string, fam
       title: String(row.title || row.name || `${providerId} result ${index + 1}`),
       url,
       snippet: String(row.snippet || row.summary || row.text || ''),
-      verdict: providerId === 'context7' ? 'verified_content' : 'weak_content',
+      verdict: 'weak_content',
       authority: tier,
       primary: providerId === 'context7',
       path: [providerId]
     })
   })
+}
+
+export async function materializeContext7SourceRows(
+  raw: unknown,
+  artifactDir: string,
+  intent: SearchIntent
+): Promise<SuperSearchSourceRecord[]> {
+  const rows = Array.isArray(raw) ? raw : Array.isArray((raw as any)?.results) ? (raw as any).results : raw ? [raw] : []
+  const out: SuperSearchSourceRecord[] = []
+  for (let index = 0; index < rows.length; index += 1) {
+    const row: any = rows[index]
+    const url = typeof row?.url === 'string' ? row.url : typeof row?.link === 'string' ? row.link : null
+    const content = String(row?.content || row?.full_text || row?.document || row?.markdown || row?.text || row?.snippet || '')
+    const visible = visibleEvidenceText(content)
+    const meaningful = visible.length >= 80 && (visible.match(/[\p{L}\p{N}]{2,}/gu) || []).length >= 8
+    const contentSha = meaningful ? sha256(content) : null
+    const contentArtifact = contentSha ? path.join('context7-content', `${contentSha.slice(0, 16)}.txt`) : null
+    if (contentArtifact) await writeTextAtomic(path.join(artifactDir, contentArtifact), content)
+    out.push(makeSource({
+      providerId: 'context7',
+      family: 'official_docs',
+      type: 'official_docs',
+      title: String(row?.title || row?.name || `context7 result ${index + 1}`),
+      url,
+      snippet: String(row?.snippet || row?.summary || visible.slice(0, 500)),
+      verdict: meaningful ? 'verified_content' : 'weak_content',
+      authority: 'A0',
+      primary: true,
+      path: ['context7', ...(contentArtifact ? ['materialized_content'] : ['snippet_only'])],
+      blockers: contentArtifact ? [] : ['context7_content_artifact_missing'],
+      contentArtifact,
+      contentSha256: contentSha,
+      contentLength: meaningful ? content.length : null
+    }))
+  }
+  return out
 }
 
 export function sourceFromWebRow(row: any, index: number, intent: SearchIntent): SuperSearchSourceRecord {
@@ -51,7 +87,7 @@ export function sourceFromWebRow(row: any, index: number, intent: SearchIntent):
   })
 }
 
-export async function sourceFromUrlFetch(url: string, artifactDir: string, intent: SearchIntent, opts: { allowLocal?: boolean } = {}): Promise<{
+export async function sourceFromUrlFetch(url: string, artifactDir: string, intent: SearchIntent, opts: { allowLocal?: boolean; hardTimeoutMs?: number; deadlineEpochMs?: number } = {}): Promise<{
   source: SuperSearchSourceRecord
   blockers: string[]
   warnings: string[]
@@ -67,7 +103,19 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
       warnings
     }
   }
-  const policyOpts = { ...opts, networkLookupRequired: fetchFn === DEFAULT_FETCH }
+  const fetchTimeoutMs = boundedOperationTimeout(10_000, opts.hardTimeoutMs, opts.deadlineEpochMs)
+  if (fetchTimeoutMs <= 0) {
+    blockers.push('direct_url_fetch_deadline_exceeded')
+    return {
+      source: { ...sourceFromKnownUrl(url, intent), blockers, warnings: ['url_parse_only'] },
+      blockers,
+      warnings
+    }
+  }
+  const policyOpts = {
+    ...(opts.allowLocal === undefined ? {} : { allowLocal: opts.allowLocal }),
+    networkLookupRequired: fetchFn === DEFAULT_FETCH
+  }
   const initialPolicy = await evaluateUrlFetchPolicy(url, policyOpts)
   if (!initialPolicy.ok) {
     blockers.push(...initialPolicy.blockers)
@@ -80,7 +128,7 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
   }
   warnings.push(...initialPolicy.warnings)
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 10000)
+  const timer = setTimeout(() => controller.abort(), fetchTimeoutMs)
   try {
     let currentUrl = url
     let response: Response | null = null
@@ -124,8 +172,11 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
     }
     warnings.push(...finalPolicy.warnings)
     if (!response.ok) blockers.push(`direct_url_fetch_http_${response.status}`)
-    if (!capped.trim()) blockers.push('direct_url_fetch_empty_content')
-    const contentSha = capped.trim() ? sha256(capped) : null
+    const contentInspection = inspectHydratedContent(capped, response.headers.get('content-type'))
+    blockers.push(...contentInspection.blockers)
+    warnings.push(...contentInspection.warnings)
+    const verifiedContent = response.ok && contentInspection.ok
+    const contentSha = verifiedContent ? sha256(capped) : null
     const relArtifact = contentSha ? path.join('url-content', `${contentSha.slice(0, 16)}.txt`) : null
     if (relArtifact) await writeTextAtomic(path.join(artifactDir, relArtifact), capped)
     const source = makeSource({
@@ -134,8 +185,8 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
       type: 'known_url',
       title: normalizedUrl,
       url: normalizedUrl,
-      snippet: capped.replace(/\s+/g, ' ').trim().slice(0, 500),
-      verdict: response.ok && capped.trim() ? 'verified_content' : 'blocked',
+      snippet: contentInspection.visible_text.slice(0, 500),
+      verdict: verifiedContent ? 'verified_content' : 'blocked',
       authority: classifyAuthority(normalizedUrl),
       primary: isOfficialUrl(normalizedUrl),
       path: opts.allowLocal ? ['direct_url_fetch', 'allow_local'] : ['direct_url_fetch'],
@@ -143,7 +194,7 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
       blockers,
       contentArtifact: relArtifact,
       contentSha256: contentSha,
-      contentLength: capped.length
+      contentLength: verifiedContent ? capped.length : null
     })
     return { source, blockers, warnings }
   } catch (error) {
@@ -158,6 +209,84 @@ export async function sourceFromUrlFetch(url: string, artifactDir: string, inten
   } finally {
     clearTimeout(timer)
   }
+}
+
+function boundedOperationTimeout(fallbackMs: number, hardTimeoutMs: unknown, deadlineEpochMs: unknown): number {
+  const hard = Number(hardTimeoutMs)
+  const deadline = Number(deadlineEpochMs)
+  const remaining = Number.isFinite(deadline) && deadline > 0 ? Math.floor(deadline - Date.now()) : Number.POSITIVE_INFINITY
+  if (remaining <= 0) return 0
+  return Math.max(1, Math.floor(Math.min(
+    fallbackMs,
+    Number.isFinite(hard) && hard > 0 ? hard : Number.POSITIVE_INFINITY,
+    remaining
+  )))
+}
+
+export function inspectHydratedContent(raw: unknown, contentTypeValue: unknown): {
+  ok: boolean
+  visible_text: string
+  blockers: string[]
+  warnings: string[]
+} {
+  const body = String(raw || '')
+  const contentType = String(contentTypeValue || '').split(';')[0]!.trim().toLowerCase()
+  const blockers: string[] = []
+  const warnings: string[] = []
+  if (contentType && !isTextualEvidenceContentType(contentType)) {
+    blockers.push(`direct_url_fetch_unsupported_content_type:${contentType}`)
+  }
+  const visibleText = visibleEvidenceText(body)
+  if (!body.trim()) blockers.push('direct_url_fetch_empty_content')
+  if (looksLikeAuthenticationOrChallenge(body, visibleText)) blockers.push('direct_url_fetch_auth_or_challenge_content')
+  if (looksLikeSoftError(body, visibleText)) blockers.push('direct_url_fetch_error_or_soft_404_content')
+  const tokens = visibleText.match(/[\p{L}\p{N}]{2,}/gu) || []
+  if (visibleText.length < 80 || tokens.length < 8) blockers.push('direct_url_fetch_non_meaningful_content')
+  if (!contentType) blockers.push('direct_url_fetch_content_type_missing')
+  return {
+    ok: blockers.length === 0,
+    visible_text: visibleText,
+    blockers: [...new Set(blockers)],
+    warnings: [...new Set(warnings)]
+  }
+}
+
+function isTextualEvidenceContentType(contentType: string): boolean {
+  return contentType.startsWith('text/')
+    || contentType === 'application/json'
+    || contentType === 'application/ld+json'
+    || contentType === 'application/xml'
+    || contentType === 'application/xhtml+xml'
+    || contentType.endsWith('+json')
+    || contentType.endsWith('+xml')
+}
+
+function visibleEvidenceText(body: string): string {
+  return body
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&(?:nbsp|amp|quot|apos|lt|gt);/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function looksLikeAuthenticationOrChallenge(body: string, visibleText: string): boolean {
+  const prefix = `${body.slice(0, 12000)}\n${visibleText.slice(0, 2000)}`
+  const structuralLogin = /<form\b[^>]*(?:login|signin|sign-in)|<input\b[^>]*type\s*=\s*["']?password/i.test(prefix)
+  const challenge = /\b(?:verify (?:that )?you are human|checking your browser|attention required|captcha|cloudflare ray id|bot (?:check|challenge|detection)|enable javascript and cookies to continue)\b/i.test(prefix)
+  const shortAuthenticationShell = visibleText.length < 1200
+    && /\b(?:sign in|log in|login required|authentication required|access denied|unauthorized)\b/i.test(prefix)
+  return structuralLogin || challenge || shortAuthenticationShell
+}
+
+function looksLikeSoftError(body: string, visibleText: string): boolean {
+  const prefix = `${body.slice(0, 8000)}\n${visibleText.slice(0, 1600)}`
+  return /<title[^>]*>\s*(?:404|not found|page not found|error|service unavailable|internal server error|bad gateway)\b/i.test(prefix)
+    || /\b(?:404\s+(?:error|not found)|page not found|the page you (?:requested|are looking for) (?:was not found|does not exist)|this page (?:does not|doesn't) exist|soft 404|service unavailable|internal server error|bad gateway)\b/i.test(prefix)
+    || /(?:페이지를\s*찾을\s*수\s*없|요청한\s*페이지가\s*없|서비스를\s*사용할\s*수\s*없|내부\s*서버\s*오류)/i.test(prefix)
 }
 
 async function evaluateUrlFetchPolicy(rawUrl: string, opts: { allowLocal?: boolean; networkLookupRequired?: boolean }): Promise<{ ok: boolean; blockers: string[]; warnings: string[] }> {
@@ -239,14 +368,37 @@ export function buildXDiscoverySources(queries: string[], intent: SearchIntent):
 }
 
 export function dedupeSources(sources: SuperSearchSourceRecord[]): SuperSearchSourceRecord[] {
-  const seen = new Map<string, string>()
-  return sources.map((source) => {
+  const clusters = new Map<string, SuperSearchSourceRecord[]>()
+  for (const source of sources) {
     const key = source.canonical_url || source.content_sha256 || source.source_id
-    const cluster = seen.get(key)
-    if (cluster) return { ...source, duplicate_cluster_id: cluster }
-    seen.set(key, source.source_id)
-    return { ...source, duplicate_cluster_id: source.source_id }
-  }).filter((source) => source.duplicate_cluster_id === source.source_id)
+    const rows = clusters.get(key) || []
+    rows.push(source)
+    clusters.set(key, rows)
+  }
+  return [...clusters.values()].map((rows) => {
+    const ranked = [...rows].sort((a, b) => sourceRank(b) - sourceRank(a))
+    const selected = ranked[0]!
+    return {
+      ...selected,
+      duplicate_cluster_id: selected.source_id,
+      acquisition_path: [...new Set(rows.flatMap((row) => row.acquisition_path || []))],
+      warnings: [...new Set(rows.flatMap((row) => row.warnings || []))],
+      blockers: selected.acquisition_verdict === 'verified_content'
+        ? []
+        : [...new Set(rows.flatMap((row) => row.blockers || []))]
+    }
+  })
+}
+
+function sourceRank(source: SuperSearchSourceRecord): number {
+  const verdict = source.acquisition_verdict === 'verified_content'
+    ? 5
+    : source.acquisition_verdict === 'partial_content'
+      ? 3
+      : source.acquisition_verdict === 'weak_content'
+        ? 2
+        : 0
+  return verdict * 100 + source.trust_score * 10 + source.relevance_score
 }
 
 export function buildLeads(sources: SuperSearchSourceRecord[], mode: SuperSearchMode): LeadRaisedEvent[] {
@@ -337,12 +489,30 @@ export function buildProof(
   })
   proofBlockers.push(...realEvidencePolicy.blockers)
   warnings.push(...realEvidencePolicy.warnings)
+  const verifiedSources = sources.filter((source) => source.acquisition_verdict === 'verified_content')
+  const verifiedProviderIds = [...new Set(verifiedSources
+    .map((source) => String(source.provider_id || '').trim())
+    .filter(Boolean))]
+  const verifiedProviderFamilies = [...new Set(verifiedSources
+    .map((source) => String(source.source_family || '').trim().toLowerCase())
+    .filter(Boolean))]
+  const verifiedIndependenceClusters = [...new Set(verifiedSources
+    .map((source) => String(source.independence_cluster_id || independenceClusterForDomain(source.domain) || '').trim().toLowerCase())
+    .filter(Boolean))]
+  const providerIndependent = verifiedProviderFamilies.length >= 2 && verifiedIndependenceClusters.length >= 2
   return {
     schema: 'sks.super-search-proof.v1',
     ok: proofBlockers.length === 0,
     mode,
     intent,
-    provider_independent: true,
+    provider_independent: providerIndependent,
+    provider_independence_basis: 'distinct_verified_provider_families_and_independence_clusters',
+    verified_provider_count: verifiedProviderIds.length,
+    verified_provider_ids: verifiedProviderIds,
+    verified_provider_family_count: verifiedProviderFamilies.length,
+    verified_provider_families: verifiedProviderFamilies,
+    verified_independence_cluster_count: verifiedIndependenceClusters.length,
+    verified_independence_clusters: verifiedIndependenceClusters,
     xai_runtime_dependency: false,
     snippet_only_final_claims: weakContentFinalClaims,
     weak_content_final_claims: weakContentFinalClaims,

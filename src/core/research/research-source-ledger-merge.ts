@@ -28,7 +28,11 @@ export async function mergeResearchSourceShards(input: {
   }
   const requiredLayers = sourceLayersForPlan(input.plan)
   const rows = dedupeSources(shardOutputs.flatMap((shard) => Array.isArray(shard?.sources) ? shard.sources : []))
-  const counterRows = rows.filter((row) => row.layer === 'counterevidence_factcheck' || row.stance === 'undermines')
+  const counterCandidates = rows.filter((row) => row.stance === 'undermines')
+  const unstructuredCounterRows = counterCandidates.filter((row) => !structuredCounterevidence(row))
+  blockers.push(...unstructuredCounterRows.map((row) => `counterevidence_link_unstructured:${row.id || 'unknown'}`))
+  const counterRows = counterCandidates.filter((row) => structuredCounterevidence(row))
+  const counterRowIds = new Set(counterRows.map((row) => String(row.id || '')))
   const primaryRows = rows.filter((row) => !counterRows.some((counter) => counter.id === row.id))
   const coveredLayers = [...new Set(rows.map((row) => String(row.layer || '')).filter(Boolean))]
   const missingLayers = requiredLayers.map((layer) => layer.id).filter((id) => !coveredLayers.includes(id))
@@ -48,8 +52,8 @@ export async function mergeResearchSourceShards(input: {
     },
     web_search_passes: shardOutputs.length ? 1 : 0,
     source_layers: requiredLayers.map((layer) => {
-      const sourceIds = rows.filter((row) => row.layer === layer.id && row.stance !== 'undermines').map((row) => row.id)
-      const counterIds = rows.filter((row) => row.layer === layer.id && row.stance === 'undermines').map((row) => row.id)
+      const sourceIds = rows.filter((row) => row.layer === layer.id && !counterRowIds.has(String(row.id || ''))).map((row) => row.id)
+      const counterIds = rows.filter((row) => row.layer === layer.id && counterRowIds.has(String(row.id || ''))).map((row) => row.id)
       return {
         id: layer.id,
         label: layer.label,
@@ -100,6 +104,100 @@ export async function mergeResearchSourceShards(input: {
   }
 }
 
+export function linkSourceLedgerToClaimMatrix(sourceLedger: any, claimMatrix: any) {
+  const claims = Array.isArray(claimMatrix?.claims) ? claimMatrix.claims : []
+  const keyClaimIds = Array.isArray(claimMatrix?.key_claim_ids) ? claimMatrix.key_claim_ids.map(String) : []
+  const originalSources = Array.isArray(sourceLedger?.sources) ? sourceLedger.sources : []
+  const originalCounterSources = Array.isArray(sourceLedger?.counterevidence_sources) ? sourceLedger.counterevidence_sources : []
+  const originalCounterIds = new Set(originalCounterSources.map((source: any) => String(source?.id || '')).filter(Boolean))
+  const sourceRowsById = new Map([...originalSources, ...originalCounterSources]
+    .map((source: any) => [String(source?.id || ''), source]))
+  const sourceToClaims = new Map<string, { supports: string[]; undermines: string[]; contradiction_rationales: string[] }>()
+  const linkBlockers: string[] = []
+  for (const claim of claims) {
+    const claimId = String(claim?.id || '').trim()
+    if (!claimId) continue
+    for (const sourceId of normalizeStringList(claim?.source_ids)) {
+      const source = sourceRowsById.get(sourceId)
+      if (!source || !supportLinkAllowed(source, originalCounterIds.has(sourceId))) {
+        linkBlockers.push(`claim_support_source_untrusted:${claimId}:${sourceId}`)
+        continue
+      }
+      const row = sourceToClaims.get(sourceId) || { supports: [], undermines: [], contradiction_rationales: [] }
+      row.supports.push(claimId)
+      sourceToClaims.set(sourceId, row)
+    }
+   for (const sourceId of normalizeStringList(claim?.counterevidence_ids)) {
+     const source = sourceRowsById.get(sourceId)
+      const structuredLink = (Array.isArray(claim?.counterevidence_links) ? claim.counterevidence_links : [])
+        .find((link: any) => String(link?.source_id || '') === sourceId && String(link?.target_claim_id || '') === claimId && String(link?.contradiction_rationale || '').trim())
+      if (!source || !structuredLink || !counterevidenceLinkAllowed(source)) {
+       linkBlockers.push(`claim_counterevidence_source_untrusted:${claimId}:${sourceId}`)
+       continue
+     }
+      const row = sourceToClaims.get(sourceId) || { supports: [], undermines: [], contradiction_rationales: [] }
+     row.undermines.push(claimId)
+      row.contradiction_rationales.push(String(structuredLink.contradiction_rationale).trim())
+     sourceToClaims.set(sourceId, row)
+   }
+ }
+ const link = (source: any) => {
+    const mapped = sourceToClaims.get(String(source?.id || '')) || { supports: [], undermines: [], contradiction_rationales: [] }
+   const semanticCounterTargets = [...new Set(mapped.undermines)]
+   return {
+     ...source,
+      stance: semanticCounterTargets.length ? 'undermines' : source?.stance || 'context',
+      discovery_claim_ids: normalizeStringList(source?.discovery_claim_ids || source?.claim_ids),
+      supports: [...new Set(mapped.supports)],
+      undermines: semanticCounterTargets,
+      claim_ids: [...new Set([...mapped.supports, ...mapped.undermines])],
+      ...(semanticCounterTargets.length ? {
+        counterevidence_target_claim_id: semanticCounterTargets[0],
+       counterevidence_target_claim_ids: semanticCounterTargets,
+       contradiction_rationale: [
+          ...mapped.contradiction_rationales,
+          `Validated semantic claim synthesis links this source against ${semanticCounterTargets.join(', ')}.`
+       ].filter(Boolean).join(' ')
+      } : {}),
+      semantic_claim_linked: mapped.supports.length > 0 || mapped.undermines.length > 0
+    }
+  }
+ const rows = [
+   ...originalSources,
+   ...originalCounterSources
+ ].map(link)
+  const semanticCounterIds = new Set(rows.filter((row) => normalizeStringList(row?.undermines).length > 0).map((row) => String(row?.id || '')))
+  const counterevidenceSources = rows.filter((row) => semanticCounterIds.has(String(row?.id || '')))
+  const sources = rows.filter((row) => !semanticCounterIds.has(String(row?.id || '')))
+  const sourceLayers = (Array.isArray(sourceLedger?.source_layers) ? sourceLedger.source_layers : []).map((layer: any) => {
+    const layerRows = rows.filter((row) => row.layer === layer.id)
+    return {
+      ...layer,
+      source_ids: layerRows.filter((row) => !semanticCounterIds.has(String(row?.id || ''))).map((row) => row.id),
+      counterevidence_ids: layerRows.filter((row) => semanticCounterIds.has(String(row?.id || ''))).map((row) => row.id)
+    }
+  })
+  return {
+    ...sourceLedger,
+    sources,
+    counterevidence_sources: counterevidenceSources,
+    source_layers: sourceLayers,
+    claim_link_blockers: [...new Set(linkBlockers)],
+    triangulation: {
+      ...(sourceLedger?.triangulation || {}),
+      cross_layer_checks: buildCrossLayerChecks(rows),
+      conflicts: counterevidenceSources.flatMap((row) => normalizeStringList(row.claim_ids).map((claimId) => ({
+        id: `conflict-${row.id}-${claimId}`,
+        source_id: row.id,
+        claim_ids: [claimId],
+        notes: row.notes || ''
+      }))),
+      synthesis_notes: ['Semantic claim links were rebuilt from the validated claim-evidence matrix.']
+    },
+    citation_coverage: buildCitationCoverage(rows, keyClaimIds)
+  }
+}
+
 async function listJsonFiles(dir: string): Promise<string[]> {
   try {
     const entries = await fsp.readdir(dir, { withFileTypes: true })
@@ -131,6 +229,9 @@ function dedupeSources(rows: any[]): any[] {
     if (existing) {
       existing.claim_ids = [...new Set([...(existing.claim_ids || []), ...(normalized.claim_ids || [])])]
       existing.notes = [existing.notes, normalized.notes].filter(Boolean).join('\n')
+      existing.counterevidence_target_claim_id ||= normalized.counterevidence_target_claim_id
+      existing.counterevidence_target_claim_ids = [...new Set([...(existing.counterevidence_target_claim_ids || []), ...(normalized.counterevidence_target_claim_ids || [])])]
+      existing.contradiction_rationale ||= normalized.contradiction_rationale
       byKey.set(existing.id, existing)
       byKey.set(key, existing)
     } else {
@@ -157,13 +258,54 @@ function normalizeSourceRow(row: any) {
     supports: normalizeStringList(row?.supports),
     undermines: normalizeStringList(row?.undermines),
     claim_ids: normalizeStringList(row?.claim_ids),
-    notes: String(row?.notes || '').trim()
+    counterevidence_target_claim_id: row?.counterevidence_target_claim_id ? String(row.counterevidence_target_claim_id).trim() : null,
+    counterevidence_target_claim_ids: normalizeStringList(row?.counterevidence_target_claim_ids),
+    contradiction_rationale: row?.contradiction_rationale ? String(row.contradiction_rationale).trim() : null,
+    notes: String(row?.notes || '').trim(),
+    semantic_claim_linked: row?.semantic_claim_linked === true,
+    content_artifact: row?.content_artifact ? String(row.content_artifact) : null,
+    content_sha256: row?.content_sha256 ? String(row.content_sha256) : null,
+    content_length: Number.isFinite(Number(row?.content_length)) ? Number(row.content_length) : null,
+    acquisition_verdict: row?.acquisition_verdict ? String(row.acquisition_verdict) : null,
+    domain: row?.domain ? String(row.domain) : null,
+    authority_tier: row?.authority_tier ? String(row.authority_tier) : null,
+    primary_source: row?.primary_source === true,
+    independence_cluster_id: row?.independence_cluster_id ? String(row.independence_cluster_id) : null
   }
+}
+
+function fixtureEvidence(source: any): boolean {
+  return /^(?:deterministic_fixture|mock|selftest(?:-|$))/i.test(String(source?.kind || ''))
+}
+
+function verifiedEvidence(source: any): boolean {
+  return String(source?.acquisition_verdict || '') === 'verified_content'
+    && /^verified_content:/i.test(String(source?.credibility || ''))
+    && Boolean(String(source?.content_artifact || '').trim())
+    && /^[a-f0-9]{32,}$/i.test(String(source?.content_sha256 || '').trim())
+    && Number(source?.content_length || 0) > 0
+}
+
+function supportLinkAllowed(source: any, isCounterSource: boolean): boolean {
+  return !isCounterSource && source?.stance !== 'undermines' && (verifiedEvidence(source) || fixtureEvidence(source))
+}
+
+function counterevidenceLinkAllowed(source: any): boolean {
+  return verifiedEvidence(source) || fixtureEvidence(source)
+}
+
+function structuredCounterevidence(source: any): boolean {
+  const targetClaimIds = normalizeStringList([
+    ...normalizeStringList(source?.counterevidence_target_claim_ids),
+    source?.counterevidence_target_claim_id
+  ])
+  return targetClaimIds.length > 0 && String(source?.contradiction_rationale || '').trim().length >= 16
 }
 
 function buildCrossLayerChecks(rows: any[]) {
   const byClaim = new Map<string, any[]>()
   for (const row of rows) {
+    if (row.semantic_claim_linked !== true && !/^(?:deterministic_fixture|selftest|mock)$/i.test(String(row.kind || ''))) continue
     for (const claimId of normalizeStringList(row.claim_ids)) {
       const current = byClaim.get(claimId) || []
       current.push(row)
@@ -175,20 +317,23 @@ function buildCrossLayerChecks(rows: any[]) {
     claim: claimId,
     source_ids: claimRows.map((row) => row.id),
     layers: [...new Set(claimRows.map((row) => row.layer))],
-    result: 'cross_layer_evidence_recorded'
+    result: 'semantic_cross_layer_evidence_recorded'
   }))
 }
 
-function buildCitationCoverage(rows: any[]) {
+function buildCitationCoverage(rows: any[], keyClaimIds: string[] = []) {
   const cited = [...new Set(rows.flatMap((row) => normalizeStringList(row.claim_ids)))]
   const sourceClaimMap = Object.fromEntries(rows.map((row) => [row.id, normalizeStringList(row.claim_ids)]))
+  const keys = [...new Set(keyClaimIds.filter(Boolean))]
   return {
-    all_key_claims_cited: cited.length >= 8,
-    key_claim_ids: cited.slice(0, 8),
+    all_key_claims_cited: keys.length > 0 && keys.every((claimId) => cited.includes(claimId)),
+    key_claim_ids: keys,
     cited_claim_ids: cited,
-    uncited_claim_ids: [],
+    uncited_claim_ids: keys.filter((claimId) => !cited.includes(claimId)),
     source_claim_map: sourceClaimMap,
-    notes: ['Citation coverage was built from source shard claim_ids.']
+    notes: keys.length
+      ? ['Citation coverage was rebuilt from the validated claim-evidence matrix.']
+      : ['Source discovery rows are not treated as cited key claims until semantic claim synthesis completes.']
   }
 }
 

@@ -1,19 +1,12 @@
 import path from 'node:path'
 import { nowIso, writeJsonAtomic } from '../fsx.js'
 import type { NarutoWorkGraph, NarutoWorkItem, NarutoWorkKind } from '../naruto/naruto-work-item.js'
-import { RESEARCH_SOURCE_LAYERS } from './research-source-shards.js'
+import { RESEARCH_SOURCE_LAYERS } from './research-source-layer-catalog.js'
 
 export const RESEARCH_WORK_GRAPH_ARTIFACT = 'research-work-graph.json'
-export const REQUIRED_SOURCE_SHARD_IDS = Object.freeze([
-  'source_shard_academic_literature',
-  'source_shard_official_government_data',
-  'source_shard_standards_primary_docs',
-  'source_shard_news_current_events',
-  'source_shard_public_discourse',
-  'source_shard_developer_practitioner',
-  'source_shard_counterevidence_factcheck',
-  'source_shard_local_project_evidence'
-])
+export const REQUIRED_SOURCE_SHARD_IDS = Object.freeze(
+  RESEARCH_SOURCE_LAYERS.map((layer) => `source_shard_${layer.id}`)
+)
 
 type ResearchGraphStage = {
   id: string
@@ -85,15 +78,27 @@ function researchStages(): ResearchGraphStage[] {
       kind: 'research',
       stage_kind: 'synthesis',
       dependencies: ['claim_matrix_build', 'falsification', 'implementation_blueprint', 'experiment_plan'],
-      outputs: ['research-report.md', 'research-paper.md', 'genius-opinion-summary.md', 'agent-ledger.json', 'debate-ledger.json', 'novelty-ledger.json']
+      outputs: ['research-report.md', 'research-paper.md', 'novelty-ledger.json']
     },
     {
       id: 'final_review',
-      title: 'Static plus Codex/GPT research final reviewer',
+      title: 'Static plus official-subagent adversarial review and bounded revision',
       kind: 'verification',
       stage_kind: 'final_review',
       dependencies: ['synthesis'],
-      outputs: ['research-final-review.static.json', 'research-final-review.codex.json', 'research-final-review.json']
+      outputs: [
+        'research-final-review.static.json',
+        'research-final-review.codex.json',
+        'research-final-review.json',
+        'research-adversarial-plan.json',
+        'research-adversarial-review.json',
+        'research-revision-ledger.json',
+        'research-adversarial-convergence.json',
+        'research-honest-mode.json',
+        'genius-opinion-summary.md',
+        'agent-ledger.json',
+        'debate-ledger.json'
+      ]
     },
     {
       id: 'verification',
@@ -131,7 +136,7 @@ function workItem(stage: ResearchGraphStage, index: number, allStages: ResearchG
     lease_requirements: stage.outputs.map((artifact) => ({ path: `${missionPrefix}${artifact}`, kind: 'read' })),
     acceptance: { requires_patch_envelope: false, requires_verification: true, requires_gpt_final: stage.stage_kind === 'final_review' },
     owner: null,
-    allocation_reason: 'Stage-aware read-only research pipeline work graph with source-layer shard parallelism',
+    allocation_reason: 'Stage-aware read-only Research graph: Super Search source acquisition, evidence synthesis, and official-subagent adversarial convergence',
     allocation_score: 1,
     allocation_hints: { domains: [stage.kind], write_paths: [], read_only_paths: stage.outputs } as any,
     lane: null,
@@ -146,16 +151,16 @@ function workItem(stage: ResearchGraphStage, index: number, allStages: ResearchG
   }
 }
 
-export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph {
+export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph & Record<string, unknown> {
   const stages = researchStages()
-  const requestedClones = Math.max(8, Number(plan?.native_agent_plan?.session_count || 0), RESEARCH_SOURCE_LAYERS.length)
+  const requestedReviewers = 5
   const workItems = stages.map((stage, index) => workItem(stage, index, stages, plan))
   const sourceShardIds = workItems.filter((item: any) => item.stage_kind === 'source_shard').map((item) => item.id)
   const closeoutIds = workItems.filter((item: any) => item.stage_kind !== 'source_shard').map((item) => item.id)
   return {
     schema: 'sks.naruto-work-graph.v1',
     route: '$Naruto',
-    requested_clones: requestedClones,
+    requested_clones: requestedReviewers,
     total_work_items: workItems.length,
     readonly: true,
     write_capable: false,
@@ -168,7 +173,10 @@ export function buildResearchWorkGraph(plan: any = null): NarutoWorkGraph {
     write_allowed_count: 0,
     worktree_policy: { mode: 'patch-envelope-only', required: false, main_repo_root: null, worktree_root: null, fallback_reason: 'Research route is read-only.' },
     blockers: [],
-    ok: true
+    ok: true,
+    official_subagent_workflow: true,
+    official_subagent_reviewer_count: requestedReviewers,
+    legacy_process_swarm_used: false
   }
 }
 

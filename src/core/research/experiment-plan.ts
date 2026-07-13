@@ -4,23 +4,27 @@ import { nowIso, readJson, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 export const EXPERIMENT_PLAN_JSON_ARTIFACT = 'experiment-plan.json'
 export const EXPERIMENT_PLAN_MARKDOWN_ARTIFACT = 'experiment-plan.md'
 
-export function defaultExperimentPlan(plan: any = null) {
+export function defaultExperimentPlan(plan: any = null, opts: { claimMatrix?: any; sourceLedger?: any } = {}) {
   const prompt = String(plan?.prompt || 'research mission')
+  const claims = Array.isArray(opts.claimMatrix?.claims) ? opts.claimMatrix.claims : []
+  const primaryClaim = claims.find((claim: any) => claim.importance === 'critical' || claim.importance === 'high') || claims[0]
+  const hypothesis = String(primaryClaim?.claim || prompt).trim()
+  const primaryClaimId = String(primaryClaim?.id || 'primary-hypothesis')
   return {
     schema: 'sks.research-experiment-plan.v1',
     generated_at: nowIso(),
     prompt,
-    hypothesis: 'The surviving research claim should produce a measurable improvement over a summary-only baseline.',
+    hypothesis: `Under the stated boundary conditions, the evidence-backed claim “${hypothesis}” should produce an observable result that distinguishes it from a simpler alternative explanation.`,
     steps: [
-      { id: 'E1', action: 'Select one baseline output and one research-pipeline output for the same prompt.', expected_evidence: ['research-report.md'] },
-      { id: 'E2', action: 'Score cited key claims, triangulation, counterevidence, and unsupported claims.', expected_evidence: ['claim-evidence-matrix.json'] },
-      { id: 'E3', action: 'Run or design the smallest probe implied by the implementation blueprint.', expected_evidence: ['implementation-blueprint.json'] },
-      { id: 'E4', action: 'Compare failure cases and falsification outcomes.', expected_evidence: ['falsification-ledger.json'] },
-      { id: 'E5', action: 'Record replication commands, artifacts, and acceptance thresholds.', expected_evidence: ['replication-pack.json'] }
+      { id: 'E1', action: `Operationalize ${primaryClaimId}: define the measurable outcome, units or decision rule, population/system boundary, and the observation window.`, expected_evidence: ['claim-evidence-matrix.json'] },
+      { id: 'E2', action: 'Choose a baseline or null explanation that could plausibly produce the same observation, and record confounders before collecting results.', expected_evidence: ['falsification-ledger.json'] },
+      { id: 'E3', action: 'Reproduce the strongest supporting evidence with the same inputs or an explicitly documented equivalent data source.', expected_evidence: ['source-ledger.json'] },
+      { id: 'E4', action: 'Run the cheapest decisive falsification probe and preserve negative, null, or contradictory outcomes instead of filtering them out.', expected_evidence: ['falsification-ledger.json'] },
+      { id: 'E5', action: 'Compare the observation with the acceptance threshold, update confidence, and publish the procedure, artifacts, and unresolved limitations for independent replication.', expected_evidence: ['replication-pack.json', 'research-report.md'] }
     ],
-    metrics: ['key_claims_supported', 'triangulated_claims', 'counterevidence_sources', 'falsification_cases', 'experiment_steps'],
-    controls: ['summary_only_baseline', 'same_prompt_same_context'],
-    acceptance_threshold: 'All quality-contract thresholds are met and the final reviewer approves the run.'
+    metrics: ['primary_outcome', 'effect_or_difference_from_baseline', 'uncertainty_interval_or_decision_margin', 'replication_success', 'falsification_result'],
+    controls: ['explicit_null_or_baseline', 'same_boundary_conditions', 'counterevidence_preserved'],
+    acceptance_threshold: `Retain ${primaryClaimId} only if the decisive observation exceeds the predeclared decision margin, survives the recorded counterevidence, and is independently reproducible; otherwise downgrade or reject it.`
   }
 }
 

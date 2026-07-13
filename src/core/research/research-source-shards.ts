@@ -1,13 +1,10 @@
 import { nowIso } from '../fsx.js'
+import {
+  RESEARCH_SOURCE_LAYERS,
+  type ResearchSourceLayer
+} from './research-source-layer-catalog.js'
 
-export interface ResearchSourceLayer {
-  id: string
-  label: string
-  purpose: string
-  evidence_role: string
-  examples: string[]
-  query_templates: string[]
-}
+export { RESEARCH_SOURCE_LAYERS, type ResearchSourceLayer } from './research-source-layer-catalog.js'
 
 export interface ResearchSourceShardOutput {
   schema: 'sks.research-source-shard-output.v1'
@@ -28,77 +25,34 @@ export interface ResearchSourceShardOutput {
     credibility: string
     stance: 'supports' | 'undermines' | 'mixed' | 'context'
     claim_ids: string[]
+    counterevidence_target_claim_id?: string | null
+    counterevidence_target_claim_ids?: string[]
+    contradiction_rationale?: string | null
     notes: string
+    content_artifact?: string | null
+    content_sha256?: string | null
+    content_length?: number | null
+    acquisition_verdict?: string | null
+    domain?: string | null
+    authority_tier?: string | null
+    primary_source?: boolean
+    independence_cluster_id?: string | null
   }>
   blockers: string[]
-}
-
-export const RESEARCH_SOURCE_LAYERS: readonly ResearchSourceLayer[] = Object.freeze([
-  {
-    id: 'academic_literature',
-    label: 'Academic literature',
-    purpose: 'Find papers, preprints, reviews, citations, and archival scholarly evidence before synthesis.',
-    evidence_role: 'formal_evidence',
-    examples: ['arXiv', 'Semantic Scholar', 'OpenAlex', 'Crossref', 'PubMed'],
-    query_templates: ['"<topic>" arxiv', '"<topic>" Semantic Scholar', '"<topic>" OpenAlex Crossref PubMed']
-  },
-  {
-    id: 'official_government_data',
-    label: 'Official government data',
-    purpose: 'Ground claims in public datasets, policy papers, national statistics, and leading-institution sources.',
-    evidence_role: 'authoritative_baseline',
-    examples: ['World Bank', 'OECD', 'Eurostat', 'data.gov', 'NIST'],
-    query_templates: ['"<topic>" site:worldbank.org OR site:oecd.org', '"<topic>" site:data.gov', '"<topic>" site:nist.gov']
-  },
-  {
-    id: 'standards_primary_docs',
-    label: 'Standards and primary documents',
-    purpose: 'Check specifications, standards, RFCs, policy originals, and official project documents before relying on summaries.',
-    evidence_role: 'primary_source',
-    examples: ['IETF RFCs', 'W3C', 'ISO abstracts', 'official standards bodies'],
-    query_templates: ['"<topic>" RFC standard specification', '"<topic>" W3C IETF NIST standard', '"<topic>" official specification']
-  },
-  {
-    id: 'news_current_events',
-    label: 'News and current events',
-    purpose: 'Capture recent events, public impact, and regional framing from reputable news and current-event indices.',
-    evidence_role: 'recency_signal',
-    examples: ['GDELT', 'BBC', 'Reuters', 'AP', 'regional reputable outlets'],
-    query_templates: ['"<topic>" latest Reuters AP', '"<topic>" GDELT news', '"<topic>" BBC analysis']
-  },
-  {
-    id: 'public_discourse',
-    label: 'Public discourse',
-    purpose: 'Sample public practitioner and community discourse without treating popularity as truth.',
-    evidence_role: 'sentiment_and_edge_cases',
-    examples: ['X/Twitter', 'Reddit', 'Hacker News', 'public forums'],
-    query_templates: ['"<topic>" site:x.com OR site:twitter.com', '"<topic>" site:reddit.com', '"<topic>" "Hacker News"']
-  },
-  {
-    id: 'developer_practitioner',
-    label: 'Developer and practitioner knowledge',
-    purpose: 'Find implementation pitfalls, developer questions, bug reports, and operational lessons.',
-    evidence_role: 'practice_feedback',
-    examples: ['Stack Overflow', 'Stack Exchange', 'GitHub issues', 'release notes', 'engineering blogs'],
-    query_templates: ['"<topic>" site:stackoverflow.com', '"<topic>" site:stackexchange.com', '"<topic>" site:github.com issues']
-  },
-  {
-    id: 'counterevidence_factcheck',
-    label: 'Counterevidence and fact checking',
-    purpose: 'Actively search for failures, critiques, null results, retractions, fact checks, and source conflicts.',
-    evidence_role: 'falsification',
-    examples: ['Fact checks', 'Retraction Watch', 'critical reviews', 'benchmark failures', 'negative results'],
-    query_templates: ['"<topic>" critique failure limitation', '"<topic>" fact check retraction', '"<topic>" counterevidence null result']
-  },
-  {
-    id: 'local_project_evidence',
-    label: 'Local project evidence',
-    purpose: 'Inspect repository-local files, scripts, docs, schemas, and tests as implementation evidence for handoff.',
-    evidence_role: 'local_evidence',
-    examples: ['git ls-files', 'package scripts', 'source modules', 'docs', 'schemas'],
-    query_templates: ['git ls-files', 'rg "<topic>" src docs schemas package.json']
+  super_search?: {
+    schema: 'sks.research-super-search-link.v1'
+    result_artifact: string
+    proof_artifact: string
+    source_ledger_artifact: string
+    claim_ledger_artifact: string
+    proof_ok: boolean
+    verified_sources: number
+    provider_independent: boolean
+    verified_provider_families: string[]
+    verified_independence_clusters: string[]
+    query_execution: unknown
   }
-])
+}
 
 export function researchSourceLayerById(id: string): ResearchSourceLayer {
   return RESEARCH_SOURCE_LAYERS.find((layer) => layer.id === id) || RESEARCH_SOURCE_LAYERS[0]!
@@ -130,7 +84,7 @@ export function defaultResearchSourceShardOutput(plan: any, layer: ResearchSourc
   const secondaryClaimIds = layer.id === 'counterevidence_factcheck'
     ? ['stage-claim-1', 'stage-claim-2', 'stage-claim-8']
     : layer.id === 'local_project_evidence' ? [secondClaim, 'stage-claim-7', 'stage-claim-8'] : [secondClaim]
-  const stance = layer.id === 'counterevidence_factcheck' ? 'undermines' : layer.id === 'local_project_evidence' ? 'context' : 'supports'
+  const stance = layer.id === 'counterevidence_factcheck' ? 'undermines' : 'supports'
   return {
     schema: 'sks.research-source-shard-output.v1',
     mission_id: missionId,
@@ -144,7 +98,7 @@ export function defaultResearchSourceShardOutput(plan: any, layer: ResearchSourc
       {
         id: `shard-${layer.id}-primary`,
         layer: layer.id,
-        kind: layer.id === 'local_project_evidence' ? 'local_project' : 'deterministic_fixture',
+        kind: 'deterministic_fixture',
         title: `${layer.label} primary evidence for ${topic}`,
         locator: layer.id === 'local_project_evidence' ? 'git ls-files' : `deterministic://${layer.id}/primary`,
         publisher_or_author: layer.id === 'local_project_evidence' ? 'local repository' : 'SKS deterministic research shard',
@@ -154,12 +108,17 @@ export function defaultResearchSourceShardOutput(plan: any, layer: ResearchSourc
         credibility: layer.id === 'public_discourse' ? 'contextual' : 'layer-appropriate',
         stance,
         claim_ids: primaryClaimIds,
+        ...(layer.id === 'counterevidence_factcheck' ? {
+          counterevidence_target_claim_id: primaryClaimIds[0],
+          counterevidence_target_claim_ids: [primaryClaimIds[0]!, 'stage-claim-7'],
+          contradiction_rationale: `Deterministic fixture challenges ${primaryClaimIds[0]} for counterevidence contract testing.`
+        } : {}),
         notes: `${layer.label} shard records reproducible evidence metadata for ${topic}.`
       },
       {
         id: `shard-${layer.id}-secondary`,
         layer: layer.id,
-        kind: layer.id === 'local_project_evidence' ? 'local_project' : 'deterministic_fixture',
+        kind: 'deterministic_fixture',
         title: `${layer.label} secondary evidence for ${topic}`,
         locator: layer.id === 'local_project_evidence' ? 'package.json docs src schemas' : `deterministic://${layer.id}/secondary`,
         publisher_or_author: layer.id === 'local_project_evidence' ? 'local repository' : 'SKS deterministic research shard',
@@ -167,8 +126,13 @@ export function defaultResearchSourceShardOutput(plan: any, layer: ResearchSourc
         accessed_at: nowIso(),
         reliability: 'medium',
         credibility: 'corroborating',
-        stance: layer.id === 'counterevidence_factcheck' ? 'undermines' : 'mixed',
+        stance: layer.id === 'counterevidence_factcheck' ? 'undermines' : 'supports',
         claim_ids: secondaryClaimIds,
+        ...(layer.id === 'counterevidence_factcheck' ? {
+          counterevidence_target_claim_id: secondaryClaimIds[1] || secondaryClaimIds[0],
+          counterevidence_target_claim_ids: [secondaryClaimIds[1] || secondaryClaimIds[0]!, 'stage-claim-8'],
+          contradiction_rationale: `Deterministic fixture challenges ${secondaryClaimIds[1] || secondaryClaimIds[0]} for counterevidence contract testing.`
+        } : {}),
         notes: `${layer.label} shard adds a second row so merger and triangulation are observable.`
       }
     ],
@@ -189,6 +153,14 @@ export function validateResearchSourceShardOutput(output: any): { ok: boolean; b
       if (!String(source?.[field] || '').trim()) blockers.push(`source_shard_source_field_missing:${field}`)
     }
     if (!Array.isArray(source?.claim_ids) || source.claim_ids.length === 0) blockers.push(`source_shard_claim_ids_missing:${source?.id || 'unknown'}`)
+    if (source?.stance === 'undermines') {
+      const targetClaimIds = [
+        ...(Array.isArray(source?.counterevidence_target_claim_ids) ? source.counterevidence_target_claim_ids : []),
+        source?.counterevidence_target_claim_id
+      ].map((value) => String(value || '').trim()).filter(Boolean)
+      if (!targetClaimIds.length) blockers.push(`source_shard_counterevidence_target_missing:${source?.id || 'unknown'}`)
+      if (!String(source?.contradiction_rationale || '').trim()) blockers.push(`source_shard_counterevidence_rationale_missing:${source?.id || 'unknown'}`)
+    }
   }
   return { ok: blockers.length === 0, blockers: [...new Set(blockers)] }
 }

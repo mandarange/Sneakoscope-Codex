@@ -4,40 +4,34 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-helper.mjs';
 
-test('Research prepare/status expose native agent sessions and batches', async () => {
+test('Research prepare/status expose official subagent adversarial convergence', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'research-native-agents' });
   const prepared = await runSksInRoot(root, ['research', 'prepare', 'native research batch fixture', '--json']);
-  assert.equal(prepared.native_agent_plan.backend, 'native_multi_session_agent_kernel');
-  assert.equal(prepared.native_agent_plan.legacy_runtime, false);
-  assert.ok(prepared.native_agent_plan.personas.some((persona) => persona.id === 'research_source_miner'));
-  assert.ok(prepared.native_agent_plan.personas.some((persona) => persona.id === 'research_skeptic'));
-  assert.ok(prepared.native_agent_plan.personas.some((persona) => persona.id === 'research_synthesis'));
-  assert.ok(prepared.native_agent_plan.personas.some((persona) => persona.id === 'research_verifier'));
-  await fs.access(path.join(root, '.sneakoscope', 'missions', prepared.mission_id, 'agents', 'agent-events.jsonl'));
+  assert.equal(prepared.official_subagent_plan.workflow, 'official_codex_subagent');
+  assert.equal(prepared.official_subagent_plan.reviewer_count, 5);
+  assert.equal(prepared.official_subagent_plan.guarantees.genius_level, false);
 
   const run = await runSksInRoot(root, ['research', 'run', prepared.mission_id, '--mock', '--json']);
   assert.equal(run.ok, true);
-  assert.ok(run.agent_batches.some((batch) => batch.id === 'research-source-mining-batch'));
+  assert.equal(run.official_subagent_review.passed, true);
+  assert.equal(run.official_subagent_review.reviewer_count_observed, 5);
+  await fs.access(path.join(root, '.sneakoscope', 'missions', prepared.mission_id, 'research-adversarial-review.json'));
 
-  const status = await runSksInRoot(root, ['research', 'status', prepared.mission_id]);
-  assert.equal(status.agent_backend, 'native_multi_session_agent_kernel');
-  const sessions = Object.values(status.agent_sessions || {});
-  assert.ok(sessions.length >= 4);
-  assert.ok(sessions.every((session) => session.status === 'closed'));
-  assert.ok(status.agent_batches.some((batch) => batch.status === 'completed_mock'));
-  assert.equal(status.autoresearch_cycle_policy.uses_agent_batches, true);
+  const status = await runSksInRoot(root, ['research', 'status', prepared.mission_id, '--json']);
+  assert.equal(status.agent_backend, 'official_codex_subagent');
+  assert.equal(status.adversarial_convergence.passed, true);
+  assert.equal(status.honest_mode.guarantees.novelty, false);
 });
 
-test('AutoResearch prepare and run inherit native agent batch cycles', async () => {
+test('AutoResearch prepare and run inherit official adversarial review cycles', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'autoresearch-agent-batches' });
   const prepared = await runSksInRoot(root, ['autoresearch', 'prepare', 'agent batch experiment loop', '--json']);
   assert.equal(prepared.schema, 'sks.autoresearch-prepare.v1');
-  assert.match(prepared.methodology, /autoresearch-batch/);
-  assert.equal(prepared.autoresearch_cycle_policy.uses_agent_batches, true);
-  assert.ok(prepared.agent_batches.every((batch) => batch.mode === 'native_agent_batch'));
+  assert.match(prepared.methodology, /super-search/);
+  assert.equal(prepared.official_subagent_plan.reviewer_count, 5);
 
   const run = await runSksInRoot(root, ['autoresearch', 'run', prepared.mission_id, '--mock', '--json']);
   assert.equal(run.schema, 'sks.autoresearch-run.v1');
-  assert.equal(run.autoresearch_cycle_policy.uses_agent_batches, true);
-  assert.ok(run.agent_batches.some((batch) => batch.agents.includes('research_verifier')));
+  assert.equal(run.official_subagent_review.passed, true);
+  assert.equal(run.honest_mode.guarantees.publication_acceptance, false);
 });

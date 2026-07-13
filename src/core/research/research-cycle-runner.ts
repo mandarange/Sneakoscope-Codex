@@ -11,6 +11,8 @@ export interface ResearchCycleInput {
   backend: ResearchStageBackend
   timeoutMs: number
   maxParallelStages?: number
+  maxReviewCycles?: number
+  maxReviewThreads?: number
   mock?: boolean
 }
 
@@ -35,6 +37,7 @@ export async function runResearchCycle(inputOrDir: ResearchCycleInput | string, 
   const running = new Map<string, Promise<ResearchStageResult>>()
   const blockers: string[] = []
   const maxParallel = Math.max(1, Math.min(16, Number(input.maxParallelStages || 4)))
+  const cycleDeadlineMs = Date.now() + Math.max(1, Number(input.timeoutMs || 1))
   let maxObservedParallel = 0
 
   while (pending.size || running.size) {
@@ -43,7 +46,15 @@ export async function runResearchCycle(inputOrDir: ResearchCycleInput | string, 
       const stage = ready.shift()
       if (!stage) break
       pending.delete(String(stage.id))
-      const promise = runResearchStage({ ...input, stage }).catch((err: unknown) => failureStage(input, stage, err))
+      const remainingMs = Math.max(0, cycleDeadlineMs - Date.now())
+      if (remainingMs <= 0) {
+        const failed = failureStage(input, stage, new Error('research_cycle_timeout_exceeded'))
+        completed.set(String(stage.id), failed)
+        blockers.push(`${String(stage.id)}:research_cycle_timeout_exceeded`)
+        continue
+      }
+      const promise = runResearchStage({ ...input, stage, timeoutMs: remainingMs, cycleDeadlineMs })
+        .catch((err: unknown) => failureStage(input, stage, err))
       running.set(String(stage.id), promise)
       maxObservedParallel = Math.max(maxObservedParallel, running.size)
     }
@@ -57,7 +68,24 @@ export async function runResearchCycle(inputOrDir: ResearchCycleInput | string, 
       pending.clear()
       break
     }
-    const done = await Promise.race([...running.entries()].map(async ([id, promise]) => ({ id, result: await promise })))
+    const done = await raceResearchStagesUntilDeadline(running, cycleDeadlineMs)
+    if (!done) {
+      for (const [id, promise] of running.entries()) {
+        promise.catch(() => undefined)
+        const stage = stages.find((candidate) => String(candidate.id) === id)
+        const failed = failureStage(input, stage, new Error('research_cycle_timeout_exceeded'))
+        completed.set(id, failed)
+        blockers.push(`${id}:research_cycle_timeout_exceeded`)
+      }
+      for (const [id, stage] of pending.entries()) {
+        const failed = failureStage(input, stage, new Error('research_cycle_timeout_exceeded'))
+        completed.set(id, failed)
+        blockers.push(`${id}:research_cycle_timeout_exceeded`)
+      }
+      running.clear()
+      pending.clear()
+      break
+    }
     running.delete(done.id)
     completed.set(done.id, done.result)
     if (done.result.status !== 'passed' && pendingStageRequired(stages.find((stage) => String(stage.id) === done.id))) {
@@ -84,12 +112,37 @@ export async function runResearchCycle(inputOrDir: ResearchCycleInput | string, 
       stage_count: stageResults.length,
       critical_path_length: criticalPathLength(stages)
     },
-    legacy_final_md_loop: false
+    legacy_final_md_loop: false,
+    timeout: {
+      budget_ms: Math.max(1, Number(input.timeoutMs || 1)),
+      deadline_epoch_ms: cycleDeadlineMs,
+      exhausted: Date.now() >= cycleDeadlineMs
+    }
   }
   await writeJsonAtomic(path.join(input.dir, 'research', `cycle-${input.cycle}`, 'research-cycle-runner.json'), record)
   await writeJsonAtomic(path.join(input.dir, 'research-cycle-runner.json'), record)
   await appendJsonlBounded(path.join(input.dir, 'events.jsonl'), { ts: nowIso(), type: 'research.cycle_runner.completed', cycle: record.cycle, stage_count: record.stage_count, status: record.status, max_observed_parallel: maxObservedParallel })
   return record
+}
+
+export async function raceResearchStagesUntilDeadline<T>(
+  running: Map<string, Promise<T>>,
+  deadlineEpochMs: number
+): Promise<{ id: string; result: T } | null> {
+  const remainingMs = Math.max(0, Math.floor(deadlineEpochMs - Date.now()))
+  if (remainingMs <= 0) return null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      ...[...running.entries()].map(async ([id, promise]) => ({ id, result: await promise })),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), remainingMs)
+        timer.unref?.()
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export function readyStages(pending: any[], completed: Map<string, ResearchStageResult>) {

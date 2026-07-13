@@ -206,7 +206,7 @@ export async function evaluateRecallPulseFixtures(root: any, opts: any = {}) {
       fixture('repeated-stop-hook-blocker', true, 'Duplicate suppression keys collapse repeated blocker text into one durable status row.'),
       fixture('hook-only-status-visibility', true, 'mission-status-ledger.json preserves recoverable user-visible status.'),
       fixture('research-persona-missing', true, 'Research validation blocks missing agent display_name/persona/persona_boundary.'),
-      fixture('research-effort-not-xhigh', true, 'Research validation blocks non-xhigh agent rows.'),
+      fixture('research-model-policy-not-sol-max', true, 'Research validation blocks reviewer rows that are not bound to the expert GPT-5.6 Sol Max policy.'),
       fixture('research-eureka-missing', true, 'Research validation blocks missing literal Eureka! ideas.'),
       fixture('research-impersonation', true, 'Research validation blocks persona-boundary violations.'),
       fixture('oversized-l1', true, 'L1 token and item limits reject oversized active recall.'),
@@ -402,7 +402,10 @@ export function validateResearchAgentPersonas(agentLedger: any = {}, geniusSumma
     if (!row.persona) issues.push(`${expected.id}:persona_missing`);
     if (!row.persona_boundary) issues.push(`${expected.id}:persona_boundary_missing`);
     if (row.persona_boundary && !/do not impersonate|not impersonat|lens only/i.test(row.persona_boundary)) issues.push(`${expected.id}:persona_boundary_not_enforced`);
-    if (row.effort !== 'xhigh' && row.reasoning_effort !== 'xhigh') issues.push(`${expected.id}:effort_not_xhigh`);
+    const modelPolicy = row.model_policy && typeof row.model_policy === 'object' ? row.model_policy : row;
+    if (modelPolicy.custom_agent !== 'expert') issues.push(`${expected.id}:custom_agent_not_expert`);
+    if (modelPolicy.model !== 'gpt-5.6-sol') issues.push(`${expected.id}:model_not_sol`);
+    if (modelPolicy.reasoning_effort !== 'max' && modelPolicy.model_reasoning_effort !== 'max') issues.push(`${expected.id}:effort_not_max`);
     if (row.service_tier && row.service_tier !== 'fast') issues.push(`${expected.id}:service_tier_not_fast`);
     if (!row.eureka?.idea || row.eureka?.exclamation !== 'Eureka!') issues.push(`${expected.id}:eureka_missing`);
     if (!Array.isArray(row.falsifiers)) issues.push(`${expected.id}:falsifiers_missing`);
