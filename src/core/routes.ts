@@ -4,7 +4,7 @@ import { ALLOWED_REASONING_EFFORTS, FROM_CHAT_IMG_CHECKLIST_ARTIFACT, FROM_CHAT_
 import { CODEX_APP_IMAGE_GENERATION_DOC_URL, CODEX_COMPUTER_USE_ONLY_POLICY, CODEX_IMAGEGEN_REQUIRED_POLICY, CODEX_WEB_VERIFICATION_POLICY, RESERVED_CODEX_PLUGIN_SKILL_NAMES } from './routes/evidence.js';
 import { getdesignReferencePolicyText, imageUxReviewPipelinePolicyText } from './routes/design-policy.js';
 import { PPT_PIPELINE_SKILL_ALLOWLIST, pptPipelineAllowlistPolicyText } from './routes/ppt-policy.js';
-import { classifyTaskProfile, type TaskProfile } from './runtime/task-profile.js';
+import { classifyTaskProfile, looksLikeDatabaseWorkRequest, type TaskProfile } from './runtime/task-profile.js';
 
 export * from './routes/constants.js';
 export * from './routes/design-policy.js';
@@ -286,13 +286,13 @@ export const ROUTES = [
     deprecated: true,
     hidden: true,
     aliasTo: '$Naruto',
-    deprecationMessage: '$Team is deprecated and redirects new execution missions to $Naruto. Existing Team observation commands remain available for old missions.',
+    deprecationMessage: '$Team is deprecated and redirects new execution missions to $Naruto. Only read-only Team log/tail/watch/lane/status commands remain for old missions.',
     lifecycle: ['deprecated_alias_redirect', 'naruto_gate', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'naruto-gate.json',
     coverage_required: true,
-    cliEntrypoint: 'sks team "task" [executor:5 reviewer:6 user:1] | sks team log|tail|watch|lane|status|event|message|open-zellij|attach-zellij|cleanup-zellij',
+    cliEntrypoint: 'sks team "task" | sks team log|tail|watch|lane|status',
     examples: ['$Team executor:5 agree on the best plan and implement it', '$From-Chat-IMG 채팅+첨부 이미지 작업 지시서']
   },
   {
@@ -300,7 +300,7 @@ export const ROUTES = [
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
-    description: '$Naruto prepares an explicit Codex subagent workflow. The parent decomposes independent slices, delegates them to worker or expert custom agents, waits for every requested agent thread, integrates the results, and reports scoped verification.',
+    description: '$Naruto prepares a lightweight Codex official subagent workflow. The Sol Max parent owns decomposition, delegates only defensible direct-child slices, reuses bounded TriWiki attention anchors, waits for every requested thread, integrates the results, and reports scoped verification. Implicit runs start with one safe child; explicit --agents enables wider parallelism.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$ShadowClone', '$Kagebunshin', '$Work', '$Swarm'],
     appSkillAliases: ['shadow-clone', 'kage-bunshin', 'work', 'swarm'],
@@ -316,15 +316,15 @@ export const ROUTES = [
     id: 'ReleaseReview',
     command: '$Release-Review',
     mode: 'RELEASE_REVIEW',
-    route: 'native release review',
+    route: 'official subagent release review',
     description: 'Run release-readiness collaboration through official Codex subagents with explicit thread budget, disjoint ownership, parent integration, scoped verification, and cleanup evidence.',
-    requiredSkills: ['team', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
-    lifecycle: ['native_agent_intake', 'release_fixture_matrix', 'five_lane_review', 'integration_evidence', 'session_cleanup', 'honest_mode'],
+    requiredSkills: ['naruto', 'pipeline-runner', REFLECTION_SKILL_NAME, 'honest-mode'],
+    lifecycle: ['subagent_plan', 'release_fixture_matrix', 'five_lane_review', 'parent_integration', 'session_cleanup', 'honest_mode'],
     context7Policy: 'optional',
     reasoningPolicy: 'high',
     stopGate: 'release-readiness-report.json',
-    cliEntrypoint: 'sks agent run "release audit" --route "$Release-Review" --agents <n> --concurrency <n> --mock --json',
-    examples: ['$Release-Review agents:10 concurrency:4 release audit', 'sks agent run "wide release audit" --route "$Release-Review" --agents 10 --concurrency 4 --mock --json']
+    cliEntrypoint: 'sks naruto run "$Release-Review release audit" --agents <n> --read-only --json',
+    examples: ['$Release-Review agents:10 release audit', 'sks naruto run "$Release-Review wide release audit" --agents 10 --read-only --json']
   },
   {
     id: 'QALoop',
@@ -499,7 +499,9 @@ export const ROUTES = [
     context7Policy: 'required',
     reasoningPolicy: 'high',
     stopGate: 'db-review.json',
-    cliEntrypoint: 'sks db scan',
+    cliEntrypoint: 'Codex App prompt route only; the legacy `sks db` CLI is removed',
+    codexAppOnly: true,
+    codexAppOnlyReason: '$DB remains a route-level safety policy. The legacy `sks db` CLI is removed from public dispatch and returns unknown_command.',
     examples: ['$DB check this migration safely']
   },
   {
@@ -684,7 +686,6 @@ export const COMMAND_CATALOG = [
   { name: 'goal', usage: 'sks goal create|pause|resume|clear|status ...', description: 'Prepare and control the fast SKS bridge overlay for Codex native persisted /goal workflows.' },
   { name: 'seo-geo-optimizer', usage: 'sks seo-geo-optimizer [seo|geo] doctor|audit|research|strategy|plan|apply|verify|status|rollback|fixture [mission|latest] [--mode seo|geo] [--target auto|website|docs|package] [--include-marketing] [--json]', description: 'Run the unified SEO/GEO optimizer on the shared search-visibility kernel with mode-specific gates, marketing research/strategy, safe apply, and proof.' },
   { name: 'research', usage: 'sks research prepare|run|status ...', description: 'Run long-form real research missions with xhigh agent Eureka ideas, debate, layered sources, paper, novelty, and falsification gates.' },
-  { name: 'db', usage: 'sks db policy|scan|mcp-config|classify|check ...', description: 'Inspect and enforce database/Supabase safety policy.' },
   { name: 'eval', usage: 'sks eval run|compare|thresholds ...', description: 'Run deterministic context-quality and performance evidence checks.' },
   { name: 'harness', usage: 'sks harness fixture|review [--json]', description: 'Run Harness Growth Factory fixtures for forgetting, skills, experiments, tool taxonomy, permissions, MultiAgentV2, and Zellij views.' },
   { name: 'perf', usage: 'sks perf run|workflow|cold-start [--json] [--iterations N]', description: 'Measure structured GPT-5.6/SKS performance budgets, including cold-start, Proof Field workflow decisions, and fast-lane evidence.' },
@@ -702,7 +703,7 @@ export const COMMAND_CATALOG = [
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or roll back Codex subagent missions with an explicit requested-agent/thread budget, disjoint work ownership, official event evidence, and parent-owned integration.' },
   { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent, Luna Max bounded workers, Sol Max experts, max_depth=1, and structured parent-thread completion evidence.' },
-  { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status|dashboard|event|message|open-zellij|attach-zellij|cleanup-zellij ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; observation subcommands remain for old Team missions.' },
+  { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; only read-only observation subcommands remain for old Team missions.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
   { name: 'profile', usage: 'sks profile show|set <model>', description: 'Inspect or set the current SKS model profile metadata.' },
@@ -871,9 +872,11 @@ export function routePrompt(prompt: any): any {
   if (looksLikeImageUxReviewRequest(text)) return select(routeById('ImageUXReview'));
   if (looksLikeComputerUseFastLane(text)) return select(routeById('ComputerUse'));
   if (looksLikeTinyDirectFix(text)) return select(routeById('DFix'));
-  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) return select(routeById('DB'));
+  if (looksLikeDatabaseWorkRequest(text)) return select(routeById('DB'));
   if (looksLikeSuperSearchRequest(text) && !looksLikeCodeChangingWork(text)) return select(routeById('SuperSearch'));
-  if (taskProfile === 'answer' && !looksLikeSpecializedAnswerRouteSignal(text)) return select(routeById('Answer'));
+  if (taskProfile === 'answer' && !looksLikeSpecializedAnswerRouteSignal(text) && !looksLikeDirectWorkRequest(text)) return select(routeById('Answer'));
+  if (/\bautoresearch\b/i.test(text) && !looksLikeCodeChangingWork(text)) return select(routeById('AutoResearch'));
+  if (/\b(research|hypothesis|falsify|novelty|frontier)\b|조사|연구/i.test(text) && !looksLikeCodeChangingWork(text)) return select(routeById('Research'));
   if (taskProfile === 'parallel-read' || taskProfile === 'parallel-write') return select(routeById('Naruto'));
   if (looksLikeQuestionShapedDirective(text)) return select(routeById('Naruto'));
   if (looksLikeDirectWorkRequest(text)) return select(routeById('Naruto'));
@@ -949,7 +952,7 @@ export function scorePromptIntent(prompt: any = ''): PromptIntentScores {
     researchScore += 2;
     reasons.add('research');
   }
-  if (/\b(SQL|Supabase|Postgres|migration|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql)\b/i.test(text)) {
+  if (looksLikeDatabaseWorkRequest(text)) {
     dbScore += 3;
     reasons.add('db');
   }
@@ -1018,6 +1021,7 @@ export function looksLikeQuestionShapedDirective(prompt: any = '') {
 export function looksLikeDirectWorkRequest(prompt: any = '') {
   const text = String(prompt || '');
   if (/(?:설명만|설명\s*만|just\s+explain|explain\s+only|only\s+explain)/i.test(text)) return false;
+  if (looksLikePureExplanationRequest(text)) return false;
   const explicitDirective = looksLikeExplicitDirectWorkDirective(text);
   if (looksLikeDirectFixQuestion(text) && !explicitDirective) return false;
   if (looksLikeMethodQuestion(text) && !looksLikePoliteDirectWorkRequest(text) && !looksLikeQuestionShapedDirective(text) && !explicitDirective) return false;
@@ -1028,6 +1032,14 @@ export function looksLikeDirectWorkRequest(prompt: any = '') {
     || explicitDirective
     || /(작업|파이프라인|구현|수정|변경|추가|적용|반영|처리|수행|검수|설치|해결|리드미|README).*(해줘|해달|해라|해야|되게|줘야|줘야지|달라)/i.test(text)
     || /(진행해|수행해|작업해|처리해|적용해|반영해|검수해|고쳐줘|바꿔줘|해결해줘|만들어줘|해줘야|해줘야지|해달라|해야지|되게 해|install|run|execute|test|deploy|commit|push)/i.test(text);
+}
+
+function looksLikePureExplanationRequest(prompt: any = '') {
+  const text = String(prompt || '').trim();
+  const explanationEnding = /(?:설명|알려)\s*(?:해\s*줘|해\s*주세요|해달라|줘)\s*[.!?]*$/i.test(text)
+    || /^(?:can|could|would) you explain\b/i.test(text);
+  if (!explanationEnding) return false;
+  return !/\b(fix|implement|change|edit|add|remove|delete|modify|refactor|build|create|write|update|rename|rewrite|patch|apply|execute|repair|resolve|publish|release|deploy|migrate)\b|고쳐|수정|변경|추가|삭제|구현|리팩터|작성|생성|업데이트|적용|실행|해결|배포|출시|마이그레이션/i.test(text);
 }
 
 function looksLikeConditionalWorkRequest(prompt: any = '') {
@@ -1066,6 +1078,9 @@ export function routeNeedsContext7(route: any, prompt: any = '') {
 export function routeRequiresSubagents(route: any, prompt: any = '', profile: TaskProfile = classifyTaskProfile(prompt)) {
   if (!route) return false;
   if (['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse'].includes(String(route.id || ''))) return false;
+  // QA-Loop retains one route-owned native execution engine. Do not also
+  // materialize an official-subagent overlay for the same mission.
+  if (route.id === 'QALoop') return false;
   if ((route.id === 'Team' || route.id === 'Naruto') && route.explicit_invocation !== false) return true;
   if (/(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b/i.test(String(prompt || ''))) return true;
   if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change' || profile === 'bounded-work') return false;

@@ -92,6 +92,7 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
       command: raw,
       reason: 'unknown_command',
     };
+    if (argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
     return result;
   }
   const entry = COMMAND_MANIFEST_BY_NAME[command];
@@ -122,6 +123,7 @@ async function dispatchInner(argv: readonly string[]): Promise<unknown> {
         || entry.readonly === true
         || safeReadOnlySubcommand(command, rest)
         || safeActiveRouteVisualQuery(command, rest)
+        || safeActiveRouteRecoverySubcommand(command, rest)
     });
     if (!migrationGate.ok) {
       console.error('SKS project migration blocked.');
@@ -170,6 +172,7 @@ async function ensureActiveRouteCommandGate(command: CommandNameLite, args: read
   ]);
   const root = await projectRoot(process.cwd()).catch(() => process.cwd());
   const state = await readJson(stateFile(root), {}).catch(() => ({}));
+  if (safeActiveRouteContinuation(command, args, state)) return { ok: true, status: 'allowed_active_route_continuation' };
   if (!activeRouteStateBlocksCommand(state)) return { ok: true, status: 'allowed' };
   const visualPreflight = await blockedVisualSourcePreflight(command, args);
   if (visualPreflight) {
@@ -224,6 +227,29 @@ function safeActiveRouteRecoverySubcommand(command: CommandNameLite, args: reado
   if (command !== 'agent') return false;
   const sub = String(args.find((arg) => !String(arg).startsWith('-')) || '').toLowerCase();
   return ['close', 'cleanup', 'rollback-patches'].includes(sub);
+}
+
+function safeActiveRouteContinuation(command: CommandNameLite, args: readonly string[], state: any = {}) {
+  const expectedRoutes = new Map<CommandNameLite, readonly string[]>([
+    ['research', ['RESEARCH']],
+    ['autoresearch', ['AUTORESEARCH', 'RESEARCH']],
+    ['qa-loop', ['QALOOP']]
+  ]).get(command);
+  if (!expectedRoutes) return false;
+  const subcommand = String(args[0] || '').toLowerCase();
+  const activeRoute = String(state.route || state.route_command || state.mode || '').replace(/^\$/, '').replace(/[-_]/g, '').toUpperCase();
+  if (!expectedRoutes.includes(activeRoute)) return false;
+  if (subcommand === 'prepare') {
+    const parentMissionId = String(process.env.SKS_RUN_PARENT_MISSION_ID || '').trim();
+    return command !== 'autoresearch'
+      && String(state.mode || '').toUpperCase() === 'RUN'
+      && String(state.phase || '').toUpperCase() === 'RUN_ROUTE_SELECTED'
+      && Boolean(parentMissionId)
+      && parentMissionId === String(state.mission_id || '');
+  }
+  if (subcommand !== 'run') return false;
+  const requestedMission = String(args[1] || '').trim();
+  return Boolean(state.mission_id) && (requestedMission === String(state.mission_id) || requestedMission === 'latest');
 }
 
 function activeRouteStateBlocksCommand(state: any = {}) {

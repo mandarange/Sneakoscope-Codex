@@ -1,4 +1,5 @@
 import { HARD_NARUTO_MAX_THREADS } from './thread-budget.js'
+import type { BoundedTriwikiAttention } from './triwiki-attention.js'
 
 export interface OfficialSubagentSlice {
   id: string
@@ -14,12 +15,18 @@ export function buildOfficialSubagentPrompt(input: {
   slices: OfficialSubagentSlice[]
   maxThreads: number
   requestedSubagents?: number
+  requestedSubagentsExplicit?: boolean
   decompositionStatus?: 'ready' | 'parent_required'
+  triwikiAttention?: BoundedTriwikiAttention
 }): string {
   const maxThreads = clampThreads(input.maxThreads)
   const requestedSubagents = normalizeRequestedSubagents(input.requestedSubagents, input.slices.length)
   const waveCount = requestedSubagents === 0 ? 0 : Math.ceil(requestedSubagents / maxThreads)
   const parentDecompositionRequired = input.decompositionStatus === 'parent_required'
+  const requestedPolicy = input.requestedSubagentsExplicit === true
+    ? `${requestedSubagents} (explicit operator request)`
+    : `${requestedSubagents} (safe default; increase only after parent-owned decomposition finds defensible independent slices)`
+  const triwiki = renderBoundedTriwikiAttention(input.triwikiAttention)
   const rows = input.slices.map((slice, index) => {
     const agentName = slice.kind === 'expert' ? 'expert' : 'worker'
     const mode = slice.readOnly ? 'read-only' : 'use the parent permission mode'
@@ -43,10 +50,11 @@ Parent agent:
 - do not do duplicate work already delegated
 
 Subagent rules:
+- use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - use \`worker\` (gpt-5.6-luna, max reasoning) for clear, bounded, repeatable work
 - use \`expert\` (gpt-5.6-sol, max reasoning) for UI, review, debugging, strategy, planning,
   architecture, refactoring, integration, security, database, release, risk, or ambiguity
-- requested subagents: ${requestedSubagents}
+- requested subagents: ${requestedPolicy}
 - max open agent threads: ${maxThreads}
 - planned waves: ${waveCount}
 - max depth: 1
@@ -59,6 +67,9 @@ ${parentDecompositionRequired ? `- decomposition status: parent_required
 - before spawning, decompose the goal into independent, non-overlapping slices
 - do not invent write scopes merely to reach the requested count
 - if the defensible independent slice count differs, update the delegation plan and requested count before execution` : '- decomposition status: ready'}
+
+Central TriWiki context:
+${triwiki}
 
 Goal:
 ${String(input.goal || '').trim()}
@@ -83,6 +94,27 @@ Final parent output:
 - include one thread_outcomes row for every requested subagent; a SubagentStop event alone never proves success
 - keep completion summary and Honest Mode wording inside the JSON fields; do not add prose outside the object
 `.trim()
+}
+
+function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefined): string {
+  if (!value?.available || value.anchors.length === 0) {
+    return [
+      '- no bounded attention anchors are available; rely on current scoped sources',
+      '- do not compensate by making every subagent reread the entire repository or full TriWiki pack'
+    ].join('\n')
+  }
+  const anchors = value.anchors.map((anchor) => ({
+    id: anchor.id,
+    claim_hash: anchor.claim_hash,
+    source_hash: anchor.source_hash,
+    hydrate_hint: anchor.hydrate_hint
+  }))
+  return [
+    `- consume these ${anchors.length} attention.use_first anchors before broad discovery`,
+    '- hydrate a referenced source only when its anchor is relevant to the assigned slice or a risky decision',
+    '- do not inject the full context pack or make each subagent repeat repository-wide context discovery',
+    `- bounded anchors: ${JSON.stringify(anchors)}`
+  ].join('\n')
 }
 
 function clampThreads(value: unknown): number {

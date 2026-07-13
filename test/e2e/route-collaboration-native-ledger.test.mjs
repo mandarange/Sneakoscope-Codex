@@ -31,14 +31,27 @@ test('Review mode exposes native read-only safety personas', async () => {
 test('route collaboration fixtures write central ledger, leases, session close, and proof graph', async () => {
   const root = await createHermeticProjectRoot({ fixtureName: 'route-collab-ledger' });
   const review = await runSksInRoot(root, ['auto-review', 'fixture', '--json']);
-  const ppt = await runSksInRoot(root, ['ppt', 'fixture', '--json']);
-  const ux = await runSksInRoot(root, ['ux-review', 'fixture', '--json']);
-  const db = await runSksInRoot(root, ['db', 'check', '--sql', 'select 1', '--json']);
+  const ppt = await runSksInRoot(root, ['ppt', 'fixture', '--json'], { expectCode: 1 });
+  const ux = await runSksInRoot(root, ['ux-review', 'fixture', '--json'], { expectCode: 1 });
+  assert.equal(ppt.ok, false);
+  assert.equal(ppt.proof?.status, 'mock_only');
+  assert.equal(ux.ok, false);
+  assert.equal(ux.proof?.status, 'mock_only');
+  const { createMission } = await import('../../dist/core/mission.js');
+  const { writeRouteCollaborationArtifacts } = await import('../../dist/core/agents/route-collaboration-ledger.js');
+  const db = await createMission(root, { mode: 'db', prompt: '$DB route-only collaboration fixture' });
+  await writeRouteCollaborationArtifacts(root, {
+    missionId: db.id,
+    route: '$DB',
+    routeKey: 'DB-Review',
+    prompt: 'DB review internal route collaboration',
+    mode: 'DB'
+  });
 
   await assertNativeRouteArtifacts(root, review.mission_id, 'Review');
   await assertNativeRouteArtifacts(root, ppt.mission_id, 'PPT-Collab');
   await assertNativeRouteArtifacts(root, ux.mission_id, 'UX-Collab');
-  await assertNativeRouteArtifacts(root, db.completion_proof.mission_id, 'DB-Review');
+  await assertNativeRouteArtifacts(root, db.id, 'DB-Review');
 });
 
 test('Release-Review route collaboration uses native agent proof and route personas', async () => {

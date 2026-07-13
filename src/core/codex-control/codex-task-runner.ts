@@ -19,6 +19,7 @@ import { readLocalModelConfig } from '../agents/ollama-worker-config.js'
 import { runLocalLlmTask } from '../local-llm/local-llm-control-adapter.js'
 import { detectPythonCodexSdkCapability, runPythonCodexSdkTask } from './python-codex-sdk-adapter.js'
 import { defaultModelCallBudget, withModelCallSlot } from './model-call-concurrency.js'
+import { inspectCodexLbSdkLaunchRecovery } from './codex-lb-launch-recovery.js'
 
 export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResult & Record<string, unknown>> {
   const root = path.resolve(input.mutationLedgerRoot)
@@ -37,11 +38,17 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
   if (bundledCodex && !runtime.env.env.SKS_PYTHON_CODEX_SDK_CODEX_BIN) runtime.env.env.SKS_PYTHON_CODEX_SDK_CODEX_BIN = bundledCodex
   if (runtime.env.env.HOME) await ensureDir(runtime.env.env.HOME)
   if (runtime.env.env.CODEX_HOME) await ensureDir(runtime.env.env.CODEX_HOME)
-  await ensurePythonCodexLbConfig(runtime.env.env, runtime.config)
+  const codexLbToolOutputRecovery = await inspectCodexLbSdkLaunchRecovery({
+    config: runtime.config,
+    env: runtime.env.env,
+    overrideEnv: process.env
+  })
+  if (codexLbToolOutputRecovery.ok) await ensurePythonCodexLbConfig(runtime.env.env, runtime.config)
   const fakeAllowed = fakeCodexSdkAllowed()
   const blockers = [
     ...(capability.ok || fakeAllowed ? [] : capability.blockers),
-    ...(sandbox.ok ? [] : sandbox.blockers)
+    ...(sandbox.ok ? [] : sandbox.blockers),
+    ...(codexLbToolOutputRecovery.ok ? [] : codexLbToolOutputRecovery.blockers)
   ]
   let adapterResult: any = null
   if (!blockers.length) {
@@ -124,6 +131,7 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     workerResultPath,
     patchEnvelopePath,
     blockers: finalBlockers,
+    codexLbToolOutputRecovery,
     reliabilityShield: adapterResult?.reliabilityShield || null,
     capacityFallback: adapterResult?.reliabilityShield?.selected_model_capacity_fallback === true,
     modelCapacityRetryCount: Number(adapterResult?.reliabilityShield?.model_capacity_retry_count || 0),
@@ -158,7 +166,8 @@ export async function runCodexTask(input: CodexTaskInput): Promise<CodexTaskResu
     envProof: {
       ...runtime.env.proof,
       capacity_fallback_selected: result.capacityFallback === true,
-      model_capacity_retry_count: result.modelCapacityRetryCount
+      model_capacity_retry_count: result.modelCapacityRetryCount,
+      codex_lb_tool_output_recovery: codexLbToolOutputRecovery
     },
     config: runtime.config,
     reliabilityShield: adapterResult?.reliabilityShield || null,
@@ -173,8 +182,13 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
   const runtime = codexSdkRuntimePolicies(task)
   if (runtime.env.env.HOME) await ensureDir(runtime.env.env.HOME)
   if (runtime.env.env.CODEX_HOME) await ensureDir(runtime.env.env.CODEX_HOME)
+  const codexLbToolOutputRecovery = await inspectCodexLbSdkLaunchRecovery({
+    config: runtime.config,
+    env: runtime.env.env,
+    overrideEnv: process.env
+  })
   const fakeAllowed = process.env.SKS_PYTHON_CODEX_SDK_FAKE === '1'
-  const adapterResult = capability.ok || fakeAllowed
+  const adapterResult = codexLbToolOutputRecovery.ok && (capability.ok || fakeAllowed)
     ? await withModelCallSlot({
       root,
       missionId: task.missionId,
@@ -185,7 +199,19 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
       sessionId: task.sessionId || null,
       backend: 'python-codex-sdk'
     }, () => runPythonCodexSdkTask(task, { env: runtime.env.env, config: runtime.config }))
-    : { ok: false, events: [], translatedEvents: [], finalResponse: '', threadId: '', turnId: '', blockers: capability.blockers, capability }
+    : {
+        ok: false,
+        events: [],
+        translatedEvents: [],
+        finalResponse: '',
+        threadId: '',
+        turnId: '',
+        blockers: [
+          ...(codexLbToolOutputRecovery.ok ? [] : codexLbToolOutputRecovery.blockers),
+          ...(capability.ok || fakeAllowed ? [] : capability.blockers)
+        ],
+        capability
+      }
   const events = Array.isArray(adapterResult.events) ? adapterResult.events : []
   const translatedEvents = Array.isArray(adapterResult.translatedEvents) ? adapterResult.translatedEvents : []
   for (const event of translatedEvents) await appendJsonlBounded(path.join(root, 'python-codex-sdk-events.jsonl'), event, 5 * 1024 * 1024)
@@ -233,6 +259,7 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
     stream_event_count: events.length,
     structured_output_valid: validation.ok,
     worker_result_path: workerResultPath,
+    codex_lb_tool_output_recovery: codexLbToolOutputRecovery,
     blockers: finalBlockers
   })
   const result: CodexTaskResult & Record<string, unknown> = {
@@ -247,6 +274,7 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
     patchEnvelopePath,
     pythonSdkProofPath,
     blockers: finalBlockers,
+    codexLbToolOutputRecovery,
     reliabilityShield: {},
     ultraRouterDecision: routerDecision as Record<string, unknown>,
     outputSchemaId: task.outputSchemaId,
@@ -276,7 +304,12 @@ async function runPythonControlTask(root: string, task: CodexTaskInput, schema: 
     result,
     capability: capability as unknown as Record<string, unknown>,
     sandbox: { ok: true, sandbox_policy: task.sandboxPolicy, python_sandbox: mapPythonSandbox(task.sandboxPolicy), blockers: [] },
-    envProof: { ...runtime.env.proof, python_bin: capability.python_bin, python_version: capability.python_version },
+    envProof: {
+      ...runtime.env.proof,
+      python_bin: capability.python_bin,
+      python_version: capability.python_version,
+      codex_lb_tool_output_recovery: codexLbToolOutputRecovery
+    },
     config: { ...runtime.config, backend: 'python-codex-sdk', package_name: capability.package_name, import_name: capability.import_name },
     reliabilityShield: null,
     routerDecision: routerDecision as Record<string, unknown>,
@@ -446,6 +479,7 @@ function isRunFailureBlocker(blockers: readonly unknown[]): boolean {
       || text.startsWith('python_codex_sdk_error')
       || text.startsWith('local_llm_generate_failed')
       || text.startsWith('local_llm_eligibility_blocked')
+      || text.startsWith('codex_lb_tool_output_recovery_')
       || text.endsWith('_adapter_reported_failure')
       || text === 'codex_reliability_shield_failed'
       || text === 'codex_reliability_fatal_error_no_retry'

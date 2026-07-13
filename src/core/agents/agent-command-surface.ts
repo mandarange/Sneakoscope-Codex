@@ -55,6 +55,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const graceMs = Number(readOption(args, '--grace-ms', 750))
   const killEscalation = hasFlag(args, '--kill-escalation') || !hasFlag(args, '--no-kill-escalation')
   const codexApp = hasFlag(args, '--codex-app')
+  const legacyNativeRuntime = hasFlag(args, '--legacy-native-runtime')
   const positionals = positionalArgs(rest, new Set(['--agents', '--target-active-slots', '--work-items', '--minimum-work-items', '--max-queue-expansion', '--concurrency', '--backend', '--route', '--mission', '--mission-id', '--agent', '--lane', '--stale-ms', '--grace-ms', '--profile', '--write-mode', '--max-write-agents', '--patch-entry-id', '--patch-entry', '--service-tier', '--zellij-session-name', '--worker-placement', '--zellij-visible-pane-cap', '--intake', '--agent-root', '--artifact-dir', '--result-path', '--heartbeat-path', '--patch-envelope-path', '--ollama-model', '--local-model-model', '--ollama-base-url', '--local-model-base-url']))
   const missionDefault = action === 'run' || action === 'spawn' || action === 'plan' ? '' : 'latest'
   const positionalMission = action === 'run' || action === 'spawn' || action === 'plan' ? '' : (positionals[0] || '')
@@ -64,7 +65,7 @@ export function parseAgentCommandArgs(command: string, args: string[] = []) {
   const promptPositionals = positionalMission ? positionals.slice(1) : positionals
   const promptExplicit = promptPositionals.length > 0
   const prompt = promptPositionals.join(' ').trim() || 'Native agent run'
-  return { command, action, prompt, promptExplicit, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, backendExplicit, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, zellijSessionName, zellijPaneWorker, workerPlacement, zellijVisiblePaneCap, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId }
+  return { command, action, prompt, promptExplicit, route, agents, targetActiveSlots, desiredWorkItemCount, minimumWorkItems, maxQueueExpansion, concurrency, backend, backendExplicit, mock, real, readonly, profile, writeMode, applyPatches, dryRunPatches, maxWriteAgents, fastMode, serviceTier, noFast, ollamaEnabled: useOllama && !noOllama, noOllama, ollamaModel, ollamaBaseUrl, zellijSessionName, zellijPaneWorker, workerPlacement, zellijVisiblePaneCap, apply, dryRun, drain, staleMs, graceMs, killEscalation, json, missionId, lane, codexApp, patchEntryId, legacyNativeRuntime }
 }
 
 export function resolveZellijVisiblePaneCap(value: unknown = '', explicit = false) {

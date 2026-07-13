@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPipelinePlan } from '../pipeline-internals/runtime-core.js';
+import { buildPipelinePlan, validatePipelinePlan } from '../pipeline-internals/runtime-core.js';
 import { routePrompt, subagentExecutionPolicyText } from '../routes.js';
 
 test('Naruto plan uses canonical official subagent stages without legacy intake commands', () => {
@@ -45,6 +45,21 @@ test('specialized parallel routes use one official subagent fanout without legac
   }
 });
 
+test('route-owned QA execution and official Release Review never activate two fanout owners', () => {
+  const qaTask = '$QA-LOOP --agents 5 dogfood the API in parallel';
+  const qa: any = buildPipelinePlan({ route: routePrompt(qaTask), task: qaTask });
+  assert.equal(qa.route.subagents_required, false);
+  assert.equal(qa.stages.some((stage: any) => stage.id === 'official_subagent_execution'), false);
+  assert.equal(qa.agent_intake.required, true);
+
+  const releaseTask = '$Release-Review --agents 5 audit the release';
+  const release: any = buildPipelinePlan({ route: routePrompt(releaseTask), task: releaseTask });
+  assert.equal(release.route.subagents_required, true);
+  assert.equal(release.agent_intake.required, false);
+  assert.equal(release.stages.filter((stage: any) => stage.id === 'official_subagent_execution').length, 1);
+  assert.doesNotMatch(release.next_actions.join('\n'), /sks agent run/i);
+});
+
 test('implicit bounded Naruto routing does not create a default six-agent intake', () => {
   for (const task of ['work on the parser', '로그인 버그 수정해줘', 'Implement the route parser']) {
     const routed: any = routePrompt(task);
@@ -85,6 +100,97 @@ test('pipeline gate and verification budgets follow the task profile', () => {
     const plan: any = buildPipelinePlan({ route: routePrompt(row.task), task: row.task });
     assert.equal(plan.gate_profile, row.gate, row.task);
     assert.equal(plan.gate_budget.blocking_gate_limit, row.limit, row.task);
+    assert.ok(plan.gate_budget.blocking_gate_count <= row.limit, row.task);
+    assert.equal(plan.gate_budget.blocking_gate_count, plan.gate_budget.blocking_gate_ids.length, row.task);
+    assert.ok(plan.gate_budget.blocking_stage_count >= plan.gate_budget.blocking_gate_count, row.task);
+    assert.ok(plan.stages.every((stage: any) => typeof stage.blocking === 'boolean'), row.task);
     assert.equal(plan.verification_budget, row.verification, row.task);
+    assert.equal(validatePipelinePlan(plan).ok, true, row.task);
   }
+});
+
+test('pipeline validation fails closed when actual blocking stages exceed the task-profile limit', () => {
+  const plan: any = buildPipelinePlan({
+    route: routePrompt('README 오타 고쳐줘'),
+    task: 'README 오타 고쳐줘'
+  });
+
+  assert.equal(plan.task_profile, 'tiny-change');
+  assert.equal(plan.gate_budget.blocking_gate_limit, 1);
+  plan.stages.push({ id: 'safety_gate', status: 'keep', reason: 'tampered_extra_blocking_gate', blocking: true, blocking_gate: 'safety' });
+
+  const validation = validatePipelinePlan(plan);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes('gate_budget.blocking_gate_limit_exceeded:2>1'));
+  assert.ok(validation.issues.includes('gate_budget.blocking_gate_count'));
+  assert.ok(validation.issues.includes('gate_budget.blocking_stage_count'));
+  assert.ok(validation.issues.includes('gate_budget.blocking_gate_ids'));
+});
+
+test('independent stop blockers are represented while sharing the bounded canonical gate groups', () => {
+  const task = '$Research --agents 5 conduct a parallel adversarial review';
+  const plan: any = buildPipelinePlan({ route: routePrompt(task), task });
+  for (const id of [
+    'ssot_guard',
+    'triwiki_use_first',
+    'triwiki_validate_before_final',
+    'subagent_plan',
+    'official_subagent_execution',
+    'parent_integration',
+    'route_materialization',
+    'work_order_coverage',
+    'reflection'
+  ]) {
+    const stage = plan.stages.find((candidate: any) => candidate.id === id);
+    assert.ok(stage, id);
+    assert.equal(stage.blocking, true, id);
+    assert.ok(stage.blocking_gate, id);
+  }
+  assert.ok(plan.gate_budget.blocking_stage_count > plan.gate_budget.blocking_gate_count);
+  assert.ok(plan.gate_budget.blocking_gate_count <= plan.gate_budget.blocking_gate_limit);
+  assert.equal(validatePipelinePlan(plan).ok, true);
+});
+
+test('pipeline validation rejects a declared gate budget that is looser than the task-profile SSOT', () => {
+  const plan: any = buildPipelinePlan({
+    route: routePrompt('로그인 버그 수정해줘'),
+    task: '로그인 버그 수정해줘'
+  });
+
+  plan.gate_budget.blocking_gate_limit = 99;
+  const validation = validatePipelinePlan(plan);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes('gate_budget.blocking_gate_limit'));
+});
+
+test('pipeline validation requires every profile-mandated high-risk gate and active status', () => {
+  const missing: any = buildPipelinePlan({
+    route: routePrompt('DB migration 적용해줘'),
+    task: 'DB migration 적용해줘'
+  });
+
+  assert.equal(missing.task_profile, 'high-risk');
+  missing.stages = missing.stages.filter((stage: any) => ![
+    'ambiguity_gate',
+    'safety_gate',
+    'ownership',
+    'listed_verification'
+  ].includes(stage.id));
+  missing.gate_budget.blocking_gate_count = 0;
+  const missingValidation = validatePipelinePlan(missing);
+  assert.equal(missingValidation.ok, false);
+  for (const id of ['ambiguity_gate', 'safety_gate', 'ownership', 'listed_verification']) {
+    assert.ok(missingValidation.issues.includes(`stages.required_count:${id}:0`), id);
+  }
+
+  const inactive: any = buildPipelinePlan({
+    route: routePrompt('DB migration 적용해줘'),
+    task: 'DB migration 적용해줘'
+  });
+  const safety = inactive.stages.find((stage: any) => stage.id === 'safety_gate');
+  safety.status = 'skipped';
+  inactive.gate_budget.blocking_gate_count = 3;
+  const inactiveValidation = validatePipelinePlan(inactive);
+  assert.equal(inactiveValidation.ok, false);
+  assert.ok(inactiveValidation.issues.includes('stages.required_inactive:safety_gate:skipped'));
 });

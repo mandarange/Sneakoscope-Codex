@@ -24,6 +24,6 @@ test('dist Naruto JSON help rejects malformed fanout and removed model flags', (
     assert.notEqual(result.status, 0, `${args.join(' ')}\n${result.stderr || result.stdout}`);
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.ok, false);
-    assert.match(JSON.stringify(parsed), /missing_option_value:--agents|legacy_process_flag_requires_opt_in:--model/);
+    assert.match(JSON.stringify(parsed), /missing_option_value:--agents|removed_legacy_process_flag:--model/);
   }
 });

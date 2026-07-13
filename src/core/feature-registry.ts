@@ -519,7 +519,6 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'cli-proof': ['proof', 'smoke', '--json'],
   'cli-trust': { setup: [['run', 'fixture', '--mock', '--json']], command: ['trust', 'report', 'latest', '--json'] },
   'cli-wrongness': ['wrongness', 'add', '--kind', 'missing_evidence', '--claim', 'fixture wrongness', '--json'],
-  'cli-db': ['db', 'policy'],
   'cli-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'cli-codex': ['codex', 'compatibility', '--json'],
   'cli-codex-lb': ['codex-lb', 'metrics', '--json'],
@@ -552,7 +551,6 @@ const SAFE_EXECUTABLE_FIXTURE_ARGS = Object.freeze({
   'route-dfix': ['dfix', 'fixture', '--json'],
   'route-seo-geo-optimizer': ['seo-geo-optimizer', 'fixture', '--mode', 'geo', '--json'],
   'route-fast-mode': ['fast-mode', 'status', '--json'],
-  'route-db': ['db', 'check', '--sql', 'SELECT 1', '--json'],
   'route-wiki': ['wiki', 'image-ingest', 'test/fixtures/images/one-by-one.png', '--json'],
   'route-gx': ['gx', 'validate', 'fixture', '--mock', '--json']
 });

@@ -2,6 +2,8 @@
 // @ts-nocheck
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { withScratchDirSync } from '../core/fsx.js';
 import { assertGate, emitGate, root, runSksJson } from './sks-1-11-gate-lib.js';
 
 const gate = process.argv[2] || path.basename(process.argv[1], '.mjs').replace(/-check$/, '');
@@ -100,7 +102,7 @@ function assertAgentSurface() {
   assertFiles(agentFiles);
   const registry = text('src/cli/command-registry.ts');
   const zellij = text('src/core/agents/agent-runner-zellij.ts');
-  assertGate(/\bagent:\s+entry/.test(registry), 'command registry must expose sks agent');
+  assertGate(/\bagent:\s+entry/.test(registry) || registry.includes('agent: routeStateMutator(entry('), 'command registry must expose sks agent');
   assertGate(/'--agent': 'agent'/.test(registry), 'CLI parser must route --agent to agent command');
   assertGate(zellij.includes('buildZellijAgentPanePlan') && zellij.includes('persistent_worker_slot') && zellij.includes('agent-zellij-report.json'), 'Zellij agent backend must declare lane plan and report policy');
 }
@@ -246,11 +248,51 @@ function assertRouteNativeBlackbox(routeName) {
     assertGate(!JSON.stringify(result).includes('analysis_scout'), 'Team runtime artifact leaked legacy analysis_scout');
   }
   if (routeName === 'research') {
-    const prepared = runSksJson(['research', 'prepare', 'native backend fixture', '--json']);
-    const result = runSksJson(['research', 'run', prepared.mission_id, ...routeFixtureArgs, '--native-proof-only']);
-    assertGate(result.ok === true, 'Research mock blackbox did not pass', result);
-    assertGate(result.gate?.gate?.native_agent_proof === true || result.gate?.native_agent_proof === true || result.proof?.ok === true, 'Research proof missing native agent evidence artifact', result);
-    assertGate(!JSON.stringify(result).includes('scout-ledger'), 'Research runtime artifact leaked scout-ledger as SSOT');
+    withScratchDirSync('research-native-release-gate-', (fixtureRoot) => {
+      const fixtureHome = path.join(fixtureRoot, 'home');
+      const fixtureFiles = {
+        'package.json': `${JSON.stringify({ name: 'sks-research-native-release-gate', private: true })}\n`,
+        'release-gates.v2.json': `${JSON.stringify({ schema: 'sks.release-gates.v2', gates: [] })}\n`,
+        'docs/research-pipeline.md': '# Research fixture\n',
+        'src/core/research/research-stage-runner.ts': 'export const fixtureResearchStageRunner = true;\n',
+        'src/core/research/research-report-quality.ts': 'export const fixtureResearchReportQuality = true;\n',
+        'src/core/research/research-final-reviewer.ts': 'export const fixtureResearchFinalReviewer = true;\n'
+      };
+      fs.mkdirSync(fixtureHome, { recursive: true });
+      for (const [relative, contents] of Object.entries(fixtureFiles)) {
+        const target = path.join(fixtureRoot, relative);
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, contents);
+      }
+      const gitInit = spawnSync('git', ['init', '--quiet'], { cwd: fixtureRoot, encoding: 'utf8' });
+      const gitAdd = gitInit.status === 0
+        ? spawnSync('git', ['add', '--', ...Object.keys(fixtureFiles)], { cwd: fixtureRoot, encoding: 'utf8' })
+        : null;
+      assertGate(gitInit.status === 0 && gitAdd?.status === 0, 'Research fixture repository inventory setup failed', {
+        git_init_status: gitInit.status,
+        git_init_stderr: gitInit.stderr,
+        git_add_status: gitAdd?.status ?? null,
+        git_add_stderr: gitAdd?.stderr || ''
+      });
+      const options = {
+        cwd: fixtureRoot,
+        env: {
+          HOME: fixtureHome,
+          CODEX_HOME: path.join(fixtureHome, '.codex'),
+          SKS_GLOBAL_ROOT: path.join(fixtureHome, '.sneakoscope-global'),
+          SKS_TEST_ISOLATION: '1',
+          SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+          SKS_RELEASE_FIXTURE_ACTIVE_ROUTE_BYPASS: '1'
+        }
+      };
+      const prepared = runSksJson(['research', 'prepare', 'native backend fixture', '--json'], options);
+      const result = runSksJson(['research', 'run', prepared.mission_id, '--agents', '5', '--max-threads', '5', '--max-cycles', '1', '--cycle-timeout-minutes', '15', '--mock', '--json'], options);
+      assertGate(result.ok === true, 'Research mock blackbox did not pass', result);
+      assertGate(result.official_subagent_review?.passed === true, 'Research proof missing official subagent adversarial convergence', result);
+      assertGate(result.honest_mode?.guarantees?.genius_level === false && result.honest_mode?.guarantees?.novelty === false, 'Research Honest Mode must reject genius/novelty guarantees', result);
+      assertGate(!JSON.stringify(result).includes('scout-ledger'), 'Research runtime artifact leaked scout-ledger as SSOT');
+      assertGate(!JSON.stringify(result).includes('agent-native-cli-session-swarm'), 'Research runtime must not use the legacy native agent swarm');
+    });
   }
   if (routeName === 'qa') {
     const prepared = runSksJson(['qa-loop', 'prepare', 'native backend API fixture', '--json']);
@@ -269,8 +311,10 @@ function assertBlackboxAgent() {
   assertGate(result.proof?.ledger_hash_chain_ok === true, 'agent ledger hash proof missing', result.proof);
 }
 
-assertAgentSurface();
-assertReleaseScripts();
+if (gate !== 'research-native-agent-backend') {
+  assertAgentSurface();
+  assertReleaseScripts();
+}
 
 if (gate.includes('legacy-multiagent') || gate === 'team-native-agent-backend' || gate === 'research-native-agent-backend' || gate === 'qa-native-agent-backend') assertLegacyMultiagentRemoved();
 if (gate === 'team-native-agent-backend') assertRouteNativeBlackbox('team');

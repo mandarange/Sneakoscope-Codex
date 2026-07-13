@@ -18,7 +18,11 @@ const sources = {
 const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToNaruto') && sources.team.includes('narutoCommand');
 assertGate(teamCreateRedirectsToNaruto, 'Team create must route through the Naruto official-subagent SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex-sdk');
-assertGate(sources.research.includes("mock ? 'fake' : 'codex-sdk'"), 'Research must route native agents through codex-sdk');
+assertGate(
+  sources.research.includes("backend: mock ? 'mock' : 'codex-sdk'")
+    && sources.research.includes("reviewer_workflow: 'official_codex_subagent'"),
+  'Research must use the Codex SDK stage backend plus the official subagent reviewer workflow'
+);
 assertGate(sources.naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must invoke the official Codex subagent runner');
 assertGate(sources.naruto.includes("workflow: 'official_codex_subagent'"), 'Naruto must persist the official subagent workflow contract');
 assertGate(!sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto must not select the legacy codex-sdk backend');

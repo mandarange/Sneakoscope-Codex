@@ -35,7 +35,7 @@ export const PROOF_CONE_DEFINITIONS = Object.freeze([
     id: 'db_safety',
     surfaces: ['database', 'supabase', 'mad-sks'],
     match: [/db-safety|supabase|migration|rls|schema|sql/i],
-    verification: ['npm run packcheck', 'sks selftest --mock --json', 'sks db scan --json'],
+    verification: ['npm run packcheck', 'sks selftest --mock --json', 'node --test test/unit/db-safety.test.mjs'],
     negative_work: ['browser_ui_e2e', 'visual_snapshot']
   },
   {

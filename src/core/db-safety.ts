@@ -394,11 +394,11 @@ async function writeMadSksTableDeletePending(root: any, state: any = {}, decisio
 }
 
 function looksLikeConfirmationYes(prompt: any = '') {
-  return /^(yes|y|confirm|confirmed|approve|approved|proceed|continue|ok|okay|네|예|응|허용|승인|진행|계속|삭제\s*허용|테이블\s*삭제\s*허용)\b/i.test(String(prompt || '').trim());
+  return /^(yes|y|confirm|confirmed|approve|approved|proceed|continue|ok|okay|네|예|응|허용|승인|진행|계속|삭제\s*허용|테이블\s*삭제\s*허용)(?=$|\s|[.!?。！？,，])/i.test(String(prompt || '').trim());
 }
 
 function looksLikeConfirmationNo(prompt: any = '') {
-  return /^(no|n|stop|abort|cancel|deny|denied|아니|아니요|중단|취소|거부|멈춰)\b/i.test(String(prompt || '').trim());
+  return /^(no|n|stop|abort|cancel|deny|denied|아니|아니요|중단|취소|거부|멈춰)(?=$|\s|[.!?。！？,，])/i.test(String(prompt || '').trim());
 }
 
 export async function handleMadSksUserConfirmation(root: any, state: any = {}, prompt: any = '') {

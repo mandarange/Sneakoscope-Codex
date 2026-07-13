@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildOfficialSubagentPrompt } from '../official-subagent-prompt.js'
+import { extractBoundedTriwikiAttention } from '../triwiki-attention.js'
 
 test('official prompt seals model, ownership, wait, and no-nesting rules', () => {
   const prompt = buildOfficialSubagentPrompt({
@@ -51,4 +52,38 @@ test('preparation prompt preserves requested count without inventing write slice
   assert.match(prompt, /decomposition status: parent_required/)
   assert.match(prompt, /do not invent write scopes/)
   assert.match(prompt, /parent decomposition required before any subagent is spawned/)
+})
+
+test('official prompt carries only bounded TriWiki attention anchors', () => {
+  const triwikiAttention = extractBoundedTriwikiAttention({
+    attention: {
+      mode: 'aggressive_triwiki_active_recall',
+      use_first: [
+        ['claim-a', 'hash-a', 'source-a'],
+        ['claim-b', 'hash-b', 'source-b'],
+        ['claim-c', 'hash-c', 'source-c']
+      ],
+      hydrate_first: [
+        ['claim-a', 'code_citations:src/a.ts'],
+        ['claim-b', 'code_citations:src/b.ts']
+      ]
+    }
+  }, 2)
+  const prompt = buildOfficialSubagentPrompt({
+    goal: 'Review the bounded source scope',
+    maxThreads: 12,
+    requestedSubagents: 1,
+    requestedSubagentsExplicit: false,
+    decompositionStatus: 'parent_required',
+    slices: [],
+    triwikiAttention
+  })
+
+  assert.match(prompt, /safe default/)
+  assert.match(prompt, /attention\.use_first anchors/)
+  assert.match(prompt, /claim-a/)
+  assert.match(prompt, /claim-b/)
+  assert.doesNotMatch(prompt, /claim-c/)
+  assert.match(prompt, /do not inject the full context pack/)
+  assert.match(prompt, /do not launch shell workers, a custom scheduler, a worker pool, or model fanout/)
 })

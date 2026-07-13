@@ -35,11 +35,22 @@ export async function createHermeticProjectRoot({
 }
 
 export async function runSksInRoot(root, args, { expectCode = 0 } = {}) {
+  const home = path.join(root, '.home');
+  const globalRoot = path.join(root, '.sneakoscope-global');
+  await fs.mkdir(home, { recursive: true });
   const result = await runProcess(process.execPath, [path.join(SOURCE_ROOT, 'dist', 'bin', 'sks.js'), ...args], {
     cwd: root,
     timeoutMs: ROUTE_E2E_COMMAND_TIMEOUT_MS,
     maxOutputBytes: 512 * 1024,
-    env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', CI: 'true' }
+    env: {
+      SKS_SKIP_NPM_FRESHNESS_CHECK: '1',
+      SKS_TEST_ISOLATION: '1',
+      SKS_UPDATE_MIGRATION_GATE_DISABLED: '1',
+      SKS_GLOBAL_ROOT: globalRoot,
+      HOME: home,
+      CODEX_HOME: path.join(home, '.codex'),
+      CI: 'true'
+    }
   });
   assert.equal(result.code, expectCode, result.stderr || result.stdout);
   const json = JSON.parse(result.stdout);
@@ -56,7 +67,7 @@ export async function assertCompletionProofInRoot(root, missionId, route) {
   const proof = JSON.parse(await fs.readFile(file, 'utf8'));
   assert.equal(proof.schema, 'sks.completion-proof.v1');
   assert.equal(proof.route, route);
-  assert.ok(['verified', 'verified_partial', 'blocked'].includes(proof.status));
+  assert.ok(['verified', 'verified_partial', 'blocked', 'mock_only'].includes(proof.status));
   return proof;
 }
 

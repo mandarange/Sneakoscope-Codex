@@ -11,6 +11,11 @@ test('Codex restart targets the ChatGPT bundle id and waits for exit before open
     return { code: 0, stdout: '', stderr: '' };
   };
   const result = await restartCodexApp({
+    root: '/tmp/sks-codex-app-restart-test-home',
+    env: {
+      HOME: '/tmp/sks-codex-app-restart-test-home',
+      CODEX_HOME: '/tmp/sks-codex-app-restart-test-home/.codex'
+    },
     platform: 'darwin',
     delayMs: 0,
     pollMs: 1,

@@ -46,7 +46,7 @@ async function zellijStatus(root: string, args: string[], json: boolean) {
     ok: ready || !requireReal,
     status,
     version: capability.version || null,
-    required_for: ['sks --mad', 'sks team open-zellij', 'interactive lane UI'],
+    required_for: ['sks --mad', 'interactive MAD lane UI', 'standalone Zellij diagnostics'],
     blockers: capability.blockers || [],
     warnings: capability.warnings || [],
     install_hint: ready ? null : installHint(),

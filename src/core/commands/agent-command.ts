@@ -40,6 +40,22 @@ function agentHelp(json = false) {
 }
 
 async function agentRun(parsed: any) {
+  if (normalizeRouteName(parsed.route) === 'release-review' && parsed.legacyNativeRuntime !== true) {
+    const result = {
+      schema: AGENT_ACTION_SCHEMA,
+      ok: false,
+      status: 'blocked',
+      route: '$Release-Review',
+      blocker: 'release_review_official_subagents_required',
+      blockers: ['release_review_official_subagents_required'],
+      next_command: `sks naruto run "$Release-Review ${String(parsed.prompt || 'release audit').replace(/"/g, '\\"')}" --agents ${Math.max(1, Number(parsed.agents || 1))} --read-only --json`,
+      legacy_escape_hatch: 'Pass --legacy-native-runtime only for an explicitly approved legacy compatibility run.'
+    }
+    process.exitCode = 2
+    return emit(parsed, result, () => {
+      console.error('Release Review is owned by the Codex official subagent workflow. Use the suggested sks naruto command.')
+    })
+  }
   const result = await runNativeAgentOrchestrator({ ...parsed, routeCommand: 'sks agent run', routeBlackboxKind: 'actual_agent_command' })
   if (normalizeRouteName(parsed.route) === 'release-review' && result.mission_id) {
     await writeReleaseReviewNativeAgentPlan(parsed, result)
@@ -57,11 +73,9 @@ function normalizeRouteName(route: any = ''): string {
 }
 
 /**
- * $Release-Review runs through the generic native agent orchestrator (sks agent run
- * --route "$Release-Review"), which does not itself know it is a release-review run.
- * Write the route-specific release-review-native-agent-plan.json summary artifact here
- * so `route-release-review`'s fixture contract (plan file + agent proof evidence +
- * agent effort policy) is genuinely satisfied by this command rather than only partially.
+ * Legacy compatibility fixtures may explicitly opt into the historical native
+ * Release-Review runner with --legacy-native-runtime. Public $Release-Review
+ * execution is owned by the official Codex subagent workflow.
  */
 async function writeReleaseReviewNativeAgentPlan(parsed: any, result: any) {
   const root = await sksRoot()

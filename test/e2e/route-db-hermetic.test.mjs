@@ -1,7 +1,10 @@
 import test from 'node:test';
-import { assertCompletionProof, runSks } from './route-real-command-helper.mjs';
+import assert from 'node:assert/strict';
+import { runSks } from './route-real-command-helper.mjs';
 
-test('DB route runs in a hermetic temp project root', async () => {
-  const json = await runSks(['db', 'check', '--sql', 'SELECT 1', '--json']);
-  await assertCompletionProof(json.mission_id || json.completion_proof?.mission_id, '$DB');
+test('legacy DB CLI is absent from the public command router', async () => {
+  const json = await runSks(['db', 'check', '--sql', 'SELECT 1', '--json'], { expectCode: 1 });
+  assert.equal(json.status, 'blocked');
+  assert.equal(json.command, 'db');
+  assert.equal(json.reason, 'unknown_command');
 });

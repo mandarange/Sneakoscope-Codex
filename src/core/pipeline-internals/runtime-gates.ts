@@ -310,7 +310,7 @@ export async function evaluateStop(root: any, state: any, payload: any, opts: an
                 ]
               : ['naruto-gate.json'];
             if (officialMissing.length) {
-              return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot stop yet. Official subagent evidence and the parent integration summary are incomplete. Missing: ${officialMissing.join(', ')}. Legacy clone/process artifacts are accepted only when SKS_NARUTO_LEGACY_PROCESS_SWARM=1 or the mission carries an explicit legacy workflow marker.`, { gate: 'official-subagent-evidence', missing: officialMissing });
+              return complianceBlock(root, state, `SKS ${state.route_command || state.mode || 'route'} route cannot stop yet. Official subagent evidence and the parent integration summary are incomplete. Missing: ${officialMissing.join(', ')}. Historical legacy artifacts are read only when the mission itself already carries an explicit legacy workflow marker; no environment switch can reactivate that runtime.`, { gate: 'official-subagent-evidence', missing: officialMissing });
             }
           }
           const coverage = await workOrderCoverageGateStatus(root, state);
@@ -848,8 +848,7 @@ async function missingLegacyNarutoArtifacts(root: any, state: any = {}, gate: an
 }
 
 function legacyNarutoWorkflowEnabled(state: any = {}, gate: any = {}) {
-  return process.env.SKS_NARUTO_LEGACY_PROCESS_SWARM === '1'
-    || state?.legacy_subagent_workflow === true
+  return state?.legacy_subagent_workflow === true
     || state?.workflow === 'legacy_process_swarm'
     || gate?.legacy_workflow === true
     || gate?.workflow === 'legacy_process_swarm';

@@ -192,6 +192,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   // readability + repair checks still run. SKS_LAUNCH_FULL_CODEX_PROBE=1 restores the
   // old behavior.
   const allowMadRepair = rawArgs.includes('--repair-config') || rawArgs.includes('--fix') || rawArgs.includes('--yes-repair');
+  const allowUnverifiedToolOutputRecovery = codexLbToolOutputRecoveryOverrideAcknowledged({ args: rawArgs });
   const launchPreflightOpts = {
     fix: allowMadRepair,
     launchFast: process.env.SKS_LAUNCH_FULL_CODEX_PROBE !== '1',
@@ -199,7 +200,7 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     sandbox: 'danger-full-access',
     serviceTier: 'fast',
     skipCodexLbToolOutputRecovery: glmMadLaunch,
-    allowUnverifiedToolOutputRecovery: codexLbToolOutputRecoveryOverrideAcknowledged({ args: rawArgs })
+    allowUnverifiedToolOutputRecovery
   };
   let launchPreflight = await runCodexLaunchPreflight(launchRoot, launchPreflightOpts);
   // Fresh-project bootstrap: when the ONLY blocker is that the managed Codex config does
@@ -300,10 +301,11 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
         conciseBlockers: true,
         madSksEnv,
         launchEnv: madSksEnv,
+        recoveryAllowUnverified: allowUnverifiedToolOutputRecovery,
         codexBin: glmRuntime.wrapper.wrapper_path,
         explicitWorkspace
       })
-    : codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: launchProfile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv });
+    : codexLbImmediateLaunchOpts(cleanArgs, launchLb, { codexArgs: launchProfile.launch_args, conciseBlockers: true, madSksEnv, launchEnv: madSksEnv, recoveryAllowUnverified: allowUnverifiedToolOutputRecovery });
   // Only the auto-derived stable `sks-mad-<cwd>` name accumulates panes across
   // runs; when the user names a session explicitly (or codex-lb already minted a
   // fresh unique session) respect it and skip the reset.

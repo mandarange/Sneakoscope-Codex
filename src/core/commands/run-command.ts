@@ -7,6 +7,7 @@ import { routePrompt } from '../routes.js';
 import { latestTrustReport } from '../trust-kernel/trust-report.js';
 import { normalizeTrustStatus, TRUST_REPORT_SCHEMA, trustKernelMetadata } from '../trust-kernel/trust-kernel-schema.js';
 import { flag, positionalArgs } from './command-utils.js';
+import { prepareRoute } from '../pipeline-internals/runtime-core.js';
 
 export type RunMode = 'prepare' | 'mock' | 'execute' | 'auto';
 export type RouteExecutionStatus = 'completed' | 'blocked' | 'verified_partial' | 'prepared';
@@ -37,6 +38,8 @@ export interface RunRouteExecution {
   ok: boolean;
   status: RouteExecutionStatus;
   execution_kind: RouteExecutionKind;
+  execution_class?: 'real' | 'mock_fixture';
+  completion_evidence?: boolean;
   route: string;
   command: string | null;
   exit_code: number | null;
@@ -103,6 +106,7 @@ interface PreparedRouteOptions {
   run: (missionId: string) => readonly string[];
   trustStatus: string;
   executionKind: RouteExecutionKind;
+  mockOnly?: boolean;
 }
 
 interface RouteExecutionOptions {
@@ -113,6 +117,7 @@ interface RouteExecutionOptions {
   unverified?: string[];
   executionKind?: RouteExecutionKind;
   promptDelivered?: boolean;
+  mockOnly?: boolean;
 }
 
 interface FinalizeResult {
@@ -256,23 +261,29 @@ async function finalizeMockRun(
 
 async function executeRunRoute(root: string, context: ExecuteRunContext): Promise<RunResult> {
   const { id, dir, route, prompt, args, classification, auto } = context;
-  const execution = await executeRouteCommand(root, route, prompt, { auto });
+  const execution = await executeRouteCommand(root, route, prompt, { auto, parentMissionId: id });
   await writeJsonAtomic(path.join(dir, 'run-route-execution.json'), execution);
+  const mockOnly = execution.execution_class === 'mock_fixture';
+  const completionBlockers = [
+    ...execution.blockers,
+    ...(mockOnly ? ['run_execute_mock_only_not_real_completion'] : [])
+  ];
   const gate = {
     schema: 'sks.run-gate.v1',
     ok: execution.ok,
-    passed: execution.ok,
+    passed: execution.ok && !mockOnly,
     route: route.command,
     execute: true,
     auto,
+    execution_class: mockOnly ? 'mock_fixture' : 'real',
     route_execution: execution.status,
     execution_kind: execution.execution_kind,
     executed_command: execution.command,
     nested_mission_id: execution.nested_mission_id,
-    blockers: execution.blockers,
+    blockers: completionBlockers,
   };
   await writeJsonAtomic(path.join(dir, 'run-gate.json'), gate);
-  const statusHint = execution.ok ? execution.trust_status || 'verified_partial' : 'blocked';
+  const statusHint = mockOnly ? 'mock_only' : execution.ok ? execution.trust_status || 'verified_partial' : 'blocked';
   const proof = await finalizeRoute(root, {
     missionId: id,
     route: route.command,
@@ -280,8 +291,9 @@ async function executeRunRoute(root: string, context: ExecuteRunContext): Promis
     gate,
     artifacts: ['run-classification.json', 'run-route-execution.json', 'run-gate.json', 'completion-proof.json'],
     statusHint,
-    blockers: execution.ok ? [] : execution.blockers,
+    blockers: gate.passed ? [] : completionBlockers,
     unverified: execution.unverified,
+    mock: mockOnly,
     command: { cmd: execution.command || `sks run "${prompt}" --execute`, status: execution.exit_code ?? (execution.ok ? 0 : 2) },
     lightweightEvidence: execution.execution_kind === 'safe_deterministic',
   });
@@ -290,15 +302,15 @@ async function executeRunRoute(root: string, context: ExecuteRunContext): Promis
     : await loadTrustReport(root, id);
   const autoVerification = auto ? await runAutoVerification(root, id) : null;
   const autoOk = autoVerification?.ok ?? true;
-  const executeOk = execution.ok && proof.ok && autoOk;
-  await closeWorkOrderLedgerForRouteResult(dir, { ok: executeOk, blockers: execution.blockers });
+  const executeOk = execution.ok && !mockOnly && proof.ok && autoOk;
+  await closeWorkOrderLedgerForRouteResult(dir, { ok: executeOk, blockers: completionBlockers });
   await setCurrent(root, {
     mission_id: id,
     mode: 'RUN',
     route: route.id,
     route_command: route.command,
     phase: executeOk ? 'RUN_EXECUTE_DONE' : 'RUN_EXECUTE_BLOCKED',
-    implementation_allowed: execution.ok,
+    implementation_allowed: executeOk,
     nested_mission_id: execution.nested_mission_id,
     completion_proof: 'completion-proof.json',
     trust_report: 'trust-report.json',
@@ -317,7 +329,7 @@ async function executeRunRoute(root: string, context: ExecuteRunContext): Promis
     auto_verification: autoVerification,
     completion_proof: `.sneakoscope/missions/${id}/completion-proof.json`,
     trust_report: `.sneakoscope/missions/${id}/trust-report.json`,
-    next_action: execution.ok && autoOk ? 'inspect status or continue with route-specific follow-up' : execution.next_action,
+    next_action: executeOk ? 'inspect status or continue with route-specific follow-up' : execution.next_action,
   };
   if (!result.ok) process.exitCode = 1;
   if (flag(args, '--json')) {
@@ -335,7 +347,7 @@ async function executeRouteCommand(
   root: string,
   route: RouteSelection,
   prompt: string,
-  { auto = false }: { auto?: boolean } = {}
+  { auto = false, parentMissionId = null }: { auto?: boolean; parentMissionId?: string | null } = {}
 ): Promise<RunRouteExecution> {
   if (route.command === '$Image-UX-Review') {
     return {
@@ -359,12 +371,12 @@ async function executeRouteCommand(
       status: 'blocked',
       execution_kind: 'blocked',
       route: route.command,
-      command: 'sks db check --command <prompt>',
+      command: null,
       exit_code: 2,
       nested_mission_id: null,
       blockers: ['destructive_db_auto_execute_blocked'],
       unverified: ['DB destructive or broad mutation prompts cannot auto-execute.'],
-      next_action: 'run sks db check/classify and prepare a scoped migration-only plan',
+      next_action: 'use the $DB Codex App route for read-only safety analysis; use sks mad-sks plan or apply-migration only after an explicit scoped permission mission',
     };
   }
   if (route.command === '$Research') {
@@ -373,7 +385,8 @@ async function executeRouteCommand(
       run: (missionId: string) => ['research', 'run', missionId, '--mock', '--json'],
       trustStatus: 'verified_partial',
       executionKind: 'mock_safe',
-    });
+      mockOnly: true,
+    }, parentMissionId);
   }
   if (route.command === '$QA-LOOP') {
     return executePreparedRoute(root, route, prompt, {
@@ -381,8 +394,10 @@ async function executeRouteCommand(
       run: (missionId: string) => ['qa-loop', 'run', missionId, '--mock', '--json'],
       trustStatus: 'verified_partial',
       executionKind: 'mock_safe',
-    });
+      mockOnly: true,
+    }, parentMissionId);
   }
+  if (route.command === '$DB') return executeInternalDbRoute(root, route, prompt);
   const commandArgs = safeRouteExecutionArgs(route, prompt, { auto });
   // safeRouteExecutionArgs() returns null for any route it doesn't have a
   // dedicated safe live command for. Routes without a dedicated branch cannot
@@ -420,6 +435,60 @@ async function executeRouteCommand(
   });
 }
 
+async function executeInternalDbRoute(root: string, route: RouteSelection, prompt: string): Promise<RunRouteExecution> {
+  try {
+    const prepared = await prepareRoute(root, `$DB ${prompt}`, {});
+    const missionId = String(prepared?.mission_id || '').trim();
+    const dir = missionId ? missionDir(root, missionId) : null;
+    const scanReady = Boolean(dir && await exists(path.join(dir, 'db-safety-scan.json')));
+    const reviewReady = Boolean(dir && await exists(path.join(dir, 'db-review.json')));
+    if (!missionId || !scanReady || !reviewReady) {
+      return {
+        schema: 'sks.run-route-execution.v1',
+        ok: false,
+        status: 'blocked',
+        execution_kind: 'blocked',
+        route: route.command,
+        command: 'internal:$DB prepare',
+        exit_code: 2,
+        nested_mission_id: missionId || null,
+        blockers: ['db_route_materialization_incomplete'],
+        unverified: [],
+        next_action: 'inspect the internal $DB preparation artifacts and retry after fixing the materialization error',
+      };
+    }
+    return {
+      schema: 'sks.run-route-execution.v1',
+      ok: true,
+      status: 'prepared',
+      execution_kind: 'safe_deterministic',
+      route: route.command,
+      command: 'internal:$DB prepare',
+      exit_code: 0,
+      nested_mission_id: missionId,
+      prompt_delivered: true,
+      trust_status: 'verified_partial',
+      blockers: [],
+      unverified: ['The internal $DB route materialized read-only safety evidence; db-review.json remains the authoritative review gate and no database mutation was attempted.'],
+      next_action: `inspect .sneakoscope/missions/${missionId}/db-safety-scan.json and complete db-review.json`,
+    };
+  } catch (error: any) {
+    return {
+      schema: 'sks.run-route-execution.v1',
+      ok: false,
+      status: 'blocked',
+      execution_kind: 'blocked',
+      route: route.command,
+      command: 'internal:$DB prepare',
+      exit_code: 2,
+      nested_mission_id: null,
+      blockers: [`db_route_materialization_failed:${error?.message || String(error)}`],
+      unverified: [],
+      next_action: 'inspect the internal $DB preparation failure; do not fall back to the removed sks db command',
+    };
+  }
+}
+
 function isSafeDeterministicRoute(command: string): boolean {
   return new Set(['$DB', '$Wiki', '$Fast-Mode', '$with-local-llm-on', '$Commit', '$Commit-And-Push']).has(command);
 }
@@ -439,9 +508,10 @@ async function executePreparedRoute(
   root: string,
   route: RouteSelection,
   prompt: string,
-  { prepare, run, trustStatus, executionKind }: PreparedRouteOptions
+  { prepare, run, trustStatus, executionKind, mockOnly = false }: PreparedRouteOptions,
+  parentMissionId: string | null
 ): Promise<RunRouteExecution> {
-  const prepareResult = await runSks(root, prepare);
+  const prepareResult = await runSks(root, prepare, { parentMissionId });
   const prepareCommand = ['sks', ...prepare].join(' ');
   const missionId = parseMissionId(prepareResult.stdout);
   const steps: RunRouteStep[] = [commandStep('prepare', prepareCommand, prepareResult)];
@@ -470,16 +540,21 @@ async function executePreparedRoute(
   return routeExecutionResult(route, `${prepareCommand} && ${runCommand}`, runResult, {
     nestedMissionId: missionId,
     steps,
-    okStatus: 'completed',
-    trustStatus,
+    okStatus: mockOnly ? 'verified_partial' : 'completed',
+    trustStatus: mockOnly ? 'mock_only' : trustStatus,
     executionKind,
+    mockOnly,
     unverified: [
       'sks run --execute prepared and ran the selected route through its CLI; mock-safe fixtures do not claim live external source or UI coverage.',
     ],
   });
 }
 
-async function runSks(root: string, commandArgs: readonly string[]): Promise<RunProcessResult> {
+async function runSks(
+  root: string,
+  commandArgs: readonly string[],
+  { parentMissionId = null }: { parentMissionId?: string | null } = {}
+): Promise<RunProcessResult> {
   const packedBin = new URL('../../bin/sks.js', import.meta.url).pathname;
   const sourceBin = new URL('../../../bin/sks.js', import.meta.url).pathname;
   const entrypoint = (await exists(packedBin)) ? packedBin : sourceBin;
@@ -487,7 +562,12 @@ async function runSks(root: string, commandArgs: readonly string[]): Promise<Run
     cwd: root,
     timeoutMs: 180_000,
     maxOutputBytes: 512 * 1024,
-    env: { SKS_SKIP_NPM_FRESHNESS_CHECK: '1', SKS_LOCAL_LLM_TOGGLE_ONLY: '1', CI: 'true' },
+    env: {
+      SKS_SKIP_NPM_FRESHNESS_CHECK: '1',
+      SKS_LOCAL_LLM_TOGGLE_ONLY: '1',
+      CI: 'true',
+      ...(parentMissionId ? { SKS_RUN_PARENT_MISSION_ID: parentMissionId } : {})
+    },
   });
 }
 
@@ -499,11 +579,14 @@ function routeExecutionResult(
 ): RunRouteExecution {
   const nestedMissionId = parseMissionId(result.stdout);
   const ok = result.code === 0;
+  const mockOnly = options.mockOnly === true || options.executionKind === 'mock_safe';
   const execution: RunRouteExecution = {
     schema: 'sks.run-route-execution.v1',
     ok,
     status: ok ? (options.okStatus || 'completed') : 'blocked',
     execution_kind: ok ? (options.executionKind || 'live_route') : 'blocked',
+    execution_class: mockOnly ? 'mock_fixture' : 'real',
+    completion_evidence: ok && !mockOnly,
     route: route.command,
     command,
     exit_code: result.code,
@@ -515,7 +598,11 @@ function routeExecutionResult(
     unverified: ok
       ? options.unverified || ['sks run --execute ran the selected route command; route-specific gates remain authoritative for final trust.']
       : [],
-    next_action: ok ? 'review completion proof and trust report' : 'inspect run-route-execution.json stderr_tail',
+    next_action: ok
+      ? mockOnly
+        ? 'mock-only route execution completed; run the route directly without --mock for real completion evidence'
+        : 'review completion proof and trust report'
+      : 'inspect run-route-execution.json stderr_tail',
   };
   if (options.steps) execution.steps = options.steps;
   if (options.promptDelivered !== undefined) execution.prompt_delivered = options.promptDelivered;
@@ -539,7 +626,6 @@ function runNextAction(route: RouteSelection, id: string, args: readonly string[
 }
 
 function safeRouteExecutionArgs(route: RouteSelection, prompt: string, { auto = false }: { auto?: boolean } = {}): string[] | null {
-  if (route.command === '$DB') return ['db', 'check', '--sql', 'SELECT 1', '--json'];
   if (route.command === '$Super-Search') return superSearchExecutionArgs(prompt);
   if (route.command === '$SEO-GEO-OPTIMIZER') return ['seo-geo-optimizer', searchVisibilityActionFromPrompt(prompt), '--mode', searchVisibilityModeFromPrompt(prompt), '--target', searchVisibilityTargetFromPrompt(prompt), '--offline', '--json'];
   if (route.command === '$Wiki') return ['wiki', 'refresh', '--json'];

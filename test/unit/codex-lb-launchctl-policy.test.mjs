@@ -4,6 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { configureCodexLb } from '../../dist/cli/install-helpers.js';
+import { CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION } from '../../dist/core/codex-lb/codex-lb-tool-output-recovery.js';
+
+const compatibleRecoveryFetch = async () => new Response('{}', {
+  status: 200,
+  headers: { 'x-app-version': CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION }
+});
 
 test('codex-lb launchctl failure is structured and redacted', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-unit-codex-lb-launchctl-'));
@@ -17,7 +23,9 @@ test('codex-lb launchctl failure is structured and redacted', async () => {
     forceLaunchEnv: true,
     syncLaunchctl: true,
     launchctlBin: fakeLaunchctl,
-    syncCodexLogin: false
+    syncCodexLogin: false,
+    processEnv: {},
+    toolOutputRecoveryFetch: compatibleRecoveryFetch
   });
   const text = JSON.stringify(result);
   assert.doesNotMatch(text, /sk-launchctl-secret/);

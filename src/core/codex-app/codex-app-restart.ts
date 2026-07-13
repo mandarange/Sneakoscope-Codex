@@ -1,4 +1,6 @@
 import { exists, runProcess, which } from '../fsx.js'
+import { inspectCodexLbCliLaunchRecovery } from '../codex-control/codex-lb-launch-recovery.js'
+import type { CodexLbToolOutputRecoveryProbe } from '../codex-lb/codex-lb-tool-output-recovery.js'
 
 export interface CodexAppRestartResult {
   schema: 'sks.codex-app-restart.v1'
@@ -12,6 +14,7 @@ export interface CodexAppRestartResult {
   exit_wait?: { ok: boolean; attempts: number; error?: string | null }
   open?: { ok: boolean; code: number | null; error?: string | null }
   blockers: string[]
+  tool_output_recovery?: CodexLbToolOutputRecoveryProbe
 }
 
 export async function restartCodexApp(opts: {
@@ -25,6 +28,9 @@ export async function restartCodexApp(opts: {
   osascriptPath?: string
   openPath?: string
   env?: NodeJS.ProcessEnv
+  root?: string
+  recoveryFetch?: typeof fetch
+  recoveryTimeoutMs?: number
   runProcessImpl?: typeof runProcess
 } = {}): Promise<CodexAppRestartResult> {
   const env = opts.env || process.env
@@ -47,6 +53,24 @@ export async function restartCodexApp(opts: {
         ...(osascript ? [] : ['osascript_missing']),
         ...(open ? [] : ['open_missing'])
       ]
+    }
+  }
+  const toolOutputRecovery = await inspectCodexLbCliLaunchRecovery({
+    root: opts.root || process.cwd(),
+    env,
+    cliArgs: ['/app'],
+    ...(opts.recoveryFetch ? { fetchImpl: opts.recoveryFetch } : {}),
+    ...(opts.recoveryTimeoutMs === undefined ? {} : { timeoutMs: opts.recoveryTimeoutMs })
+  })
+  if (!toolOutputRecovery.ok) {
+    return {
+      schema: 'sks.codex-app-restart.v1',
+      ok: false,
+      status: 'tool_output_recovery_blocked',
+      app_name: appName,
+      bundle_id: bundleId,
+      blockers: toolOutputRecovery.blockers,
+      tool_output_recovery: toolOutputRecovery
     }
   }
   const appTarget = bundleId ? `application id ${JSON.stringify(bundleId)}` : `application ${JSON.stringify(appName)}`
@@ -79,7 +103,8 @@ export async function restartCodexApp(opts: {
       bundle_id: bundleId,
       quit: { ok: true, code: quit.code, error: null },
       exit_wait: { ok: false, attempts, error: 'codex_app_exit_timeout' },
-      blockers: ['codex_app_exit_timeout']
+      blockers: ['codex_app_exit_timeout'],
+      tool_output_recovery: toolOutputRecovery
     }
   }
   await sleep(Number(opts.delayMs ?? env.SKS_CODEX_APP_RESTART_DELAY_MS ?? 150))
@@ -101,7 +126,8 @@ export async function restartCodexApp(opts: {
     blockers: [
       ...(quitOk ? [] : ['codex_app_quit_failed']),
       ...(openOk ? [] : ['codex_app_open_failed'])
-    ]
+    ],
+    tool_output_recovery: toolOutputRecovery
   }
 }
 

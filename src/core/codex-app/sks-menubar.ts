@@ -1269,6 +1269,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var codexCliLatestVersion: String?
     var codexCliUpdateAvailable = false
     var codexCliMissing = false
+    var codexCliStatusUnavailable = false
+    var codexCliStatusRequestGeneration = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -1377,6 +1379,10 @@ ${codexLifecycleSource}
         }
         if codexCliMissing {
             return MenuState(title: "SKS ⚠", line: "SKS v\\(packageVersion) · Codex CLI not installed")
+        }
+        if codexCliStatusUnavailable {
+            let current = codexCliCurrentVersion.map { " " + $0 } ?? ""
+            return MenuState(title: "SKS ⚠", line: "SKS v\\(packageVersion) · Codex CLI\\(current) status unavailable")
         }
         if codexCliUpdateAvailable {
             let current = codexCliCurrentVersion ?? "unknown"
@@ -1499,28 +1505,46 @@ ${codexLifecycleSource}
     }
 
     func updateCodexCliStatus(refresh: Bool = false) {
+        codexCliStatusRequestGeneration += 1
+        let requestGeneration = codexCliStatusRequestGeneration
         var args = ["codex", "update-status", "--json"]
         if refresh { args.append("--refresh") }
-        runSksSilent(args) { [weak self] _, output in
+        runSksSilent(args) { [weak self] code, output in
             guard let self = self else { return }
-            guard let json = parseJsonObject(output) else {
-                self.codexCliVersionItem.title = "Codex CLI: status unavailable"
-                self.codexCliUpdateItem.title = "Update Codex CLI Now"
-                self.codexCliUpdateAvailable = false
-                self.codexCliMissing = false
-                self.updateState()
+            guard self.codexCliStatusRequestGeneration == requestGeneration else { return }
+            guard let json = parseJsonObject(output),
+                  json["schema"] as? String == "sks.codex-cli-update-status.v1",
+                  let ok = json["ok"] as? Bool,
+                  let installed = json["installed"] as? Bool,
+                  let status = json["status"] as? String,
+                  ["current", "update_available", "missing", "update_check_unavailable"].contains(status),
+                  code == 0 || (!ok && !installed && status == "missing") else {
+                self.markCodexCliStatusUnavailable()
                 return
             }
             let current = json["current_version"] as? String
             let latest = json["latest_version"] as? String
-            let updateAvailable = json["update_available"] as? Bool == true
-            let installed = json["installed"] as? Bool == true
+            let reportedUpdateAvailable = json["update_available"] as? Bool
+            let trusted = status == "missing"
+                ? !ok && !installed && current == nil
+                : ok && installed && current != nil
+                    && (status == "update_check_unavailable"
+                        || (status == "update_available" && reportedUpdateAvailable == true)
+                        || (status == "current" && reportedUpdateAvailable == false))
+            guard trusted else {
+                self.markCodexCliStatusUnavailable()
+                return
+            }
+            let updateAvailable = reportedUpdateAvailable == true
             self.codexCliCurrentVersion = current
             self.codexCliLatestVersion = latest
             self.codexCliUpdateAvailable = updateAvailable
             self.codexCliMissing = !installed
+            self.codexCliStatusUnavailable = status == "update_check_unavailable"
             if !installed {
                 self.codexCliVersionItem.title = "Codex CLI: not installed"
+            } else if status == "update_check_unavailable" {
+                self.codexCliVersionItem.title = "Codex CLI: \\(current ?? "unknown") (update check unavailable)"
             } else if updateAvailable {
                 self.codexCliVersionItem.title = "Codex CLI: \\(current ?? "unknown") → \\(latest ?? "latest")  ⬆"
             } else if let current = current, let latest = latest {
@@ -1531,6 +1555,17 @@ ${codexLifecycleSource}
             self.codexCliUpdateItem.title = updateAvailable ? "Update Codex CLI Now  ⬆" : "Update Codex CLI Now"
             self.updateState()
         }
+    }
+
+    func markCodexCliStatusUnavailable() {
+        codexCliVersionItem.title = "Codex CLI: status unavailable"
+        codexCliUpdateItem.title = "Update Codex CLI Now"
+        codexCliCurrentVersion = nil
+        codexCliLatestVersion = nil
+        codexCliUpdateAvailable = false
+        codexCliMissing = false
+        codexCliStatusUnavailable = true
+        updateState()
     }
 
     @objc func useCodexLb() {

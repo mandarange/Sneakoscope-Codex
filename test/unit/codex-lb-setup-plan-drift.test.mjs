@@ -4,6 +4,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { configureCodexLb } from '../../dist/cli/install-helpers.js';
+import { CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION } from '../../dist/core/codex-lb/codex-lb-tool-output-recovery.js';
+
+const compatibleRecoveryFetch = async () => new Response('{}', {
+  status: 200,
+  headers: { 'x-app-version': CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION }
+});
 
 test('codex-lb no-env-file does not mutate an existing env file', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-lb-no-env-existing-'));
@@ -18,7 +24,10 @@ test('codex-lb no-env-file does not mutate an existing env file', async () => {
     writeEnvFile: false,
     storeKeychain: false,
     syncLaunchctl: false,
-    shellProfile: 'skip'
+    shellProfile: 'skip',
+    syncCodexLogin: false,
+    processEnv: {},
+    toolOutputRecoveryFetch: compatibleRecoveryFetch
   });
   assert.equal(result.ok, true);
   assert.equal(result.drift?.length, 0);

@@ -3,6 +3,8 @@ import fsp from 'node:fs/promises';
 import { ensureDir, exists, packageRoot, readJson, runProcess, which } from './fsx.js';
 import { codexVersionPolicy, compareSemverLike, parseCodexVersionText } from './codex-compat/codex-version-policy.js';
 import { validateJsonSchemaRecursive } from './json-schema-validator.js';
+import { inspectCodexLbCliLaunchRecovery } from './codex-control/codex-lb-launch-recovery.js';
+import type { CodexLbToolOutputRecoveryProbe } from './codex-lb/codex-lb-tool-output-recovery.js';
 
 export interface CodexExecResumeOutputSchemaAvailability {
   schema: 'sks.codex-exec-output-schema-availability.v1';
@@ -134,6 +136,7 @@ export interface CodexExecResumeOutputSchemaRunResult {
   stderr_tail: string;
   timed_out: boolean;
   exit_code: number | null;
+  codex_lb_tool_output_recovery: CodexLbToolOutputRecoveryProbe;
 }
 
 export async function detectCodexExecResumeOutputSchema(opts: any = {}): Promise<CodexExecResumeOutputSchemaAvailability> {
@@ -229,8 +232,35 @@ export async function buildCodexExecResumeOutputSchemaArgs(input: CodexResumeOut
 
 export async function runCodexExecResumeWithOutputSchema(
   input: CodexResumeOutputSchemaCommandInput,
-  opts: { codexBin?: string | null; timeoutMs?: number; maxOutputBytes?: number; cwd?: string; env?: NodeJS.ProcessEnv } = {}
+  opts: { codexBin?: string | null; timeoutMs?: number; maxOutputBytes?: number; cwd?: string; env?: NodeJS.ProcessEnv; recoveryFetch?: typeof fetch; recoveryTimeoutMs?: number; runProcessImpl?: typeof runProcess } = {}
 ): Promise<CodexExecResumeOutputSchemaRunResult> {
+  const root = opts.cwd || packageRoot();
+  const env = opts.env || process.env;
+  const toolOutputRecovery = await inspectCodexLbCliLaunchRecovery({
+    root,
+    env,
+    cliArgs: input.extraArgs || [],
+    ...(opts.recoveryFetch ? { fetchImpl: opts.recoveryFetch } : {}),
+    ...(opts.recoveryTimeoutMs === undefined ? {} : { timeoutMs: opts.recoveryTimeoutMs })
+  });
+  if (!toolOutputRecovery.ok) {
+    return {
+      schema: 'sks.codex-exec-output-schema-run.v1',
+      ok: false,
+      status: 'blocked',
+      args: [],
+      codex_bin: opts.codexBin || null,
+      output_file: null,
+      parsed_json: null,
+      blocker: structuredOutputBlocker('codex_lb_tool_output_recovery_blocked', toolOutputRecovery.blockers.join(', ')),
+      validation: { ok: false, issues: ['codex_lb_tool_output_recovery_blocked'] },
+      stdout_tail: '',
+      stderr_tail: '',
+      timed_out: false,
+      exit_code: null,
+      codex_lb_tool_output_recovery: toolOutputRecovery
+    };
+  }
   const availability = await detectCodexExecResumeOutputSchema({ codexBin: opts.codexBin || undefined });
   if (!availability.codex_bin || availability.status !== 'available' || !availability.output_schema_supported) {
     const status = availability.status === 'available' ? 'degraded_supported' : availability.status;
@@ -247,7 +277,8 @@ export async function runCodexExecResumeWithOutputSchema(
       stdout_tail: '',
       stderr_tail: '',
       timed_out: false,
-      exit_code: null
+      exit_code: null,
+      codex_lb_tool_output_recovery: toolOutputRecovery
     };
   }
 
@@ -257,12 +288,12 @@ export async function runCodexExecResumeWithOutputSchema(
   await ensureDir(path.dirname(outputFile));
   const args = await buildCodexExecResumeOutputSchemaArgs({ ...input, outputFile });
   const runOpts: Parameters<typeof runProcess>[2] = {
-    cwd: opts.cwd || packageRoot(),
+    cwd: root,
     timeoutMs: opts.timeoutMs || 120_000,
     maxOutputBytes: opts.maxOutputBytes || 256 * 1024
   };
-  if (opts.env) runOpts.env = opts.env;
-  const result = await runProcess(availability.codex_bin, args, runOpts);
+  runOpts.env = env;
+  const result = await (opts.runProcessImpl || runProcess)(availability.codex_bin, args, runOpts);
   const outputText = await readOutputText(outputFile, result.stdout);
   const parsed = parseStructuredCodexOutput(outputText);
   const schema = await readJson<any>(path.resolve(input.outputSchemaPath), null);
@@ -285,7 +316,8 @@ export async function runCodexExecResumeWithOutputSchema(
     stdout_tail: redactCodexOutput(result.stdout).slice(-12_000),
     stderr_tail: redactCodexOutput(result.stderr).slice(-12_000),
     timed_out: result.timedOut,
-    exit_code: result.code
+    exit_code: result.code,
+    codex_lb_tool_output_recovery: toolOutputRecovery
   };
 }
 

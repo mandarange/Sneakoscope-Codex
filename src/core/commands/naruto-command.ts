@@ -15,43 +15,39 @@ import {
 } from '../work-order-ledger.js'
 import {
   exists,
-  nowIso,
   readJson,
   sksRoot,
-  writeJsonAtomic,
-  writeTextAtomic
+  writeJsonAtomic
 } from '../fsx.js'
-import { classifyTaskProfile } from '../runtime/task-profile.js'
-import { chooseVerificationBudget } from '../runtime/verification-budget.js'
-import {
-  DEFAULT_SUBAGENT_MODEL,
-  NARUTO_PARENT_EFFORT,
-  NARUTO_PARENT_MODEL,
-  SUBAGENT_EFFORT,
-  THINKING_SUBAGENT_MODEL
-} from '../subagents/model-policy.js'
-import { buildOfficialSubagentPrompt } from '../subagents/official-subagent-prompt.js'
-import { readOfficialSubagentConfig } from '../subagents/official-subagent-config.js'
 import {
   SUBAGENT_EVENT_LOG_FILENAME,
   SUBAGENT_PARENT_SUMMARY_FILENAME,
-  normalizeSubagentParentSummary,
+  bindTrustworthySubagentParentSummaryToRun,
   persistOrReuseTrustworthySubagentParentSummary,
   readSubagentEvents,
   writeSubagentEvidence
 } from '../subagents/subagent-evidence.js'
 import { buildNarutoHelpResult } from '../subagents/naruto-help-contract.js'
+import { withFileLock } from '../locks/file-lock.js'
 import { resolveSubagentThreadBudget } from '../subagents/thread-budget.js'
 import {
   codexAppSessionKey,
   detectCodexAppSession,
   runOfficialSubagentWorkflow
 } from '../subagents/official-subagent-runner.js'
+import {
+  NARUTO_GATE_FILENAME,
+  NARUTO_RESULT_SCHEMA,
+  NARUTO_SUMMARY_FILENAME,
+  SUBAGENT_PLAN_FILENAME,
+  buildNarutoGateResult,
+  buildNarutoSummary,
+  prepareOfficialSubagentMission,
+  writeNarutoGate
+} from '../subagents/official-subagent-preparation.js'
 
-const NARUTO_RESULT_SCHEMA = 'sks.naruto-subagent-workflow.v1'
-const SUBAGENT_PLAN_FILENAME = 'subagent-plan.json'
-const NARUTO_SUMMARY_FILENAME = 'naruto-summary.json'
-const NARUTO_GATE_FILENAME = 'naruto-gate.json'
+export { buildNarutoGateResult } from '../subagents/official-subagent-preparation.js'
+
 const LEGACY_FLAG_WARNING = 'SKS: --clones is deprecated; use --agents. Naruto now uses Codex subagents.'
 const LEGACY_WORKERS_WARNING = 'SKS: naruto workers is deprecated; use naruto subagents.'
 const REMOVED_LEGACY_SUBCOMMANDS = new Set(['dashboard'])
@@ -74,10 +70,6 @@ export interface NarutoArgs {
 
 export async function narutoCommand(commandOrArgs: string | string[] = 'naruto', maybeArgs: string[] = []) {
   const args = Array.isArray(commandOrArgs) ? commandOrArgs.map(String) : maybeArgs.map(String)
-  if (process.env.SKS_NARUTO_LEGACY_PROCESS_SWARM === '1') {
-    const legacy = await import('./naruto-command-legacy.js')
-    return legacy.narutoCommand(args)
-  }
   if (args.some((arg) => arg === '--glm' || arg.startsWith('--glm='))) return blockGlmOverride(args.includes('--json'))
 
   const parsed = parseNarutoArgs(args)
@@ -90,7 +82,7 @@ export async function narutoCommand(commandOrArgs: string | string[] = 'naruto',
   }
   if (parsed.unsupportedLegacyFlags.length) {
     return emit(parsed, legacyFlagBlock(parsed.unsupportedLegacyFlags), () => {
-      console.error('$Naruto uses the Codex official subagent workflow. Legacy process flags require SKS_NARUTO_LEGACY_PROCESS_SWARM=1.')
+      console.error('$Naruto uses only the Codex official subagent workflow. Legacy process, scheduler, pool, backend, and model flags were removed.')
     }, true)
   }
 
@@ -106,24 +98,22 @@ async function narutoRun(parsed: NarutoArgs) {
   const root = await sksRoot()
   const appSession = detectCodexAppSession()
   const sessionKey = appSession ? codexAppSessionKey() : null
-  const taskProfile = classifyTaskProfile(parsed.prompt)
-  const officialConfig = await readOfficialSubagentConfig(root)
-  const budget = resolveSubagentThreadBudget({
-    requested: parsed.requestedSubagents,
-    configuredMaxThreads: parsed.maxThreads ?? officialConfig.maxThreads
-  })
-  const verification = chooseVerificationBudget({ taskProfile, changedFiles: [] })
-  const configBlockers = officialConfig.blockers.map((blocker) => `official_subagent_config:${blocker}`)
-  const delegationGoal = parsed.readOnly
-    ? `${parsed.prompt}\n\nConstraint: run every delegated slice in read-only mode. Do not edit files.`
-    : parsed.prompt
-  const delegationPrompt = buildOfficialSubagentPrompt({
-    goal: delegationGoal,
-    slices: [],
-    requestedSubagents: budget.requestedSubagents,
-    maxThreads: budget.maxThreads,
-    decompositionStatus: 'parent_required'
-  })
+  if (appSession && sessionKey) {
+    return withFileLock({
+      lockPath: path.join(root, '.sneakoscope', 'state', `naruto-session-${sessionStateKey(sessionKey)}.lock`),
+      timeoutMs: 20_000,
+      staleMs: 120_000
+    }, () => narutoRunTransaction(parsed, root, appSession, sessionKey))
+  }
+  return narutoRunTransaction(parsed, root, appSession, sessionKey)
+}
+
+async function narutoRunTransaction(
+  parsed: NarutoArgs,
+  root: string,
+  appSession: boolean,
+  sessionKey: string | null
+) {
   const mission = await resolveRunMission(root, parsed, sessionKey)
   if (!mission) {
     return emit(parsed, {
@@ -134,6 +124,10 @@ async function narutoRun(parsed: NarutoArgs) {
     }, () => console.error(`Naruto mission not found: ${parsed.missionId}`), true)
   }
   const { id, dir } = mission
+  if (appSession && sessionKey) {
+    const pending = await readPendingAppNarutoRun(root, { id, dir }, sessionKey)
+    if (pending) return emit(parsed, pending, () => renderRunResult(pending))
+  }
   if (!(await exists(path.join(dir, 'work-order-ledger.json')))) {
     await createAndWriteWorkOrderLedgerForPrompt(dir, {
       missionId: id,
@@ -141,63 +135,34 @@ async function narutoRun(parsed: NarutoArgs) {
       prompt: parsed.prompt
     })
   }
-  if (!(await exists(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME)))) {
-    await writeTextAtomic(path.join(dir, SUBAGENT_EVENT_LOG_FILENAME), '')
-  }
 
-  const plan = {
-    schema: 'sks.subagent-plan.v1',
-    mission_id: id,
-    route: '$Naruto',
-    workflow: 'official_codex_subagent',
+  const preparation = await withFileLock({
+    lockPath: path.join(dir, '.naruto-preparation.lock'),
+    timeoutMs: 5_000,
+    staleMs: 60_000
+  }, () => prepareOfficialSubagentMission({
+    root,
+    dir,
+    missionId: id,
     goal: parsed.prompt,
-    read_only: parsed.readOnly,
-    task_profile: taskProfile,
-    decomposition_status: 'parent_required',
-    delegation_prompt: delegationPrompt,
-    requested_subagents: budget.requestedSubagents,
-    max_threads: budget.maxThreads,
-    first_wave: budget.firstWave,
-    wave_count: budget.waveCount,
-    max_depth: budget.maxDepth,
-    config_source: parsed.maxThreads === undefined ? officialConfig.sources.maxThreads : 'cli',
-    config_blockers: officialConfig.blockers,
-    slices: [],
-    parent: {
-      model: NARUTO_PARENT_MODEL,
-      model_reasoning_effort: NARUTO_PARENT_EFFORT
-    },
-    agents: {
-      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
-      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
-    },
-    verification: { budget: verification },
-    legacy_process_swarm_used: false,
-    created_at: nowIso()
-  }
-  await writeJsonAtomic(path.join(dir, SUBAGENT_PLAN_FILENAME), plan)
-  const preparationEvidence = await writeSubagentEvidence(dir, {
-    requestedSubagents: budget.requestedSubagents,
-    parentSummaryPresent: false,
-    workflowStatus: 'delegation_context_ready',
-    preparationOnly: true,
-    additionalBlockers: configBlockers
-  })
-  await writeJsonAtomic(path.join(dir, NARUTO_SUMMARY_FILENAME), buildNarutoSummary({
-    missionId: id,
-    budget,
-    evidence: preparationEvidence,
-    verification,
-    status: 'delegation_context_ready',
-    ok: false,
-    blockers: [...preparationEvidence.blockers, ...configBlockers]
+    route: '$Naruto',
+    sessionScope: sessionKey,
+    ...(parsed.requestedSubagents === undefined ? {} : { requestedSubagents: parsed.requestedSubagents }),
+    requestedSubagentsExplicit: parsed.requestedSubagents !== undefined,
+    ...(parsed.maxThreads === undefined ? {} : { maxThreads: parsed.maxThreads }),
+    mode: 'naruto',
+    readOnly: parsed.readOnly,
+    preparationOnly: true
   }))
-  await writeNarutoGate(dir, {
-    missionId: id,
+  const {
+    plan,
     evidence: preparationEvidence,
-    passed: false,
-    blockers: [...preparationEvidence.blockers, ...configBlockers]
-  })
+    budget,
+    verification,
+    delegationPrompt,
+    workflowRunId,
+    configBlockers
+  } = preparation
   await setCurrent(root, {
     mission_id: id,
     route: 'Naruto',
@@ -214,6 +179,8 @@ async function narutoRun(parsed: NarutoArgs) {
     requested_subagents: budget.requestedSubagents,
     max_threads: budget.maxThreads,
     max_depth: budget.maxDepth,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionKey,
     stop_gate: NARUTO_GATE_FILENAME,
     naruto_gate_file: NARUTO_GATE_FILENAME,
     prompt: parsed.prompt
@@ -233,14 +200,17 @@ async function narutoRun(parsed: NarutoArgs) {
     requested: Number(completedPlan?.requested_subagents || budget.requestedSubagents),
     configuredMaxThreads: Number(completedPlan?.max_threads || budget.maxThreads)
   })
-  const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, run.parent_summary, {
-    workflowStatus: run.status
+  const runBoundParentSummary = bindTrustworthySubagentParentSummaryToRun(run.parent_summary, workflowRunId)
+  const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, runBoundParentSummary, {
+    workflowStatus: run.status,
+    runId: workflowRunId
   })
   const evidence = await writeSubagentEvidence(dir, {
     requestedSubagents: finalBudget.requestedSubagents,
     parentSummary: effectiveParentSummary,
     workflowStatus: run.status,
     preparationOnly: appSession,
+    runId: workflowRunId,
     additionalBlockers: configBlockers
   })
   const passed = run.ok === true && evidence.ok === true && appSession === false
@@ -259,6 +229,7 @@ async function narutoRun(parsed: NarutoArgs) {
         : 'blocked'
   const summary = buildNarutoSummary({
     missionId: id,
+    workflowRunId,
     budget: finalBudget,
     evidence,
     verification,
@@ -270,9 +241,11 @@ async function narutoRun(parsed: NarutoArgs) {
     sessionKey
   })
   await writeJsonAtomic(path.join(dir, NARUTO_SUMMARY_FILENAME), summary)
-  await writeNarutoGate(dir, { missionId: id, evidence, passed, blockers })
+  await writeNarutoGate(dir, { missionId: id, workflowRunId, evidence, passed, blockers })
   await setCurrent(root, {
     mission_id: id,
+    official_subagent_run_id: workflowRunId,
+    session_scope: sessionKey,
     phase: passed ? 'NARUTO_COMPLETE' : appSession ? 'NARUTO_DELEGATION_CONTEXT_READY' : 'NARUTO_BLOCKED',
     subagents_verified: evidence.ok === true,
     requested_subagents: finalBudget.requestedSubagents,
@@ -288,17 +261,80 @@ async function narutoRun(parsed: NarutoArgs) {
   const result = {
     ...summary,
     mission_id: id,
+    attached_to_pending_run: false,
     additionalContext: appSession ? run.additionalContext : undefined,
-    artifacts: {
-      plan: SUBAGENT_PLAN_FILENAME,
-      events: SUBAGENT_EVENT_LOG_FILENAME,
-      parent_summary: evidence.parent_summary_trustworthy === true ? SUBAGENT_PARENT_SUMMARY_FILENAME : null,
-      evidence: 'subagent-evidence.json',
-      summary: NARUTO_SUMMARY_FILENAME,
-      gate: NARUTO_GATE_FILENAME
-    }
+    artifacts: narutoArtifactLinks(evidence)
   }
   return emit(parsed, result, () => renderRunResult(result))
+}
+
+async function readPendingAppNarutoRun(
+  root: string,
+  mission: { id: string; dir: string },
+  sessionKey: string
+) {
+  const [plan, evidence, summary, gate, state] = await Promise.all([
+    readJson<any>(path.join(mission.dir, SUBAGENT_PLAN_FILENAME), null),
+    readJson<any>(path.join(mission.dir, 'subagent-evidence.json'), null),
+    readJson<any>(path.join(mission.dir, NARUTO_SUMMARY_FILENAME), null),
+    readJson<any>(path.join(mission.dir, NARUTO_GATE_FILENAME), null),
+    loadStateForSession(root, sessionKey).catch(() => null)
+  ])
+  const workflowRunId = String(plan?.workflow_run_id || '').trim()
+  const sessionMatches = state?._session_key === sessionStateKey(sessionKey)
+  const pending = Boolean(
+    workflowRunId
+      && plan?.schema === 'sks.subagent-plan.v1'
+      && plan?.workflow === 'official_codex_subagent'
+      && plan?.mission_id === mission.id
+      && plan?.session_scope === sessionKey
+      && evidence?.run_id === workflowRunId
+      && evidence?.preparation_only === true
+      && evidence?.ok !== true
+      && summary?.workflow_run_id === workflowRunId
+      && summary?.mission_id === mission.id
+      && summary?.app_session === true
+      && summary?.session_scope === sessionKey
+      && summary?.status === 'delegation_context_ready'
+      && summary?.ok !== true
+      && summary?.completion_evidence !== true
+      && gate?.workflow_run_id === workflowRunId
+      && gate?.mission_id === mission.id
+      && gate?.passed !== true
+      && sessionMatches
+      && state?.mission_id === mission.id
+      && state?.official_subagent_run_id === workflowRunId
+      && state?.session_scope === sessionKey
+      && state?.route_closed !== true
+      && state?.phase === 'NARUTO_DELEGATION_CONTEXT_READY'
+  )
+  if (!pending) return null
+
+  return {
+    ...summary,
+    schema: NARUTO_RESULT_SCHEMA,
+    ok: false,
+    completion_evidence: false,
+    status: 'delegation_context_ready',
+    workflow_run_id: workflowRunId,
+    mission_id: mission.id,
+    app_session: true,
+    session_scope: sessionKey,
+    attached_to_pending_run: true,
+    additionalContext: plan.delegation_prompt,
+    artifacts: narutoArtifactLinks(evidence)
+  }
+}
+
+function narutoArtifactLinks(evidence: any) {
+  return {
+    plan: SUBAGENT_PLAN_FILENAME,
+    events: SUBAGENT_EVENT_LOG_FILENAME,
+    parent_summary: evidence?.parent_summary_trustworthy === true ? SUBAGENT_PARENT_SUMMARY_FILENAME : null,
+    evidence: 'subagent-evidence.json',
+    summary: NARUTO_SUMMARY_FILENAME,
+    gate: NARUTO_GATE_FILENAME
+  }
 }
 
 async function narutoStatus(parsed: NarutoArgs) {
@@ -383,84 +419,11 @@ function narutoHelp(parsed: NarutoArgs) {
     console.log(`Parent: ${result.parent.model} / ${result.parent.model_reasoning_effort}`)
     console.log(`Worker: ${result.agents.worker.model} / ${result.agents.worker.model_reasoning_effort}`)
     console.log(`Expert: ${result.agents.expert.model} / ${result.agents.expert.model_reasoning_effort}`)
+    console.log(`Default children: ${result.default_requested_subagents}; use explicit --agents N for wider parallelism`)
     console.log(`Nesting: max_depth=${result.max_depth}; subagents must not spawn subagents`)
+    console.log('Context: bounded TriWiki attention.use_first anchors with on-demand source hydration')
     console.log('Evidence: SubagentStop is lifecycle-only; completion requires subagent-parent-summary.json with one structured outcome per thread.')
   })
-}
-
-function buildNarutoSummary(input: any) {
-  const parentSummary = normalizeSubagentParentSummary(input.parentSummary)
-  return {
-    schema: NARUTO_RESULT_SCHEMA,
-    ok: input.ok === true,
-    completion_evidence: input.ok === true,
-    status: input.status,
-    route: '$Naruto',
-    workflow: 'official_codex_subagent',
-    mission_id: input.missionId,
-    parent: {
-      model: NARUTO_PARENT_MODEL,
-      model_reasoning_effort: NARUTO_PARENT_EFFORT
-    },
-    requested_subagents: input.budget.requestedSubagents,
-    max_threads: input.budget.maxThreads,
-    max_depth: input.budget.maxDepth,
-    started_subagents: Number(input.evidence?.started_threads || 0),
-    completed_subagents: Number(input.evidence?.completed_threads || 0),
-    failed_subagents: Number(input.evidence?.failed_threads || 0),
-    agents: {
-      worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },
-      expert: { model: THINKING_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT }
-    },
-    verification: {
-      budget: input.verification,
-      checks: []
-    },
-    parent_summary_present: Boolean(input.parentSummary),
-    parent_summary: parentSummary.summary,
-    parent_thread_outcomes: parentSummary.raw?.thread_outcomes || [],
-    app_session: input.appSession === true,
-    session_scope: input.sessionKey || null,
-    blockers: uniqueStrings(input.blockers || input.evidence?.blockers || []),
-    legacy_process_swarm_used: false,
-    updated_at: nowIso()
-  }
-}
-
-async function writeNarutoGate(dir: string, input: any) {
-  await writeJsonAtomic(path.join(dir, NARUTO_GATE_FILENAME), buildNarutoGateResult(input))
-}
-
-export function buildNarutoGateResult(input: any) {
-  const passed = input.passed === true
-  const requested = Number(input.evidence?.requested_subagents || 0)
-  const completed = Number(input.evidence?.completed_threads || 0)
-  const failed = Number(input.evidence?.failed_threads || 0)
-  return {
-    schema: 'sks.naruto-gate.v1',
-    route: '$Naruto',
-    workflow: 'official_codex_subagent',
-    mission_id: input.missionId,
-    status: passed ? 'passed' : 'blocked',
-    passed,
-    terminal: passed,
-    terminal_state: passed ? 'completed' : 'blocked',
-    subagent_plan_ready: true,
-    official_subagent_evidence: input.evidence?.ok === true,
-    session_cleanup: failed === 0 && requested > 0 && completed >= requested,
-    subagent_evidence_ready: input.evidence?.ok === true,
-    requested_subagents: requested || null,
-    started_subagents: Number(input.evidence?.started_threads || 0),
-    completed_subagents: Number(input.evidence?.completed_threads || 0),
-    failed_subagents: Number(input.evidence?.failed_threads || 0),
-    parent_summary_present: input.evidence?.parent_summary_present === true,
-    event_sources: input.evidence?.event_sources || [],
-    native_process_proof_required: false,
-    legacy_process_swarm_used: false,
-    blockers: uniqueStrings(input.blockers || input.evidence?.blockers || []),
-    missing_fields: uniqueStrings(input.blockers || input.evidence?.blockers || []),
-    updated_at: nowIso()
-  }
 }
 
 async function resolveRunMission(root: string, parsed: NarutoArgs, sessionKey: string | null = null) {
@@ -506,8 +469,10 @@ async function resolveReadMission(parsed: NarutoArgs) {
 }
 
 export function parseNarutoArgs(args: string[]): NarutoArgs {
-  const normalized = args.includes('--help') || args.includes('-h')
-    ? ['help', ...args.filter((arg) => arg !== '--help' && arg !== '-h')]
+  const helpRequested = args.includes('--help') || args.includes('-h')
+  const validationArgs = [...args]
+  const normalized = helpRequested
+    ? ['help', ...(args.includes('--json') ? ['--json'] : [])]
     : args
   const first = normalized[0] && !normalized[0].startsWith('-') ? normalized[0] : ''
   const workersAliasUsed = first === 'workers'
@@ -516,7 +481,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
   const action = (actions.has(actionName) ? actionName : 'run') as NarutoAction
   const explicitAction = actions.has(actionName) || workersAliasUsed
   const rest = explicitAction ? normalized.slice(1) : normalized
-  const optionArgs = normalized.includes('--') ? normalized.slice(0, normalized.indexOf('--')) : normalized
+  const optionArgs = validationArgs.includes('--') ? validationArgs.slice(0, validationArgs.indexOf('--')) : validationArgs
   const agentsOption = optionValue(optionArgs, '--agents')
   const clonesOption = optionValue(optionArgs, '--clones')
   const maxThreadsOption = optionValue(optionArgs, '--max-threads')
@@ -529,8 +494,8 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ...optionErrors('--mission', missionOption, false),
     ...optionErrors('--mission-id', missionIdOption, false),
     ...(agentsOption.present && clonesOption.present ? ['conflicting_options:--agents,--clones'] : []),
-    ...booleanOptionErrors(normalized),
-    ...unknownOptionErrors(normalized)
+    ...booleanOptionErrors(validationArgs),
+    ...unknownOptionErrors(validationArgs)
   ])
   if (REMOVED_LEGACY_SUBCOMMANDS.has(String(first || '').toLowerCase())) {
     argumentErrors.push(`removed_legacy_subcommand:${String(first).toLowerCase()}`)
@@ -546,10 +511,32 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     ? positional.join(' ').trim()
     : ''
   const positionalHead = String(positional[0] || '').toLowerCase()
-  if (!explicitAction && REMOVED_LEGACY_SUBCOMMANDS.has(positionalHead)) {
+  const subcommandNames = new Set(['run', 'status', 'subagents', 'workers', 'proof', 'help'])
+  if (explicitAction && action === 'run' && REMOVED_LEGACY_SUBCOMMANDS.has(positionalHead)) {
     argumentErrors.push(`removed_legacy_subcommand:${positionalHead}`)
-  } else if (!explicitAction && ['run', 'status', 'subagents', 'workers', 'proof', 'help'].includes(positionalHead)) {
+  } else if (explicitAction && action === 'run' && subcommandNames.has(positionalHead)) {
     argumentErrors.push(`misplaced_subcommand:${positionalHead}`)
+  } else if (!explicitAction && REMOVED_LEGACY_SUBCOMMANDS.has(positionalHead)) {
+    argumentErrors.push(`removed_legacy_subcommand:${positionalHead}`)
+  } else if (!explicitAction && subcommandNames.has(positionalHead)) {
+    argumentErrors.push(`misplaced_subcommand:${positionalHead}`)
+  }
+  if (action !== 'run') {
+    let missionConsumed = false
+    for (const value of positional) {
+      if (!missionConsumed && positionalMission !== undefined && value === positionalMission) {
+        missionConsumed = true
+        continue
+      }
+      const normalizedValue = String(value || '').toLowerCase()
+      if (REMOVED_LEGACY_SUBCOMMANDS.has(normalizedValue)) {
+        argumentErrors.push(`removed_legacy_subcommand:${normalizedValue}`)
+      } else if (subcommandNames.has(normalizedValue)) {
+        argumentErrors.push(`misplaced_subcommand:${normalizedValue}`)
+      } else {
+        argumentErrors.push(`unexpected_positional:${value}`)
+      }
+    }
   }
   if (action === 'run' && !prompt) argumentErrors.push('empty_task')
   return {
@@ -562,7 +549,7 @@ export function parseNarutoArgs(args: string[]): NarutoArgs {
     readOnly: normalized.includes('--readonly') || normalized.includes('--read-only'),
     clonesAliasUsed: clonesOption.present,
     workersAliasUsed,
-    unsupportedLegacyFlags: unsupportedLegacyFlags(normalized),
+    unsupportedLegacyFlags: unsupportedLegacyFlags(validationArgs),
     argumentErrors: uniqueStrings(argumentErrors)
   }
 }
@@ -573,7 +560,9 @@ function positionalValues(args: string[]) {
     '--backend', '--concurrency', '--target-active-slots', '--work-items',
     '--write-mode', '--max-write-agents', '--service-tier', '--messages',
     '--parallelism', '--tournament', '--ollama-model', '--local-model-model',
-    '--ollama-base-url', '--local-model-base-url'
+    '--ollama-base-url', '--local-model-base-url', '--scheduler', '--scheduler-mode',
+    '--pool', '--pool-size', '--model', '--parent-model', '--worker-model',
+    '--expert-model', '--agent-model', '--clone-model', '--reasoning-effort', '--engine'
   ])
   const booleanFlags = new Set([
     '--json', '--readonly', '--read-only', '--real', '--mock', '--no-open-zellij',
@@ -717,8 +706,8 @@ function legacyFlagBlock(flags: string[]) {
     schema: NARUTO_RESULT_SCHEMA,
     ok: false,
     status: 'blocked',
-    blockers: flags.map((flag) => `legacy_process_flag_requires_opt_in:${flag}`),
-    hint: 'Set SKS_NARUTO_LEGACY_PROCESS_SWARM=1 only when explicitly using the compatibility process swarm.'
+    blockers: flags.map((flag) => `removed_legacy_process_flag:${flag}`),
+    hint: 'Naruto supports only the Codex official subagent workflow. Use --agents, --max-threads, --read-only, --mission, or --json.'
   }
 }
 

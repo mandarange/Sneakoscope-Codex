@@ -87,7 +87,6 @@ const FIXTURES = Object.freeze({
   'cli-with-local-llm': fixture('execute', 'sks with-local-llm status --json', [], 'pass'),
   'cli-dfix': fixture('execute_and_validate_artifacts', 'sks dfix fixture --json', ['completion-proof.json', 'dfix-gate.json', 'dfix-verification.json'], 'pass'),
   'cli-wiki': fixture('execute_and_validate_artifacts', 'sks wiki image-ingest test/fixtures/images/one-by-one.png --json', [{ path: '.sneakoscope/wiki/image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1', require_anchors: false }], 'pass'),
-  'cli-db': fixture('execute', 'sks db policy', [], 'pass'),
   'cli-wizard': fixture('execute', 'sks wizard', [], 'pass'),
   'cli-bootstrap': fixture('execute', 'sks bootstrap --dry-run', [], 'pass'),
   'cli-deps': fixture('execute', 'sks deps check --json', [], 'pass'),
@@ -123,7 +122,7 @@ const FIXTURES = Object.freeze({
   'cli-team': fixture('execute_and_validate_artifacts', 'sks team "fixture" --agents 4 --max-threads 4 --json', ['subagent-plan.json', 'subagent-events.jsonl', 'subagent-evidence.json', 'naruto-summary.json', 'naruto-gate.json', 'team-alias-to-naruto.json', 'work-order-ledger.json'], 'pass', preparationFixtureContract({ timeout_ms: 90000 })),
   'cli-reasoning': fixture('execute', 'sks reasoning status --json', [], 'pass'),
   'cli-profile': fixture('execute', 'sks profile status --json', [], 'pass'),
-  'skill-db-safety-guard': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['db-operation-report.json', 'completion-proof.json'], 'pass'),
+  'skill-db-safety-guard': fixture('execute', 'node --test test/unit/db-safety.test.mjs', [], 'pass', { root_mode: 'source_checkout_required' }),
   'skill-honest-mode': fixture('execute_and_validate_artifacts', 'sks proof smoke --json', ['completion-proof.json', 'trust-report.json'], 'pass'),
   'skill-imagegen': fixture('execute_and_validate_artifacts', 'sks image-ux-review fixture --mock --json', ['image-ux-generated-review-ledger.json', 'image-voxel-ledger.json'], 'pass'),
   'ux-review:run-wires-imagegen': fixture('execute_and_validate_artifacts', 'npm run ux-review:run-wires-imagegen --silent', [{ path: 'image-ux-review-gate.json', schema: 'sks.image-ux-review-gate.v2', optional: true }], 'pass', {
@@ -181,7 +180,7 @@ const FIXTURES = Object.freeze({
     reason: 'hasFromChatImgSignal() routes $From-Chat-IMG to the full Naruto multi-agent work-order pipeline (routes.ts routeById(\'Naruto\')), which requires real chat-screenshot attachments to produce from-chat-img-work-order.md; there is no lightweight deterministic `--mock` single-command invocation that produces this route\'s specific work-order/coverage artifacts the way route-naruto\'s generic fixture prompt does. Left as documented mock.'
   }),
   'route-ux-review': fixture('mock', 'sks image-ux-review fixture --mock --json', ['completion-proof.json', { path: 'image-voxel-ledger.json', schema: 'sks.image-voxel-ledger.v1' }, 'image-ux-generated-review-ledger.json'], 'pass', { reason: 'Alias of route-image-ux-review ($UX-Review -> $Image-UX-Review); shares the identical underlying command and the same intentional exit-1/ok:false mock-fixture hardening in imageUxFixture().' }),
-  'route-db': fixture('execute_and_validate_artifacts', 'sks db check --sql "SELECT 1" --json', ['completion-proof.json', 'db-operation-report.json'], 'pass', { timeout_ms: 120000 }),
+  'route-db': fixture('execute', 'node ./dist/scripts/db-route-materialization-check.js', [], 'pass', { root_mode: 'source_checkout_required' }),
   'route-mad-db': fixture('mock', '$MAD-DB deprecated alias to $MAD-SKS sql-plane contract', ['mad-sks-gate.json', 'completion-proof.json'], 'pass', {
     reason: 'Deprecated alias of $MAD-SKS; shares the same gap as route-mad-sks (mad-sks-gate.json is only written via the real Codex App route dispatch pipeline, not any safe single sks CLI invocation). Left as documented mock alongside route-mad-sks.'
   }),
@@ -219,7 +218,7 @@ const FIXTURES = Object.freeze({
   'route-commit-and-push': fixture('mock', '$Commit-And-Push git route', ['completion-proof.json'], 'pass', {
     reason: 'Dollar-command alias of cli-commit-and-push; dispatches to the same simpleGitCommitCommand() that performs a real commit and `git push` with no working --dry-run mode. Left as documented mock alongside cli-commit-and-push.'
   }),
-  'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 4 --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
+  'route-release-review': fixture('execute_and_validate_artifacts', 'sks agent run "release audit" --route "$Release-Review" --agents 10 --concurrency 4 --legacy-native-runtime --mock --json', ['release-review-native-agent-plan.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000, note: 'legacy compatibility fixture only; the public $Release-Review route uses official Codex subagents' }),
   'route-native-agent-intake': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --route "$Team" --agents 5 --concurrency 4 --mock --json', ['agents/agent-central-ledger.json', 'agents/agent-task-board.json', 'agents/agent-leases.json', 'agents/agent-no-overlap-proof.json', 'agents/agent-session-cleanup.json', 'agents/agent-proof-evidence.json', 'agents/agent-effort-policy.json'], 'pass', { timeout_ms: 90000 }),
   'proof-agent-evidence': fixture('execute_and_validate_artifacts', 'sks agent run "fixture" --mock --json', ['agents/agent-proof-evidence.json'], 'pass', { timeout_ms: 120000 })
 });

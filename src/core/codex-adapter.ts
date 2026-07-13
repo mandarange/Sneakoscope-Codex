@@ -3,6 +3,10 @@ import { runProcess, type RunProcessResult } from './fsx.js';
 import { preserveCodexModelArgs } from './codex-model-guard.js';
 import { managedProxyEnvForChild } from './codex/managed-proxy-env.js';
 import { resolveCodexRuntime } from './codex-runtime/resolve-codex-runtime.js';
+import {
+  codexLbRecoveryBlockedProcessResult,
+  withCodexLbCliLaunchRecovery
+} from './codex-control/codex-lb-launch-recovery.js';
 
 export async function findCodexBinary(): Promise<string | null> {
   const resolved = await resolveCodexRuntime({
@@ -48,29 +52,41 @@ export function buildCodexExecArgs({ root, prompt, outputFile, json = true, prof
   return args;
 }
 
-export async function runCodexExec({ root, prompt, outputFile, json = true, profile = null, extraArgs = [], onStdout, onStderr, logDir = null, stdoutFile = null, stderrFile = null, maxBufferBytes = 256 * 1024, timeoutMs = null }: any): Promise<RunProcessResult> {
-  const bin = await findCodexBinary();
-  if (!bin) {
-    return {
-      code: 127,
-      stdout: '',
-      stderr: 'Codex CLI not found. Install @openai/codex or set SKS_CODEX_BIN.',
-      stdoutBytes: 0,
-      stderrBytes: 0,
-      truncated: false,
-      timedOut: false
-    };
-  }
+export async function runCodexExec({ root, recoveryRoot = root, prompt, outputFile, json = true, profile = null, extraArgs = [], onStdout, onStderr, logDir = null, stdoutFile = null, stderrFile = null, maxBufferBytes = 256 * 1024, timeoutMs = null, env = process.env, codexBin = null, findCodexBinaryImpl = findCodexBinary, runProcessImpl = runProcess, recoveryFetch = undefined, recoveryTimeoutMs = undefined }: any): Promise<RunProcessResult> {
   const args = buildCodexExecArgs({ root, prompt, outputFile, json, profile, extraArgs });
   const effectiveTimeoutMs = Number(timeoutMs || process.env.SKS_CODEX_TIMEOUT_MS || process.env.DCODEX_CODEX_TIMEOUT_MS || 30 * 60 * 1000);
-  return runProcess(bin, args, {
-    cwd: root,
-    env: managedProxyEnvForChild(process.env),
-    onStdout,
-    onStderr,
-    timeoutMs: effectiveTimeoutMs,
-    maxOutputBytes: maxBufferBytes,
-    stdoutFile: stdoutFile || (logDir ? path.join(logDir, 'codex.stdout.log') : undefined),
-    stderrFile: stderrFile || (logDir ? path.join(logDir, 'codex.stderr.log') : undefined)
+  const recoveryArgs = args.slice(1, -1);
+  const guarded = await withCodexLbCliLaunchRecovery({
+    root: recoveryRoot,
+    env,
+    cliArgs: recoveryArgs,
+    ...(typeof recoveryFetch === 'function' ? { fetchImpl: recoveryFetch } : {}),
+    ...(recoveryTimeoutMs === undefined ? {} : { timeoutMs: recoveryTimeoutMs })
+  }, async () => {
+    const bin = codexBin || await findCodexBinaryImpl();
+    if (!bin) {
+      return {
+        code: 127,
+        stdout: '',
+        stderr: 'Codex CLI not found. Install @openai/codex or set SKS_CODEX_BIN.',
+        stdoutBytes: 0,
+        stderrBytes: 0,
+        truncated: false,
+        timedOut: false
+      } satisfies RunProcessResult;
+    }
+    return runProcessImpl(bin, args, {
+      cwd: root,
+      env: { ...env, ...managedProxyEnvForChild(env) },
+      onStdout,
+      onStderr,
+      timeoutMs: effectiveTimeoutMs,
+      maxOutputBytes: maxBufferBytes,
+      stdoutFile: stdoutFile || (logDir ? path.join(logDir, 'codex.stdout.log') : undefined),
+      stderrFile: stderrFile || (logDir ? path.join(logDir, 'codex.stderr.log') : undefined)
+    });
   });
+  return guarded.launched
+    ? guarded.value
+    : codexLbRecoveryBlockedProcessResult(guarded.toolOutputRecovery);
 }

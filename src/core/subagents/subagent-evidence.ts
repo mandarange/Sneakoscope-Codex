@@ -15,11 +15,14 @@ export interface NormalizedSubagentEvent {
   schema: typeof SUBAGENT_EVENT_SCHEMA
   event_name: SubagentEventName
   thread_id: string | null
-  thread_id_source: 'thread_id' | 'agent_id' | 'session_id' | null
+  thread_id_source: 'thread_id' | 'agent_id' | null
   agent_id: string | null
   session_id: string | null
+  turn_id: string | null
+  run_id: string | null
+  run_epoch: string | null
   model: string | null
-  outcome: 'started' | 'stopped' | 'failed'
+  outcome: 'started' | 'stopped' | 'failed' | 'ambiguous'
   occurred_at: string
 }
 
@@ -40,6 +43,12 @@ export interface SubagentEvidence {
   parent_summary_trustworthy: boolean
   parent_summary_status: 'completed' | 'failed' | 'ambiguous' | null
   ambiguous_stop_thread_ids: string[]
+  run_id: string | null
+  run_epoch: string | null
+  run_scope_source: 'input' | 'parent_summary' | 'event_run_id' | 'event_turn_id' | 'event_run_epoch' | null
+  rejected_stale_events: number
+  rejected_stale_thread_ids: string[]
+  unbound_run_events: number
   preparation_only: boolean
   status: 'completed' | 'incomplete' | 'blocked' | 'preparation_only'
   ok: boolean
@@ -58,6 +67,8 @@ export interface StructuredSubagentParentSummary {
   changed_files?: string[]
   verification?: unknown[]
   blockers?: string[]
+  run_id?: string
+  run_epoch?: string | number
 }
 
 export interface BuildSubagentEvidenceInput {
@@ -68,6 +79,8 @@ export interface BuildSubagentEvidenceInput {
   workflowStatus?: string | null
   preparationOnly?: boolean
   additionalBlockers?: readonly unknown[]
+  runId?: string | null
+  runEpoch?: string | number | null
 }
 
 export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unknown): NormalizedSubagentEvent | null {
@@ -96,6 +109,9 @@ export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unk
       ?? nested.type
   )
   if (!eventName) return null
+  const persistedOutcome = row.schema === SUBAGENT_EVENT_SCHEMA
+    ? normalizePersistedOutcome(row.outcome, eventName)
+    : null
 
   const explicitThreadId = firstText(
     row.thread_id,
@@ -115,14 +131,15 @@ export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unk
   )
   const agentId = firstText(row.agent_id, row.agentId, nested.agent_id, nested.agentId, recordId(row.agent), recordId(nested.agent))
   const sessionId = firstText(row.session_id, row.sessionId, nested.session_id, nested.sessionId, recordId(row.session), recordId(nested.session))
-  const threadId = explicitThreadId || agentId || sessionId || null
+  // Official SubagentStart/SubagentStop payloads identify the child with
+  // agent_id. session_id is the parent/session scope and must never be used as
+  // a child identity because every sibling can share it.
+  const threadId = explicitThreadId || agentId || null
   const threadIdSource = explicitThreadId
     ? 'thread_id'
     : agentId
       ? 'agent_id'
-      : sessionId
-        ? 'session_id'
-        : null
+      : null
 
   return {
     schema: SUBAGENT_EVENT_SCHEMA,
@@ -131,12 +148,35 @@ export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unk
     thread_id_source: threadIdSource,
     agent_id: agentId || null,
     session_id: sessionId || null,
+    turn_id: firstText(row.turn_id, row.turnId, nested.turn_id, nested.turnId) || null,
+    run_id: firstText(
+      row.run_id,
+      row.runId,
+      row.workflow_run_id,
+      row.workflowRunId,
+      nested.run_id,
+      nested.runId,
+      nested.workflow_run_id,
+      nested.workflowRunId
+    ) || null,
+    run_epoch: firstText(
+      row.run_epoch,
+      row.runEpoch,
+      row.execution_epoch,
+      row.executionEpoch,
+      nested.run_epoch,
+      nested.runEpoch,
+      nested.execution_epoch,
+      nested.executionEpoch
+    ) || null,
     model: firstText(row.model, nested.model) || null,
-    outcome: eventName === 'SubagentStart'
+    outcome: persistedOutcome ?? (eventName === 'SubagentStart'
       ? 'started'
       : stopFailed(merged)
         ? 'failed'
-        : 'stopped',
+        : stopAmbiguous(merged)
+          ? 'ambiguous'
+          : 'stopped'),
     occurred_at: firstText(
       row.occurred_at,
       row.timestamp,
@@ -152,9 +192,13 @@ export function normalizeSubagentEvent(payload: unknown, explicitEventName?: unk
 
 export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): SubagentEvidence {
   const requestedSubagents = normalizeRequested(input.requestedSubagents)
-  const events = (input.events || [])
+  const normalizedEvents = (input.events || [])
     .map((event) => normalizeSubagentEvent(event))
     .filter((event): event is NormalizedSubagentEvent => Boolean(event))
+  const parentSummary = normalizeSubagentParentSummary(input.parentSummary)
+  const runScope = resolveRunScope(input, normalizedEvents, parentSummary)
+  const scopedEvents = scopeSubagentEvents(normalizedEvents, runScope)
+  const events = scopedEvents.events
   const starts = new Set<string>()
   const successfulStops = new Set<string>()
   const failedStops = new Set<string>()
@@ -162,8 +206,11 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   const ambiguousStops = new Set<string>()
   const eventSources = new Set<SubagentEventName>()
   let missingThreadId = false
-
-  const parentSummary = normalizeSubagentParentSummary(input.parentSummary)
+  const parentSummaryStructurallyTrustworthy = parentSummary.trustworthy
+    && runScope.blockers.length === 0
+    && runScope.parentBlockers.length === 0
+  const parentCompletedStructurallyTrustworthy = parentSummaryStructurallyTrustworthy
+    && parentSummary.status === 'completed'
 
   for (const event of events) {
     eventSources.add(event.event_name)
@@ -182,16 +229,48 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     if (event.outcome === 'failed') {
       failedStops.add(event.thread_id)
       successfulStops.delete(event.thread_id)
+      ambiguousStops.delete(event.thread_id)
+      continue
+    }
+    if (event.outcome === 'ambiguous') {
+      ambiguousStops.add(event.thread_id)
+      successfulStops.delete(event.thread_id)
+      failedStops.delete(event.thread_id)
       continue
     }
     const parentOutcome = parentSummary.thread_outcomes.get(event.thread_id)
     if (parentOutcome === 'failed') {
       failedStops.add(event.thread_id)
       successfulStops.delete(event.thread_id)
-    } else if (parentOutcome === 'completed' && !failedStops.has(event.thread_id)) {
+      ambiguousStops.delete(event.thread_id)
+    } else if (parentOutcome === 'completed' && parentCompletedStructurallyTrustworthy) {
       successfulStops.add(event.thread_id)
+      failedStops.delete(event.thread_id)
+      ambiguousStops.delete(event.thread_id)
     } else {
       ambiguousStops.add(event.thread_id)
+      successfulStops.delete(event.thread_id)
+      failedStops.delete(event.thread_id)
+    }
+  }
+
+  const parentOutcomeThreadIds = [...parentSummary.thread_outcomes.keys()].sort()
+  const parentOutcomeThreadIdSet = new Set(parentOutcomeThreadIds)
+  const missingParentOutcomeThreadIds = [...starts]
+    .filter((threadId) => !parentOutcomeThreadIdSet.has(threadId))
+    .sort()
+  const unobservedParentOutcomeThreadIds = parentOutcomeThreadIds
+    .filter((threadId) => !starts.has(threadId))
+  const parentThreadIdentityBlockers = [
+    ...missingParentOutcomeThreadIds.map((threadId) => `parent_thread_outcome_missing_for_started_thread:${threadId}`),
+    ...unobservedParentOutcomeThreadIds.map((threadId) => `parent_thread_outcome_without_start:${threadId}`)
+  ]
+  const parentSummaryTrustworthy = parentSummaryStructurallyTrustworthy
+    && parentThreadIdentityBlockers.length === 0
+  if (!parentSummaryTrustworthy) {
+    for (const threadId of successfulStops) {
+      successfulStops.delete(threadId)
+      if (!failedStops.has(threadId)) ambiguousStops.add(threadId)
     }
   }
 
@@ -214,14 +293,20 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
   if (missingThreadId) blockers.push('subagent_event_thread_id_missing')
   if (startedThreadIds.length < requestedSubagents) {
     blockers.push(`requested_subagent_starts_incomplete:${startedThreadIds.length}/${requestedSubagents}`)
+  } else if (startedThreadIds.length > requestedSubagents) {
+    blockers.push(`requested_subagent_starts_exceeded:${startedThreadIds.length}/${requestedSubagents}`)
   }
   if (completedThreadIds.length < requestedSubagents) {
     blockers.push(`requested_subagent_completions_incomplete:${completedThreadIds.length}/${requestedSubagents}`)
+  } else if (completedThreadIds.length > requestedSubagents) {
+    blockers.push(`requested_subagent_completions_exceeded:${completedThreadIds.length}/${requestedSubagents}`)
   }
   if (failedThreadIds.length > 0) blockers.push(`subagent_threads_failed:${failedThreadIds.length}`)
   if (openThreadIds.length > 0) blockers.push(`subagent_threads_still_open:${openThreadIds.length}`)
   if (unmatchedStops.size > 0) blockers.push(`subagent_stops_without_start:${unmatchedStops.size}`)
   if (ambiguousStops.size > 0) blockers.push(`subagent_thread_outcomes_ambiguous:${ambiguousStops.size}`)
+  blockers.push(...runScope.blockers, ...runScope.parentBlockers)
+  blockers.push(...parentThreadIdentityBlockers)
   if (!parentSummaryPresent) blockers.push('parent_summary_missing')
   else if (!parentSummary.trustworthy) blockers.push(...parentSummary.blockers)
   if (parentSummary.status === 'failed') blockers.push('parent_summary_failed')
@@ -254,9 +339,15 @@ export function buildSubagentEvidence(input: BuildSubagentEvidenceInput): Subage
     unmatched_stop_thread_ids: [...unmatchedStops].sort(),
     event_sources: [...eventSources].sort(eventSourceOrder),
     parent_summary_present: parentSummaryPresent,
-    parent_summary_trustworthy: parentSummary.trustworthy,
+    parent_summary_trustworthy: parentSummaryTrustworthy,
     parent_summary_status: parentSummary.status,
     ambiguous_stop_thread_ids: [...ambiguousStops].sort(),
+    run_id: runScope.runId,
+    run_epoch: runScope.runEpoch,
+    run_scope_source: runScope.source,
+    rejected_stale_events: scopedEvents.staleEvents.length,
+    rejected_stale_thread_ids: uniqueStrings(scopedEvents.staleEvents.map((event) => event.thread_id || '')).sort(),
+    unbound_run_events: scopedEvents.unboundEvents.length,
     preparation_only: preparationOnly,
     status,
     ok,
@@ -305,12 +396,14 @@ export async function writeSubagentEvidence(
 export async function persistOrReuseTrustworthySubagentParentSummary(
   artifactDir: string,
   value: unknown,
-  opts: { workflowStatus?: string | null } = {}
+  opts: { workflowStatus?: string | null; runId?: string | null } = {}
 ): Promise<unknown> {
   const incoming = normalizeSubagentParentSummary(value)
   const file = path.join(artifactDir, SUBAGENT_PARENT_SUMMARY_FILENAME)
   const workflowFailed = isFailureWorkflowStatus(opts.workflowStatus)
-  if (incoming.trustworthy && incoming.status === 'failed' && incoming.raw) {
+  const activeRunId = firstText(opts.runId)
+  const incomingMatchesActiveRun = !activeRunId || !incoming.run_id || incoming.run_id === activeRunId
+  if (incoming.trustworthy && incoming.status === 'failed' && incoming.raw && incomingMatchesActiveRun) {
     await writeJsonAtomic(file, incoming.raw)
     return incoming.raw
   }
@@ -320,14 +413,32 @@ export async function persistOrReuseTrustworthySubagentParentSummary(
     return value
   }
   if (incoming.trustworthy && incoming.raw) {
+    if (!incomingMatchesActiveRun) return reuseMatchingPersistedParentSummary(file, activeRunId, value)
     await writeJsonAtomic(file, incoming.raw)
     return incoming.raw
   }
+  return reuseMatchingPersistedParentSummary(file, activeRunId, value)
+}
+
+export function bindTrustworthySubagentParentSummaryToRun(value: unknown, runId: unknown): unknown {
+  const normalizedRunId = firstText(runId)
+  if (!normalizedRunId) return value
+  const summary = normalizeSubagentParentSummary(value)
+  if (!summary.trustworthy || !summary.raw) return value
+  if (summary.run_id && summary.run_id !== normalizedRunId) return null
+  return summary.run_id
+    ? summary.raw
+    : { ...summary.raw, run_id: normalizedRunId }
+}
+
+async function reuseMatchingPersistedParentSummary(file: string, activeRunId: string, fallback: unknown): Promise<unknown> {
   const persisted = await fsp.readFile(file, 'utf8')
     .then((text) => JSON.parse(text))
     .catch(() => null)
   const previous = normalizeSubagentParentSummary(persisted)
-  return previous.trustworthy && previous.raw ? previous.raw : value
+  if (!previous.trustworthy || !previous.raw) return fallback
+  if (activeRunId && previous.run_id !== activeRunId) return fallback
+  return previous.raw
 }
 
 export const normalizeSubagentEvidence = buildSubagentEvidence
@@ -336,6 +447,13 @@ function normalizeEventName(value: unknown): SubagentEventName | null {
   const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z]+/g, '')
   if (normalized === 'subagentstart') return 'SubagentStart'
   if (normalized === 'subagentstop') return 'SubagentStop'
+  return null
+}
+
+function normalizePersistedOutcome(value: unknown, eventName: SubagentEventName): NormalizedSubagentEvent['outcome'] | null {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (eventName === 'SubagentStart') return normalized === 'started' ? 'started' : null
+  if (normalized === 'stopped' || normalized === 'failed' || normalized === 'ambiguous') return normalized
   return null
 }
 
@@ -357,11 +475,25 @@ function stopFailed(row: Record<string, unknown>): boolean {
     || containsUnambiguousFailureText(resultText)
 }
 
+function stopAmbiguous(row: Record<string, unknown>): boolean {
+  const resultText = firstText(
+    row.last_assistant_message,
+    row.lastAssistantMessage,
+    row.summary,
+    row.message,
+    row.result_text,
+    row.resultText
+  )
+  return containsAmbiguousOutcomeText(resultText)
+}
+
 export function normalizeSubagentParentSummary(value: unknown): {
   present: boolean
   trustworthy: boolean
   status: 'completed' | 'failed' | 'ambiguous' | null
   summary: string | null
+  run_id: string | null
+  run_epoch: string | null
   thread_outcomes: Map<string, 'completed' | 'failed' | 'ambiguous'>
   blockers: string[]
   raw: StructuredSubagentParentSummary | null
@@ -377,6 +509,8 @@ export function normalizeSubagentParentSummary(value: unknown): {
       trustworthy: false,
       status: present ? 'ambiguous' : null,
       summary: null,
+      run_id: null,
+      run_epoch: null,
       thread_outcomes: threadOutcomes,
       blockers,
       raw: null
@@ -385,7 +519,7 @@ export function normalizeSubagentParentSummary(value: unknown): {
 
   const summary = String(parsed.summary || '').trim()
   if (typeof parsed.summary !== 'string' || !summary) blockers.push('parent_summary_text_missing')
-  const topLevelKeys = new Set(['schema', 'status', 'summary', 'thread_outcomes', 'changed_files', 'verification', 'blockers'])
+  const topLevelKeys = new Set(['schema', 'status', 'summary', 'thread_outcomes', 'changed_files', 'verification', 'blockers', 'run_id', 'run_epoch'])
   for (const key of Object.keys(parsed as any)) {
     if (!topLevelKeys.has(key)) blockers.push(`parent_summary_unknown_field:${key}`)
   }
@@ -422,14 +556,14 @@ export function normalizeSubagentParentSummary(value: unknown): {
     threadOutcomes.set(threadId, status)
     if (status === 'ambiguous') blockers.push(`parent_thread_outcome_ambiguous:${threadId}`)
     if (!rowSummary) blockers.push(`parent_thread_outcome_summary_missing:${threadId}`)
-    if (status === 'completed' && containsUnambiguousFailureText(rowSummary)) {
+    if (status === 'completed' && containsFailedOrAmbiguousOutcomeText(rowSummary)) {
       blockers.push(`parent_thread_outcome_text_contradiction:${threadId}`)
     }
   }
 
   const status = strictTerminalOutcome(parsed.status)
   if (status === 'ambiguous') blockers.push('parent_summary_status_ambiguous')
-  if (status === 'completed' && containsUnambiguousFailureText(summary)) blockers.push('parent_summary_text_contradiction')
+  if (status === 'completed' && containsFailedOrAmbiguousOutcomeText(summary)) blockers.push('parent_summary_text_contradiction')
   if (status === 'completed' && Array.isArray(parsed.blockers) && parsed.blockers.length > 0) {
     blockers.push('parent_summary_completed_with_blockers')
   }
@@ -438,6 +572,8 @@ export function normalizeSubagentParentSummary(value: unknown): {
     trustworthy: blockers.length === 0,
     status,
     summary: summary || null,
+    run_id: firstText(parsed.run_id) || null,
+    run_epoch: firstText(parsed.run_epoch) || null,
     thread_outcomes: threadOutcomes,
     blockers: uniqueStrings(blockers.length ? blockers : []),
     raw: parsed
@@ -478,18 +614,54 @@ function containsUnambiguousFailureText(value: unknown): boolean {
   if (!source) return false
   const scrubbed = source
     .replace(/\b(?:no|without)\s+(?:errors?|failures?|blockers?|issues?)\b/gi, ' ')
+    .replace(/\bno\s+(?:\d+\s+)?(?:tests?|suites?|checks?|cases?)\s+(?:failed|failing|errored)\b/gi, ' ')
     .replace(/\bnot\s+blocked\b/gi, ' ')
     .replace(/\b(?:did\s+not|didn't)\s+fail\b/gi, ' ')
-    .replace(/\b(?:failure|error|blocked)[- ]path\b/gi, ' ')
+    .replace(/\b(?:type\s*check|typecheck|build|compilation|compile|compiler|npm\s+test|tests?|test\s+suites?)\s+(?:did\s+not|didn't)\s+fail\b/gi, ' ')
+    .replace(/\b(?:failed|failure|error|blocked)[- ]paths?\b/gi, ' ')
     .replace(/\b(?:could\s+not|unable\s+to)\s+(?:reproduce|find|detect|observe|identify)\b[^.!?\n]*/gi, ' ')
     .replace(/(?:실패한|차단된|오류(?:가|는)?\s*발생한?)\s*(?:테스트|검사|항목|문제)(?:가|이|는|은)?\s*(?:없음|없다|없습니다)/g, ' ')
     .replace(/(?:실패|오류|에러|차단|문제)(?:가|이|는|은)?\s*(?:없음|없다|없습니다|없이)/g, ' ')
     .replace(/차단되지\s*않(?:음|았다|았습니다)/g, ' ')
   return /^(?:failed|failure|error|blocked|cancelled|canceled|interrupted|timed\s*out|incomplete)\b/i.test(scrubbed)
+    || /\b\d+\s+(?:tests?|suites?|checks?|cases?)\s+(?:failed|failing|errored)\b/i.test(scrubbed)
+    || /\b(?:type\s*check|typecheck|build|compilation|compile|compiler|npm\s+test|npm\s+run\s+(?:test|build|typecheck)|tests?|test\s+suites?|lint|verification)\b[^.!?\n]{0,40}\b(?:failed|failing|failure|errored|errors?)\b/i.test(scrubbed)
+    || /\b(?:compilation|compiler|typescript|tsc)\s+error(?:\s+TS\d+)?\b/i.test(scrubbed)
+    || /\berror\s+TS\d+\b/i.test(scrubbed)
     || /\b(?:slice|thread|task|work|review|integration|execution|run|job|agent|subagent)\b[^.!?\n]{0,32}\b(?:failed|blocked|cancelled|canceled|interrupted|timed\s*out|not\s+completed|incomplete)\b/i.test(scrubbed)
     || /\b(?:could\s+not|unable\s+to|failed\s+to)\s+(?:complete|finish|deliver|execute|run|continue|return)\b/i.test(scrubbed)
     || /(?:작업|슬라이스|스레드|검수|통합|실행|에이전트|서브\s*에이전트)[^.!?\n]{0,20}(?:실패|차단|중단|미완료)/i.test(scrubbed)
     || /(?:완료|수행|실행|진행|통합)하지\s*못|완료되지\s*않|미완료/i.test(scrubbed)
+}
+
+function containsAmbiguousOutcomeText(value: unknown): boolean {
+  const source = String(value || '').trim()
+  if (!source) return false
+  const completedReadOnlyReview = (
+    /\bread[- ]only\b[^.!?\n]{0,180}\b(?:review|inspection|audit)\b[^.!?\n]{0,180}\b(?:covered|completed|finished)\b/i.test(source)
+      || /읽기\s*전용[^.!?\n]{0,180}(?:검수|검토|감사)[^.!?\n]{0,180}(?:완료|점검|확인)/i.test(source)
+  ) && (
+    /\bno files? (?:were )?(?:changed|modified)\b/i.test(source)
+      || /파일[^.!?\n]{0,40}(?:변경|수정)(?:하지\s*않|없)/i.test(source)
+  )
+  const ambiguitySource = completedReadOnlyReview
+    ? source
+      .replace(/\bno tests? (?:were )?(?:run|executed)\b/gi, ' ')
+      .replace(/\btests? (?:were )?not (?:run|executed)\b/gi, ' ')
+      .replace(/테스트[^.!?\n]{0,20}(?:미실행|실행하지\s*않)/gi, ' ')
+    : source
+  const scrubbed = ambiguitySource
+    .replace(/\bno\s+(?:remaining\s+)?(?:unknowns?|ambiguities|pending\s+(?:checks?|work)|unverified\s+(?:checks?|work|gaps?))\b/gi, ' ')
+    .replace(/\bnot\s+(?:pending|unknown|unclear|ambiguous|inconclusive)\b/gi, ' ')
+  return /\b(?:tests?|test\s+suites?|checks?|type\s*check|typecheck|build|lint|verification)\b[^.!?\n]{0,32}\b(?:not\s+(?:run|executed|verified|completed)|pending|unknown|unclear|ambiguous|inconclusive)\b/i.test(scrubbed)
+    || /\b(?:could\s+not|unable\s+to|failed\s+to)\s+(?:verify|confirm|determine)\b/i.test(scrubbed)
+    || /\b(?:result|status|outcome)\b[^.!?\n]{0,20}\b(?:unknown|unclear|ambiguous|pending|inconclusive)\b/i.test(scrubbed)
+    || /\b(?:partially|partly)\s+(?:completed|verified|tested)\b/i.test(scrubbed)
+    || /(?:테스트|검사|타입\s*체크|빌드|검증)[^.!?\n]{0,16}(?:미실행|미검증|보류|불명확|알\s*수\s*없|확인하지\s*못)/i.test(scrubbed)
+}
+
+function containsFailedOrAmbiguousOutcomeText(value: unknown): boolean {
+  return containsUnambiguousFailureText(value) || containsAmbiguousOutcomeText(value)
 }
 
 function parentResultExplicitlyFailed(value: unknown): boolean {
@@ -515,6 +687,100 @@ function parentResultExplicitlyFailed(value: unknown): boolean {
 
 function isFailureWorkflowStatus(value: unknown): boolean {
   return /^(parent_failed|failed|blocked|incomplete|cancelled|canceled|timed[_ -]?out)$/i.test(String(value || '').trim())
+}
+
+interface ResolvedRunScope {
+  runId: string | null
+  runEpoch: string | null
+  source: SubagentEvidence['run_scope_source']
+  blockers: string[]
+  parentBlockers: string[]
+}
+
+function resolveRunScope(
+  input: BuildSubagentEvidenceInput,
+  events: readonly NormalizedSubagentEvent[],
+  parentSummary: ReturnType<typeof normalizeSubagentParentSummary>
+): ResolvedRunScope {
+  const requestedRunId = firstText(input.runId)
+  const requestedRunEpoch = firstText(input.runEpoch)
+  const eventRunIds = uniqueStrings(events.map((event) => event.run_id || ''))
+  const eventTurnIds = uniqueStrings(events.map((event) => event.turn_id || ''))
+  const eventRunEpochs = uniqueStrings(events.map((event) => event.run_epoch || ''))
+  const latestEventRunId = latestText(events, (event) => event.run_id)
+  const latestEventTurnId = latestText(events, (event) => event.turn_id)
+  const latestEventRunEpoch = latestText(events, (event) => event.run_epoch)
+  const runId = requestedRunId || latestEventRunId || latestEventTurnId || parentSummary.run_id || null
+  const runEpoch = requestedRunEpoch || latestEventRunEpoch || parentSummary.run_epoch || null
+  const source: ResolvedRunScope['source'] = requestedRunId || requestedRunEpoch
+    ? 'input'
+    : latestEventRunId
+      ? 'event_run_id'
+      : latestEventTurnId
+        ? 'event_turn_id'
+        : parentSummary.run_id || parentSummary.run_epoch
+          ? 'parent_summary'
+          : latestEventRunEpoch
+            ? 'event_run_epoch'
+            : null
+  const blockers: string[] = []
+  const parentBlockers: string[] = []
+
+  const parentRunBindingRequired = Boolean(parentSummary.run_id)
+    || (source !== 'event_turn_id' && Boolean(requestedRunId || eventRunIds.length > 0))
+  if (parentSummary.present && runId && parentRunBindingRequired) {
+    if (!parentSummary.run_id) parentBlockers.push('parent_summary_run_id_missing')
+    else if (parentSummary.run_id !== runId) parentBlockers.push('parent_summary_run_id_mismatch')
+  }
+  const parentEpochBindingRequired = Boolean(requestedRunEpoch || parentSummary.run_epoch || eventRunEpochs.length > 0)
+  if (parentSummary.present && runEpoch && parentEpochBindingRequired) {
+    if (!parentSummary.run_epoch) parentBlockers.push('parent_summary_run_epoch_missing')
+    else if (parentSummary.run_epoch !== runEpoch) parentBlockers.push('parent_summary_run_epoch_mismatch')
+  }
+
+  return {
+    runId,
+    runEpoch,
+    source,
+    blockers,
+    parentBlockers
+  }
+}
+
+function scopeSubagentEvents(events: readonly NormalizedSubagentEvent[], scope: ResolvedRunScope): {
+  events: NormalizedSubagentEvent[]
+  staleEvents: NormalizedSubagentEvent[]
+  unboundEvents: NormalizedSubagentEvent[]
+} {
+  const accepted: NormalizedSubagentEvent[] = []
+  const staleEvents: NormalizedSubagentEvent[] = []
+  const unboundEvents: NormalizedSubagentEvent[] = []
+  for (const event of events) {
+    const eventRunId = scope.source === 'event_turn_id'
+      ? event.turn_id
+      : scope.source === 'input' || scope.source === 'parent_summary'
+        ? event.run_id || event.turn_id
+        : event.run_id
+    if ((scope.runId && !eventRunId) || (scope.runEpoch && !event.run_epoch)) {
+      unboundEvents.push(event)
+      continue
+    }
+    if ((scope.runId && eventRunId !== scope.runId) || (scope.runEpoch && event.run_epoch !== scope.runEpoch)) {
+      staleEvents.push(event)
+      continue
+    }
+    accepted.push(event)
+  }
+  if (unboundEvents.length > 0) scope.blockers.push(`subagent_events_run_scope_missing:${unboundEvents.length}`)
+  return { events: accepted, staleEvents, unboundEvents }
+}
+
+function latestText<T>(values: readonly T[], pick: (value: T) => string | null): string {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = pick(values[index] as T)
+    if (value) return value
+  }
+  return ''
 }
 
 function uniqueStrings(values: string[]): string[] {

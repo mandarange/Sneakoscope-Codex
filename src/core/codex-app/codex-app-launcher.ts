@@ -1,5 +1,9 @@
 import { findCodexBinary } from '../codex-adapter.js'
 import { runProcess } from '../fsx.js'
+import {
+  inspectCodexLbCliLaunchRecovery
+} from '../codex-control/codex-lb-launch-recovery.js'
+import type { CodexLbToolOutputRecoveryProbe } from '../codex-lb/codex-lb-tool-output-recovery.js'
 
 export interface CodexAppLaunchAttempt {
   schema: 'sks.codex-app-launch-attempt.v1'
@@ -13,6 +17,7 @@ export interface CodexAppLaunchAttempt {
   stderr_tail: string
   fallback_reason: string | null
   blockers: string[]
+  tool_output_recovery?: CodexLbToolOutputRecoveryProbe
 }
 
 export async function attemptCodexAppLaunch(input: {
@@ -21,11 +26,17 @@ export async function attemptCodexAppLaunch(input: {
   codexBin?: string | null
   mode: 'artifact-only' | 'attempt-launch'
   timeoutMs?: number
+  env?: NodeJS.ProcessEnv
+  recoveryFetch?: typeof fetch
+  recoveryTimeoutMs?: number
+  runProcessImpl?: typeof runProcess
+  findCodexBinaryImpl?: typeof findCodexBinary
+  platform?: NodeJS.Platform
 }): Promise<CodexAppLaunchAttempt> {
-  const platform = process.platform
+  const platform = input.platform || process.platform
   const timeoutMs = Math.max(1, Math.min(Number(input.timeoutMs || 3000), 3000))
-  const codexBin = input.codexBin || await findCodexBinary()
-  const commandLine = [codexBin || 'codex', '/app']
+  let codexBin = input.codexBin || null
+  let commandLine = [codexBin || 'codex', '/app']
   if (input.mode === 'artifact-only') {
     return launchAttempt({
       attempted: false,
@@ -51,18 +62,6 @@ export async function attemptCodexAppLaunch(input: {
       blockers: ['codex_app_handoff_platform_unsupported']
     })
   }
-  if (!codexBin) {
-    return launchAttempt({
-      attempted: false,
-      launched: false,
-      platform,
-      mode: input.mode,
-      command_line: commandLine,
-      exit_code: null,
-      fallback_reason: 'codex_cli_missing_artifact_only_fallback',
-      blockers: ['codex_cli_missing']
-    })
-  }
   if (process.env.SKS_CODEX_APP_LAUNCH_FAKE === '1') {
     const launched = process.env.SKS_CODEX_APP_LAUNCH_FAKE_LAUNCHED !== '0'
     return launchAttempt({
@@ -78,8 +77,46 @@ export async function attemptCodexAppLaunch(input: {
       blockers: launched ? [] : ['codex_app_launch_failed']
     })
   }
-  const result = await runProcess(codexBin, ['/app'], {
+  const env = input.env || process.env
+  const execute = input.runProcessImpl || runProcess
+  const toolOutputRecovery = await inspectCodexLbCliLaunchRecovery({
+    root: input.cwd,
+    env,
+    cliArgs: ['/app'],
+    ...(input.recoveryFetch ? { fetchImpl: input.recoveryFetch } : {}),
+    ...(input.recoveryTimeoutMs === undefined ? {} : { timeoutMs: input.recoveryTimeoutMs })
+  })
+  if (!toolOutputRecovery.ok) {
+    return launchAttempt({
+      attempted: false,
+      launched: false,
+      platform,
+      mode: input.mode,
+      command_line: commandLine,
+      exit_code: null,
+      fallback_reason: 'codex_lb_tool_output_recovery_blocked',
+      blockers: toolOutputRecovery.blockers,
+      tool_output_recovery: toolOutputRecovery
+    })
+  }
+  codexBin ||= await (input.findCodexBinaryImpl || findCodexBinary)()
+  commandLine = [codexBin || 'codex', '/app']
+  if (!codexBin) {
+    return launchAttempt({
+      attempted: false,
+      launched: false,
+      platform,
+      mode: input.mode,
+      command_line: commandLine,
+      exit_code: null,
+      fallback_reason: 'codex_cli_missing_artifact_only_fallback',
+      blockers: ['codex_cli_missing'],
+      tool_output_recovery: toolOutputRecovery
+    })
+  }
+  const result = await execute(codexBin, ['/app'], {
     cwd: input.cwd,
+    env,
     timeoutMs,
     maxOutputBytes: 32 * 1024,
     input: `Continue the SKS mission using this prompt artifact:\n${input.promptArtifactPath}\n`
@@ -87,6 +124,9 @@ export async function attemptCodexAppLaunch(input: {
     code: -1,
     stdout: '',
     stderr: err instanceof Error ? err.message : String(err),
+    stdoutBytes: 0,
+    stderrBytes: 0,
+    truncated: false,
     timedOut: false
   }))
   const code = typeof result.code === 'number' ? result.code : null
@@ -110,7 +150,8 @@ export async function attemptCodexAppLaunch(input: {
     stdout_tail: stdout.slice(-4000),
     stderr_tail: stderr.slice(-4000),
     fallback_reason: fallbackReason,
-    blockers: launched ? [] : [timedOut ? 'codex_app_launch_interactive_or_timeout' : 'codex_app_launch_failed']
+    blockers: launched ? [] : [timedOut ? 'codex_app_launch_interactive_or_timeout' : 'codex_app_launch_failed'],
+    tool_output_recovery: toolOutputRecovery
   })
 }
 

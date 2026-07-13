@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureDir, exists, nowIso, projectRoot, runProcess, writeJsonAtomic } from '../fsx.js';
-import { buildAgentManifest } from '../agent-bridge/agent-manifest.js';
+import { buildAgentManifest, validateAgentManifest } from '../agent-bridge/agent-manifest.js';
 import { flag } from './command-utils.js';
 
 async function resolveSksEntrypoint(): Promise<string> {
@@ -16,7 +16,10 @@ async function runNonInteractiveSmoke(entrypoint: string): Promise<{ ok: boolean
   const result = await runProcess(process.execPath, [entrypoint, 'status', '--json'], {
     env: { SKS_AGENT_MODE: '1' },
     timeoutMs: 15_000,
-    maxOutputBytes: 32 * 1024
+    // Status is intentionally bounded but can exceed 32 KiB when several
+    // session summaries are present. Truncating otherwise-valid JSON makes the
+    // bridge report a false non-interactive failure.
+    maxOutputBytes: 512 * 1024
   }).catch((err: unknown) => ({ code: 1, stdout: '', stderr: err instanceof Error ? err.message : String(err) }));
   let stdoutIsCleanJson = false;
   try {
@@ -58,7 +61,22 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
 
   const root = await projectRoot();
   const manifest = buildAgentManifest();
+  const manifestValidation = validateAgentManifest(manifest);
   const manifestPath = path.join(root, '.sneakoscope', 'agent-bridge', 'manifest.json');
+  if (!manifestValidation.ok) {
+    const result = {
+      schema: 'sks.agent-bridge-setup.v1',
+      generated_at: nowIso(),
+      ok: false,
+      status: 'manifest_validation_failed',
+      manifest_path: manifestPath,
+      manifest_validation: manifestValidation
+    };
+    process.exitCode = 1;
+    if (flag(args as any, '--json')) console.log(JSON.stringify(result, null, 2));
+    else console.error(`Agent bridge manifest validation failed: ${manifestValidation.issues.join(', ')}`);
+    return result;
+  }
   await ensureDir(path.dirname(manifestPath));
   await writeJsonAtomic(manifestPath, manifest);
 
@@ -71,6 +89,7 @@ export async function agentBridgeCommand(subcommand: string, args: readonly stri
     ok: smoke.ok,
     manifest_path: manifestPath,
     tool_count: manifest.tools.length,
+    manifest_validation: manifestValidation,
     registration_snippets: registrationSnippets(),
     non_interactive_smoke: smoke
   };

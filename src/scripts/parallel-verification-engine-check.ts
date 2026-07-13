@@ -20,8 +20,8 @@ for (const rel of [
 
 await runFixture();
 const releaseSource = read('src/scripts/release-parallel-check.ts');
-for (const token of ['runVerificationDag', 'buildVerificationDag', 'writeParallelVerificationProof']) {
-  if (!releaseSource.includes(token)) issues.push(`release_parallel_runner_missing:${token}`);
+for (const token of ['release-gate-dag-runner.js', "'--preset', 'release', '--full'", 'spawnSync(process.execPath']) {
+  if (!releaseSource.includes(token)) issues.push(`release_parallel_redirect_missing:${token}`);
 }
 
 const result = { schema: 'sks.parallel-verification-engine-check.v1', ok: issues.length === 0, issues };

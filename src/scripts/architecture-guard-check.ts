@@ -25,8 +25,13 @@ function assertScript(name, expected) {
 }
 
 const pkg = readJson('package.json');
+const releaseManifest = readJson('release-gates.v2.json');
+const releaseGateIds = new Set((Array.isArray(releaseManifest?.gates) ? releaseManifest.gates : [])
+  .filter((gate) => Array.isArray(gate?.preset) && gate.preset.includes('release'))
+  .map((gate) => String(gate.id || '')));
 
 assertScript('architecture:guard', 'node ./dist/scripts/architecture-guard-check.js');
+if (!releaseGateIds.has('architecture:guard')) issues.push('release-gates.v2.json release preset missing architecture:guard');
 assertIncludes('src/core/safety/ssot-guard.ts', 'solid_principles');
 assertIncludes('src/core/safety/ssot-guard.ts', 'single_responsibility');
 assertIncludes('src/core/safety/ssot-guard.ts', 'open_closed');
@@ -39,7 +44,8 @@ assertIncludes('src/core/pipeline-internals/runtime-core.ts', 'ssotGuardPolicyTe
 assertIncludes('src/core/pipeline-internals/runtime-gates.ts', 'validateSsotGuardArtifact');
 assertIncludes('src/core/pipeline-internals/runtime-gates.ts', "'ssot_guard'");
 assertIncludes('src/core/commands/team-command.ts', 'SSOT_GUARD_ARTIFACT');
-assertIncludes('src/scripts/release-parallel-check.ts', "task('architecture:guard'");
+assertIncludes('src/scripts/release-parallel-check.ts', 'release-gate-dag-runner.js');
+assertIncludes('src/scripts/release-parallel-check.ts', "'--preset', 'release', '--full'");
 assertIncludes('src/core/release/gate-manifest.ts', "'architecture:guard'");
 assertIncludes('src/core/release/gate-manifest.ts', "'architecture:'");
 assertIncludes('docs/architecture-ts-rust-boundary.md', '`architecture:guard`');

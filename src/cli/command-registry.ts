@@ -260,7 +260,6 @@ export const COMMANDS = {
   'code-structure': entry('labs', 'Scan source structure', 'dist/core/commands/code-structure-command.js', subcommand(() => import('../core/commands/code-structure-command.js'), 'codeStructureCommand', 'dist/core/commands/code-structure-command.js', 'scan')),
   rust: entry('beta', 'Inspect optional Rust accelerator status and smoke parity', 'dist/commands/rust.js', directCommand(() => import('../commands/rust.js'), 'dist/commands/rust.js')),
   gx: entry('labs', 'Render/validate GX cartridges', 'dist/core/commands/gx-command.js', subcommand(() => import('../core/commands/gx-command.js'), 'gxCommand', 'dist/core/commands/gx-command.js', 'validate')),
-  db: entry('beta', 'Inspect DB safety policy', 'dist/core/commands/db-command.js', subcommand(() => import('../core/commands/db-command.js'), 'dbCommand', 'dist/core/commands/db-command.js', 'policy')),
   eval: entry('labs', 'Run eval reports', 'dist/core/commands/eval-command.js', subcommand(() => import('../core/commands/eval-command.js'), 'evalCommand', 'dist/core/commands/eval-command.js', 'run')),
   harness: entry('labs', 'Run harness fixtures', 'dist/core/commands/harness-command.js', subcommand(() => import('../core/commands/harness-command.js'), 'harnessCommand', 'dist/core/commands/harness-command.js', 'fixture')),
   wiki: activeRouteDiagnostic(entry('beta', 'Manage TriWiki and image voxel ledgers', 'dist/commands/wiki.js', directCommand(() => import('../commands/wiki.js'), 'dist/commands/wiki.js'))),
@@ -271,7 +270,7 @@ export const COMMANDS = {
   'all-features': entry('beta', 'Run all-features selftest', 'dist/commands/all-features.js', directCommand(() => import('../commands/all-features.js'), 'dist/commands/all-features.js')),
   perf: entry('beta', 'Run performance checks', 'dist/commands/perf.js', directCommand(() => import('../commands/perf.js'), 'dist/commands/perf.js')),
   bench: entry('beta', 'Run core trust-kernel benchmark budgets', 'dist/core/commands/bench-command.js', argsCommand(() => import('../core/commands/bench-command.js'), 'benchCommand', 'dist/core/commands/bench-command.js')),
-  'mcp-server': entry('beta', 'Run a stdio MCP server exposing SKS commands as tools for any MCP-capable agent host', 'dist/core/commands/mcp-server-command.js', argsCommand(() => import('../core/commands/mcp-server-command.js'), 'mcpServerCommand', 'dist/core/commands/mcp-server-command.js'), {
+  'mcp-server': entry('beta', 'Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts', 'dist/core/commands/mcp-server-command.js', argsCommand(() => import('../core/commands/mcp-server-command.js'), 'mcpServerCommand', 'dist/core/commands/mcp-server-command.js'), {
     skipMigrationGate: true,
     allowedDuringActiveRoute: true,
     activeRoutePolicy: 'always'

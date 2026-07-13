@@ -44,9 +44,9 @@ export function buildZellijRightLaneCockpit(input: {
     visible_lane_count: Math.min(lanes.length, maxVisible),
     page_count: pageCount,
     actual_pane_ids: lanes.map((lane) => lane.pane_id).filter(Boolean),
-    attach_command: input.sessionName ? `zellij attach ${input.sessionName}` : 'sks team open-zellij latest',
+    attach_command: input.sessionName ? `zellij attach ${input.sessionName}` : 'sks zellij status',
     keyboard_hint: 'Use the Zellij pane controls to move between lanes; detach with the configured Zellij detach binding.',
-    cleanup_command_hint: 'sks team cleanup-zellij latest',
+    cleanup_command_hint: 'Use native Zellij session controls; legacy Team mutation commands are removed.',
     ok: lanes.length > 0
   }
   const laneManifest = {

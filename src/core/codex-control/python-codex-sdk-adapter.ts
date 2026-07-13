@@ -72,7 +72,21 @@ export async function runPythonCodexSdkTask(input: CodexTaskInput, opts: {
     prompt: input.prompt,
     output_schema: input.outputSchema || {}
   }
-  const events = await runPythonRunner(python, request, pythonRunnerEnv(opts.env, cap.module_parent_path))
+  const timeoutMs = pythonCodexSdkTimeoutMs(input)
+  if (timeoutMs <= 0) {
+    return {
+      ok: false,
+      events: [{ event: 'error', retryable: false, message: 'python_codex_sdk_hard_deadline_exceeded' }],
+      translatedEvents: [],
+      finalResponse: '',
+      threadId: '',
+      sessionId,
+      turnId: '',
+      blockers: ['python_codex_sdk_hard_deadline_exceeded'],
+      capability: cap
+    }
+  }
+  const events = await runPythonRunner(python, request, pythonRunnerEnv(opts.env, cap.module_parent_path), timeoutMs)
   const translatedEvents = translatePythonCodexSdkEvents(events)
   const last = [...events].reverse().find((event: any) => event?.event === 'turn_completed') as any
   const errors = events.filter((event: any) => event?.event === 'error').map((event: any) => String(event.message || 'python_codex_sdk_error'))
@@ -105,7 +119,7 @@ function prependPath(value: string | undefined, entry: string) {
   return [entry, ...parts.filter((part) => part !== entry)].join(path.delimiter)
 }
 
-function runPythonRunner(python: string, request: unknown, envOverride?: Record<string, string>): Promise<any[]> {
+function runPythonRunner(python: string, request: unknown, envOverride: Record<string, string> | undefined, timeoutMs: number): Promise<any[]> {
   const runner = path.join(packageRoot(), 'pytools', 'codex_sdk_runner.py')
   return new Promise((resolve, reject) => {
     const child = spawn(python, [runner], {
@@ -116,7 +130,6 @@ function runPythonRunner(python: string, request: unknown, envOverride?: Record<
     const events: any[] = []
     let stderr = ''
     let timedOut = false
-    const timeoutMs = Number(process.env.SKS_PYTHON_CODEX_SDK_TIMEOUT_MS || 120000)
     const timer = setTimeout(() => {
       timedOut = true
       events.push({ event: 'error', retryable: true, message: `python_codex_sdk_timeout:${timeoutMs}` })
@@ -146,6 +159,21 @@ function runPythonRunner(python: string, request: unknown, envOverride?: Record<
     })
     child.stdin.end(JSON.stringify(request))
   })
+}
+
+export function pythonCodexSdkTimeoutMs(input: CodexTaskInput, nowMs = Date.now()): number {
+  const configured = Number(process.env.SKS_PYTHON_CODEX_SDK_TIMEOUT_MS || 120000)
+  const base = Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 120000
+  const hard = positiveFinite(input.reliabilityPolicy?.hardTimeoutMs)
+  const deadline = positiveFinite(input.reliabilityPolicy?.deadlineEpochMs)
+  const remaining = deadline === null ? null : Math.floor(deadline - nowMs)
+  if (remaining !== null && remaining <= 0) return 0
+  return Math.max(1, Math.floor(Math.min(base, hard ?? Number.POSITIVE_INFINITY, remaining ?? Number.POSITIVE_INFINITY)))
+}
+
+function positiveFinite(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
 function terminatePythonRunner(child: ReturnType<typeof spawn>) {

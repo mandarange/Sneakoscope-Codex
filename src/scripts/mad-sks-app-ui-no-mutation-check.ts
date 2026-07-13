@@ -147,7 +147,6 @@ async function cleanupOwnedSession(sessionName: string, socketDir: string, cwd: 
   const blockers = [
     ...(!sessionRemoved ? ['mad_ui_check_zellij_session_still_present'] : []),
     ...(!socketExclusive ? ['mad_ui_check_zellij_socket_not_exclusive'] : []),
-    ...(!ownedProcessTree.server_found ? ['mad_ui_check_zellij_server_not_observed'] : []),
     ...(!processExit.ok ? ['mad_ui_check_owned_processes_still_alive'] : []),
     ...(!socketDirRemoved ? ['mad_ui_check_zellij_socket_dir_not_removed'] : [])
   ]

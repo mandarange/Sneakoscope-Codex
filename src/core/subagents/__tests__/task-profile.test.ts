@@ -29,7 +29,26 @@ test('task profiles distinguish tiny, bounded, parallel, and high-risk work', ()
   assert.equal(classifyTaskProfile('Edit multiple files in parallel'), 'parallel-write')
   assert.equal(classifyTaskProfile('Fix the database migration'), 'high-risk')
   assert.equal(classifyTaskProfile('DB migration 적용해줘'), 'high-risk')
+  assert.equal(classifyTaskProfile('apply the migration'), 'high-risk')
+  assert.equal(classifyTaskProfile('migration 적용해줘'), 'high-risk')
+  assert.equal(classifyTaskProfile('review the migration'), 'high-risk')
+  assert.equal(classifyTaskProfile('마이그레이션 검토해줘'), 'high-risk')
+  assert.equal(classifyTaskProfile('Apply this migration code to Postgres'), 'high-risk')
+  assert.equal(classifyTaskProfile('Prisma migration code 적용해줘'), 'high-risk')
+  assert.notEqual(classifyTaskProfile('마이그레이션'), 'high-risk')
   assert.equal(classifyTaskProfile('Delete database records'), 'high-risk')
+
+  for (const prompt of [
+    'fix the migration parser',
+    'review the migration route',
+    'remove the migration command',
+    'update migration docs',
+    'fix the migration code parser',
+    '마이그레이션 라우트 수정해줘',
+    '마이그레이션 문서 업데이트해줘'
+  ]) {
+    assert.equal(classifyTaskProfile(prompt), 'bounded-work', prompt)
+  }
 
   assert.equal(gateProfileForTask('tiny-change'), 'minimal')
   assert.equal(gateProfileForTask('bounded-work'), 'scoped')

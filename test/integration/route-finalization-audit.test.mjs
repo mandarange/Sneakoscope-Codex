@@ -5,23 +5,21 @@ import path from 'node:path';
 import { createHermeticProjectRoot, runSksInRoot } from '../e2e/route-real-command-helper.mjs';
 
 const ROUTE_COMMANDS = [
-  ['team', 'fixture', '--mock', '--json'],
-  ['ppt', 'fixture', '--mock', '--json'],
-  ['image-ux-review', 'fixture', '--mock', '--json'],
-  ['computer-use', 'import-fixture', '--mock', '--json'],
-  ['db', 'check', '--sql', 'SELECT 1', '--json'],
-  ['gx', 'validate', 'fixture', '--mock', '--json']
+  { args: ['ppt', 'fixture', '--mock', '--json'], expectCode: 1 },
+  { args: ['image-ux-review', 'fixture', '--mock', '--json'], expectCode: 1 },
+  { args: ['computer-use', 'import-fixture', '--mock', '--json'], expectCode: 1 },
+  { args: ['gx', 'validate', 'fixture', '--mock', '--json'], expectCode: 1 }
 ];
 
 test('route finalization audit uses real route commands, not proof finalize substitute', async () => {
-  const root = await createHermeticProjectRoot({ fixtureName: 'route-finalization-audit' });
-  for (const args of ROUTE_COMMANDS) {
-    const result = await runSksInRoot(root, args);
+  for (const row of ROUTE_COMMANDS) {
+    const root = await createHermeticProjectRoot({ fixtureName: `route-finalization-${row.args[0]}` });
+    const result = await runSksInRoot(root, row.args, { expectCode: row.expectCode });
     const missionId = result.mission_id || result.proof?.mission_id || result.completion_proof?.mission_id;
-    assert.ok(missionId, args.join(' '));
+    assert.ok(missionId, row.args.join(' '));
     for (const file of ['completion-proof.json', 'route-completion-contract.json', 'evidence-index.json']) {
       const target = path.join(root, '.sneakoscope/missions', missionId, file);
-      assert.ok(await exists(target), `${args.join(' ')} missing ${file}`);
+      assert.ok(await exists(target), `${row.args.join(' ')} missing ${file}`);
     }
   }
 });

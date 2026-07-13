@@ -209,6 +209,9 @@ test('SKS menu bar update badge prefers version comparison over a stale boolean 
 
 test('SKS menu bar shows Codex CLI version, update indicator/action, and doctor fix action', () => {
   const swift = source('com.openai.codex');
+  const statusBody = swift.match(/func updateCodexCliStatus\(refresh: Bool = false\) \{[\s\S]*?\n    \}\n\n    func markCodexCliStatusUnavailable/)?.[0] || '';
+  const unavailableBody = swift.match(/func markCodexCliStatusUnavailable\(\) \{[\s\S]*?\n    \}/)?.[0] || '';
+  const updateBody = swift.match(/@objc func updateCodexCliNow\(\) \{[\s\S]*?\n    \}/)?.[0] || '';
   assert.match(swift, /codexCliVersionItem = NSMenuItem\(title: "Codex CLI: checking…"/);
   assert.match(swift, /codexCliUpdateItem = add\(menu, "Update Codex CLI Now", #selector\(updateCodexCliNow\)\)/);
   assert.match(swift, /add\(menu, "Run sks doctor --fix", #selector\(runDoctorFix\)\)/);
@@ -218,6 +221,20 @@ test('SKS menu bar shows Codex CLI version, update indicator/action, and doctor 
   assert.match(swift, /runSksBackground\(\["doctor", "--fix", "--global-only", "--json"\], title: "Run sks doctor --fix"\)/);
   assert.match(swift, /MenuState\(title: "SKS ⬆", line: "SKS v\\\(packageVersion\) · Codex CLI/);
   assert.match(swift, /self\.codexCliUpdateItem\.title = updateAvailable \? "Update Codex CLI Now  ⬆"/);
+  assert.match(statusBody, /json\["schema"\] as\? String == "sks\.codex-cli-update-status\.v1"/);
+  assert.match(statusBody, /code == 0 \|\| \(!ok && !installed && status == "missing"\)/);
+  assert.match(statusBody, /self\.markCodexCliStatusUnavailable\(\)/);
+  assert.match(statusBody, /status == "update_check_unavailable"/);
+  assert.match(swift, /var codexCliStatusRequestGeneration = 0/);
+  assert.match(statusBody, /codexCliStatusRequestGeneration \+= 1/);
+  assert.match(statusBody, /let requestGeneration = codexCliStatusRequestGeneration/);
+  assert.match(statusBody, /guard self\.codexCliStatusRequestGeneration == requestGeneration else \{ return \}/);
+  assert.match(unavailableBody, /codexCliCurrentVersion = nil/);
+  assert.match(unavailableBody, /codexCliLatestVersion = nil/);
+  assert.match(unavailableBody, /codexCliStatusUnavailable = true/);
+  assert.match(swift, /Codex CLI\\\(current\) status unavailable/);
+  assert.match(updateBody, /runSksBackground\(\["codex", "update", "--json"\], title: "Update Codex CLI Now"\)/);
+  assert.doesNotMatch(updateBody, /runProcess\([^\n]*codex[^\n]*update/i);
 });
 
 test('SKS menu bar actions run from global HOME scope instead of an arbitrary project', () => {

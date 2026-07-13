@@ -105,7 +105,6 @@ export const COMMAND_MANIFEST_LITE = [
   { name: 'code-structure', summary: 'Scan source structure', maturity: 'labs' },
   { name: 'rust', summary: 'Inspect optional Rust accelerator status and smoke parity', maturity: 'beta' },
   { name: 'gx', summary: 'Render/validate GX cartridges', maturity: 'labs' },
-  { name: 'db', summary: 'Inspect DB safety policy', maturity: 'beta' },
   { name: 'eval', summary: 'Run eval reports', maturity: 'labs' },
   { name: 'harness', summary: 'Run harness fixtures', maturity: 'labs' },
   { name: 'wiki', summary: 'Manage TriWiki and image voxel ledgers', maturity: 'beta', skipMigrationGate: true, allowedDuringActiveRoute: true, diagnostic: true },

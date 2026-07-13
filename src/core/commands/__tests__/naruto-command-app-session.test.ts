@@ -30,6 +30,7 @@ test('App Naruto reuses the active mission bound to the current Codex thread sta
 
     const result: any = await narutoCommand(['run', 'review independent packages', '--agents', '2', '--json'])
     const sessionState: any = await loadStateForSession(root, threadId)
+    const plan = JSON.parse(await fs.readFile(path.join(previous.dir, 'subagent-plan.json'), 'utf8'))
 
     assert.equal(result.mission_id, previous.id)
     assert.equal(result.ok, false)
@@ -40,11 +41,84 @@ test('App Naruto reuses the active mission bound to the current Codex thread sta
     assert.equal(sessionState.subagents_required, true)
     assert.equal(sessionState.agents_required, false)
     assert.equal(sessionState.phase, 'NARUTO_DELEGATION_CONTEXT_READY')
+    assert.equal(sessionState.session_scope, threadId)
+    assert.equal(plan.session_scope, threadId)
+    assert.equal(plan.workflow_run_id, result.workflow_run_id)
   } finally {
     process.chdir(oldCwd)
     restoreEnv('CODEX_THREAD_ID', oldThreadId)
     restoreEnv('SKS_NARUTO_APP_SESSION', oldAppSession)
     restoreEnv('SKS_NARUTO_STANDALONE_CLI', oldStandalone)
+    restoreEnv('HOME', oldHome)
+    restoreEnv('CODEX_HOME', oldCodexHome)
+    console.log = oldLog
+    console.warn = oldWarn
+    await fs.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('a reused App Naruto mission resets stale completion artifacts and binds a fresh workflow run', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-app-stale-run-'))
+  const threadId = 'thread-app-stale-run'
+  const oldCwd = process.cwd()
+  const oldThreadId = process.env.CODEX_THREAD_ID
+  const oldGlobalRoot = process.env.SKS_GLOBAL_ROOT
+  const oldHome = process.env.HOME
+  const oldCodexHome = process.env.CODEX_HOME
+  const oldLog = console.log
+  const oldWarn = console.warn
+  try {
+    process.chdir(root)
+    process.env.CODEX_THREAD_ID = threadId
+    process.env.SKS_GLOBAL_ROOT = root
+    process.env.HOME = path.join(root, 'home')
+    process.env.CODEX_HOME = path.join(root, 'home', '.codex')
+    console.log = () => undefined
+    console.warn = () => undefined
+
+    const first: any = await narutoCommand(['run', 'old task', '--agents', '1', '--json'])
+    const dir = path.join(root, '.sneakoscope', 'missions', first.mission_id)
+    const firstPlan = JSON.parse(await fs.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'))
+    const staleSummary = {
+      schema: 'sks.subagent-parent-summary.v1',
+      status: 'completed',
+      summary: 'Old task integrated.',
+      run_id: firstPlan.workflow_run_id,
+      thread_outcomes: [{ thread_id: 'old-agent', status: 'completed', summary: 'Old task completed.' }],
+      changed_files: [],
+      verification: [],
+      blockers: []
+    }
+    await fs.writeFile(path.join(dir, 'subagent-events.jsonl'), [
+      JSON.stringify({ event_name: 'SubagentStart', agent_id: 'old-agent', workflow_run_id: firstPlan.workflow_run_id }),
+      JSON.stringify({ event_name: 'SubagentStop', agent_id: 'old-agent', workflow_run_id: firstPlan.workflow_run_id })
+    ].join('\n') + '\n')
+    await fs.writeFile(path.join(dir, 'subagent-parent-summary.json'), JSON.stringify(staleSummary))
+    await fs.writeFile(path.join(dir, 'subagent-evidence.json'), JSON.stringify({ schema: 'sks.subagent-evidence.v1', ok: true, run_id: firstPlan.workflow_run_id }))
+    await fs.writeFile(path.join(dir, 'naruto-gate.json'), JSON.stringify({ schema: 'sks.naruto-gate.v1', passed: true, workflow_run_id: firstPlan.workflow_run_id }))
+
+    const second: any = await narutoCommand(['run', 'new task', '--agents', '1', '--json'])
+    const secondPlan = JSON.parse(await fs.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'))
+    const evidence = JSON.parse(await fs.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'))
+    const gate = JSON.parse(await fs.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'))
+    const events = await fs.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8')
+    const state: any = await loadStateForSession(root, threadId)
+
+    assert.equal(second.mission_id, first.mission_id)
+    assert.notEqual(secondPlan.workflow_run_id, firstPlan.workflow_run_id)
+    assert.equal(second.workflow_run_id, secondPlan.workflow_run_id)
+    assert.equal(evidence.run_id, secondPlan.workflow_run_id)
+    assert.equal(evidence.ok, false)
+    assert.equal(evidence.preparation_only, true)
+    assert.equal(gate.workflow_run_id, secondPlan.workflow_run_id)
+    assert.equal(gate.passed, false)
+    assert.equal(events, '')
+    await assert.rejects(fs.access(path.join(dir, 'subagent-parent-summary.json')))
+    assert.equal(state.official_subagent_run_id, secondPlan.workflow_run_id)
+  } finally {
+    process.chdir(oldCwd)
+    restoreEnv('CODEX_THREAD_ID', oldThreadId)
+    restoreEnv('SKS_GLOBAL_ROOT', oldGlobalRoot)
     restoreEnv('HOME', oldHome)
     restoreEnv('CODEX_HOME', oldCodexHome)
     console.log = oldLog
@@ -115,11 +189,42 @@ test('concurrent App Naruto runs atomically reuse one mission for the same Codex
     ])
 
     assert.equal(first.mission_id, second.mission_id)
+    assert.equal(first.workflow_run_id, second.workflow_run_id)
+    assert.deepEqual(first.artifacts, second.artifacts)
+    assert.deepEqual(
+      [first.attached_to_pending_run, second.attached_to_pending_run].sort(),
+      [false, true]
+    )
+    assert.equal(first.ok, false)
+    assert.equal(second.ok, false)
+    assert.equal(first.status, 'delegation_context_ready')
+    assert.equal(second.status, 'delegation_context_ready')
+    assert.equal(first.completion_evidence, false)
+    assert.equal(second.completion_evidence, false)
+    assert.equal(first.session_scope, threadId)
+    assert.equal(second.session_scope, threadId)
     const missionIds = (await fs.readdir(path.join(root, '.sneakoscope', 'missions')))
       .filter((entry) => entry.startsWith('M-'))
     assert.deepEqual(missionIds, [first.mission_id])
+    const dir = path.join(root, '.sneakoscope', 'missions', first.mission_id)
+    const [plan, evidence, summary, gate] = await Promise.all([
+      fs.readFile(path.join(dir, 'subagent-plan.json'), 'utf8').then(JSON.parse),
+      fs.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8').then(JSON.parse),
+      fs.readFile(path.join(dir, 'naruto-summary.json'), 'utf8').then(JSON.parse),
+      fs.readFile(path.join(dir, 'naruto-gate.json'), 'utf8').then(JSON.parse)
+    ])
+    assert.equal(plan.workflow_run_id, first.workflow_run_id)
+    assert.equal(evidence.run_id, first.workflow_run_id)
+    assert.equal(summary.workflow_run_id, first.workflow_run_id)
+    assert.equal(gate.workflow_run_id, first.workflow_run_id)
+    assert.equal(plan.session_scope, threadId)
+    assert.equal(summary.session_scope, threadId)
+    assert.equal(evidence.preparation_only, true)
+    assert.equal(gate.passed, false)
     const sessionState: any = await loadStateForSession(root, threadId)
     assert.equal(sessionState.mission_id, first.mission_id)
+    assert.equal(sessionState.official_subagent_run_id, first.workflow_run_id)
+    assert.equal(sessionState.session_scope, threadId)
   } finally {
     process.chdir(oldCwd)
     restoreEnv('CODEX_THREAD_ID', oldThreadId)

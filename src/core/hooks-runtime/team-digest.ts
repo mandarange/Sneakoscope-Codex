@@ -31,7 +31,6 @@ export async function teamLiveDigest(root: any, state: any = {}) {
   const lines = events.map(formatTeamDigestEvent);
   const context = boundText([
     `SKS Team live digest: mission ${id}, phase ${phase}, source ${source}.`,
-    `Open Zellij multi-view with: sks team open-zellij ${id}`,
     `Open live view with: sks team watch ${id}`,
     'Recent events:',
     ...lines.map((line: any) => `- ${line}`)
@@ -90,4 +89,3 @@ function boundText(value: any, limit: any) {
 export function joinSystemMessages(...parts: any[]) {
   return boundText(parts.filter(Boolean).join(' | '), 420);
 }
-

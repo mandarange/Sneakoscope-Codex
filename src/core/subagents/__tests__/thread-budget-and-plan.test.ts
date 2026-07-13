@@ -13,14 +13,14 @@ import {
 } from '../../agents/agent-plan.js'
 import { routePrompt } from '../../routes.js'
 
-test('official thread budget defaults to six requested and twelve open threads', () => {
-  assert.equal(DEFAULT_NARUTO_REQUESTED_SUBAGENTS, 6)
+test('official thread budget defaults to one child and twelve available threads', () => {
+  assert.equal(DEFAULT_NARUTO_REQUESTED_SUBAGENTS, 1)
   assert.equal(DEFAULT_NARUTO_MAX_THREADS, 12)
   assert.equal(HARD_NARUTO_MAX_THREADS, 32)
   assert.deepEqual(resolveSubagentThreadBudget(), {
-    requestedSubagents: 6,
+    requestedSubagents: 1,
     maxThreads: 12,
-    firstWave: 6,
+    firstWave: 1,
     waveCount: 1,
     maxDepth: 1
   })

@@ -22,6 +22,16 @@ export interface AgentManifest {
   tools: AgentManifestEntry[];
 }
 
+export interface AgentManifestValidation {
+  ok: boolean;
+  issues: string[];
+  expected_names: string[];
+  observed_names: string[];
+  missing_names: string[];
+  unexpected_names: string[];
+  duplicate_names: string[];
+}
+
 /** Keyword match on name+summary only, word-bounded to avoid substrings like "preset" matching "reset"; never invent commands not present in COMMANDS. */
 const DESTRUCTIVE_NAME_PATTERNS = [/uninstall/, /^mad-sks$/, /^mad-db$/, /\breset\b/, /\bpurge\b/, /\bwipe\b/, /\bdelete\b/];
 const DESTRUCTIVE_SUMMARY_PATTERNS = [/uninstall/i, /irreversib/i, /destructive/i, /\bdeletes?\b/i, /\bwipe[sd]?\b/i, /\bpurge[sd]?\b/i, /\breset[s]?\b/i];
@@ -81,5 +91,45 @@ export function buildAgentManifest(): AgentManifest {
     schema: 'sks.agent-manifest.v1',
     generated_at: nowIso(),
     tools
+  };
+}
+
+export function validateAgentManifest(manifest: unknown): AgentManifestValidation {
+  const candidate = manifest as Partial<AgentManifest> | null;
+  const expectedNames = Object.keys(COMMANDS).sort();
+  const tools = Array.isArray(candidate?.tools) ? candidate.tools : [];
+  const observedNames = tools.map((tool: any) => String(tool?.name || '')).filter(Boolean);
+  const observedSet = new Set(observedNames);
+  const duplicateNames = [...new Set(observedNames.filter((name, index) => observedNames.indexOf(name) !== index))].sort();
+  const missingNames = expectedNames.filter((name) => !observedSet.has(name));
+  const unexpectedNames = [...observedSet].filter((name) => !(name in COMMANDS)).sort();
+  const sortedNames = [...observedNames].sort();
+  const issues: string[] = [];
+
+  if (candidate?.schema !== 'sks.agent-manifest.v1') issues.push('schema');
+  if (!Array.isArray(candidate?.tools)) issues.push('tools');
+  if (duplicateNames.length) issues.push(...duplicateNames.map((name) => `duplicate_tool:${name}`));
+  if (missingNames.length) issues.push(...missingNames.map((name) => `missing_registry_tool:${name}`));
+  if (unexpectedNames.length) issues.push(...unexpectedNames.map((name) => `unexpected_tool:${name}`));
+  if (JSON.stringify(observedNames) !== JSON.stringify(sortedNames)) issues.push('tool_order');
+
+  for (const tool of tools) {
+    const name = String((tool as any)?.name || '');
+    if (!name || typeof (tool as any)?.description !== 'string') issues.push(`invalid_tool_shape:${name || '<missing>'}`);
+    if (typeof (tool as any)?.read_only !== 'boolean') issues.push(`invalid_read_only:${name || '<missing>'}`);
+    if (typeof (tool as any)?.requires_explicit_opt_in !== 'boolean') issues.push(`invalid_opt_in:${name || '<missing>'}`);
+    if (typeof (tool as any)?.json_output_supported !== 'boolean') issues.push(`invalid_json_support:${name || '<missing>'}`);
+    if (!['fast', 'normal', 'long'].includes(String((tool as any)?.latency_class || ''))) issues.push(`invalid_latency_class:${name || '<missing>'}`);
+    if (typeof (tool as any)?.example_invocation !== 'string' || !(tool as any).example_invocation.startsWith(`sks ${name}`)) issues.push(`invalid_example:${name || '<missing>'}`);
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues: [...new Set(issues)],
+    expected_names: expectedNames,
+    observed_names: observedNames,
+    missing_names: missingNames,
+    unexpected_names: unexpectedNames,
+    duplicate_names: duplicateNames
   };
 }

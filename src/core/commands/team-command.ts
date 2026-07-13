@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { nowIso, readJson, sksRoot, writeJsonAtomic } from '../fsx.js'
-import { findLatestMission } from '../mission.js'
 import { narutoCommand } from './naruto-command.js'
 import { teamLegacyObserveCommand, teamLegacySubcommands } from './team-legacy-observe-command.js'
 import { SSOT_GUARD_ARTIFACT } from '../safety/ssot-guard.js'
@@ -21,12 +20,12 @@ async function redirectTeamCreateToNaruto(args: any[] = []) {
   const result: any = jsonRequested
     ? await withSuppressedConsoleLog(() => narutoCommand(narutoArgs))
     : await narutoCommand(narutoArgs)
-  const missionId = result?.mission_id || await findLatestMission(root, { mode: 'naruto' })
+  const missionId = result?.mission_id ? String(result.mission_id) : null
   const nativeAgentRun = missionId ? await buildTeamNativeAgentCompatibility(root, missionId, result) : null
   if (missionId) {
     await writeJsonAtomic(path.join(root, '.sneakoscope', 'missions', missionId, 'team-alias-to-naruto.json'), {
       schema: 'sks.team-alias-to-naruto.v1',
-      ok: true,
+      ok: result?.ok === true,
       mission_id: missionId,
       source_command: 'sks team',
       redirected_to: 'sks naruto run',

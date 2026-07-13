@@ -113,6 +113,27 @@ test('reserved documentation hosts bypass network only with an explicit hermetic
   assert.equal(called, false);
 });
 
+test('recovery probe serialization redacts URL userinfo and transport error secrets', async () => {
+  const blocked = await probeCodexLbToolOutputRecovery({
+    baseUrl: 'https://alice:super-secret@lb.fixture.internal/backend-api/codex?token=short-secret'
+  });
+  const blockedText = JSON.stringify(blocked);
+  assert.equal(blocked.status, 'transport_blocked');
+  assert.equal(blocked.base_url, 'https://lb.fixture.internal/backend-api/codex?token=[redacted]');
+  assert.doesNotMatch(blockedText, /alice|super-secret|short-secret/);
+
+  const failed = await probeCodexLbToolOutputRecovery({
+    baseUrl: 'https://lb.fixture.internal/backend-api/codex',
+    fetchImpl: async () => {
+      throw new Error('request failed https://bob:transport-secret@lb.fixture.internal/health token=topsecret')
+    }
+  });
+  const failedText = JSON.stringify(failed);
+  assert.equal(failed.status, 'probe_unavailable');
+  assert.doesNotMatch(failedText, /bob|transport-secret|topsecret/);
+  assert.match(String(failed.error || ''), /\[redacted\]/);
+});
+
 test('codex-lb setup blocks an old proxy before writing config, auth, or secrets', async () => {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-recovery-setup-'));
   const oldFetch: typeof fetch = async () => new Response('{}', {

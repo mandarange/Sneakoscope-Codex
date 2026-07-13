@@ -112,6 +112,44 @@ test('greeting fast path does not emit a session-id fallback warning artifact', 
   }
 });
 
+test('pending MAD-SKS table deletion confirmation is handled before generic continuation', async () => {
+  const root = await tempRoot('sks-mad-confirmation-continuation-');
+  const session = 'mad-confirmation-session';
+  const missionId = 'M-mad-confirmation';
+  const state: any = {
+    mission_id: missionId,
+    mode: 'MAD-SKS',
+    route: 'MAD-SKS',
+    route_command: '$MAD-SKS',
+    route_closed: false,
+    _session_key: session
+  };
+  const dir = missionDir(root, missionId);
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(path.join(dir, 'mad-sks-table-delete-confirmation.json'), JSON.stringify({
+      schema: 'sks.mad-sks-table-delete-confirmation.v1',
+      status: 'pending',
+      operation: 'drop_table',
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 30_000).toISOString()
+    }));
+    await setCurrent(root, state, { sessionKey: session, replace: true });
+
+    const submitted: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: session,
+      turn_id: 'turn-mad-confirmation',
+      prompt: '계속'
+    }, { root, state });
+    assert.equal(submitted.continue, true);
+    assert.match(submitted.additionalContext, /confirmation accepted/i);
+    const receipt = JSON.parse(await fsp.readFile(path.join(dir, 'mad-sks-table-delete-confirmation.json'), 'utf8'));
+    assert.equal(receipt.status, 'accepted');
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('standalone parent launch attaches its child hook session to the owning mission without duplication', async () => {
   const root = await tempRoot('sks-parent-launch-attach-');
   const outerSession = 'standalone-outer';
@@ -270,6 +308,49 @@ test('missing custom tool output quarantines every later prompt in the same thre
   }
 });
 
+test('missing custom tool output in prior assistant and raw error fields quarantines a continuation prompt', async () => {
+  const root = await tempRoot('sks-interrupted-tool-output-prior-fields-');
+  const state = {
+    mission_id: 'M-interrupted-tool-output-prior-fields',
+    mode: 'NARUTO',
+    route: 'Naruto',
+    route_command: '$Naruto',
+    route_closed: false
+  };
+  try {
+    await fsp.mkdir(missionDir(root, state.mission_id), { recursive: true });
+    const priorAssistantSession = 'interrupted-prior-assistant-session';
+    const priorAssistant: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: priorAssistantSession,
+      turn_id: 'turn-prior-assistant-error',
+      prompt: '계속해줘',
+      last_assistant_message: '[No tool output found for custom tool call call_lost_review.]'
+    }, { root, state });
+    assert.equal(priorAssistant.decision, 'block');
+    assert.match(String(priorAssistant.reason || ''), /call_lost_review/);
+    const priorAssistantQuarantine = JSON.parse(await fsp.readFile(toolOutputQuarantinePath(root, priorAssistantSession), 'utf8'));
+    assert.equal(priorAssistantQuarantine.call_id, 'call_lost_review');
+
+    const rawErrorSession = 'interrupted-raw-error-session';
+    const rawError: any = await evaluateHookPayload('user-prompt-submit', {
+      conversation_id: rawErrorSession,
+      turn_id: 'turn-raw-error',
+      prompt: 'keep going',
+      raw_error: {
+        response: {
+          error: '[No tool output found for custom tool call call_lost_raw_error.]'
+        }
+      }
+    }, { root, state });
+    assert.equal(rawError.decision, 'block');
+    assert.match(String(rawError.reason || ''), /call_lost_raw_error/);
+    const rawErrorQuarantine = JSON.parse(await fsp.readFile(toolOutputQuarantinePath(root, rawErrorSession), 'utf8'));
+    assert.equal(rawErrorQuarantine.call_id, 'call_lost_raw_error');
+  } finally {
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
 test('plain answer fast path avoids mission, TriWiki, team digest, and code-pack preparation', async () => {
   const root = await tempRoot('sks-light-answer-');
   const session = 'answer-session';
@@ -328,6 +409,10 @@ test('SubagentStart uses configured official max_threads and SubagentStop is evi
     const started: any = await evaluateHookPayload('subagent-start', officialSubagentHookPayload('SubagentStart', 'agent-a1'), { root, state });
     assert.match(started.additionalContext, /max_threads is 9/i);
     assert.doesNotMatch(started.additionalContext, /at most 4/i);
+    assert.match(started.additionalContext, /execute only the slice assigned by the parent/i);
+    assert.doesNotMatch(started.additionalContext, /wait for all requested agent threads/i);
+    assert.doesNotMatch(started.additionalContext, /delegate independent slices/i);
+    assert.doesNotMatch(started.additionalContext, /return the exact sks\.subagent-parent-summary\.v1/i);
     const startedEvidence = JSON.parse(await fsp.readFile(path.join(missionDir(root, missionId), 'subagent-evidence.json'), 'utf8'));
     assert.equal(startedEvidence.started_threads, 1);
     assert.deepEqual(startedEvidence.event_sources, ['SubagentStart']);
@@ -385,13 +470,23 @@ test('official events plus parent summary pass Naruto without legacy process art
 
     state = await loadStateForSession(root, session);
     const dir = missionDir(root, state.mission_id);
+    const plan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
     const evidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    const eventRows = (await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8'))
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    const persistedParentSummary = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-parent-summary.json'), 'utf8'));
     const summary = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-summary.json'), 'utf8'));
     const gate = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
     assert.equal(evidence.ok, true);
     assert.equal(evidence.started_threads, 2);
     assert.equal(evidence.completed_threads, 2);
     assert.equal(evidence.parent_summary_trustworthy, true);
+    assert.equal(evidence.run_id, plan.workflow_run_id);
+    assert.ok(eventRows.every((row) => row.run_id === plan.workflow_run_id));
+    assert.equal(persistedParentSummary.run_id, plan.workflow_run_id);
     assert.equal(summary.schema, 'sks.naruto-subagent-workflow.v1');
     assert.equal(summary.parent_summary_present, true);
     assert.equal(gate.passed, true);

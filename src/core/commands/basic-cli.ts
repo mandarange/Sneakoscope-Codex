@@ -25,6 +25,8 @@ interface CommandRow {
   maturity: CommandManifestLiteEntry['maturity'];
 }
 
+const REMOVED_USAGE_TOPICS = new Set(['db']);
+
 export async function helpCommand(args: string[] = []): Promise<void | unknown> {
   const topic = args[0];
   if (topic) return usageCommand([topic]);
@@ -107,7 +109,9 @@ export function usageCommand(args: any = []) {
     console.log(row.description);
     return;
   }
-  const route = DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === `$${topic}`.toLowerCase());
+  const route = REMOVED_USAGE_TOPICS.has(String(topic).toLowerCase())
+    ? null
+    : DOLLAR_COMMANDS.find((entry: any) => entry.command.toLowerCase() === `$${topic}`.toLowerCase());
   if (route) {
     console.log(`${route.command}\n`);
     console.log(`${route.route}: ${route.description}`);

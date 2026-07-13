@@ -6,8 +6,11 @@ import { ensureDir, exists, packageRoot, readJson, runProcess, writeJsonAtomic, 
 export const CODEX_CLI_UPDATE_STATUS_SCHEMA = 'sks.codex-cli-update-status.v1';
 export const CODEX_CLI_UPDATE_RESULT_SCHEMA = 'sks.codex-cli-update-result.v1';
 const DEFAULT_CACHE_TTL_MS = 60 * 60 * 1000;
+const CODEX_STANDALONE_INSTALLER_URL = 'https://chatgpt.com/codex/install.sh';
+const CODEX_STANDALONE_INSTALLER_PS1_URL = 'https://chatgpt.com/codex/install.ps1';
 
 export type OperatorCodexCliSource = 'explicit' | 'path' | 'unavailable';
+export type CodexCliUpdateMethod = 'native-self-update' | 'standalone-installer' | 'npm-global' | 'homebrew-cask' | 'unknown';
 
 export type OperatorCodexCliResolution = {
   ok: true;
@@ -39,7 +42,7 @@ export interface CodexCliUpdateStatus {
   raw_version: string | null;
   latest_version: string | null;
   update_available: boolean | null;
-  update_command: 'codex update';
+  update_command: 'sks codex update';
   source: 'npm' | 'cache' | 'unavailable';
   checked_at: string;
   cache_path: string;
@@ -52,7 +55,8 @@ export interface CodexCliUpdateResult {
   schema: typeof CODEX_CLI_UPDATE_RESULT_SCHEMA;
   ok: boolean;
   status: 'updated' | 'already_current' | 'missing' | 'failed';
-  command: 'codex update';
+  command: string | null;
+  update_method: CodexCliUpdateMethod;
   bin: string | null;
   cli_path: string | null;
   cli_source: OperatorCodexCliSource;
@@ -179,7 +183,7 @@ export async function inspectCodexCliUpdate(opts: {
       raw_version: null,
       latest_version: null,
       update_available: null,
-      update_command: 'codex update',
+      update_command: 'sks codex update',
       source: 'unavailable',
       checked_at: now.toISOString(),
       cache_path: cachePath,
@@ -261,18 +265,31 @@ export async function updateCodexCliNow(opts: {
       after: null,
       rawOutput: '',
       updateStatus: null,
+      command: null,
+      updateMethod: 'unknown',
       blockers: ['codex_cli_missing', ...before.blockers],
       guidance: ['Install a release build of Codex CLI on the operator PATH first; SKS does not invent a package-manager fallback.']
     });
   }
+  const env = opts.env || process.env;
   const run = deps.runProcessImpl || runProcess;
   const capability = await run(before.path, ['update', '--help'], {
     timeoutMs: 10_000,
     maxOutputBytes: 32 * 1024,
-    env: opts.env || process.env
+    env
   }).catch((err: unknown) => failedProcessResult(err));
   const capabilityOutput = `${capability.stdout || ''}${capability.stderr || ''}`.trim();
-  if (capability.code !== 0 || !/Usage:\s+codex\s+update\b/i.test(capabilityOutput)) {
+  const nativeSelfUpdateSupported = capability.code === 0
+    && /Usage:\s+codex\s+update\b/i.test(capabilityOutput);
+  const updatePlan = nativeSelfUpdateSupported
+    ? {
+        method: 'native-self-update' as const,
+        command: 'codex update',
+        executable: before.path,
+        args: ['update']
+      }
+    : await detectCodexCliUpdatePlan({ before, env, deps, run });
+  if (!updatePlan) {
     return updateResult({
       ok: false,
       status: 'failed',
@@ -280,15 +297,22 @@ export async function updateCodexCliNow(opts: {
       after: null,
       rawOutput: capabilityOutput,
       updateStatus: null,
-      blockers: ['codex_cli_update_capability_unverified'],
-      guidance: ['The selected executable does not expose the official `codex update` command. Install an official Codex CLI release before retrying.']
+      command: null,
+      updateMethod: 'unknown',
+      blockers: ['codex_cli_update_method_unverified'],
+      guidance: [
+        'The selected Codex CLI neither advertises native self-update nor maps safely to the official standalone installer, npm global package, or Homebrew cask.',
+        'Reinstall Codex with an official supported method, then retry.'
+      ]
     });
   }
-  const result = await run(before.path, ['update'], {
-    timeoutMs: 180_000,
-    maxOutputBytes: 128 * 1024,
-    env: opts.env || process.env
-  }).catch((err: unknown) => failedProcessResult(err));
+  const result = updatePlan.method === 'standalone-installer'
+    ? await runStandaloneInstallerUpdate({ before, env, deps, run })
+    : await run(updatePlan.executable, updatePlan.args, {
+        timeoutMs: 180_000,
+        maxOutputBytes: 128 * 1024,
+        env
+      }).catch((err: unknown) => failedProcessResult(err));
   const rawOutput = `${result.stdout || ''}${result.stderr || ''}`.trim();
   if (result.code !== 0) {
     return updateResult({
@@ -298,8 +322,10 @@ export async function updateCodexCliNow(opts: {
       after: null,
       rawOutput,
       updateStatus: null,
-      blockers: ['codex_cli_self_update_failed'],
-      guidance: ['Run `codex update` in a terminal to review the updater output. Debug builds must be replaced with a release build.']
+      command: updatePlan.command,
+      updateMethod: updatePlan.method,
+      blockers: [updateFailureBlocker(updatePlan.method)],
+      guidance: [`Run the detected updater in a terminal to review its output: ${updatePlan.command}`]
     });
   }
 
@@ -316,6 +342,8 @@ export async function updateCodexCliNow(opts: {
       after,
       rawOutput,
       updateStatus: null,
+      command: updatePlan.command,
+      updateMethod: updatePlan.method,
       blockers: ['codex_cli_post_update_missing', ...after.blockers],
       guidance: ['The updater exited successfully, but the operator Codex CLI or its version disappeared. Reinstall Codex CLI and retry the status check.']
     });
@@ -328,6 +356,8 @@ export async function updateCodexCliNow(opts: {
       after,
       rawOutput,
       updateStatus: null,
+      command: updatePlan.command,
+      updateMethod: updatePlan.method,
       blockers: ['codex_cli_post_update_target_changed'],
       guidance: ['The updated Codex CLI path disappeared and resolution fell through to a different installation. Restore or reinstall the original operator CLI before retrying.']
     });
@@ -341,6 +371,8 @@ export async function updateCodexCliNow(opts: {
       after,
       rawOutput,
       updateStatus: null,
+      command: updatePlan.command,
+      updateMethod: updatePlan.method,
       blockers: ['codex_cli_post_update_version_regressed'],
       guidance: ['The Codex updater returned an older operator CLI version. Restore or reinstall the expected release before retrying.']
     });
@@ -369,6 +401,8 @@ export async function updateCodexCliNow(opts: {
       after,
       rawOutput,
       updateStatus,
+      command: updatePlan.command,
+      updateMethod: updatePlan.method,
       blockers: ['codex_cli_post_update_status_untrusted'],
       guidance: ['The updater exited successfully, but the refreshed operator CLI status was missing or failed. Verify `codex --version` before retrying.']
     });
@@ -381,6 +415,8 @@ export async function updateCodexCliNow(opts: {
       after,
       rawOutput,
       updateStatus,
+      command: updatePlan.command,
+      updateMethod: updatePlan.method,
       blockers: ['codex_cli_post_update_status_target_mismatch'],
       guidance: ['The refreshed status described a different Codex CLI path or version. Fix PATH/override precedence before retrying the update.']
     });
@@ -393,9 +429,11 @@ export async function updateCodexCliNow(opts: {
     after,
     rawOutput,
     updateStatus,
+    command: updatePlan.command,
+    updateMethod: updatePlan.method,
     blockers: [],
     guidance: updateStatus.update_available === true
-      ? ['The updater completed, but a newer registry version is still reported. Reopen the menu or run `codex update` again.']
+      ? [`The updater completed, but a newer registry version is still reported. Reopen the menu or rerun: ${updatePlan.command}`]
       : []
   });
 }
@@ -427,6 +465,179 @@ export function compareCodexCliVersions(left: unknown, right: unknown): number {
   if (!aPre) return 1;
   if (!bPre) return -1;
   return aPre.localeCompare(bPre, undefined, { numeric: true });
+}
+
+interface CodexCliUpdatePlan {
+  method: Exclude<CodexCliUpdateMethod, 'unknown'>;
+  command: string;
+  executable: string;
+  args: string[];
+}
+
+async function detectCodexCliUpdatePlan(input: {
+  before: OperatorCodexCliResolution & { ok: true; path: string; version: string };
+  env: NodeJS.ProcessEnv;
+  deps: CodexCliUpdateDependencies;
+  run: NonNullable<CodexCliUpdateDependencies['runProcessImpl']>;
+}): Promise<CodexCliUpdatePlan | null> {
+  const selectedPath = path.resolve(input.before.path);
+  const selectedRealPath = await realPathOrResolved(selectedPath);
+  const codexHome = await realPathOrResolved(input.env.CODEX_HOME || path.join(input.env.HOME || os.homedir(), '.codex'));
+  const standaloneRoot = await realPathOrResolved(path.join(codexHome, 'packages', 'standalone'));
+  if (isWithin(selectedRealPath, standaloneRoot)) {
+    return {
+      method: 'standalone-installer',
+      command: process.platform === 'win32'
+        ? `powershell -NoProfile -Command "irm ${CODEX_STANDALONE_INSTALLER_PS1_URL} | iex"`
+        : `curl -fsSL ${CODEX_STANDALONE_INSTALLER_URL} | CODEX_NON_INTERACTIVE=1 sh`,
+      executable: '',
+      args: []
+    };
+  }
+
+  const brew = await resolveUpdateExecutable('brew', input.env, input.deps);
+  if (brew) {
+    const caskPrefixResult = await input.run(brew, ['--prefix', '--cask', 'codex'], {
+      timeoutMs: 10_000,
+      maxOutputBytes: 16 * 1024,
+      env: input.env
+    }).catch((err: unknown) => failedProcessResult(err));
+    const caskPrefix = caskPrefixResult.code === 0
+      ? String(caskPrefixResult.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
+      : '';
+    if (caskPrefix && isWithin(selectedRealPath, await realPathOrResolved(caskPrefix))) {
+      return {
+        method: 'homebrew-cask',
+        command: 'brew upgrade --cask codex',
+        executable: brew,
+        args: ['upgrade', '--cask', 'codex']
+      };
+    }
+  }
+
+  const npm = await resolveUpdateExecutable('npm', input.env, input.deps);
+  if (npm) {
+    const [rootResult, prefixResult] = await Promise.all([
+      input.run(npm, ['root', '-g'], {
+        timeoutMs: 10_000,
+        maxOutputBytes: 16 * 1024,
+        env: input.env
+      }).catch((err: unknown) => failedProcessResult(err)),
+      input.run(npm, ['prefix', '-g'], {
+        timeoutMs: 10_000,
+        maxOutputBytes: 16 * 1024,
+        env: input.env
+      }).catch((err: unknown) => failedProcessResult(err))
+    ]);
+    const npmRoot = rootResult.code === 0
+      ? String(rootResult.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
+      : '';
+    const npmPrefix = prefixResult.code === 0
+      ? String(prefixResult.stdout || '').trim().split(/\r?\n/).find(Boolean) || ''
+      : '';
+    const packageDir = npmRoot ? await realPathOrResolved(path.resolve(npmRoot, '@openai', 'codex')) : '';
+    const npmBinCandidates = npmPrefix
+      ? process.platform === 'win32'
+        ? ['codex.cmd', 'codex.exe', 'codex'].map((name) => path.resolve(npmPrefix, name))
+        : [path.resolve(npmPrefix, 'bin', 'codex')]
+      : [];
+    const packageInstalled = Boolean(packageDir) && await exists(packageDir);
+    if (packageInstalled && (
+      isWithin(selectedRealPath, packageDir)
+      || npmBinCandidates.includes(selectedPath)
+    )) {
+      return {
+        method: 'npm-global',
+        command: 'npm install -g @openai/codex@latest',
+        executable: npm,
+        args: ['install', '-g', '@openai/codex@latest']
+      };
+    }
+  }
+  return null;
+}
+
+async function runStandaloneInstallerUpdate(input: {
+  before: OperatorCodexCliResolution & { ok: true; path: string; version: string };
+  env: NodeJS.ProcessEnv;
+  deps: CodexCliUpdateDependencies;
+  run: NonNullable<CodexCliUpdateDependencies['runProcessImpl']>;
+}): Promise<RunProcessResult> {
+  if (process.platform === 'win32') {
+    const powershell = await resolveUpdateExecutable('pwsh', input.env, input.deps)
+      || await resolveUpdateExecutable('powershell', input.env, input.deps);
+    if (!powershell) return failedProcessResult(new Error('codex_cli_standalone_update_prerequisite_missing'));
+    const codexHome = path.resolve(input.env.CODEX_HOME || path.join(input.env.HOME || os.homedir(), '.codex'));
+    return input.run(powershell, [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      `$ErrorActionPreference='Stop'; Invoke-RestMethod '${CODEX_STANDALONE_INSTALLER_PS1_URL}' | Invoke-Expression`
+    ], {
+      timeoutMs: 180_000,
+      maxOutputBytes: 128 * 1024,
+      env: {
+        ...input.env,
+        CODEX_HOME: codexHome,
+        CODEX_INSTALL_DIR: path.dirname(input.before.path),
+        CODEX_NON_INTERACTIVE: '1'
+      }
+    }).catch((err: unknown) => failedProcessResult(err));
+  }
+  const curl = await resolveUpdateExecutable('curl', input.env, input.deps);
+  const shell = await resolveUpdateExecutable('sh', input.env, input.deps);
+  if (!curl || !shell) {
+    return failedProcessResult(new Error('codex_cli_standalone_update_prerequisite_missing'));
+  }
+  const download = await input.run(curl, ['-fsSL', CODEX_STANDALONE_INSTALLER_URL], {
+    timeoutMs: 30_000,
+    maxOutputBytes: 512 * 1024,
+    env: input.env
+  }).catch((err: unknown) => failedProcessResult(err));
+  const installer = String(download.stdout || '');
+  if (download.code !== 0 || !/^#!\/bin\/sh\s*$/m.test(installer) || !installer.includes('CODEX_NON_INTERACTIVE')) {
+    return {
+      ...download,
+      code: download.code === 0 ? 1 : download.code,
+      stderr: String(download.stderr || 'codex_cli_standalone_installer_download_untrusted')
+    };
+  }
+  const codexHome = path.resolve(input.env.CODEX_HOME || path.join(input.env.HOME || os.homedir(), '.codex'));
+  return input.run(shell, ['-s', '--'], {
+    timeoutMs: 180_000,
+    maxOutputBytes: 128 * 1024,
+    input: installer,
+    env: {
+      ...input.env,
+      CODEX_HOME: codexHome,
+      CODEX_INSTALL_DIR: path.dirname(input.before.path),
+      CODEX_NON_INTERACTIVE: '1'
+    }
+  }).catch((err: unknown) => failedProcessResult(err));
+}
+
+async function resolveUpdateExecutable(
+  command: string,
+  env: NodeJS.ProcessEnv,
+  deps: CodexCliUpdateDependencies
+): Promise<string | null> {
+  return deps.whichImpl
+    ? deps.whichImpl(command).catch(() => null)
+    : resolveOperatorExecutable(command, env);
+}
+
+function updateFailureBlocker(method: Exclude<CodexCliUpdateMethod, 'unknown'>): string {
+  if (method === 'native-self-update') return 'codex_cli_self_update_failed';
+  if (method === 'standalone-installer') return 'codex_cli_standalone_update_failed';
+  if (method === 'homebrew-cask') return 'codex_cli_homebrew_cask_update_failed';
+  return 'codex_cli_npm_global_update_failed';
+}
+
+async function realPathOrResolved(value: string): Promise<string> {
+  const resolved = path.resolve(value);
+  return fsp.realpath(resolved).catch(() => resolved);
 }
 
 async function operatorCodexCandidates(explicitBin: string | undefined, env: NodeJS.ProcessEnv): Promise<OperatorCodexCandidate[]> {
@@ -576,13 +787,13 @@ function buildStatus(input: {
     raw_version: input.codex.raw_version,
     latest_version: input.latestVersion,
     update_available: updateAvailable,
-    update_command: 'codex update',
+    update_command: 'sks codex update',
     source: input.source,
     checked_at: input.checkedAt,
     cache_path: input.cachePath,
     warnings: input.codex.warnings,
     blockers: [],
-    guidance: updateAvailable ? ['Run `codex update` or choose Update Codex CLI Now in the SKS menu bar.'] : []
+    guidance: updateAvailable ? ['Run `sks codex update` or choose Update Codex CLI Now in the SKS menu bar.'] : []
   };
 }
 
@@ -604,7 +815,7 @@ function unavailableStatus(
     raw_version: codex.raw_version,
     latest_version: null,
     update_available: null,
-    update_command: 'codex update',
+    update_command: 'sks codex update',
     source: 'unavailable',
     checked_at: now.toISOString(),
     cache_path: cachePath,
@@ -621,6 +832,8 @@ function updateResult(input: {
   after: OperatorCodexCliResolution | null;
   rawOutput: string;
   updateStatus: CodexCliUpdateStatus | null;
+  command: string | null;
+  updateMethod: CodexCliUpdateMethod;
   blockers: string[];
   guidance: string[];
 }): CodexCliUpdateResult {
@@ -628,7 +841,8 @@ function updateResult(input: {
     schema: CODEX_CLI_UPDATE_RESULT_SCHEMA,
     ok: input.ok,
     status: input.status,
-    command: 'codex update',
+    command: input.command,
+    update_method: input.updateMethod,
     bin: input.before.path,
     cli_path: input.before.path,
     cli_source: input.before.source,

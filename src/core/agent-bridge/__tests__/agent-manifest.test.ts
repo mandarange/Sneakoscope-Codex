@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COMMANDS } from '../../../cli/command-registry.js';
-import { buildAgentManifest } from '../agent-manifest.js';
+import { buildAgentManifest, validateAgentManifest } from '../agent-manifest.js';
 
 test('agent manifest is non-empty and schema-tagged', () => {
   const manifest = buildAgentManifest();
@@ -60,4 +60,33 @@ test('every manifest entry has a well-formed shape', () => {
     assert.ok(['fast', 'normal', 'long'].includes(tool.latency_class));
     assert.ok(tool.example_invocation.startsWith(`sks ${tool.name}`));
   }
+});
+
+test('generated manifest exactly matches the command registry in sorted order', () => {
+  const manifest = buildAgentManifest();
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, true, validation.issues.join(', '));
+  assert.deepEqual(validation.observed_names, Object.keys(COMMANDS).sort());
+  assert.deepEqual(validation.missing_names, []);
+  assert.deepEqual(validation.unexpected_names, []);
+  assert.deepEqual(validation.duplicate_names, []);
+});
+
+test('manifest validation rejects stale removed commands, missing canonical commands, and duplicates', () => {
+  const manifest: any = buildAgentManifest();
+  const withoutSuperSearch = manifest.tools.filter((tool: any) => tool.name !== 'super-search');
+  manifest.tools = [
+    { ...withoutSuperSearch[1] },
+    { ...withoutSuperSearch[0] },
+    ...withoutSuperSearch.slice(2),
+    { ...withoutSuperSearch[0] },
+    { ...withoutSuperSearch[0], name: 'db', example_invocation: 'sks db --json' }
+  ];
+
+  const validation = validateAgentManifest(manifest);
+  assert.equal(validation.ok, false);
+  assert.ok(validation.issues.includes('missing_registry_tool:super-search'));
+  assert.ok(validation.issues.includes('unexpected_tool:db'));
+  assert.ok(validation.issues.some((issue) => issue.startsWith('duplicate_tool:')));
+  assert.ok(validation.issues.includes('tool_order'));
 });

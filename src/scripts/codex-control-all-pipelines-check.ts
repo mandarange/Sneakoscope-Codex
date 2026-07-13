@@ -12,6 +12,7 @@ const sources = {
   team: readText('src/core/commands/team-command.ts'),
   qa: readText('src/core/commands/qa-loop-command.ts'),
   research: readText('src/core/commands/research-command.ts'),
+  researchStage: readText('src/core/research/research-stage-runner.ts'),
   naruto: readText('src/core/commands/naruto-command.ts'),
   dfix: readText('src/core/commands/dfix-command.ts'),
   workerRouter: readText('src/core/agents/native-worker-backend-router.ts')
@@ -19,7 +20,11 @@ const sources = {
 const teamCreateRedirectsToNaruto = sources.team.includes('redirectTeamCreateToNaruto') && sources.team.includes('narutoCommand');
 assertGate(teamCreateRedirectsToNaruto, 'Team create must route through Naruto codex control backend SSOT');
 assertGate(sources.qa.includes("mock ? 'fake' : 'codex-sdk'"), 'QA must route native agents through codex control backend');
-assertGate(sources.research.includes("mock ? 'fake' : 'codex-sdk'"), 'Research must route native agents through codex control backend');
+assertGate(
+  sources.research.includes("backend: mock ? 'mock' : 'codex-sdk'")
+    && sources.researchStage.includes('runCodexTask({'),
+  'Research must route real stages through the Codex control backend'
+);
 assertGate(sources.naruto.includes('runOfficialSubagentWorkflow'), 'Naruto must invoke the official Codex subagent runner');
 assertGate(sources.naruto.includes("workflow: 'official_codex_subagent'"), 'Naruto must persist the official subagent workflow contract');
 assertGate(!sources.naruto.includes("backend: 'codex-sdk'"), 'Naruto must not fall back to the legacy codex-sdk backend selector');

@@ -16,6 +16,8 @@ const counts = [4, 8, 12, 20, 100].map((requested) => resolveSubagentThreadBudge
   requested,
   configuredMaxThreads: requested === 20 ? 12 : undefined
 }))
+const implicitCount = resolveSubagentThreadBudget()
+assertGate(implicitCount.requestedSubagents === 1, 'implicit Naruto must default to one safe child', implicitCount)
 assertGate(counts[0]?.requestedSubagents === 4, 'requested 4 must remain 4', counts)
 assertGate(counts[1]?.requestedSubagents === 8, 'requested 8 must remain 8', counts)
 assertGate(counts[2]?.requestedSubagents === 12, 'requested 12 must remain 12', counts)
@@ -133,9 +135,11 @@ try {
   assertGate(nestedLaunch === false && appResult.ok === false && appResult.status === 'delegation_context_ready' && appResult.completion_evidence === false, 'in-app preparation must not launch nested codex or count as completion', appResult)
 
   const facade = fs.readFileSync(path.join(root, 'src', 'core', 'commands', 'naruto-command.ts'), 'utf8')
-  assertGate(facade.includes("await import('./naruto-command-legacy.js')"), 'legacy process swarm must be reachable only by dynamic import')
+  const preparationOwner = fs.readFileSync(path.join(root, 'src', 'core', 'subagents', 'official-subagent-preparation.ts'), 'utf8')
+  assertGate(!facade.includes('naruto-command-legacy') && !fs.existsSync(path.join(root, 'src', 'core', 'commands', 'naruto-command-legacy.ts')), 'legacy Naruto process swarm command must be removed and unreachable')
   assertGate(!facade.includes("from '../agents/agent-orchestrator.js'") && !facade.includes("from '../agents/native-cli-session-swarm.js'"), 'default Naruto facade must not eager-import the process orchestrator')
-  assertGate(facade.includes('delegation_prompt: delegationPrompt'), 'canonical subagent plan must persist the official delegation prompt required by the stop gate')
+  assertGate(facade.includes('prepareOfficialSubagentMission'), 'Naruto facade must delegate preparation to the shared official-subagent owner')
+  assertGate(preparationOwner.includes('delegation_prompt: delegationPrompt'), 'canonical subagent plan must persist the official delegation prompt required by the stop gate')
 
   emitGate('naruto:official-subagent-workflow', {
     requested_counts: counts.map((row) => row.requestedSubagents),

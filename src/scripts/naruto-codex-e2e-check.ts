@@ -33,12 +33,10 @@ const args = [
   realMode ? 'real Codex E2E readonly smoke' : 'hermetic Naruto E2E readonly smoke',
   '--json',
   '--readonly',
-  '--no-open-zellij',
-  '--clones',
+  '--agents',
   realMode ? '2' : '3',
-  '--work-items',
-  realMode ? '2' : '3',
-  ...(realMode ? ['--real'] : ['--mock'])
+  '--max-threads',
+  realMode ? '2' : '3'
 ]
 
 const run = await runProcess(process.execPath, args, {
@@ -50,13 +48,21 @@ const run = await runProcess(process.execPath, args, {
     SKS_CODEX_ALLOW_NON_GIT: realMode ? '1' : process.env.SKS_CODEX_ALLOW_NON_GIT || '',
     SKS_DISABLE_NETWORK: realMode ? process.env.SKS_DISABLE_NETWORK || '' : '1',
     SKS_DISABLE_UPDATE_CHECK: '1',
-    SKS_NARUTO_PRE_RUN_SMOKE: '1'
+    SKS_NARUTO_STANDALONE_CLI: realMode ? '1' : '0',
+    SKS_NARUTO_APP_SESSION: realMode ? '0' : '1',
+    CODEX_THREAD_ID: realMode ? process.env.CODEX_THREAD_ID || '' : `naruto-e2e-${path.basename(tempRoot)}`
   }
 })
 
 const parsed = parseJsonObjectFromStdout(run.stdout)
 
-const ok = run.code === 0 && parsed?.ok === true && parsed?.mode === 'NARUTO'
+const ok = realMode
+  ? run.code === 0 && parsed?.ok === true && parsed?.route === '$Naruto' && parsed?.status === 'completed'
+  : run.code === 0
+    && parsed?.ok === false
+    && parsed?.route === '$Naruto'
+    && parsed?.status === 'delegation_context_ready'
+    && parsed?.app_session === true
 assertGate(ok || (realMode && !requireReal), `${mode} Naruto E2E failed`, {
   code: run.code,
   parsed,
@@ -70,6 +76,7 @@ emitGate(realMode ? 'naruto:e2e-real-codex' : 'naruto:e2e-hermetic', {
   temp_root: tempRoot,
   mission_id: parsed?.mission_id || null,
   readonly: true,
+  preparation_only: !realMode,
   real_required: requireReal
 })
 

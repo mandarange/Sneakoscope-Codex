@@ -4,6 +4,10 @@ import { managedProxyEnvForChild } from '../codex/managed-proxy-env.js'
 import { agentWorkerEnv, validateAgentWorkerResult } from './agent-worker-pipeline.js'
 import { fastModeEnv, resolveFastModePolicy } from './fast-mode-policy.js'
 import { buildCodexExecArgs } from '../codex/codex-cli-syntax-builder.js'
+import {
+  codexLbRecoveryBlockedProcessResult,
+  withCodexLbCliLaunchRecovery
+} from '../codex-control/codex-lb-launch-recovery.js'
 
 export function buildCodexExecAgentArgs(agent: any, prompt: string, opts: any = {}) {
   const resultFile = opts.resultFile || defaultCodexResultFile(agent, opts)
@@ -76,8 +80,19 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
   const stderrFile = path.join(logRoot, 'codex-exec.stderr.log')
   const allowedCommandsFile = path.join(opts.agentRoot || opts.cwd || process.cwd(), 'agent-allowed-commands.json')
   const workerEnv = agentWorkerEnv(agent, allowedCommandsFile)
-  const proxyEnv = managedProxyEnvForChild({ ...process.env, ...(opts.env || {}) })
-  const result = await runProcess(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...proxyEnv, ...fastModeEnv(fastPolicy), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile })
+  const effectiveEnv = { ...process.env, ...(opts.env || {}) }
+  const proxyEnv = managedProxyEnvForChild(effectiveEnv)
+  const execute: typeof runProcess = opts.runProcessImpl || runProcess
+  const guarded = await withCodexLbCliLaunchRecovery({
+    root: opts.cwd || process.cwd(),
+    env: effectiveEnv,
+    cliArgs: command.args.slice(0, -1),
+    ...(typeof opts.recoveryFetch === 'function' ? { fetchImpl: opts.recoveryFetch } : {}),
+    ...(opts.recoveryTimeoutMs === undefined ? {} : { timeoutMs: opts.recoveryTimeoutMs })
+  }, () => execute(opts.codexBin || 'codex', command.args, { cwd: opts.cwd || process.cwd(), env: { ...(opts.env || {}), ...proxyEnv, ...fastModeEnv(fastPolicy), ...workerEnv }, timeoutMs: opts.timeoutMs || 30 * 60 * 1000, maxOutputBytes: 256 * 1024, stdoutFile, stderrFile }))
+  const result = guarded.launched
+    ? guarded.value
+    : codexLbRecoveryBlockedProcessResult(guarded.toolOutputRecovery)
   const report = await writeCodexProcessReport(opts.agentRoot || opts.cwd || process.cwd(), agent, {
     project_hash: opts.projectHash || agent.project_hash || agent.root_hash || null,
     command: [opts.codexBin || 'codex', ...command.args],
@@ -103,6 +118,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
     stderr_bytes: result.stderrBytes,
     truncated: result.truncated,
     timed_out: result.timedOut,
+    codex_lb_tool_output_recovery: guarded.toolOutputRecovery,
     dry_run: false
   })
   if (result.code === 0) {
@@ -126,7 +142,7 @@ export async function runCodexExecAgent(agent: any, slice: any, opts: any = {}) 
       return { ...validated, status: 'blocked', blockers: [...validated.blockers, 'codex_exec_result_schema_invalid'] }
     }
   }
-  return validateAgentWorkerResult({ mission_id: opts.missionId || opts.mission_id || '', agent_id: agent.id, session_id: agent.session_id, persona_id: agent.persona_id || agent.id, task_slice_id: slice?.id || '', status: result.code === 0 ? 'done' : 'failed', backend: 'codex-exec', summary: result.stdout.slice(-1000) || result.stderr.slice(-1000), artifacts: [command.resultFile, report], blockers: result.code === 0 ? ['codex_exec_output_last_message_missing_or_invalid'] : ['codex_exec_exit_' + result.code], confidence: 'verified_partial', unverified: result.code === 0 ? ['codex-exec stdout fallback; resultFile JSON missing or invalid'] : [], writes: [], source_intelligence_refs: agent.source_intelligence_refs || null, goal_mode_ref: agent.goal_mode_ref || null, verification: { status: result.code === 0 ? 'partial' : 'failed', checks: ['codex-exec-exit-code', 'codex-exec-process-report', 'codex-exec-output-last-message'] } })
+  return validateAgentWorkerResult({ mission_id: opts.missionId || opts.mission_id || '', agent_id: agent.id, session_id: agent.session_id, persona_id: agent.persona_id || agent.id, task_slice_id: slice?.id || '', status: result.code === 0 ? 'done' : 'failed', backend: 'codex-exec', summary: result.stdout.slice(-1000) || result.stderr.slice(-1000), artifacts: [command.resultFile, report], blockers: result.code === 0 ? ['codex_exec_output_last_message_missing_or_invalid'] : [...(guarded.launched ? [] : guarded.toolOutputRecovery.blockers), 'codex_exec_exit_' + result.code], confidence: 'verified_partial', unverified: result.code === 0 ? ['codex-exec stdout fallback; resultFile JSON missing or invalid'] : [], writes: [], source_intelligence_refs: agent.source_intelligence_refs || null, goal_mode_ref: agent.goal_mode_ref || null, codex_child_report: { tool_output_recovery: guarded.toolOutputRecovery }, verification: { status: result.code === 0 ? 'partial' : 'failed', checks: ['codex-exec-exit-code', 'codex-exec-process-report', 'codex-exec-output-last-message'] } })
 }
 
 function workerNoMcpDefault(agent: any, opts: any = {}, sandbox = 'read-only') {

@@ -58,3 +58,55 @@ test('implementation language and Korean fix conjugations route as work', () => 
   assert.equal(parallel?.task_profile, 'parallel-write');
   assert.equal(routeRequiresSubagents(parallel, 'parallel implementation'), true);
 });
+
+test('legacy DB command and routing discussion stays out of the database route', () => {
+  for (const prompt of [
+    'remove the public legacy db usage topic from routes constants',
+    'fix the DB route parser regression',
+    '레거시 sks db 커맨드를 삭제해줘'
+  ]) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'Naruto', prompt);
+    assert.equal(route?.task_profile, 'bounded-work', prompt);
+  }
+
+  for (const prompt of [
+    'How does the sks db command work?',
+    'Explain the DB routing regex'
+  ]) {
+    assert.equal(routePrompt(prompt)?.id, 'Answer', prompt);
+  }
+
+  const actualDatabaseWork = routePrompt('DB migration 적용해줘');
+  assert.equal(actualDatabaseWork?.id, 'DB');
+  assert.equal(actualDatabaseWork?.task_profile, 'high-risk');
+
+  for (const prompt of ['apply the migration', 'migration 적용해줘', 'review the migration', '마이그레이션 검토해줘']) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'DB', prompt);
+    assert.equal(route?.task_profile, 'high-risk', prompt);
+  }
+
+  for (const prompt of ['Apply this migration code to Postgres', 'Prisma migration code 적용해줘']) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'DB', prompt);
+    assert.equal(route?.task_profile, 'high-risk', prompt);
+  }
+
+  for (const prompt of ['fix the migration parser', 'review the migration route', 'remove the migration command', 'update migration docs']) {
+    const route = routePrompt(prompt);
+    assert.notEqual(route?.id, 'DB', prompt);
+    assert.equal(route?.task_profile, 'bounded-work', prompt);
+  }
+});
+
+test('specialized Research prompts keep their route when parallel execution is requested', () => {
+  for (const prompt of ['research this topic in parallel', 'research this topic with subagents', '이 주제를 병렬로 연구해줘']) {
+    const route = routePrompt(prompt);
+    assert.equal(route?.id, 'Research', prompt);
+    assert.ok(['parallel-read', 'parallel-write'].includes(route?.task_profile), prompt);
+    assert.equal(routeRequiresSubagents(route, prompt), true, prompt);
+  }
+
+  assert.equal(routePrompt('fix the Research parser in parallel')?.id, 'Naruto');
+});

@@ -22,7 +22,6 @@ for (const relModule of registeredCommandModules()) {
 const disallowedImports = {
   'qa-loop-command.ts': ['research-command', 'ppt-command', 'team-command', 'gx-command'],
   'research-command.ts': ['qa-loop-command', 'ppt-command', 'team-command', 'gx-command'],
-  'db-command.ts': ['image-ux-review-command', 'ppt-command', 'computer-use-command'],
   'wiki-command.ts': ['team-command', 'research-command', 'qa-loop-command', 'ppt-command']
 };
 for (const [name, needles] of Object.entries(disallowedImports)) {

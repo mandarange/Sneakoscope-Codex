@@ -1,4 +1,5 @@
 import { codexLbBaseUrlSecurityBlocker, normalizeCodexLbBaseUrl } from './codex-lb-env.js';
+import { redactString } from '../secret-redaction.js';
 
 export const CODEX_LB_TOOL_OUTPUT_RECOVERY_SCHEMA = 'sks.codex-lb-tool-output-recovery.v1';
 export const CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION = '1.21.0-beta.3';
@@ -137,8 +138,8 @@ export async function probeCodexLbToolOutputRecovery(
     return applyCodexLbToolOutputRecoveryOverride(result, opts.allowUnverified === true);
   } catch (err: unknown) {
     const error = err instanceof Error
-      ? err.name === 'AbortError' ? 'codex-lb health probe timed out' : err.message
-      : String(err);
+      ? err.name === 'AbortError' ? 'codex-lb health probe timed out' : redactCodexLbProbeText(err.message)
+      : redactCodexLbProbeText(String(err));
     return applyCodexLbToolOutputRecoveryOverride(blockedProbe('probe_unavailable', {
       baseUrl,
       healthUrl,
@@ -251,8 +252,8 @@ function baseProbe(baseUrl: string | null, healthUrl: string | null): CodexLbToo
     ok: false,
     required: true,
     status: 'version_unverified',
-    base_url: baseUrl,
-    health_url: healthUrl,
+    base_url: redactCodexLbProbeUrl(baseUrl),
+    health_url: redactCodexLbProbeUrl(healthUrl),
     observed_version: null,
     minimum_version: CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION,
     version_header: 'x-app-version',
@@ -282,8 +283,33 @@ function blockedProbe(
     status,
     blockers: input.blockers,
     ...(input.httpStatus === undefined ? {} : { http_status: input.httpStatus }),
-    ...(input.error === undefined ? {} : { error: input.error })
+    ...(input.error === undefined ? {} : { error: redactCodexLbProbeText(input.error) })
   };
+}
+
+function redactCodexLbProbeUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    parsed.username = '';
+    parsed.password = '';
+    parsed.hash = '';
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (/(?:access[_-]?token|api[_-]?key|secret|password|token|credential)/i.test(key)) {
+        parsed.searchParams.set(key, 'redacted');
+      }
+    }
+    return redactCodexLbProbeText(parsed.toString());
+  } catch {
+    return redactCodexLbProbeText(value);
+  }
+}
+
+function redactCodexLbProbeText(value: unknown): string {
+  return redactString(String(value || ''))
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@/gi, '$1[redacted]@')
+    .replace(/([?&](?:access[_-]?token|api[_-]?key|secret|password|token|credential)=)[^&#\s]*/gi, '$1[redacted]')
+    .replace(/(\b(?:access[_-]?token|api[_-]?key|secret|password|token|credential)\s*[:=]\s*)(?:\[redacted\]|"[^"]*"|'[^']*'|[^\s,;}\]]+)/gi, '$1[redacted]');
 }
 
 function parseVersion(value: unknown): { core: [number, number, number]; pre: string[] } | null {

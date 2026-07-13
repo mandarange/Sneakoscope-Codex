@@ -24,8 +24,17 @@ const TASK_PROFILES = new Set<TaskProfile>(Object.keys(TASK_PROFILE_GATE_PROFILE
 const GREETING_RE =
   /^(hi|hello|hey|thanks|thank you|good morning|good evening|안녕|안녕하세요|고마워|고마워요|감사해|감사합니다|잘 지내\??)[!.?\s]*$/i
 
-const HIGH_RISK_RE =
-  /\b(database|db|migration|security|permission|publish|release|deploy|auth|payment|production)\b|데이터베이스|디비|마이그레이션|보안|권한|배포|릴리즈|출시|인증|결제|운영/i
+const NON_DATABASE_HIGH_RISK_RE =
+  /\b(security|permission|publish|release|deploy|auth|payment|production)\b|보안|권한|배포|릴리즈|출시|인증|결제|운영/i
+
+const DATABASE_DOMAIN_RE =
+  /\b(?:SQL|Supabase|Postgres|PostgreSQL|RLS|Prisma|Drizzle|Knex|database|DB|execute_sql|migrate|migration|migrations)\b|데이터베이스|디비|마이그레이션/i
+
+const DATABASE_WORK_RE =
+  /\b(?:apply|execute|run|fix|change|modify|migrate|audit|review|inspect|analy[sz]e|query|seed|backfill|optimi[sz]e|create|alter|drop|truncate|update|delete|repair)\b|적용|실행|수정|변경|검수|검토|점검|분석|조회|쿼리|시드|백필|최적화|생성|추가|삭제|복구|만들어/i
+
+const DATABASE_CONTROL_SURFACE_META_RE =
+  /\bsks\s+db\b|\b(?:db|database|migrate|migrations?)\b[\s\S]{0,48}\b(?:command|cli|route|routing|parser|classifier|regex|help|usage|topic|docs?|documentation|constant|keyword|alias)\b|\b(?:command|cli|route|routing|parser|classifier|regex|help|usage|topic|docs?|documentation|constant|keyword|alias)\b[\s\S]{0,48}\b(?:db|database|migrate|migrations?)\b|(?:db|디비|데이터베이스|migration|migrate|마이그레이션)\s*(?:커맨드|명령|명령어|CLI|라우트|라우팅|파서|분류기|정규식|도움말|헬프|사용법|토픽|문서|상수|키워드|별칭)|(?:커맨드|명령|명령어|CLI|라우트|라우팅|파서|분류기|정규식|도움말|헬프|사용법|토픽|문서|상수|키워드|별칭)[\s\S]{0,32}(?:db|디비|데이터베이스|migration|migrate|마이그레이션)/i
 
 const PARALLEL_CUE_RE =
   /\b(parallel|subagents?|one agent per|fan out|multiple files|audit all|all files|independent slices?|naruto|shadow\s*clone|kagebunshin|swarm)\b|병렬|하위\s*에이전트|서브\s*에이전트|여러\s*파일|모든\s*파일|전체\s*검토|나루토|분담/i
@@ -42,16 +51,17 @@ const EXPLANATION_QUESTION_RE =
 const DIRECT_REQUEST_RE =
   /^(please\s+|can you\s+|could you\s+|would you\s+)|(?:해줘|해주세요|해\s*주세요|바꿔줘|고쳐줘|수정해줘|구현해줘)/i
 
-const EXPLANATION_REQUEST_RE = /^(?:can|could|would) you explain\b/i
+const EXPLANATION_REQUEST_RE = /^(?:can|could|would) you explain\b|(?:설명|알려)\s*(?:해\s*줘|해\s*주세요|해달라|줘)\s*[.!?]*$/i
 
 export function classifyTaskProfile(prompt: unknown): TaskProfile {
   const text = String(prompt ?? '').trim()
 
   if (!text || GREETING_RE.test(text)) return 'passthrough'
   if (looksLikeExplanationQuestion(text)) return 'answer'
-  if (HIGH_RISK_RE.test(text) && CHANGE_RE.test(text)) return 'high-risk'
+  if (looksLikeDatabaseWorkRequest(text) || (CHANGE_RE.test(text) && NON_DATABASE_HIGH_RISK_RE.test(text))) return 'high-risk'
   if (PARALLEL_CUE_RE.test(text) && CHANGE_RE.test(text)) return 'parallel-write'
   if (PARALLEL_CUE_RE.test(text)) return 'parallel-read'
+  if (DATABASE_CONTROL_SURFACE_META_RE.test(text) && DATABASE_WORK_RE.test(text)) return 'bounded-work'
   if (looksLikeTinyChange(text)) return 'tiny-change'
   if (CHANGE_RE.test(text)) return 'bounded-work'
   return 'answer'
@@ -66,6 +76,13 @@ export function gateProfileForTask(profileOrPrompt: TaskProfile | unknown): Gate
 
 export function isTaskProfile(value: unknown): value is TaskProfile {
   return TASK_PROFILES.has(String(value || '') as TaskProfile)
+}
+
+export function looksLikeDatabaseWorkRequest(prompt: unknown): boolean {
+  const text = String(prompt ?? '').trim()
+  if (!text || !DATABASE_DOMAIN_RE.test(text)) return false
+  if (DATABASE_CONTROL_SURFACE_META_RE.test(text)) return false
+  return DATABASE_WORK_RE.test(text)
 }
 
 function looksLikeTinyChange(text: string): boolean {

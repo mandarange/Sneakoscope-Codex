@@ -34,6 +34,7 @@ import {
   THINKING_SUBAGENT_MODEL
 } from './subagents/model-policy.js';
 import {
+  bindTrustworthySubagentParentSummaryToRun,
   normalizeSubagentParentSummary,
   persistOrReuseTrustworthySubagentParentSummary,
   readSubagentEvents,
@@ -75,6 +76,7 @@ import {
 import {
   interruptedToolOutputRecoveryBlockReason,
   missingToolOutputCallId,
+  missingToolOutputCallIdFromPayload,
   quarantineMissingToolOutput,
   readToolOutputQuarantine
 } from './hooks-runtime/tool-output-quarantine.js';
@@ -154,7 +156,7 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   await recordAndRefreshSubagentEvidence(artifactDir, state, payload, 'SubagentStart').catch(() => null);
   const config = await readOfficialSubagentConfig(root);
   const budget = resolveSubagentThreadBudget({ configuredMaxThreads: config.maxThreads });
-  const active = await activeRouteContext(root, state).catch(() => '');
+  const active = subagentRouteContext(state);
   const resourceGuard = [
     `SKS subagent policy: Codex [agents].max_threads is ${budget.maxThreads}.`,
     'Use max_depth=1. Subagents must not spawn subagents.',
@@ -164,6 +166,19 @@ async function hookSubagentStart(root: any, state: any, payload: any = {}, sessi
   ].join(' ');
   const additionalContext = [leanEngineeringCompactText(), resourceGuard, active].filter(Boolean).join('\n\n');
   return { continue: true, additionalContext };
+}
+
+function subagentRouteContext(state: any = {}) {
+  if (!state?.route && !state?.mode) return '';
+  const route = state.route_command || state.route || state.mode;
+  const mission = state.mission_id ? ` for mission ${state.mission_id}` : '';
+  const artifacts = state.mission_id
+    ? ` Read only the route artifacts relevant to your assigned slice under .sneakoscope/missions/${state.mission_id}/.`
+    : '';
+  const databaseBoundary = String(state.mode || state.route || '').toUpperCase() === 'DB'
+    ? ' Keep database inspection read-only unless the parent supplied a separately sealed mutation contract.'
+    : '';
+  return `You are a child thread on ${route}${mission}. Execute only the slice assigned by the parent.${artifacts} Do not spawn or delegate other agents, wait for sibling threads, integrate sibling results, close the parent route, or author the sks.subagent-parent-summary.v1 parent result. Return a concise slice result to the parent.${databaseBoundary}`;
 }
 
 async function hookSubagentStop(root: any, state: any, payload: any = {}, sessionKey: any = null) {
@@ -185,9 +200,13 @@ async function recordAndRefreshSubagentEvidence(artifactDir: string, state: any,
     timeoutMs: 5_000,
     staleMs: 60_000
   }, async () => {
-    const event = await recordSubagentEvent(artifactDir, payload, eventName);
-    if (!event) return null;
     const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), {});
+    const workflowRunId = String(plan?.workflow_run_id || state?.official_subagent_run_id || '').trim();
+    const eventPayload = workflowRunId && payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? { ...payload, workflow_run_id: workflowRunId }
+      : payload;
+    const event = await recordSubagentEvent(artifactDir, eventPayload, eventName);
+    if (!event) return null;
     const existing: any = await readJson(path.join(artifactDir, SUBAGENT_EVIDENCE_FILENAME), {});
     const parentSummary: any = await readJson(path.join(artifactDir, SUBAGENT_PARENT_SUMMARY_FILENAME), null);
     const requestedSubagents = Number(
@@ -203,6 +222,7 @@ async function recordAndRefreshSubagentEvidence(artifactDir: string, state: any,
       parentSummaryPresent: parentSummary !== null,
       workflowStatus: 'running',
       preparationOnly: false,
+      runId: workflowRunId || null,
       additionalBlockers: Array.isArray(plan?.config_blockers)
         ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
         : []
@@ -217,7 +237,8 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
   await clearLightTurnStopBypass(root, { sessionKey }).catch(() => undefined);
   const submittedPrompt = stripVisibleDecisionAnswerBlocks(extractUserPrompt(payload));
   const explicitSession = explicitConversationId(payload);
-  const detectedMissingCallId = missingToolOutputCallId(submittedPrompt);
+  const detectedMissingCallId = missingToolOutputCallId(submittedPrompt)
+    || missingToolOutputCallIdFromPayload(payload);
   let toolOutputQuarantine = explicitSession
     ? await readToolOutputQuarantine(root, sessionKey).catch(() => null)
     : null;
@@ -310,6 +331,14 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       const additionalContext = compactAnswerContext(prompt);
       return { continue: true, additionalContext, sksTaskProfile: 'answer' };
     }
+    const madSksConfirmation = madConfirmationPrompt
+      ? await handleMadSksUserConfirmation(root, state, prompt)
+      : null;
+    if (madSksConfirmation?.handled) {
+      const teamDigest = await teamLiveDigest(root, state);
+      const additionalContext = [madSksConfirmation.additionalContext, teamDigest?.context].filter(Boolean).join('\n\n');
+      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
+    }
     if (activeContinuation) {
       const activeContext = await activeRouteContext(root, state);
       const teamDigest = await teamLiveDigest(root, state);
@@ -325,14 +354,6 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
     }
 
     await maybeReconcileProjectSkillsPreflight(root).catch(() => null);
-    const madSksConfirmation = madConfirmationPrompt
-      ? await handleMadSksUserConfirmation(root, state, prompt)
-      : null;
-    if (madSksConfirmation?.handled) {
-      const teamDigest = await teamLiveDigest(root, state);
-      const additionalContext = [madSksConfirmation.additionalContext, teamDigest?.context].filter(Boolean).join('\n\n');
-      return { continue: true, additionalContext, systemMessage: joinSystemMessages(visibleHookMessage('user-prompt-submit', additionalContext), teamDigest?.system) };
-    }
     const updateContext = '';
     const command = dollarCommand(prompt);
     const route = routePrompt(prompt);
@@ -762,9 +783,12 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
   const plan = await readJson(path.join(dir, 'subagent-plan.json'), null).catch(() => null);
   if (plan?.workflow !== 'official_codex_subagent') return null;
   const requestedSubagents = Number(plan.requested_subagents || state.requested_subagents || 0);
+  const workflowRunId = String(plan.workflow_run_id || state.official_subagent_run_id || '').trim();
   const events = await readSubagentEvents(dir);
-  const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, parentSummary, {
-    workflowStatus: 'parent_completed'
+  const runBoundParentSummary = bindTrustworthySubagentParentSummaryToRun(parentSummary, workflowRunId);
+  const effectiveParentSummary = await persistOrReuseTrustworthySubagentParentSummary(dir, runBoundParentSummary, {
+    workflowStatus: 'parent_completed',
+    runId: workflowRunId || null
   });
   const evidence = await writeSubagentEvidence(dir, {
     requestedSubagents,
@@ -772,6 +796,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     parentSummary: effectiveParentSummary,
     workflowStatus: 'parent_completed',
     preparationOnly: false,
+    runId: workflowRunId || null,
     additionalBlockers: Array.isArray(plan.config_blockers)
       ? plan.config_blockers.map((item: any) => `official_subagent_config:${String(item)}`)
       : []
@@ -804,6 +829,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     schema: 'sks.naruto-subagent-workflow.v1',
     ok: passed,
     workflow: 'official_codex_subagent',
+    workflow_run_id: workflowRunId || null,
     mission_id: id,
     route: '$Naruto',
     status: passed ? 'completed' : evidence.status,
@@ -844,6 +870,7 @@ async function refreshOfficialSubagentCompletionArtifacts(root: any, state: any 
     ...previousGate,
     schema: 'sks.naruto-gate.v1',
     workflow: 'official_codex_subagent',
+    workflow_run_id: workflowRunId || null,
     mission_id: id,
     status: passed ? 'passed' : 'blocked',
     passed,

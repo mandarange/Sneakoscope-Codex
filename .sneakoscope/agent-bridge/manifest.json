@@ -1,15 +1,15 @@
 {
   "schema": "sks.agent-manifest.v1",
-  "generated_at": "2026-07-05T13:11:55.107Z",
+  "generated_at": "2026-07-12T19:05:36.210Z",
   "tools": [
     {
       "name": "agent",
       "description": "Run native multi-session agent missions",
       "read_only": false,
       "requires_explicit_opt_in": false,
-      "json_output_supported": false,
+      "json_output_supported": true,
       "latency_class": "long",
-      "example_invocation": "sks agent",
+      "example_invocation": "sks agent --json",
       "maturity": "beta"
     },
     {
@@ -211,16 +211,6 @@
       "latency_class": "normal",
       "example_invocation": "sks daemon --json",
       "maturity": "stable"
-    },
-    {
-      "name": "db",
-      "description": "Inspect DB safety policy",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks db --json",
-      "maturity": "beta"
     },
     {
       "name": "deps",
@@ -443,16 +433,6 @@
       "maturity": "stable"
     },
     {
-      "name": "insane-search",
-      "description": "Run provider-independent InsaneSearch source intelligence",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks insane-search --json",
-      "maturity": "beta"
-    },
-    {
       "name": "loop",
       "description": "Dynamic Loop Runtime: plan/run/status/proof loop graphs.",
       "read_only": false,
@@ -484,7 +464,7 @@
     },
     {
       "name": "mcp-server",
-      "description": "Run a stdio MCP server exposing SKS commands as tools for any MCP-capable agent host",
+      "description": "Run a stdio MCP server exposing SKS commands as tools for MCP-capable agent hosts",
       "read_only": false,
       "requires_explicit_opt_in": false,
       "json_output_supported": false,
@@ -514,7 +494,7 @@
     },
     {
       "name": "naruto",
-      "description": "Run $Naruto shadow-clone swarm (up to 100 parallel sessions)",
+      "description": "Run the $Naruto Codex official subagent workflow",
       "read_only": false,
       "requires_explicit_opt_in": false,
       "json_output_supported": true,
@@ -803,6 +783,16 @@
       "maturity": "beta"
     },
     {
+      "name": "super-search",
+      "description": "Run Super-Search provider-independent source intelligence",
+      "read_only": false,
+      "requires_explicit_opt_in": false,
+      "json_output_supported": true,
+      "latency_class": "normal",
+      "example_invocation": "sks super-search --json",
+      "maturity": "beta"
+    },
+    {
       "name": "task",
       "description": "Run an SLA-bounded SKS task check",
       "read_only": false,
@@ -861,16 +851,6 @@
       "latency_class": "fast",
       "example_invocation": "sks ui --json",
       "maturity": "stable"
-    },
-    {
-      "name": "ultra-search",
-      "description": "Compatibility alias for InsaneSearch source intelligence",
-      "read_only": false,
-      "requires_explicit_opt_in": false,
-      "json_output_supported": true,
-      "latency_class": "normal",
-      "example_invocation": "sks ultra-search --json",
-      "maturity": "beta"
     },
     {
       "name": "uninstall",

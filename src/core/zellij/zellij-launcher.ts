@@ -1,6 +1,12 @@
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { appendJsonl, nowIso, sha256, writeJsonAtomic } from '../fsx.js'
+import {
+  inspectCodexLbCliLaunchRecovery
+} from '../codex-control/codex-lb-launch-recovery.js'
+import {
+  codexLbToolOutputRecoveryNotChecked
+} from '../codex-lb/codex-lb-tool-output-recovery.js'
 import { checkZellijCapability } from './zellij-capability.js'
 import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { writeZellijLayout, type ZellijLayoutInput } from './zellij-layout-builder.js'
@@ -24,6 +30,9 @@ export interface ZellijLaunchOptions {
   codexBin?: string
   codexArgs?: readonly unknown[]
   launchEnv?: Record<string, unknown>
+  recoveryFetch?: typeof fetch
+  recoveryTimeoutMs?: number
+  recoveryAllowUnverified?: boolean
   // When true, kill any pre-existing session with this name before (re)creating
   // it so the launch starts from a clean main-only layout. Without this, a stable
   // per-cwd session name (e.g. `sks-mad-<cwd>`) is reused across runs and each new
@@ -61,19 +70,30 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   const createCommand = ['attach', '--create-background', sessionName, 'options', '--default-layout', layout.layout_path, ...clipboard.optionFlags]
   const attachCommand = ['attach', sessionName]
   const zellijEnv = resolveZellijProcessEnvMeta()
+  const willCreateSession = opts.dryRun !== true && capability.status === 'ok'
+  const codexLaunchRecovery = layout.main_pane_kind === 'codex_interactive' && willCreateSession
+    ? await inspectCodexLbCliLaunchRecovery({
+        root: opts.cwd || root,
+        env: launchRecoveryEnv(opts.launchEnv),
+        cliArgs: layout.codex_args,
+        ...(typeof opts.recoveryFetch === 'function' ? { fetchImpl: opts.recoveryFetch } : {}),
+        ...(opts.recoveryTimeoutMs === undefined ? {} : { timeoutMs: opts.recoveryTimeoutMs }),
+        ...(opts.recoveryAllowUnverified === true ? { allowUnverified: true } : {})
+      })
+    : codexLbToolOutputRecoveryNotChecked(false)
   // Reset a stale same-named session before recreating it so the launch starts
   // main-only. `attach --create-background` is idempotent and otherwise reuses an
   // existing session, causing each run to pile another right-split SLOTS column
   // onto leftover panes from prior missions. Skipped on dry-run, when zellij is
   // unavailable, or when the user opts out with SKS_ZELLIJ_KEEP_SESSION=1.
   const resetSession = opts.freshSession === true
-    && opts.dryRun !== true
-    && capability.status === 'ok'
+    && willCreateSession
+    && codexLaunchRecovery.ok
     && process.env.SKS_ZELLIJ_KEEP_SESSION !== '1'
   const sessionReset = resetSession
     ? await runZellij(['kill-session', sessionName], { cwd: opts.cwd || root, timeoutMs: 200, optional: true })
     : null
-  const launch: any = opts.dryRun === true || capability.status !== 'ok'
+  const launch: any = !willCreateSession || !codexLaunchRecovery.ok
     ? null
     : {
         create_background: await runZellij(createCommand, { cwd: opts.cwd || root, timeoutMs: 5000, optional: opts.requireZellij !== true })
@@ -89,7 +109,8 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   }
   if (layout.main_pane_kind === 'codex_interactive') paneProofOpts.expectedMainCommandIncludes = 'codex'
   const strictPaneProof = opts.requireZellij === true || opts.dryRun === true || process.env.SKS_ZELLIJ_STRICT_PANE_PROOF === '1'
-  const shouldWritePaneProof = strictPaneProof || (opts.dryRun !== true && capability.status === 'ok')
+  const shouldWritePaneProof = codexLaunchRecovery.ok
+    && (strictPaneProof || willCreateSession)
   const paneProof = shouldWritePaneProof
     ? await writeZellijPaneProof(root, paneProofOpts).catch((err: any) => ({
         ok: false,
@@ -106,9 +127,13 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     launch.create_background = normalizeExistingZellijSession(sessionName, launch.create_background)
   }
   const launchOk = launch?.create_background?.ok === true
-  const ok = capability.ok && (opts.dryRun === true || capability.status !== 'ok' || launchOk) && (opts.requireZellij === true ? paneProof.ok === true : true)
+  const ok = capability.ok
+    && codexLaunchRecovery.ok
+    && (opts.dryRun === true || capability.status !== 'ok' || launchOk)
+    && (opts.requireZellij === true ? paneProof.ok === true : true)
   const blockers = [
     ...capability.blockers,
+    ...(!codexLaunchRecovery.ok ? codexLaunchRecovery.blockers : []),
     ...(launch && !launch.create_background?.ok ? (launch.create_background?.blockers || ['zellij_background_session_failed']).map((blocker: string) => `zellij_launch_${blocker}`) : []),
     ...(opts.requireZellij === true && paneProof.ok !== true ? (paneProof.blockers || ['zellij_pane_proof_failed']).map((blocker: string) => `zellij_launch_${blocker}`) : [])
   ]
@@ -149,11 +174,13 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     pane_proof_background: false,
     dry_run: opts.dryRun === true,
     capability,
+    codex_lb_tool_output_recovery: codexLaunchRecovery,
     launch,
     session_reset: sessionReset,
     blockers,
     warnings: [
       ...capability.warnings,
+      ...codexLaunchRecovery.warnings,
       ...(opts.dryRun === true ? ['zellij_launch_dry_run'] : []),
       ...(!launch && capability.status !== 'ok' && !opts.requireZellij ? ['zellij_launch_skipped_optional_missing'] : [])
     ]
@@ -170,6 +197,14 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     })
   ])
   return report
+}
+
+function launchRecoveryEnv(launchEnv: Record<string, unknown> | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const [key, value] of Object.entries(launchEnv || {})) {
+    if (value !== undefined && value !== null) env[key] = String(value)
+  }
+  return env
 }
 
 export async function launchMadZellijUi(args: readonly unknown[] = [], opts: ZellijLaunchOptions = {}) {

@@ -138,7 +138,7 @@ export function compactAnswerContext(prompt: any = '') {
 }
 
 export function looksLikeMadSksConfirmationPrompt(prompt: any = '') {
-  return /^(yes|y|no|n|confirm|confirmed|approve|approved|proceed|continue|ok|okay|stop|abort|cancel|deny|denied|네|예|응|아니|아니요|허용|승인|진행|계속|중단|취소|거부|삭제\s*허용|테이블\s*삭제\s*허용)\b/i.test(String(prompt || '').trim())
+  return /^(yes|y|no|n|confirm|confirmed|approve|approved|proceed|continue|ok|okay|stop|abort|cancel|deny|denied|네|예|응|아니|아니요|허용|승인|진행|계속|중단|취소|거부|삭제\s*허용|테이블\s*삭제\s*허용)(?=$|\s|[.!?。！？,，])/i.test(String(prompt || '').trim())
 }
 
 export function observedParentModel(payload: any = {}) {

@@ -5,7 +5,7 @@ export const HIGH_RISK_CONTRACT_TARGETS = [
   'rollback apply',
   'doctor --fix',
   'update now --dry-run',
-  'db',
+  '$DB',
   'mad-sks'
 ] as const
 
@@ -50,7 +50,7 @@ export function highRiskNegativeFixtures() {
       blocker: 'dry_run_attempted_real_install'
     },
     {
-      target: 'db',
+      target: '$DB',
       fixture: 'destructive_sql_without_mad_sks',
       input: { sql: 'DROP TABLE users;', madSksSqlPlane: false },
       blocker: 'destructive_sql_requires_mad_sks'
@@ -116,8 +116,8 @@ export function highRiskCliNegativeSmokeSpecs() {
       expected_blockers: ['dry_run_no_install_executed']
     },
     {
-      target: 'db',
-      argv: ['sks', 'db', 'check', '--sql', 'DROP TABLE users;', '--json'],
+      target: '$DB',
+      argv: ['sks', 'run', 'DROP TABLE users;', '--db', '--execute', '--json'],
       expected_blockers: ['destructive_sql_requires_mad_sks']
     },
     {
@@ -192,7 +192,7 @@ function blockersFromCliText(target: string, text: string, parsed: any, run: any
   if (target === 'rollback apply' && /Unknown rollback id: (?:missing|--yes)|rollback.*missing/i.test(text)) blockers.push('rollback_id_required')
   if (target === 'doctor --fix' && /doctor_touched_user_owned_file_without_sks_marker/i.test(text)) blockers.push('doctor_touched_user_owned_file_without_sks_marker')
   else if (target === 'doctor --fix' && /(?:^|\s)user_owned_file_without_sks_marker(?:\s|$)/i.test(text)) blockers.push('user_owned_file_without_sks_marker')
-  if (target === 'db' && /drop_table|drop_statement|destructive/i.test(text)) blockers.push('destructive_sql_requires_mad_sks')
+  if (target === '$DB' && /drop_table|drop_statement|destructive/i.test(text)) blockers.push('destructive_sql_requires_mad_sks')
   if (target === 'mad-sks' && /mad-sks-proof\.json|status.*missing|proof.*missing/i.test(text)) blockers.push('mad_sks_read_back_proof_missing')
   if (target === 'update now --dry-run') {
     const installCode = parsed?.install_code
@@ -222,7 +222,7 @@ export function highRiskBlockers(target: string, input: any = {}) {
       return doctorFixBlockers(input)
     case 'update now --dry-run':
       return updateNowDryRunBlockers(input)
-    case 'db':
+    case '$DB':
       return dbBlockers(input)
     case 'mad-sks':
       return madSksBlockers(input)

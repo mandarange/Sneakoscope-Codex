@@ -19,6 +19,21 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   env: Record<string, string>
   config: Record<string, unknown>
 }) {
+  if (codexSdkTurnTimeoutMs(input) <= 0) {
+    return {
+      ok: false,
+      sdkThreadId: '',
+      sdkRunId: null,
+      events: [],
+      finalResponse: '',
+      structuredOutput: null,
+      blockers: ['codex_sdk_hard_deadline_exceeded'],
+      liveEventsWritten: false,
+      runtimeIdentity: null,
+      executionPolicy: buildCodexExecutionPolicy(input),
+      raw: { aborted: true, hard_deadline_exceeded: true }
+    }
+  }
   const mod: any = await import('@openai/codex-sdk')
   const Codex = mod.Codex || mod.default?.Codex || mod.default
   if (typeof Codex !== 'function') throw new Error('Codex SDK export Codex not found')
@@ -69,6 +84,21 @@ export async function runRealCodexSdkTask(input: CodexTaskInput, policy: {
   let liveEventsWritten = false
   const liveEventPath = input.mutationLedgerRoot ? path.join(input.mutationLedgerRoot, 'codex-sdk-events.jsonl') : null
   const timeoutMs = codexSdkTurnTimeoutMs(input)
+  if (timeoutMs <= 0) {
+    return {
+      ok: false,
+      sdkThreadId: String(thread.id || ''),
+      sdkRunId: null,
+      events,
+      finalResponse,
+      structuredOutput: null,
+      blockers: ['codex_sdk_hard_deadline_exceeded'],
+      liveEventsWritten,
+      runtimeIdentity: runtime.identity,
+      executionPolicy,
+      raw: { aborted: true, hard_deadline_exceeded: true, tool_catalog: toolCatalog }
+    }
+  }
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -171,16 +201,26 @@ async function prepareCodexLbToolCatalog(input: CodexTaskInput, policy: {
   })
 }
 
-export function codexSdkTurnTimeoutMs(input: CodexTaskInput) {
+export function codexSdkTurnTimeoutMs(input: CodexTaskInput, nowMs = Date.now()) {
   const explicit = Number(process.env.SKS_CODEX_SDK_TURN_TIMEOUT_MS)
-  if (Number.isFinite(explicit) && explicit > 0) return Math.max(1000, Math.floor(explicit))
-  const timeoutClass = codexTimeoutClassForRoute(
-    input.route,
-    input.reliabilityPolicy?.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard')
-  )
-  if (timeoutClass === 'short') return 45_000
-  if (timeoutClass === 'long') return 300_000
-  return 120_000
+  const timeoutClass = codexTimeoutClassForRoute(input.route, input.reliabilityPolicy?.timeoutClass || (input.tier === 'orchestrator' ? 'long' : 'standard'))
+  const classTimeout = Number.isFinite(explicit) && explicit > 0
+    ? Math.max(1, Math.floor(explicit))
+    : timeoutClass === 'short' ? 45_000 : timeoutClass === 'long' ? 300_000 : 120_000
+  const hardTimeout = positiveFinite(input.reliabilityPolicy?.hardTimeoutMs)
+  const deadline = positiveFinite(input.reliabilityPolicy?.deadlineEpochMs)
+  const remainingDeadline = deadline === null ? null : Math.floor(deadline - nowMs)
+  if (remainingDeadline !== null && remainingDeadline <= 0) return 0
+  return Math.max(1, Math.floor(Math.min(
+    classTimeout,
+    hardTimeout ?? Number.POSITIVE_INFINITY,
+    remainingDeadline ?? Number.POSITIVE_INFINITY
+  )))
+}
+
+function positiveFinite(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
 function buildSdkInput(input: CodexTaskInput): any {

@@ -6,7 +6,11 @@ export async function run(_command: any, args: any = []) {
     runtime: 'tmux',
     status: 'removed_runtime',
     replacement: 'zellij',
-    operator_actions: ['Use `sks --mad`, `sks team open-zellij`, or `npm run zellij:capability`.']
+    operator_actions: [
+      'Use `sks --mad` for the supported SKS Zellij launcher.',
+      'Use `sks zellij status` or `npm run zellij:capability` for runtime diagnostics.',
+      'Use `sks naruto status|subagents|proof` for official subagent missions.'
+    ]
   };
   if (json) console.log(JSON.stringify(result, null, 2));
   else {

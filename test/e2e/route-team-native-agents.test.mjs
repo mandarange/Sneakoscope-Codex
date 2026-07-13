@@ -1,92 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { assertAgentProof, assertCompletionProof, createHermeticProjectRoot, runSks, runSksInRoot } from './route-real-command-helper.mjs';
+import { createHermeticProjectRoot, runSksInRoot } from './route-real-command-helper.mjs';
 
-test('Team route fixture includes native agent proof evidence', async () => {
-  const json = await runSks(['team', 'fixture', '--mock', '--json']);
-  const completion = await assertCompletionProof(json.mission_id, '$Team');
-  assert.notEqual(completion.status, 'blocked');
-  await assertAgentProof(json.mission_id, { route: '$Team', agentCount: json.bundle_size });
-});
+test('legacy Team Zellij mutation commands are removed and point to official Naruto evidence', async () => {
+  const root = await createHermeticProjectRoot({ fixtureName: 'team-zellij-mutations-removed' });
 
-test('Team route exposes native agent backend only', async () => {
-  const root = await createHermeticProjectRoot({ fixtureName: 'team-native-agent-only' });
-  const json = await runSksInRoot(root, ['team', 'fixture', '--mock', '--json']);
-  const proof = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'missions', json.mission_id, 'agents', 'agent-proof-evidence.json'), 'utf8'));
-  assert.equal(proof.backend, 'fake');
-  assert.equal(proof.status, 'passed');
-  assert.equal(proof.ok, true);
-});
-
-test('Team route preserves compatibility artifacts and exposes Zellij cockpit lanes', async () => {
-  const root = await createHermeticProjectRoot({ fixtureName: 'team-compat-artifacts' });
-  const json = await runSksInRoot(root, ['team', 'fixture', '--mock', '--json']);
-  const missionDir = path.join(root, '.sneakoscope', 'missions', json.mission_id);
-  const plan = JSON.parse(await fs.readFile(path.join(missionDir, 'team-plan.json'), 'utf8'));
-
-  for (const name of [
-    'team-plan.json',
-    'team-workflow.md',
-    'team-roster.json',
-    'team-runtime-tasks.json',
-    'ssot-guard.json',
-    'team-analysis.md',
-    'team-gate.json',
-    'team-live.md',
-    'team-transcript.jsonl',
-    'team-dashboard.json',
-    'team-session-cleanup.json',
-    'completion-proof.json'
-  ]) {
-    await fs.access(path.join(missionDir, name));
+  for (const subcommand of ['open-zellij', 'attach-zellij', 'cleanup-zellij']) {
+    const result = await runSksInRoot(root, ['team', subcommand, 'latest', '--json'], { expectCode: 2 });
+    assert.equal(result.schema, 'sks.team-legacy-observe.v1', subcommand);
+    assert.equal(result.ok, false, subcommand);
+    assert.equal(result.status, 'removed_non_read_only_surface', subcommand);
+    assert.equal(result.subcommand, subcommand);
+    assert.match(result.replacement, /naruto status\|subagents\|proof/i);
+    assert.deepEqual(result.read_only_commands, ['log', 'tail', 'watch', 'lane', 'status']);
   }
-  assert.ok(plan.required_artifacts.includes('team-analysis.md'));
-  assert.ok(plan.required_artifacts.includes('ssot-guard.json'));
-  assert.ok(plan.required_artifacts.includes('team-live.md'));
-  assert.ok(plan.required_artifacts.includes('team-transcript.jsonl'));
-  assert.ok(plan.required_artifacts.includes('team-dashboard.json'));
-  const ssotGuard = JSON.parse(await fs.readFile(path.join(missionDir, 'ssot-guard.json'), 'utf8'));
-  assert.equal(ssotGuard.ok, true);
-  assert.equal(ssotGuard.solid_principles.length, 5);
-  const teamGate = JSON.parse(await fs.readFile(path.join(missionDir, 'team-gate.json'), 'utf8'));
-  assert.equal(teamGate.ssot_guard, true);
-
-  const zellij = await runSksInRoot(root, ['team', 'open-zellij', json.mission_id, '--json', '--no-attach']);
-  assert.equal(zellij.schema, 'sks.zellij-session.v1');
-  assert.equal(zellij.kind, 'team');
-  assert.equal(zellij.mission_id, json.mission_id);
-  assert.equal(zellij.dry_run, true);
-  assert.ok(Array.isArray(zellij.command));
-  assert.ok(zellij.command.includes('zellij'));
-  assert.deepEqual(zellij.launch_command.slice(0, 4), ['zellij', 'attach', '--create-background', zellij.session_name]);
-  assert.ok(zellij.launch_command.includes('options'));
-  assert.ok(zellij.launch_command.includes('--default-layout'));
-  assert.equal(zellij.launch_command.includes('--layout'), false);
-  assert.match(zellij.attach_command, /^zellij attach /);
-  assert.match(zellij.layout_artifact, /\.kdl$/);
-  assert.equal(zellij.pane_proof.expected_lane_count, plan.bundle_size || plan.agent_session_count);
-  const layoutJson = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'missions', json.mission_id, 'zellij-layout.kdl.json'), 'utf8'));
-  assert.equal(layoutJson.slot_count, plan.bundle_size || plan.agent_session_count);
 });
 
-test('Team Zellij opens one visible right lane per native agent even when active slots are throttled', async () => {
-  const root = await createHermeticProjectRoot({ fixtureName: 'team-zellij-visible-agent-lanes' });
-  const json = await runSksInRoot(root, ['team', 'fixture', '--target-active-slots', '1', '--mock', '--json']);
-  const missionDir = path.join(root, '.sneakoscope', 'missions', json.mission_id);
-  const plan = JSON.parse(await fs.readFile(path.join(missionDir, 'team-plan.json'), 'utf8'));
-
-  assert.equal(plan.target_active_slots, 1);
-  assert.ok(plan.bundle_size > plan.target_active_slots);
-
-  const proof = JSON.parse(await fs.readFile(path.join(missionDir, 'agents', 'agent-proof-evidence.json'), 'utf8'));
-  assert.equal(proof.target_active_slots, 1);
-  assert.equal(proof.visual_lane_count, plan.bundle_size);
-
-  const zellij = await runSksInRoot(root, ['team', 'open-zellij', json.mission_id, '--json', '--no-attach']);
-  const layoutJson = JSON.parse(await fs.readFile(path.join(root, '.sneakoscope', 'missions', json.mission_id, 'zellij-layout.kdl.json'), 'utf8'));
-
-  assert.equal(zellij.pane_proof.expected_lane_count, plan.bundle_size);
-  assert.equal(layoutJson.slot_count, plan.bundle_size);
+test('Zellij status no longer advertises removed Team mutation commands', async () => {
+  const root = await createHermeticProjectRoot({ fixtureName: 'zellij-status-no-team-mutation' });
+  const result = await runSksInRoot(root, ['zellij', 'status', '--json']);
+  assert.equal(result.schema, 'sks.zellij-command.v1');
+  assert.equal(result.subcommand, 'status');
+  assert.equal(result.required_for.some((entry) => /team open-zellij/i.test(entry)), false);
 });

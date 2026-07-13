@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { buildCodexExecArgs, findCodexBinary } from '../codex-adapter.js'
+import { buildCodexExecArgs, findCodexBinary, runCodexExec } from '../codex-adapter.js'
 import { ensureDir, runProcess, writeBinaryAtomic } from '../fsx.js'
 import { buildImageArtifactPathContract } from '../image/image-artifact-path-contract.js'
 import { codex0139ProbeTail, skippedCodex0139Probe, type Codex0139SingleProbe } from './codex-0139-real-probes.js'
@@ -15,6 +15,9 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   requireReal?: boolean
   timeoutMs?: number
   codexBin?: string | null
+  env?: NodeJS.ProcessEnv
+  recoveryFetch?: typeof fetch
+  runProcessImpl?: typeof runProcess
 }): Promise<Codex0139SingleProbe> {
   const started = Date.now()
   const tempDir = path.join(input.root, '.sneakoscope', 'tmp', 'codex-0139-real-probes', `image-path-${Date.now()}`)
@@ -65,10 +68,19 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
   ].join(' ')
   const extraArgs = ['-c', 'mcp_servers={}', '--image', inputB, '--skip-git-repo-check', '--ephemeral']
   const args = buildCodexExecArgs({ root: tempDir, prompt, outputFile, json: true, extraArgs })
-  const result = await runProcess(codexBin, args, {
-    cwd: tempDir,
+  const result = await runCodexExec({
+    root: tempDir,
+    recoveryRoot: input.root,
+    prompt,
+    outputFile,
+    json: true,
+    extraArgs,
     timeoutMs: input.timeoutMs || 60000,
-    maxOutputBytes: 512 * 1024
+    maxBufferBytes: 512 * 1024,
+    codexBin,
+    env: input.env || process.env,
+    ...(typeof input.recoveryFetch === 'function' ? { recoveryFetch: input.recoveryFetch } : {}),
+    ...(typeof input.runProcessImpl === 'function' ? { runProcessImpl: input.runProcessImpl } : {})
   }).catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }))
   const outputText = await fs.readFile(outputFile, 'utf8').catch(() => '')
   const combined = `${(result as any).stdout || ''}\n${(result as any).stderr || ''}\n${outputText}`
@@ -97,10 +109,12 @@ export async function runCodex0139ImageReferencedPathRealProbe(input: {
       process_exited_successfully: processExitedSuccessfully,
       process_warning: processExitedSuccessfully ? null : 'Codex emitted the referenced path evidence before process timeout/nonzero exit.',
       output_file: outputFile,
+      codex_lb_tool_output_recovery: (result as any).codexLbToolOutputRecovery || null,
       contract_blockers: contract.blockers
     },
     blockers: ok ? [] : [
       ...(processExitedSuccessfully ? [] : ['codex_image_referenced_path_process_failed_or_timed_out']),
+      ...((result as any).codexLbToolOutputRecovery?.blockers || []),
       ...(!exactReferencedPath || !commandReferencesOnlyInputB || !outputReferencesInputB || contract.blockers.length > 0
         ? ['codex_image_referenced_path_actual_cli_probe_failed']
         : [])

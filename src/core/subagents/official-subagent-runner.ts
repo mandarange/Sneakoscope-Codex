@@ -6,6 +6,7 @@ import {
   NARUTO_PARENT_EFFORT,
   NARUTO_PARENT_MODEL
 } from './model-policy.js'
+import { inspectCodexLbCliLaunchRecovery } from '../codex-control/codex-lb-launch-recovery.js'
 
 export const OFFICIAL_SUBAGENT_WORKFLOW_SCHEMA = 'sks.subagent-workflow.v1'
 
@@ -76,13 +77,40 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     }
   }
 
+  const childEnv: NodeJS.ProcessEnv = {
+    ...(input.env || {}),
+    SKS_NARUTO_STANDALONE_CLI: '0',
+    SKS_NARUTO_PARENT_LAUNCH: '1',
+    ...(input.missionId ? { SKS_NARUTO_PARENT_MISSION_ID: input.missionId } : {})
+  }
   const parentSummaryFile = path.join(os.tmpdir(), `sks-naruto-parent-summary-${process.pid}-${Date.now()}.txt`)
-  await fsp.mkdir(path.dirname(parentSummaryFile), { recursive: true })
   const args = buildOfficialSubagentCodexArgs({
     prompt: input.prompt,
     maxThreads: input.maxThreads,
     parentSummaryFile
   })
+  const toolOutputRecovery = await inspectCodexLbCliLaunchRecovery({
+    root: input.root,
+    env: { ...process.env, ...childEnv },
+    cliArgs: args.slice(0, -1)
+  })
+  if (!toolOutputRecovery.ok) {
+    return {
+      ...base,
+      ok: false,
+      status: 'tool_output_recovery_blocked',
+      prepared: false,
+      codex_exit_code: null,
+      parent_summary: null,
+      parent_summary_file: null,
+      tool_output_recovery: toolOutputRecovery,
+      blockers: toolOutputRecovery.blockers,
+      operator_actions: toolOutputRecovery.operator_actions,
+      completion_evidence: false
+    }
+  }
+
+  await fsp.mkdir(path.dirname(parentSummaryFile), { recursive: true })
   const execute = input.runProcessImpl || runProcess
   let processResult: RunProcessResult
   try {
@@ -90,12 +118,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
       cwd: input.root,
       timeoutMs: input.timeoutMs || 60 * 60 * 1000,
       maxOutputBytes: 256 * 1024,
-      env: {
-        ...(input.env || {}),
-        SKS_NARUTO_STANDALONE_CLI: '0',
-        SKS_NARUTO_PARENT_LAUNCH: '1',
-        ...(input.missionId ? { SKS_NARUTO_PARENT_MISSION_ID: input.missionId } : {})
-      }
+      env: childEnv
     })
   } catch (error: any) {
     processResult = {
@@ -118,6 +141,7 @@ export async function runOfficialSubagentWorkflow(input: OfficialSubagentWorkflo
     codex_exit_code: processResult.code,
     parent_summary: parentSummary.trim() || null,
     parent_summary_file: null,
+    tool_output_recovery: toolOutputRecovery,
     process: {
       pid: processResult.pid || null,
       timed_out: processResult.timedOut,

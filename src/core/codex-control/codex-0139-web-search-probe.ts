@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { buildCodexExecArgs, findCodexBinary } from '../codex-adapter.js'
+import { buildCodexExecArgs, findCodexBinary, runCodexExec } from '../codex-adapter.js'
 import { ensureDir, runProcess, writeJsonAtomic, writeTextAtomic } from '../fsx.js'
 import { codex0139ProbeTail, skippedCodex0139Probe, type Codex0139SingleProbe } from './codex-0139-real-probes.js'
 
@@ -10,6 +10,9 @@ export async function runCodex0139WebSearchRealProbe(input: {
   allowNetwork?: boolean
   timeoutMs?: number
   codexBin?: string | null
+  env?: NodeJS.ProcessEnv
+  recoveryFetch?: typeof fetch
+  runProcessImpl?: typeof runProcess
 }): Promise<Codex0139SingleProbe> {
   const started = Date.now()
   if (!input.allowNetwork) {
@@ -24,12 +27,21 @@ export async function runCodex0139WebSearchRealProbe(input: {
   const outputFile = path.join(tempDir, 'last-message.txt')
   const prompt = 'In code mode, use standalone web search to find the title of https://example.com. Return JSON {"used_web_search":true,"answer":"...","sources":[...]}.'
   const args = buildCodexExecArgs({ root: tempDir, prompt, outputFile, json: true, extraArgs: ['-c', 'mcp_servers={}'] })
-  const result = await runProcess(codexBin, args, {
-    cwd: tempDir,
+  const result = await runCodexExec({
+    root: tempDir,
+    recoveryRoot: input.root,
+    prompt,
+    outputFile,
+    json: true,
+    extraArgs: ['-c', 'mcp_servers={}'],
     timeoutMs: input.timeoutMs || 120000,
-    maxOutputBytes: 512 * 1024,
+    maxBufferBytes: 512 * 1024,
     stdoutFile: path.join(tempDir, 'codex.stdout.log'),
-    stderrFile: path.join(tempDir, 'codex.stderr.log')
+    stderrFile: path.join(tempDir, 'codex.stderr.log'),
+    codexBin,
+    env: input.env || process.env,
+    ...(typeof input.recoveryFetch === 'function' ? { recoveryFetch: input.recoveryFetch } : {}),
+    ...(typeof input.runProcessImpl === 'function' ? { runProcessImpl: input.runProcessImpl } : {})
   }).catch((err: any) => ({
     code: 1,
     stdout: '',
@@ -70,10 +82,12 @@ export async function runCodex0139WebSearchRealProbe(input: {
       result_contains_expected_marker: resultContainsExpectedMarker,
       process_exited_successfully: processExitedSuccessfully,
       process_warning: processExitedSuccessfully ? null : 'Codex emitted web-search evidence before process timeout/nonzero exit.',
-      output_file: outputFile
+      output_file: outputFile,
+      codex_lb_tool_output_recovery: (result as any).codexLbToolOutputRecovery || null
     },
     blockers: ok ? [] : [
       ...(processExitedSuccessfully ? [] : ['codex_web_search_process_failed_or_timed_out']),
+      ...((result as any).codexLbToolOutputRecovery?.blockers || []),
       ...(!sawPlaintextResult || !resultContainsExpectedMarker ? ['codex_web_search_real_probe_failed'] : [])
     ]
   }

@@ -44,6 +44,8 @@ export interface CodexTaskInput {
   reliabilityPolicy?: {
     maxEmptyResultRetries?: number
     idleTimeoutMs?: number
+    hardTimeoutMs?: number
+    deadlineEpochMs?: number
     timeoutClass?: 'short' | 'standard' | 'long'
   }
   backendPreference?: CodexControlBackend[]

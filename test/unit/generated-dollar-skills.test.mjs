@@ -56,3 +56,26 @@ test('generated QA and Computer Use skills use Chrome Extension first for web ve
   const ux = await fs.readFile(path.join(root, '.agents', 'skills', 'ux-review', 'SKILL.md'), 'utf8');
   assert.match(ux, /web\/browser\/webapp capture must pass the Codex Chrome Extension readiness gate first/);
 });
+
+test('generated DB skill uses route-owned safety artifacts and never revives sks db', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-db-route-skill-'));
+  await installSkills(root);
+
+  const db = await fs.readFile(path.join(root, '.agents', 'skills', 'db', 'SKILL.md'), 'utf8');
+  assert.match(db, /automatically materializes db-safety-scan\.json and db-review\.json/);
+  assert.match(db, /legacy sks db command is removed and must remain unknown/);
+  assert.doesNotMatch(db, /sks db (?:policy|scan|classify|check)/);
+  assert.match(db, /sks mad-sks plan\|sql\|apply-migration/);
+});
+
+test('generated Naruto skill keeps official threads lightweight and TriWiki-bounded', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-naruto-official-skill-'));
+  await installSkills(root);
+
+  const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'naruto', 'SKILL.md'), 'utf8');
+  assert.match(naruto, /implicit run starts with one safe direct child/i);
+  assert.match(naruto, /historical Naruto process runtime is removed/i);
+  assert.match(naruto, /custom scheduler, or worker pool/i);
+  assert.match(naruto, /bounded TriWiki attention\.use_first anchors/);
+  assert.match(naruto, /do not inject the full pack/);
+});

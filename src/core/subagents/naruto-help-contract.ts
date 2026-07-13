@@ -5,6 +5,7 @@ import {
   SUBAGENT_EFFORT,
   THINKING_SUBAGENT_MODEL
 } from './model-policy.js'
+import { DEFAULT_NARUTO_REQUESTED_SUBAGENTS } from './thread-budget.js'
 
 export const NARUTO_HELP_SCHEMA = 'sks.naruto-subagent-workflow.v1'
 
@@ -22,7 +23,10 @@ export function buildNarutoHelpResult() {
       'sks naruto proof [latest|M-...] [--json]'
     ],
     commands: ['help', 'status', 'subagents', 'proof', 'run'],
+    default_requested_subagents: DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
+    scaling_policy: 'one_safe_direct_child_by_default_explicit_agents_for_wider_parallelism',
     max_depth: 1,
+    triwiki_context: 'bounded_attention_use_first_with_on_demand_hydration',
     completion_evidence: {
       lifecycle_events: ['SubagentStart', 'SubagentStop'],
       stop_is_success_evidence: false,
@@ -32,6 +36,7 @@ export function buildNarutoHelpResult() {
       '--clones N': '--agents N',
       workers: 'subagents'
     },
+    legacy_process_runtime_available: false,
     parent: { model: NARUTO_PARENT_MODEL, model_reasoning_effort: NARUTO_PARENT_EFFORT },
     agents: {
       worker: { model: DEFAULT_SUBAGENT_MODEL, model_reasoning_effort: SUBAGENT_EFFORT },

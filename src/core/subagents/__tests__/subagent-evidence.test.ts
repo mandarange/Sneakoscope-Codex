@@ -8,9 +8,11 @@ import {
   SUBAGENT_PARENT_SUMMARY_FILENAME,
   SUBAGENT_EVIDENCE_FILENAME,
   SUBAGENT_EVENT_LOG_FILENAME,
+  bindTrustworthySubagentParentSummaryToRun,
   buildSubagentEvidence,
   normalizeSubagentEvent,
   persistOrReuseTrustworthySubagentParentSummary,
+  readSubagentEvents,
   recordSubagentEvent,
   writeSubagentEvidence
 } from '../subagent-evidence.js'
@@ -31,7 +33,7 @@ function parentSummary(threadIds: string[], status: 'completed' | 'blocked' | 'f
   }
 }
 
-test('event normalization prefers explicit thread ids and supports official agent ids', () => {
+test('event normalization prefers explicit thread ids, supports official agent ids, and never promotes a session id', () => {
   const explicit = normalizeSubagentEvent({
     hook_event_name: 'SubagentStart',
     thread_id: 'thread-1',
@@ -49,11 +51,35 @@ test('event normalization prefers explicit thread ids and supports official agen
   assert.equal(officialHook?.thread_id, 'agent-2')
   assert.equal(officialHook?.thread_id_source, 'agent_id')
 
+  const sessionOnly = normalizeSubagentEvent({
+    hook_event_name: 'SubagentStart',
+    session_id: 'parent-session'
+  })
+  assert.equal(sessionOnly?.thread_id, null)
+  assert.equal(sessionOnly?.thread_id_source, null)
+  assert.equal(sessionOnly?.session_id, 'parent-session')
+
   const nested = normalizeSubagentEvent({
     type: 'SubagentStart',
     payload: { thread: { id: 'thread-nested' } }
   })
   assert.equal(nested?.thread_id, 'thread-nested')
+})
+
+test('a shared session id cannot masquerade as an official child identity', () => {
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['parent-session']),
+    events: [
+      { event_name: 'SubagentStart', session_id: 'parent-session' },
+      { event_name: 'SubagentStop', session_id: 'parent-session' }
+    ]
+  })
+
+  assert.equal(evidence.started_threads, 0)
+  assert.equal(evidence.completed_threads, 0)
+  assert.equal(evidence.ok, false)
+  assert.ok(evidence.blockers.includes('subagent_event_thread_id_missing'))
 })
 
 test('evidence completes only unique correlated start and stop thread ids with a parent summary', () => {
@@ -77,6 +103,80 @@ test('evidence completes only unique correlated start and stop thread ids with a
   assert.equal(evidence.parent_summary_present, true)
   assert.equal(evidence.parent_summary_trustworthy, true)
   assert.equal(evidence.ok, true)
+})
+
+test('evidence rejects observed fanout that exceeds the planned subagent count', () => {
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['thread-a', 'thread-b']),
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStart', thread_id: 'thread-b' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-b' }
+    ]
+  })
+
+  assert.equal(evidence.requested_subagents, 1)
+  assert.equal(evidence.started_threads, 2)
+  assert.equal(evidence.completed_threads, 2)
+  assert.equal(evidence.ok, false)
+  assert.ok(evidence.blockers.includes('requested_subagent_starts_exceeded:2/1'))
+  assert.ok(evidence.blockers.includes('requested_subagent_completions_exceeded:2/1'))
+})
+
+test('parent thread outcomes must exactly equal the observed started thread ids', () => {
+  const extraOutcome = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['thread-a', 'thread-ghost']),
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ]
+  })
+
+  assert.equal(extraOutcome.completed_threads, 0)
+  assert.equal(extraOutcome.parent_summary_trustworthy, false)
+  assert.equal(extraOutcome.ok, false)
+  assert.ok(extraOutcome.blockers.includes('parent_thread_outcome_without_start:thread-ghost'))
+
+  const missingOutcome = buildSubagentEvidence({
+    requestedSubagents: 2,
+    parentSummary: parentSummary(['thread-a']),
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStart', thread_id: 'thread-b' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-b' }
+    ]
+  })
+
+  assert.equal(missingOutcome.completed_threads, 0)
+  assert.equal(missingOutcome.parent_summary_trustworthy, false)
+  assert.equal(missingOutcome.ok, false)
+  assert.ok(missingOutcome.blockers.includes('parent_thread_outcome_missing_for_started_thread:thread-b'))
+})
+
+test('duplicate parent thread outcomes fail closed even when their unique ids match starts', () => {
+  const duplicate = parentSummary(['thread-a'])
+  duplicate.thread_outcomes.push({
+    thread_id: 'thread-a',
+    status: 'completed',
+    summary: 'duplicate completion claim'
+  })
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: duplicate,
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ]
+  })
+
+  assert.equal(evidence.completed_threads, 0)
+  assert.equal(evidence.parent_summary_trustworthy, false)
+  assert.equal(evidence.ok, false)
+  assert.ok(evidence.blockers.includes('parent_thread_outcome_duplicate:thread-a'))
 })
 
 test('plain parent prose and status-less SubagentStop events fail closed as ambiguous', () => {
@@ -115,7 +215,39 @@ test('structured parent summary is strict and rejects contradictory or wrapped r
     })
     assert.equal(evidence.ok, false, JSON.stringify(candidate))
     assert.equal(evidence.parent_summary_trustworthy, false, JSON.stringify(candidate))
+    assert.equal(evidence.completed_threads, 0, JSON.stringify(candidate))
   }
+})
+
+test('completion requires an explicit trustworthy completed parent result', () => {
+  const base = parentSummary(['thread-a'])
+  const ambiguousStatus = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: { ...base, status: 'success' },
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ]
+  })
+  assert.equal(ambiguousStatus.completed_threads, 0)
+  assert.equal(ambiguousStatus.parent_summary_trustworthy, false)
+
+  const failedParent = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: {
+      ...base,
+      status: 'failed',
+      summary: 'Parent integration failed.',
+      blockers: []
+    },
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a' }
+    ]
+  })
+  assert.equal(failedParent.completed_threads, 0)
+  assert.equal(failedParent.ok, false)
+  assert.ok(failedParent.blockers.includes('parent_summary_failed'))
 })
 
 test('failure text detection is negation-aware but still blocks unambiguous failure', () => {
@@ -125,6 +257,7 @@ test('failure text detection is negation-aware but still blocks unambiguous fail
     'No failure occurred.',
     'Could not find any issues.',
     'Failure-path tests passed and the slice completed.',
+    'Build failed-path coverage passed.',
     'Unable to reproduce the reported error; no issue found.',
     '오류가 없습니다.',
     '실패한 테스트가 없습니다.',
@@ -144,7 +277,12 @@ test('failure text detection is negation-aware but still blocks unambiguous fail
   for (const text of [
     'The slice failed with an error.',
     'Unable to complete the assigned work.',
-    '작업을 완료하지 못했습니다.'
+    '작업을 완료하지 못했습니다.',
+    '12 tests failed.',
+    'Typecheck failed.',
+    'Build failed.',
+    'npm test failed.',
+    'Compilation error TS2322.'
   ]) {
     const evidence = buildSubagentEvidence({
       requestedSubagents: 1,
@@ -156,6 +294,263 @@ test('failure text detection is negation-aware but still blocks unambiguous fail
     })
     assert.equal(evidence.ok, false, text)
     assert.equal(evidence.failed_threads, 1, text)
+
+    const contradictoryParent = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: { ...parentSummary(['thread-a']), summary: text },
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a' }
+      ]
+    })
+    assert.equal(contradictoryParent.completed_threads, 0, text)
+    assert.equal(contradictoryParent.parent_summary_trustworthy, false, text)
+  }
+})
+
+test('ambiguous result text cannot be upgraded by a completed parent status', () => {
+  for (const text of [
+    'Tests not run.',
+    'Typecheck not verified.',
+    'Verification pending.',
+    'Result unknown.',
+    'Unable to verify the build.',
+    'Partially completed.'
+  ]) {
+    const evidence = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: parentSummary(['thread-a']),
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a', last_assistant_message: text }
+      ]
+    })
+    assert.equal(evidence.completed_threads, 0, text)
+    assert.equal(evidence.failed_threads, 0, text)
+    assert.deepEqual(evidence.ambiguous_stop_thread_ids, ['thread-a'], text)
+    assert.equal(evidence.ok, false, text)
+
+    const contradictoryParent = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: { ...parentSummary(['thread-a']), summary: text },
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a' }
+      ]
+    })
+    assert.equal(contradictoryParent.parent_summary_trustworthy, false, text)
+    assert.equal(contradictoryParent.completed_threads, 0, text)
+  }
+})
+
+test('completed read-only review boundaries do not masquerade as unfinished verification', () => {
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['thread-a']),
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      {
+        event_name: 'SubagentStop',
+        thread_id: 'thread-a',
+        last_assistant_message: 'Read-only inspection covered the assigned review scope. No tests were executed and no files were changed.'
+      }
+    ]
+  })
+
+  assert.equal(evidence.ok, true)
+
+  const withoutParent = buildSubagentEvidence({
+    requestedSubagents: 1,
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      {
+        event_name: 'SubagentStop',
+        thread_id: 'thread-a',
+        last_assistant_message: 'Read-only inspection covered the assigned review scope. No tests were executed and no files were changed.'
+      }
+    ]
+  })
+  assert.equal(withoutParent.ok, false)
+  assert.equal(withoutParent.completed_threads, 0)
+})
+
+test('the latest stop attempt controls retry outcome while parent evidence remains mandatory', () => {
+  for (const firstOutcome of [
+    { last_assistant_message: 'The first attempt failed with an error.' },
+    { last_assistant_message: 'Verification pending.' }
+  ]) {
+    const recovered = buildSubagentEvidence({
+      requestedSubagents: 1,
+      parentSummary: parentSummary(['thread-a']),
+      events: [
+        { event_name: 'SubagentStart', thread_id: 'thread-a' },
+        { event_name: 'SubagentStop', thread_id: 'thread-a', ...firstOutcome },
+        { event_name: 'SubagentStop', thread_id: 'thread-a', last_assistant_message: 'Retry completed the assigned slice.' }
+      ]
+    })
+    assert.equal(recovered.ok, true)
+    assert.deepEqual(recovered.completed_thread_ids, ['thread-a'])
+    assert.deepEqual(recovered.failed_thread_ids, [])
+    assert.deepEqual(recovered.ambiguous_stop_thread_ids, [])
+  }
+
+  const finalFailure = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['thread-a']),
+    events: [
+      { event_name: 'SubagentStart', thread_id: 'thread-a' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a', last_assistant_message: 'Retry completed the assigned slice.' },
+      { event_name: 'SubagentStop', thread_id: 'thread-a', last_assistant_message: 'The final slice failed with an error.' }
+    ]
+  })
+  assert.equal(finalFailure.ok, false)
+  assert.deepEqual(finalFailure.failed_thread_ids, ['thread-a'])
+})
+
+test('persisted normalized ambiguous outcomes survive event-log round trips', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-event-roundtrip-'))
+  try {
+    await recordSubagentEvent(dir, { thread_id: 'thread-a' }, 'SubagentStart')
+    await recordSubagentEvent(dir, { thread_id: 'thread-a', last_assistant_message: 'Tests not run.' }, 'SubagentStop')
+    const events = await readSubagentEvents(dir)
+    assert.equal(events[1]?.outcome, 'ambiguous')
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('run-scoped evidence rejects stale and unbound events without letting them satisfy the active run', () => {
+  const scopedSummary = {
+    ...parentSummary(['agent-new']),
+    run_id: 'run-new',
+    run_epoch: 2
+  }
+  const currentAndStale = buildSubagentEvidence({
+    requestedSubagents: 1,
+    runId: 'run-new',
+    runEpoch: 2,
+    parentSummary: scopedSummary,
+    events: [
+      { event_name: 'SubagentStart', agent_id: 'agent-old', run_id: 'run-old', run_epoch: 1 },
+      { event_name: 'SubagentStop', agent_id: 'agent-old', run_id: 'run-old', run_epoch: 1 },
+      { event_name: 'SubagentStart', agent_id: 'agent-new', run_id: 'run-new', run_epoch: 2 },
+      { event_name: 'SubagentStop', agent_id: 'agent-new', run_id: 'run-new', run_epoch: 2 }
+    ]
+  })
+
+  assert.equal(currentAndStale.ok, true)
+  assert.deepEqual(currentAndStale.started_thread_ids, ['agent-new'])
+  assert.deepEqual(currentAndStale.completed_thread_ids, ['agent-new'])
+  assert.equal(currentAndStale.rejected_stale_events, 2)
+  assert.deepEqual(currentAndStale.rejected_stale_thread_ids, ['agent-old'])
+
+  const staleOnly = buildSubagentEvidence({
+    requestedSubagents: 1,
+    runId: 'run-new',
+    runEpoch: 2,
+    parentSummary: scopedSummary,
+    events: [
+      { event_name: 'SubagentStart', agent_id: 'agent-new', run_id: 'run-old', run_epoch: 1 },
+      { event_name: 'SubagentStop', agent_id: 'agent-new', run_id: 'run-old', run_epoch: 1 }
+    ]
+  })
+  assert.equal(staleOnly.started_threads, 0)
+  assert.equal(staleOnly.completed_threads, 0)
+  assert.equal(staleOnly.ok, false)
+  assert.equal(staleOnly.rejected_stale_events, 2)
+
+  const unbound = buildSubagentEvidence({
+    requestedSubagents: 1,
+    runId: 'run-new',
+    runEpoch: 2,
+    parentSummary: scopedSummary,
+    events: [
+      { event_name: 'SubagentStart', agent_id: 'agent-new' },
+      { event_name: 'SubagentStop', agent_id: 'agent-new' }
+    ]
+  })
+  assert.equal(unbound.completed_threads, 0)
+  assert.equal(unbound.unbound_run_events, 2)
+  assert.equal(unbound.parent_summary_trustworthy, false)
+  assert.ok(unbound.blockers.includes('subagent_events_run_scope_missing:2'))
+})
+
+test('mixed run identities and an unbound parent summary fail closed', () => {
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['agent-a']),
+    events: [
+      { event_name: 'SubagentStart', agent_id: 'agent-a', run_id: 'run-a' },
+      { event_name: 'SubagentStop', agent_id: 'agent-a', run_id: 'run-a' },
+      { event_name: 'SubagentStart', agent_id: 'agent-b', run_id: 'run-b' },
+      { event_name: 'SubagentStop', agent_id: 'agent-b', run_id: 'run-b' }
+    ]
+  })
+
+  assert.equal(evidence.completed_threads, 0)
+  assert.equal(evidence.parent_summary_trustworthy, false)
+  assert.equal(evidence.ok, false)
+  assert.equal(evidence.run_id, 'run-b')
+  assert.equal(evidence.rejected_stale_events, 2)
+  assert.ok(evidence.blockers.includes('parent_summary_run_id_missing'))
+})
+
+test('official turn ids select the newest execution epoch without requiring user-authored run fields', () => {
+  const evidence = buildSubagentEvidence({
+    requestedSubagents: 1,
+    parentSummary: parentSummary(['agent-new']),
+    events: [
+      { event_name: 'SubagentStart', agent_id: 'agent-old', turn_id: 'turn-old' },
+      { event_name: 'SubagentStop', agent_id: 'agent-old', turn_id: 'turn-old' },
+      { event_name: 'SubagentStart', agent_id: 'agent-new', turn_id: 'turn-new' },
+      { event_name: 'SubagentStop', agent_id: 'agent-new', turn_id: 'turn-new' }
+    ]
+  })
+
+  assert.equal(evidence.ok, true)
+  assert.equal(evidence.run_id, 'turn-new')
+  assert.equal(evidence.run_scope_source, 'event_turn_id')
+  assert.equal(evidence.rejected_stale_events, 2)
+  assert.deepEqual(evidence.completed_thread_ids, ['agent-new'])
+})
+
+test('structured parent summaries are bound only when trustworthy and reject a mismatched run id', () => {
+  const summary = parentSummary(['thread-a'])
+  assert.deepEqual(bindTrustworthySubagentParentSummaryToRun(summary, 'run-current'), {
+    ...summary,
+    run_id: 'run-current'
+  })
+  const stale = { ...summary, run_id: 'run-old' }
+  assert.equal(bindTrustworthySubagentParentSummaryToRun(stale, 'run-current'), null)
+  const ambiguous = { ...summary, status: 'success' }
+  assert.deepEqual(bindTrustworthySubagentParentSummaryToRun(ambiguous, 'run-current'), ambiguous)
+})
+
+test('a delayed stale parent summary cannot overwrite or replace the active run summary', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-subagent-parent-summary-run-scope-'))
+  try {
+    const current = { ...parentSummary(['thread-current']), run_id: 'run-current' }
+    const stale = { ...parentSummary(['thread-old']), run_id: 'run-old' }
+    await persistOrReuseTrustworthySubagentParentSummary(dir, current, { runId: 'run-current' })
+
+    const rejected = bindTrustworthySubagentParentSummaryToRun(stale, 'run-current')
+    assert.equal(rejected, null)
+    assert.deepEqual(
+      await persistOrReuseTrustworthySubagentParentSummary(dir, rejected, { runId: 'run-current' }),
+      current
+    )
+    assert.deepEqual(
+      JSON.parse(await fsp.readFile(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME), 'utf8')),
+      current
+    )
+
+    await fsp.writeFile(path.join(dir, SUBAGENT_PARENT_SUMMARY_FILENAME), JSON.stringify(stale))
+    assert.equal(
+      await persistOrReuseTrustworthySubagentParentSummary(dir, 'Completion Summary: ambiguous current retry', { runId: 'run-current' }),
+      'Completion Summary: ambiguous current retry'
+    )
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true })
   }
 })
 
@@ -214,7 +609,7 @@ test('external official config blockers prevent otherwise complete evidence from
   ])
 })
 
-test('a stop before its start and an extra open thread cannot satisfy correlation', () => {
+test('a stop before its start and an extra observed thread invalidate the whole parent outcome set', () => {
   const evidence = buildSubagentEvidence({
     requestedSubagents: 1,
     parentSummary: parentSummary(['thread-b']),
@@ -226,10 +621,12 @@ test('a stop before its start and an extra open thread cannot satisfy correlatio
     ]
   })
 
-  assert.equal(evidence.completed_threads, 1)
-  assert.deepEqual(evidence.open_thread_ids, ['thread-a'])
+  assert.equal(evidence.completed_threads, 0)
+  assert.equal(evidence.parent_summary_trustworthy, false)
+  assert.deepEqual(evidence.open_thread_ids, ['thread-a', 'thread-b'])
   assert.equal(evidence.ok, false)
-  assert.ok(evidence.blockers.includes('subagent_threads_still_open:1'))
+  assert.ok(evidence.blockers.includes('parent_thread_outcome_missing_for_started_thread:thread-a'))
+  assert.ok(evidence.blockers.includes('subagent_threads_still_open:2'))
   assert.ok(evidence.blockers.includes('subagent_stops_without_start:1'))
 })
 
