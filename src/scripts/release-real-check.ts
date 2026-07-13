@@ -11,9 +11,14 @@ import {
   normalizeReleaseRealProcessResult,
   releaseRealDependencySatisfied,
   summarizeReleaseRealPhases,
-  validateReleaseRealSkipProof
+  validateReleaseRealSkipProof,
+  validateReleaseRealTaskIds
 } from '../core/release/release-real-contract.js'
 import { currentDistFreshness } from './lib/ensure-dist-fresh.js'
+import {
+  releaseAuthorizationSnapshot,
+  sameReleaseAuthorizationSnapshot
+} from '../core/release/release-authorization-snapshot.js'
 
 const args = process.argv.slice(2)
 const skipReleaseCheck = args.includes('--skip-release-check') || process.env.SKS_RELEASE_REAL_CHECK_SKIP_RELEASE_CHECK === '1'
@@ -118,6 +123,8 @@ const tasks = [
   task('ux-review:real-imagegen-smoke', 'direct', { command: nodeScript('ux-review-real-imagegen-smoke-check.js'), group: 'real_smoke', phase: 'parallel_processing', deps: ['imagegen:real-smoke'], policy: liveOptionalPolicy(['sks.ux-real-imagegen-smoke.v1'], ['passed']) }),
   task('ppt:real-imagegen-smoke', 'direct', { command: nodeScript('ppt-real-imagegen-smoke-check.js'), group: 'real_smoke', phase: 'parallel_processing', deps: ['imagegen:real-smoke'], policy: liveOptionalPolicy(['sks.ppt-real-imagegen-smoke.v1'], ['passed']) })
 ]
+const taskContract = validateReleaseRealTaskIds(tasks.map((row) => row.id))
+report.task_contract = taskContract
 let ownedCleanupSucceeded = false
 let emergencyCleanupPromise = null
 let terminating = false
@@ -146,6 +153,12 @@ for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]]) {
 }
 
 async function main() {
+  if (!taskContract.ok) {
+    report.blockers.push(...taskContract.missing_ids.map((id) => `release_real_task_missing:${id}`))
+    report.blockers.push(...taskContract.unexpected_ids.map((id) => `release_real_task_unexpected:${id}`))
+    report.blockers.push(...taskContract.duplicate_ids.map((id) => `release_real_task_duplicate:${id}`))
+    return await finish(false)
+  }
   if (!skipReleaseCheck) {
     report.release_check = await runNpm(task('release:check', 'release:check', { group: 'design', phase: 'design', policy: requiredPolicy(['sks.gate-result.v1']) }))
     if (terminating) return
@@ -428,7 +441,9 @@ async function finish(ok, trigger = 'finish') {
     const identityMatches = finalProof.ok === true
       && finalProof.run_id === initialProof.run_id
       && finalProof.latest_summary_sha256 === initialProof.latest_summary_sha256
-      && finalProof.source_digest === initialProof.source_digest
+      && sameReleaseAuthorizationSnapshot(finalProof, initialProof)
+      && finalProof.dist_source_digest === initialProof.dist_source_digest
+      && finalProof.dist_source_file_count === initialProof.dist_source_file_count
       && finalProof.dist_stamp_source_digest === initialProof.dist_stamp_source_digest
     report.skip_release_check_proof = {
       ...initialProof,
@@ -494,22 +509,34 @@ function buildSkipReleaseCheckProof() {
   const summaryPath = latestReleaseGateSummaryPath()
   const summary = readJson(summaryPath)
   const freshness = currentDistFreshness()
+  const pkg = readJson(path.join(root, 'package.json'))
+  const authorizationSnapshot = releaseAuthorizationSnapshot(root, pkg)
   const summaryMtimeMs = fileMtime(summaryPath)
   const distStampMtimeMs = fileMtime(freshness.stamp_path)
   const maxAgeMs = Math.max(60_000, Number(process.env.SKS_RELEASE_REAL_SKIP_MAX_AGE_MS || 6 * 60 * 60 * 1000))
   return validateReleaseRealSkipProof({
     summary,
+    expectedReleaseGateIds: releasePresetGateIds(),
     summaryPath: summaryPath ? path.relative(root, summaryPath).split(path.sep).join('/') : null,
     summaryMtimeMs,
     summarySha256: summaryPath ? sha256File(summaryPath) : null,
     distStamp: freshness.stamp,
     distStampPath: freshness.stamp_path ? path.relative(root, freshness.stamp_path).split(path.sep).join('/') : null,
     distStampMtimeMs,
-    currentSourceDigest: freshness.source_digest || null,
-    currentSourceFileCount: Number.isInteger(freshness.source_file_count) ? freshness.source_file_count : null,
+    authorizationSnapshot,
+    currentDistSourceDigest: freshness.source_digest || null,
+    currentDistSourceFileCount: Number.isInteger(freshness.source_file_count) ? freshness.source_file_count : null,
     nowMs: Date.now(),
     maxAgeMs
   })
+}
+
+function releasePresetGateIds() {
+  const manifest = readJson(path.join(root, 'release-gates.v2.json'))
+  return (Array.isArray(manifest?.gates) ? manifest.gates : [])
+    .filter((gate) => Array.isArray(gate?.preset) && gate.preset.includes('release'))
+    .map((gate) => String(gate.id || ''))
+    .filter(Boolean)
 }
 
 function latestReleaseGateSummaryPath() {

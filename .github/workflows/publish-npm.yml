@@ -1,10 +1,17 @@
 name: Publish to npm
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package.json version to publish
+        required: true
+        type: string
+      confirm_publish:
+        description: Run the publish job after the full release proof passes
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -17,7 +24,7 @@ concurrency:
 jobs:
   publish:
     name: Publish package
-    if: github.repository == 'mandarange/Sneakoscope-Codex'
+    if: github.repository == 'mandarange/Sneakoscope-Codex' && github.ref == 'refs/heads/main' && inputs.confirm_publish == true
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -30,9 +37,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20.x'
+          node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
+
+      - name: Setup trusted-publishing npm
+        shell: bash
+        run: |
+          npm install --global npm@11.5.1
+          node --version
+          npm --version
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -49,29 +63,41 @@ jobs:
           console.log(`version=${pkg.version}`);
           NODE
 
+      - name: Verify requested version
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if [ "$REQUESTED_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Requested version does not match package.json." >&2
+            exit 1
+          fi
+
       - name: Check npm registry
         id: registry
         shell: bash
+        env:
+          PACKAGE_NAME: ${{ steps.package.outputs.name }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         run: |
-          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version --registry https://registry.npmjs.org/ >/dev/null 2>&1; then
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version --registry https://registry.npmjs.org/ >/dev/null 2>&1; then
             echo "published=true" >> "$GITHUB_OUTPUT"
-            echo "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }} is already published; skipping publish."
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is already published; skipping publish."
           else
             echo "published=false" >> "$GITHUB_OUTPUT"
-            echo "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }} is not published yet; continuing."
+            echo "$PACKAGE_NAME@$PACKAGE_VERSION is not published yet; continuing."
           fi
 
       - name: Run publish gates
         if: steps.registry.outputs.published != 'true'
         shell: bash
+        env:
+          SKS_PUBLISH_AUTH_MODE: trusted-publisher
         run: |
-          npm run build --silent
-          npm run release:metadata
-          npm run release:version-truth
-          npm run release:dist-freshness
-          npm run publish:packlist-performance
-          npm run release:provenance -- --publish
-          node ./dist/scripts/release-registry-check.js --require-unpublished
+          npm run release:check:full
+          node ./dist/scripts/release-check-stamp.js verify
+          npm run publish:prep-ignore-scripts
 
       - name: Publish to npm
         if: steps.registry.outputs.published != 'true'

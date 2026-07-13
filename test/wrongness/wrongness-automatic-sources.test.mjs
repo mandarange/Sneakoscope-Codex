@@ -11,7 +11,7 @@ test('automatic wrongness sources cover test, DB, hook, and image validation fai
   const image = await import('../../dist/core/triwiki-wrongness/image-wrongness.js');
 
   await ledger.recordTestFailureWrongness(root, { mission_id: 'M-auto', command: 'npm test', failure: 'fixture failed' });
-  await ledger.recordDbSafetyMismatchWrongness(root, { mission_id: 'M-auto', expected: 'safe', actual: 'blocked', command: 'sks db check' });
+  await ledger.recordDbSafetyMismatchWrongness(root, { mission_id: 'M-auto', expected: 'safe', actual: 'blocked', command: '$DB internal safety check' });
   await ledger.recordHookPolicyMismatchWrongness(root, { mission_id: 'M-auto', expected: 'block', actual: 'continue' });
   await ledger.recordAgentMismatchWrongness(root, { mission_id: 'M-auto', agent_id: 'agent-2-verification', issues: ['parse_failed'] });
   await image.recordImageWrongnessFromValidation(root, {

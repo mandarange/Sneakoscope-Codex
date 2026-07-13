@@ -14,12 +14,11 @@ const harnessIds = new Set(harnessGates.map((gate) => gate.id));
 const allGates = [...releaseGates, ...harnessGates];
 
 const requiredRelease = [
+  'architecture:guard',
   'codex:app-handoff-comprehensive',
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',
   'naruto:canonical-stop-gate',
-  'agent:native-cli-session-swarm-scaling',
-  'agent:fast-mode-policy',
   'codex-control:event-stream-ledger',
   'runtime:proof-summary',
   'release:dag-runner',

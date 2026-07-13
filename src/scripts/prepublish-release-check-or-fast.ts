@@ -1,18 +1,14 @@
 #!/usr/bin/env node
 // @ts-nocheck
-// Publish-time release check coordinator.
+// Publish-time release stamp verifier.
 //
-// Fast path: accept a current release-check stamp.
-// Repair path: if the stamp is missing/stale, run the authoritative full
-// `release:check:full` once, then require both the fast check and the
-// authoritative stamp verifier to pass.
-//
-// This keeps direct `npm publish` usable without weakening the publish gate:
-// stale stamp repair is the full release gate, not a synthetic stamp write.
+// The final registry operation is deliberately not a release-check runner.
+// It accepts only an authoritative full-release stamp that is already current
+// and fails closed when the stamp is missing or stale. Operators refresh proof
+// separately with `npm run release:check:full` so publish latency stays bounded
+// and a registry command cannot silently launch the entire canonical test DAG.
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
-
-const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 function runFastCheck() {
   const result = spawnSync(process.execPath, ['./dist/scripts/prepublish-fast-check.js'], {
@@ -22,10 +18,7 @@ function runFastCheck() {
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
-  return {
-    ...result,
-    report: parseLastJsonLine(result.stdout)
-  };
+  return result;
 }
 
 function runStampVerify() {
@@ -39,84 +32,27 @@ function runStampVerify() {
   return result;
 }
 
-function runReleaseCheck() {
-  const override = process.env.SKS_PREPUBLISH_RELEASE_CHECK_CMD;
-  if (override) {
-    return spawnSync(override, {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      env: process.env,
-      shell: true,
-      stdio: 'inherit'
-    });
-  }
-  return spawnSync(npmCmd, ['run', 'release:check:full'], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    env: process.env,
-    stdio: 'inherit'
-  });
+function failClosed(status = 1) {
+  console.error('Prepublish requires a current authoritative full-release stamp.');
+  console.error('Run `npm run release:check:full` separately, then rerun the publish command.');
+  process.exit(status || 1);
 }
 
-function parseLastJsonLine(text = '') {
-  const lines = String(text).trim().split(/\n/).filter(Boolean).reverse();
-  for (const line of lines) {
-    try { return JSON.parse(line); } catch {
-      // Keep looking; child processes may print non-JSON context.
-    }
-  }
-  return null;
-}
-
-function isStaleOrMissingStamp(report) {
-  if (!report) return false;
-  if (report.reason === 'no_release_stamp') return true;
-  const mismatched = Array.isArray(report.mismatched) ? report.mismatched : [];
-  return mismatched.some((name) => [
-    'package_version',
-    'package_json_sha256',
-    'package_files_list_sha256',
-    'package_files_sha256',
-    'dist_build_sha256',
-    'dist_file_count',
-    'release_gate_sha256',
-    'release_check_sha256',
-    'source_digest',
-    'source_file_count',
-    'stamp_unreadable'
-  ].includes(name));
-}
-
-function repairAndVerify() {
-  if (process.env.SKS_PREPUBLISH_RUN_RELEASE_CHECK_ON_STALE === '0') {
-    console.error('Prepublish release-check auto-repair disabled by SKS_PREPUBLISH_RUN_RELEASE_CHECK_ON_STALE=0.');
-    process.exit(1);
-  }
-
-  console.error('Prepublish release stamp is stale or missing; running full `npm run release:check:full` before publish.');
-  const releaseCheck = runReleaseCheck();
-  if (releaseCheck.status !== 0) process.exit(releaseCheck.status || 1);
-
-  const second = runFastCheck();
-  if (second.status !== 0) process.exit(second.status || 1);
-
-  const secondStamp = runStampVerify();
-  process.exit(secondStamp.status === 0 ? 0 : (secondStamp.status || 1));
+function blockLifecyclePublish() {
+  console.error('Lifecycle-enabled npm publish is unsupported because prepack would rebuild after authorization.');
+  console.error('Run `npm run publish:prep-ignore-scripts`, then use `npm publish --ignore-scripts` only if you are the repository maintainer performing the separate publish handoff.');
+  process.exit(2);
 }
 
 function main() {
-  const first = runFastCheck();
-  if (first.status === 0) {
-    const stamp = runStampVerify();
-    if (stamp.status === 0) process.exit(0);
-    repairAndVerify();
+  if (process.argv.includes('--block-lifecycle-publish') || process.env.npm_lifecycle_event === 'prepublishOnly') {
+    blockLifecyclePublish();
   }
+  const fast = runFastCheck();
+  if (fast.status !== 0) failClosed(fast.status);
 
-  if (!isStaleOrMissingStamp(first.report)) {
-    process.exit(first.status || 1);
-  }
-
-  repairAndVerify();
+  const stamp = runStampVerify();
+  if (stamp.status !== 0) failClosed(stamp.status);
 }
 
 main();

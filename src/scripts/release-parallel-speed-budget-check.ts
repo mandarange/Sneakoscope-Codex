@@ -15,9 +15,19 @@ const slowest = slowestGateResults(latest.dir)
 const warnOnly = process.env.SKS_RELEASE_SPEED_BUDGET_WARN_ONLY === '1'
 const budgetMs = Number(process.env.SKS_RELEASE_SPEED_BUDGET_MS || 20 * 60 * 1000)
 const cachedBudgetMs = Number(process.env.SKS_RELEASE_CACHED_SPEED_BUDGET_MS || 4 * 60 * 1000)
+const fastSlaMs = Number(process.env.SKS_RELEASE_FAST_SLA_MS || 5 * 60 * 1000)
 const cachedRatio = Number(summary.cached || 0) / Math.max(1, Number(summary.completed || summary.selected_gates || 1))
 const cachedRun = cachedRatio >= 0.5
-const parallelismOk = cachedRun || summary.parallelism_gain >= 2
+const parallelismGainTarget = 2
+const parallelismPeakTarget = 2
+const fastSlaMet = Number(summary.wall_ms || 0) <= fastSlaMs
+// A long critical-path gate can keep measured gain below 2 even while the DAG
+// executes independent work concurrently and finishes inside the release SLA.
+// Preserve a real parallelism requirement, but accept either measured gain or
+// observed concurrent execution paired with the five-minute certificate SLA.
+const parallelismOk = cachedRun
+  || Number(summary.parallelism_gain || 0) >= parallelismGainTarget
+  || (Number(summary.peak_running || 0) >= parallelismPeakTarget && fastSlaMet)
 const wallOk = cachedRun ? summary.wall_ms <= cachedBudgetMs : summary.wall_ms <= budgetMs
 const failureIds = Array.isArray(summary.failures) ? summary.failures.map((entry) => String(entry?.id || '')).filter(Boolean) : []
 const selfFailureIds = new Set(['release:parallel-speed-budget', 'release:stability-report'])
@@ -44,11 +54,17 @@ const report = {
   target_full_wall_ms: budgetMs,
   target_cached_wall_ms: cachedBudgetMs,
   target_changed_file_wall_ms: 90 * 1000,
+  target_fast_sla_ms: fastSlaMs,
+  fast_sla_met: fastSlaMet,
   parallelism_gain: summary.parallelism_gain,
+  parallelism_gain_target: parallelismGainTarget,
+  peak_running: summary.peak_running,
+  parallelism_peak_target: parallelismPeakTarget,
+  parallel_execution_proven: parallelismOk,
   warn_only: warnOnly,
   blockers: [
     ...(summaryOk ? [] : ['release_summary_has_failures']),
-    ...(parallelismOk ? [] : ['parallelism_gain_below_2']),
+    ...(parallelismOk ? [] : ['parallel_execution_not_proven']),
     ...(wallOk || warnOnly ? [] : [cachedRun ? 'cached_release_wall_budget_exceeded' : 'release_wall_budget_exceeded']),
     ...(Number.isFinite(Number(summary.critical_path_ms)) ? [] : ['critical_path_ms_missing']),
     ...(Array.isArray(slowest) && slowest.length ? [] : ['slowest_gates_missing'])

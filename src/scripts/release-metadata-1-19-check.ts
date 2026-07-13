@@ -308,6 +308,7 @@ const requiredRealScripts = [
 const requiredPackageScripts = [
   'build',
   'build:incremental',
+  'release:ensure-build',
   'typecheck',
   'release:check',
   'release:metadata',
@@ -326,10 +327,12 @@ const requiredReleaseGates = [
   'qa-loop:comprehensive-verification',
   'loop-integration-finalizer-check',
   'naruto:canonical-stop-gate',
-  'agent:native-cli-session-swarm-scaling',
-  'agent:fast-mode-policy',
   'codex-control:event-stream-ledger',
   'runtime:proof-summary',
+  'release:metadata-current',
+  'docs:truthfulness',
+  'publish:packlist-performance',
+  'package:published-contract',
   'release:dag-runner',
   'release:gate-budget',
   'release:gate-selection-comprehensive',
@@ -373,6 +376,9 @@ assertGate(harnessGates.length > 0, 'infra harness manifest must include harness
 const PACKAGE_SCRIPT_BUDGET = 100;
 assertGate(Object.keys(pkg.scripts || {}).length <= PACKAGE_SCRIPT_BUDGET, 'package script budget exceeded', { script_count: Object.keys(pkg.scripts || {}).length, limit: PACKAGE_SCRIPT_BUDGET });
 for (const script of requiredPackageScripts) assertGate(Boolean(pkg.scripts?.[script]), `missing package script: ${script}`);
+const fullReleaseScript = String(pkg.scripts?.['release:check:full'] || '');
+assertGate((fullReleaseScript.match(/build:clean/g) || []).length === 1, 'release:check:full must perform exactly one clean build', { script: fullReleaseScript });
+assertGate((fullReleaseScript.match(/npm test --silent/g) || []).length === 1, 'release:check:full must run the canonical recursive test suite exactly once', { script: fullReleaseScript });
 for (const id of requiredReleaseGates) assertGate(releaseGateIds.has(id), `critical release gate missing from release v2 manifest: ${id}`, { id });
 for (const id of requiredHarnessGates) assertGate(harnessGateIds.has(id), `critical harness gate missing from infra-harness-gates.json: ${id}`, { id });
 const duplicateAcrossManifests = [...releaseGateIds].filter((id) => harnessGateIds.has(id));
@@ -390,13 +396,16 @@ assertGate(!pkg.files?.includes('src'), 'package files must not include src runt
 const publishPrepIgnoreScripts = String(pkg.scripts?.['publish:prep-ignore-scripts'] || '');
 const publishVerifyIgnoreScripts = String(pkg.scripts?.['publish:verify-ignore-scripts'] || '');
 const effectivePublishPreflight = `${publishPrepIgnoreScripts} ${publishVerifyIgnoreScripts}`;
+assertGate(!/npm test/.test(effectivePublishPreflight), 'publish preflight must reuse canonical test proof instead of rerunning tests', { script: effectivePublishPreflight });
 assertGate(
   !/\bprepublishOnly\b/.test(publishPrepIgnoreScripts),
   'publish:prep-ignore-scripts must not depend on npm lifecycle hooks that --ignore-scripts disables',
   { script: publishPrepIgnoreScripts || null }
 );
-assertGate(/build:(?:clean|incremental)/.test(effectivePublishPreflight), 'publish:prep-ignore-scripts missing lifecycle-disabled publish preflight: build:clean|build:incremental', { script: effectivePublishPreflight });
+assertGate(!/build:(?:clean|incremental)/.test(effectivePublishPreflight), 'publish preflight must reuse the authoritative clean-build stamp instead of compiling again', { script: effectivePublishPreflight });
+assertGate((publishPrepIgnoreScripts.match(/release-check-stamp\.js verify/g) || []).length === 2, 'publish preflight must verify the full-release stamp before and after package inspection', { script: publishPrepIgnoreScripts });
 for (const required of [
+  'release:dist-freshness',
   'release:version-truth',
   'publish:packlist-performance',
   'package-published-contract-check.js',
@@ -419,12 +428,39 @@ assertGate(
   'publish:ignore-scripts must keep npm lifecycle scripts disabled for the final publish',
   { script: pkg.scripts?.['publish:ignore-scripts'] || null }
 );
+assertGate(
+  /prepublish-release-check-or-fast\.js --block-lifecycle-publish/.test(String(pkg.scripts?.prepublishOnly || '')),
+  'prepublishOnly must fail closed before npm prepack can rebuild after authorization',
+  { script: pkg.scripts?.prepublishOnly || null }
+);
 
 for (const file of requiredDocs) {
   const absolute = path.join(root, file);
   assertGate(fs.existsSync(absolute), `missing release doc: ${file}`);
   if (versionedDocs.has(file)) {
     assertGate(fs.readFileSync(absolute, 'utf8').includes(RELEASE_VERSION), `release doc does not mention ${RELEASE_VERSION}: ${file}`);
+  }
+}
+
+const readinessText = fs.readFileSync(path.join(root, 'docs/release-readiness.md'), 'utf8');
+const activeVersionPatterns = [
+  /^SKS (\d+\.\d+\.\d+) is ready/m,
+  /cannot authorize the (\d+\.\d+\.\d+) release/,
+  /^(\d+\.\d+\.\d+) release readiness requires/m,
+  /^## Current publish authorization policy \((\d+\.\d+\.\d+)\)$/m,
+  /^The (\d+\.\d+\.\d+) implementation handoff/m,
+  /^the (\d+\.\d+\.\d+) command surface/m,
+  /^not the (\d+\.\d+\.\d+) release procedure/m,
+  /do not satisfy the (\d+\.\d+\.\d+) official-subagent gate\. Current (\d+\.\d+\.\d+) proof/,
+  /not represented as current (\d+\.\d+\.\d+) completion proof/,
+  /^For (\d+\.\d+\.\d+), a selected codex-lb/m,
+  /^The (\d+\.\d+\.\d+) SKS menu bar/m
+];
+for (const pattern of activeVersionPatterns) {
+  const match = readinessText.match(pattern);
+  assertGate(Boolean(match), `release-readiness active version surface missing: ${pattern}`);
+  for (const observed of (match || []).slice(1)) {
+    assertGate(observed === RELEASE_VERSION, `release-readiness active version mismatch: expected ${RELEASE_VERSION}, found ${observed}`, { pattern: String(pattern) });
   }
 }
 

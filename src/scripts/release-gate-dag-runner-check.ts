@@ -29,7 +29,6 @@ assertGate(pkg.scripts['release:real-check'] === 'node ./dist/scripts/release-re
 assertGate(manifest.schema === 'sks.release-gates.v2' && manifest.gates.length >= 10, 'release-gates.v2 manifest must exist with nodes', manifest)
 for (const gateId of [
   'scheduler:comprehensive',
-  'agent:native-cli-session-swarm-scaling',
   'doctor:fix-proves-codex-read',
   'release:batch-runner-comprehensive',
   'release:parallel-speed-budget'

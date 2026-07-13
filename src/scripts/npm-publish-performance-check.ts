@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
+import { readCurrentNpmPackProof, writeNpmPackProof } from '../core/release/npm-pack-proof.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
@@ -12,7 +13,7 @@ const BUDGET_MS = Number(process.env.SKS_PACK_BUDGET_MS || 30000);
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
-  const argv = ['pack', '--dry-run', '--json', '--ignore-scripts'];
+  const argv = ['pack', '--dry-run', '--ignore-scripts', '--json'];
   const res = npmCli
     ? spawnSync(process.execPath, [npmCli, ...argv], { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
     : spawnSync('npm', argv, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
@@ -25,17 +26,21 @@ function writeReport(report) {
   fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
 }
 
-const t0 = Date.now();
-const res = runNpmPack();
-const packMs = Date.now() - t0;
-
-let info;
-if (res.status === 0) {
-  try {
-    const parsed = JSON.parse(res.stdout);
-    info = Array.isArray(parsed) ? parsed[0] : parsed;
-  } catch {
-    info = undefined;
+const existingProof = readCurrentNpmPackProof(root);
+let packMs = existingProof.ok && existingProof.proof ? existingProof.proof.pack_ms : 0;
+let info = existingProof.ok && existingProof.proof ? existingProof.proof.info : undefined;
+if (!info) {
+  const t0 = Date.now();
+  const res = runNpmPack();
+  packMs = Date.now() - t0;
+  if (res.status === 0) {
+    try {
+      const parsed = JSON.parse(res.stdout);
+      info = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (info) writeNpmPackProof(root, info, packMs);
+    } catch {
+      info = undefined;
+    }
   }
 }
 
@@ -51,6 +56,7 @@ const report = {
   schema: 'sks.npm-publish-performance.v1',
   ok: info.entryCount <= MAX_FILES && info.size <= MAX_PACKED,
   pack_ms: packMs,
+  reused_pack_proof: existingProof.ok,
   slowest_phase: 'pack',
   file_count: info.entryCount,
   packed_bytes: info.size,

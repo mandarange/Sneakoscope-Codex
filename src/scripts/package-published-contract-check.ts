@@ -1,35 +1,14 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { assertGate, emitGate, readJson, root } from './sks-1-18-gate-lib.js';
+import { readCurrentNpmPackProof } from '../core/release/npm-pack-proof.js';
 
 const pkg = readJson('package.json');
 const scripts = pkg.scripts || {};
-const cacheRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-package-published-contract-'));
-let cacheCleaned = false;
-const cleanupCacheRoot = () => {
-  if (cacheCleaned) return;
-  cacheCleaned = true;
-  fs.rmSync(cacheRoot, { recursive: true, force: true });
-};
-process.once('exit', cleanupCacheRoot);
-const dry = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
-  cwd: root,
-  encoding: 'utf8',
-  env: {
-    ...process.env,
-    npm_config_cache: path.join(cacheRoot, 'npm-cache')
-  },
-  maxBuffer: 16 * 1024 * 1024
-});
-assertGate(dry.status === 0, 'npm pack --dry-run must succeed for package contract check', {
-  status: dry.status,
-  stderr: dry.stderr
-});
-const parsed = JSON.parse(dry.stdout || '[]');
-const files = new Set<string>((parsed[0]?.files || []).map((row: any) => String(row.path || '').replace(/\\/g, '/')));
+const packProof = readCurrentNpmPackProof(root);
+assertGate(packProof.ok && packProof.proof, 'current npm pack proof is required for package contract check', { blockers: packProof.blockers });
+const info = packProof.proof!.info;
+const files = new Set<string>((info.files || []).map((row: any) => String(row.path || '').replace(/\\/g, '/')));
 const missingTargets: Array<{ script: string; target: string }> = [];
 for (const [name, command] of Object.entries(scripts)) {
   for (const target of scriptTargets(String(command))) {
@@ -41,12 +20,11 @@ assertGate(missingTargets.length === 0, 'published package scripts must not refe
   missingTargets: missingTargets.slice(0, 50),
   missing_count: missingTargets.length
 });
-cleanupCacheRoot();
 emitGate('package:published-contract', {
   files: files.size,
   script_count: Object.keys(scripts).length,
   missing_targets: 0,
-  package: path.basename(parsed[0]?.filename || '')
+  package: path.basename(info.filename || '')
 });
 
 function scriptTargets(command: string): string[] {

@@ -181,7 +181,7 @@ export function reportBackedDollarSmoke(entry, routed = null) {
 function highRiskSmokeForDollar(command) {
   const report = readReport('high-risk-contracts.json')
   const target = {
-    '$DB': 'db',
+    '$DB': '$DB',
     '$MAD-SKS': 'mad-sks',
     '$Commit-And-Push': 'commit-and-push'
   }[command]

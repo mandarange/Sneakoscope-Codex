@@ -12,7 +12,11 @@ for (const name of ['release:check:affected', 'release:check:full', 'release:che
   assertGate(Boolean(scripts[name]), `missing package script ${name}`)
 }
 assertGate(String(scripts['release:check']).includes('release:check:affected'), 'release:check must default to affected preset')
-assertGate(String(scripts['release:check:affected']).includes('build:incremental') && String(scripts['release:check:fast']).includes('build:incremental') && String(scripts['release:check:confidence']).includes('--sla 5m'), 'affected/fast/confidence checks must use incremental build and five-minute SLA')
+assertGate(
+  ['release:check:affected', 'release:check:fast', 'release:check:confidence'].every((name) => String(scripts[name]).includes('release:ensure-build'))
+    && String(scripts['release:check:confidence']).includes('--sla 5m'),
+  'affected/fast/confidence checks must reuse a source-bound fresh build and keep the five-minute SLA'
+)
 assertGate(dag.includes('selectAffectedReleaseGates'), 'release DAG must use affected selector')
 assertGate(dagMod.selectReleaseGatePreset(manifest, 'affected').length === releaseCount, 'affected preset must select the release gate universe before affected filtering')
 assertGate(dagMod.selectReleaseGatePreset(manifest, 'fast').length === releaseCount, 'fast preset must select the release gate universe before affected filtering')

@@ -32,6 +32,41 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
+      "id": "architecture:guard",
+      "command": "node ./dist/scripts/architecture-guard-check.js",
+      "deps": [],
+      "resource": [
+        "cpu-light",
+        "fs-read",
+        "fs-write"
+      ],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": {
+        "enabled": true,
+        "inputs": [
+          "package.json",
+          "release-gates.v2.json",
+          "src/core/safety/ssot-guard.ts",
+          "src/core/pipeline-internals/runtime-core.ts",
+          "src/core/pipeline-internals/runtime-gates.ts",
+          "src/core/commands/team-command.ts",
+          "src/core/release/gate-manifest.ts",
+          "src/scripts/architecture-guard-check.ts",
+          "src/scripts/release-parallel-check.ts",
+          "docs/architecture-ts-rust-boundary.md"
+        ]
+      },
+      "isolation": {
+        "home": "temp",
+        "codex_home": "temp",
+        "report_dir": "per-gate"
+      },
+      "preset": [
+        "release"
+      ]
+    },
+    {
       "id": "agent:message-bus-reader",
       "command": "node ./dist/scripts/agent-message-bus-reader-check.js",
       "deps": [],
@@ -284,7 +319,7 @@
       "side_effect": "hermetic",
       "timeout_ms": 120000,
       "cache": {
-        "enabled": true,
+        "enabled": false,
         "inputs": [
           "package.json",
           "release-gates.v2.json",
@@ -314,7 +349,7 @@
       "side_effect": "hermetic",
       "timeout_ms": 120000,
       "cache": {
-        "enabled": false,
+        "enabled": true,
         "inputs": [
           "package.json",
           "package-lock.json",
@@ -1758,6 +1793,7 @@
           "package.json",
           "package-lock.json",
           "release-gates.v2.json",
+          "src/core/release/npm-pack-proof.ts",
           "src/core/codex-control/**",
           "src/core/codex-compat/**",
           "src/core/codex-runtime/**",
@@ -1950,6 +1986,7 @@
           "package.json",
           "package-lock.json",
           "release-gates.v2.json",
+          "src/core/release/npm-pack-proof.ts",
           "src/scripts/packlist-performance-check.ts",
           "dist/**"
         ]
@@ -2112,8 +2149,7 @@
       "id": "release:parallel-speed-budget",
       "command": "node ./dist/scripts/release-parallel-speed-budget-check.js",
       "deps": [
-        "agent:fast-mode-policy",
-        "agent:native-cli-session-swarm-scaling",
+        "naruto:canonical-stop-gate",
         "appshots:thread-attachment-discovery",
         "codex-control:all-pipelines",
         "codex-sdk:all-pipelines",
@@ -2552,7 +2588,7 @@
     },
     {
       "id": "trust:check",
-      "command": "node ./dist/bin/sks.js trust validate latest --json || node ./dist/scripts/trust-fixture-check.js",
+      "command": "node ./dist/scripts/trust-fixture-check.js",
       "deps": [],
       "resource": [
         "cpu-light",
@@ -3199,65 +3235,6 @@
           "src/scripts/git-worktree-untracked-diff-check.ts",
           "src/core/git/git-worktree-merge-queue.ts",
           "src/scripts/git-worktree-integration-primary-check.ts"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "agent:fast-mode-policy",
-      "command": "node ./dist/scripts/official-subagent-workflow-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 500000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
-        ]
-      },
-      "isolation": {
-        "home": "temp",
-        "codex_home": "temp",
-        "report_dir": "per-gate"
-      },
-      "preset": [
-        "release"
-      ],
-      "output_contract": "sks.gate-result.v1"
-    },
-    {
-      "id": "agent:native-cli-session-swarm-scaling",
-      "command": "node ./dist/scripts/official-subagent-workflow-check.js",
-      "deps": [],
-      "resource": [
-        "cpu-light",
-        "fs-read",
-        "timing-sensitive"
-      ],
-      "side_effect": "hermetic",
-      "timeout_ms": 700000,
-      "cache": {
-        "enabled": true,
-        "inputs": [
-          "package.json",
-          "release-gates.v2.json",
-          "src/**",
-          "schemas/**"
         ]
       },
       "isolation": {
@@ -4044,9 +4021,33 @@
       "output_contract": "sks.gate-result.v1"
     },
     {
+      "id": "release:metadata-current",
+      "command": "node ./dist/scripts/release-metadata-check.js",
+      "deps": [],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": false, "inputs": ["package.json", "package-lock.json", "CHANGELOG.md", "README.md", "docs/**", "src/core/version-manager.ts", "src/core/version.ts", "src/bin/sks.ts", "src/scripts/release-metadata-check.ts", "src/scripts/release-metadata-1-19-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
+      "id": "docs:truthfulness",
+      "command": "node ./dist/scripts/docs-truthfulness-check.js",
+      "deps": ["release:metadata-current"],
+      "resource": ["cpu-light", "fs-read"],
+      "side_effect": "hermetic",
+      "timeout_ms": 120000,
+      "cache": { "enabled": false, "inputs": ["package.json", "CHANGELOG.md", "README.md", "docs/**", "src/scripts/docs-truthfulness-check.ts"] },
+      "isolation": { "home": "temp", "codex_home": "temp", "report_dir": "per-gate" },
+      "preset": ["release"],
+      "output_contract": "sks.gate-result.v1"
+    },
+    {
       "id": "release:runtime-truth-matrix",
       "command": "node ./dist/scripts/release-runtime-truth-matrix-check.js",
-      "deps": ["all-features:deep-completion"],
+      "deps": ["all-features:deep-completion", "docs:truthfulness"],
       "resource": ["cpu-light", "fs-read"],
       "side_effect": "real-env",
       "timeout_ms": 120000,

@@ -6,6 +6,9 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createReleaseStampProof } from '../helpers/release-stamp-proof.mjs';
+import { validateReleaseRealSkipProof } from '../../dist/core/release/release-real-contract.js';
+import { releaseAuthorizationSnapshot } from '../../dist/core/release/release-authorization-snapshot.js';
+import { currentDistFreshness } from '../../dist/scripts/lib/ensure-dist-fresh.js';
 
 const pkg = JSON.parse(fsSync.readFileSync('package.json', 'utf8'));
 
@@ -49,8 +52,167 @@ test('release-check stamp can be written and verified without rerunning release:
   assert.equal(parsed.package_name, 'sneakoscope');
   assert.equal(parsed.package_version, pkg.version);
   assert.match(parsed.source_digest, /^[a-f0-9]{64}$/);
+  assert.ok(parsed.source_file_count > 0);
+  assert.match(parsed.package_files_sha256, /^[a-f0-9]{64}$/);
+  assert.ok(parsed.package_file_count > 0);
+  assert.match(parsed.release_gate_sha256, /^[a-f0-9]{64}$/);
+  assert.match(parsed.dist_build_sha256, /^[a-f0-9]{64}$/);
+  assert.ok(parsed.dist_file_count > 0);
   assert.equal(parsed.release_gate_proof.full, true);
   proof.cleanup();
+});
+
+test('release-check stamp rejects HEAD-only identity drift', async () => {
+  const proof = createReleaseStampProof();
+  try {
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 0, write.stderr);
+    const stamp = JSON.parse(await fs.readFile(proof.stampPath, 'utf8'));
+    stamp.git_commit = '0'.repeat(40);
+    await fs.writeFile(proof.stampPath, `${JSON.stringify(stamp, null, 2)}\n`);
+    const verify = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', 'verify'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(verify.status, 2);
+    assert.match(verify.stderr, /git_commit/);
+  } finally {
+    proof.cleanup();
+  }
+});
+
+test('release-check stamp rejects real proof that is not bound to current source and dist', () => {
+  const proof = createReleaseStampProof();
+  try {
+    const real = JSON.parse(fsSync.readFileSync(proof.realSummaryPath, 'utf8'));
+    real.skip_release_check_proof.final_revalidation.source_digest = 'f'.repeat(64);
+    real.skip_release_check_proof.final_revalidation.dist_build_sha256 = 'e'.repeat(64);
+    real.release_check.proof = real.skip_release_check_proof;
+    fsSync.writeFileSync(proof.realSummaryPath, `${JSON.stringify(real, null, 2)}\n`);
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 2);
+    assert.match(write.stderr, /real_skip_final_(?:source|dist)_/);
+  } finally {
+    proof.cleanup();
+  }
+});
+
+test('DAG-to-real proof rejects same-id release gate command drift in an isolated fixture repo', () => {
+  const root = fsSync.mkdtempSync(path.join(os.tmpdir(), 'sks-release-dag-drift-'));
+  const fixturePkg = {
+    name: 'release-drift-fixture',
+    version: '1.0.0',
+    files: ['dist', 'release-gates.v2.json'],
+    scripts: { 'release:check': 'node release.js', prepublishOnly: 'node prepublish.js' }
+  };
+  const manifestPath = path.join(root, 'release-gates.v2.json');
+  fsSync.mkdirSync(path.join(root, 'dist'), { recursive: true });
+  fsSync.writeFileSync(path.join(root, 'package.json'), JSON.stringify(fixturePkg, null, 2) + '\n');
+  fsSync.writeFileSync(path.join(root, 'dist', 'index.js'), 'export const ready = true;\n');
+  fsSync.writeFileSync(path.join(root, 'infra-harness-gates.json'), '{"gates":[]}\n');
+  fsSync.writeFileSync(manifestPath, JSON.stringify({
+    schema: 'sks.release-gates.v2',
+    gates: [{ id: 'same:id', command: 'node check-a.js', preset: ['release'] }]
+  }, null, 2) + '\n');
+  for (const args of [
+    ['init', '-q'],
+    ['config', 'user.email', 'fixture@example.invalid'],
+    ['config', 'user.name', 'Fixture'],
+    ['add', '.'],
+    ['commit', '-qm', 'fixture']
+  ]) {
+    const git = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(git.status, 0, git.stderr);
+  }
+
+  try {
+    const authorizationBefore = releaseAuthorizationSnapshot(root, fixturePkg);
+    const summary = {
+      schema: 'sks.release-gate-dag-run.v1',
+      ok: true,
+      run_id: 'fixture-full',
+      selected_preset: 'release',
+      selected_gates: 1,
+      selected_gate_ids: ['same:id'],
+      completed: 1,
+      failed: 0,
+      affected_selection: { mode: 'full' },
+      release_authorization_snapshot: authorizationBefore,
+      completion_certificate: { confidence: 'full-release-proof', full_release_proof: 'current_run' }
+    };
+    const manifest = JSON.parse(fsSync.readFileSync(manifestPath, 'utf8'));
+    manifest.gates[0].command = 'node check-b.js';
+    fsSync.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    const authorizationAfter = releaseAuthorizationSnapshot(root, fixturePkg);
+    const proof = validateReleaseRealSkipProof({
+      summary,
+      expectedReleaseGateIds: ['same:id'],
+      summaryPath: 'summary.json',
+      summaryMtimeMs: 2_000,
+      summarySha256: 'a'.repeat(64),
+      distStamp: { schema: 'sks.dist-build-stamp.v1', source_digest: 'b'.repeat(64), source_file_count: 3 },
+      distStampPath: 'dist/.sks-build-stamp.json',
+      distStampMtimeMs: 1_000,
+      authorizationSnapshot: authorizationAfter,
+      currentDistSourceDigest: 'b'.repeat(64),
+      currentDistSourceFileCount: 3,
+      nowMs: 3_000,
+      maxAgeMs: 10_000
+    });
+    assert.equal(proof.ok, false);
+    assert.ok(proof.blockers.includes('release_real_skip_full_summary_authorization_mismatch:release_gate_sha256'));
+  } finally {
+    fsSync.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('release-check stamp rejects a self-asserted truncated release DAG', () => {
+  const proof = createReleaseStampProof();
+  try {
+    const summary = JSON.parse(fsSync.readFileSync(proof.summaryPath, 'utf8'));
+    summary.selected_gate_ids = summary.selected_gate_ids.slice(0, 2);
+    summary.selected_gates = 2;
+    summary.completed = 2;
+    summary.affected_selection.selected_gate_ids = summary.selected_gate_ids;
+    fsSync.writeFileSync(proof.summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 2);
+    assert.match(write.stderr, /selected_gate_ids_not_release_manifest|release_preset_gate_count_mismatch/);
+  } finally {
+    proof.cleanup();
+  }
+});
+
+test('release-check stamp rejects an incomplete release-real check list', () => {
+  const proof = createReleaseStampProof();
+  try {
+    const real = JSON.parse(fsSync.readFileSync(proof.realSummaryPath, 'utf8'));
+    real.all_checks = real.all_checks.slice(0, 1);
+    real.release_authorizing_checks = real.all_checks;
+    fsSync.writeFileSync(proof.realSummaryPath, `${JSON.stringify(real, null, 2)}\n`);
+    const write = spawnSync(process.execPath, ['dist/scripts/release-check-stamp.js', ...proof.writeArgs], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, ...proof.env }
+    });
+    assert.equal(write.status, 2);
+    assert.match(write.stderr, /real_check_ids_not_contract|real_authorizing_check_ids_not_contract/);
+  } finally {
+    proof.cleanup();
+  }
 });
 
 test('release-check stamp ensure refreshes a stale publish stamp', async () => {

@@ -5,12 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
+import { DEFAULT_MAX_PACK_BYTES, DEFAULT_MAX_UNPACKED_BYTES } from '../core/release/package-size-budget.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const limits = {
   packedBytes: Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYTES),
-  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || 10 * 1024 * 1024),
+  unpackedBytes: Number(process.env.SKS_MAX_UNPACKED_BYTES || DEFAULT_MAX_UNPACKED_BYTES),
   packFiles: Number(process.env.SKS_MAX_PACK_FILES || 2100),
   trackedFileBytes: Number(process.env.SKS_MAX_TRACKED_FILE_BYTES || 384 * 1024)
 };

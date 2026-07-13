@@ -188,6 +188,16 @@ test('phase pass counts exclude optional ok=true rows and live coverage owns tho
 })
 
 test('skip proof requires the latest full receipt to postdate a matching current-source build stamp', () => {
+  const authorizationSnapshot = {
+    git_commit: 'a'.repeat(40),
+    source_digest: 'c'.repeat(64),
+    source_file_count: 80,
+    package_files_sha256: 'e'.repeat(64),
+    package_file_count: 60,
+    release_gate_sha256: 'f'.repeat(64),
+    dist_build_sha256: 'd'.repeat(64),
+    dist_file_count: 42
+  }
   const base = {
     summary: {
       schema: 'sks.release-gate-dag-run.v1',
@@ -199,24 +209,53 @@ test('skip proof requires the latest full receipt to postdate a matching current
       completed: 3,
       failed: 0,
       affected_selection: { mode: 'full' },
+      release_authorization_snapshot: { ...authorizationSnapshot },
       completion_certificate: { confidence: 'full-release-proof', full_release_proof: 'current_run' }
     },
+    expectedReleaseGateIds: ['gate:a', 'gate:b', 'gate:c'],
     summaryPath: '.sneakoscope/reports/release-gates/full-1/summary.json',
     summaryMtimeMs: 2_000,
     summarySha256: 'a'.repeat(64),
     distStamp: { schema: 'sks.dist-build-stamp.v1', source_digest: 'b'.repeat(64), source_file_count: 9 },
     distStampPath: 'dist/.sks-build-stamp.json',
     distStampMtimeMs: 1_000,
-    currentSourceDigest: 'b'.repeat(64),
-    currentSourceFileCount: 9,
+    authorizationSnapshot,
+    currentDistSourceDigest: 'b'.repeat(64),
+    currentDistSourceFileCount: 9,
     nowMs: 3_000,
     maxAgeMs: 10_000
   }
-  assert.equal(validateReleaseRealSkipProof(base).ok, true)
+  const valid = validateReleaseRealSkipProof(base)
+  assert.equal(valid.ok, true)
+  assert.equal(valid.git_commit, base.authorizationSnapshot.git_commit)
+  assert.equal(valid.source_digest, base.authorizationSnapshot.source_digest)
+  assert.equal(valid.package_files_sha256, base.authorizationSnapshot.package_files_sha256)
+  assert.equal(valid.release_gate_sha256, base.authorizationSnapshot.release_gate_sha256)
 
-  const staleSource = validateReleaseRealSkipProof({ ...base, currentSourceDigest: 'c'.repeat(64) })
-  assert.equal(staleSource.ok, false)
-  assert.ok(staleSource.blockers.includes('release_real_skip_source_digest_mismatch'))
+  const dagGateCommandDrift = validateReleaseRealSkipProof({
+    ...base,
+    authorizationSnapshot: { ...base.authorizationSnapshot, release_gate_sha256: '9'.repeat(64) }
+  })
+  assert.equal(dagGateCommandDrift.ok, false)
+  assert.ok(dagGateCommandDrift.blockers.includes('release_real_skip_full_summary_authorization_mismatch:release_gate_sha256'))
+
+  const staleDistSource = validateReleaseRealSkipProof({ ...base, currentDistSourceDigest: '7'.repeat(64) })
+  assert.equal(staleDistSource.ok, false)
+  assert.ok(staleDistSource.blockers.includes('release_real_skip_dist_source_digest_mismatch'))
+
+  const missingDistDigest = validateReleaseRealSkipProof({
+    ...base,
+    authorizationSnapshot: { ...base.authorizationSnapshot, dist_build_sha256: null }
+  })
+  assert.equal(missingDistDigest.ok, false)
+  assert.ok(missingDistDigest.blockers.includes('release_real_skip_dist_digest_missing'))
+
+  const missingGateDigest = validateReleaseRealSkipProof({
+    ...base,
+    authorizationSnapshot: { ...base.authorizationSnapshot, release_gate_sha256: '' }
+  })
+  assert.equal(missingGateDigest.ok, false)
+  assert.ok(missingGateDigest.blockers.includes('release_real_skip_release_gate_digest_missing'))
 
   const predated = validateReleaseRealSkipProof({ ...base, summaryMtimeMs: 500 })
   assert.equal(predated.ok, false)
@@ -225,4 +264,8 @@ test('skip proof requires the latest full receipt to postdate a matching current
   const expired = validateReleaseRealSkipProof({ ...base, nowMs: 20_001 })
   assert.equal(expired.ok, false)
   assert.ok(expired.blockers.includes('release_real_skip_full_summary_expired'))
+
+  const truncated = validateReleaseRealSkipProof({ ...base, expectedReleaseGateIds: ['gate:a', 'gate:b', 'gate:c', 'gate:d'] })
+  assert.equal(truncated.ok, false)
+  assert.ok(truncated.blockers.includes('release_real_skip_full_summary_gate_ids_mismatch'))
 })

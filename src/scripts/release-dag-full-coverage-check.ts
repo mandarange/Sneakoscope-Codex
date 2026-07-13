@@ -2,6 +2,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js'
+import { releaseGateContractSnapshot } from '../core/release/release-gate-contract.js'
 
 interface ReleaseGate {
   id: string
@@ -31,21 +32,8 @@ const releasePreset = releaseManifest.gates.filter((gate) => gate.preset.include
 const harnessPreset = harnessManifest.gates.filter((gate) => gate.preset.includes('harness'))
 const releaseIds = new Set(releasePreset.map((gate) => gate.id))
 const harnessIds = new Set(harnessPreset.map((gate) => gate.id))
-const requiredReleasePresetIds = [
-  'codex:app-handoff-comprehensive',
-  'qa-loop:comprehensive-verification',
-  'loop-integration-finalizer-check',
-  'naruto:canonical-stop-gate',
-  'agent:native-cli-session-swarm-scaling',
-  'agent:fast-mode-policy',
-  'codex-control:event-stream-ledger',
-  'release:dag-runner',
-  'release:gate-budget',
-  'release:gate-selection-comprehensive',
-  'policy:gate-audit',
-  'runtime:proof-summary',
-  'typecheck'
-]
+const releaseContract = releaseGateContractSnapshot()
+const requiredReleasePresetIds = releaseContract.ids
 const requiredHarnessPresetIds = [
   'zellij:layout-valid',
   'zellij:compact-slot-renderer',
@@ -55,6 +43,7 @@ const requiredHarnessPresetIds = [
   'zellij:right-column-geometry-proof'
 ]
 const missingRequiredReleasePreset = requiredReleasePresetIds.filter((id) => !releaseIds.has(id))
+const unexpectedReleasePreset = [...releaseIds].filter((id) => !requiredReleasePresetIds.includes(id)).sort()
 const missingRequiredHarnessPreset = requiredHarnessPresetIds.filter((id) => !harnessIds.has(id))
 const duplicateAcrossManifests = [...releaseIds].filter((id) => harnessIds.has(id))
 const releaseZellij = [...releaseIds].filter((id) => id.startsWith('zellij:'))
@@ -67,6 +56,7 @@ const report = {
   ok: schemaComplete
     && releasePreset.length <= 200
     && missingRequiredReleasePreset.length === 0
+    && unexpectedReleasePreset.length === 0
     && missingRequiredHarnessPreset.length === 0
     && duplicateAcrossManifests.length === 0
     && releaseZellij.length === 0
@@ -76,6 +66,8 @@ const report = {
   harness_gate_count: harnessPreset.length,
   required_release_preset_ids: requiredReleasePresetIds,
   missing_required_release_preset: missingRequiredReleasePreset,
+  unexpected_release_preset: unexpectedReleasePreset,
+  release_gate_contract: releaseContract,
   required_harness_preset_ids: requiredHarnessPresetIds,
   missing_required_harness_preset: missingRequiredHarnessPreset,
   duplicate_across_manifests: duplicateAcrossManifests,

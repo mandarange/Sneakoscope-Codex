@@ -148,10 +148,70 @@ if (args[0] === 'view' && args[1] === 'sneakoscope' && args[2] === 'maintainers'
   assert.match(blocked.stderr, /sneakoscope maintainers: cdw0424/);
 });
 
+test('release registry trusted-publisher auth validates OIDC context without npm whoami', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-release-registry-oidc-check-'));
+  const bin = path.join(tmp, 'bin');
+  const log = path.join(tmp, 'npm-log.jsonl');
+  await fs.mkdir(bin);
+  await writeFakeNpm(bin, `
+if (args[0] === 'whoami') {
+  console.error('whoami must not run for trusted publishing');
+  process.exit(91);
+}
+`);
+
+  const result = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${bin}${path.delimiter}${process.env.PATH || ''}`,
+      SKS_FAKE_NPM_LOG: log,
+      SKS_PUBLISH_AUTH_MODE: 'trusted-publisher',
+      GITHUB_ACTIONS: 'true',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_REPOSITORY: 'mandarange/Sneakoscope-Codex',
+      GITHUB_WORKFLOW_REF: 'mandarange/Sneakoscope-Codex/.github/workflows/publish-npm.yml@refs/heads/main',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'redacted-test-token'
+    }
+  });
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /Trusted-publisher environment check passed/);
+  const calls = (await fs.readFile(log, 'utf8')).trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(calls.some((args) => args[0] === 'whoami'), false);
+});
+
+test('release registry trusted-publisher auth cannot skip unpublished network checks', () => {
+  const result = spawnSync(process.execPath, ['dist/scripts/release-registry-check.js', '--require-unpublished', '--require-publish-auth'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      SKS_SKIP_REGISTRY_NETWORK_CHECK: '1',
+      SKS_PUBLISH_AUTH_MODE: 'trusted-publisher',
+      GITHUB_ACTIONS: 'true',
+      GITHUB_REF: 'refs/heads/main',
+      GITHUB_REPOSITORY: 'mandarange/Sneakoscope-Codex',
+      GITHUB_WORKFLOW_REF: 'mandarange/Sneakoscope-Codex/.github/workflows/publish-npm.yml@refs/heads/main',
+      ACTIONS_ID_TOKEN_REQUEST_URL: 'https://example.invalid/oidc',
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: 'redacted-test-token'
+    }
+  });
+  assert.equal(result.status, 2, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /registry network checks cannot be skipped/);
+  assert.doesNotMatch(result.stderr, /redacted-test-token/);
+});
+
 async function writeFakeNpm(bin, extraCases = '') {
   const fakeNpm = path.join(bin, 'npm-fake.mjs');
   await fs.writeFile(fakeNpm, `#!/usr/bin/env node
+import fs from 'node:fs';
 const args = process.argv.slice(2);
+if (process.env.SKS_FAKE_NPM_LOG) {
+  fs.appendFileSync(process.env.SKS_FAKE_NPM_LOG, JSON.stringify(args) + '\\n');
+}
 
 if (args[0] === 'pack') {
   console.log(JSON.stringify([{ name: 'sneakoscope', version: '${pkgVersion}' }]));

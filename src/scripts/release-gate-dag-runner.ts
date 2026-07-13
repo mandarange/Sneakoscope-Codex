@@ -1,7 +1,12 @@
 #!/usr/bin/env node
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runReleaseGateDag, type ReleaseGateDagRunResult } from '../core/release/release-gate-dag.js'
+import {
+  releaseAuthorizationSnapshot,
+  type ReleaseAuthorizationSnapshot
+} from '../core/release/release-authorization-snapshot.js'
 import { ensureDistFresh } from './lib/ensure-dist-fresh.js'
 import { ensureCurrentMigrationBeforeCommand } from '../core/update/update-migration-state.js'
 
@@ -35,6 +40,13 @@ const changedSinceIndex = args.indexOf('--changed-since')
 const changedSince = changedSinceIndex >= 0 ? (args[changedSinceIndex + 1] || null) : null
 const slaIndex = args.indexOf('--sla')
 const slaMs = slaIndex >= 0 ? parseDurationMs(args[slaIndex + 1] || '') : null
+let authorizationSnapshot: ReleaseAuthorizationSnapshot
+try {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+  authorizationSnapshot = releaseAuthorizationSnapshot(root, pkg)
+} catch (error) {
+  failRunner(`release_authorization_snapshot_failed:${error instanceof Error ? error.message : String(error)}`)
+}
 
 let result: ReleaseGateDagRunResult
 try {
@@ -47,7 +59,8 @@ try {
     explain: args.includes('--explain'),
     noCache: args.includes('--no-cache'),
     failFast: args.includes('--fail-fast'),
-    useGatePacks: args.includes('--use-gate-packs')
+    useGatePacks: args.includes('--use-gate-packs'),
+    releaseAuthorizationSnapshot: authorizationSnapshot
   })
 } catch (error) {
   failRunner(error instanceof Error ? error.message : String(error || 'release_gate_dag_failed'))

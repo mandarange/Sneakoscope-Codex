@@ -15,6 +15,7 @@ import { guardedProcessKill, guardContextForRoute } from '../safety/mutation-gua
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
 import { rmrf } from '../fsx.js'
 import { sweepSksTempDirs } from '../retention.js'
+import type { ReleaseAuthorizationSnapshot } from './release-authorization-snapshot.js'
 
 export interface ReleaseGateDagRunResult {
   schema: 'sks.release-gate-dag-run.v1'
@@ -45,6 +46,7 @@ export interface ReleaseGateDagRunResult {
   failures: Array<{ id: string; exit_code: number | null; stderr_tail: string; timed_out: boolean; signal: NodeJS.Signals | null }>
   affected_graph: ReleaseGateAffectedGraph
   completion_certificate: ReleaseGateCompletionCertificate
+  release_authorization_snapshot: ReleaseAuthorizationSnapshot | null
   retention?: ReleaseGateRunRetention
   triwiki_affected_graph?: TriWikiAffectedGraph | null
   triwiki_selection_used: boolean
@@ -150,6 +152,7 @@ export async function runReleaseGateDag(input: {
   useTriWikiProofBank?: boolean
   useGatePacks?: boolean
   onlyGateIds?: string[]
+  releaseAuthorizationSnapshot?: ReleaseAuthorizationSnapshot | null
 }): Promise<ReleaseGateDagRunResult> {
   const root = path.resolve(input.root)
   const preset = input.preset || 'release'
@@ -262,6 +265,7 @@ export async function runReleaseGateDag(input: {
       failures,
       affected_graph: affectedGraph,
       completion_certificate: completionCertificate,
+      release_authorization_snapshot: input.releaseAuthorizationSnapshot || null,
       triwiki_affected_graph: triwikiGraph,
       triwiki_selection_used: triwikiSelectionUsed,
       triwiki_selected_gates: triwikiGraph ? selected.map((gate) => gate.id) : [],

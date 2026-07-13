@@ -4,11 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readCurrentNpmPackProof } from '../core/release/npm-pack-proof.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const expectedRegistry = 'https://registry.npmjs.org/';
 const requireUnpublished = process.argv.includes('--require-unpublished');
 const requirePublishAuth = process.argv.includes('--require-publish-auth');
+const requirePackProof = process.argv.includes('--require-pack-proof');
+const publishAuthMode = String(process.env.SKS_PUBLISH_AUTH_MODE || 'token').trim().toLowerCase();
 const skipNetwork = process.env.SKS_SKIP_REGISTRY_NETWORK_CHECK === '1';
 const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
@@ -137,18 +140,9 @@ function checkLockfile(pkg: AnyRecord) {
 }
 
 function checkPackedMetadata(pkg: AnyRecord) {
-  const env = npmRegistryReadEnv({
-    npm_config_cache: process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache')
-  });
-  const result = run(npmBin, ['pack', '--dry-run', '--json', '--ignore-scripts', '--registry', expectedRegistry], { env });
-  if (result.status !== 0) fail('npm pack dry-run failed', `${result.stdout || ''}\n${result.stderr || ''}`);
-  let info;
-  try {
-    info = JSON.parse(result.stdout)[0];
-  } catch {
-    fail('npm pack dry-run returned non-json output', result.stdout || '');
-  }
-  if (!info) fail('npm pack dry-run returned no package metadata');
+  const packProof = readCurrentNpmPackProof(root);
+  if (!packProof.ok || !packProof.proof) fail('current npm pack proof is required', packProof.blockers.join('\n'));
+  const info = packProof.proof.info;
   if (info.name !== pkg.name || info.version !== pkg.version) {
     fail('packed package metadata differs from package.json', `pack: ${info.name || 'missing'}@${info.version || 'missing'}\npackage.json: ${pkg.name}@${pkg.version}`);
   }
@@ -216,6 +210,13 @@ function isBackfillTag(value: unknown): boolean {
 }
 
 function checkPublishAuth(pkg: AnyRecord) {
+  if (publishAuthMode === 'trusted-publisher') {
+    checkTrustedPublisherAuth(pkg);
+    return;
+  }
+  if (publishAuthMode !== 'token') {
+    fail('unsupported npm publish auth mode', `SKS_PUBLISH_AUTH_MODE=${publishAuthMode}`);
+  }
   if (skipNetwork) {
     fail('publish auth check cannot run when SKS_SKIP_REGISTRY_NETWORK_CHECK=1 is set');
   }
@@ -266,6 +267,53 @@ function checkPublishAuth(pkg: AnyRecord) {
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
   console.log(`Publish auth check passed: ${pkg.name}@${pkg.version} as ${user}.`);
+}
+
+function checkTrustedPublisherAuth(pkg: AnyRecord) {
+  const expectedRepository = githubRepositorySlug(pkg);
+  const workflowRef = String(process.env.GITHUB_WORKFLOW_REF || '');
+  const blockers = [
+    process.env.GITHUB_ACTIONS === 'true' ? null : 'github_actions_environment_missing',
+    process.env.GITHUB_REF === 'refs/heads/main' ? null : 'trusted_publish_ref_not_main',
+    process.env.GITHUB_REPOSITORY === expectedRepository ? null : 'trusted_publish_repository_mismatch',
+    workflowRef.includes(`${expectedRepository}/.github/workflows/publish-npm.yml@refs/heads/main`)
+      ? null
+      : 'trusted_publish_workflow_ref_mismatch',
+    process.env.ACTIONS_ID_TOKEN_REQUEST_URL ? null : 'oidc_request_url_missing',
+    process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN ? null : 'oidc_request_token_missing'
+  ].filter(Boolean);
+  if (blockers.length > 0) {
+    fail(
+      'npm trusted-publisher environment is incomplete',
+      `${blockers.join('\n')}\nUse the manual publish-npm.yml workflow on refs/heads/main with id-token: write.`
+    );
+  }
+
+  const report = {
+    schema: 'sks.release-publish-auth.v1',
+    ok: true,
+    package: pkg.name,
+    version: pkg.version,
+    registry: expectedRegistry,
+    auth_mode: 'trusted-publisher',
+    github_repository: expectedRepository,
+    github_ref: process.env.GITHUB_REF,
+    workflow_file: 'publish-npm.yml',
+    oidc_environment_present: true,
+    identity_verified_by_registry_at_publish: false,
+    generated_at: new Date().toISOString()
+  };
+  const out = path.join(root, '.sneakoscope', 'reports', 'release-publish-auth.json');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, `${JSON.stringify(report, null, 2)}\n`);
+  console.log(`Trusted-publisher environment check passed: ${pkg.name}@${pkg.version} from ${expectedRepository}.`);
+}
+
+function githubRepositorySlug(pkg: AnyRecord): string {
+  const repository = typeof pkg.repository === 'string' ? pkg.repository : pkg.repository?.url;
+  const match = String(repository || '').match(/github\.com[/:]([^/]+\/[^/#]+?)(?:\.git)?$/i);
+  if (!match?.[1]) fail('package.json repository must identify the GitHub trusted-publisher repository');
+  return match[1].replace(/\.git$/i, '');
 }
 
 function publishAuthRepairInstructions(pkg: AnyRecord, authHints: string[]): string[] {
@@ -365,7 +413,10 @@ const pkg = readJson('package.json');
 checkPackagePublishConfig(pkg);
 checkRootNpmrc(pkg);
 checkLockfile(pkg);
-checkPackedMetadata(pkg);
+if (skipNetwork && (requireUnpublished || requirePublishAuth)) {
+  fail('registry network checks cannot be skipped for publish-authorizing validation');
+}
+if (requirePackProof) checkPackedMetadata(pkg);
 checkPublishedVersion(pkg);
 if (requirePublishAuth) checkPublishAuth(pkg);
 console.log(`Release registry check passed: ${pkg.name}@${pkg.version} -> ${expectedRegistry}`);

@@ -90,7 +90,14 @@ async function writeWrongnessLedgerUnlocked(root: string, ledger: WrongnessLedge
 export async function readCombinedWrongnessRecords(root: string, missionId: string | null = null): Promise<WrongnessRecord[]> {
   const project = await readWrongnessLedger(root, null);
   const mission = missionId ? await readWrongnessLedger(root, missionId) : emptyWrongnessLedger('mission', missionId);
-  return dedupeRecords([...project.records, ...mission.records]);
+  // The project ledger is also the cross-mission index, so it contains copies
+  // of mission-scoped records. A mission proof must inherit only truly global
+  // project records plus rows owned by that mission; otherwise unrelated old
+  // missions can block every future route forever.
+  const projectRecords = missionId
+    ? project.records.filter((record) => !record.mission_id || record.mission_id === missionId)
+    : project.records;
+  return dedupeRecords([...projectRecords, ...mission.records]);
 }
 
 export async function addWrongnessRecord(root: string, input: unknown = {}, opts: { missionId?: string | null } = {}): Promise<{ record: WrongnessRecord; project: WrongnessLedger; mission: WrongnessLedger | null }> {
@@ -324,7 +331,7 @@ export async function recordDbSafetyMismatchWrongness(root: string, input: unkno
     wrongness_kind: kind,
     severity: kind === 'db_safety_false_negative' ? 'high' : 'medium',
     claim: { text: `DB safety expected ${expected} but classified ${actual}.` },
-    detected_by: { source: 'db_safety_check', command: typeof row.command === 'string' ? row.command : 'sks db check', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: typeof row.sql === 'string' ? row.sql : null },
+    detected_by: { source: 'db_safety_check', command: typeof row.command === 'string' ? row.command : '$DB internal safety check', artifact: typeof row.artifact === 'string' ? row.artifact : null, detail: typeof row.sql === 'string' ? row.sql : null },
     root_cause: { category: 'missing_db_policy', explanation: 'A DB safety expectation did not match the current classifier output.' },
     corrective_action: { summary: 'Adjust the policy/classifier or fixture expectation, then rerun DB safety validation.', required_evidence: ['db-operation-report.json'], patch_status: 'pending' },
     links: { artifacts: typeof row.artifact === 'string' ? [row.artifact] : [] }

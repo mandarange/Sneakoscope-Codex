@@ -4,16 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { DEFAULT_MAX_PACK_BYTES } from '../core/release/package-size-budget.js';
+import { DEFAULT_MAX_PACK_BYTES, DEFAULT_MAX_UNPACKED_BYTES } from '../core/release/package-size-budget.js';
+import { writeNpmPackProof } from '../core/release/npm-pack-proof.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
-// 6.1.1 adds the official-subagent runtime/evidence/config surfaces plus the
-// Codex CLI lifecycle and tool-output recovery modules. The measured unpacked
-// payload was ~10.07 MiB before the installed-runtime contract added the three
-// root gate/script manifests (~140 KiB). Keep a narrow 10.375 MiB ceiling for
-// that required surface plus the focused stabilization delta.
-const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || 10.375 * 1024 * 1024);
+const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || DEFAULT_MAX_UNPACKED_BYTES);
 // Raised from 2300 KiB after the 5.4.0 dollar-command hardening pass added
 // src/core/feature-fixture-executor.ts and expanded several command modules
 // (route-success-helpers.ts, seo-command.ts, ppt-command.ts, qa-loop-command.ts,
@@ -40,7 +36,7 @@ function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
   const npmCache = process.env.SKS_RELEASE_NPM_CACHE || path.join(os.tmpdir(), 'sneakoscope-npm-cache');
   fs.mkdirSync(npmCache, { recursive: true });
-  const argv = ['pack', '--dry-run', '--json', '--ignore-scripts'];
+  const argv = ['pack', '--dry-run', '--ignore-scripts', '--json'];
   const opts = {
     cwd: root,
     encoding: 'utf8',
@@ -57,7 +53,9 @@ function runNpmPack() {
   return res;
 }
 
+const packStarted = Date.now();
 const res = runNpmPack();
+const packMs = Date.now() - packStarted;
 assertGate(res.status === 0, 'npm_pack_failed', { stderr: res.stderr });
 
 let info;
@@ -69,6 +67,7 @@ try {
 }
 
 const files = info.files.map((f) => f.path);
+const packProof = writeNpmPackProof(root, info, packMs);
 const runtimeManifest = JSON.parse(fs.readFileSync(path.join(root, 'runtime-required-scripts.json'), 'utf8'));
 assertGate(runtimeManifest.schema === 'sks.runtime-required-scripts.v1' && Array.isArray(runtimeManifest.scripts), 'runtime required scripts manifest invalid', runtimeManifest);
 
@@ -111,6 +110,10 @@ const report = {
   entryCount: info.entryCount,
   size: info.size,
   unpackedSize: info.unpackedSize,
+  pack_ms: packMs,
+  pack_proof_id: packProof.proof_id,
+  pack_info_sha256: packProof.info_digest,
+  pack_file_list_sha256: packProof.file_list_digest,
   runtime_required_scripts: runtimeManifest.scripts.map((entry) => entry.path),
   runtime_required_missing: runtimeManifest.scripts.filter((entry) => !files.includes(entry.path)).map((entry) => entry.path),
   max_files: MAX_FILES,
@@ -131,6 +134,9 @@ const surfaceReport = {
   max_file_count: SURFACE_MAX_FILES,
   actual_tarball_bytes: info.size,
   actual_file_count: info.entryCount,
+  pack_proof_id: packProof.proof_id,
+  pack_info_sha256: packProof.info_digest,
+  pack_file_list_sha256: packProof.file_list_digest,
   forbidden_globs: [
     'dist/**/__tests__/**',
     'dist/**/*.test.js',

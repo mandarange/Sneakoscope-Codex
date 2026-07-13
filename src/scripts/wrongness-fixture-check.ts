@@ -30,7 +30,7 @@ await ledger.recordDbSafetyMismatchWrongness(root, {
   mission_id: 'M-fixture',
   expected: 'blocked',
   actual: 'safe',
-  command: 'sks db check --sql "DROP TABLE users"',
+  command: '$DB internal safety check: DROP TABLE users',
   sql: 'DROP TABLE users'
 });
 await ledger.recordHookPolicyMismatchWrongness(root, {

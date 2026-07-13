@@ -6,6 +6,7 @@ import { normalizeReleaseCacheInputForBehavior } from './release-cache-key.js'
 import { computeTriWikiCacheKey } from '../triwiki/triwiki-cache-key.js'
 import { createTriWikiProofCard } from '../triwiki/triwiki-proof-card.js'
 import { readReusableTriWikiProofCard, writeTriWikiProofCard } from '../triwiki/triwiki-proof-bank.js'
+import { readCurrentNpmPackGateArtifacts } from './npm-pack-proof.js'
 
 export const RELEASE_GATE_CACHE_V2_SCHEMA = 'sks.release-gate-cache.v2'
 
@@ -148,6 +149,18 @@ export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode):
   const key = releaseGateCacheKey(root, gate)
   const proof = readReusableTriWikiProofCard({ root, subjectId: gate.id, cacheKey: key })
   if (proof.hit && proof.card) {
+    const artifactBlockers = releaseGateCacheArtifactBlockers(root, gate)
+    if (artifactBlockers.length) {
+      writeReleaseCacheBridgeReport(root, {
+        gate_id: gate.id,
+        cache_key: key,
+        bridge: 'triwiki-to-release-v2',
+        source: proof.path || null,
+        duration_ms: Math.max(0, Math.floor(Number(proof.card.duration_ms) || 0)),
+        disagreement: `required_artifact_invalid:${artifactBlockers.join(',')}`
+      })
+      return null
+    }
     writeReleaseCacheBridgeReport(root, {
       gate_id: gate.id,
       cache_key: key,
@@ -169,6 +182,18 @@ export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode):
   for (const file of [releaseGateProofBankFile(root), releaseGateCacheFile(root)]) {
     const record = readCacheRecord(file, key)
     if (!record || record.ok !== true) continue
+    const artifactBlockers = releaseGateCacheArtifactBlockers(root, gate)
+    if (artifactBlockers.length) {
+      writeReleaseCacheBridgeReport(root, {
+        gate_id: gate.id,
+        cache_key: key,
+        bridge: 'release-v2-to-triwiki',
+        source: file,
+        duration_ms: Math.max(0, Math.floor(Number(record.duration_ms) || 0)),
+        disagreement: `required_artifact_invalid:${artifactBlockers.join(',')}`
+      })
+      return null
+    }
     writeTriWikiProofFromReleaseCacheRecord(root, gate, key, record, file)
     writeReleaseCacheBridgeReport(root, {
       gate_id: gate.id,
@@ -189,6 +214,11 @@ export function readReleaseGateCacheRecord(root: string, gate: ReleaseGateNode):
     }
   }
   return null
+}
+
+function releaseGateCacheArtifactBlockers(root: string, gate: ReleaseGateNode): string[] {
+  if (!['publish:packlist-performance', 'package:published-contract'].includes(gate.id)) return []
+  return readCurrentNpmPackGateArtifacts(root).blockers
 }
 
 export function writeReleaseGateCacheHit(root: string, gate: ReleaseGateNode, durationMs = 0): void {
