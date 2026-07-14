@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-14T03:04:36.893Z",
-  "git_head_sha": "4e85817eb1846f5c62aa18f3a23e7ec60e75d265",
+  "generated_at": "2026-07-14T04:10:54.865Z",
+  "git_head_sha": "fb02d1629a35ca227abe8600a363709d0e2c3b05",
   "source_file_count": 3522,
   "index_digest": "c1f92891d27025553c2edd32318f545ca3c5c123c2b6c467ee2a70b8830c52a4",
   "entries": [
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (118 files, 34711 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 518 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (118 files, 34727 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 518 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -67,7 +67,7 @@
     },
     {
       "id": "code:core-agents",
-      "text": "core-agents is a core module at src/core/agents (85 files, 18750 loc, high risk). Key exports: const AGENT_ORCHESTRATOR_ONLY_FILES = Object.freeze([; function agentLedgerRoot(missionDir: string); function validateAgentLedgerWriteScope(input: { actor_agent_id: string; target_path: string; mode?: 'append' | 'write' }); async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string; dynamicScheduler?: boolean }); async function appendAgentLedgerEvent(root: string, event: { agent_id: string; session_id: string; event_type: string; payload?: any }), and 327 more. It has no detected cross-module dependencies.",
+      "text": "core-agents is a core module at src/core/agents (85 files, 18768 loc, high risk). Key exports: const AGENT_ORCHESTRATOR_ONLY_FILES = Object.freeze([; function agentLedgerRoot(missionDir: string); function validateAgentLedgerWriteScope(input: { actor_agent_id: string; target_path: string; mode?: 'append' | 'write' }); async function initializeAgentCentralLedger(missionDir: string, input: { missionId: string; roster: any; partition?: any; route?: string; prompt?: string; dynamicScheduler?: boolean }); async function appendAgentLedgerEvent(root: string, event: { agent_id: string; session_id: string; event_type: string; payload?: any }), and 327 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/agents"
@@ -442,7 +442,7 @@
     },
     {
       "id": "code:core-managed-assets",
-      "text": "core-managed-assets is a core module at src/core/managed-assets (1 file, 676 loc, low risk). Key exports: const MANAGED_ASSET_SCHEMA_VERSION = 1; const MANAGED_ASSET_VERSION = '6.2.0'; const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'; const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'; type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual', and 7 more. It has no detected cross-module dependencies.",
+      "text": "core-managed-assets is a core module at src/core/managed-assets (1 file, 748 loc, low risk). Key exports: const MANAGED_ASSET_SCHEMA_VERSION = 1; const MANAGED_ASSET_VERSION = '6.2.0'; const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'; const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'; type ManagedAssetRisk = 'read-only' | 'managed-write' | 'user-confirmation' | 'manual', and 7 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/managed-assets"
@@ -613,7 +613,7 @@
     },
     {
       "id": "code:core-provider",
-      "text": "core-provider is a core module at src/core/provider (4 files, 561 loc, low risk). Key exports: type TaskCategory = 'quick' | 'standard' | 'agentic' | 'ultrabrain' | 'verify' | 'review' | 'e2e' | 'refactor' | 'strategy';; type ModelReasoning = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';; type ModelServiceTier = 'fast' | 'standard';; interface ModelChoice; interface LbHealth, and 25 more. It has no detected cross-module dependencies.",
+      "text": "core-provider is a core module at src/core/provider (4 files, 575 loc, low risk). Key exports: type TaskCategory = 'quick' | 'standard' | 'agentic' | 'ultrabrain' | 'verify' | 'review' | 'e2e' | 'refactor' | 'strategy';; type ModelReasoning = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';; type ModelServiceTier = 'fast' | 'standard';; interface ModelChoice; interface LbHealth, and 24 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/provider"
@@ -709,7 +709,7 @@
     },
     {
       "id": "code:core-research",
-      "text": "core-research is a core module at src/core/research (39 files, 7679 loc, medium risk). Key exports: async function writeVerifiedSuperSearchFixture(dir: string, ids: string[], name = 'verified-fixture'); interface ClaimEvidenceMatrix; interface ClaimEvidenceMatrixSummary; const CLAIM_EVIDENCE_MATRIX_ARTIFACT = 'claim-evidence-matrix.json';; function defaultClaimEvidenceMatrix(missionId = ''): ClaimEvidenceMatrix, and 109 more. It has no detected cross-module dependencies.",
+      "text": "core-research is a core module at src/core/research (39 files, 7691 loc, medium risk). Key exports: async function writeVerifiedSuperSearchFixture(dir: string, ids: string[], name = 'verified-fixture'); interface ClaimEvidenceMatrix; interface ClaimEvidenceMatrixSummary; const CLAIM_EVIDENCE_MATRIX_ARTIFACT = 'claim-evidence-matrix.json';; function defaultClaimEvidenceMatrix(missionId = ''): ClaimEvidenceMatrix, and 110 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/research"
@@ -868,7 +868,7 @@
     },
     {
       "id": "code:core-subagents",
-      "text": "core-subagents is a core module at src/core/subagents (20 files, 4995 loc, medium risk). Key exports: const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2; const MAX_AUTOMATIC_SUBAGENT_COUNT = 3; const MAX_AUTOMATIC_REVIEWER_COUNT = 2; const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = MAX_AUTOMATIC_SUBAGENT_COUNT; interface OfficialSubagentRoleSummary, and 67 more. It has no detected cross-module dependencies.",
+      "text": "core-subagents is a core module at src/core/subagents (20 files, 5284 loc, medium risk). Key exports: const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2; const MAX_AUTOMATIC_SUBAGENT_COUNT = 3; const MAX_AUTOMATIC_REVIEWER_COUNT = 2; const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = MAX_AUTOMATIC_SUBAGENT_COUNT; interface OfficialSubagentRoleSummary, and 82 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/subagents"
