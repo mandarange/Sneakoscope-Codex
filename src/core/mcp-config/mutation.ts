@@ -111,7 +111,12 @@ async function runMutation(
         });
         if (!write.ok && write.status === 'concurrent_change_detected' && attempt < 3) continue;
         if (!write.ok) return failure(action, name, scope, [`mcp_config_write_${write.status}`], null, attempt, generated.cliUsed, generated.fallbackUsed);
-        const finalized = await finalizeMcpBackup(backup, generated.text);
+        let finalized;
+        try {
+          finalized = await finalizeMcpBackup(backup, generated.text);
+        } catch (error) {
+          return postWriteReceiptFailure(action, name, scope, write.changed, backup.metadata.id, attempt, generated, error);
+        }
         const inventory = await listMcpInventory(scope, { ...options, cli });
         return {
           schema: MCP_MUTATION_SCHEMA,
@@ -253,6 +258,25 @@ function failure(
     schema: MCP_MUTATION_SCHEMA, ok: false, action, name, scope, changed: false,
     official_cli_used: cliUsed, fallback_used: fallbackUsed, backup_id: null, restart_required: false,
     servers: [], blockers, warnings: [], attempts, public_error: publicError
+  };
+}
+
+function postWriteReceiptFailure(
+  action: MutationAction,
+  name: string,
+  scope: McpWritableScope,
+  changed: boolean,
+  backupId: string,
+  attempts: number,
+  generated: Awaited<ReturnType<typeof generateNextText>>,
+  error: unknown
+): McpMutationResultV2 {
+  return {
+    schema: MCP_MUTATION_SCHEMA, ok: false, action, name, scope, changed,
+    official_cli_used: generated.cliUsed, fallback_used: generated.fallbackUsed,
+    backup_id: backupId, restart_required: changed, servers: [],
+    blockers: ['mcp_backup_receipt_failed_after_write'], warnings: generated.warnings,
+    attempts, public_error: redactMcpError(error)
   };
 }
 

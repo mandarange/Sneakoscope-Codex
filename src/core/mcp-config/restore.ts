@@ -39,7 +39,28 @@ export async function restoreMcpBackup(
         mutate: () => backup.text
       });
       if (!write.ok) return failure(scope, [`mcp_config_write_${write.status}`]);
-      const finalized = await finalizeMcpBackup(rollback, backup.text);
+      let finalized;
+      try {
+        finalized = await finalizeMcpBackup(rollback, backup.text);
+      } catch (error) {
+        return {
+          schema: MCP_MUTATION_SCHEMA,
+          ok: false,
+          action: 'restore',
+          name: backup.metadata.server,
+          scope,
+          changed: write.changed,
+          official_cli_used: false,
+          fallback_used: true,
+          backup_id: rollback.metadata.id,
+          restart_required: write.changed,
+          servers: [],
+          blockers: ['mcp_backup_receipt_failed_after_write'],
+          warnings: ['guarded_restore_used'],
+          attempts: 1,
+          public_error: redactMcpError(error)
+        };
+      }
       const cli = options.cli ?? new CodexMcpCliAdapter({ ...(options.codexPath ? { codexPath: options.codexPath } : {}) });
       const inventory = await listMcpInventory(scope, { ...options, cli });
       return {
