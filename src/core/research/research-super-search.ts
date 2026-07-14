@@ -2,11 +2,16 @@ import path from 'node:path'
 import { readJson, sha256 } from '../fsx.js'
 import { runCodexTask } from '../codex-control/codex-task-runner.js'
 import { runSuperSearch, type SuperSearchSourceFunction, type SuperSearchSourceRecord } from '../super-search/index.js'
-import { DEFAULT_SUBAGENT_MODEL, SUBAGENT_EFFORT } from '../subagents/model-policy.js'
+import { TERRA_SUBAGENT_EFFORT, TERRA_SUBAGENT_MODEL } from '../subagents/model-policy.js'
 import {
   type ResearchSourceLayer,
   type ResearchSourceShardOutput
 } from './research-source-shards.js'
+
+export const RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY = Object.freeze({
+  model: TERRA_SUBAGENT_MODEL,
+  model_reasoning_effort: TERRA_SUBAGENT_EFFORT
+})
 
 export interface ResearchSuperSearchShardInput {
   root: string
@@ -116,9 +121,9 @@ function createCodexSourceSearch(input: ResearchSuperSearchShardInput): SuperSea
         hardTimeoutMs: input.timeoutMs,
         ...(input.deadlineMs === undefined ? {} : { deadlineEpochMs: input.deadlineMs })
       },
-      model: DEFAULT_SUBAGENT_MODEL,
-      reasoningEffort: SUBAGENT_EFFORT,
-      modelReasoningEffort: SUBAGENT_EFFORT,
+      model: RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY.model,
+      reasoningEffort: RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY.model_reasoning_effort,
+      modelReasoningEffort: RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY.model_reasoning_effort,
       serviceTier: 'fast'
     })
     const worker = await readJson<any>(result.workerResultPath as string, null)

@@ -9,7 +9,7 @@ export interface DollarCommandAliasLiteEntry {
   app_skill: string;
 }
 
-const NARUTO_DESCRIPTION = '$Naruto is the lightweight Codex official subagent workflow. The Sol Max parent uses two independent children for non-trivial work and at most three for critical multi-domain risk; explicit --agents remains authoritative. It delegates only defensible independent slices, reuses bounded query-aware TriWiki attention anchors, and requires official lifecycle events plus a trustworthy structured parent summary.';
+const NARUTO_DESCRIPTION = '$Naruto is the lightweight Codex official subagent workflow. The Sol Max parent uses two independent children for non-trivial work and at most three for critical multi-domain risk; explicit --agents remains authoritative. Child routing is fixed to Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/Computer Use/Browser/ImageGen execution. It delegates only defensible independent slices, reuses bounded query-aware TriWiki attention anchors, and requires official lifecycle events plus a trustworthy structured parent summary.';
 const COMPUTER_USE_DESCRIPTION = 'Maximum-speed Codex Computer Use lane for native macOS, desktop-app, OS-settings, and non-web visual tasks only. Browser, localhost, website, webapp, and web-based app verification must route through Codex Chrome Extension readiness first.';
 
 export const DOLLAR_COMMANDS_LITE = [

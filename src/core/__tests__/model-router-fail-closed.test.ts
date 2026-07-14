@@ -2,10 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { modelRouteReason, routeNarutoGpt56Model } from '../provider/model-router.js'
 
-const models = ['gpt-5.6-luna', 'gpt-5.6-sol']
+const models = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol']
 const modelEfforts = {
   'gpt-5.6-luna': ['xhigh', 'max'],
-  'gpt-5.6-sol': ['xhigh', 'max', 'ultra']
+  'gpt-5.6-terra': ['medium', 'high'],
+  'gpt-5.6-sol': ['high', 'xhigh', 'max', 'ultra']
 }
 
 test('Naruto GPT-5.6 routing fails closed for an explicit model outside the family', () => {
@@ -32,14 +33,29 @@ test('Naruto GPT-5.6 routing preserves a supported explicit family model', () =>
   assert.equal(modelRouteReason('agentic', choice, { explicit: true }), 'agentic->gpt-5.6-luna (explicit model preserved)')
 })
 
-test('Naruto GPT-5.6 routing preserves explicit Terra compatibility without auto-selecting it', () => {
+test('Naruto GPT-5.6 routing preserves Terra Medium and auto-selects it for tool work', () => {
   const choice = routeNarutoGpt56Model({
     taskText: 'implementation',
     explicitModel: 'gpt-5.6-terra',
-    availableModels: [...models, 'gpt-5.6-terra'],
-    availableModelEfforts: { ...modelEfforts, 'gpt-5.6-terra': ['max'] }
+    availableModels: models,
+    availableModelEfforts: modelEfforts
   })
 
-  assert.deepEqual(choice, { model: 'gpt-5.6-terra', reasoning: 'max', serviceTier: 'fast' })
-  assert.equal(routeNarutoGpt56Model({ taskText: 'implementation' }).model, 'gpt-5.6-sol')
+  assert.deepEqual(choice, { model: 'gpt-5.6-terra', reasoning: 'medium', serviceTier: 'fast' })
+  assert.deepEqual(routeNarutoGpt56Model({ taskText: 'browser QA' }), {
+    model: 'gpt-5.6-terra', reasoning: 'medium', serviceTier: 'fast'
+  })
+  assert.deepEqual(routeNarutoGpt56Model({ taskText: 'implementation' }), {
+    model: 'gpt-5.6-sol', reasoning: 'high', serviceTier: 'fast'
+  })
+})
+
+test('Naruto GPT-5.6 routing rejects an unavailable model/effort pair without fallback', () => {
+  const choice = routeNarutoGpt56Model({
+    taskText: 'browser QA',
+    availableModels: models,
+    availableModelEfforts: { ...modelEfforts, 'gpt-5.6-terra': ['max'] }
+  })
+  assert.equal(choice.model, '')
+  assert.equal(choice.reasoning, 'medium')
 })

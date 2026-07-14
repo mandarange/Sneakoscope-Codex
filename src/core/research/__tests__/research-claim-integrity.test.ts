@@ -1,13 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { buildClaimEvidenceMatrixFromSourceShards } from '../research-claim-builder.js'
-import { researchSourceRow } from '../research-super-search.js'
+import { RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY, researchSourceRow } from '../research-super-search.js'
 import { densifyImplementationBlueprint } from '../implementation-blueprint-densifier.js'
 import { linkSourceLedgerToClaimMatrix } from '../research-source-ledger-merge.js'
 import { buildSourceQualityReport } from '../source-quality-report.js'
 import { recalculateResearchClaimEvidenceMatrix } from '../research-claim-synthesizer.js'
 import { validateClaimEvidenceMatrix } from '../claim-evidence-matrix.js'
 import { normalizeResearchSynthesisOutput, validateResearchSynthesisOutput } from '../research-synthesis-writer.js'
+
+test('Research source acquisition uses Terra Medium while judgment stages remain separate', () => {
+  assert.deepEqual(RESEARCH_SOURCE_ACQUISITION_MODEL_POLICY, {
+    model: 'gpt-5.6-terra',
+    model_reasoning_effort: 'medium'
+  })
+})
 
 test('unrelated live-looking sources cannot fabricate a shared high-confidence stage claim', async () => {
   const ledger = {

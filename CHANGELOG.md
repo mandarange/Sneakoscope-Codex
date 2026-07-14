@@ -3,7 +3,6 @@
 ## [Unreleased]
 
 
-
 ## [6.2.0] - 2026-07-14
 
 ### Added
@@ -12,6 +11,7 @@
 - Add matching `sks menubar mcp` commands and real global Codex configuration updates, including protected backups, file locking, TOML validation, and restrictive file permissions.
 - Add one common three-state Naruto decision gate to all ten Codex hook events, with bounded hash-only telemetry and route-owned orchestration detection.
 - Expand the official project custom-agent catalog from sixteen to twenty-one roles with native AppKit, toolchain, protocol, runtime-reliability, and TriWiki-evidence specialists.
+- Add dedicated Terra Medium `long_context_analyst`, `computer_use_operator`, `browser_use_operator`, and `image_generation_operator` project agents, expanding the installed official catalog from twenty-one to twenty-five roles while retaining the three-role on-demand prompt cap.
 
 ### Changed
 
@@ -19,6 +19,8 @@
 - Default non-trivial generic Naruto work to two independent subagents, reserve automatic fan-out three for critical multi-domain risk, and preserve explicit operator counts.
 - Keep Research, AutoResearch, and QA-Loop on their route-owned orchestration contracts so the shared hook gate cannot create duplicate fan-out.
 - Inject only the current task's one-to-three recommended agent roles and use query-aware TriWiki budgets of four ordinary or six complex/high-risk anchors instead of serializing the full role catalog or an unrelated context prefix.
+- Replace the Luna/Sol Max-only subagent split with a fail-closed four-profile policy: Luna Max only for tiny short-context mechanical work, Sol High for ordinary UI/logic/backend/native implementation, Sol Max for review/debugging/planning/security and other judgment, and Terra Medium for long-context plus Computer Use, Browser/Chrome, and image-generation execution.
+- Split mixed execution and judgment work when possible and make Sol Max win unsplittable conflicts; route Research source acquisition to Terra Medium while keeping synthesis, falsification, and adversarial review on Sol Max.
 
 ### Fixed
 

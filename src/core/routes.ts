@@ -712,7 +712,7 @@ export const COMMAND_CATALOG = [
   { name: 'memory', usage: 'sks memory build [--json] | sks memory gc [--dry-run]', description: 'Project TriWiki context-pack memory into managed AGENTS.md blocks or run bounded memory cleanup.' },
   { name: 'hproof', usage: 'sks hproof check [mission-id|latest]', description: 'Evaluate the H-Proof done gate for a mission.' },
   { name: 'agent', usage: 'sks agent run|status|close|cleanup <mission-id|latest> [--agents N] [--work-items N] [--target-active-slots N] [--mock] [--apply|--dry-run] [--drain] [--stale-ms N] [--json] | sks agent rollback-patches [mission-id|latest] [--patch-entry-id id] [--dry-run|--apply] [--json]', description: 'Run, inspect, close, clean, or roll back Codex subagent missions with an explicit requested-agent/thread budget, disjoint work ownership, official event evidence, and parent-owned integration.' },
-  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent, Luna Max bounded workers, Sol Max experts, max_depth=1, and structured parent-thread completion evidence.' },
+  { name: 'naruto', usage: 'sks naruto run \"task\" [--agents N] [--max-threads N] [--json] | sks naruto status|subagents|proof [latest|M-...] [--json]', description: 'Run or inspect the Codex official subagent workflow with a Sol Max parent and fixed Luna Max mechanical, Sol High implementation, Sol Max judgment, and Terra Medium long-context/tool profiles, max_depth=1, and structured parent-thread completion evidence.' },
   { name: 'team', usage: 'sks team \"task\" | sks team log|tail|watch|lane|status ...', description: 'Deprecated compatibility command: new tasks redirect to Naruto; only read-only observation subcommands remain for old Team missions.' },
   { name: 'reasoning', usage: 'sks reasoning ["prompt"] [--json]', description: 'Show SKS temporary reasoning-effort routing: medium for simple tasks, high for logic, xhigh for research.' },
   { name: 'gx', usage: 'sks gx init|render|validate|drift|snapshot [name]', description: 'Create and verify deterministic SVG/HTML visual context cartridges.' },
@@ -1226,7 +1226,7 @@ export function subagentExecutionPolicyText(route: any, prompt: any = '') {
   return [
     'Codex subagent workflow: required for this explicit Naruto or parallel task.',
     'The parent agent owns decomposition, integration, scoped verification, and the final answer.',
-    'Delegate only genuinely independent slices. Use worker for clear bounded work and expert for review, debugging, planning, architecture, integration, or risk-sensitive judgment.',
+    'Delegate only genuinely independent slices. Use Luna Max only for tiny short-context mechanical work, Sol High for ordinary implementation, Sol Max for review/debug/planning/architecture/integration/risk judgment, and Terra Medium for long-context or Computer Use, Browser/Chrome, and image-generation execution.',
     'Parallel writes require disjoint paths; serialize overlapping paths, prohibit nested delegation, avoid duplicate work, wait for all requested agent threads, and close completed threads after collecting results.',
     'Completion evidence comes from official SubagentStart/SubagentStop events plus the parent integration summary, not process counts or PID evidence.',
     noUnrequestedFallbackCodePolicyText()

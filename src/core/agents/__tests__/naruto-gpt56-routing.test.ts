@@ -6,15 +6,19 @@ import type { CodexTaskInput } from '../../codex-control/codex-control-plane.js'
 import { buildCodexExecutionPolicy, buildCodexSdkConfig } from '../../codex-control/codex-sdk-config-policy.js';
 import { normalizeCodexModelEffortCatalogPayload } from '../../codex-lb/codex-lb-env.js';
 
-const models = ['gpt-5.6-luna', 'gpt-5.6-sol'];
+const models = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'];
 const modelEfforts = {
   'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
+  'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max'],
   'gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra']
 };
 
-test('Naruto GPT-5.6 policy maps bounded work to Luna Max and judgment work to Sol Max', () => {
+test('Naruto GPT-5.6 policy maps all four sealed profiles', () => {
   const available = { availableModels: models, availableModelEfforts: modelEfforts };
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'implementation code_modification' }), {
+    model: 'gpt-5.6-sol', reasoning: 'high', serviceTier: 'fast'
+  });
+  assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'exact one-line single-file rename' }), {
     model: 'gpt-5.6-luna', reasoning: 'max', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'implementation', riskText: 'critical security migration' }), {
@@ -27,7 +31,7 @@ test('Naruto GPT-5.6 policy maps bounded work to Luna Max and judgment work to S
     model: 'gpt-5.6-sol', reasoning: 'max', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'test_execution browser' }), {
-    model: 'gpt-5.6-luna', reasoning: 'max', serviceTier: 'fast'
+    model: 'gpt-5.6-terra', reasoning: 'medium', serviceTier: 'fast'
   });
   assert.deepEqual(routeNarutoGpt56Model({ ...available, taskText: 'test_execution GUI', riskText: 'forensic cross-app failure' }), {
     model: 'gpt-5.6-sol', reasoning: 'max', serviceTier: 'fast'
@@ -36,7 +40,7 @@ test('Naruto GPT-5.6 policy maps bounded work to Luna Max and judgment work to S
 
 test('Naruto GPT-5.6 policy fails closed for missing model or unadvertised effort', () => {
   assert.equal(routeNarutoGpt56Model({
-    taskText: 'exact bounded code_modification',
+    taskText: 'exact one-line single-file rename',
     availableModels: ['gpt-5.6-sol'],
     availableModelEfforts: modelEfforts
   }).model, '');
@@ -47,7 +51,7 @@ test('Naruto GPT-5.6 policy fails closed for missing model or unadvertised effor
   }).model, '');
 });
 
-test('native Naruto worker routing passes exact model and max effort into SDK config', async () => {
+test('native Naruto worker routing passes the exact selected model and effort into SDK config', async () => {
   const catalog = { ok: true, models, model_efforts: modelEfforts, blockers: [] };
   const routing = await resolveWorkerModelRouting({
     agent: { id: 'naruto_1', role: 'integrator', naruto_role: 'integrator' },
@@ -140,4 +144,7 @@ test('Codex App and cache effort catalog shapes normalize to the same model cont
   assert.deepEqual(normalizeCodexModelEffortCatalogPayload({ models: [{
     slug: 'gpt-5.6-luna', supported_reasoning_levels: [{ effort: 'xhigh' }, { effort: 'max' }]
   }] }), { 'gpt-5.6-luna': ['xhigh', 'max'] });
+  assert.deepEqual(normalizeCodexModelEffortCatalogPayload({ models: [{
+    slug: 'gpt-5.6-terra', supported_reasoning_levels: [{ effort: 'medium' }, { effort: 'high' }]
+  }] }), { 'gpt-5.6-terra': ['medium', 'high'] });
 });

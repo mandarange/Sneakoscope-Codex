@@ -32,6 +32,13 @@ export function buildNarutoHelpResult() {
     critical_multi_domain_reviewer_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
     max_depth: 1,
     triwiki_context: 'bounded_attention_use_first_with_on_demand_hydration',
+    model_routing_policy: {
+      luna_max: 'tiny_short_context_mechanical_only',
+      sol_high: 'ordinary_ui_logic_backend_and_native_implementation',
+      sol_max: 'review_debug_planning_architecture_security_database_research_release_and_judgment',
+      terra_medium: 'long_context_computer_use_browser_chrome_and_image_generation_execution',
+      mixed_slice_rule: 'split_execution_from_judgment_when_possible_otherwise_sol_max_wins'
+    },
     completion_evidence: {
       lifecycle_events: ['SubagentStart', 'SubagentStop'],
       stop_is_success_evidence: false,

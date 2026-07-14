@@ -1,4 +1,10 @@
-import { decideSubagentModel, SUBAGENT_EFFORT } from '../subagents/model-policy.js';
+import {
+  DEFAULT_SUBAGENT_EFFORT,
+  LUNA_SUBAGENT_EFFORT,
+  SOL_MAX_SUBAGENT_EFFORT,
+  TERRA_SUBAGENT_EFFORT,
+  decideSubagentModel
+} from '../subagents/model-policy.js';
 
 export type TaskCategory = 'quick' | 'standard' | 'agentic' | 'ultrabrain' | 'verify' | 'review' | 'e2e' | 'refactor' | 'strategy';
 export type ModelReasoning = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
@@ -28,9 +34,8 @@ const CATEGORY_POLICY: Record<TaskCategory, Omit<ModelChoice, 'model'>> = {
   strategy: { reasoning: 'max', serviceTier: 'fast' }
 };
 
-export const NARUTO_MODELS = ['gpt-5.6-luna', 'gpt-5.6-sol'] as const;
-const NARUTO_EXPLICIT_COMPATIBILITY_MODELS = [...NARUTO_MODELS, 'gpt-5.6-terra'] as const;
-export type NarutoGpt56Model = typeof NARUTO_EXPLICIT_COMPATIBILITY_MODELS[number];
+export const NARUTO_MODELS = ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] as const;
+export type NarutoGpt56Model = typeof NARUTO_MODELS[number];
 
 const E2E_WORK_RE = /(e2e|end[-\s]?to[-\s]?end|test_execution|browser|chrome|computer[-\s]?use|computer\s+use|cross[-\s]?app|playwright|selenium|puppeteer|브라우저|컴퓨터\s*유즈)/i;
 
@@ -77,6 +82,7 @@ export function routeNarutoGpt56Model(input: {
     title: input.taskText,
     description: input.riskText,
     role: category,
+    toolHeavy: category === 'e2e',
     requiresJudgment: category === 'review'
       || category === 'refactor'
       || category === 'strategy'
@@ -84,12 +90,14 @@ export function routeNarutoGpt56Model(input: {
   });
   const preferred: NarutoGpt56Model = explicit || automatic.model;
   const available = input.availableModels == null
-    ? [...NARUTO_EXPLICIT_COMPATIBILITY_MODELS]
+    ? [...NARUTO_MODELS]
     : input.availableModels.map(normalizeNarutoGpt56Model).filter((model): model is NarutoGpt56Model => Boolean(model));
   const degraded = new Set((input.degradedModels || []).map((model) => String(model).toLowerCase()));
   const usable = available.filter((model) => !degraded.has(model));
   const availableEfforts = effortsForModel(input.availableModelEfforts, preferred);
-  const intendedReasoning: ModelReasoning = SUBAGENT_EFFORT;
+  const intendedReasoning: ModelReasoning = explicit
+    ? reasoningForExplicitModel(explicit, automatic.policy === 'sol_max_judgment')
+    : automatic.modelReasoningEffort;
   const model = !invalidExplicit && usable.includes(preferred) && (availableEfforts == null || availableEfforts.includes(intendedReasoning)) ? preferred : '';
   return { model, reasoning: intendedReasoning, serviceTier: 'fast' };
 }
@@ -100,7 +108,7 @@ export function isNarutoGpt56Model(value: unknown): value is NarutoGpt56Model {
 
 export function normalizeNarutoGpt56Model(value: unknown): NarutoGpt56Model | null {
   const model = String(value || '').trim().toLowerCase();
-  return (NARUTO_EXPLICIT_COMPATIBILITY_MODELS as readonly string[]).includes(model) ? model as NarutoGpt56Model : null;
+  return (NARUTO_MODELS as readonly string[]).includes(model) ? model as NarutoGpt56Model : null;
 }
 
 export function categoryForWorkerRole(role: string, taskText = ''): TaskCategory {
@@ -129,4 +137,10 @@ function effortsForModel(catalog: Record<string, string[]> | null | undefined, m
   if (direct) return direct.map((effort) => String(effort).toLowerCase());
   const match = Object.entries(catalog).find(([key]) => key.trim().toLowerCase() === model);
   return (match?.[1] || []).map((effort) => String(effort).toLowerCase());
+}
+
+function reasoningForExplicitModel(model: NarutoGpt56Model, judgment: boolean): ModelReasoning {
+  if (model === 'gpt-5.6-luna') return LUNA_SUBAGENT_EFFORT;
+  if (model === 'gpt-5.6-terra') return TERRA_SUBAGENT_EFFORT;
+  return judgment ? SOL_MAX_SUBAGENT_EFFORT : DEFAULT_SUBAGENT_EFFORT;
 }

@@ -15,8 +15,11 @@ sks naruto subagents latest --json
 sks naruto proof latest --json
 ```
 
-The parent uses GPT-5.6 Sol Max. Clear bounded worker slices use GPT-5.6 Luna
-Max, while reasoning-sensitive expert slices use GPT-5.6 Sol Max. Official
+The parent uses GPT-5.6 Sol Max. Child roles use the same fixed Naruto matrix:
+Luna Max only for tiny short-context mechanical work, Sol High for ordinary
+implementation, Sol Max for judgment-heavy work, and Terra Medium for
+long-context or Computer Use, Browser/Chrome, and image-generation execution.
+Official
 `SubagentStart`/`SubagentStop` events establish lifecycle, and a trustworthy
 structured parent summary must provide the outcome of every stopped thread
 before completion can pass.

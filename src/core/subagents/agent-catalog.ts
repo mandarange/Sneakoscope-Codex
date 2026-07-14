@@ -3,6 +3,7 @@ import {
   managedOfficialSubagentRoleByName,
   type ManagedOfficialSubagentRole
 } from '../managed-assets/managed-assets-manifest.js'
+import type { SubagentModelPolicyId, SubagentModelReasoningEffort } from './model-policy.js'
 
 export const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2
 export const MAX_AUTOMATIC_SUBAGENT_COUNT = 3
@@ -12,8 +13,9 @@ export const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = MAX_AUTOMATIC_SUBAGENT_COUNT
 export interface OfficialSubagentRoleSummary {
   name: string
   description: string
+  model_policy: SubagentModelPolicyId
   model: string
-  model_reasoning_effort: 'max'
+  model_reasoning_effort: SubagentModelReasoningEffort
   sandbox_mode: 'inherit' | 'read-only' | 'workspace-write'
 }
 
@@ -44,6 +46,7 @@ function roleSummary(role: ManagedOfficialSubagentRole): OfficialSubagentRoleSum
   return {
     name: role.codex_name,
     description: role.description,
+    model_policy: role.model_policy,
     model: role.model,
     model_reasoning_effort: role.model_reasoning_effort,
     sandbox_mode: role.sandbox || 'inherit'
@@ -75,11 +78,10 @@ export function recommendOfficialSubagentRoles(input: {
   const scored = MANAGED_OFFICIAL_SUBAGENT_ROLES
     .map((role, index) => ({ role, index, score: roleScore(role, text, input) }))
     .filter((row) => input.readOnly !== true || row.role.sandbox === 'read-only')
-  const solSpecialistMatched = scored.some((row) => row.score > 0
-    && row.role.model === 'gpt-5.6-sol'
+  const narrowSpecialistMatched = scored.some((row) => row.score > 0
     && !['worker', 'expert'].includes(row.role.codex_name))
   const ranked = scored
-    .filter((row) => !(solSpecialistMatched && row.role.codex_name === 'worker'))
+    .filter((row) => !(narrowSpecialistMatched && row.role.codex_name === 'worker'))
     .filter((row) => row.score > 0)
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .map((row) => row.role.codex_name)
@@ -218,6 +220,8 @@ function roleScore(
     .reduce((total, keyword) => total + keywordScore(text, keyword), 0)
   if (semanticScore <= 0) return 0
   let score = semanticScore
+  if (ROLE_PRIORITY_PATTERNS[role.codex_name]?.test(text)) score += 8
+  if (JUDGMENT_PRIORITY_RE.test(text) && role.model_policy === 'sol_max_judgment') score += 10
   if (input.readOnly === true) score += role.sandbox === 'read-only' ? 2 : role.sandbox ? -3 : 0
   if (input.requiresWrite === true) score += role.sandbox === 'read-only' ? -3 : role.sandbox === 'workspace-write' ? 2 : 1
   if (role.codex_name === 'worker' && !looksClearBounded(text)) score -= 4
@@ -236,7 +240,9 @@ function keywordScore(text: string, keyword: string): number {
 }
 
 function looksClearBounded(text: string): boolean {
-  return /\b(bounded|mechanical|repeatable|exact|single[- ](?:file|step|change)|rename|format|copy|fixture)\b|정해진|명확한|기계적|반복적|단일\s*파일/i.test(text)
+  const tinyMechanical = /\b(tiny|trivial|mechanical|repeatable|one[- ]line|single[- ]file|exact (?:rename|copy|replace|format)|typo|format only)\b|한\s*줄|단일\s*파일|극단적으로\s*단순|기계적|반복적|오타|이름\s*변경/i.test(text)
+  const longOrRisky = /\b(long[- ]context|large[- ](?:file|document|codebase|repository)|repository[- ]wide|browser|chrome|computer[- ]use|imagegen|review|debug|security|architecture|research)\b|긴\s*컨텍스트|장문|대규모|브라우저|컴퓨터\s*유즈|이미지\s*생성|리뷰|디버깅|보안|아키텍처|연구/i.test(text)
+  return tinyMechanical && !longOrRisky
 }
 
 function normalizeText(values: readonly unknown[]): string {
@@ -272,7 +278,7 @@ const ROLE_LANGUAGE_HINTS: Record<string, string[]> = {
   toolchain_specialist: ['툴체인', '의존성', '패키지 매니저', '빌드', '설치', '닥터', '업데이트', 'ci 자동화'],
   protocol_reviewer: ['프로토콜', '계약', '스키마', '직렬화', 'api', 'sdk', 'cli', 'mcp', '하위 호환'],
   runtime_reliability_reviewer: ['런타임 신뢰성', '훅', '세션', '락', '데몬', '프로세스 정리', '멱등성', '복구', '경쟁 상태', '교착'],
-  triwiki_evidence_reviewer: ['트라이위키', '컨텍스트 팩', '출처', '신뢰 앵커', '증거', '증명', 'wrongness', '소스 하이드레이션'],
+  triwiki_evidence_reviewer: ['트라이위키', '컨텍스트 팩', '출처 계보', '신뢰 앵커', '증명 아티팩트', 'wrongness', '소스 하이드레이션'],
   architecture_reviewer: ['아키텍처', '설계', '수명주기', '결합도', '리팩터'],
   security_reviewer: ['보안', '권한', '인증', '비밀', '신뢰 경계'],
   database_reviewer: ['데이터베이스', '디비', '마이그레이션', '롤백', '스키마'],
@@ -281,8 +287,28 @@ const ROLE_LANGUAGE_HINTS: Record<string, string[]> = {
   release_reviewer: ['배포', '릴리스', '출시', '퍼블리시', '버전'],
   docs_maintainer: ['문서', '리드미', '변경로그', '마이그레이션 가이드'],
   integration_reviewer: ['통합', '병합', '리베이스', '호환성', '엔드투엔드'],
-  performance_analyst: ['성능', '지연', '벤치마크', '동시성', '토큰', '메모리']
+  performance_analyst: ['성능', '지연', '벤치마크', '동시성', '토큰', '메모리'],
+  long_context_analyst: ['롱 컨텍스트', '긴 컨텍스트', '장문', '대규모 파일', '여러 문서', '긴 로그', '컨텍스트 압축'],
+  computer_use_operator: ['컴퓨터 유즈', '데스크톱 조작', '맥os 점검', '시스템 설정', '네이티브 앱 점검'],
+  browser_use_operator: ['브라우저 유즈', '브라우저', '크롬', '웹사이트', '웹앱', '로컬호스트', '플레이라이트'],
+  image_generation_operator: ['이미지 생성', '이미지젠', 'gpt image', 'gpt-image-2', '비주얼 에셋']
 }
+
+const ROLE_PRIORITY_PATTERNS: Readonly<Record<string, RegExp>> = {
+  debugger: /\b(?:debug|diagnos|root cause|failure|flaky|regression)\b|디버깅|진단|원인|실패|회귀/i,
+  architecture_reviewer: /\b(?:architecture|architect|refactor|state ownership|coupling)\b|아키텍처|리팩터|결합도/i,
+  security_reviewer: /\b(?:security|permission|secret|auth|trust boundary|abuse)\b|보안|권한|인증|비밀|신뢰\s*경계/i,
+  database_reviewer: /\b(?:database|db|sql|migration|rls|rollback)\b|데이터베이스|디비|마이그레이션|롤백/i,
+  release_reviewer: /\b(?:release|publish|deploy|distribution|versioning)\b|릴리스|배포|출시|퍼블리시/i,
+  research_reviewer: /\b(?:research review|paper review|methodology|falsification|reproducibility)\b|논문\s*검토|방법론|반증|재현성/i,
+  browser_use_operator: /\b(?:browser|chrome|playwright|selenium|puppeteer|website|webapp|localhost)\b|브라우저|크롬|웹사이트|웹앱|로컬호스트/i,
+  computer_use_operator: /\b(?:computer[- ]use|desktop interaction|system settings|native app inspection)\b|컴퓨터\s*유즈|데스크톱\s*조작|시스템\s*설정/i,
+  image_generation_operator: /\b(?:imagegen|image generation|gpt[- ]image(?:-2)?|generate image|edit image)\b|이미지\s*생성|이미지젠/i,
+  long_context_analyst: /\b(?:long[- ]context|large[- ](?:file|document|codebase)|multi[- ]document|extensive logs|context compression)\b|긴\s*컨텍스트|장문|대규모|여러\s*문서|긴\s*로그/i,
+  triwiki_evidence_reviewer: /\b(?:triwiki|context pack|provenance|trust anchor|wrongness memory|source hydration)\b|트라이위키|컨텍스트\s*팩|출처\s*계보|신뢰\s*앵커/i
+}
+
+const JUDGMENT_PRIORITY_RE = /\b(?:review|audit|debug|diagnos|root cause|planning|strategy|architecture|security|database|research|release|risk|judgment|ambiguous)\b|리뷰|검토|감사|디버깅|진단|원인|기획|전략|아키텍처|보안|데이터베이스|연구|릴리스|위험|판단|모호/i
 
 const CRITICAL_RISK_RE = /\b(?:critical|catastrophic|production|data loss|security incident|breaking release)\b|치명|중대|운영|데이터\s*손실|보안\s*사고/i
 

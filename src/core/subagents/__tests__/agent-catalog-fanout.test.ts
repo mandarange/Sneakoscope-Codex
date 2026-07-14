@@ -60,7 +60,7 @@ test('automatic official subagent fanout defaults non-trivial work to two and re
   assert.equal(critical.critical_multi_domain, true)
 })
 
-test('Sol specialists outrank a bounded Luna worker for UI, test, and root-cause language', () => {
+test('narrow specialists outrank a bounded Luna worker for UI, test, and root-cause language', () => {
   assert.equal(selectOfficialSubagentRole({
     description: 'UI exact bounded change',
     requiresWrite: true
@@ -75,13 +75,17 @@ test('Sol specialists outrank a bounded Luna worker for UI, test, and root-cause
   }), 'test_engineer')
 })
 
-test('specialist selection covers native apps, toolchains, protocols, runtime reliability, and TriWiki evidence', () => {
+test('specialist selection covers implementation, judgment, long-context, and Codex tool roles', () => {
   const cases = [
     ['Implement the macOS AppKit menu bar NSStatusItem modal', 'native_app_specialist', false],
     ['Upgrade the npm dependency and repair install doctor build scripts', 'toolchain_specialist', false],
     ['Review the MCP SDK wire protocol schema and backward compatibility', 'protocol_reviewer', true],
     ['Audit hook session locks process cleanup idempotency and deadlock recovery', 'runtime_reliability_reviewer', true],
-    ['Validate TriWiki context pack provenance trust anchors and proof artifacts', 'triwiki_evidence_reviewer', true]
+    ['Validate TriWiki context pack provenance trust anchors and proof artifacts', 'triwiki_evidence_reviewer', true],
+    ['Analyze several large files and extensive logs as long context', 'long_context_analyst', true],
+    ['Use Computer Use to inspect macOS System Settings', 'computer_use_operator', true],
+    ['Use Chrome browser on localhost to capture webapp evidence', 'browser_use_operator', true],
+    ['Generate a visual asset with gpt-image-2 imagegen', 'image_generation_operator', false]
   ] as const
 
   for (const [description, expected, readOnly] of cases) {
@@ -91,6 +95,24 @@ test('specialist selection covers native apps, toolchains, protocols, runtime re
       requiresWrite: !readOnly
     }), expected)
   }
+})
+
+test('mixed tool and judgment recommendations put Sol Max judgment first and retain the Terra operator', () => {
+  const securityBrowser = recommendOfficialSubagentRoles({
+    description: 'Security review using Chrome browser evidence',
+    readOnly: true,
+    limit: 3
+  })
+  assert.equal(securityBrowser[0], 'security_reviewer')
+  assert.ok(securityBrowser.includes('browser_use_operator'))
+
+  const debugLongContext = recommendOfficialSubagentRoles({
+    description: 'Debug a failure across several large files and extensive logs',
+    readOnly: true,
+    limit: 3
+  })
+  assert.equal(debugLongContext[0], 'debugger')
+  assert.ok(debugLongContext.includes('long_context_analyst'))
 })
 
 test('on-demand role metadata is unique, alias-aware, and bounded independently of the installed catalog', () => {
@@ -103,7 +125,7 @@ test('on-demand role metadata is unique, alias-aware, and bounded independently 
     'triwiki-evidence-reviewer'
   ])
 
-  assert.equal(full.length, 21)
+  assert.equal(full.length, 25)
   assert.equal(selected.length, MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT)
   assert.deepEqual(selected.map((role) => role.name), [
     'native_app_specialist',
@@ -111,6 +133,7 @@ test('on-demand role metadata is unique, alias-aware, and bounded independently 
     'runtime_reliability_reviewer'
   ])
   assert.equal(new Set(selected.map((role) => role.description)).size, selected.length)
+  assert.ok(full.every((role) => role.model_policy.length > 0))
 })
 
 test('read-only slices select only explicitly read-only custom agents', () => {
@@ -169,7 +192,7 @@ test('mission preparation writes the selected automatic count into plan, budget,
   assert.match(automatic.delegationPrompt, /requested subagents: 2/)
   assert.equal(automatic.plan.agent_catalog.mode, 'on_demand')
   assert.equal(automatic.plan.agent_catalog.full_catalog_injected, false)
-  assert.equal(automatic.plan.agent_catalog.total_available, 21)
+  assert.equal(automatic.plan.agent_catalog.total_available, 25)
   assert.equal(Object.keys(automatic.plan.agents).length, automatic.plan.suggested_agents.length)
   assert.equal(Object.keys(automatic.plan.agents).length <= MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT, true)
   assert.equal(

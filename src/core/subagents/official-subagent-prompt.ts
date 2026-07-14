@@ -62,11 +62,13 @@ export function buildOfficialSubagentPrompt(input: {
   const rows = resolvedSlices.map(({ slice, agentName }, index) => {
     const mode = slice.readOnly ? 'read-only' : 'use the parent permission mode'
     const paths = (slice.paths || []).map((entry) => String(entry).trim()).filter(Boolean)
+    const role = officialSubagentOnDemandRoleCatalog([agentName])[0]
 
     return [
       `${index + 1}. [${slice.id}] use custom agent \`${agentName}\``,
       `   title: ${slice.title}`,
       `   task: ${slice.description}`,
+      `   model policy: ${role ? `${role.model_policy} (${role.model}/${role.model_reasoning_effort})` : 'resolve from installed custom agent'}`,
       `   mode: ${mode}`,
       `   paths: ${paths.join(', ') || 'assigned by parent'}`
     ].join('\n')
@@ -83,8 +85,12 @@ Parent agent:
 Subagent rules:
 - use only Codex official subagent threads; do not launch shell workers, a custom scheduler, a worker pool, or model fanout
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
-- use \`worker\` with gpt-5.6-luna and max reasoning only for clear, bounded, repeatable work
-- use \`expert\` with gpt-5.6-sol and max reasoning only as the read-only judgment fallback
+- use \`worker\` with gpt-5.6-luna and max reasoning only for tiny, short-context, mechanical work with no exploration or judgment
+- use gpt-5.6-sol with high reasoning for ordinary UI, logic, backend, and native implementation
+- use gpt-5.6-sol with max reasoning for review, debugging, planning, architecture, security, database, research, release, ambiguity, and every judgment-bearing slice
+- use gpt-5.6-terra with medium reasoning for long-context analysis and direct Computer Use, Browser/Chrome, or image-generation execution
+- split mixed work when possible: Terra gathers or operates, Sol High implements, and Sol Max judges; when one slice cannot be split safely, judgment takes priority
+- never assign Luna to long-context, exploration, review, debugging, planning, or tool-heavy work
 - automatic fan-out is selected before execution: two independent children for non-trivial work,
   and at most ${MAX_AUTOMATIC_SUBAGENT_COUNT} only for critical multi-domain risk; trivial Answer/DFix work is filtered before this route
 - automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work; critical multi-domain review may use the overall cap of ${MAX_AUTOMATIC_SUBAGENT_COUNT}
@@ -166,7 +172,7 @@ function renderAgentCatalog(requested: readonly string[]): string {
     `- metadata mode: on-demand (${selected.length}/${officialSubagentRoleCatalog().length} roles included; full catalog is not injected)`,
     ...selected.map((role) => {
       const marker = preferred.has(role.name) ? ' [suggested for this goal]' : ''
-      return `- \`${role.name}\`${marker}: ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
+      return `- \`${role.name}\`${marker}: ${role.model_policy}, ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
     })
   ].join('\n')
 }

@@ -99,12 +99,18 @@ test('native agent model policy keeps GLM mode on GLM 5.2 with GLM efforts', () 
   assert.equal(risky.model_tier, 'glm-5.2-high');
 });
 
-test('official subagents use Luna or Sol at max and keep the legacy alias', () => {
+test('official subagents use the fixed four-profile matrix and keep the legacy alias', () => {
   assert.equal(decideNarutoCloneEffort, decideOfficialSubagentModel);
-  const bounded = decideOfficialSubagentModel({ persona: { role: 'implementer' }, prompt: 'bounded mechanical edit' });
+  const bounded = decideOfficialSubagentModel({ persona: { role: 'worker' }, prompt: 'exact one-line single-file mechanical rename' });
+  const implementation = decideOfficialSubagentModel({ persona: { role: 'implementation_specialist' }, prompt: 'implement parser logic' });
+  const context = decideOfficialSubagentModel({ persona: { role: 'browser_use_operator' }, prompt: 'collect Chrome browser evidence' });
   const review = decideOfficialSubagentModel({ persona: { role: 'ux' }, prompt: 'review the UI' });
   assert.equal(bounded.model, 'gpt-5.6-luna');
   assert.equal(bounded.model_reasoning_effort, 'max');
+  assert.equal(implementation.model, 'gpt-5.6-sol');
+  assert.equal(implementation.model_reasoning_effort, 'high');
+  assert.equal(context.model, 'gpt-5.6-terra');
+  assert.equal(context.model_reasoning_effort, 'medium');
   assert.equal(review.model, 'gpt-5.6-sol');
   assert.equal(review.model_reasoning_effort, 'max');
 });

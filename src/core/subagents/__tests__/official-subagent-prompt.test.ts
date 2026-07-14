@@ -11,7 +11,7 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
       {
         id: 'A',
         title: 'Mechanical edit',
-        description: 'Apply the specified rename',
+        description: 'Apply the exact one-line single-file rename',
         kind: 'worker',
         paths: ['src/a.ts']
       },
@@ -27,8 +27,11 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   })
 
   assert.match(prompt, /gpt-5\.6-sol with max reasoning/)
-  assert.match(prompt, /worker.*gpt-5\.6-luna.*max reasoning/)
-  assert.match(prompt, /expert.*gpt-5\.6-sol.*max reasoning/)
+  assert.match(prompt, /worker.*gpt-5\.6-luna.*max reasoning.*tiny, short-context, mechanical/)
+  assert.match(prompt, /gpt-5\.6-sol with high reasoning.*ordinary UI, logic, backend, and native implementation/)
+  assert.match(prompt, /gpt-5\.6-sol with max reasoning.*review, debugging, planning, architecture, security/)
+  assert.match(prompt, /gpt-5\.6-terra with medium reasoning.*long-context analysis.*Computer Use, Browser\/Chrome, or image-generation/)
+  assert.match(prompt, /split mixed work when possible/)
   assert.match(prompt, /requested subagents: 2/)
   assert.match(prompt, /max open agent threads: 12/)
   assert.match(prompt, /max depth: 1/)
@@ -36,8 +39,10 @@ test('official prompt seals model, ownership, wait, and no-nesting rules', () =>
   assert.match(prompt, /wait for every requested subagent/)
   assert.match(prompt, /\[A\].*`worker`/)
   assert.match(prompt, /\[B\].*`architecture_reviewer`/)
+  assert.match(prompt, /model policy: luna_max_mechanical \(gpt-5\.6-luna\/max\)/)
+  assert.match(prompt, /model policy: sol_max_judgment \(gpt-5\.6-sol\/max\)/)
   assert.match(prompt, /mode: read-only/)
-  assert.match(prompt, /metadata mode: on-demand \(2\/21 roles included; full catalog is not injected\)/)
+  assert.match(prompt, /metadata mode: on-demand \(2\/25 roles included; full catalog is not injected\)/)
 })
 
 test('preparation prompt preserves requested count without inventing write slices', () => {
@@ -137,7 +142,7 @@ test('official prompt injects at most three recommended role descriptions instea
     ]
   })
 
-  assert.match(prompt, /metadata mode: on-demand \(3\/21 roles included; full catalog is not injected\)/)
+  assert.match(prompt, /metadata mode: on-demand \(3\/25 roles included; full catalog is not injected\)/)
   assert.match(prompt, /`native_app_specialist`/)
   assert.match(prompt, /`protocol_reviewer`/)
   assert.match(prompt, /`runtime_reliability_reviewer`/)

@@ -23,7 +23,8 @@ test('managed Codex 0.144.1 agent roles contain only supported rendered policy k
     const parsed = parse(text);
     assert.equal(parsed.name, role.codex_name);
     assert.equal(parsed.model, role.model);
-    assert.equal(parsed.model_reasoning_effort, 'max');
+    assert.equal(parsed.model_reasoning_effort, role.model_reasoning_effort);
+    assert.equal(Object.hasOwn(parsed, 'model_policy'), false);
     assert.equal(Object.hasOwn(parsed, 'sandbox_mode'), role.sandbox === 'read-only');
     assert.equal(parsed.sandbox_mode, role.sandbox);
     assert.equal(manifest.managedOfficialSubagentRoleOwnsText(text, role), true);
@@ -34,14 +35,18 @@ test('official custom agent catalog has unique identities and broad specialist c
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
   const roles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES;
   const expectedSpecialists = new Map([
-    ['native_app_specialist', { model: 'gpt-5.6-sol', sandbox: undefined }],
-    ['toolchain_specialist', { model: 'gpt-5.6-sol', sandbox: undefined }],
-    ['protocol_reviewer', { model: 'gpt-5.6-sol', sandbox: 'read-only' }],
-    ['runtime_reliability_reviewer', { model: 'gpt-5.6-sol', sandbox: 'read-only' }],
-    ['triwiki_evidence_reviewer', { model: 'gpt-5.6-sol', sandbox: 'read-only' }]
+    ['native_app_specialist', { policy: 'sol_high_implementation', model: 'gpt-5.6-sol', effort: 'high', sandbox: undefined }],
+    ['toolchain_specialist', { policy: 'sol_max_judgment', model: 'gpt-5.6-sol', effort: 'max', sandbox: undefined }],
+    ['protocol_reviewer', { policy: 'sol_max_judgment', model: 'gpt-5.6-sol', effort: 'max', sandbox: 'read-only' }],
+    ['runtime_reliability_reviewer', { policy: 'sol_max_judgment', model: 'gpt-5.6-sol', effort: 'max', sandbox: 'read-only' }],
+    ['triwiki_evidence_reviewer', { policy: 'sol_max_judgment', model: 'gpt-5.6-sol', effort: 'max', sandbox: 'read-only' }],
+    ['long_context_analyst', { policy: 'terra_medium_context_tools', model: 'gpt-5.6-terra', effort: 'medium', sandbox: 'read-only' }],
+    ['computer_use_operator', { policy: 'terra_medium_context_tools', model: 'gpt-5.6-terra', effort: 'medium', sandbox: 'read-only' }],
+    ['browser_use_operator', { policy: 'terra_medium_context_tools', model: 'gpt-5.6-terra', effort: 'medium', sandbox: 'read-only' }],
+    ['image_generation_operator', { policy: 'terra_medium_context_tools', model: 'gpt-5.6-terra', effort: 'medium', sandbox: undefined }]
   ]);
 
-  assert.equal(roles.length, 21);
+  assert.equal(roles.length, 25);
   assert.equal(new Set(roles.map((role) => role.id)).size, roles.length);
   assert.equal(new Set(roles.map((role) => role.filename)).size, roles.length);
   assert.equal(new Set(roles.map((role) => role.codex_name)).size, roles.length);
@@ -50,14 +55,21 @@ test('official custom agent catalog has unique identities and broad specialist c
   for (const [name, expected] of expectedSpecialists) {
     const role = roles.find((candidate) => candidate.codex_name === name);
     assert.ok(role, `missing ${name}`);
+    assert.equal(role.model_policy, expected.policy);
     assert.equal(role.model, expected.model);
     assert.equal(role.sandbox, expected.sandbox);
-    assert.equal(role.model_reasoning_effort, 'max');
+    assert.equal(role.model_reasoning_effort, expected.effort);
     assert.ok(role.selection_keywords.length >= 5);
   }
 
-  assert.equal(roles.find((role) => role.codex_name === 'worker').model, 'gpt-5.6-luna');
-  assert.equal(roles.find((role) => role.codex_name === 'expert').model, 'gpt-5.6-sol');
+  const distribution = Object.fromEntries(['luna_max_mechanical', 'sol_high_implementation', 'sol_max_judgment', 'terra_medium_context_tools']
+    .map((policy) => [policy, roles.filter((role) => role.model_policy === policy).length]));
+  assert.deepEqual(distribution, {
+    luna_max_mechanical: 1,
+    sol_high_implementation: 3,
+    sol_max_judgment: 15,
+    terra_medium_context_tools: 6
+  });
 });
 
 test('fresh agent role repair requires the complete official custom agent catalog', async () => {

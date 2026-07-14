@@ -7,8 +7,14 @@ or a custom active pool as Naruto completion evidence.
 The canonical policy is:
 
 - parent: GPT-5.6 Sol with `model_reasoning_effort="max"`
-- clear bounded worker: GPT-5.6 Luna with `model_reasoning_effort="max"`
-- reasoning-sensitive expert: GPT-5.6 Sol with `model_reasoning_effort="max"`
+- tiny short-context mechanical worker: GPT-5.6 Luna with `model_reasoning_effort="max"`
+- ordinary implementation: GPT-5.6 Sol with `model_reasoning_effort="high"`
+- review, debugging, planning, architecture, security, database, research,
+  release, ambiguity, and judgment: GPT-5.6 Sol with `model_reasoning_effort="max"`
+- long-context, Computer Use, Browser/Chrome, and image-generation execution:
+  GPT-5.6 Terra with `model_reasoning_effort="medium"`
+- mixed work is split by execution versus judgment when possible; an
+  unsplittable mixed slice uses Sol Max
 - automatic requested children: 1 by default, 2 for explicit parallel work or independent risk domains, and at most 3 for critical multi-domain risk
 - explicit `--agents N` remains authoritative when the operator supplies it
 - default `agents.max_threads`: 12 for fresh SKS-owned project config

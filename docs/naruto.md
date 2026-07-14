@@ -37,12 +37,19 @@ rejected before any parent or paid subagent workflow can start.
 ## Model Policy
 
 - parent agent: GPT-5.6 Sol, maximum reasoning effort
-- `worker`: GPT-5.6 Luna, maximum reasoning effort, for clear bounded work
-- `expert`: GPT-5.6 Sol, maximum reasoning effort, for reasoning-sensitive work
+- Luna Max: only tiny, short-context, mechanical work with an explicit done condition
+- Sol High: ordinary UI, logic, backend, core, and native implementation
+- Sol Max: review, debugging, planning, architecture, security, database,
+  research, release, ambiguity, and every judgment-sensitive task
+- Terra Medium: long-context analysis and direct Computer Use, Browser/Chrome,
+  or image-generation execution
 
-UI, review, debugging, planning, strategy, architecture, integration, security,
-database, release, ambiguity, and other judgment-sensitive slices use the
-expert role. SKS does not silently fall back to Terra or another model.
+Mixed work is split when possible: Terra gathers evidence or operates tools,
+Sol High implements, and Sol Max judges. If one slice cannot be split safely,
+the Sol Max judgment policy wins. Luna is never used for exploration,
+long-context work, review, debugging, planning, or tool-heavy execution. SKS
+does not silently substitute a different model/effort profile when the selected
+combination is unavailable.
 
 ## Agent Configuration
 
@@ -63,15 +70,19 @@ requests larger than the configured concurrent limit are divided into waves.
 SKS materializes a project-scoped catalog of narrow official agents so Codex can
 select by description instead of routing every task through one generic pair:
 
-- bounded execution: `worker`, `explorer`, `docs_maintainer`
-- implementation and diagnosis: `implementation_specialist`, `debugger`, `test_engineer`, `ui_implementer`
+- tiny mechanical execution: `worker`
+- ordinary implementation: `implementation_specialist`, `ui_implementer`, `native_app_specialist`
+- long-context and tool execution: `explorer`, `docs_maintainer`, `long_context_analyst`, `computer_use_operator`, `browser_use_operator`, `image_generation_operator`
+- diagnosis and testing: `debugger`, `test_engineer`, `toolchain_specialist`
 - independent review: `expert`, `architecture_reviewer`, `security_reviewer`, `database_reviewer`, `integration_reviewer`, `performance_analyst`, `release_reviewer`
+- contracts and evidence: `protocol_reviewer`, `runtime_reliability_reviewer`, `triwiki_evidence_reviewer`
 - Research: `research_synthesizer`, `research_reviewer`
 
-Clear bounded roles use Luna Max. Implementation, UI, debugging, test/root-cause,
-Research, integration, safety, and release judgment use Sol Max. Write-capable
-roles inherit the parent sandbox; only read-only roles declare a read-only
-sandbox explicitly.
+The installed catalog contains twenty-five roles, but a delegation prompt
+injects metadata for at most the three roles relevant to the current goal. This
+keeps the broader capability inventory from becoming recurring prompt cost.
+Write-capable roles inherit the parent sandbox; only read-only roles declare a
+read-only sandbox explicitly.
 
 User-authored collisions or invalid TOML are preserved and reported as manual
 blockers instead of being overwritten.

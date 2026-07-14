@@ -89,24 +89,31 @@ export function decideAgentEffort(input: { persona?: Partial<AgentPersona>; prom
   }
 }
 
-// Official Codex subagents always use max reasoning. Clear bounded work uses
-// Luna; any judgment-bearing slice uses Sol. There is no automatic Terra or
-// lower-effort fallback.
+// Official Codex subagents use one of four fixed profiles: Luna Max for tiny
+// mechanical work, Sol High for ordinary implementation, Sol Max for
+// judgment, and Terra Medium for long-context or Codex-tool execution.
 export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPersona>; prompt?: string; agentId?: string; readonly?: boolean } = {}): AgentEffortDecision {
   const persona = input.persona || {}
   const prompt = String(input.prompt || '')
   const role = String(persona.role || '')
   const agentId = String(input.agentId || persona.id || 'subagent')
+  const routingRole = [agentId, persona.naruto_role, persona.work_kind, role].filter(Boolean).join(' ')
+  const taskClass = /(?:implementation_specialist|ui_implementer|native_app_specialist)/i.test(routingRole)
+    ? 'implementation' as const
+    : /(?:explorer|docs_maintainer|long_context_analyst|computer_use_operator|browser_use_operator|image_generation_operator)/i.test(routingRole)
+      ? 'context_tools' as const
+      : undefined
   const routed = decideSubagentModel({
-    title: [agentId, persona.naruto_role, persona.work_kind].filter(Boolean).join(' '),
+    title: routingRole,
     description: [prompt, persona.risk_focus, persona.write_policy].filter(Boolean).join(' '),
     role,
-    expectedOutput: (persona.output_expectations || []).join(' ')
+    expectedOutput: (persona.output_expectations || []).join(' '),
+    ...(taskClass ? { taskClass } : {})
   })
-  const effort: AgentReasoningEffort = 'max'
+  const effort: AgentReasoningEffort = routed.modelReasoningEffort
   const modelCapability = codexModelEffortCapability({
     model: routed.model,
-    advertisedEfforts: ['max'],
+    advertisedEfforts: [effort],
     defaultEffort: effort
   })
   return {
@@ -126,11 +133,15 @@ export function decideOfficialSubagentModel(input: { persona?: Partial<AgentPers
     reason: routed.reason,
     dynamic: true,
     escalation_triggers: [
-      'UI, review, debugging, planning, architecture, integration, security, database, release, or ambiguity selects Sol Max',
-      'requiresJudgment or reasoning-sensitive evidence selects Sol Max',
-      'requested model or max effort unavailable blocks instead of silently falling back'
+      'review, debugging, planning, architecture, integration, security, database, research, release, or ambiguity selects Sol Max',
+      'mixed tool-and-judgment work is split; an unsplittable slice selects Sol Max',
+      'requested model/effort profile unavailable blocks instead of silently falling back'
     ],
-    downshift_triggers: []
+    downshift_triggers: [
+      'ordinary UI, logic, backend, or native implementation selects Sol High',
+      'long-context, Browser/Chrome, Computer Use, or image-generation execution selects Terra Medium',
+      'tiny short-context mechanical work selects Luna Max'
+    ]
   }
 }
 
@@ -158,20 +169,20 @@ export function buildAgentEffortPolicy(roster: any = {}) {
     policy_version: 1,
     dynamic: true,
     service_tier: 'fast',
-    model_catalog_policy: narutoFamilyOnly ? 'official_subagent_luna_sol_max' : 'codex_catalog_passthrough',
-    model_constraint: narutoFamilyOnly ? ['gpt-5.6-luna', 'gpt-5.6-sol'] : null,
-    explicit_compatibility_models: narutoFamilyOnly ? ['gpt-5.6-terra'] : null,
+    model_catalog_policy: narutoFamilyOnly ? 'official_subagent_four_profile_matrix' : 'codex_catalog_passthrough',
+    model_constraint: narutoFamilyOnly ? ['gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol'] : null,
+    explicit_compatibility_models: null,
     model_tiers: narutoFamilyOnly
-      ? ['gpt-5.6-luna-max', 'gpt-5.6-sol-max', 'gpt-5.6-terra-max']
+      ? ['gpt-5.6-luna-max', 'gpt-5.6-sol-high', 'gpt-5.6-sol-max', 'gpt-5.6-terra-medium']
       : ['codex-selected-low', 'codex-selected-medium', 'codex-selected-high', 'codex-selected-xhigh', 'glm-5.2-minimal', 'glm-5.2-low', 'glm-5.2-high', 'glm-5.2-xhigh'],
-    allowed_efforts: narutoFamilyOnly ? ['max'] : codexModelEffortCapability().advertised_efforts,
+    allowed_efforts: narutoFamilyOnly ? ['medium', 'high', 'max'] : codexModelEffortCapability().advertised_efforts,
     model_effort_capability: codexModelEffortCapability(),
     max_agents: roster.max_agents || 20,
     agent_count: roster.agent_count || decisions.length,
     concurrency: roster.concurrency || decisions.length,
     decisions,
     rule: narutoFamilyOnly
-      ? 'Official Naruto subagents automatically use GPT-5.6 Luna Max for clear bounded repeatable work and GPT-5.6 Sol Max for every reasoning-sensitive slice; an explicit user-selected Terra model remains compatible but is never selected automatically.'
+      ? 'Official Naruto subagents use GPT-5.6 Luna Max only for tiny short-context mechanical work, GPT-5.6 Sol High for ordinary implementation, GPT-5.6 Sol Max for judgment-heavy work, and GPT-5.6 Terra Medium for long-context or Browser/Chrome, Computer Use, and image-generation execution. Judgment wins when one slice cannot be safely split.'
       : 'Codex/OpenAI workers inherit the current Codex-selected model, including future catalog entries; SKS changes only advertised reasoning effort. Explicit non-Codex provider modes retain their provider model.'
   }
 }
