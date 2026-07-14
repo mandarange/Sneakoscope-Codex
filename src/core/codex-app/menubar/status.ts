@@ -1,0 +1,131 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { exists, PACKAGE_VERSION, readJson, readText, sha256 } from '../../fsx.js';
+import { smokeSksMenuBarAction } from './action-runner.js';
+import { isCodexAppRunningByBundleId, readMenuBarConfig } from './config.js';
+import { inspectLaunchdService, isMenuBarProcessRunning, removeLaunchAgent, restartLaunchAgent } from './launch-agent.js';
+import { sksMenuBarPaths } from './paths.js';
+import { inspectInstalledResources } from './resources.js';
+import { inspectSignature } from './signature.js';
+import type { SksMenuBarBuildStamp, SksMenuBarStatusResult, SksMenuBarUninstallResult } from './types.js';
+
+export async function inspectSksMenuBarStatus(opts: {
+  home?: string;
+  root?: string;
+  env?: NodeJS.ProcessEnv;
+} = {}): Promise<SksMenuBarStatusResult> {
+  const paths = sksMenuBarPaths(opts.home || opts.env?.HOME, opts.root);
+  const installed = await exists(paths.executable_path);
+  const running = installed ? await isMenuBarProcessRunning(paths.executable_path) : false;
+  const actionText = await readText(paths.action_script_path, '');
+  const nodeBin = shellAssignment(actionText, 'NODE_BIN');
+  const sksEntry = shellAssignment(actionText, 'SKS_ENTRY');
+  const actionSmoke = await smokeSksMenuBarAction(paths.action_script_path);
+  const buildStamp = await readJson<SksMenuBarBuildStamp | null>(paths.build_stamp_path, null);
+  const actionIntegrity = evaluateActionScriptIntegrity(actionText, buildStamp);
+  const expectedVersion = buildStamp?.package_version || PACKAGE_VERSION;
+  const versionMatches = actionSmoke.detectedVersion === expectedVersion && expectedVersion === PACKAGE_VERSION;
+  const config = await readMenuBarConfig(paths.config_path);
+  const codexRunning = config.codex_bundle_id ? await isCodexAppRunningByBundleId(config.codex_bundle_id, opts.env) : null;
+  const launchd = await inspectLaunchdService(opts.env);
+  const signature = await inspectSignature(paths.app_path, opts.env);
+  const resources = await inspectInstalledResources({ resourcesDir: paths.resources_path, buildStamp });
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+  if (!installed) blockers.push('menubar_app_missing');
+  if (installed && launchd.checked && !launchd.ok) blockers.push('launchd_not_running');
+  if (installed && !actionSmoke.executable) blockers.push('action_script_not_executable');
+  if (installed && !actionSmoke.ok) blockers.push('action_script_smoke_failed');
+  if (installed && actionSmoke.ok && !versionMatches) blockers.push('action_target_version_mismatch');
+  if (installed && !buildStamp) blockers.push('build_stamp_missing');
+  if (installed && buildStamp && !actionIntegrity.script_hash_matches_stamp) blockers.push('action_script_hash_mismatch');
+  if (installed && !resources.ok) blockers.push('menubar_resources_invalid');
+  if (installed && signature.checked && !signature.ok) blockers.push('menubar_signature_invalid');
+  if (!config.codex_bundle_id) warnings.push('codex_sync_disabled');
+  return {
+    schema: 'sks.menubar-status.v1', ok: blockers.length === 0, platform: process.platform,
+    installed, running, paths, launchd,
+    action_target: {
+      node_bin: nodeBin,
+      node_exists: nodeBin ? await isExecutable(nodeBin) : false,
+      sks_entry: sksEntry,
+      sks_entry_exists: sksEntry ? await exists(sksEntry) : false,
+      smoke_code: actionSmoke.code,
+      smoke_output: actionSmoke.output,
+      version_detected: actionSmoke.versionDetected,
+      detected_version: actionSmoke.detectedVersion,
+      expected_version: expectedVersion,
+      version_matches_expected: versionMatches,
+      ...actionIntegrity,
+      executable: actionSmoke.executable,
+      ok: actionSmoke.ok && versionMatches && actionIntegrity.script_hash_matches_stamp
+    },
+    codex_sync: {
+      ok: Boolean(config.codex_bundle_id), bundle_id: config.codex_bundle_id,
+      codex_running: codexRunning,
+      icon_visible_expected: config.codex_bundle_id ? codexRunning === true : true,
+      warning: config.codex_bundle_id ? null : 'codex_sync_disabled'
+    },
+    build_stamp: buildStamp, package_version: PACKAGE_VERSION, signature, resources,
+    blockers, warnings,
+    next_actions: blockers.length ? defaultNextActions() : ['sks menubar status --json']
+  };
+}
+
+export function evaluateActionScriptIntegrity(
+  actionText: string,
+  buildStamp: Pick<SksMenuBarBuildStamp, 'action_script_sha256'> | null | undefined
+) {
+  const scriptSha256 = actionText ? sha256(actionText) : null;
+  const expectedScriptSha256 = buildStamp?.action_script_sha256 || null;
+  return {
+    script_sha256: scriptSha256,
+    expected_script_sha256: expectedScriptSha256,
+    script_hash_matches_stamp: Boolean(scriptSha256 && expectedScriptSha256 && scriptSha256 === expectedScriptSha256)
+  };
+}
+
+export async function restartSksMenuBar(opts: { home?: string; root?: string; env?: NodeJS.ProcessEnv } = {}) {
+  const env = opts.env || process.env;
+  const paths = sksMenuBarPaths(opts.home || env.HOME, opts.root);
+  if (process.platform !== 'darwin') return { schema: 'sks.menubar-restart.v1', ok: true, platform: process.platform, skipped: true, reason: 'not_macos' };
+  return { schema: 'sks.menubar-restart.v1', platform: process.platform, ...(await restartLaunchAgent(paths, env)) };
+}
+
+export async function uninstallSksMenuBar(opts: { home?: string; root?: string; env?: NodeJS.ProcessEnv } = {}): Promise<SksMenuBarUninstallResult> {
+  const env = opts.env || process.env;
+  const paths = sksMenuBarPaths(opts.home || env.HOME, opts.root);
+  if (process.platform !== 'darwin') return { schema: 'sks.menubar-uninstall.v1', ok: true, platform: process.platform, paths, actions: [], warnings: ['not_macos'], blockers: [] };
+  const removed = await removeLaunchAgent(paths, env);
+  return { schema: 'sks.menubar-uninstall.v1', ok: removed.blockers.length === 0, platform: process.platform, paths, ...removed };
+}
+
+export function isMenuBarInstallPathUnderTempDir(target: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const resolved = path.resolve(target);
+  const roots = new Set<string>();
+  for (const value of [os.tmpdir(), env.TMPDIR, env.SKS_TMP_DIR]) {
+    if (!value) continue;
+    const abs = path.resolve(value);
+    roots.add(abs);
+    if (abs.startsWith('/var/')) roots.add(path.resolve('/private', abs.slice(1)));
+    if (abs.startsWith('/private/var/')) roots.add(abs.replace('/private', ''));
+  }
+  return [...roots].some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`));
+}
+
+export function defaultNextActions(): string[] {
+  return ['Run: sks menubar status', 'Run: sks menubar install', 'Run: sks menubar restart', 'Run: sks menubar uninstall'];
+}
+
+function shellAssignment(text: string, key: string): string | null {
+  const line = text.split(/\r?\n/).find((row) => row.startsWith(`${key}=`));
+  if (!line) return null;
+  const value = line.slice(key.length + 1).trim();
+  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replace(/'\\''/g, "'");
+  return value;
+}
+
+async function isExecutable(file: string): Promise<boolean> {
+  return fs.access(file, 1).then(() => true).catch(() => false);
+}

@@ -1,0 +1,140 @@
+import type { sksMenuBarPaths } from './paths.js';
+
+export interface SksMenuBarBuildStamp {
+  schema: 'sks.sks-menubar-build-stamp.v2';
+  package_version: string;
+  source_sha256: string;
+  source_files_sha256: Record<string, string>;
+  resources_sha256: string;
+  resource_files_sha256: Record<string, string>;
+  action_script_sha256: string;
+  info_plist_sha256: string;
+  launch_agent_sha256: string;
+  swiftc_version: string;
+  codesign_identifier: string;
+}
+
+export interface SksMenuBarTargetCheck {
+  requested: string | null;
+  resolved: string | null;
+  packaged: string;
+  exists: boolean;
+  project_local: boolean;
+  used_previous_script: boolean;
+}
+
+export interface SecretLaunchEnvCleanupResult {
+  ok: boolean;
+  status: 'cleaned' | 'skipped' | 'not_macos' | 'launchctl_missing' | 'partial';
+  variables: string[];
+  cleaned: string[];
+  failed: Array<{ key: string; error: string }>;
+  next_actions: string[];
+}
+
+export interface SksMenuBarConfig {
+  schema: 'sks.sks-menubar-config.v1';
+  codex_bundle_id: string | null;
+  quit_with_codex: boolean;
+}
+
+export interface SksMenuBarInstallOptions {
+  apply?: boolean;
+  launch?: boolean;
+  root?: string;
+  home?: string;
+  sksEntry?: string;
+  env?: NodeJS.ProcessEnv;
+  quiet?: boolean;
+}
+
+export interface SksMenuBarInstallResult {
+  schema: 'sks.codex-app-sks-menubar.v1';
+  ok: boolean;
+  apply: boolean;
+  status: 'planned' | 'installed' | 'installed_launch_skipped' | 'installed_open_fallback' | 'unsupported_platform' | 'blocked';
+  platform: NodeJS.Platform;
+  app_path: string | null;
+  executable_path: string | null;
+  launch_agent_path: string | null;
+  action_script_path: string | null;
+  build_stamp_path: string | null;
+  config_path?: string | null;
+  report_path: string | null;
+  codex_bundle_id?: string | null;
+  menu_items: string[];
+  actions: string[];
+  launch?: {
+    requested: boolean;
+    method: 'launchctl' | 'open-fallback' | 'skipped' | 'none';
+    ok: boolean;
+    bootstrap_code?: number | null;
+    kickstart_code?: number | null;
+    print_code?: number | null;
+    open_code?: number | null;
+    error?: string | null;
+  };
+  target_check?: SksMenuBarTargetCheck;
+  build_stamp?: SksMenuBarBuildStamp | null;
+  tcc_automation_status?: 'unknown' | 'granted' | 'denied';
+  secret_env_cleanup?: SecretLaunchEnvCleanupResult;
+  next_actions: string[];
+  blockers: string[];
+  warnings: string[];
+  report_write_failed?: boolean;
+}
+
+export interface SksMenuBarStatusResult {
+  schema: 'sks.menubar-status.v1';
+  ok: boolean;
+  platform: NodeJS.Platform;
+  installed: boolean;
+  running: boolean;
+  paths: ReturnType<typeof sksMenuBarPaths>;
+  launchd: { checked: boolean; ok: boolean; service: string | null; state: string | null; pid: number | null; error: string | null };
+  action_target: {
+    node_bin: string | null;
+    node_exists: boolean;
+    sks_entry: string | null;
+    sks_entry_exists: boolean;
+    smoke_code: number | null;
+    smoke_output: string | null;
+    version_detected: boolean;
+    detected_version: string | null;
+    expected_version: string;
+    version_matches_expected: boolean;
+    script_sha256: string | null;
+    expected_script_sha256: string | null;
+    script_hash_matches_stamp: boolean;
+    executable: boolean;
+    ok: boolean;
+  };
+  codex_sync: { ok: boolean; bundle_id: string | null; codex_running: boolean | null; icon_visible_expected: boolean; warning: string | null };
+  build_stamp: SksMenuBarBuildStamp | null;
+  package_version: string;
+  signature: { checked: boolean; identifier: string | null; ok: boolean; error: string | null };
+  resources: { checked: boolean; ok: boolean; missing: string[]; mismatched: string[] };
+  blockers: string[];
+  warnings: string[];
+  next_actions: string[];
+}
+
+export interface SksMenuBarUninstallResult {
+  schema: 'sks.menubar-uninstall.v1';
+  ok: boolean;
+  platform: NodeJS.Platform;
+  paths: ReturnType<typeof sksMenuBarPaths>;
+  actions: string[];
+  warnings: string[];
+  blockers: string[];
+}
+
+export interface NativeSourceInput {
+  actionScriptPath: string;
+  buildStampPath: string;
+  configPath: string;
+  lastActionLogPath: string;
+  operationDirPath: string;
+  codexBundleId: string | null;
+  packageVersion: string;
+}

@@ -1,336 +1,267 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PACKAGE_VERSION, runProcess, which } from '../core/fsx.js';
-import { installSksMenuBar } from '../core/codex-app/sks-menubar.js';
+import { PACKAGE_VERSION, runProcess, sha256, which } from '../core/fsx.js';
+import {
+  aggregateFileHashes,
+  installSksMenuBar,
+  NATIVE_RESOURCE_FILES,
+  NATIVE_SOURCE_FILES,
+  type SksMenuBarBuildStamp
+} from '../core/codex-app/sks-menubar.js';
 
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-check-'));
-const envHomeTemp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-menubar-env-home-check-'));
 const fakeRoot = path.join(temp, 'project-root');
 await fs.mkdir(fakeRoot, { recursive: true });
-const launchGuardEnv = { ...process.env, SKS_SKIP_SKS_MENUBAR_LAUNCH: '0' };
-const localEntry = path.join(fakeRoot, 'dist', 'bin', 'sks.js');
-await fs.mkdir(path.dirname(localEntry), { recursive: true });
-await fs.writeFile(localEntry, '#!/usr/bin/env node\n', 'utf8');
+const firstEntry = await writeProbeEntry(path.join(fakeRoot, 'first', 'dist', 'bin', 'sks.js'));
+const replacementEntry = await writeProbeEntry(path.join(fakeRoot, 'replacement', 'dist', 'bin', 'sks.js'));
+const env = { ...process.env, SKS_SKIP_SKS_MENUBAR_LAUNCH: '1' };
 
-const result = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  home: temp,
-  root: fakeRoot,
-  sksEntry: localEntry,
-  env: launchGuardEnv
+const initialResult = await installSksMenuBar({
+  apply: true, launch: false, home: temp, root: fakeRoot, sksEntry: firstEntry, env, quiet: true
 });
+
+if (process.platform !== 'darwin') {
+  const ok = initialResult.ok && initialResult.status === 'unsupported_platform';
+  console.log(JSON.stringify({
+    schema: 'sks.sks-menubar-install-check.v2', ok, temp, result: initialResult,
+    is_idempotent: false, previous_app_rollback_verified: false,
+    resource_sha256: null, resources_sha256: null,
+    blockers: ok ? [] : ['sks_menubar_install_check_failed']
+  }, null, 2));
+  if (!ok) process.exit(1);
+  process.exit(0);
+}
+
+const initialAppPath = required(initialResult.app_path, 'initial app path');
+const initialExecutable = required(initialResult.executable_path, 'initial executable path');
+const initialStamp = required(initialResult.build_stamp, 'initial build stamp');
+const installDir = path.dirname(initialAppPath);
+const initialExecutableSha256 = sha256(await fs.readFile(initialExecutable));
+const initialInfoPlistSha256 = sha256(await fs.readFile(path.join(initialAppPath, 'Contents', 'Info.plist')));
+const initialActionScript = await fs.readFile(required(initialResult.action_script_path, 'initial action script path'), 'utf8');
+
 const secondResult = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  home: temp,
-  root: fakeRoot,
-  sksEntry: localEntry,
-  env: launchGuardEnv
+  apply: true, launch: false, home: temp, root: fakeRoot, sksEntry: firstEntry, env, quiet: true
 });
-if (secondResult.action_script_path) await fs.rm(secondResult.action_script_path, { force: true });
-const restoredScriptResult = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  home: temp,
-  root: fakeRoot,
-  sksEntry: localEntry,
-  env: launchGuardEnv
-});
-if (restoredScriptResult.action_script_path) {
-  await fs.writeFile(restoredScriptResult.action_script_path, '#!/bin/zsh\necho stale-sks-menubar-action\n', 'utf8');
-}
-const staleScriptMissingEntryResult = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  home: temp,
-  root: fakeRoot,
-  sksEntry: path.join(fakeRoot, 'dist', 'bin', 'missing-sks.js'),
-  env: launchGuardEnv
-});
-const recoveredStaleScriptResult = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  home: temp,
-  root: fakeRoot,
-  sksEntry: localEntry,
-  env: launchGuardEnv
-});
-if (recoveredStaleScriptResult.action_script_path) {
-  await fs.chmod(recoveredStaleScriptResult.action_script_path, 0o644);
-}
-const restoredExecutableBitResult = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  home: temp,
-  root: fakeRoot,
-  sksEntry: localEntry,
-  env: launchGuardEnv
-});
-const envHomeResult = await installSksMenuBar({
-  apply: true,
-  launch: true,
-  root: envHomeTemp,
-  sksEntry: path.join(process.cwd(), 'dist', 'bin', 'sks.js'),
-  env: { ...launchGuardEnv, HOME: envHomeTemp }
-});
+const secondExecutableSha256 = sha256(await fs.readFile(required(secondResult.executable_path, 'second executable path')));
+const isIdempotent = secondResult.ok
+  && secondResult.actions.includes('menubar_up_to_date')
+  && secondExecutableSha256 === initialExecutableSha256
+  && secondResult.build_stamp?.source_sha256 === initialStamp.source_sha256
+  && secondResult.build_stamp?.resources_sha256 === initialStamp.resources_sha256;
 
-const executableExists = result.executable_path ? await exists(result.executable_path) : false;
-const launchAgentExists = result.launch_agent_path ? await exists(result.launch_agent_path) : false;
-const actionScriptExists = result.action_script_path ? await exists(result.action_script_path) : false;
-const buildStampExists = result.build_stamp_path ? await exists(result.build_stamp_path) : false;
-const generatedSourcePath = result.app_path ? path.join(path.dirname(result.app_path), 'SKSMenuBar.swift') : null;
-const generatedSource = generatedSourcePath ? await fs.readFile(generatedSourcePath, 'utf8').catch(() => '') : '';
-const actionScript = result.action_script_path ? await fs.readFile(result.action_script_path, 'utf8').catch(() => '') : '';
-const launchAgentSource = result.launch_agent_path ? await fs.readFile(result.launch_agent_path, 'utf8').catch(() => '') : '';
-const infoPlistPath = result.app_path ? path.join(result.app_path, 'Contents', 'Info.plist') : null;
-const infoPlist = infoPlistPath ? await fs.readFile(infoPlistPath, 'utf8').catch(() => '') : '';
-const swiftParse = await swiftParseSmoke(generatedSourcePath);
-const commandRegistry = await fs.readFile(path.join(process.cwd(), 'src', 'cli', 'command-registry.ts'), 'utf8');
-const installHelpers = await fs.readFile(path.join(process.cwd(), 'src', 'cli', 'install-helpers.ts'), 'utf8');
-const cltMissing = process.platform === 'darwin' && result.blockers.includes('xcode_clt_missing');
+// Changing only the pinned package entry is a legitimate upgrade input. It
+// forces a fresh staging build without corrupting the currently installed app,
+// so the resulting .previous bundle is a valid rollback candidate.
+const result = await installSksMenuBar({
+  apply: true, launch: false, home: temp, root: fakeRoot, sksEntry: replacementEntry, env, quiet: true
+});
+const appPath = required(result.app_path, 'final app path');
+const executablePath = required(result.executable_path, 'final executable path');
+const buildStamp = required(result.build_stamp, 'final build stamp');
+const resourcesDir = path.join(appPath, 'Contents', 'Resources');
+const sourcesDir = path.join(installDir, 'Sources');
+const previousAppPath = `${appPath}.previous`;
+const previousExecutablePath = path.join(previousAppPath, 'Contents', 'MacOS', 'SKSMenuBar');
+const previousBuildStampPath = path.join(installDir, 'build-stamp.json.previous');
+const previousActionScriptPath = path.join(installDir, 'sks-menubar-action.sh.previous');
 
-const hasVisibleStatusSource = generatedSource.includes('NSStatusItem.variableLength')
-  && generatedSource.includes('configureStatusButton(button, title: state.title)')
-  && generatedSource.includes('SKS ⚠')
-  && generatedSource.includes('SKS ↑')
-  && generatedSource.includes('SKS ⬆')
-  && generatedSource.includes('SKS ⋯')
-  && generatedSource.includes('Timer.scheduledTimer(withTimeInterval: 30.0');
-const hasBackgroundReadonlyActions = generatedSource.includes('runSksBackground(["codex-lb", "fast-check"]')
-  && generatedSource.includes('runSksBackground(["fast-mode", "on", "--json"]')
-  && generatedSource.includes('runSksBackground(["fast-mode", "off", "--json"]')
-  && generatedSource.includes('runSksSilent(["fast-mode", "status", "--json"]')
-  && generatedSource.includes('runSksBackground(["update", "check"]')
-  && generatedSource.includes('runSksSilent(args)')
-  && generatedSource.includes('["codex", "update-status", "--json"]')
-  && generatedSource.includes('runSksBackground(["codex", "update", "--json"]')
-  && generatedSource.includes('runSksBackground(["doctor", "--fix", "--global-only", "--json"]')
-  && generatedSource.includes('display notification')
-  && !generatedSource.includes('runSksInTerminal')
-  && !generatedSource.includes('runInTerminal');
-const hasNativeModalSource = generatedSource.includes('func promptText(title: String, message: String')
-  && generatedSource.includes('NSSecureTextField')
-  && generatedSource.includes('stdinText: key + "\\n"')
-  && generatedSource.includes('final class McpManagerController')
-  && generatedSource.includes('add(menu, "Manage MCP Servers…", #selector(manageMcpServers))')
-  && generatedSource.includes('["menubar", "mcp", "list", "--json"]')
-  && generatedSource.includes('["menubar", "mcp", "add", "--stdin-json", "--json"]');
-const hasActionLogSource = generatedSource.includes('lastActionLogPath')
-  && generatedSource.includes('.posixPermissions: 0o600')
-  && generatedSource.includes('redactSecrets');
-const hasAutosaveNameSource = generatedSource.includes('statusItem.autosaveName = "com.sneakoscope.sks-menubar"');
-const hasCodexLifecycleSource = generatedSource.includes('Codex app not detected — sync disabled')
-  || (generatedSource.includes('NSWorkspace.didLaunchApplicationNotification') && generatedSource.includes('NSWorkspace.didTerminateApplicationNotification'));
-const hasNoUnconditionalKeepAlive = !launchAgentSource.includes('<key>KeepAlive</key>');
-const hasNoLaunchAgentSecrets = !launchAgentSource.includes('EnvironmentVariables')
-  && !launchAgentSource.includes('CODEX_LB_API_KEY')
-  && !launchAgentSource.includes('OPENROUTER_API_KEY');
-const hasInteractiveProcessType = launchAgentSource.includes('<key>ProcessType</key>')
-  && launchAgentSource.includes('<string>Interactive</string>');
-const hasPackagePlistVersion = infoPlist.includes(`<string>${PACKAGE_VERSION}</string>`)
-  && infoPlist.includes('<key>CFBundleShortVersionString</key>')
-  && infoPlist.includes('<key>CFBundleVersion</key>');
-const hasActionFallbacks = actionScript.includes('command -v sks')
-  && actionScript.includes('npm root -g')
-  && actionScript.includes('.nvm/versions/node/*/lib/node_modules/sneakoscope/dist/bin/sks.js')
-  && actionScript.includes('/bin/zsh -lc')
-  && actionScript.includes('exit 127')
-  && actionScript.includes('display notification');
-const pinnedEntryIndex = actionScript.indexOf('run_node_entry "$SKS_ENTRY" "$@"');
-const hasPinnedEntryPriority = pinnedEntryIndex >= 0
-  && pinnedEntryIndex < actionScript.indexOf('command -v sks')
-  && pinnedEntryIndex < actionScript.indexOf('npm root -g')
-  && actionScript.lastIndexOf('run_node_entry "$SKS_ENTRY" "$@"') === pinnedEntryIndex;
-const hasEntryWarning = result.warnings.includes('sks_entry_project_local');
-const hasBuildStamp = buildStampExists
-  && result.build_stamp?.package_version === PACKAGE_VERSION
-  && result.build_stamp?.codesign_identifier === 'com.sneakoscope.sks-menubar';
-const isIdempotent = secondResult.actions.includes('menubar_up_to_date')
-  && secondResult.build_stamp?.action_script_sha256 === result.build_stamp?.action_script_sha256;
-const restoresMissingActionScript = restoredScriptResult.actions.includes(`wrote ${secondResult.action_script_path}`)
-  && actionScriptExists
-  && restoredScriptResult.build_stamp?.action_script_sha256 === result.build_stamp?.action_script_sha256;
-const blocksStaleActionScriptReuse = staleScriptMissingEntryResult.ok === false
-  && staleScriptMissingEntryResult.blockers.includes('sks_entry_unresolved')
-  && staleScriptMissingEntryResult.warnings.includes('sks_entry_unresolved_stale_action_script_not_reused')
-  && staleScriptMissingEntryResult.target_check?.used_previous_script === false;
-const recoversStaleActionScriptWhenEntryExists = recoveredStaleScriptResult.ok === true
-  && recoveredStaleScriptResult.actions.includes(`wrote ${restoredScriptResult.action_script_path}`)
-  && recoveredStaleScriptResult.build_stamp?.action_script_sha256 === result.build_stamp?.action_script_sha256;
-const restoresExecutableBit = restoredExecutableBitResult.ok === true
-  && restoredExecutableBitResult.actions.includes('menubar_up_to_date')
-  && restoredExecutableBitResult.actions.includes('restored action script executable bit')
-  && actionScriptExists
-  && await isExecutable(result.action_script_path);
-const hasCommandRegistry = commandRegistry.includes('menubar:')
-  && commandRegistry.includes('menubarCommand')
-  && commandRegistry.includes('dist/core/commands/menubar-command.js');
-const noLaunchctlSecretSetenv = !installHelpers.includes('{ CODEX_LB_API_KEY: apiKey')
-  && !installHelpers.includes("['setenv', 'CODEX_LB_API_KEY")
-  && !installHelpers.includes("['setenv', 'OPENROUTER_API_KEY");
-const hasLaunchctlUnsetenv = installHelpers.includes('cleanupMacLaunchSecretEnvironment')
-  && installHelpers.includes('skipped_secret_variables');
-const expectedMenuItems = [
-  'Use codex-lb',
-  'Use ChatGPT OAuth',
-  'Set codex-lb Domain and Key',
-  'Set OpenRouter Key and GLM Profiles',
-  'Fast Mode On',
-  'Fast Mode Off',
-  'Fast Check',
-  'SKS Version Check',
-  'Update SKS Now',
-  'Codex CLI Version',
-  'Update Codex CLI Now',
-  'Manage MCP Servers',
-  'Run sks doctor --fix',
-  'View Last Log'
-];
-const missingExpectedItems = expectedMenuItems.filter((item) => !result.menu_items.includes(item));
-const hasExpectedItems = missingExpectedItems.length === 0;
-const launchSkippedForTempHome = result.launch?.requested === false
-  && result.launch?.method === 'skipped'
-  && result.warnings.includes('launch_skipped_non_user_home');
-const launchSkippedForEnvHome = envHomeResult.launch?.requested === false
-  && envHomeResult.launch?.method === 'skipped'
-  && envHomeResult.warnings.includes('launch_skipped_non_user_home');
-const launchSkippedForTempInstall = result.launch?.requested === false
-  && result.warnings.includes('launch_skipped_temp_install')
-  && envHomeResult.launch?.requested === false
-  && envHomeResult.warnings.includes('launch_skipped_temp_install');
-const preferredPositionSkippedForTempInstall = !result.actions.includes('seeded SKS menu bar preferred position')
-  && !envHomeResult.actions.includes('seeded SKS menu bar preferred position');
-const darwinOk = cltMissing
-  ? swiftParse.status === 'skipped' && swiftParse.reason === 'xcode_clt_missing'
-  : result.ok === true
-    && result.status === 'installed_launch_skipped'
-    && secondResult.ok === true
-    && envHomeResult.ok === true
-    && envHomeResult.status === 'installed_launch_skipped'
-    && executableExists
-    && launchAgentExists
-    && actionScriptExists
-    && hasExpectedItems
-    && hasVisibleStatusSource
-    && hasBackgroundReadonlyActions
-    && hasNativeModalSource
-    && hasActionLogSource
-    && hasAutosaveNameSource
-    && hasCodexLifecycleSource
-    && hasNoUnconditionalKeepAlive
-    && hasNoLaunchAgentSecrets
-    && hasInteractiveProcessType
-    && hasPackagePlistVersion
-    && hasActionFallbacks
-    && hasPinnedEntryPriority
-    && hasEntryWarning
-    && hasBuildStamp
-    && swiftParse.ok === true
-    && isIdempotent
-    && restoresMissingActionScript
-    && blocksStaleActionScriptReuse
-    && recoversStaleActionScriptWhenEntryExists
-    && restoresExecutableBit
-    && hasCommandRegistry
-    && noLaunchctlSecretSetenv
-    && hasLaunchctlUnsetenv
-    && launchSkippedForTempHome
-    && launchSkippedForEnvHome
-    && launchSkippedForTempInstall
-    && preferredPositionSkippedForTempInstall;
-const ok = process.platform === 'darwin'
-  ? darwinOk
-  : result.ok === true && result.status === 'unsupported_platform';
+const installedSourceNames = (await fs.readdir(sourcesDir)).sort();
+const installedResourceNames = (await fs.readdir(resourcesDir)).sort();
+const sourceHashes = await hashNamedFiles(sourcesDir, [...NATIVE_SOURCE_FILES]);
+const resourceHashes = await hashNamedFiles(resourcesDir, [...NATIVE_RESOURCE_FILES]);
+const sourceSha256 = aggregateFileHashes(sourceHashes);
+const resourcesSha256 = aggregateFileHashes(resourceHashes);
+const sourceBindingVerified = sourceSha256 === buildStamp.source_sha256
+  && recordsEqual(sourceHashes, buildStamp.source_files_sha256);
+const resourceBindingVerified = resourcesSha256 === buildStamp.resources_sha256
+  && recordsEqual(resourceHashes, buildStamp.resource_files_sha256);
 
+const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist');
+const infoPlist = await fs.readFile(infoPlistPath, 'utf8');
+const infoPlistIconVerified = /<key>CFBundleIconFile<\/key>\s*<string>AppIcon<\/string>/.test(infoPlist)
+  && /<key>CFBundleDisplayName<\/key>\s*<string>SKS<\/string>/.test(infoPlist)
+  && /<key>LSUIElement<\/key>\s*<true\/>/.test(infoPlist)
+  && sha256(infoPlist) === buildStamp.info_plist_sha256;
+const appIconPath = path.join(resourcesDir, 'AppIcon.icns');
+const iconLoadSmoke = await imageLoadSmoke(appIconPath);
+const signature = await strictCodesign(appPath);
+const previousSignature = await strictCodesign(previousAppPath);
+const swiftCompile = result.actions.some((action) => /^compiled 17 Swift sources$/.test(action));
+const swiftParse = await swiftParseSmoke(sourcesDir);
+const actionScriptExecutable = await isExecutable(required(result.action_script_path, 'final action script path'));
+const launchAgent = await fs.readFile(required(result.launch_agent_path, 'launch agent path'), 'utf8');
+const launchAgentSafe = !launchAgent.includes('<key>KeepAlive</key>')
+  && !launchAgent.includes('EnvironmentVariables')
+  && launchAgent.includes('<key>ProcessType</key>')
+  && launchAgent.includes('<string>Interactive</string>');
+
+const nativeSources = await Promise.all(NATIVE_SOURCE_FILES.map((name) => fs.readFile(path.join(sourcesDir, name), 'utf8')));
+const nativeSource = nativeSources.join('\n');
+const notificationActionTest = ['SKS_OPERATION_RESULT', 'SKS_UPDATE_AVAILABLE', 'SKS_ACTION_REQUIRED',
+  'OPEN_CONTROL_CENTER', 'OPEN_LOG', 'RETRY_OPERATION', 'OPEN_DASHBOARD']
+  .every((token) => nativeSource.includes(token))
+  && nativeSource.includes('UNUserNotificationCenterDelegate')
+  && nativeSource.includes('authorizationStatus == .denied')
+  && !nativeSource.includes('display notification')
+  && !nativeSource.includes('runModal(');
+const accessibilitySmoke = nativeSource.includes('setAccessibilityLabel("Control Center sections")')
+  && nativeSource.includes('setAccessibilityLabel("Effective MCP servers")')
+  && nativeSource.includes('button.setAccessibilityLabel(title)');
+const reducedMotionSmoke = !nativeSource.includes('NSAnimationContext') && !nativeSource.includes('animator()');
+
+const previousBuildStamp = await readJson<SksMenuBarBuildStamp>(previousBuildStampPath);
+const previousActionScript = await fs.readFile(previousActionScriptPath, 'utf8').catch(() => '');
+const previousResources = await hashNamedFiles(path.join(previousAppPath, 'Contents', 'Resources'), [...NATIVE_RESOURCE_FILES]).catch(() => ({}));
+const previousAppRollbackVerified = await exists(previousExecutablePath)
+  && sha256(await fs.readFile(previousExecutablePath)) === initialExecutableSha256
+  && previousSignature.ok
+  && previousBuildStamp?.source_sha256 === initialStamp.source_sha256
+  && previousBuildStamp?.resources_sha256 === initialStamp.resources_sha256
+  && recordsEqual(previousResources, initialStamp.resource_files_sha256)
+  && sha256(await fs.readFile(path.join(previousAppPath, 'Contents', 'Info.plist'))) === initialInfoPlistSha256
+  && previousActionScript === initialActionScript
+  && result.actions.includes(`preserved ${previousAppPath}`);
+
+const expectedResourcesPresent = [
+  'AppIcon.icns', 'SKSStatusTemplate.pdf', 'SKSStatusUpdateTemplate.pdf',
+  'SKSStatusWarningTemplate.pdf', 'SKSStatusAttentionTemplate.pdf'
+].every((name) => installedResourceNames.includes(name));
+const buildStampVersionSourceBinding = buildStamp.package_version === PACKAGE_VERSION
+  && buildStamp.codesign_identifier === 'com.sneakoscope.sks-menubar'
+  && buildStamp.action_script_sha256 === sha256(await fs.readFile(required(result.action_script_path, 'final action script path')))
+  && sourceBindingVerified
+  && resourceBindingVerified;
+
+const checks = {
+  install_ok: result.ok && result.status === 'installed_launch_skipped',
+  app_bundle_exists: await exists(appPath) && await exists(executablePath),
+  swift_compile: swiftCompile,
+  swift_parse: swiftParse.ok,
+  source_inventory: recordsEqual(
+    Object.fromEntries(installedSourceNames.map((name) => [name, 'present'])),
+    Object.fromEntries([...NATIVE_SOURCE_FILES].sort().map((name) => [name, 'present']))
+  ),
+  resources_inventory: recordsEqual(
+    Object.fromEntries(installedResourceNames.map((name) => [name, 'present'])),
+    Object.fromEntries([...NATIVE_RESOURCE_FILES].sort().map((name) => [name, 'present']))
+  ),
+  expected_resources_present: expectedResourcesPresent,
+  info_plist_icon_verified: infoPlistIconVerified,
+  app_icon_load_smoke: iconLoadSmoke.ok,
+  codesign_strict_verified: signature.ok,
+  codesign_identifier_verified: signature.identifier === 'com.sneakoscope.sks-menubar',
+  action_script_executable: actionScriptExecutable,
+  launch_agent_safe: launchAgentSafe,
+  notification_action_test: notificationActionTest,
+  accessibility_smoke: accessibilitySmoke,
+  reduced_motion_smoke: reducedMotionSmoke,
+  build_stamp_version_source_binding: buildStampVersionSourceBinding,
+  is_idempotent: isIdempotent,
+  previous_app_rollback_verified: previousAppRollbackVerified
+};
+const failedChecks = Object.entries(checks).filter(([, value]) => !value).map(([name]) => name);
+const ok = failedChecks.length === 0;
 const report = {
-  schema: 'sks.sks-menubar-install-check.v1',
+  schema: 'sks.sks-menubar-install-check.v2',
   ok,
   temp,
-  env_home_temp: envHomeTemp,
   result,
+  initial_result: initialResult,
   second_result: secondResult,
-  restored_script_result: restoredScriptResult,
-  stale_script_missing_entry_result: staleScriptMissingEntryResult,
-  recovered_stale_script_result: recoveredStaleScriptResult,
-  restored_executable_bit_result: restoredExecutableBitResult,
-  env_home_result: envHomeResult,
-  executable_exists: executableExists,
-  launch_agent_exists: launchAgentExists,
-  action_script_exists: actionScriptExists,
-  build_stamp_exists: buildStampExists,
-  generated_source_path: generatedSourcePath,
-  has_visible_status_source: hasVisibleStatusSource,
-  has_background_readonly_actions: hasBackgroundReadonlyActions,
-  has_native_modal_source: hasNativeModalSource,
-  has_action_log_source: hasActionLogSource,
-  has_autosave_name_source: hasAutosaveNameSource,
-  has_codex_lifecycle_source: hasCodexLifecycleSource,
-  has_no_unconditional_keepalive: hasNoUnconditionalKeepAlive,
-  has_no_launch_agent_secrets: hasNoLaunchAgentSecrets,
-  has_interactive_process_type: hasInteractiveProcessType,
-  has_package_plist_version: hasPackagePlistVersion,
-  has_action_fallbacks: hasActionFallbacks,
-  has_pinned_entry_priority: hasPinnedEntryPriority,
-  has_entry_warning: hasEntryWarning,
-  has_build_stamp: hasBuildStamp,
-  swift_parse: swiftParse,
+  checks,
   is_idempotent: isIdempotent,
-  restores_missing_action_script: restoresMissingActionScript,
-  blocks_stale_action_script_reuse: blocksStaleActionScriptReuse,
-  recovers_stale_action_script_when_entry_exists: recoversStaleActionScriptWhenEntryExists,
-  restores_executable_bit: restoresExecutableBit,
-  has_command_registry: hasCommandRegistry,
-  no_launchctl_secret_setenv: noLaunchctlSecretSetenv,
-  has_launchctl_unsetenv: hasLaunchctlUnsetenv,
-  launch_skipped_for_temp_home: launchSkippedForTempHome,
-  launch_skipped_for_env_home: launchSkippedForEnvHome,
-  launch_skipped_for_temp_install: launchSkippedForTempInstall,
-  preferred_position_skipped_for_temp_install: preferredPositionSkippedForTempInstall,
-  expected_menu_items: expectedMenuItems,
-  missing_expected_items: missingExpectedItems,
-  has_expected_items: hasExpectedItems,
+  previous_app_path: previousAppPath,
+  previous_app_rollback_verified: previousAppRollbackVerified,
+  resource_sha256: resourcesSha256,
+  resources_sha256: resourcesSha256,
+  resource_files_sha256: resourceHashes,
+  source_sha256: sourceSha256,
+  source_files_sha256: sourceHashes,
+  build_stamp_version_source_binding: buildStampVersionSourceBinding,
+  signature,
+  previous_signature: previousSignature,
+  icon_load_smoke: iconLoadSmoke,
+  swift_parse: swiftParse,
+  installed_source_names: installedSourceNames,
+  installed_resource_names: installedResourceNames,
+  failed_checks: failedChecks,
   blockers: ok ? [] : ['sks_menubar_install_check_failed']
 };
 
 console.log(JSON.stringify(report, null, 2));
 if (!ok) process.exit(1);
 
-async function exists(file: string): Promise<boolean> {
-  try {
-    await fs.access(file);
-    return true;
-  } catch {
-    return false;
-  }
+async function writeProbeEntry(file: string): Promise<string> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, [
+    '#!/usr/bin/env node',
+    `console.log('sks ${PACKAGE_VERSION}');`,
+    ''
+  ].join('\n'), { mode: 0o755 });
+  return file;
 }
 
-async function isExecutable(file: string | null | undefined): Promise<boolean> {
-  if (!file) return false;
-  try {
-    await fs.access(file, fs.constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
+async function hashNamedFiles(directory: string, names: string[]): Promise<Record<string, string>> {
+  const output: Record<string, string> = {};
+  for (const name of names) output[name] = sha256(await fs.readFile(path.join(directory, name)));
+  return output;
 }
 
-async function swiftParseSmoke(sourcePath: string | null): Promise<{ ok: boolean; status: 'parsed' | 'skipped' | 'failed'; reason: string | null; code?: number | null; error?: string | null }> {
-  if (process.platform !== 'darwin') return { ok: true, status: 'skipped', reason: 'not_macos' };
-  const xcodeSelect = await which('xcode-select').catch(() => null) || '/usr/bin/xcode-select';
-  const clt = await runProcess(xcodeSelect, ['-p'], { timeoutMs: 5_000, maxOutputBytes: 8 * 1024 })
-    .catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
-  if (clt.code !== 0) return { ok: true, status: 'skipped', reason: 'xcode_clt_missing', code: clt.code, error: String(clt.stderr || clt.stdout || '').trim() };
-  if (!sourcePath) return { ok: false, status: 'failed', reason: 'source_missing' };
-  const swiftc = await which('swiftc').catch(() => null) || '/usr/bin/swiftc';
-  const parsed = await runProcess(swiftc, ['-parse', sourcePath], { timeoutMs: 30_000, maxOutputBytes: 32 * 1024 })
-    .catch((err: any) => ({ code: 1, stdout: '', stderr: err?.message || String(err) }));
+function recordsEqual(left: Record<string, string>, right: Record<string, string>): boolean {
+  return JSON.stringify(Object.entries(left).sort()) === JSON.stringify(Object.entries(right).sort());
+}
+
+async function strictCodesign(appPath: string): Promise<{ ok: boolean; identifier: string | null; verify_code: number | null; detail_code: number | null; error: string | null }> {
+  const codesign = await which('codesign').catch(() => null) || '/usr/bin/codesign';
+  const verify = await runProcess(codesign, ['--verify', '--deep', '--strict', appPath], { timeoutMs: 20_000, maxOutputBytes: 32 * 1024 })
+    .catch((error: unknown) => ({ code: 1, stdout: '', stderr: error instanceof Error ? error.message : String(error) }));
+  const detail = await runProcess(codesign, ['-dv', '--verbose=4', appPath], { timeoutMs: 10_000, maxOutputBytes: 32 * 1024 })
+    .catch((error: unknown) => ({ code: 1, stdout: '', stderr: error instanceof Error ? error.message : String(error) }));
+  const detailText = `${detail.stdout || ''}\n${detail.stderr || ''}`;
+  const identifier = detailText.match(/\bIdentifier=([^\n]+)/)?.[1]?.trim() || null;
   return {
-    ok: parsed.code === 0,
-    status: parsed.code === 0 ? 'parsed' : 'failed',
-    reason: parsed.code === 0 ? null : 'swift_parse_failed',
-    code: parsed.code,
-    error: parsed.code === 0 ? null : String(parsed.stderr || parsed.stdout || '').trim()
+    ok: verify.code === 0 && detail.code === 0,
+    identifier,
+    verify_code: verify.code,
+    detail_code: detail.code,
+    error: verify.code === 0 && detail.code === 0 ? null : String(verify.stderr || detail.stderr || detail.stdout).trim()
   };
+}
+
+async function imageLoadSmoke(iconPath: string): Promise<{ ok: boolean; width: number | null; height: number | null; code: number | null; error: string | null }> {
+  const sips = await which('sips').catch(() => null) || '/usr/bin/sips';
+  const result = await runProcess(sips, ['-g', 'pixelWidth', '-g', 'pixelHeight', iconPath], { timeoutMs: 10_000, maxOutputBytes: 16 * 1024 })
+    .catch((error: unknown) => ({ code: 1, stdout: '', stderr: error instanceof Error ? error.message : String(error) }));
+  const text = `${result.stdout || ''}\n${result.stderr || ''}`;
+  const width = Number(text.match(/pixelWidth:\s*(\d+)/)?.[1] || '') || null;
+  const height = Number(text.match(/pixelHeight:\s*(\d+)/)?.[1] || '') || null;
+  return { ok: result.code === 0 && Boolean(width && height), width, height, code: result.code, error: result.code === 0 ? null : text.trim() };
+}
+
+async function swiftParseSmoke(sourcesDir: string): Promise<{ ok: boolean; code: number | null; error: string | null }> {
+  const swiftc = await which('swiftc').catch(() => null) || '/usr/bin/swiftc';
+  const files = NATIVE_SOURCE_FILES.map((name) => path.join(sourcesDir, name));
+  const result = await runProcess(swiftc, ['-parse', ...files], { timeoutMs: 30_000, maxOutputBytes: 64 * 1024 })
+    .catch((error: unknown) => ({ code: 1, stdout: '', stderr: error instanceof Error ? error.message : String(error) }));
+  return { ok: result.code === 0, code: result.code, error: result.code === 0 ? null : String(result.stderr || result.stdout).trim() };
+}
+
+async function readJson<T>(file: string): Promise<T | null> {
+  try { return JSON.parse(await fs.readFile(file, 'utf8')) as T; }
+  catch { return null; }
+}
+
+async function isExecutable(file: string): Promise<boolean> {
+  return fs.access(file, fs.constants.X_OK).then(() => true).catch(() => false);
+}
+
+async function exists(file: string): Promise<boolean> {
+  return fs.access(file).then(() => true).catch(() => false);
+}
+
+function required<T>(value: T | null | undefined, label: string): T {
+  if (value === null || value === undefined) throw new Error(`missing ${label}`);
+  return value;
 }
