@@ -1,18 +1,22 @@
 import path from 'node:path';
-import { exists, readJson, runProcess } from '../fsx.js';
+import { exists, readJson } from '../fsx.js';
+import { inspectCodePackHeadFreshness } from '../triwiki/code-pack-head-freshness.js';
 
 /** Bounded, non-blocking code-pack staleness nudge for the user-prompt-submit hook.
  *
  * Returns a one-line context note when a published code pack
  * (.sneakoscope/wiki/code-pack.json) exists but was generated against a different
  * git HEAD than the current one — i.e. the codebase moved and the LLM-facing code
- * summaries are now out of date. Returns null (silent) when there is no pack at all
+ * summaries are now out of date. A follow-up commit that changes only the two
+ * tracked code-pack metadata files remains fresh; otherwise committing the generated
+ * pack would make itself stale forever. Returns null (silent) when there is no pack at all
  * (repos that never opted into `sks wiki refresh --code` must not be nagged) or when
  * the check can't complete cheaply. It NEVER regenerates the pack and NEVER blocks:
- * the whole check is one JSON read plus one `git rev-parse HEAD`, wrapped in a hard
- * timeout so it cannot blow the hook latency budget. Any failure resolves to null. */
+ * the common path is one JSON read plus one bounded `git log` history check,
+ * wrapped in a hard timeout so it cannot blow the hook latency budget. Any
+ * failure resolves to null. */
 export async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null> {
-  const budgetMs = Math.max(1, opts.budgetMs ?? 250);
+  const budgetMs = Math.max(1, opts.budgetMs ?? 750);
   const gitTimeoutMs = Math.max(1, budgetMs - 50);
   return raceWithTimeout(computeNote(root, gitTimeoutMs), budgetMs).catch(() => null);
 }
@@ -25,9 +29,11 @@ async function computeNote(root: string, gitTimeoutMs: number): Promise<string |
   // A pack with no recorded sha (non-git build) can't be compared; stay silent
   // rather than nag with a comparison we can't actually make.
   if (!packSha) return null;
-  const head = await runProcess('git', ['rev-parse', 'HEAD'], { cwd: root, timeoutMs: gitTimeoutMs }).catch(() => null);
-  const currentSha = head && head.code === 0 ? String(head.stdout || '').trim() : null;
-  if (!currentSha || currentSha === packSha) return null;
+  const freshness = await inspectCodePackHeadFreshness(root, packSha, {
+    timeoutMs: gitTimeoutMs,
+    advisoryCache: true,
+  });
+  if (!freshness.conclusive || !freshness.current_sha || freshness.fresh) return null;
   return 'SKS note: the codebase code pack is stale (HEAD moved since it was built). Run `sks wiki refresh --code` to refresh source-cited code context.';
 }
 

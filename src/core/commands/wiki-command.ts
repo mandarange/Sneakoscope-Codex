@@ -22,6 +22,7 @@ import { recordImageWrongnessFromValidation } from '../triwiki-wrongness/image-w
 import { publishSharedMemory, rebuildSharedIndexes, sharedMemorySummary, validateSharedMemory } from '../git-hygiene/shared-memory-publish.js';
 import { scanCodebaseIndex } from '../triwiki/code-index-scanner.js';
 import { buildCodePack, validateCodePack, writeCodePackAtomic } from '../triwiki/code-pack.js';
+import { inspectCodePackHeadFreshness } from '../triwiki/code-pack-head-freshness.js';
 import { sealTriWikiContextPack, validateTriWikiContextPackProvenance } from '../triwiki-provenance.js';
 import { flag, positionalArgs, readFlagValue, readOption, resolveMissionId } from './command-utils.js';
 
@@ -227,8 +228,10 @@ async function wikiRefreshCode(args: any = []): Promise<void> {
 }
 
 /** Cheap freshness check: compares the code pack's recorded git HEAD sha (at
- * generation time) against the current HEAD. Any uncertainty (no pack, no git,
- * spawn failure) resolves to 'stale' rather than 'fresh', never overclaiming. */
+ * generation time) against the current HEAD. A commit containing only the two
+ * tracked code-pack metadata files is equivalent to the generating HEAD, which
+ * avoids an impossible self-referential commit hash. Any other uncertainty
+ * resolves to 'stale' rather than 'fresh', never overclaiming. */
 /** Active-wrongness counts per TriWiki module id (from wrongness records' module_ids),
  * so attention can hydrate frequently-wrong modules' code entries first. */
 async function buildWrongnessByModule(root: any): Promise<Record<string, number>> {
@@ -249,9 +252,12 @@ async function codePackFreshness(root: any): Promise<{ status: 'fresh' | 'stale'
   const pack = await readJson<any>(packPath, null).catch(() => null);
   const packSha = pack?.git_head_sha || null;
   if (!packSha) return { status: 'missing', git_head_sha: null, pack_sha: null };
-  const head = await runProcess('git', ['rev-parse', 'HEAD'], { cwd: root, timeoutMs: 5000 }).catch(() => null);
-  const currentSha = head && head.code === 0 ? head.stdout.trim() : null;
-  return { status: currentSha && currentSha === packSha ? 'fresh' : 'stale', git_head_sha: currentSha, pack_sha: packSha };
+  const freshness = await inspectCodePackHeadFreshness(root, packSha, { timeoutMs: 5_000 });
+  return {
+    status: freshness.fresh ? 'fresh' : 'stale',
+    git_head_sha: freshness.current_sha,
+    pack_sha: freshness.pack_sha
+  };
 }
 
 function wikiRefreshFailureAnalysis(validationResult: any, gate: any = {}) {

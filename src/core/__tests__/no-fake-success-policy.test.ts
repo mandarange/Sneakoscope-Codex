@@ -49,10 +49,13 @@ test('URL acquisition blocks instead of substituting an example URL', async () =
 test('URL acquisition writes verified content evidence when direct fetch succeeds', async () => {
   const missionDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-url-fetch-search-'));
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = (async () => new Response('official source body', {
-    status: 200,
-    headers: { 'content-type': 'text/plain' },
-  })) as typeof fetch;
+  globalThis.fetch = (async () => new Response(
+    'Official project documentation provides verified release, installation, configuration, and security guidance for current users.',
+    {
+      status: 200,
+      headers: { 'content-type': 'text/plain' },
+    },
+  )) as typeof fetch;
   try {
     const result = await runSuperSearch({
       missionDir,
