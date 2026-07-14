@@ -15,6 +15,12 @@ test('dist Naruto fast and direct JSON help share one runnable schema', () => {
   assert.deepEqual(JSON.parse(fast.stdout), JSON.parse(direct.stdout));
 });
 
+test('dist Naruto text help uses the shared CLI status vocabulary', () => {
+  const result = spawnSync(process.execPath, ['dist/bin/sks.js', 'naruto', 'help'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /^SKS \d+\.\d+\.\d+ · naruto help\n✔ official subagent workflow help available\n/m);
+});
+
 test('dist Naruto JSON help rejects malformed fanout and removed model flags', () => {
   for (const args of [
     ['naruto', 'help', '--json', '--agents'],

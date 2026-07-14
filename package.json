@@ -36,6 +36,8 @@
     "!dist/scripts/*blackbox*.js",
     "!dist/scripts/release-readiness-report.js",
     "!dist/scripts/readme-architecture-imagegen-official-check.js",
+    "!dist/scripts/codex-0139-feature-probes-check.js",
+    "!dist/scripts/codex-0139-marketplace-source-check.js",
     "!dist/scripts/gpt-image-2-real-file-smoke.js",
     "!dist/scripts/official-docs-compat-report.js",
     "!dist/scripts/codex-0-134-official-compat-report.js",

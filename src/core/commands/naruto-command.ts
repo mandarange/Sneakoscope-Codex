@@ -440,6 +440,7 @@ async function narutoProof(parsed: NarutoArgs) {
 function narutoHelp(parsed: NarutoArgs) {
   const result = buildNarutoHelpResult()
   return emit(parsed, result, () => {
+    cliUi.ok('official subagent workflow help available')
     console.log('$Naruto — Codex official subagent workflow')
     for (const line of result.usage) console.log(`  ${line}`)
     console.log(`Parent: ${result.parent.model} / ${result.parent.model_reasoning_effort}`)
