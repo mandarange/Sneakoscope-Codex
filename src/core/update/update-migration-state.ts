@@ -8,6 +8,7 @@ import { COMMANDS } from '../../cli/command-registry.js';
 import { reconcileSkills } from '../init/skills.js';
 import { codexHookTrustDoctor } from '../codex-hooks/codex-hook-trust-doctor.js';
 import { writeCodexConfigGuarded } from '../codex/codex-config-guard.js';
+import { compareSemVer } from './semver.js';
 
 export const UPDATE_MIGRATION_SCHEMA = 'sks.project-migration-receipt.v2' as const;
 export const INSTALLATION_EPOCH_SCHEMA = 'sks.installation-epoch.v1' as const;
@@ -141,10 +142,13 @@ export async function readProjectUpdateMigrationReceipt(root: string): Promise<U
   return readJson<UpdateMigrationReceipt | null>(projectUpdateMigrationReceiptPath(root), null).catch(() => null);
 }
 
-export function isUpdateMigrationReceiptCurrent(receipt: UpdateMigrationReceipt | null | undefined): boolean {
+export function isUpdateMigrationReceiptCurrent(
+  receipt: UpdateMigrationReceipt | null | undefined,
+  expectedVersion = PACKAGE_VERSION
+): boolean {
   return receipt?.schema === UPDATE_MIGRATION_SCHEMA
     && receipt.status === 'current'
-    && receipt.sks_version === PACKAGE_VERSION
+    && receipt.sks_version === expectedVersion
     && typeof receipt.installation_epoch_sha256 === 'string'
     && Array.isArray(receipt.blockers)
     && receipt.blockers.length === 0
@@ -583,13 +587,7 @@ function legacyStageApplies(fromVersion: string | null, minFromVersion: string):
 }
 
 function compareVersionLike(a: string | null | undefined, b: string | null | undefined): number {
-  const pa = String(a || '').split(/[.-]/).map((value) => Number.parseInt(value, 10) || 0);
-  const pb = String(b || '').split(/[.-]/).map((value) => Number.parseInt(value, 10) || 0);
-  for (let index = 0; index < Math.max(pa.length, pb.length, 3); index += 1) {
-    if ((pa[index] || 0) > (pb[index] || 0)) return 1;
-    if ((pa[index] || 0) < (pb[index] || 0)) return -1;
-  }
-  return 0;
+  return compareSemVer(a, b) ?? 0;
 }
 
 function safeFileName(value: string): string {

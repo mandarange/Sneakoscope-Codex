@@ -26,7 +26,29 @@ test('post-update menu bar install runs through the updated package entrypoint',
     const recorded = JSON.parse(await fs.readFile(invocation, 'utf8'));
     assert.deepEqual(recorded.argv, ['menubar', 'install', '--json']);
     assert.equal(result?.ok, true);
-    assert.deepEqual(stages, [{ id: 'sks_menubar', ok: true, status: 'installed' }]);
+    assert.deepEqual(stages, [{ id: 'menubar_rebuild', ok: true, status: 'installed' }]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('post-update menu bar build failure is a failed progress stage', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-updated-menubar-fail-'));
+  const entrypoint = path.join(root, 'updated-sks.mjs');
+  await fs.writeFile(entrypoint, "console.error('fixture menu build failed'); process.exit(9);\n");
+  const stages: Array<{ id: string; ok: boolean; status: string }> = [];
+  try {
+    const result = await installUpdateSksMenuBar({
+      root,
+      entrypoint,
+      env: { ...process.env, SKS_MIGRATION_DOCTOR_TIMEOUT_MS: '5000' },
+      quiet: true,
+      stage: (id, ok, status) => stages.push({ id, ok, status })
+    });
+    assert.equal(result?.ok, false);
+    assert.equal(stages.length, 1);
+    assert.equal(stages[0]?.id, 'menubar_rebuild');
+    assert.equal(stages[0]?.ok, false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
