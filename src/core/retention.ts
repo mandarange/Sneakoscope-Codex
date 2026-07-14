@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive, managedSksTmpRoot, sha256 } from './fsx.js';
+import { exists, readJson, writeJsonAtomic, ensureDir, dirSize, fileSize, formatBytes, rmrf, nowIso, appendJsonlBounded, listFilesRecursive, managedSksTmpRoot, sha256, SKS_TEMP_LEASE_FILE } from './fsx.js';
 import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT, FROM_CHAT_IMG_TEMP_TRIWIKI_SESSIONS } from './routes.js';
 
 export const DEFAULT_RETENTION_POLICY = Object.freeze({
@@ -483,6 +483,41 @@ function currentProcessOwns(stat: Awaited<ReturnType<typeof fs.lstat>>) {
 
 function sharedTempEntryMatchesProject(entryName: string, projectHash: string) {
   return entryName === `sks-${projectHash}` || entryName.startsWith(`sks-${projectHash}-`);
+}
+
+function activeTempEnvironmentKey(target: string): string | null {
+  const resolvedTarget = path.resolve(target);
+  for (const key of ['SKS_TMP_DIR', 'TMPDIR', 'TMP', 'TEMP']) {
+    const raw = process.env[key];
+    if (!raw) continue;
+    const activePath = path.resolve(raw);
+    if (isWithin(resolvedTarget, activePath)) return key;
+  }
+  return null;
+}
+
+async function liveTempLease(target: string): Promise<{ path: string; pid: number; kind: string | null } | null> {
+  const leasePath = path.join(target, SKS_TEMP_LEASE_FILE);
+  const stat = await fs.lstat(leasePath).catch(() => null);
+  if (!stat?.isFile() || stat.isSymbolicLink() || !currentProcessOwns(stat)) return null;
+  const lease = await readJson(leasePath, null).catch(() => null);
+  const pid = Number(lease?.pid);
+  if (lease?.schema !== 'sks.temp-lease.v1' || !processIdAlive(pid)) return null;
+  return {
+    path: leasePath,
+    pid,
+    kind: lease?.kind ? String(lease.kind) : null
+  };
+}
+
+function processIdAlive(pid: number) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: any) {
+    return error?.code === 'EPERM';
+  }
 }
 
 async function pruneTmp(root: any, policy: any, dryRun: any, actions: any) {
@@ -1092,6 +1127,28 @@ export async function sweepSksTempDirs(root: any, opts: any = {}) {
       if (plannedPaths.has(resolvedTarget)) continue;
       const stat = await fs.lstat(target).catch(() => null);
       if (!stat || stat.isSymbolicLink() || !currentProcessOwns(stat)) continue;
+      const environmentKey = activeTempEnvironmentKey(target);
+      if (environmentKey) {
+        actions.push({
+          action: 'retain_active_sks_temp',
+          path: target,
+          reason: 'active_temp_environment',
+          environment_key: environmentKey
+        });
+        continue;
+      }
+      const lease = stat.isDirectory() ? await liveTempLease(target) : null;
+      if (lease) {
+        actions.push({
+          action: 'retain_active_sks_temp',
+          path: target,
+          reason: 'active_temp_lease',
+          lease_path: lease.path,
+          owner_pid: lease.pid,
+          lease_kind: lease.kind
+        });
+        continue;
+      }
       const inspected = await inspectTempPath(target);
       if (!inspected.complete) {
         actions.push({ action: 'skip_unsafe_temp_entry', path: target, reason: inspected.blockers.join(',') });
@@ -1479,7 +1536,14 @@ export async function enforceRetention(root: any, opts: any = {}) {
   if (fullMissionSweep || opts.rotateLargeJsonl === true) await rotateLargeJsonl(root, policy, dryRun, actions);
   await pruneDisposableReportLogs(root, policy, dryRun, actions, opts);
   await pruneSessionStateFiles(root, policy, dryRun, actions);
-  await sweepSksTempDirs(root, { dryRun, actions, maxAgeHours: opts.sksTempMaxAgeHours ?? policy.max_tmp_age_hours ?? 0 });
+  if (opts.skipSksTempSweep === true) {
+    actions.push({
+      action: 'skip_sks_temp_sweep',
+      reason: opts.afterRoute ? 'post_route_global_temp_isolation' : 'explicit_temp_sweep_skip'
+    });
+  } else {
+    await sweepSksTempDirs(root, { dryRun, actions, maxAgeHours: opts.sksTempMaxAgeHours ?? policy.max_tmp_age_hours ?? 0 });
+  }
   if (opts.pruneWikiArtifacts || policy.prune_wiki_artifacts) await pruneWikiArtifacts(root, { policy, dryRun, actions, lowTrust: opts.pruneWikiLowTrust });
   let report = boundedMode || opts.skipStorageReport === true ? await lightweightStorageReport(root) : await storageReport(root);
   let storageBudget = retentionStorageBudget(report, policy);

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { applyRetentionPlan, enforceRetention, pruneWikiArtifacts, sweepSksTempDirs } from '../retention.js';
-import { managedSksTmpRoot, readJson, sha256 } from '../fsx.js';
+import { managedSksTmpRoot, readJson, sha256, SKS_TEMP_LEASE_FILE } from '../fsx.js';
 import { FROM_CHAT_IMG_TEMP_TRIWIKI_ARTIFACT } from '../routes/constants.js';
 import { backdate, makeRoot, quietPolicy, writeJson } from './retention-test-helpers.js';
 
@@ -165,6 +165,66 @@ test('managed SKS temp cleanup removes stale arbitrary children but retains acti
   } finally {
     if (previousTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previousTmpdir;
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(isolatedTmp, { recursive: true, force: true });
+  }
+});
+
+test('managed SKS temp cleanup preserves the active environment and live leased scratch while removing stale siblings', async () => {
+  const root = await makeRoot('sks-retention-active-temp-');
+  const isolatedTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-retention-active-temp-root-'));
+  const previousTmpdir = process.env.TMPDIR;
+  const previousSksTmpDir = process.env.SKS_TMP_DIR;
+  process.env.TMPDIR = isolatedTmp;
+  const shared = managedSksTmpRoot();
+  const suffix = `${process.pid}-${path.basename(root)}`;
+  const active = path.join(shared, `active-environment-${suffix}`);
+  const leased = path.join(shared, `active-lease-${suffix}`);
+  const stale = path.join(shared, `stale-sibling-${suffix}`);
+  try {
+    for (const dir of [active, leased, stale]) {
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, 'payload.txt'), `${path.basename(dir)}\n`);
+      await backdate(path.join(dir, 'payload.txt'));
+      await backdate(dir);
+    }
+    await writeJson(path.join(leased, SKS_TEMP_LEASE_FILE), {
+      schema: 'sks.temp-lease.v1',
+      kind: 'fixture-live-owner',
+      pid: process.pid,
+      created_at: new Date().toISOString()
+    });
+    process.env.SKS_TMP_DIR = active;
+
+    const retained = await sweepSksTempDirs(root, { maxAgeHours: 0 });
+    assert.equal(await fs.access(active).then(() => true, () => false), true);
+    assert.equal(await fs.access(leased).then(() => true, () => false), true);
+    assert.equal(await fs.access(stale).then(() => true, () => false), false);
+    assert.ok(retained.actions.some((action: any) => action.action === 'retain_active_sks_temp'
+      && action.path === active
+      && action.reason === 'active_temp_environment'
+      && action.environment_key === 'SKS_TMP_DIR'));
+    assert.ok(retained.actions.some((action: any) => action.action === 'retain_active_sks_temp'
+      && action.path === leased
+      && action.reason === 'active_temp_lease'
+      && action.owner_pid === process.pid));
+
+    await writeJson(path.join(leased, SKS_TEMP_LEASE_FILE), {
+      schema: 'sks.temp-lease.v1',
+      kind: 'fixture-dead-owner',
+      pid: 0,
+      created_at: new Date(0).toISOString()
+    });
+    await backdate(path.join(leased, SKS_TEMP_LEASE_FILE));
+    await backdate(leased);
+    const removed = await sweepSksTempDirs(root, { maxAgeHours: 0 });
+    assert.equal(await fs.access(leased).then(() => true, () => false), false);
+    assert.ok(removed.actions.some((action: any) => action.action === 'remove_sks_temp' && action.path === leased));
+  } finally {
+    if (previousTmpdir === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previousTmpdir;
+    if (previousSksTmpDir === undefined) delete process.env.SKS_TMP_DIR;
+    else process.env.SKS_TMP_DIR = previousSksTmpDir;
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(isolatedTmp, { recursive: true, force: true });
   }

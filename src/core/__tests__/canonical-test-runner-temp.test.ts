@@ -18,7 +18,8 @@ test('canonical test runner isolates direct os.tmpdir allocations and removes th
       const path = require('node:path');
       const test = require('node:test');
       test('records canonical temp environment', () => {
-        const values = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP, SKS_TMP_DIR: process.env.SKS_TMP_DIR };
+        const lease = JSON.parse(fs.readFileSync(path.join(process.env.SKS_TMP_DIR, '.sks-temp-lease.json'), 'utf8'));
+        const values = { TMPDIR: process.env.TMPDIR, TMP: process.env.TMP, TEMP: process.env.TEMP, SKS_TMP_DIR: process.env.SKS_TMP_DIR, lease };
         fs.writeFileSync(path.join(process.cwd(), 'observed.json'), JSON.stringify(values));
       });
     `);
@@ -33,6 +34,9 @@ test('canonical test runner isolates direct os.tmpdir allocations and removes th
     assert.equal(observed.TMPDIR, observed.TMP);
     assert.equal(observed.TMPDIR, observed.TEMP);
     assert.equal(observed.TMPDIR, observed.SKS_TMP_DIR);
+    assert.equal(observed.lease.schema, 'sks.temp-lease.v1');
+    assert.equal(observed.lease.kind, 'canonical-test-runner');
+    assert.ok(Number(observed.lease.pid) > 0);
     assert.ok(String(observed.TMPDIR).startsWith(`${managedSksTmpRoot()}${path.sep}sks-canonical-test-`));
     assert.equal(fs.existsSync(observed.TMPDIR), false);
   } finally {

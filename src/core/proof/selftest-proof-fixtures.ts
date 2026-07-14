@@ -38,11 +38,9 @@ export async function writeSelftestRouteProof(root: any, {
     route,
     // This fixture writes into a scratch temp directory (see selftestCommand's
     // `tmpdir('sks-selftest-')`) that is discarded after the call returns, so trust
-    // artifacts and post-route retention are pointless here. Worse than pointless:
-    // writeRouteCompletionProof's default path runs runPostRouteRetention() with
-    // `max_tmp_age_hours: 0`, which swept the just-written completion-proof.json
-    // before the caller could read it back, making `sks selftest --mock` fail with
-    // "completion proof fixture missing" even though the proof was written correctly.
+    // artifacts and post-route retention are pointless here. The production
+    // post-route path now skips global temp sweeping, but this mock fixture still
+    // avoids unnecessary trust/retention work before its caller removes the root.
     lightweightEvidence: true,
     status: 'mock_only',
     executionClass: 'mock_fixture',

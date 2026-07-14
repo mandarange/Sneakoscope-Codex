@@ -130,7 +130,7 @@ async function runPostRouteRetention(root: any, missionId: any) {
       afterRoute: true,
       completedMissionId: missionId,
       pruneReportLogs: false,
-      policy: { max_tmp_age_hours: 0 }
+      skipSksTempSweep: true
     });
     return {
       ok: true,

@@ -13,6 +13,7 @@ import { PACKAGE_VERSION } from './version.js';
 export { PACKAGE_VERSION };
 export const DEFAULT_PROCESS_TAIL_BYTES = 256 * 1024;
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
+export const SKS_TEMP_LEASE_FILE = '.sks-temp-lease.json';
 const gunzipAsync = promisify(gunzipCallback);
 
 export interface RunProcessOptions {

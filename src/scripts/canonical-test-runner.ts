@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { tmpdir } from '../core/fsx.js';
+import { SKS_TEMP_LEASE_FILE, tmpdir, writeJsonAtomic } from '../core/fsx.js';
 
 const root = process.cwd();
 const compiled = discover(path.join(root, 'dist'), (file) => file.endsWith('.test.js') && file.includes(`${path.sep}__tests__${path.sep}`));
@@ -59,6 +59,13 @@ const cleanup = async (): Promise<Error | null> => {
 process.once('exit', () => {
   const error = removeScratchSync();
   if (error) console.error(`canonical test cleanup failed during exit: ${error.message}`);
+});
+
+await writeJsonAtomic(path.join(scratch, SKS_TEMP_LEASE_FILE), {
+  schema: 'sks.temp-lease.v1',
+  kind: 'canonical-test-runner',
+  pid: process.pid,
+  created_at: new Date().toISOString()
 });
 
 const isolatedProcessGroup = process.platform !== 'win32';
