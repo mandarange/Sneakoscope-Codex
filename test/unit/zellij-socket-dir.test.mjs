@@ -15,7 +15,9 @@ import {
 
 test('SKS-provided Zellij socket dir stays short enough for macOS IPC paths', async () => {
   const prepared = await prepareZellijProcessEnv({
-    TMPDIR: '/var/folders/n2/cngnqhgd453fc04dl2kk6jdm0000gn/T/'
+    TMPDIR: '/var/folders/n2/cngnqhgd453fc04dl2kk6jdm0000gn/T/',
+    ZELLIJ_SOCKET_DIR: '',
+    SKS_ZELLIJ_SOCKET_DIR: ''
   });
   assert.equal(prepared.meta.zellij_socket_dir_source, 'sks_default');
   assert.equal(prepared.env.ZELLIJ_SOCKET_DIR, defaultZellijSocketDir());

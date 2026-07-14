@@ -8,8 +8,7 @@ test('GPT final arbiter approves safe fake Codex SDK result', async () => {
   const mod = await import('../../dist/core/codex-control/gpt-final-arbiter.js');
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-gpt-final-test-'));
   const old = snapshotEnv();
-  process.env.NODE_ENV = 'test';
-  process.env.SKS_CODEX_SDK_FAKE = '1';
+  enableHermeticFakeCodex();
   try {
     const result = await mod.runGptFinalArbiter(input('safe'), { cwd: process.cwd(), mutationLedgerRoot: tmp });
     assert.equal(result.ok, true);
@@ -46,8 +45,7 @@ test('GPT final arbiter flags lean over-build fixtures', async () => {
     ['delete validation one-liner', 'rejected', 'unsafe_candidate_patch']
   ];
   const old = snapshotEnv();
-  process.env.NODE_ENV = 'test';
-  process.env.SKS_CODEX_SDK_FAKE = '1';
+  enableHermeticFakeCodex();
   try {
     for (const [diff, status, blocker] of cases) {
       const result = await mod.runGptFinalArbiter(input(diff), { writeArtifact: false });
@@ -81,8 +79,16 @@ function snapshotEnv() {
   return {
     NODE_ENV: process.env.NODE_ENV,
     SKS_CODEX_SDK_FAKE: process.env.SKS_CODEX_SDK_FAKE,
-    SKS_GPT_FINAL_ARBITER_UNAVAILABLE: process.env.SKS_GPT_FINAL_ARBITER_UNAVAILABLE
+    SKS_GPT_FINAL_ARBITER_UNAVAILABLE: process.env.SKS_GPT_FINAL_ARBITER_UNAVAILABLE,
+    SKS_CODEX_LB_AUTOBYPASS: process.env.SKS_CODEX_LB_AUTOBYPASS
   };
+}
+
+function enableHermeticFakeCodex() {
+  process.env.NODE_ENV = 'test';
+  process.env.SKS_CODEX_SDK_FAKE = '1';
+  process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
+  delete process.env.SKS_GPT_FINAL_ARBITER_UNAVAILABLE;
 }
 
 function restoreEnv(old) {

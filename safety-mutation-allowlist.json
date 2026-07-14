@@ -2468,12 +2468,6 @@
       "reason": "src/scripts/official-docs-compat-report.ts#module writes only its scoped fixture, generated report, or build artifact; the exact callsite remains release-gated."
     },
     {
-      "file": "src/scripts/package-published-contract-check.ts",
-      "symbol": "cleanupCacheRoot",
-      "token": "rmSync",
-      "reason": "Published-package contract cleanup removes only its mkdtemp npm cache root once at process exit."
-    },
-    {
       "file": "src/scripts/packlist-performance-check.ts",
       "symbol": "runNpmPack",
       "token": "writeFileSync",
@@ -2674,6 +2668,12 @@
     {
       "file": "src/scripts/release-registry-check.ts",
       "symbol": "checkPublishAuth",
+      "token": "writeFileSync",
+      "reason": "Release registry auth preflight writes only the scoped release-publish-auth report under .sneakoscope/reports."
+    },
+    {
+      "file": "src/scripts/release-registry-check.ts",
+      "symbol": "checkTrustedPublisherAuth",
       "token": "writeFileSync",
       "reason": "Release registry auth preflight writes only the scoped release-publish-auth report under .sneakoscope/reports."
     },
@@ -3162,6 +3162,102 @@
       "symbol": "module",
       "token": "writeFileSync",
       "reason": "Real Zellij blackbox writes scoped worker fixture results and the matching proof report."
+    },
+    {
+      "file": "src/core/codex/codex-config-guard.ts",
+      "symbol": "commitCodexConfigIfUnchanged",
+      "token": "rename",
+      "reason": "The guarded commit claims only the hash-verified target config into a unique same-directory backup before atomic replacement."
+    },
+    {
+      "file": "src/core/codex/codex-config-guard.ts",
+      "symbol": "commitCodexConfigIfUnchanged",
+      "token": "chmod",
+      "reason": "The guarded commit applies owner-only permissions only to the verified config and its unique same-directory backup."
+    },
+    {
+      "file": "src/core/codex/codex-config-guard.ts",
+      "symbol": "commitCodexConfigIfUnchanged",
+      "token": "fsp.rm",
+      "reason": "The guarded commit finally removes only its run-unique .sks-commit temporary candidate file."
+    },
+    {
+      "file": "src/core/hooks-runtime/light-turn.ts",
+      "symbol": "consumeLightTurnStopBypass",
+      "token": "fsp.rm",
+      "reason": "Light-turn consumption removes only the session-hashed single-use receipt before validation to prevent replay."
+    },
+    {
+      "file": "src/core/hooks-runtime/light-turn.ts",
+      "symbol": "clearLightTurnStopBypass",
+      "token": "fsp.rm",
+      "reason": "Light-turn cleanup removes only the receipt derived from the caller session hash under project state."
+    },
+    {
+      "file": "src/core/release/npm-pack-proof.ts",
+      "symbol": "writeNpmPackProof",
+      "token": "writeFileSync",
+      "reason": "The pack proof writer persists only the deterministic npm-pack-proof report under .sneakoscope/reports."
+    },
+    {
+      "file": "src/core/research/research-adversarial-review.ts",
+      "symbol": "prepareResearchSubagentRun",
+      "token": "fsp.rm",
+      "reason": "Research cycle preparation clears only prior official-subagent evidence files inside the selected mission directory."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-config.ts",
+      "symbol": "installOfficialSubagentAgentConfigs",
+      "token": "fs.rm",
+      "reason": "Agent config repair removes only legacy role files whose SKS ownership marker and managed body were verified."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-preparation.ts",
+      "symbol": "prepareOfficialSubagentMission",
+      "token": "fsp.rm",
+      "reason": "Mission preparation clears only stale summary, evidence, and gate artifacts inside the selected mission directory."
+    },
+    {
+      "file": "src/core/subagents/official-subagent-runner.ts",
+      "symbol": "runOfficialSubagentWorkflow",
+      "token": "fsp.rm",
+      "reason": "The standalone parent runner removes only its run-unique temporary parent-summary file after reading it."
+    },
+    {
+      "file": "src/core/subagents/subagent-evidence.ts",
+      "symbol": "persistOrReuseTrustworthySubagentParentSummary",
+      "token": "fsp.rm",
+      "reason": "Failed official-subagent outcomes remove only the stale parent-summary artifact in the active artifact directory."
+    },
+    {
+      "file": "src/scripts/agent-native-release-gate.ts",
+      "symbol": "assertRouteNativeBlackbox",
+      "token": "writeFileSync",
+      "reason": "The native release blackbox writes only declared fixture files inside its withScratchDirSync-owned repository."
+    },
+    {
+      "file": "src/scripts/db-route-materialization-check.ts",
+      "symbol": "module",
+      "token": "fsp.writeFile",
+      "reason": "The DB route check writes only package.json inside its mkdtemp-owned fixture repository."
+    },
+    {
+      "file": "src/scripts/db-route-materialization-check.ts",
+      "symbol": "module",
+      "token": "fsp.rm",
+      "reason": "The DB route check removes only the mkdtemp-owned fixture root in its finally block."
+    },
+    {
+      "file": "src/scripts/official-subagent-workflow-check.ts",
+      "symbol": "module",
+      "token": "rmSync",
+      "reason": "The official-subagent workflow check removes only its temporary fixture repository in its finally block."
+    },
+    {
+      "file": "src/scripts/super-search-provider-interface-check.ts",
+      "symbol": "module",
+      "token": "fs.rm",
+      "reason": "The provider-interface check removes only its mkdtemp-owned Super Search mission fixture in its finally block."
     }
   ]
 }

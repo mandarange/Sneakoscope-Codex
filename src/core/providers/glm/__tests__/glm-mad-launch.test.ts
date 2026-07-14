@@ -57,8 +57,8 @@ test('GLM MAD wrapper reads stored key at runtime without embedding raw OpenRout
   assert.doesNotMatch(script, /sk-or-/);
 });
 
-test('GLM MAD disables native swarm by default to block GPT fallback panes', () => {
-  const swarm = resolveMadNativeSwarmOptions(['--glm'], {}, {
+test('GLM MAD blocks explicitly requested native swarm to prevent GPT fallback panes', () => {
+  const swarm = resolveMadNativeSwarmOptions(['--glm', '--mad-native-swarm'], {}, {
     glmLaunch: { provider: 'openrouter', model: GLM_52_OPENROUTER_MODEL }
   });
 

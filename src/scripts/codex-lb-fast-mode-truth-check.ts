@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { run } from '../commands/codex-lb.js';
+import { CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION } from '../core/codex-lb/codex-lb-tool-output-recovery.js';
 
 const calls: any[] = [];
 const home = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-fast-truth-'));
@@ -63,7 +64,16 @@ async function runFastCheck(env: NodeJS.ProcessEnv) {
   try {
     Object.assign(process.env, env);
     process.exitCode = 0;
-    (globalThis as any).fetch = async (_url: string, init: any) => {
+    (globalThis as any).fetch = async (url: string, init: any = {}) => {
+      if (new URL(String(url)).pathname === '/health') {
+        return new Response('{}', {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-app-version': CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION
+          }
+        });
+      }
       const body = JSON.parse(String(init.body || '{}'));
       calls.push({ body });
       const id = calls.length % 2 === 1 ? 'resp_fast_1' : 'resp_fast_2';

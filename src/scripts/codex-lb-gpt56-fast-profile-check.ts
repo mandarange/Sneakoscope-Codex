@@ -12,6 +12,7 @@ import {
 } from '../cli/install-helpers.js'
 import { repairCodexConfigStructure, splitCodexProjectConfigPolicy } from '../core/codex/codex-project-config-policy.js'
 import { parseCodexConfigToml, validateCodexConfigRoundTrip } from '../core/codex/codex-config-toml.js'
+import { CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION } from '../core/codex-lb/codex-lb-tool-output-recovery.js'
 import { normalizeCodexLbToolCatalog } from '../core/codex-lb/codex-lb-tool-catalog.js'
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-lb-gpt56-fast-'))
@@ -38,7 +39,8 @@ const setup = await configureCodexLb({
   forceFastMode: true,
   forceCodexLbApiKeyAuth: true,
   authMode: 'codex-lb',
-  shellProfile: 'skip'
+  shellProfile: 'skip',
+  toolOutputRecoveryFetch
 })
 const fastOn = await ensureGlobalCodexFastModeDuringInstall({ home, configPath, forceFastMode: true })
 const first = assertFastProfile(await fs.readFile(configPath, 'utf8'), 'setup_fast_on')
@@ -46,7 +48,7 @@ const first = assertFastProfile(await fs.readFile(configPath, 'utf8'), 'setup_fa
 const release = await releaseCodexLbAuthHold({ home, configPath, authPath, backupPath: oauthBackupPath })
 const afterOauth = assertFastProfile(await fs.readFile(configPath, 'utf8'), 'use_oauth_roundtrip')
 
-const repair = await repairCodexLbAuth({ home, configPath, envPath, forceCodexLbApiKeyAuth: true, forceFastMode: true, authMode: 'codex-lb' })
+const repair = await repairCodexLbAuth({ home, configPath, envPath, forceCodexLbApiKeyAuth: true, forceFastMode: true, authMode: 'codex-lb', toolOutputRecoveryFetch })
 await fs.writeFile(projectConfig, [
   '# SKS managed fixture',
   'default_profile = "sks-fast-high"',
@@ -169,4 +171,14 @@ function codex0144Model(slug: string) {
     use_responses_lite: true,
     minimal_client_version: '0.144.1'
   }
+}
+
+async function toolOutputRecoveryFetch() {
+  return new Response('{}', {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'x-app-version': CODEX_LB_TOOL_OUTPUT_RECOVERY_MIN_VERSION
+    }
+  })
 }

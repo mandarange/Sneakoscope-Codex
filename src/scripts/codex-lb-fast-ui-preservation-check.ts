@@ -50,9 +50,16 @@ await fs.writeFile(configPath, [
 ].join('\n'))
 await fs.writeFile(envPath, 'export CODEX_LB_BASE_URL="https://lb.example.test/backend-api/codex"\nexport CODEX_LB_API_KEY="sk-test-fast-ui"\n')
 await fs.writeFile(authPath, `${oauthAuth}\n`)
+const toolOutputRecoveryFetch = async () => new Response('{}', {
+  status: 200,
+  headers: {
+    'content-type': 'application/json',
+    'x-app-version': '1.21.0-beta.3'
+  }
+})
 
 const install = await ensureGlobalCodexFastModeDuringInstall({ home, configPath, forceFastMode: true })
-const firstRepair = await repairCodexLbAuth({ home, configPath, envPath, forceCodexLbApiKeyAuth: true, forceFastMode: true, authMode: 'codex-lb' })
+const firstRepair = await repairCodexLbAuth({ home, configPath, envPath, forceCodexLbApiKeyAuth: true, forceFastMode: true, authMode: 'codex-lb', toolOutputRecoveryFetch })
 const firstConfig = await fs.readFile(configPath, 'utf8')
 const firstAssert = assertConfig(firstConfig, 'first_use_codex_lb')
 
@@ -67,7 +74,7 @@ const releaseAssert = {
   ]
 }
 
-const secondRepair = await repairCodexLbAuth({ home, configPath, envPath, forceCodexLbApiKeyAuth: true, forceFastMode: true, authMode: 'codex-lb' })
+const secondRepair = await repairCodexLbAuth({ home, configPath, envPath, forceCodexLbApiKeyAuth: true, forceFastMode: true, authMode: 'codex-lb', toolOutputRecoveryFetch })
 const secondConfig = await fs.readFile(configPath, 'utf8')
 const secondAssert = assertConfig(secondConfig, 'second_use_codex_lb')
 
