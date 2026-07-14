@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-14T04:10:54.865Z",
-  "git_head_sha": "fb02d1629a35ca227abe8600a363709d0e2c3b05",
-  "source_file_count": 3522,
+  "generated_at": "2026-07-14T05:21:44.158Z",
+  "git_head_sha": "26b6e6821aaa5f4fa048b7c45a24fea5e2f8a747",
+  "source_file_count": 3524,
   "index_digest": "c1f92891d27025553c2edd32318f545ca3c5c123c2b6c467ee2a70b8830c52a4",
   "entries": [
     {
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (118 files, 34727 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 518 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (118 files, 34536 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 519 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -307,7 +307,7 @@
     },
     {
       "id": "code:core-hooks-runtime",
-      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (13 files, 2023 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 35 more. It has no detected cross-module dependencies.",
+      "text": "core-hooks-runtime is a core module at src/core/hooks-runtime (14 files, 2114 loc, low risk). Key exports: async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null>; async function claimHookInvocation(root: string, name: unknown, payload: any = {}); async function loadHookPayload(); function normalizeHookResult(name: any, result: any = {}); function codexHookEventName(name: any), and 36 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/hooks-runtime"
@@ -709,13 +709,13 @@
     },
     {
       "id": "code:core-research",
-      "text": "core-research is a core module at src/core/research (39 files, 7691 loc, medium risk). Key exports: async function writeVerifiedSuperSearchFixture(dir: string, ids: string[], name = 'verified-fixture'); interface ClaimEvidenceMatrix; interface ClaimEvidenceMatrixSummary; const CLAIM_EVIDENCE_MATRIX_ARTIFACT = 'claim-evidence-matrix.json';; function defaultClaimEvidenceMatrix(missionId = ''): ClaimEvidenceMatrix, and 110 more. It has no detected cross-module dependencies.",
+      "text": "core-research is a core module at src/core/research (40 files, 7807 loc, high risk). Key exports: async function writeVerifiedSuperSearchFixture(dir: string, ids: string[], name = 'verified-fixture'); interface ClaimEvidenceMatrix; interface ClaimEvidenceMatrixSummary; const CLAIM_EVIDENCE_MATRIX_ARTIFACT = 'claim-evidence-matrix.json';; function defaultClaimEvidenceMatrix(missionId = ''): ClaimEvidenceMatrix, and 112 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/research"
         }
       ],
-      "trust_score": 0.7,
+      "trust_score": 0.55,
       "freshness": "unknown",
       "token_cost": 119
     },
