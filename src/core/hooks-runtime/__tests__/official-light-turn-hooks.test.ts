@@ -496,6 +496,12 @@ test('official events plus parent summary pass Naruto without legacy process art
     assert.equal(gate.completed_subagents, 2);
     assert.equal(gate.failed_subagents, 0);
     assert.deepEqual(gate.event_sources, ['SubagentStart', 'SubagentStop']);
+    const terminalEvents = await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8');
+    await evaluateHookPayload('subagent-stop', officialSubagentHookPayload('SubagentStop', 'agent-late', 'Unrelated later result.'), { root, state });
+    assert.equal(await fsp.readFile(path.join(dir, 'subagent-events.jsonl'), 'utf8'), terminalEvents);
+    const terminalEvidence = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-evidence.json'), 'utf8'));
+    assert.equal(terminalEvidence.ok, true);
+    assert.deepEqual(terminalEvidence.unmatched_stop_thread_ids, []);
     const ledger = JSON.parse(await fsp.readFile(path.join(dir, 'work-order-ledger.json'), 'utf8'));
     assert.equal(ledger.items[0].status, 'verified');
     await assert.rejects(fsp.access(path.join(dir, 'agents', 'naruto-work-graph.json')));

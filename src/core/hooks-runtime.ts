@@ -211,6 +211,16 @@ async function recordAndRefreshSubagentEvidence(root: string, artifactDir: strin
   }, async () => {
     const plan: any = await readJson(path.join(artifactDir, 'subagent-plan.json'), {});
     const workflowRunId = String(plan?.workflow_run_id || state?.official_subagent_run_id || '').trim();
+    const terminalGate: any = plan?.workflow === 'official_codex_subagent'
+      ? await readJson(path.join(artifactDir, 'naruto-gate.json'), null).catch(() => null)
+      : null;
+    const terminalRunId = String(terminalGate?.workflow_run_id || '').trim();
+    if (workflowRunId
+      && terminalRunId === workflowRunId
+      && terminalGate?.passed === true
+      && terminalGate?.terminal === true) {
+      return null;
+    }
     const eventPayload = workflowRunId && payload && typeof payload === 'object' && !Array.isArray(payload)
       ? { ...payload, workflow_run_id: workflowRunId }
       : payload;
