@@ -34,7 +34,7 @@ test('every registry-marked read-only command appears in the manifest as read_on
   }
 });
 
-test('a clearly destructive-sounding command requires explicit opt-in', () => {
+test('an explicitly R3 command requires explicit opt-in without name regex inference', () => {
   const manifest = buildAgentManifest();
   const destructiveCandidate = manifest.tools.find((tool) => tool.name.includes('uninstall'));
   assert.ok(destructiveCandidate, 'fixture assumption invalid: no uninstall-family command found in registry');
@@ -59,6 +59,12 @@ test('every manifest entry has a well-formed shape', () => {
     assert.equal(typeof tool.json_output_supported, 'boolean');
     assert.ok(['fast', 'normal', 'long'].includes(tool.latency_class));
     assert.ok(tool.example_invocation.startsWith(`sks ${tool.name}`));
+    assert.equal(tool.contract_schema, 'sks.command-contract.v2');
+    assert.ok(['R0', 'R1', 'R2', 'R3'].includes(tool.risk));
+    assert.equal(typeof tool.remote_allowed, 'boolean');
+    assert.equal(typeof tool.telegram_allowed, 'boolean');
+    assert.equal(tool.input_schema.type, 'object');
+    assert.equal(tool.input_schema.additionalProperties, false);
   }
 });
 

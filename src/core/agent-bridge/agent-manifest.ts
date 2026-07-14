@@ -1,7 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { COMMANDS, type CommandEntry, type CommandName } from '../../cli/command-registry.js';
-import { nowIso, packageRoot } from '../fsx.js';
+import { nowIso } from '../fsx.js';
+import { commandContract, validateCommandContractRegistry, type CommandRisk } from '../safety/command-contract/index.js';
 
 export type LatencyClass = 'fast' | 'normal' | 'long';
 
@@ -14,6 +13,12 @@ export interface AgentManifestEntry {
   latency_class: LatencyClass;
   example_invocation: string;
   maturity: CommandEntry['maturity'];
+  contract_schema: 'sks.command-contract.v2';
+  risk: CommandRisk;
+  remote_allowed: boolean;
+  telegram_allowed: boolean;
+  input_schema: Record<string, unknown>;
+  required_capabilities: string[];
 }
 
 export interface AgentManifest {
@@ -32,55 +37,28 @@ export interface AgentManifestValidation {
   duplicate_names: string[];
 }
 
-/** Keyword match on name+summary only, word-bounded to avoid substrings like "preset" matching "reset"; never invent commands not present in COMMANDS. */
-const DESTRUCTIVE_NAME_PATTERNS = [/uninstall/, /^mad-sks$/, /^mad-db$/, /\breset\b/, /\bpurge\b/, /\bwipe\b/, /\bdelete\b/];
-const DESTRUCTIVE_SUMMARY_PATTERNS = [/uninstall/i, /irreversib/i, /destructive/i, /\bdeletes?\b/i, /\bwipe[sd]?\b/i, /\bpurge[sd]?\b/i, /\breset[s]?\b/i];
-
-const LONG_RUNNING_NAME_PATTERNS = [/^naruto$/, /^mad-sks$/, /^mad-db$/, /^update$/, /^update-check$/, /^postinstall$/, /^agent$/, /^team$/, /^loop$/, /^research$/, /^autoresearch$/];
-const LONG_RUNNING_SUMMARY_PATTERNS = [/naruto/i, /shadow-clone swarm/i, /\bmad[- ]sks\b/i, /\bmad[- ]db\b/i, /\binstall\b/i, /\bupdate\b/i, /multi-session agent missions/i];
-
-function isDestructive(name: string, summary: string): boolean {
-  if (DESTRUCTIVE_NAME_PATTERNS.some((re) => re.test(name))) return true;
-  return DESTRUCTIVE_SUMMARY_PATTERNS.some((re) => re.test(summary));
-}
-
-function isLongRunning(name: string, summary: string): boolean {
-  if (LONG_RUNNING_NAME_PATTERNS.some((re) => re.test(name))) return true;
-  return LONG_RUNNING_SUMMARY_PATTERNS.some((re) => re.test(summary));
-}
-
-/** Best-effort literal scan of the compiled command file; unreadable (e.g. packaged install without dist) means false, never a guessed true. */
-function scanSupportsJsonFlag(packageRequiredFiles: readonly string[]): boolean {
-  const root = packageRoot();
-  for (const relFile of packageRequiredFiles) {
-    try {
-      const abs = path.join(root, relFile);
-      if (!fs.existsSync(abs)) continue;
-      const text = fs.readFileSync(abs, 'utf8');
-      if (text.includes("'--json'") || text.includes('"--json"')) return true;
-    } catch {
-      continue;
-    }
-  }
-  return false;
-}
-
 function exampleInvocation(name: string, jsonSupported: boolean): string {
   return jsonSupported ? `sks ${name} --json` : `sks ${name}`;
 }
 
 function buildEntry(name: CommandName, command: CommandEntry): AgentManifestEntry {
-  const readOnly = command.readonly === true;
-  const jsonSupported = scanSupportsJsonFlag(command.packageRequiredFiles);
+  const contract = commandContract(name);
+  if (!contract) throw new Error(`Missing command contract for ${name}`);
   return {
     name,
     description: command.summary,
-    read_only: readOnly,
-    requires_explicit_opt_in: isDestructive(name, command.summary),
-    json_output_supported: jsonSupported,
-    latency_class: readOnly ? 'fast' : (isLongRunning(name, command.summary) ? 'long' : 'normal'),
-    example_invocation: exampleInvocation(name, jsonSupported),
-    maturity: command.maturity
+    read_only: contract.read_only,
+    requires_explicit_opt_in: contract.risk === 'R2' || contract.risk === 'R3',
+    json_output_supported: contract.supports_json,
+    latency_class: contract.latency,
+    example_invocation: exampleInvocation(name, contract.supports_json),
+    maturity: command.maturity,
+    contract_schema: contract.schema,
+    risk: contract.risk,
+    remote_allowed: contract.remote_allowed,
+    telegram_allowed: contract.telegram_allowed,
+    input_schema: contract.input_schema,
+    required_capabilities: [...contract.required_capabilities]
   };
 }
 
@@ -105,8 +83,10 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
   const unexpectedNames = [...observedSet].filter((name) => !(name in COMMANDS)).sort();
   const sortedNames = [...observedNames].sort();
   const issues: string[] = [];
+  const contractValidation = validateCommandContractRegistry();
 
   if (candidate?.schema !== 'sks.agent-manifest.v1') issues.push('schema');
+  if (!contractValidation.ok) issues.push(...contractValidation.issues.map((entry) => `command_contract:${entry}`));
   if (!Array.isArray(candidate?.tools)) issues.push('tools');
   if (duplicateNames.length) issues.push(...duplicateNames.map((name) => `duplicate_tool:${name}`));
   if (missingNames.length) issues.push(...missingNames.map((name) => `missing_registry_tool:${name}`));
@@ -121,6 +101,11 @@ export function validateAgentManifest(manifest: unknown): AgentManifestValidatio
     if (typeof (tool as any)?.json_output_supported !== 'boolean') issues.push(`invalid_json_support:${name || '<missing>'}`);
     if (!['fast', 'normal', 'long'].includes(String((tool as any)?.latency_class || ''))) issues.push(`invalid_latency_class:${name || '<missing>'}`);
     if (typeof (tool as any)?.example_invocation !== 'string' || !(tool as any).example_invocation.startsWith(`sks ${name}`)) issues.push(`invalid_example:${name || '<missing>'}`);
+    if ((tool as any)?.contract_schema !== 'sks.command-contract.v2') issues.push(`invalid_contract_schema:${name || '<missing>'}`);
+    if (!['R0', 'R1', 'R2', 'R3'].includes(String((tool as any)?.risk || ''))) issues.push(`invalid_risk:${name || '<missing>'}`);
+    if (typeof (tool as any)?.remote_allowed !== 'boolean') issues.push(`invalid_remote_allowed:${name || '<missing>'}`);
+    if (typeof (tool as any)?.telegram_allowed !== 'boolean') issues.push(`invalid_telegram_allowed:${name || '<missing>'}`);
+    if (!(tool as any)?.input_schema || typeof (tool as any).input_schema !== 'object') issues.push(`invalid_input_schema:${name || '<missing>'}`);
   }
 
   return {

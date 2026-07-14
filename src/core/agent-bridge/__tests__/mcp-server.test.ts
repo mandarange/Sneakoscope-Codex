@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { runMcpServer } from '../mcp-server.js';
+import { invokeSksTool, runMcpServer } from '../mcp-server.js';
 import { buildAgentManifest } from '../agent-manifest.js';
+import { commandContract } from '../../safety/command-contract/index.js';
 
 interface JsonRpcResponse {
   jsonrpc: string;
@@ -91,11 +92,45 @@ test('runMcpServer tools/list returns only read-only manifest tools by default',
   const listedNames = response.result.tools.map((t: any) => t.name);
   for (const name of listedNames) {
     assert.ok(readOnlyNames.has(name), `tools/list exposed non-read-only tool ${name} without --expose-exec`);
+    const descriptor = response.result.tools.find((entry: any) => entry.name === name);
+    assert.equal(descriptor.inputSchema.type, 'object');
+    assert.equal(descriptor.inputSchema.additionalProperties, false);
   }
   assert.ok(listedNames.includes('status'), 'tools/list missing expected read-only tool "status"');
   for (const name of nonReadOnlyNames) {
     assert.ok(!listedNames.includes(name), `tools/list must not expose non-read-only tool ${name} by default`);
   }
+});
+
+test('invokeSksTool validates input, applies argv, and uses latency bounds', async () => {
+  const contract = commandContract('stop-gate');
+  assert.ok(contract);
+  let observedArgs: readonly string[] = [];
+  let observedOptions: any = null;
+  const result = await invokeSksTool(contract, { route: 'Naruto', json: true }, async (_command, args, options) => {
+    observedArgs = args;
+    observedOptions = options;
+    return { code: 0, stdout: '{}', stderr: '', stdoutBytes: 2, stderrBytes: 0, truncated: false, timedOut: false };
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.argv, ['stop-gate', 'check', '--route', 'Naruto', '--json']);
+  assert.ok(observedArgs.includes('stop-gate'));
+  assert.equal(observedOptions.timeoutMs, 15_000);
+  assert.equal(observedOptions.maxOutputBytes, 128 * 1024);
+});
+
+test('invokeSksTool rejects invalid arguments before spawning', async () => {
+  const contract = commandContract('status');
+  assert.ok(contract);
+  let spawned = false;
+  await assert.rejects(
+    invokeSksTool(contract, { argv: ['--unsafe'] }, async () => {
+      spawned = true;
+      throw new Error('must not run');
+    }),
+    /INVALID_ARGUMENTS|Invalid arguments/
+  );
+  assert.equal(spawned, false);
 });
 
 test('runMcpServer tools/call on a safe read-only tool spawns sks and returns its stdout', async () => {

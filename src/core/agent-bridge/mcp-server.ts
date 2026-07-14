@@ -2,6 +2,13 @@ import { fileURLToPath } from 'node:url';
 import { buildAgentManifest, type AgentManifestEntry } from './agent-manifest.js';
 import { AGENT_MODE_ENV_PASSTHROUGH } from './agent-mode.js';
 import { exists, runProcess } from '../fsx.js';
+import {
+  commandContract,
+  outputCapFor,
+  timeoutFor,
+  validateJsonSchema,
+  type CommandContractV2
+} from '../safety/command-contract/index.js';
 
 export interface RunMcpServerOptions {
   exposeExec?: boolean;
@@ -36,21 +43,21 @@ async function loadMcpSdk(): Promise<{
 }
 
 function exposedTools(manifest: AgentManifestEntry[], exposeExec: boolean): AgentManifestEntry[] {
-  return exposeExec ? manifest : manifest.filter((tool) => tool.read_only === true);
+  return manifest.filter((tool) =>
+    tool.remote_allowed === true
+    && tool.risk !== 'R3'
+    && (exposeExec || tool.risk === 'R0')
+  );
 }
 
 function toMcpToolDescriptor(entry: AgentManifestEntry): Record<string, unknown> {
   return {
     name: entry.name,
     description: entry.description,
-    inputSchema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: true
-    },
+    inputSchema: entry.input_schema,
     annotations: {
       readOnlyHint: entry.read_only,
-      destructiveHint: entry.requires_explicit_opt_in,
+      destructiveHint: entry.risk === 'R2' || entry.risk === 'R3',
       title: entry.name
     }
   };
@@ -64,23 +71,54 @@ async function resolveSksEntrypoint(): Promise<string> {
   return (await exists(packedBin)) ? packedBin : sourceBin;
 }
 
-async function invokeSksTool(entry: AgentManifestEntry): Promise<{ ok: boolean; stdout: string; stderr: string; code: number | null }> {
+export async function invokeSksTool(
+  contract: CommandContractV2,
+  input: unknown,
+  run: typeof runProcess = runProcess
+): Promise<{ ok: boolean; stdout: string; stderr: string; code: number | null; timed_out: boolean; truncated: boolean; argv: string[] }> {
+  const validation = validateJsonSchema(input, contract.input_schema);
+  if (!validation.ok) {
+    const detail = validation.issues.map((entry) => `${entry.path}:${entry.code}`).join(', ');
+    throw new McpInvocationError('INVALID_ARGUMENTS', `Invalid arguments for ${contract.name}: ${detail}`);
+  }
+  if (!contract.remote_allowed || contract.risk === 'R3') {
+    throw new McpInvocationError('REMOTE_DENIED', `Remote invocation is denied for ${contract.name}`);
+  }
   const entrypoint = await resolveSksEntrypoint();
-  const commandArgs = [entry.name, ...(entry.json_output_supported ? ['--json'] : [])];
+  const commandArgs = contract.argv_builder(validation.value);
+  if (commandArgs[0] !== contract.name) {
+    throw new McpInvocationError('INVALID_ARGV', `argv builder for ${contract.name} changed the command name`);
+  }
   const passthroughEnv: Record<string, string> = {};
   for (const name of AGENT_MODE_ENV_PASSTHROUGH) passthroughEnv[name] = '1';
-  const result = await runProcess(process.execPath, [entrypoint, ...commandArgs], {
+  const result = await run(process.execPath, [entrypoint, ...commandArgs], {
     env: { ...passthroughEnv, SKS_AGENT_MODE: '1' },
-    timeoutMs: 180_000,
-    maxOutputBytes: 512 * 1024
+    timeoutMs: timeoutFor(contract.latency),
+    maxOutputBytes: outputCapFor(contract.latency)
   });
-  return { ok: result.code === 0, stdout: result.stdout, stderr: result.stderr, code: result.code };
+  return {
+    ok: result.code === 0 && !result.timedOut,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    code: result.code,
+    timed_out: result.timedOut,
+    truncated: result.truncated,
+    argv: commandArgs
+  };
 }
 
-function mcpToolErrorResult(message: string): Record<string, unknown> {
+export class McpInvocationError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(message);
+    this.name = 'McpInvocationError';
+  }
+}
+
+function mcpToolErrorResult(message: string, code = 'EXECUTION_FAILED'): Record<string, unknown> {
   return {
     content: [{ type: 'text', text: message }],
-    isError: true
+    isError: true,
+    structuredContent: { schema: 'sks.mcp-error.v1', ok: false, code, message }
   };
 }
 
@@ -113,9 +151,12 @@ export async function runMcpServer(opts: RunMcpServerOptions = {}): Promise<void
       return mcpToolErrorResult(`Unknown or unexposed tool: ${toolName}`);
     }
     try {
-      const result = await invokeSksTool(entry);
+      const contract = commandContract(entry.name);
+      if (!contract) return mcpToolErrorResult(`Missing command contract: ${entry.name}`, 'CONTRACT_MISSING');
+      const result = await invokeSksTool(contract, request?.params?.arguments ?? {});
       if (!result.ok) {
-        return mcpToolErrorResult(result.stderr || result.stdout || `sks ${toolName} exited with code ${result.code}`);
+        const code = result.timed_out ? 'TIMEOUT' : result.truncated ? 'OUTPUT_LIMIT' : 'EXECUTION_FAILED';
+        return mcpToolErrorResult(result.stderr || result.stdout || `sks ${toolName} exited with code ${result.code}`, code);
       }
       return {
         content: [{ type: 'text', text: result.stdout }],
@@ -123,7 +164,8 @@ export async function runMcpServer(opts: RunMcpServerOptions = {}): Promise<void
       };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      return mcpToolErrorResult(`Failed to run sks ${toolName}: ${message}`);
+      const code = err instanceof McpInvocationError ? err.code : 'EXECUTION_FAILED';
+      return mcpToolErrorResult(`Failed to run sks ${toolName}: ${message}`, code);
     }
   });
 
