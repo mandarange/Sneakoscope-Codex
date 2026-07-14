@@ -8,7 +8,9 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 const PROMPT = 'route truth dynamic scheduler fixture';
 const ROUTE_ARGS = ['--agents', '5', '--work-items', '8', '--target-active-slots', '4', '--minimum-work-items', '5', '--max-queue-expansion', '10', '--mock', '--json'];
 const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-agent-route-blackbox-'));
+const fixtureHome = path.join(fixtureRoot, 'home');
 fs.mkdirSync(path.join(fixtureRoot, '.sneakoscope'), { recursive: true });
+fs.mkdirSync(path.join(fixtureHome, '.codex'), { recursive: true });
 process.once('exit', () => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
 
 export function runRouteBackfillBlackbox(route, gate) {
@@ -121,6 +123,8 @@ function runSks(args, gate) {
       TMP: fixtureRoot,
       TEMP: fixtureRoot,
       PWD: fixtureRoot,
+      HOME: fixtureHome,
+      CODEX_HOME: path.join(fixtureHome, '.codex'),
       // These blackboxes exercise a hermetic mock route inside fixtureRoot.
       // The fixture cwd, not a router bypass, isolates it from operator state.
       SKS_TEST_ISOLATION: '1',
