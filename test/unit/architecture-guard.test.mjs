@@ -19,5 +19,5 @@ test('architecture:guard script verifies pipeline and release wiring', () => {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const report = JSON.parse(result.stdout);
   assert.equal(report.ok, true);
-  assert.deepEqual(report.guarantees, ['ssot', 'solid']);
+  assert.deepEqual(report.guarantees, ['ssot', 'solid', 'merge-base', 'shrink-only']);
 });

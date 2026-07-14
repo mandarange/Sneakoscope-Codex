@@ -4,8 +4,50 @@
     {
       "schema": "sks.architecture-waiver.v1",
       "file": "src/cli/install-helpers.ts",
-      "reason": "generated",
-      "expires_version": "1.0.1"
+      "reason": "generated installer compatibility source pending extraction",
+      "policy": "shrink-only",
+      "baseline_lines": 2989,
+      "expires_version": "6.4.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/commands/doctor.ts",
+      "reason": "legacy command split debt outside the 6.3.0 release scope",
+      "policy": "shrink-only",
+      "baseline_lines": 1901,
+      "expires_version": "6.4.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/agents/agent-orchestrator.ts",
+      "reason": "legacy orchestrator split debt outside the 6.3.0 release scope",
+      "policy": "shrink-only",
+      "baseline_lines": 2225,
+      "expires_version": "6.4.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/codex-app/sks-menubar.ts",
+      "reason": "6.3.0 W01 must shrink this compatibility facade to 80 lines or fewer",
+      "policy": "shrink-only",
+      "baseline_lines": 2459,
+      "expires_version": "6.3.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/commands/mad-sks-command.ts",
+      "reason": "legacy command split debt outside the 6.3.0 release scope",
+      "policy": "shrink-only",
+      "baseline_lines": 1597,
+      "expires_version": "6.4.0"
+    },
+    {
+      "schema": "sks.architecture-waiver.v1",
+      "file": "src/core/pipeline-internals/runtime-core.ts",
+      "reason": "legacy pipeline split debt outside the 6.3.0 release scope",
+      "policy": "shrink-only",
+      "baseline_lines": 1715,
+      "expires_version": "6.4.0"
     }
   ]
 }

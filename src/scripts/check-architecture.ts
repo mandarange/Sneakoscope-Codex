@@ -3,103 +3,147 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+interface ArchitectureBudgetRule {
+  id: string;
+  match: string;
+  max_lines: number;
+  new_file_max_lines?: number;
+}
+
+interface ArchitectureBudgetConfig {
+  schema: 'sks.architecture-budgets.v1';
+  scan_roots: string[];
+  source_extensions: string[];
+  split_review_lines: number;
+  default_new_file_max_lines: number;
+  budgets: ArchitectureBudgetRule[];
+  waiver_policy: {
+    mode: 'shrink-only';
+    required_fields: string[];
+  };
+}
+
+interface ArchitectureWaiver {
+  schema: 'sks.architecture-waiver.v1';
+  file: string;
+  reason: string;
+  policy: 'shrink-only';
+  baseline_lines: number;
+  expires_version: string;
+}
+
 const root = process.cwd();
 const failures: string[] = [];
+const args = process.argv.slice(2);
+const strictAll = args.includes('--strict-all');
+const budgets = loadBudgetConfig();
 const waivers = loadWaivers();
-const changedFiles = changedFileSet();
+const baseRef = optionValue('--base-ref') || process.env.SKS_ARCH_BASE_REF || defaultBaseRef();
+const baseSha = mergeBaseSha(baseRef);
+const baseFiles = trackedFileSet(baseSha);
+const changedFiles = changedFileSet(baseSha);
+let scannedFiles = 0;
 
 runGate('pipeline-budget:check');
 runGate('pipeline-runtime:check');
 checkLargeFiles();
 checkTsImports();
 checkDistRuntime();
+
+const report = {
+  schema: 'sks.architecture-check.v2',
+  ok: failures.length === 0,
+  mode: strictAll ? 'strict-all' : 'merge-base-changed',
+  budget_config: 'config/architecture-budgets.v1.json',
+  base_ref: baseRef,
+  merge_base: baseSha,
+  changed_files: [...changedFiles].sort(),
+  scanned_files: scannedFiles,
+  waiver_policy: budgets.waiver_policy.mode,
+  failures
+};
+writeReport(report);
+
 if (failures.length) {
   console.error('Architecture check failed:');
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
-console.log('Architecture check passed');
+console.log(`Architecture check passed (${report.mode}, base ${baseSha || 'unavailable'})`);
 
 function runGate(script: string) {
+  const pkg = readJson(path.join(root, 'package.json'));
+  if (!pkg?.scripts?.[script]) {
+    failures.push(`${script}: package script missing`);
+    return;
+  }
   const result = spawnSync('npm', ['run', script], { cwd: root, encoding: 'utf8', stdio: 'pipe' });
   if (result.status !== 0) failures.push(`${script}: ${result.stderr || result.stdout}`.trim());
 }
 
-function checkFacade(relPath: string, maxLines: number) {
-  const file = path.join(root, relPath);
-  if (!fs.existsSync(file)) return failures.push(`${relPath}: missing`);
-  const text = fs.readFileSync(file, 'utf8');
-  const lines = text.split(/\r?\n/).length;
-  if (lines > maxLines) failures.push(`${relPath}: line count ${lines} > ${maxLines}`);
-  if (/from ['"].*\b(team|qa|research|ppt|image-ux-review|db|gx)\b/i.test(text)) failures.push(`${relPath}: imports route implementation domains directly`);
-}
-
 function checkLargeFiles() {
   const files: string[] = [];
-  walk(path.join(root, 'src'), files);
+  for (const scanRoot of budgets.scan_roots) {
+    const absolute = path.join(root, scanRoot);
+    if (fs.existsSync(absolute)) walk(absolute, files);
+  }
   for (const file of files) {
-    const relPath = path.relative(root, file).split(path.sep).join('/');
-    const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/).length;
-    if (isWaivedGenerated(relPath)) continue;
-    const max = architectureLineLimit(relPath);
-    const baselineLines = changedFiles.has(relPath) ? baseLineCount(relPath) : lines;
-    if (lines >= 3000) failures.push(`${relPath}: handwritten file ${lines} lines >= 3000 split-review risk`);
-    if (baselineLines === null && lines > 400) failures.push(`${relPath}: new source file ${lines} lines > 400`);
-    if (changedFiles.has(relPath) && lines > max && (baselineLines === null || lines - baselineLines > 80)) {
-      failures.push(`${relPath}: changed file grew to ${lines} lines > ${max} architecture gate`);
+    const relPath = normalize(path.relative(root, file));
+    if (!budgets.source_extensions.includes(path.extname(file))) continue;
+    if (isGeneratedPath(relPath)) continue;
+    scannedFiles += 1;
+    const lines = lineCount(fs.readFileSync(file, 'utf8'));
+    const rule = budgetRule(relPath);
+    const existedAtBase = baseFiles.has(relPath);
+    const changed = changedFiles.has(relPath);
+    if (!strictAll && !changed) continue;
+
+    if (lines >= budgets.split_review_lines) {
+      const baseLines = existedAtBase ? baseLineCount(relPath, baseSha) : null;
+      const waiverFailure = waiverFailureFor(relPath, lines, baseLines);
+      if (waiverFailure) failures.push(`${relPath}: handwritten file ${lines} lines >= ${budgets.split_review_lines} split-review gate (${waiverFailure})`);
+      continue;
     }
-    if (changedFiles.has(relPath) && !isRouteDomainAggregator(relPath) && importsUnrelatedRouteDomains(file)) failures.push(`${relPath}: changed file imports 5+ unrelated route domains`);
+
+    const maxLines = existedAtBase
+      ? rule.max_lines
+      : Math.min(rule.max_lines, rule.new_file_max_lines ?? budgets.default_new_file_max_lines);
+    if (lines > maxLines) {
+      const baseLines = existedAtBase ? baseLineCount(relPath, baseSha) : null;
+      const waiverFailure = waiverFailureFor(relPath, lines, baseLines);
+      if (waiverFailure) failures.push(`${relPath}: ${lines} lines > ${maxLines} ${rule.id} budget (${waiverFailure})`);
+    }
+    if ((strictAll || changed) && !isRouteDomainAggregator(relPath) && importsUnrelatedRouteDomains(file)) {
+      failures.push(`${relPath}: imports 5+ unrelated route domains`);
+    }
   }
 }
 
-function architectureLineLimit(relPath: string): number {
-  if (/^src\/core\/(?:pipeline|trust-kernel|evidence|proof)\//.test(relPath)) return 1200;
-  if (/^src\/core\/(?:pipeline|trust-kernel|evidence|proof)/.test(relPath)) return 1200;
-  if (/^src\/commands\//.test(relPath) || /^src\/core\/commands\//.test(relPath)) return 900;
-  return 1800;
-}
-
-function isRouteDomainAggregator(relPath: string): boolean {
-  return [
-    'src/core/pipeline-internals/runtime-core.ts',
-    'src/core/pipeline-internals/runtime-gates.ts'
-  ].includes(relPath);
-}
-
-function importsUnrelatedRouteDomains(file: string): boolean {
-  const text = fs.readFileSync(file, 'utf8');
-  const domains = new Set();
-  const imports = importSpecs(text);
-  for (const domain of ['team', 'qa-loop', 'research', 'ppt', 'image-ux-review', 'db', 'gx', 'wiki']) {
-    if (imports.some((spec) => new RegExp(`(^|[/_-])${domain}([/_-]|\\.|$)`, 'i').test(spec))) domains.add(domain);
+function budgetRule(relPath: string): ArchitectureBudgetRule {
+  for (const rule of budgets.budgets) {
+    if (new RegExp(rule.match).test(relPath)) return rule;
   }
-  return domains.size >= 5;
+  throw new Error(`architecture budget missing for ${relPath}`);
 }
 
-function importSpecs(text: string): string[] {
-  const specs: string[] = [];
-  const re = /^\s*import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text))) {
-    const spec = match[1];
-    if (spec) specs.push(spec);
-  }
-  return specs;
-}
-
-function walk(dir: string, out: string[]) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const file = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(file, out);
-    else if (entry.isFile() && /\.(mjs|js|ts)$/.test(entry.name)) out.push(file);
-  }
+function waiverFailureFor(relPath: string, lines: number, baseLines: number | null): string | null {
+  const waiver = waivers.find((candidate) => candidate.file === relPath);
+  if (!waiver) return 'no shrink-only waiver';
+  if (waiver.policy !== budgets.waiver_policy.mode) return `waiver policy ${String(waiver.policy || 'missing')} is not shrink-only`;
+  if (!Number.isInteger(waiver.baseline_lines) || waiver.baseline_lines < 1) return 'waiver baseline_lines missing';
+  if (!waiver.reason || !waiver.expires_version) return 'waiver reason/expiry missing';
+  if (baseLines === null) return 'new files cannot use architecture waivers';
+  const ceiling = Math.min(baseLines, waiver.baseline_lines);
+  return lines <= ceiling ? null : `shrink-only ceiling ${ceiling} exceeded`;
 }
 
 function checkTsImports() {
   const files: string[] = [];
-  walk(path.join(root, 'src'), files);
+  const src = path.join(root, 'src');
+  if (!fs.existsSync(src)) return;
+  walk(src, files);
   for (const file of files.filter((item) => item.endsWith('.ts'))) {
-    const relPath = path.relative(root, file).split(path.sep).join('/');
+    const relPath = normalize(path.relative(root, file));
     const text = fs.readFileSync(file, 'utf8');
     if (/from\s+['"][^'"]+\.mjs['"]|import\(\s*['"][^'"]+\.mjs['"]\s*\)/.test(text)) {
       failures.push(`${relPath}: TypeScript imports .mjs runtime`);
@@ -113,47 +157,134 @@ function checkDistRuntime() {
   const files: string[] = [];
   walk(dist, files);
   for (const file of files) {
-    const relPath = path.relative(root, file).split(path.sep).join('/');
+    const relPath = normalize(path.relative(root, file));
     if (relPath.endsWith('.mjs')) failures.push(`${relPath}: dist .mjs runtime forbidden`);
   }
 }
 
-function loadWaivers() {
-  const file = path.join(root, 'src', 'generated', 'architecture-waivers.json');
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return Array.isArray(parsed.waivers) ? parsed.waivers : [];
-  } catch {
-    return [];
+function loadBudgetConfig(): ArchitectureBudgetConfig {
+  const file = path.join(root, 'config', 'architecture-budgets.v1.json');
+  const parsed = readJson(file);
+  if (parsed?.schema !== 'sks.architecture-budgets.v1' || !Array.isArray(parsed?.budgets)) {
+    throw new Error('config/architecture-budgets.v1.json is missing or invalid');
   }
+  if (parsed?.waiver_policy?.mode !== 'shrink-only') throw new Error('architecture waiver policy must be shrink-only');
+  return parsed as ArchitectureBudgetConfig;
 }
 
-function isWaivedGenerated(relPath: string): boolean {
-  return /^src\/generated\//.test(relPath)
-    || waivers.some((waiver: any) => waiver?.schema === 'sks.architecture-waiver.v1'
-      && waiver.file === relPath
-      && waiver.reason === 'generated'
-      && waiver.expires_version);
+function loadWaivers(): ArchitectureWaiver[] {
+  const file = path.join(root, 'src', 'generated', 'architecture-waivers.json');
+  const parsed = readJson(file);
+  return Array.isArray(parsed?.waivers) ? parsed.waivers : [];
 }
 
-function changedFileSet(): Set<string> {
+function changedFileSet(base: string | null): Set<string> {
   const out = new Set<string>();
-  for (const line of gitLines(['diff', '--name-only', 'HEAD', '--'])) out.add(normalize(line));
+  if (base) {
+    for (const line of gitLines(['diff', '--name-only', '--diff-filter=ACMR', `${base}...HEAD`, '--'])) out.add(normalize(line));
+  }
+  for (const line of gitLines(['diff', '--name-only', '--diff-filter=ACMR', '--'])) out.add(normalize(line));
+  for (const line of gitLines(['diff', '--cached', '--name-only', '--diff-filter=ACMR', '--'])) out.add(normalize(line));
   for (const line of gitLines(['ls-files', '--others', '--exclude-standard'])) out.add(normalize(line));
   return out;
 }
 
-function baseLineCount(relPath: string): number | null {
-  const result = spawnSync('git', ['show', `HEAD:${relPath}`], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+function trackedFileSet(base: string | null): Set<string> {
+  if (!base) return new Set<string>();
+  return new Set(gitLines(['ls-tree', '-r', '--name-only', base]));
+}
+
+function baseLineCount(relPath: string, base: string | null): number | null {
+  if (!base) return null;
+  const result = spawnSync('git', ['show', `${base}:${relPath}`], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) return null;
-  const text = String(result.stdout || '');
+  return lineCount(String(result.stdout || ''));
+}
+
+function defaultBaseRef(): string {
+  for (const candidate of ['origin/main', 'main']) {
+    if (gitOk(['rev-parse', '--verify', candidate])) return candidate;
+  }
+  return 'HEAD';
+}
+
+function mergeBaseSha(ref: string): string | null {
+  const result = spawnSync('git', ['merge-base', 'HEAD', ref], { cwd: root, encoding: 'utf8' });
+  if (result.status === 0 && String(result.stdout || '').trim()) return String(result.stdout).trim();
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
+  return head.status === 0 ? String(head.stdout || '').trim() || null : null;
+}
+
+function optionValue(name: string): string {
+  const index = args.indexOf(name);
+  return index >= 0 ? String(args[index + 1] || '').trim() : '';
+}
+
+function isGeneratedPath(relPath: string): boolean {
+  return /^src\/generated\//.test(relPath);
+}
+
+function isRouteDomainAggregator(relPath: string): boolean {
+  return [
+    'src/core/pipeline-internals/runtime-core.ts',
+    'src/core/pipeline-internals/runtime-gates.ts'
+  ].includes(relPath);
+}
+
+function importsUnrelatedRouteDomains(file: string): boolean {
+  const text = fs.readFileSync(file, 'utf8');
+  const domains = new Set<string>();
+  const imports = importSpecs(text);
+  for (const domain of ['team', 'qa-loop', 'research', 'ppt', 'image-ux-review', 'db', 'gx', 'wiki']) {
+    if (imports.some((spec) => new RegExp(`(^|[/_-])${domain}([/_-]|\\.|$)`, 'i').test(spec))) domains.add(domain);
+  }
+  return domains.size >= 5;
+}
+
+function importSpecs(text: string): string[] {
+  const specs: string[] = [];
+  const re = /^\s*import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text))) {
+    if (match[1]) specs.push(match[1]);
+  }
+  return specs;
+}
+
+function walk(dir: string, out: string[]) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(file, out);
+    else if (entry.isFile()) out.push(file);
+  }
+}
+
+function lineCount(text: string): number {
   return text ? text.split(/\r?\n/).length : 0;
 }
 
-function gitLines(args: string[]): string[] {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+function readJson(file: string): any {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function gitLines(gitArgs: string[]): string[] {
+  const result = spawnSync('git', gitArgs, { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) return [];
   return String(result.stdout || '').split(/\r?\n/).map(normalize).filter(Boolean);
+}
+
+function gitOk(gitArgs: string[]): boolean {
+  return spawnSync('git', gitArgs, { cwd: root, stdio: 'ignore' }).status === 0;
+}
+
+function writeReport(value: unknown) {
+  const dir = path.join(root, '.sneakoscope', 'reports');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'architecture-check.json'), `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function normalize(file: string): string {

@@ -1,0 +1,23 @@
+{
+  "schema": "sks.release-overengineering-deletions.v1",
+  "removed_modules": [],
+  "removed_lines": 0,
+  "avoided_dependencies": [
+    "new database",
+    "Telegram SDK dependency",
+    "SSH library dependency",
+    "custom TOML parser expansion",
+    "Rust UI runtime"
+  ],
+  "avoided_background_processes": [
+    "per-worker-Mac daemon",
+    "always-on multi-Mac stream",
+    "custom relay service"
+  ],
+  "avoided_state_stores": [
+    "event-sourcing database",
+    "second proof bus",
+    "transport-specific command registries"
+  ],
+  "notes": "This baseline receipt is updated after integration with actual deleted modules and line counts. The only permitted new long-running process is the single Telegram Hub on its owner Mac."
+}

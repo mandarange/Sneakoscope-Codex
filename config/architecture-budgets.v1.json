@@ -1,0 +1,70 @@
+{
+  "schema": "sks.architecture-budgets.v1",
+  "scan_roots": [
+    "src",
+    "native"
+  ],
+  "source_extensions": [
+    ".mjs",
+    ".js",
+    ".ts",
+    ".swift"
+  ],
+  "split_review_lines": 3000,
+  "default_new_file_max_lines": 450,
+  "budgets": [
+    {
+      "id": "menubar-app-delegate",
+      "match": "^native/sks-menubar/(?:Sources/)?AppDelegate\\.swift$",
+      "max_lines": 250,
+      "new_file_max_lines": 250
+    },
+    {
+      "id": "menubar-swift",
+      "match": "^native/sks-menubar/.*\\.swift$",
+      "max_lines": 500,
+      "new_file_max_lines": 500
+    },
+    {
+      "id": "menubar-facade",
+      "match": "^src/core/codex-app/sks-menubar\\.ts$",
+      "max_lines": 80,
+      "new_file_max_lines": 80
+    },
+    {
+      "id": "menubar-typescript",
+      "match": "^src/core/codex-app/menubar/.*\\.ts$",
+      "max_lines": 450,
+      "new_file_max_lines": 450
+    },
+    {
+      "id": "pipeline-trust-evidence-proof",
+      "match": "^src/core/(?:pipeline|trust-kernel|evidence|proof)(?:/|\\.)",
+      "max_lines": 1200,
+      "new_file_max_lines": 450
+    },
+    {
+      "id": "command-module",
+      "match": "^src/(?:commands|core/commands)/",
+      "max_lines": 900,
+      "new_file_max_lines": 450
+    },
+    {
+      "id": "default-handwritten-source",
+      "match": ".*",
+      "max_lines": 1800,
+      "new_file_max_lines": 450
+    }
+  ],
+  "waiver_policy": {
+    "mode": "shrink-only",
+    "required_fields": [
+      "schema",
+      "file",
+      "reason",
+      "policy",
+      "baseline_lines",
+      "expires_version"
+    ]
+  }
+}

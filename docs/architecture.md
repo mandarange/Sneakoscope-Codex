@@ -19,12 +19,25 @@ npm run pipeline-budget:check
 npm run pipeline-runtime:check
 ```
 
-`architecture:check` fails active `src/` files over the 3000-line split-review gate and warns on files over 1500 lines. Existing warnings must be treated as extraction candidates before unrelated logic is added.
+`config/architecture-budgets.v1.json` is the single source of truth for architecture line budgets. `architecture:check` computes committed changes from `git merge-base HEAD <base-ref>` (preferring `origin/main`) and also includes staged, unstaged, and untracked files. This keeps a clean feature checkout observable instead of relying on `git diff HEAD`. Use `--base-ref <ref>` to seal a comparison target and `--strict-all` for release-wide enforcement.
+
+Hard thresholds in the budget SSOT:
+
+- Menu Bar compatibility facade: `80` lines.
+- Menu Bar TypeScript modules: `450` lines.
+- Menu Bar AppDelegate: `250` lines.
+- Other Menu Bar Swift modules: `500` lines.
+- Command modules: `900` lines.
+- Pipeline, trust-kernel, evidence, and proof modules: `1200` lines.
+- Other handwritten source: `1800` lines.
+- Any handwritten file at `3000` lines enters the split-review gate.
+
+Every over-budget legacy waiver is `shrink-only`: it records the merge-base line ceiling and an expiry version, cannot be used for a new file, and fails as soon as the file grows. A waiver never raises the shared budget.
 # 1.0.0 Architecture Gates
 
 Architecture warnings are release failures.
 
-Hard thresholds:
+Hard thresholds are read from the budget SSOT:
 
 - any handwritten file above `1800` lines fails;
 - core pipeline/trust-kernel/evidence/proof files above `1200` lines fail;
