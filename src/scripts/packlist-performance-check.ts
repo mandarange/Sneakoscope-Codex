@@ -10,24 +10,7 @@ import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
 const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || DEFAULT_MAX_UNPACKED_BYTES);
-// Raised from 2300 KiB after the 5.4.0 dollar-command hardening pass added
-// src/core/feature-fixture-executor.ts and expanded several command modules
-// (route-success-helpers.ts, seo-command.ts, ppt-command.ts, qa-loop-command.ts,
-// research-command.ts, image-ux-review-command.ts, mad-sks-command.ts,
-// sks-menubar.ts) with genuine new production logic, pushing the packed size
-// to ~2306 KiB. 5.7.0 adds doctor/update migration repair coverage and publish
-// contract checks, pushing the packed tarball to ~2345 KiB. 5.9.0 adds quantum
-// release evidence scripts (installed package smoke, perf budgets, scorecard,
-// Super-Search contracts, and parallel smoke), pushing the packed tarball to
-// ~2354 KiB. Keep a narrow cap rather than giving the package a broad size
-// budget. 5.11.0 adds package-referenced integrity gates for SEO marketing,
-// Naruto write E2E, high-risk contracts, scorecards, and retention long-run
-// checks; keep those scripts publishable because package contract validation
-// rejects scripts that point at files absent from the tarball. 5.12.0 adds ops
-// maturity diagnostics, migration/recovery smokes, and their package-referenced
-// gates, pushing the packed tarball to ~2400 KiB. 6.0.3 adds the menu restart
-// lifecycle and Naruto GPT-5.6 routing enforcement, bringing the measured
-// packed size to ~2411 KiB; keep the next 1 KiB boundary as the narrow cap.
+// Shared measured budgets stay centralized and intentionally narrow.
 const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYTES);
 const SURFACE_MAX_PACKED = Number(process.env.SKS_PACKAGE_SURFACE_MAX_PACK_BYTES || 25_000_000);
 const SURFACE_MAX_FILES = Number(process.env.SKS_PACKAGE_SURFACE_MAX_FILES || 2500);

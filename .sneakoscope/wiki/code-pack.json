@@ -1,8 +1,8 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-14T07:28:11.145Z",
-  "git_head_sha": "842725fd139392af68a983c5299a015940a97214",
-  "source_file_count": 3524,
+  "generated_at": "2026-07-14T07:52:08.177Z",
+  "git_head_sha": "b01c844d48049d1026bcbc3f780058edc426edc2",
+  "source_file_count": 3525,
   "index_digest": "c1f92891d27025553c2edd32318f545ca3c5c123c2b6c467ee2a70b8830c52a4",
   "entries": [
     {
@@ -601,7 +601,7 @@
     },
     {
       "id": "code:core-proof",
-      "text": "core-proof is a core module at src/core/proof (21 files, 1802 loc, medium risk). Key exports: async function maybeFinalizeRoute(root: any,; function summarizeClaims(claims: any = []); async function appendProofCommand(root: any = packageRoot(), command: any = {}); async function readProofCommands(root: any = packageRoot()); async function collectProofEvidence(root: any = packageRoot()), and 44 more. It has no detected cross-module dependencies.",
+      "text": "core-proof is a core module at src/core/proof (22 files, 1833 loc, medium risk). Key exports: async function maybeFinalizeRoute(root: any,; function summarizeClaims(claims: any = []); async function appendProofCommand(root: any = packageRoot(), command: any = {}); async function readProofCommands(root: any = packageRoot()); async function collectProofEvidence(root: any = packageRoot()), and 44 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/proof"
@@ -685,7 +685,7 @@
     },
     {
       "id": "code:core-release",
-      "text": "core-release is a core module at src/core/release (33 files, 4757 loc, medium risk). Key exports: interface CriticalPathLedger; function buildCriticalPathLedger(input: Omit<CriticalPathLedger, 'schema'>): CriticalPathLedger; function writeCriticalPathLedger(root: string, ledger: CriticalPathLedger): string; const EXTREME_PARALLEL_SCHEDULER_SCHEMA = 'sks.extreme-parallel-scheduler.v1';; interface ExtremeParallelSchedule, and 128 more. It has no detected cross-module dependencies.",
+      "text": "core-release is a core module at src/core/release (33 files, 4754 loc, medium risk). Key exports: interface CriticalPathLedger; function buildCriticalPathLedger(input: Omit<CriticalPathLedger, 'schema'>): CriticalPathLedger; function writeCriticalPathLedger(root: string, ledger: CriticalPathLedger): string; const EXTREME_PARALLEL_SCHEDULER_SCHEMA = 'sks.extreme-parallel-scheduler.v1';; interface ExtremeParallelSchedule, and 128 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/release"

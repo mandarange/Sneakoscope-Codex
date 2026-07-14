@@ -1,7 +1,7 @@
 {
   "schema": "sks.code-pack.v1",
-  "generated_at": "2026-07-14T06:25:56.348Z",
-  "git_head_sha": "f26f4dbb846d7a358d9cf13d54919bfac601b079",
+  "generated_at": "2026-07-14T07:28:11.145Z",
+  "git_head_sha": "842725fd139392af68a983c5299a015940a97214",
   "source_file_count": 3524,
   "index_digest": "c1f92891d27025553c2edd32318f545ca3c5c123c2b6c467ee2a70b8830c52a4",
   "entries": [
@@ -43,7 +43,7 @@
     },
     {
       "id": "code:core",
-      "text": "core is a core module at src/core (118 files, 34546 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 519 more. It has no detected cross-module dependencies.",
+      "text": "core is a core module at src/core (118 files, 34675 loc, high risk). Key exports: const quietPolicy =; async function makeRoot(prefix: string); async function writeJson(file: string, value: unknown); async function backdate(file: string); const ARTIFACT_SCHEMA_VERSION = 1;, and 519 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core"
@@ -601,7 +601,7 @@
     },
     {
       "id": "code:core-proof",
-      "text": "core-proof is a core module at src/core/proof (21 files, 1804 loc, medium risk). Key exports: async function maybeFinalizeRoute(root: any,; function summarizeClaims(claims: any = []); async function appendProofCommand(root: any = packageRoot(), command: any = {}); async function readProofCommands(root: any = packageRoot()); async function collectProofEvidence(root: any = packageRoot()), and 44 more. It has no detected cross-module dependencies.",
+      "text": "core-proof is a core module at src/core/proof (21 files, 1802 loc, medium risk). Key exports: async function maybeFinalizeRoute(root: any,; function summarizeClaims(claims: any = []); async function appendProofCommand(root: any = packageRoot(), command: any = {}); async function readProofCommands(root: any = packageRoot()); async function collectProofEvidence(root: any = packageRoot()), and 44 more. It has no detected cross-module dependencies.",
       "citations": [
         {
           "path": "src/core/proof"
