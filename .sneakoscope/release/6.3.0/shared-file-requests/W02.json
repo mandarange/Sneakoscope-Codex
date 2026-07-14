@@ -1,0 +1,21 @@
+{
+  "schema": "sks.shared-file-request.v1",
+  "workstream": "W02-mcp",
+  "reason": "Register MCP Config Domain v2 as the shared CLI/route surface and wire the native Control Center to the domain without reintroducing Menu Bar-only config logic.",
+  "target_files": [
+    "src/core/commands/mcp-config-command.ts",
+    "src/cli/command-registry.ts",
+    "src/cli/command-manifest-lite.ts",
+    "src/core/routes.ts",
+    "README.md"
+  ],
+  "required_change": "Add `sks mcp config list|get|add|edit|duplicate|enable|disable|remove|test|login|logout|backups|restore` dispatch backed only by `src/core/mcp-config/index.ts`. Support `--scope global|project|effective`, `--stdin-json`, and `--json`; effective is read-only, project mutations require trusted canonical root plus explicit confirmation, and no flag or JSON field may accept raw secret values. Register explicit command metadata/risk: read/list/get/backups are R0, bounded health/login are R1, config mutation/restore are R2 with exact scope, and all remote/Telegram R3-style or raw-shell use is denied. Keep `sks menubar mcp ...` for one release as a deprecation alias. Wire W01 MCP Control Center actions to this CLI instead of embedding a second parser. Refresh README only with behavior proven by the integration tests.",
+  "depends_on_commit": "b463a94916e0976a7da97b7f5b18da6c226237ec",
+  "tests_requiring_change": [
+    "command registry and manifest parity for mcp config",
+    "CLI blackbox for global/project/effective scope",
+    "stdin JSON raw-secret rejection",
+    "menubar mcp deprecation alias",
+    "Control Center MCP action routing"
+  ]
+}
