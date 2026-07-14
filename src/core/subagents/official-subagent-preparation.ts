@@ -10,8 +10,10 @@ import {
   NARUTO_PARENT_MODEL
 } from './model-policy.js'
 import {
+  MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT,
   officialSubagentFanoutPolicy,
-  officialSubagentRolePlan,
+  officialSubagentOnDemandRolePlan,
+  officialSubagentRoleCatalog,
   recommendOfficialSubagentRoles
 } from './agent-catalog.js'
 import { resolveSubagentThreadBudget } from './thread-budget.js'
@@ -56,11 +58,25 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     requiresWrite: input.readOnly !== true
   })
   const officialConfig = await readOfficialSubagentConfig(input.root)
-  const triwikiAttention = await readBoundedTriwikiAttention(input.root)
-  const requestedExplicit = input.requestedSubagentsExplicit ?? input.requestedSubagents !== undefined
+  const triwikiAttention = await readBoundedTriwikiAttention(
+    input.root,
+    triwikiAttentionLimit(taskProfile),
+    goal
+  )
+  const operatorRequested = input.requestedSubagentsExplicit ?? input.requestedSubagents !== undefined
+  const routeContract = mode === 'generic' && !operatorRequested
+    ? routeOwnedSubagentContract(input.route)
+    : null
+  const requestedSubagents = input.requestedSubagents ?? routeContract?.count
+  const requestedSource = operatorRequested
+    ? 'operator'
+    : routeContract
+      ? 'route_contract'
+      : 'automatic'
   const selectedFanoutPolicy = officialSubagentFanoutPolicy({
-    ...(input.requestedSubagents === undefined ? {} : { requestedSubagents: input.requestedSubagents }),
-    requestedExplicit,
+    ...(requestedSubagents === undefined ? {} : { requestedSubagents }),
+    requestedExplicit: requestedSource !== 'automatic',
+    requestedSource,
     taskProfile,
     suggestedRoles: suggestedAgents,
     goal
@@ -85,12 +101,15 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     goal: delegationGoal,
     slices: [],
     requestedSubagents: budget.requestedSubagents,
-    requestedSubagentsExplicit: requestedExplicit,
+    requestedSubagentsExplicit: requestedSource === 'operator',
+    requestedSubagentsSource: requestedSource,
     maxThreads: budget.maxThreads,
     decompositionStatus: 'parent_required',
     triwikiAttention,
     recommendedAgents: suggestedAgents
   })
+  const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
+  const agentCatalog = onDemandAgentCatalogMetadata(selectedAgentPlan)
   const configBlockers = officialConfig.blockers.map((blocker) => `official_subagent_config:${blocker}`)
   const plan = {
     schema: 'sks.subagent-plan.v1',
@@ -105,7 +124,9 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
     decomposition_status: 'parent_required',
     delegation_prompt: delegationPrompt,
     requested_subagents: budget.requestedSubagents,
-    requested_subagents_explicit: requestedExplicit,
+    requested_subagents_explicit: requestedSource === 'operator',
+    requested_subagents_source: requestedSource,
+    route_owned_count_contract: routeContract,
     max_threads: budget.maxThreads,
     first_wave: budget.firstWave,
     wave_count: budget.waveCount,
@@ -124,7 +145,8 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
       model: NARUTO_PARENT_MODEL,
       model_reasoning_effort: NARUTO_PARENT_EFFORT
     },
-    agents: officialSubagentRolePlan(),
+    agent_catalog: agentCatalog,
+    agents: selectedAgentPlan,
     verification_budget: verification,
     verification_checks: [],
     verification: { budget: verification },
@@ -171,6 +193,7 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
       ok: false,
       blockers,
       sessionKey: input.sessionScope || null,
+      suggestedAgents,
       observedParentModel,
       parentModelMatch
     }))
@@ -204,8 +227,27 @@ export async function prepareOfficialSubagentMission(input: OfficialSubagentPrep
   }
 }
 
+function triwikiAttentionLimit(taskProfile: string): number {
+  return ['parallel-read', 'parallel-write', 'high-risk'].includes(taskProfile) ? 6 : 4
+}
+
+function routeOwnedSubagentContract(route: string): { count: number; reason: string } | null {
+  const normalized = String(route || '').replace(/^\$/, '').trim().toLowerCase()
+  if (normalized === 'research') {
+    return { count: 3, reason: 'research_exact_three_independent_reviewers' }
+  }
+  if (normalized === 'autoresearch') {
+    return { count: 3, reason: 'autoresearch_exact_three_independent_reviewers' }
+  }
+  return null
+}
+
 export function buildNarutoSummary(input: any) {
   const parentSummary = normalizeSubagentParentSummary(input.parentSummary)
+  const suggestedAgents = Array.isArray(input.suggestedAgents)
+    ? uniqueStrings(input.suggestedAgents)
+    : []
+  const selectedAgentPlan = officialSubagentOnDemandRolePlan(suggestedAgents)
   return {
     schema: NARUTO_RESULT_SCHEMA,
     ok: input.ok === true,
@@ -227,7 +269,8 @@ export function buildNarutoSummary(input: any) {
     started_subagents: Number(input.evidence?.started_threads || 0),
     completed_subagents: Number(input.evidence?.completed_threads || 0),
     failed_subagents: Number(input.evidence?.failed_threads || 0),
-    agents: officialSubagentRolePlan(),
+    agent_catalog: onDemandAgentCatalogMetadata(selectedAgentPlan),
+    agents: selectedAgentPlan,
     verification: {
       budget: input.verification,
       checks: []
@@ -240,6 +283,20 @@ export function buildNarutoSummary(input: any) {
     blockers: uniqueStrings(input.blockers || input.evidence?.blockers || []),
     legacy_process_swarm_used: false,
     updated_at: nowIso()
+  }
+}
+
+function onDemandAgentCatalogMetadata(
+  selectedAgentPlan: Record<string, unknown>
+) {
+  const selectedAgents = Object.keys(selectedAgentPlan)
+  return {
+    mode: 'on_demand',
+    total_available: officialSubagentRoleCatalog().length,
+    selected_count: selectedAgents.length,
+    selected_agents: selectedAgents,
+    max_injected: MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT,
+    full_catalog_injected: false
   }
 }
 

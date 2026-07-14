@@ -21,6 +21,9 @@ export async function runFakeCodexSdkTaskFixture(label = 'fixture', extra = {}) 
   const old = snapshotEnv();
   process.env.NODE_ENV = 'test';
   process.env.SKS_CODEX_SDK_FAKE = '1';
+  // Hermetic fixture runs must not inherit an operator's live codex-lb
+  // selection. The fake adapter exercises control-plane contracts only.
+  process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
   try {
     const result = await mod.runCodexTask({
       route: extra.route || '$Agent',
@@ -85,6 +88,7 @@ function snapshotEnv() {
   return {
     NODE_ENV: process.env.NODE_ENV,
     SKS_CODEX_SDK_FAKE: process.env.SKS_CODEX_SDK_FAKE,
+    SKS_CODEX_LB_AUTOBYPASS: process.env.SKS_CODEX_LB_AUTOBYPASS,
     SKS_CODEX_SDK_FIXTURE: process.env.SKS_CODEX_SDK_FIXTURE
   };
 }

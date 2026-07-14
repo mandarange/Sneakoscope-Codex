@@ -89,7 +89,7 @@ test('Naruto App preparation reuses the session mission, isolates each run, and 
     const gate = JSON.parse(await fsp.readFile(path.join(dir, 'naruto-gate.json'), 'utf8'));
     assert.equal(second.mission_id, first.mission_id);
     assert.notEqual(secondPlan.workflow_run_id, firstPlan.workflow_run_id);
-    assert.equal(secondPlan.requested_subagents, 1);
+    assert.equal(secondPlan.requested_subagents, 2);
     assert.equal(secondPlan.requested_subagents_explicit, false);
     assert.equal(secondPlan.session_scope, sessionKey);
     assert.equal(secondPlan.triwiki_attention.anchors[0].id, 'naruto-anchor');

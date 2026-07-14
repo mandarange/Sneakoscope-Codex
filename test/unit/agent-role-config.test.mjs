@@ -8,7 +8,7 @@ import { parse } from 'smol-toml';
 test('managed Codex 0.144.1 agent roles contain only supported rendered policy keys', async () => {
   const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
 
-  assert.equal(manifest.MANAGED_ASSET_VERSION, '6.1.2');
+  assert.equal(manifest.MANAGED_ASSET_VERSION, '6.2.0');
   for (const role of manifest.MANAGED_AGENT_ROLES) {
     const text = manifest.managedAgentRoleContent(role);
     const parsed = parse(text);
@@ -28,6 +28,36 @@ test('managed Codex 0.144.1 agent roles contain only supported rendered policy k
     assert.equal(parsed.sandbox_mode, role.sandbox);
     assert.equal(manifest.managedOfficialSubagentRoleOwnsText(text, role), true);
   }
+});
+
+test('official custom agent catalog has unique identities and broad specialist coverage without model-policy drift', async () => {
+  const manifest = await import('../../dist/core/managed-assets/managed-assets-manifest.js');
+  const roles = manifest.MANAGED_OFFICIAL_SUBAGENT_ROLES;
+  const expectedSpecialists = new Map([
+    ['native_app_specialist', { model: 'gpt-5.6-sol', sandbox: undefined }],
+    ['toolchain_specialist', { model: 'gpt-5.6-sol', sandbox: undefined }],
+    ['protocol_reviewer', { model: 'gpt-5.6-sol', sandbox: 'read-only' }],
+    ['runtime_reliability_reviewer', { model: 'gpt-5.6-sol', sandbox: 'read-only' }],
+    ['triwiki_evidence_reviewer', { model: 'gpt-5.6-sol', sandbox: 'read-only' }]
+  ]);
+
+  assert.equal(roles.length, 21);
+  assert.equal(new Set(roles.map((role) => role.id)).size, roles.length);
+  assert.equal(new Set(roles.map((role) => role.filename)).size, roles.length);
+  assert.equal(new Set(roles.map((role) => role.codex_name)).size, roles.length);
+  assert.equal(new Set(roles.map((role) => role.description)).size, roles.length);
+
+  for (const [name, expected] of expectedSpecialists) {
+    const role = roles.find((candidate) => candidate.codex_name === name);
+    assert.ok(role, `missing ${name}`);
+    assert.equal(role.model, expected.model);
+    assert.equal(role.sandbox, expected.sandbox);
+    assert.equal(role.model_reasoning_effort, 'max');
+    assert.ok(role.selection_keywords.length >= 5);
+  }
+
+  assert.equal(roles.find((role) => role.codex_name === 'worker').model, 'gpt-5.6-luna');
+  assert.equal(roles.find((role) => role.codex_name === 'expert').model, 'gpt-5.6-sol');
 });
 
 test('fresh agent role repair requires the complete official custom agent catalog', async () => {

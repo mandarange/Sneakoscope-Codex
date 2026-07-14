@@ -3,6 +3,7 @@ import type { BoundedTriwikiAttention } from './triwiki-attention.js'
 import {
   MAX_AUTOMATIC_REVIEWER_COUNT,
   MAX_AUTOMATIC_SUBAGENT_COUNT,
+  officialSubagentOnDemandRoleCatalog,
   officialSubagentRoleCatalog,
   selectOfficialSubagentRole
 } from './agent-catalog.js'
@@ -23,6 +24,7 @@ export function buildOfficialSubagentPrompt(input: {
   maxThreads: number
   requestedSubagents?: number
   requestedSubagentsExplicit?: boolean
+  requestedSubagentsSource?: 'operator' | 'route_contract' | 'automatic'
   decompositionStatus?: 'ready' | 'parent_required'
   triwikiAttention?: BoundedTriwikiAttention
   recommendedAgents?: readonly string[]
@@ -31,13 +33,20 @@ export function buildOfficialSubagentPrompt(input: {
   const requestedSubagents = normalizeRequestedSubagents(input.requestedSubagents, input.slices.length)
   const waveCount = requestedSubagents === 0 ? 0 : Math.ceil(requestedSubagents / maxThreads)
   const parentDecompositionRequired = input.decompositionStatus === 'parent_required'
-  const requestedPolicy = input.requestedSubagentsExplicit === true
+  const requestedSource = input.requestedSubagentsSource === 'route_contract'
+    ? 'route_contract'
+    : input.requestedSubagentsExplicit === true || input.requestedSubagentsSource === 'operator'
+      ? 'operator'
+      : 'automatic'
+  const requestedPolicy = requestedSource === 'operator'
     ? `${requestedSubagents} (explicit operator request)`
-    : `${requestedSubagents} (risk-based automatic count; one child is the safe default; keep the plan and evidence count exact)`
+    : requestedSource === 'route_contract'
+      ? `${requestedSubagents} (route-owned exact orchestration contract)`
+      : `${requestedSubagents} (risk-based automatic count; two independent children are the non-trivial default; keep the plan and evidence count exact)`
   const triwiki = renderBoundedTriwikiAttention(input.triwikiAttention)
-  const catalog = renderAgentCatalog(input.recommendedAgents)
-  const rows = input.slices.map((slice, index) => {
-    const agentName = slice.agent || selectOfficialSubagentRole({
+  const resolvedSlices = input.slices.map((slice) => ({
+    slice,
+    agentName: slice.agent || selectOfficialSubagentRole({
       title: slice.title,
       description: slice.description,
       role: slice.kind,
@@ -45,6 +54,12 @@ export function buildOfficialSubagentPrompt(input: {
       readOnly: slice.readOnly === true,
       requiresWrite: slice.readOnly !== true
     })
+  }))
+  const catalog = renderAgentCatalog([
+    ...resolvedSlices.map((row) => row.agentName),
+    ...(input.recommendedAgents || [])
+  ])
+  const rows = resolvedSlices.map(({ slice, agentName }, index) => {
     const mode = slice.readOnly ? 'read-only' : 'use the parent permission mode'
     const paths = (slice.paths || []).map((entry) => String(entry).trim()).filter(Boolean)
 
@@ -70,8 +85,8 @@ Subagent rules:
 - select the narrowest matching project custom agent by its description; the custom agent name is the spawn type
 - use \`worker\` with gpt-5.6-luna and max reasoning only for clear, bounded, repeatable work
 - use \`expert\` with gpt-5.6-sol and max reasoning only as the read-only judgment fallback
-- automatic fan-out is selected before execution: one by default, two only for explicit parallel work or independent risk domains,
-  and at most ${MAX_AUTOMATIC_SUBAGENT_COUNT} for critical multi-domain risk; never spawn beyond the requested count
+- automatic fan-out is selected before execution: two independent children for non-trivial work,
+  and at most ${MAX_AUTOMATIC_SUBAGENT_COUNT} only for critical multi-domain risk; trivial Answer/DFix work is filtered before this route
 - automatic reviewer-only fan-out is capped at ${MAX_AUTOMATIC_REVIEWER_COUNT} for ordinary work; critical multi-domain review may use the overall cap of ${MAX_AUTOMATIC_SUBAGENT_COUNT}
 - requested subagents: ${requestedPolicy}
 - max open agent threads: ${maxThreads}
@@ -85,9 +100,11 @@ Subagent rules:
 ${parentDecompositionRequired ? `- decomposition status: parent_required
 - before spawning, decompose the goal into independent, non-overlapping slices
 - do not invent write scopes merely to reach the requested count
-${input.requestedSubagentsExplicit === true
+${requestedSource === 'operator'
     ? '- the explicit operator count is authoritative; if it cannot be defended safely, block and report instead of silently changing it'
-    : '- if fewer defensible slices exist, reduce the delegation plan and requested count before execution; never increase automatically beyond the selected count'}` : '- decomposition status: ready'}
+    : requestedSource === 'route_contract'
+      ? '- the route-owned exact count is authoritative; preserve it and follow the route-specific orchestration contract'
+      : '- if fewer defensible slices exist, reduce the delegation plan and requested count before execution; never increase automatically beyond the selected count'}` : '- decomposition status: ready'}
 
 Central TriWiki context:
 ${triwiki}
@@ -141,16 +158,17 @@ function renderBoundedTriwikiAttention(value: BoundedTriwikiAttention | undefine
   ].join('\n')
 }
 
-function renderAgentCatalog(recommended: readonly string[] | undefined): string {
-  const preferred = new Set((recommended || []).map(String))
-  const included = new Set(['worker', 'implementation_specialist', 'expert', ...preferred])
-  return officialSubagentRoleCatalog()
-    .filter((role) => included.has(role.name))
-    .map((role) => {
+function renderAgentCatalog(requested: readonly string[]): string {
+  const names = [...new Set(requested.map(String).map((name) => name.trim()).filter(Boolean))]
+  const selected = officialSubagentOnDemandRoleCatalog(names.length ? names : ['expert'])
+  const preferred = new Set(names)
+  return [
+    `- metadata mode: on-demand (${selected.length}/${officialSubagentRoleCatalog().length} roles included; full catalog is not injected)`,
+    ...selected.map((role) => {
       const marker = preferred.has(role.name) ? ' [suggested for this goal]' : ''
       return `- \`${role.name}\`${marker}: ${role.model}/${role.model_reasoning_effort}, ${role.sandbox_mode}; ${role.description}`
     })
-    .join('\n')
+  ].join('\n')
 }
 
 function clampThreads(value: unknown): number {

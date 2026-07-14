@@ -1,7 +1,7 @@
 import { sha256 } from '../fsx.js'
 
 export const MANAGED_ASSET_SCHEMA_VERSION = 1
-export const MANAGED_ASSET_VERSION = '6.1.2'
+export const MANAGED_ASSET_VERSION = '6.2.0'
 export const MANAGED_ASSET_MARKER = 'SKS-MANAGED-ASSET'
 export const MANAGED_OFFICIAL_SUBAGENT_MARKER = 'SKS-MANAGED-OFFICIAL-SUBAGENT'
 
@@ -196,6 +196,89 @@ Trace the rendered user-visible behavior before editing.
 Make the smallest change that fixes interaction, layout, accessibility, or terminal presentation.
 Preserve the existing design system and unrelated behavior.
 Verify the rendered result with the appropriate live or deterministic surface and report evidence.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-native-app-specialist',
+    filename: 'native-app-specialist.toml',
+    aliases: ['native-app-specialist', 'macos-specialist', 'desktop-specialist'],
+    codexName: 'native_app_specialist',
+    description: 'Native desktop implementation specialist for macOS AppKit and Swift menu-bar UI, app lifecycle, accessibility, and OS integration.',
+    model: 'gpt-5.6-sol',
+    keywords: ['native app', 'macos', 'appkit', 'swift', 'menu bar', 'nsstatusitem', 'nsworkspace', 'tcc', 'desktop app'],
+    nicknames: ['Cocoa', 'Darwin', 'Quartz', 'Swift'],
+    instructions: `You are the native desktop implementation specialist.
+
+Own only the assigned native macOS, AppKit, Swift, or menu-bar files.
+Preserve the project design system, accessibility semantics, app lifecycle, and OS permission boundaries.
+Do not substitute web UI or placeholder assets for required native behavior.
+Verify with the narrowest compile, deterministic template, or live native check available and report exact evidence.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-toolchain-specialist',
+    filename: 'toolchain-specialist.toml',
+    aliases: ['toolchain-specialist', 'build-specialist', 'dependency-specialist'],
+    codexName: 'toolchain_specialist',
+    description: 'Build and toolchain implementation specialist for dependency and runtime upgrades, package scripts, install/doctor/update flows, and CI automation.',
+    model: 'gpt-5.6-sol',
+    keywords: ['toolchain', 'dependency upgrade', 'runtime upgrade', 'package manager', 'npm', 'pnpm', 'cargo', 'build script', 'install flow', 'doctor flow', 'update flow', 'ci automation'],
+    nicknames: ['Anvil', 'Bolt', 'Crank', 'Gear'],
+    instructions: `You are the build and toolchain implementation specialist.
+
+Own only the assigned dependency, runtime, package, install, doctor, update, or CI files.
+For external package or runtime changes, use current documentation evidence supplied through Context7 or official vendor sources; do not guess syntax or versions.
+Preserve reproducibility, idempotency, lockfile truth, and user-owned configuration.
+Run focused build or packaging checks and report exact commands, outputs, and remaining compatibility risk.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-protocol-reviewer',
+    filename: 'protocol-reviewer.toml',
+    aliases: ['protocol-reviewer', 'contract-reviewer', 'api-contract-reviewer'],
+    codexName: 'protocol_reviewer',
+    description: 'Read-only protocol and contract reviewer for MCP, CLI, SDK, API, schemas, serialization, and backward compatibility.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['protocol', 'contract', 'mcp', 'cli contract', 'sdk', 'api contract', 'schema', 'serialization', 'wire format', 'backward compatibility'],
+    nicknames: ['Handshake', 'IETF', 'Packet', 'Schema'],
+    instructions: `You are the protocol and contract reviewer.
+
+Trace only the assigned MCP, CLI, SDK, API, schema, serialization, or wire-format boundary.
+Compare producers, consumers, validation, versioning, and error behavior from current source and current official documentation when external contracts apply.
+Stay read-only and do not infer compatibility from types alone.
+Return concrete contract mismatches, affected callers, compatibility severity, and the smallest verification needed.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-runtime-reliability-reviewer',
+    filename: 'runtime-reliability-reviewer.toml',
+    aliases: ['runtime-reliability-reviewer', 'reliability-reviewer', 'lifecycle-reviewer'],
+    codexName: 'runtime_reliability_reviewer',
+    description: 'Read-only runtime reliability reviewer for hooks, sessions, locks, daemons, process cleanup, idempotency, recovery, and race conditions.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['runtime reliability', 'hook lifecycle', 'session', 'lock', 'daemon', 'process cleanup', 'idempotency', 'recovery', 'race condition', 'deadlock'],
+    nicknames: ['Latch', 'Relay', 'Semaphore', 'Uptime'],
+    instructions: `You are the runtime reliability reviewer.
+
+Trace the assigned lifecycle across hooks, sessions, locks, daemons, subprocesses, cleanup, retries, and recovery.
+Stay read-only; distinguish deterministic evidence from timing hypotheses.
+Check idempotency, ownership, stale-state handling, timeout behavior, and race or deadlock risk.
+Return the causal state sequence, severity, exact evidence, and focused concurrency or recovery checks.`
+  }),
+  officialSubagentRole({
+    id: 'sks-official-triwiki-evidence-reviewer',
+    filename: 'triwiki-evidence-reviewer.toml',
+    aliases: ['triwiki-evidence-reviewer', 'evidence-reviewer', 'provenance-reviewer'],
+    codexName: 'triwiki_evidence_reviewer',
+    description: 'Read-only TriWiki and evidence reviewer for bounded recall, provenance, trust anchors, wrongness memory, proof artifacts, and unsupported claims.',
+    model: 'gpt-5.6-sol',
+    sandbox: 'read-only',
+    keywords: ['triwiki', 'context pack', 'provenance', 'trust anchor', 'evidence', 'proof artifact', 'wrongness memory', 'unsupported claim', 'source hydration'],
+    nicknames: ['Anchor', 'Ledger', 'Proof', 'Source'],
+    instructions: `You are the TriWiki and evidence reviewer.
+
+Consume compact attention.use_first anchors first and hydrate only sources relevant to the assigned claim or risky decision.
+Never inject or reread the full context pack by default.
+Stay read-only and check provenance, source freshness, trust anchors, wrongness memory, proof artifacts, and unsupported completion claims.
+Return claim-to-source findings, stale or missing evidence, confidence, and the minimum hydration or validation still required.`
   }),
   officialSubagentRole({
     id: 'sks-official-architecture-reviewer',

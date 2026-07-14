@@ -5,9 +5,10 @@ import {
   inspectCodexLbCliLaunchRecovery
 } from '../codex-control/codex-lb-launch-recovery.js'
 import {
-  codexLbToolOutputRecoveryNotChecked
+  codexLbToolOutputRecoveryNotChecked,
+  type CodexLbToolOutputRecoveryProbe
 } from '../codex-lb/codex-lb-tool-output-recovery.js'
-import { checkZellijCapability } from './zellij-capability.js'
+import { checkZellijCapability, type ZellijCapabilityReport } from './zellij-capability.js'
 import { formatZellijCommand, resolveZellijProcessEnvMeta, runZellij, type ZellijCommandResult } from './zellij-command.js'
 import { writeZellijLayout, type ZellijLayoutInput } from './zellij-layout-builder.js'
 import { writeZellijClipboardConfig } from './zellij-clipboard-config.js'
@@ -33,6 +34,8 @@ export interface ZellijLaunchOptions {
   recoveryFetch?: typeof fetch
   recoveryTimeoutMs?: number
   recoveryAllowUnverified?: boolean
+  zellijCapability?: ZellijCapabilityReport
+  verifiedCodexLbToolOutputRecovery?: CodexLbToolOutputRecoveryProbe
   // When true, kill any pre-existing session with this name before (re)creating
   // it so the launch starts from a clean main-only layout. Without this, a stable
   // per-cwd session name (e.g. `sks-mad-<cwd>`) is reused across runs and each new
@@ -60,7 +63,8 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
   }
   if (opts.codexBin) layoutInput.codexBin = opts.codexBin
   const layout = await writeZellijLayout(root, layoutInput)
-  const capability = await checkZellijCapability({ root, require: opts.requireZellij === true })
+  const capability = reusableZellijCapability(opts.zellijCapability, opts.requireZellij === true)
+    || await checkZellijCapability({ root, require: opts.requireZellij === true })
   // Configure the clipboard pipeline so selections inside the session reach the OS
   // clipboard (Zellij's default OSC-52 copy is dropped by Terminal.app etc.). The
   // copy option flags are appended AFTER `--default-layout <path>` so the launch
@@ -77,6 +81,7 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
         root: opts.cwd || root,
         env: launchProcessEnv,
         cliArgs: layout.codex_args,
+        ...(opts.verifiedCodexLbToolOutputRecovery ? { verifiedProbe: opts.verifiedCodexLbToolOutputRecovery } : {}),
         ...(typeof opts.recoveryFetch === 'function' ? { fetchImpl: opts.recoveryFetch } : {}),
         ...(opts.recoveryTimeoutMs === undefined ? {} : { timeoutMs: opts.recoveryTimeoutMs }),
         ...(opts.recoveryAllowUnverified === true ? { allowUnverified: true } : {})
@@ -106,7 +111,8 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     ledgerRoot: path.join(root, '.sneakoscope', 'missions', missionId),
     sessionName,
     expectedLaneCount: 0,
-    expectedCwd: opts.cwd || root
+    expectedCwd: opts.cwd || root,
+    zellijCapability: capability
   }
   if (layout.main_pane_kind === 'codex_interactive') paneProofOpts.expectedMainCommandIncludes = 'codex'
   const strictPaneProof = opts.requireZellij === true || opts.dryRun === true || process.env.SKS_ZELLIJ_STRICT_PANE_PROOF === '1'
@@ -198,6 +204,12 @@ export async function launchZellijLayout(opts: ZellijLaunchOptions = {}) {
     })
   ])
   return report
+}
+
+function reusableZellijCapability(value: ZellijCapabilityReport | undefined, requireZellij: boolean): ZellijCapabilityReport | null {
+  if (!value || value.schema !== 'sks.zellij-capability.v1') return null
+  if (requireZellij && value.status !== 'ok') return null
+  return value
 }
 
 function launchRecoveryEnv(launchEnv: Record<string, unknown> | undefined): NodeJS.ProcessEnv {

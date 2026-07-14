@@ -1,4 +1,6 @@
 import path from 'node:path'
+import fsp from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
 import { appendJsonl, ensureDir, nowIso, readText, sha256, writeTextAtomic } from '../fsx.js'
 import { diffCodexAppUiSnapshots, snapshotCodexAppUiState } from '../codex-app/codex-app-ui-state-snapshot.js'
 import { cleanupCodexConfigBackups, validateCodexConfigRoundTrip } from './codex-config-toml.js'
@@ -13,6 +15,9 @@ export interface WriteCodexConfigGuardedInput {
   removeTopLevelModeLocks?: boolean
   preserveFastUiKeys?: boolean
   ownershipVerified?: boolean
+  verifyUnchangedBeforeWrite?: boolean
+  expectedBeforeExists?: boolean
+  preserveTextFormatting?: boolean
   reportPath?: string
 }
 
@@ -65,9 +70,12 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
   }
 
   const beforeSnapshot = await snapshotForConfig(root, configPath).catch(() => null)
-  let next = ensureTrailingNewline(await input.mutate(before))
+  const normalizeText = input.preserveTextFormatting === true
+    ? (value: unknown) => String(value || '')
+    : ensureTrailingNewline
+  let next = normalizeText(await input.mutate(before))
   if (input.removeTopLevelModeLocks === true) next = removeLegacyTopLevelCodexModeLocks(next)
-  const preserved = input.preserveFastUiKeys === false ? { text: ensureTrailingNewline(next), keys: [] } : mergeLostFastUiKeys(before, next)
+  const preserved = input.preserveFastUiKeys === false ? { text: normalizeText(next), keys: [] } : mergeLostFastUiKeys(before, next)
   next = preserved.text
   if (input.removeTopLevelModeLocks === true) next = removeLegacyTopLevelCodexModeLocks(next)
 
@@ -90,8 +98,28 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
     return result
   }
 
-  if (next === ensureTrailingNewline(before)) {
-    await writeTextAtomic(configPath, next, { mode: 0o600 })
+  const expectedBefore = normalizeText(before)
+  if (next === expectedBefore) {
+    if (input.verifyUnchangedBeforeWrite === true) {
+      const observed = await readConfigCommitSnapshot(configPath)
+      const expectedExists = input.expectedBeforeExists ?? true
+      if (!configCommitSnapshotMatches(observed, expectedExists, before)) {
+        return recordConcurrentConfigChange({
+          root,
+          reportPath: input.reportPath,
+          cause,
+          configPath,
+          before,
+          expectedExists,
+          observed,
+          backupPath: null,
+          repairedKeys: preserved.keys,
+          forbiddenTopLevel
+        })
+      }
+    } else {
+      await writeTextAtomic(configPath, next, { mode: 0o600 })
+    }
     const result = { ok: true, status: 'present', config_path: configPath, backup_path: null, changed: false, repaired_keys: preserved.keys, forbidden_top_level: forbiddenTopLevel }
     if (preserved.keys.length || forbiddenTopLevel.length) {
       await recordCodexConfigGuard(root, input.reportPath, {
@@ -107,9 +135,36 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
     return result
   }
 
-  const backupPath = before.trim() ? await backupCodexConfig(configPath, before, input.backupTag || cause) : null
-  await ensureDir(path.dirname(configPath))
-  await writeTextAtomic(configPath, next, { mode: 0o600 })
+  let backupPath: string | null = null
+  if (input.verifyUnchangedBeforeWrite === true) {
+    const expectedExists = input.expectedBeforeExists ?? true
+    const commit = await commitCodexConfigIfUnchanged({
+      configPath,
+      before,
+      next,
+      expectedExists,
+      backupTag: input.backupTag || cause
+    })
+    if (!commit.ok) {
+      return recordConcurrentConfigChange({
+        root,
+        reportPath: input.reportPath,
+        cause,
+        configPath,
+        before,
+        expectedExists,
+        observed: commit.observed,
+        backupPath: commit.backupPath,
+        repairedKeys: preserved.keys,
+        forbiddenTopLevel
+      })
+    }
+    backupPath = commit.backupPath
+  } else {
+    backupPath = before.trim() ? await backupCodexConfig(configPath, before, input.backupTag || cause) : null
+    await ensureDir(path.dirname(configPath))
+    await writeTextAtomic(configPath, next, { mode: 0o600 })
+  }
   const afterSnapshot = await snapshotForConfig(root, configPath).catch(() => null)
   const diff = beforeSnapshot && afterSnapshot ? diffCodexAppUiSnapshots(beforeSnapshot, afterSnapshot) : null
   const result = {
@@ -142,6 +197,147 @@ export async function writeCodexConfigGuarded(input: WriteCodexConfigGuardedInpu
     } : null
   })
   return { ...result, report_path: reportPath }
+}
+
+type ConfigCommitSnapshot = Awaited<ReturnType<typeof readConfigCommitSnapshot>>
+
+function configCommitSnapshotMatches(observed: ConfigCommitSnapshot, expectedExists: boolean, expectedText: string): boolean {
+  return observed.ok
+    && observed.exists === expectedExists
+    && sha256(observed.text) === sha256(expectedText)
+}
+
+async function recordConcurrentConfigChange(input: {
+  root: string
+  reportPath: string | undefined
+  cause: string
+  configPath: string
+  before: string
+  expectedExists: boolean
+  observed: ConfigCommitSnapshot
+  backupPath: string | null
+  repairedKeys: string[]
+  forbiddenTopLevel: string[]
+}): Promise<WriteCodexConfigGuardedResult> {
+  const result = {
+    ok: false,
+    status: 'concurrent_change_detected',
+    config_path: input.configPath,
+    backup_path: input.backupPath,
+    changed: false,
+    repaired_keys: input.repairedKeys,
+    forbidden_top_level: input.forbiddenTopLevel
+  }
+  await recordCodexConfigGuard(input.root, input.reportPath, {
+    cause: input.cause,
+    config_path: input.configPath,
+    ok: false,
+    status: result.status,
+    expected_exists: input.expectedExists,
+    observed_exists: input.observed.exists,
+    expected_sha256: sha256(input.before),
+    observed_sha256: input.observed.ok ? sha256(input.observed.text) : null,
+    observed_status: input.observed.status,
+    backup_path: input.backupPath,
+    changed: false
+  })
+  return result
+}
+
+async function commitCodexConfigIfUnchanged(input: {
+  configPath: string
+  before: string
+  next: string
+  expectedExists: boolean
+  backupTag: string
+}): Promise<
+  | { ok: true; backupPath: string | null }
+  | { ok: false; backupPath: string | null; observed: ConfigCommitSnapshot }
+> {
+  await ensureDir(path.dirname(input.configPath))
+  const token = `${Date.now().toString(36)}-${process.pid}-${randomBytes(6).toString('hex')}`
+  const candidatePath = `${input.configPath}.sks-commit-${token}.tmp`
+  let backupPath: string | null = null
+  try {
+    await writeTextAtomic(candidatePath, input.next, { mode: 0o600 })
+    const observed = await readConfigCommitSnapshot(input.configPath)
+    if (!configCommitSnapshotMatches(observed, input.expectedExists, input.before)) {
+      return { ok: false, backupPath, observed }
+    }
+
+    if (input.expectedExists) {
+      backupPath = `${input.configPath}.sks-${safeBackupTag(input.backupTag)}-${token}.bak`
+      try {
+        await fsp.rename(input.configPath, backupPath)
+      } catch {
+        return { ok: false, backupPath: null, observed: await readConfigCommitSnapshot(input.configPath) }
+      }
+
+      const claimed = await readConfigCommitSnapshot(backupPath)
+      if (!configCommitSnapshotMatches(claimed, true, input.before)) {
+        await restoreClaimedConfigIfAbsent(backupPath, input.configPath, claimed)
+        return { ok: false, backupPath, observed: claimed }
+      }
+      try {
+        await fsp.chmod(backupPath, 0o600)
+        const now = new Date()
+        await fsp.utimes(backupPath, now, now)
+      } catch {
+        await restoreClaimedConfigIfAbsent(backupPath, input.configPath, claimed)
+        return { ok: false, backupPath, observed: await readConfigCommitSnapshot(input.configPath) }
+      }
+
+      const afterClaim = await readConfigCommitSnapshot(input.configPath)
+      if (!afterClaim.ok || afterClaim.exists) {
+        if (!afterClaim.exists) await restoreClaimedConfigIfAbsent(backupPath, input.configPath, claimed)
+        return { ok: false, backupPath, observed: await readConfigCommitSnapshot(input.configPath) }
+      }
+    }
+
+    try {
+      await fsp.link(candidatePath, input.configPath)
+    } catch {
+      if (backupPath) {
+        const claimed = await readConfigCommitSnapshot(backupPath)
+        await restoreClaimedConfigIfAbsent(backupPath, input.configPath, claimed)
+      }
+      return { ok: false, backupPath, observed: await readConfigCommitSnapshot(input.configPath) }
+    }
+    await fsp.chmod(input.configPath, 0o600).catch(() => undefined)
+    await cleanupCodexConfigBackups(input.configPath, { keepPerTag: 3, maxAgeMs: 30 * 24 * 60 * 60 * 1000 }).catch(() => undefined)
+    return { ok: true, backupPath }
+  } finally {
+    await fsp.rm(candidatePath, { force: true }).catch(() => undefined)
+  }
+}
+
+async function restoreClaimedConfigIfAbsent(backupPath: string, configPath: string, claimed: ConfigCommitSnapshot) {
+  if (!claimed.ok || !claimed.exists || claimed.status !== 'regular') return
+  await fsp.link(backupPath, configPath).catch(() => undefined)
+}
+
+function safeBackupTag(value: string) {
+  return String(value || 'codex-config').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96) || 'codex-config'
+}
+
+async function readConfigCommitSnapshot(configPath: string): Promise<
+  | { ok: true; exists: boolean; text: string; status: 'missing' | 'regular' }
+  | { ok: false; exists: boolean; text: ''; status: 'symlink' | 'non_regular' | 'read_failed' }
+> {
+  let stat
+  try {
+    stat = await fsp.lstat(configPath)
+  } catch (error: any) {
+    if (error?.code === 'ENOENT') return { ok: true, exists: false, text: '', status: 'missing' }
+    return { ok: false, exists: false, text: '', status: 'read_failed' }
+  }
+  if (stat.isSymbolicLink()) return { ok: false, exists: true, text: '', status: 'symlink' }
+  if (!stat.isFile()) return { ok: false, exists: true, text: '', status: 'non_regular' }
+  try {
+    return { ok: true, exists: true, text: await fsp.readFile(configPath, 'utf8'), status: 'regular' }
+  } catch {
+    return { ok: false, exists: true, text: '', status: 'read_failed' }
+  }
 }
 
 export function extractTomlTable(text: string, tableName: string): string | null {

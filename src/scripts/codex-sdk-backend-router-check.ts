@@ -10,6 +10,7 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-codex-sdk-router-'));
 const old = snapshotEnv();
 process.env.NODE_ENV = 'test';
 process.env.SKS_CODEX_SDK_FAKE = '1';
+process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
 process.env.SKS_DISABLE_ROUTE_RECURSION = '1';
 process.env.SKS_AGENT_WORKER = '1';
 process.env.SKS_FAST_MODE = '1';
@@ -49,6 +50,7 @@ function snapshotEnv() {
   return {
     NODE_ENV: process.env.NODE_ENV,
     SKS_CODEX_SDK_FAKE: process.env.SKS_CODEX_SDK_FAKE,
+    SKS_CODEX_LB_AUTOBYPASS: process.env.SKS_CODEX_LB_AUTOBYPASS,
     SKS_DISABLE_ROUTE_RECURSION: process.env.SKS_DISABLE_ROUTE_RECURSION,
     SKS_AGENT_WORKER: process.env.SKS_AGENT_WORKER,
     SKS_FAST_MODE: process.env.SKS_FAST_MODE,

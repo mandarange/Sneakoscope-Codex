@@ -12,6 +12,7 @@ import {
   probeCodexLbToolOutputRecovery,
   type CodexLbToolOutputRecoveryProbe
 } from '../codex-lb/codex-lb-tool-output-recovery.js'
+import { normalizeCodexLbBaseUrl } from '../codex-lb/codex-lb-env.js'
 
 export interface CodexLbCliLaunchRecoveryInput {
   root: string
@@ -20,6 +21,7 @@ export interface CodexLbCliLaunchRecoveryInput {
   fetchImpl?: typeof fetch
   timeoutMs?: number
   allowUnverified?: boolean
+  verifiedProbe?: CodexLbToolOutputRecoveryProbe
 }
 
 export type CodexLbGuardedLaunchResult<T> =
@@ -116,6 +118,8 @@ export async function inspectCodexLbCliLaunchRecovery(
     ?? profileConfig.baseUrl
     ?? userConfig.baseUrl
     ?? String(env.CODEX_LB_BASE_URL || '')
+  const verifiedProbe = reusableVerifiedProbeForBase(input.verifiedProbe, baseUrl)
+  if (verifiedProbe) return verifiedProbe
   return probeCodexLbToolOutputRecovery({
     baseUrl,
     ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
@@ -123,6 +127,18 @@ export async function inspectCodexLbCliLaunchRecovery(
     allowUnverified: input.allowUnverified === true
       || codexLbToolOutputRecoveryOverrideAcknowledged({ args, env })
   })
+}
+
+function reusableVerifiedProbeForBase(
+  value: CodexLbToolOutputRecoveryProbe | undefined,
+  selectedBaseUrl: string
+): CodexLbToolOutputRecoveryProbe | null {
+  if (!value || value.schema !== 'sks.codex-lb-tool-output-recovery.v1') return null
+  if (value.ok !== true || value.required !== true || value.verified !== true || value.supports_interrupted_tool_output_recovery !== true) return null
+  const verifiedBaseUrl = normalizeCodexLbBaseUrl(value.base_url)
+  const effectiveBaseUrl = normalizeCodexLbBaseUrl(selectedBaseUrl)
+  if (!verifiedBaseUrl || !effectiveBaseUrl || verifiedBaseUrl !== effectiveBaseUrl) return null
+  return value
 }
 
 export async function withCodexLbCliLaunchRecovery<T>(

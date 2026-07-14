@@ -177,6 +177,7 @@ const MENU_ITEMS = [
   'Update SKS Now',
   'Codex CLI Version',
   'Update Codex CLI Now',
+  'Manage MCP Servers',
   'Run sks doctor --fix',
   'Open Dashboard',
   'Open Codex Settings',
@@ -1110,7 +1111,12 @@ func humanizeSksCode(_ code: String) -> String {
         "setup_needed": "codex-lb is not configured yet.",
         "cancelled": "Setup was cancelled.",
         "process_only_cancelled": "Setup was cancelled (process-only mode was not confirmed).",
-        "process_only_requires_yes": "This setup would only be kept for the current session — nothing durable was saved."
+        "process_only_requires_yes": "This setup would only be kept for the current session — nothing durable was saved.",
+        "codex_mcp_config_read_failed": "Could not read ~/.codex/config.toml. Check its ownership and permissions; no MCP change was made.",
+        "codex_mcp_config_symlink_unsupported": "~/.codex/config.toml is a symbolic link. The MCP manager left it unchanged to avoid replacing the link.",
+        "codex_mcp_config_not_regular_file": "~/.codex/config.toml is not a regular file. The MCP manager left it unchanged.",
+        "codex_mcp_config_toml_parse_failed": "~/.codex/config.toml contains invalid TOML. Fix it before managing MCP servers.",
+        "codex_mcp_config_busy": "Another MCP configuration change is in progress. Try again shortly."
     ]
     if let mapped = known[code] { return mapped }
     let words = code.split(separator: "_").joined(separator: " ")
@@ -1160,6 +1166,55 @@ func promptChoice(title: String, message: String, options: [String]) -> String? 
     return popup.titleOfSelectedItem
 }
 
+func promptTextAllowEmpty(title: String, message: String, placeholder: String = "", secure: Bool = false) -> String? {
+    NSApp.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Cancel")
+    let field: NSTextField = secure ? NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24)) : NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+    field.placeholderString = placeholder
+    alert.accessoryView = field
+    let response = alert.runModal()
+    if response != .alertFirstButtonReturn { return nil }
+    return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func promptMultiline(title: String, message: String, placeholder: String = "") -> String? {
+    NSApp.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    alert.addButton(withTitle: "Cancel")
+    let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 120))
+    scroll.hasVerticalScroller = true
+    scroll.borderType = .bezelBorder
+    let textView = NSTextView(frame: scroll.bounds)
+    textView.isRichText = false
+    textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    textView.string = ""
+    textView.setAccessibilityLabel(title)
+    textView.setAccessibilityHelp(placeholder)
+    scroll.documentView = textView
+    alert.accessoryView = scroll
+    let response = alert.runModal()
+    if response != .alertFirstButtonReturn { return nil }
+    return textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func confirmAction(title: String, message: String, destructive: Bool = false) -> Bool {
+    NSApp.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.alertStyle = destructive ? .warning : .informational
+    alert.addButton(withTitle: destructive ? "Remove" : "OK")
+    alert.addButton(withTitle: "Cancel")
+    return alert.runModal() == .alertFirstButtonReturn
+}
+
 func parseJsonObject(_ text: String) -> [String: Any]? {
     guard let data = text.data(using: .utf8) else { return nil }
     return (try? JSONSerialization.jsonObject(with: data, options: [])) as? [String: Any]
@@ -1178,13 +1233,17 @@ func runProcess(_ executable: String, _ args: [String] = [], stdinText: String? 
         process.standardInput = pipe
         inputPipe = pipe
     }
-    process.terminationHandler = { proc in
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        let text = String(data: data, encoding: .utf8) ?? ""
-        completion?(proc.terminationStatus, text)
-    }
     do {
         try process.run()
+        output.fileHandleForWriting.closeFile()
+        DispatchQueue.global(qos: .utility).async {
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            let text = String(data: data, encoding: .utf8) ?? ""
+            DispatchQueue.main.async {
+                completion?(process.terminationStatus, text)
+            }
+        }
         if let stdinText = stdinText, let inputPipe = inputPipe {
             inputPipe.fileHandleForWriting.write(Data(stdinText.utf8))
             inputPipe.fileHandleForWriting.closeFile()
@@ -1252,6 +1311,339 @@ struct MenuBarConfig {
     let quitWithCodex: Bool
 }
 
+struct McpServerRow {
+    let name: String
+    let enabled: Bool
+    let transport: String
+    let summary: String
+}
+
+final class McpManagerController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
+    weak var owner: AppDelegate?
+    var panel: NSPanel!
+    var tableView: NSTableView!
+    var statusLabel: NSTextField!
+    var removeButton: NSButton!
+    var toggleButton: NSButton!
+    var refreshButton: NSButton!
+    var addButton: NSButton!
+    var rows: [McpServerRow] = []
+    var working = false
+
+    init(owner: AppDelegate) {
+        self.owner = owner
+        super.init()
+    }
+
+    func show() {
+        if panel == nil { buildPanel() }
+        if panel.isVisible {
+            panel.makeKeyAndOrderFront(nil)
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        panel.center()
+        panel.makeKeyAndOrderFront(nil)
+        refresh()
+        NSApp.runModal(for: panel)
+    }
+
+    func buildPanel() {
+        panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 440),
+            styleMask: [.titled, .closable, .resizable, .utilityWindow],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "MCP Servers"
+        panel.minSize = NSSize(width: 640, height: 360)
+        panel.isFloatingPanel = true
+        panel.delegate = self
+
+        let content = NSView(frame: panel.contentView?.bounds ?? .zero)
+        panel.contentView = content
+
+        let heading = NSTextField(labelWithString: "Global Codex MCP servers")
+        heading.font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        heading.translatesAutoresizingMaskIntoConstraints = false
+
+        let scope = NSTextField(labelWithString: "Changes are written safely to ~/.codex/config.toml and apply to new Codex sessions.")
+        scope.textColor = .secondaryLabelColor
+        scope.font = NSFont.systemFont(ofSize: 11)
+        scope.translatesAutoresizingMaskIntoConstraints = false
+
+        tableView = NSTableView()
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.usesAlternatingRowBackgroundColors = true
+        tableView.allowsMultipleSelection = false
+        tableView.rowSizeStyle = .medium
+        tableView.setAccessibilityLabel("Configured MCP servers")
+        let statusColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("status"))
+        statusColumn.title = "State"
+        statusColumn.width = 70
+        statusColumn.minWidth = 64
+        statusColumn.maxWidth = 88
+        let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
+        nameColumn.title = "Name"
+        nameColumn.width = 180
+        nameColumn.minWidth = 120
+        let transportColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("transport"))
+        transportColumn.title = "Transport"
+        transportColumn.width = 90
+        transportColumn.minWidth = 80
+        let detailColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("summary"))
+        detailColumn.title = "Configuration"
+        detailColumn.width = 360
+        detailColumn.minWidth = 220
+        tableView.addTableColumn(statusColumn)
+        tableView.addTableColumn(nameColumn)
+        tableView.addTableColumn(transportColumn)
+        tableView.addTableColumn(detailColumn)
+
+        let scroll = NSScrollView()
+        scroll.documentView = tableView
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.borderType = .bezelBorder
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+
+        statusLabel = NSTextField(labelWithString: "Loading MCP configuration…")
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.font = NSFont.systemFont(ofSize: 11)
+        statusLabel.lineBreakMode = .byTruncatingMiddle
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        addButton = makeButton("Add…", #selector(addServer))
+        removeButton = makeButton("Remove", #selector(removeServer))
+        toggleButton = makeButton("Disable", #selector(toggleServer))
+        refreshButton = makeButton("Refresh", #selector(refresh))
+        let closeButton = makeButton("Close", #selector(closePanel))
+        closeButton.keyEquivalent = "\\u{1b}"
+
+        let buttonStack = NSStackView(views: [addButton, removeButton, toggleButton, refreshButton, NSView(), closeButton])
+        buttonStack.orientation = .horizontal
+        buttonStack.spacing = 8
+        buttonStack.distribution = .fill
+        buttonStack.translatesAutoresizingMaskIntoConstraints = false
+
+        content.addSubview(heading)
+        content.addSubview(scope)
+        content.addSubview(scroll)
+        content.addSubview(statusLabel)
+        content.addSubview(buttonStack)
+        NSLayoutConstraint.activate([
+            heading.topAnchor.constraint(equalTo: content.topAnchor, constant: 18),
+            heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
+            heading.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
+            scope.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 4),
+            scope.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
+            scope.trailingAnchor.constraint(equalTo: heading.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: scope.bottomAnchor, constant: 12),
+            scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
+            scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -18),
+            scroll.bottomAnchor.constraint(equalTo: statusLabel.topAnchor, constant: -10),
+            statusLabel.leadingAnchor.constraint(equalTo: scroll.leadingAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: buttonStack.centerYAnchor),
+            statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: buttonStack.leadingAnchor, constant: -12),
+            buttonStack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor),
+            buttonStack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            buttonStack.heightAnchor.constraint(equalToConstant: 30)
+        ])
+        updateControls()
+    }
+
+    func makeButton(_ title: String, _ selector: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: selector)
+        button.bezelStyle = .rounded
+        button.setAccessibilityLabel(title)
+        return button
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        return rows.count
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard row >= 0, row < rows.count, let tableColumn = tableColumn else { return nil }
+        let identifier = tableColumn.identifier
+        let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView ?? NSTableCellView()
+        cell.identifier = identifier
+        let field: NSTextField
+        if let existing = cell.textField {
+            field = existing
+        } else {
+            field = NSTextField(labelWithString: "")
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.lineBreakMode = .byTruncatingTail
+            cell.textField = field
+            cell.addSubview(field)
+            NSLayoutConstraint.activate([
+                field.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+                field.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+                field.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+        }
+        let server = rows[row]
+        switch identifier.rawValue {
+        case "status":
+            field.stringValue = server.enabled ? "Enabled" : "Disabled"
+            field.textColor = server.enabled ? .systemGreen : .secondaryLabelColor
+            field.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        case "name":
+            field.stringValue = server.name
+            field.textColor = .labelColor
+            field.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        case "transport":
+            field.stringValue = server.transport == "url" ? "Remote" : server.transport == "stdio" ? "Local" : "Unknown"
+            field.textColor = .labelColor
+            field.font = NSFont.systemFont(ofSize: 12)
+        default:
+            field.stringValue = server.summary
+            field.textColor = .secondaryLabelColor
+            field.font = NSFont.systemFont(ofSize: 11)
+        }
+        return cell
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        updateControls()
+    }
+
+    func selectedServer() -> McpServerRow? {
+        let selected = tableView.selectedRow
+        return selected >= 0 && selected < rows.count ? rows[selected] : nil
+    }
+
+    func setWorking(_ value: Bool, status: String? = nil) {
+        working = value
+        if let status = status { statusLabel.stringValue = status }
+        updateControls()
+    }
+
+    func updateControls() {
+        let selected = selectedServer()
+        addButton?.isEnabled = !working
+        refreshButton?.isEnabled = !working
+        removeButton?.isEnabled = !working && selected != nil
+        toggleButton?.isEnabled = !working && selected != nil
+        toggleButton?.title = selected?.enabled == true ? "Disable" : "Enable"
+    }
+
+    @objc func refresh() {
+        guard !working else { return }
+        guard let owner = owner else { return }
+        setWorking(true, status: "Loading MCP configuration…")
+        owner.runSksSilent(["menubar", "mcp", "list", "--json"]) { [weak self] code, output in
+            guard let self = self else { return }
+            guard code == 0,
+                  let json = parseJsonObject(output),
+                  json["schema"] as? String == "sks.menubar-mcp-list.v1",
+                  json["ok"] as? Bool == true,
+                  let servers = json["servers"] as? [[String: Any]] else {
+                self.rows = []
+                self.tableView.reloadData()
+                self.setWorking(false, status: "Could not read MCP configuration")
+                showAlert("MCP Manager", informative: humanizeSksFailure(output))
+                return
+            }
+            self.rows = servers.compactMap { server in
+                guard let name = server["name"] as? String else { return nil }
+                return McpServerRow(
+                    name: name,
+                    enabled: server["enabled"] as? Bool != false,
+                    transport: server["transport"] as? String ?? "unknown",
+                    summary: server["summary"] as? String ?? "Configured"
+                )
+            }
+            self.tableView.reloadData()
+            if !self.rows.isEmpty { self.tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false) }
+            let enabled = self.rows.filter { $0.enabled }.count
+            self.setWorking(false, status: "\(self.rows.count) configured · \(enabled) enabled · Global")
+        }
+    }
+
+    @objc func addServer() {
+        guard !working else { return }
+        guard let transport = promptChoice(title: "Add MCP Server", message: "Choose how Codex connects to this server.", options: ["Remote URL", "Local command"]) else { return }
+        guard let name = promptText(title: "MCP Server Name", message: "Use a unique name (letters, numbers, dots, dashes, or underscores).", placeholder: "context7") else { return }
+        var payload: [String: Any] = ["name": name]
+        if transport == "Remote URL" {
+            guard let url = promptText(title: "Remote MCP URL", message: "Enter the full HTTP or HTTPS MCP endpoint.", placeholder: "https://mcp.example.com/mcp") else { return }
+            guard let bearer = promptTextAllowEmpty(title: "Bearer Token Environment Variable", message: "Optional. Enter the environment variable name that contains the bearer token, or leave blank.", placeholder: "MCP_ACCESS_TOKEN") else { return }
+            payload["transport"] = "url"
+            payload["url"] = url
+            if !bearer.isEmpty { payload["bearer_token_env_var"] = bearer }
+        } else {
+            guard let command = promptText(title: "Local MCP Command", message: "Enter the executable used to start the MCP server.", placeholder: "npx") else { return }
+            guard let arguments = promptMultiline(title: "Command Arguments", message: "Optional. Enter one argument per line.", placeholder: "-y\\n@upstash/context7-mcp") else { return }
+            guard let environment = promptMultiline(title: "Environment Variables", message: "Optional. Enter KEY=VALUE pairs, one per line. Values are written only to Codex config and never shown in the MCP list.", placeholder: "API_TOKEN=...") else { return }
+            payload["transport"] = "stdio"
+            payload["command"] = command
+            payload["args"] = arguments.split(separator: "\\n").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            var env: [String: String] = [:]
+            for line in environment.split(separator: "\\n") {
+                let text = String(line)
+                guard let separator = text.firstIndex(of: "=") else {
+                    showAlert("Invalid environment variable", informative: "Use KEY=VALUE, one entry per line.")
+                    return
+                }
+                let key = String(text[..<separator]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let value = String(text[text.index(after: separator)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                env[key] = value
+            }
+            if !env.isEmpty { payload["env"] = env }
+        }
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else {
+            showAlert("Add MCP Server", informative: "Could not prepare the MCP configuration payload.")
+            return
+        }
+        runMutation(["menubar", "mcp", "add", "--stdin-json", "--json"], title: "Add MCP Server", stdinText: json + "\\n")
+    }
+
+    @objc func removeServer() {
+        guard !working, let server = selectedServer() else { return }
+        guard confirmAction(title: "Remove \(server.name)?", message: "This removes the global MCP configuration and creates a protected backup first.", destructive: true) else { return }
+        runMutation(["menubar", "mcp", "remove", server.name, "--json"], title: "Remove MCP Server")
+    }
+
+    @objc func toggleServer() {
+        guard !working, let server = selectedServer() else { return }
+        let action = server.enabled ? "disable" : "enable"
+        runMutation(["menubar", "mcp", action, server.name, "--json"], title: server.enabled ? "Disable MCP Server" : "Enable MCP Server")
+    }
+
+    func runMutation(_ args: [String], title: String, stdinText: String? = nil) {
+        guard let owner = owner else { return }
+        setWorking(true, status: title + "…")
+        owner.runSksCapture(args, title: title, stdinText: stdinText, notify: false) { [weak self] code, output in
+            guard let self = self else { return }
+            guard code == 0,
+                  let json = parseJsonObject(output),
+                  json["schema"] as? String == "sks.menubar-mcp-mutation.v1",
+                  json["ok"] as? Bool == true else {
+                self.setWorking(false, status: title + " failed")
+                showAlert(title + " failed", informative: humanizeSksFailure(output))
+                return
+            }
+            self.setWorking(false, status: title + " complete · restart or open a new Codex session to apply")
+            self.refresh()
+        }
+    }
+
+    @objc func closePanel() {
+        if NSApp.modalWindow === panel { NSApp.stopModal() }
+        panel.orderOut(nil)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        closePanel()
+        return false
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     var statusLineItem: NSMenuItem!
@@ -1261,6 +1653,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var fastModeOffItem: NSMenuItem!
     var codexCliVersionItem: NSMenuItem!
     var codexCliUpdateItem: NSMenuItem!
+    var mcpManager: McpManagerController?
     var timer: Timer?
     var busy = false
     var lastFailure = false
@@ -1302,6 +1695,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         codexCliVersionItem.isEnabled = false
         menu.addItem(codexCliVersionItem)
         codexCliUpdateItem = add(menu, "Update Codex CLI Now", #selector(updateCodexCliNow))
+        add(menu, "Manage MCP Servers…", #selector(manageMcpServers))
         add(menu, "Run sks doctor --fix", #selector(runDoctorFix))
         menu.addItem(NSMenuItem.separator())
         add(menu, "Open Dashboard", #selector(openDashboard))
@@ -1621,6 +2015,11 @@ ${codexLifecycleSource}
         runSksBackground(["codex", "update", "--json"], title: "Update Codex CLI Now") { [weak self] _, _ in
             self?.updateCodexCliStatus(refresh: true)
         }
+    }
+
+    @objc func manageMcpServers() {
+        if mcpManager == nil { mcpManager = McpManagerController(owner: self) }
+        mcpManager?.show()
     }
 
     @objc func runDoctorFix() {

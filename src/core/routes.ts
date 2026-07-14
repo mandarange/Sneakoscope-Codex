@@ -21,6 +21,16 @@ export interface PromptIntentScores {
   reasons: string[];
 }
 
+export interface NarutoRouteDecision {
+  mode: 'none' | 'generic_naruto' | 'route_owned';
+  required: boolean;
+  route_id: string | null;
+  task_profile: TaskProfile;
+  reason: string;
+  trivial: boolean;
+  default_parallel: boolean;
+}
+
 export function looksLikeProblemSolvingRequest(prompt: any = '') {
   const text = String(prompt || '').trim();
   if (!text) return false;
@@ -300,7 +310,7 @@ export const ROUTES = [
     command: '$Naruto',
     mode: 'NARUTO',
     route: 'Codex official subagent workflow',
-    description: '$Naruto prepares a lightweight Codex official subagent workflow. The Sol Max parent owns decomposition, delegates only defensible direct-child slices, reuses bounded TriWiki attention anchors, waits for every requested thread, integrates the results, and reports scoped verification. Automatic fan-out is one by default, two for explicit parallel work or independent risk domains, and at most three for critical multi-domain risk; explicit --agents remains authoritative.',
+    description: '$Naruto prepares a lightweight Codex official subagent workflow. The Sol Max parent owns decomposition, delegates only defensible direct-child slices, reuses bounded query-aware TriWiki attention anchors, waits for every requested thread, integrates the results, and reports scoped verification. Automatic fan-out is two for non-trivial work and at most three for critical multi-domain risk; explicit --agents remains authoritative.',
     requiredSkills: ['naruto', 'pipeline-runner', 'prompt-pipeline', 'honest-mode'],
     dollarAliases: ['$ShadowClone', '$Kagebunshin', '$Work', '$Swarm'],
     appSkillAliases: ['shadow-clone', 'kage-bunshin', 'work', 'swarm'],
@@ -1075,21 +1085,95 @@ export function routeNeedsContext7(route: any, prompt: any = '') {
   return /\b(package|library|framework|SDK|API|MCP|Supabase|React|Next|Vue|Svelte|Vite|Prisma|Drizzle|Knex|Postgres|npm|node_modules|docs?|documentation)\b/i.test(String(prompt || ''));
 }
 
-export function routeRequiresSubagents(route: any, prompt: any = '', profile: TaskProfile = classifyTaskProfile(prompt)) {
-  if (!route) return false;
-  if (['Answer', 'DFix', 'Help', 'Wiki', 'ComputerUse'].includes(String(route.id || ''))) return false;
-  // QA-Loop retains one route-owned native execution engine. Do not also
-  // materialize an official-subagent overlay for the same mission.
-  if (route.id === 'QALoop') return false;
-  if ((route.id === 'Team' || route.id === 'Naruto') && route.explicit_invocation !== false) return true;
-  if (/(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b/i.test(String(prompt || ''))) return true;
-  if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change' || profile === 'bounded-work') return false;
-  if (profile === 'parallel-read' || profile === 'parallel-write') return true;
-  return profile === 'high-risk' && explicitlyParallelizable(prompt);
+const NARUTO_GATE_BYPASS_ROUTE_IDS = new Set([
+  'Answer',
+  'DFix',
+  'Help',
+  'Wiki',
+  'ComputerUse',
+  'Goal',
+  'Commit',
+  'CommitAndPush',
+  'FastMode',
+  'LocalModel',
+  'Planner'
+]);
+
+const NARUTO_GATE_ROUTE_OWNED_IDS = new Set([
+  'Research',
+  'AutoResearch',
+  'QALoop'
+]);
+
+const NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS = new Set([
+  'Review',
+  'ReleaseReview',
+  'PPT',
+  'ImageUXReview',
+  'SuperSearch',
+  'SEOGEOOptimizer',
+  'DB',
+  'MadDB',
+  'MadSKS',
+  'GX'
+]);
+
+export function narutoDecisionForRoute(
+  route: any,
+  prompt: any = '',
+  profile: TaskProfile = classifyTaskProfile(prompt)
+): NarutoRouteDecision {
+  const routeId = route?.id ? String(route.id) : null;
+  if (!routeId) {
+    return narutoRouteDecision('none', null, profile, 'no_route_or_task_context', true);
+  }
+  if (NARUTO_GATE_ROUTE_OWNED_IDS.has(routeId)) {
+    // These routes already own their orchestration lifecycle. The common
+    // Naruto gate records that fact but must not add a second generic fanout.
+    return narutoRouteDecision('route_owned', routeId, profile, `route_owned_orchestration:${routeId}`, false);
+  }
+  if (NARUTO_GATE_BYPASS_ROUTE_IDS.has(routeId)) {
+    return narutoRouteDecision('none', routeId, profile, `lightweight_route_bypass:${routeId}`, true);
+  }
+  if ((routeId === 'Team' || routeId === 'Naruto') && route.explicit_invocation !== false) {
+    return narutoRouteDecision('generic_naruto', routeId, profile, 'explicit_official_subagent_route', false);
+  }
+  if (/(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b/i.test(String(prompt || ''))) {
+    return narutoRouteDecision('generic_naruto', routeId, profile, 'explicit_subagent_count', false);
+  }
+  if (NARUTO_GATE_SPECIALIZED_PARALLEL_ROUTE_IDS.has(routeId)) {
+    return narutoRouteDecision('generic_naruto', routeId, profile, `specialized_route_default_parallel:${routeId}`, false);
+  }
+  if (profile === 'passthrough' || profile === 'answer' || profile === 'tiny-change') {
+    return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_bypass`, true);
+  }
+  if (profile === 'bounded-work' || profile === 'parallel-read' || profile === 'parallel-write' || profile === 'high-risk') {
+    return narutoRouteDecision('generic_naruto', routeId, profile, `task_profile_${profile}_default_parallel`, false);
+  }
+  return narutoRouteDecision('none', routeId, profile, `task_profile_${profile}_bypass`, true);
 }
 
-function explicitlyParallelizable(prompt: any = '') {
-  return /(?:^|\s)--(?:agents|clones)(?:=|\s+)\d+\b|\b(parallel|subagents?|one agent per|fan out|independent slices?|multiple files|audit all)\b|병렬|하위\s*에이전트|서브\s*에이전트|독립\s*(?:작업|범위)|분담|여러\s*파일|전체\s*검토/i.test(String(prompt || ''));
+export function routeRequiresSubagents(route: any, prompt: any = '', profile: TaskProfile = classifyTaskProfile(prompt)) {
+  return narutoDecisionForRoute(route, prompt, profile).mode === 'generic_naruto';
+}
+
+function narutoRouteDecision(
+  mode: NarutoRouteDecision['mode'],
+  routeId: string | null,
+  profile: TaskProfile,
+  reason: string,
+  trivial: boolean
+): NarutoRouteDecision {
+  const required = mode === 'generic_naruto';
+  return {
+    mode,
+    required,
+    route_id: routeId,
+    task_profile: profile,
+    reason,
+    trivial,
+    default_parallel: required
+  };
 }
 
 export function simpleGitOnlyRouteId(prompt: any = '') {

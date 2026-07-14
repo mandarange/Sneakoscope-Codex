@@ -1945,9 +1945,14 @@ async function inspectCodexLbMacLaunchEnvironment(baseUrl: any = '', opts: any =
     const result = await runProcess(launchctl, ['getenv', key], { timeoutMs: 3000, maxOutputBytes: 8192 });
     return result.code === 0 ? String(result.stdout || '').trim() : '';
   };
-  const currentBaseUrl = await readVar('CODEX_LB_BASE_URL');
-  const currentApiKey = await readVar('CODEX_LB_API_KEY');
-  const currentOpenRouterKey = await readVar('OPENROUTER_API_KEY');
+  // launchctl can stall behind the same launchd/TCC boundary for every key.
+  // These reads are independent, so keep the worst case to one timeout window
+  // instead of three serial windows on `sks --mad` preflight.
+  const [currentBaseUrl, currentApiKey, currentOpenRouterKey] = await Promise.all([
+    readVar('CODEX_LB_BASE_URL'),
+    readVar('CODEX_LB_API_KEY'),
+    readVar('OPENROUTER_API_KEY')
+  ]);
   const baseMatches = !baseUrl || currentBaseUrl === String(baseUrl || '').trim();
   const basePresent = Boolean(currentBaseUrl);
   const keyPresent = Boolean(currentApiKey);

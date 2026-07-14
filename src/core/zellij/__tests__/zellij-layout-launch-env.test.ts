@@ -4,6 +4,8 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { launchZellijLayout } from '../zellij-launcher.js'
+import type { ZellijCapabilityReport } from '../zellij-capability.js'
+import type { CodexLbToolOutputRecoveryProbe } from '../../codex-lb/codex-lb-tool-output-recovery.js'
 
 test('Zellij session creation receives the same viewport and refresh environment', async () => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-launch-env-'))
@@ -37,6 +39,138 @@ test('Zellij session creation receives the same viewport and refresh environment
     assert.equal(create.sks_zellij_refresh_ms, '725')
   } finally {
     restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter)
+    restoreEnv('SKS_ZELLIJ_CAPABILITY_FAKE_STATUS', previous.status)
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Zellij launch reuses verified preflight capability and codex-lb recovery evidence', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-launch-evidence-'))
+  const previous = {
+    adapter: process.env.SKS_ZELLIJ_FAKE_ADAPTER,
+    root: process.env.SKS_ZELLIJ_FAKE_ROOT,
+    status: process.env.SKS_ZELLIJ_CAPABILITY_FAKE_STATUS
+  }
+  process.env.SKS_ZELLIJ_FAKE_ADAPTER = '1'
+  process.env.SKS_ZELLIJ_FAKE_ROOT = root
+  process.env.SKS_ZELLIJ_CAPABILITY_FAKE_STATUS = 'blocked'
+  const capability: ZellijCapabilityReport = {
+    schema: 'sks.zellij-capability.v1',
+    generated_at: new Date().toISOString(),
+    ok: true,
+    status: 'ok',
+    integration_optional: true,
+    require_zellij: false,
+    min_version: '0.43.0',
+    version: '0.43.1',
+    bin: 'zellij',
+    command: ['zellij', '--version'],
+    docs_evidence: [],
+    blockers: [],
+    warnings: [],
+    operator_actions: []
+  }
+  const recovery: CodexLbToolOutputRecoveryProbe = {
+    schema: 'sks.codex-lb-tool-output-recovery.v1',
+    ok: true,
+    required: true,
+    status: 'compatible',
+    base_url: 'https://lb.example.test/backend-api/codex',
+    health_url: 'https://lb.example.test/health',
+    observed_version: '1.21.0-beta.3',
+    minimum_version: '1.21.0-beta.3',
+    version_header: 'x-app-version',
+    supports_interrupted_tool_output_recovery: true,
+    verified: true,
+    override_acknowledged: false,
+    test_bypass: false,
+    http_status: 200,
+    blockers: [],
+    warnings: [],
+    operator_actions: []
+  }
+  try {
+    const report = await launchZellijLayout({
+      root,
+      missionId: 'M-launch-evidence',
+      kind: 'mad',
+      attach: false,
+      codexArgs: ['-c', 'model_provider="codex-lb"'],
+      launchEnv: {
+        HOME: root,
+        CODEX_HOME: path.join(root, '.codex'),
+        CODEX_LB_BASE_URL: 'https://lb.example.test/backend-api/codex'
+      },
+      zellijCapability: capability,
+      verifiedCodexLbToolOutputRecovery: recovery,
+      recoveryFetch: async () => { throw new Error('recovery probe should have been reused') }
+    })
+    assert.equal(report.ok, true)
+    assert.equal(report.capability.version, '0.43.1')
+    assert.equal((report.pane_proof as any).capability_status, 'ok')
+    assert.equal(report.codex_lb_tool_output_recovery.status, 'compatible')
+  } finally {
+    restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter)
+    restoreEnv('SKS_ZELLIJ_FAKE_ROOT', previous.root)
+    restoreEnv('SKS_ZELLIJ_CAPABILITY_FAKE_STATUS', previous.status)
+    await fsp.rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Zellij launch does not reuse codex-lb recovery evidence for a different effective base URL', async () => {
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), 'sks-zellij-launch-recovery-binding-'))
+  const previous = {
+    adapter: process.env.SKS_ZELLIJ_FAKE_ADAPTER,
+    root: process.env.SKS_ZELLIJ_FAKE_ROOT,
+    status: process.env.SKS_ZELLIJ_CAPABILITY_FAKE_STATUS
+  }
+  process.env.SKS_ZELLIJ_FAKE_ADAPTER = '1'
+  process.env.SKS_ZELLIJ_FAKE_ROOT = root
+  process.env.SKS_ZELLIJ_CAPABILITY_FAKE_STATUS = 'ok'
+  let fetchCalls = 0
+  const recovery: CodexLbToolOutputRecoveryProbe = {
+    schema: 'sks.codex-lb-tool-output-recovery.v1',
+    ok: true,
+    required: true,
+    status: 'compatible',
+    base_url: 'https://verified.example.test/backend-api/codex',
+    health_url: 'https://verified.example.test/health',
+    observed_version: '1.21.0-beta.3',
+    minimum_version: '1.21.0-beta.3',
+    version_header: 'x-app-version',
+    supports_interrupted_tool_output_recovery: true,
+    verified: true,
+    override_acknowledged: false,
+    test_bypass: false,
+    http_status: 200,
+    blockers: [],
+    warnings: [],
+    operator_actions: []
+  }
+  try {
+    const report = await launchZellijLayout({
+      root,
+      missionId: 'M-launch-recovery-binding',
+      kind: 'mad',
+      attach: false,
+      codexArgs: ['-c', 'model_provider="codex-lb"'],
+      launchEnv: {
+        HOME: root,
+        CODEX_HOME: path.join(root, '.codex'),
+        CODEX_LB_BASE_URL: 'https://different.example.test/backend-api/codex'
+      },
+      verifiedCodexLbToolOutputRecovery: recovery,
+      recoveryFetch: async () => {
+        fetchCalls += 1
+        return new Response('{}', { status: 200, headers: { 'x-app-version': '1.21.0-beta.3' } })
+      }
+    })
+    assert.equal(report.ok, true)
+    assert.equal(fetchCalls, 1)
+    assert.equal(report.codex_lb_tool_output_recovery.base_url, 'https://different.example.test/backend-api/codex')
+  } finally {
+    restoreEnv('SKS_ZELLIJ_FAKE_ADAPTER', previous.adapter)
+    restoreEnv('SKS_ZELLIJ_FAKE_ROOT', previous.root)
     restoreEnv('SKS_ZELLIJ_CAPABILITY_FAKE_STATUS', previous.status)
     await fsp.rm(root, { recursive: true, force: true })
   }

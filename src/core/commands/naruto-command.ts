@@ -263,7 +263,8 @@ async function narutoRunTransaction(
     parentSummary: effectiveParentSummary,
     blockers,
     appSession,
-    sessionKey
+    sessionKey,
+    suggestedAgents: Array.isArray(completedPlan?.suggested_agents) ? completedPlan.suggested_agents : []
   })
   await writeJsonAtomic(path.join(dir, NARUTO_SUMMARY_FILENAME), summary)
   await writeNarutoGate(dir, { missionId: id, workflowRunId, evidence, passed, blockers })

@@ -1,6 +1,6 @@
 export const DEFAULT_NARUTO_MAX_THREADS = 12
 export const HARD_NARUTO_MAX_THREADS = 32
-export const DEFAULT_NARUTO_REQUESTED_SUBAGENTS = 1
+export const DEFAULT_NARUTO_REQUESTED_SUBAGENTS = 2
 
 export interface SubagentThreadBudget {
   requestedSubagents: number

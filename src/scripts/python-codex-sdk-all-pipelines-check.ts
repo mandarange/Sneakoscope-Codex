@@ -14,7 +14,11 @@ const mod = await importDist('core/codex-control/codex-control-plane.js');
 const schema = await importDist('core/codex-control/schemas/agent-worker-result.schema.js');
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-python-codex-sdk-pipeline-'));
 const oldFake = process.env.SKS_PYTHON_CODEX_SDK_FAKE;
+const oldCodexLbAutobypass = process.env.SKS_CODEX_LB_AUTOBYPASS;
 process.env.SKS_PYTHON_CODEX_SDK_FAKE = '1';
+// Keep the hermetic fake backend independent from an operator's live
+// codex-lb configuration. This fixture validates the Python SDK pipeline only.
+process.env.SKS_CODEX_LB_AUTOBYPASS = '1';
 try {
   const result = await mod.runCodexTask({
     route: '$Agent',
@@ -41,4 +45,6 @@ try {
 } finally {
   if (oldFake === undefined) delete process.env.SKS_PYTHON_CODEX_SDK_FAKE;
   else process.env.SKS_PYTHON_CODEX_SDK_FAKE = oldFake;
+  if (oldCodexLbAutobypass === undefined) delete process.env.SKS_CODEX_LB_AUTOBYPASS;
+  else process.env.SKS_CODEX_LB_AUTOBYPASS = oldCodexLbAutobypass;
 }

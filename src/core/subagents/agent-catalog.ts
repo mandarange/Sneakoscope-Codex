@@ -1,11 +1,13 @@
 import {
   MANAGED_OFFICIAL_SUBAGENT_ROLES,
+  managedOfficialSubagentRoleByName,
   type ManagedOfficialSubagentRole
 } from '../managed-assets/managed-assets-manifest.js'
 
-export const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 1
+export const DEFAULT_AUTOMATIC_SUBAGENT_COUNT = 2
 export const MAX_AUTOMATIC_SUBAGENT_COUNT = 3
 export const MAX_AUTOMATIC_REVIEWER_COUNT = 2
+export const MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT = MAX_AUTOMATIC_SUBAGENT_COUNT
 
 export interface OfficialSubagentRoleSummary {
   name: string
@@ -16,13 +18,36 @@ export interface OfficialSubagentRoleSummary {
 }
 
 export function officialSubagentRoleCatalog(): OfficialSubagentRoleSummary[] {
-  return MANAGED_OFFICIAL_SUBAGENT_ROLES.map((role) => ({
+  return MANAGED_OFFICIAL_SUBAGENT_ROLES.map(roleSummary)
+}
+
+export function officialSubagentOnDemandRoleCatalog(roleNames: readonly string[]): OfficialSubagentRoleSummary[] {
+  const selected: ManagedOfficialSubagentRole[] = []
+  const seen = new Set<string>()
+  for (const name of roleNames) {
+    const role = managedOfficialSubagentRoleByName(String(name || ''))
+    if (!role || seen.has(role.codex_name)) continue
+    seen.add(role.codex_name)
+    selected.push(role)
+    if (selected.length >= MAX_ON_DEMAND_SUBAGENT_ROLE_COUNT) break
+  }
+  return selected.map(roleSummary)
+}
+
+export function officialSubagentOnDemandRolePlan(
+  roleNames: readonly string[]
+): Record<string, Omit<OfficialSubagentRoleSummary, 'name'>> {
+  return Object.fromEntries(officialSubagentOnDemandRoleCatalog(roleNames).map(({ name, ...config }) => [name, config]))
+}
+
+function roleSummary(role: ManagedOfficialSubagentRole): OfficialSubagentRoleSummary {
+  return {
     name: role.codex_name,
     description: role.description,
     model: role.model,
     model_reasoning_effort: role.model_reasoning_effort,
     sandbox_mode: role.sandbox || 'inherit'
-  }))
+  }
 }
 
 export function officialSubagentRolePlan(): Record<string, Omit<OfficialSubagentRoleSummary, 'name'>> {
@@ -72,11 +97,17 @@ export function selectOfficialSubagentRole(input: Parameters<typeof recommendOff
 export function officialSubagentFanoutPolicy(input: {
   requestedSubagents?: number | null
   requestedExplicit?: boolean
+  requestedSource?: 'operator' | 'route_contract' | 'automatic'
   taskProfile?: string | null
   suggestedRoles?: readonly string[] | null
   goal?: string | null
 } = {}) {
-  const explicit = input.requestedExplicit === true
+  const countSource = input.requestedSource === 'route_contract'
+    ? 'route_contract'
+    : input.requestedExplicit === true || input.requestedSource === 'operator'
+      ? 'operator'
+      : 'automatic'
+  const explicit = countSource !== 'automatic'
   const explicitRequested = Number.isFinite(Number(input.requestedSubagents))
     ? Math.max(1, Math.floor(Number(input.requestedSubagents)))
     : DEFAULT_AUTOMATIC_SUBAGENT_COUNT
@@ -90,13 +121,22 @@ export function officialSubagentFanoutPolicy(input: {
     ? MAX_AUTOMATIC_SUBAGENT_COUNT
     : MAX_AUTOMATIC_REVIEWER_COUNT
   return {
-    mode: explicit ? 'explicit_operator_count' : 'parent_owned_risk_based',
+    mode: countSource === 'operator'
+      ? 'explicit_operator_count'
+      : countSource === 'route_contract'
+        ? 'route_owned_contract_count'
+        : 'parent_owned_risk_based',
+    count_source: countSource,
     requested_subagents: requested,
     default_subagents: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
     automatic_selected: explicit ? null : automatic.count,
     automatic_ceiling: automatic.ceiling,
     automatic_reviewer_ceiling: automaticReviewerCeiling,
-    selection_reason: explicit ? 'explicit_operator_count_preserved' : automatic.reason,
+    selection_reason: countSource === 'operator'
+      ? 'explicit_operator_count_preserved'
+      : countSource === 'route_contract'
+        ? 'route_owned_contract_count_preserved'
+        : automatic.reason,
     risk_domains: automatic.riskDomains,
     critical_multi_domain: automatic.criticalMultiDomain,
     requires_independent_non_overlapping_slices: true,
@@ -149,7 +189,7 @@ function automaticSubagentFanout(input: {
   return {
     count: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
     ceiling: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
-    reason: 'single_bounded_or_single_domain_task',
+    reason: 'non_trivial_default_parallel',
     riskDomains,
     criticalMultiDomain: false
   }
@@ -228,6 +268,11 @@ const ROLE_LANGUAGE_HINTS: Record<string, string[]> = {
   debugger: ['디버깅', '원인', '실패', '재현', '회귀'],
   test_engineer: ['테스트', '회귀 테스트', '검증', '픽스처', '커버리지'],
   ui_implementer: ['화면', '터미널', '젤리', '패널', '팬', '레이아웃', '사용성'],
+  native_app_specialist: ['네이티브 앱', '메뉴바', '앱킷', '스위프트', '맥os', '데스크톱', 'tcc'],
+  toolchain_specialist: ['툴체인', '의존성', '패키지 매니저', '빌드', '설치', '닥터', '업데이트', 'ci 자동화'],
+  protocol_reviewer: ['프로토콜', '계약', '스키마', '직렬화', 'api', 'sdk', 'cli', 'mcp', '하위 호환'],
+  runtime_reliability_reviewer: ['런타임 신뢰성', '훅', '세션', '락', '데몬', '프로세스 정리', '멱등성', '복구', '경쟁 상태', '교착'],
+  triwiki_evidence_reviewer: ['트라이위키', '컨텍스트 팩', '출처', '신뢰 앵커', '증거', '증명', 'wrongness', '소스 하이드레이션'],
   architecture_reviewer: ['아키텍처', '설계', '수명주기', '결합도', '리팩터'],
   security_reviewer: ['보안', '권한', '인증', '비밀', '신뢰 경계'],
   database_reviewer: ['데이터베이스', '디비', '마이그레이션', '롤백', '스키마'],
@@ -247,7 +292,11 @@ const RISK_DOMAIN_PATTERNS: readonly (readonly [string, RegExp])[] = [
   ['release', /\b(?:release|publish|deploy|distribution|package registry|production rollout)\b|릴리스|배포|출시|퍼블리시/i],
   ['payment', /\b(?:payment|billing|checkout|transaction)\b|결제|청구|트랜잭션/i],
   ['performance', /\b(?:performance|latency|throughput|concurrency|resource usage)\b|성능|지연|처리량|동시성/i],
-  ['integration', /\b(?:integration|compatibility|cross-module|end-to-end)\b|통합|호환성|엔드투엔드/i]
+  ['integration', /\b(?:integration|compatibility|cross-module|end-to-end)\b|통합|호환성|엔드투엔드/i],
+  ['protocol', /\b(?:protocol|mcp|sdk|api contract|schema|serialization|wire format)\b|프로토콜|계약|스키마|직렬화/i],
+  ['runtime', /\b(?:hook|session|lock|daemon|process cleanup|idempotency|recovery|race condition|deadlock)\b|훅|세션|락|데몬|프로세스\s*정리|멱등성|복구|경쟁\s*상태|교착/i],
+  ['toolchain', /\b(?:toolchain|dependency upgrade|runtime upgrade|package manager|build script|install flow|doctor flow|update flow|ci automation)\b|툴체인|의존성|패키지\s*매니저|빌드|설치|닥터|업데이트/i],
+  ['evidence', /\b(?:triwiki|context pack|provenance|trust anchor|proof artifact|wrongness memory)\b|트라이위키|컨텍스트\s*팩|출처|신뢰\s*앵커|증거|증명/i]
 ]
 
 const ROLE_RISK_DOMAINS: Readonly<Record<string, string>> = {
@@ -255,5 +304,9 @@ const ROLE_RISK_DOMAINS: Readonly<Record<string, string>> = {
   database_reviewer: 'database',
   release_reviewer: 'release',
   performance_analyst: 'performance',
-  integration_reviewer: 'integration'
+  integration_reviewer: 'integration',
+  protocol_reviewer: 'protocol',
+  runtime_reliability_reviewer: 'runtime',
+  toolchain_specialist: 'toolchain',
+  triwiki_evidence_reviewer: 'evidence'
 }

@@ -7,8 +7,15 @@ import {
   restartSksMenuBar,
   uninstallSksMenuBar
 } from '../codex-app/sks-menubar.js';
+import {
+  addCodexMcpServer,
+  listCodexMcpServers,
+  removeCodexMcpServer,
+  setCodexMcpServerEnabled
+} from '../codex-app/mcp-manager.js';
 
 export async function menubarCommand(subcommand = 'status', args: string[] = []) {
+  if (String(subcommand || '').toLowerCase() === 'mcp') return menubarMcpCommand(args);
   const action = normalizeAction(subcommand);
   const root = path.resolve(String(readOption(args, '--root', '') || await projectRoot()));
   const home = stringOption(args, '--home');
@@ -63,6 +70,32 @@ export async function menubarCommand(subcommand = 'status', args: string[] = [])
   process.exitCode = 2;
 }
 
+async function menubarMcpCommand(args: string[] = []) {
+  const action = String(args[0] || 'list').toLowerCase();
+  const rest = args.slice(1);
+  const home = stringOption(rest, '--home');
+  const options = home ? { home } : {};
+  let result: any;
+  if (['list', 'status', 'refresh'].includes(action)) {
+    result = await listCodexMcpServers(options);
+  } else if (action === 'add') {
+    const payload = flag(rest, '--stdin-json') ? await readStdinJson() : null;
+    result = await addCodexMcpServer(payload, options);
+  } else if (action === 'remove') {
+    result = await removeCodexMcpServer(stringOption(rest, '--name') || positional(rest), options);
+  } else if (action === 'enable' || action === 'disable') {
+    result = await setCodexMcpServerEnabled(stringOption(rest, '--name') || positional(rest), action === 'enable', options);
+  } else {
+    printMcpUsage();
+    process.exitCode = 2;
+    return;
+  }
+  if (flag(rest, '--json') || flag(args, '--json')) printJson(result);
+  else printMcpResult(result);
+  if (result?.ok !== true) process.exitCode = 1;
+  return result;
+}
+
 function normalizeAction(value: unknown): 'status' | 'install' | 'restart' | 'uninstall' | 'help' {
   const text = String(value || 'status').toLowerCase();
   if (['status', 'inspect', 'doctor'].includes(text)) return 'status';
@@ -103,7 +136,63 @@ Usage:
   sks menubar install [--no-launch] [--json]
   sks menubar restart [--json]
   sks menubar uninstall [--json]
+  sks menubar mcp list [--json]
+  sks menubar mcp add --stdin-json [--json]
+  sks menubar mcp enable|disable|remove <name> [--json]
 `);
+}
+
+function printMcpUsage() {
+  console.log(`SKS Menu Bar MCP Manager
+
+Usage:
+  sks menubar mcp list [--json]
+  sks menubar mcp add --stdin-json [--json]
+  sks menubar mcp enable <name> [--json]
+  sks menubar mcp disable <name> [--json]
+  sks menubar mcp remove <name> [--json]
+`);
+}
+
+function printMcpResult(result: any) {
+  if (result?.schema === 'sks.menubar-mcp-list.v1') {
+    console.log(`Codex MCP servers (${result.server_count || 0})`);
+    for (const server of result.servers || []) console.log(`- ${server.enabled ? 'on ' : 'off'} ${server.name}: ${server.summary}`);
+    return;
+  }
+  console.log(`Codex MCP ${result?.action || 'mutation'}: ${result?.ok ? 'ok' : 'failed'}`);
+  for (const blocker of result?.blockers || []) console.log(`blocker: ${blocker}`);
+}
+
+async function readStdinJson() {
+  if (process.stdin.isTTY) return null;
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of process.stdin) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > 1024 * 1024) throw new Error('menubar_mcp_stdin_payload_too_large');
+    chunks.push(buffer);
+  }
+  const text = Buffer.concat(chunks).toString('utf8').trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function positional(args: string[]): string | null {
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = String(args[index] || '');
+    if (arg === '--home' || arg === '--name') {
+      index += 1;
+      continue;
+    }
+    if (!arg.startsWith('--')) return arg;
+  }
+  return null;
 }
 
 function printJson(value: unknown) {

@@ -1,10 +1,10 @@
 # Release Readiness
 
-SKS 6.1.2 is ready for publication only when package/lock/Rust/docs/dist versions agree; the active `rust-v0.144.1` manifest, exact `@openai/codex-sdk`/`@openai/codex` 0.144.1 dependency graph, generated App Server schema digest, package file allowlist, and current Codex compatibility evidence agree; the Voxel TriWiki coordinate/voxel, trust, wrongness, and bounded-context contracts validate; generation-aware GC preserves the active mission and durable evidence; Codex plugin repair proves Browser, Chrome, Computer Use, and ImageGen inventory; and the lifecycle-disabled publish gates pass from a clean build.
+SKS 6.2.0 is ready for publication only when package/lock/Rust/docs/dist versions agree; the active `rust-v0.144.1` manifest, exact `@openai/codex-sdk`/`@openai/codex` 0.144.1 dependency graph, generated App Server schema digest, package file allowlist, and current Codex compatibility evidence agree; the Voxel TriWiki coordinate/voxel, trust, wrongness, and bounded-context contracts validate; generation-aware GC preserves the active mission and durable evidence; Codex plugin repair proves Browser, Chrome, Computer Use, and ImageGen inventory; and the lifecycle-disabled publish gates pass from a clean build.
 
-Codex 0.142 references later in this document are historical release records and cannot authorize the 6.1.2 release.
+Codex 0.142 references later in this document are historical release records and cannot authorize the 6.2.0 release.
 
-6.1.2 release readiness requires `$Naruto` to use the Codex official subagent workflow, Sol Max parent orchestration, Luna Max bounded subagents, Sol Max reasoning-sensitive experts, matched `SubagentStart`/`SubagentStop` thread evidence plus a parent summary, no native PID requirement, preserved user-owned agent/config files, the 200-gate/100-script lean budgets, focused tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. The installed package must also contain `release-gates.v2.json`, `infra-harness-gates.json`, and `runtime-required-scripts.json` so stable `sks check`, `sks gates`, and package contract checks do not depend on source-checkout-only files. Live paid Naruto fan-out and npm publication remain operator-only checks.
+6.2.0 release readiness requires `$Naruto` to use the Codex official subagent workflow, Sol Max parent orchestration, Luna Max bounded subagents, Sol Max reasoning-sensitive experts, matched `SubagentStart`/`SubagentStop` thread evidence plus a parent summary, no native PID requirement, preserved user-owned agent/config files, the 200-gate/100-script lean budgets, focused tests, packlist verification, and `npm pack --dry-run --ignore-scripts`. The installed package must also contain `release-gates.v2.json`, `infra-harness-gates.json`, and `runtime-required-scripts.json` so stable `sks check`, `sks gates`, and package contract checks do not depend on source-checkout-only files. Live paid Naruto fan-out and npm publication remain operator-only checks.
 
 The direct `test:official-subagent-policy` release gate runs the official config, model-policy, and affected-selector regressions from their compiled test files; it does not depend on package-script aliases.
 
@@ -242,9 +242,9 @@ Publish mode treats main/tag/npm mismatches as blockers.
 runtime totals. Readiness blocks on unexpected applied mutations, global mutations
 without confirmation, or config/auth/skill mutations without backup or no-op proof.
 
-## Current publish authorization policy (6.1.2)
+## Current publish authorization policy (6.2.0)
 
-The 6.1.2 implementation handoff uses this bounded verification sequence:
+The 6.2.0 implementation handoff uses this bounded verification sequence:
 
 ```bash
 npm run typecheck --silent
@@ -264,7 +264,7 @@ handoff.
 
 `npm run release:check` is the change-aware affected gate for local checks and cannot
 authorize publication on its own. The removed dynamic runner aliases are not part of
-the 6.1.2 command surface; affected selection is owned by the manifest-backed release
+the 6.2.0 command surface; affected selection is owned by the manifest-backed release
 DAG.
 
 Each release-DAG completion also rotates `.sneakoscope/reports/release-gates/` to the
@@ -306,7 +306,7 @@ so it is unsupported unless the explicit repository preflight was just run and i
 workspace remained unchanged.
 
 The following long command list and report inventory are archived 1.x/2.x provenance,
-not the 6.1.2 release procedure. Some aliases were intentionally removed and must not
+not the 6.2.0 release procedure. Some aliases were intentionally removed and must not
 be reintroduced or invoked by the compatibility `release-parallel-check`; current
 verification uses `release-gates.v2.json` directly.
 
@@ -442,7 +442,7 @@ npm run official-docs:compat
 npm run release:readiness
 ```
 
-The following 2.x report names and native-process artifacts are historical examples only; they do not satisfy the 6.1.2 official-subagent gate. Current 6.1.2 proof comes from the canonical subagent plan/events/parent-summary/evidence artifacts and the focused release gates listed at the top of this document.
+The following 2.x report names and native-process artifacts are historical examples only; they do not satisfy the 6.2.0 official-subagent gate. Current 6.2.0 proof comes from the canonical subagent plan/events/parent-summary/evidence artifacts and the focused release gates listed at the top of this document.
 
 `release:readiness` historically wrote reports such as:
 
@@ -490,7 +490,7 @@ The following 2.x report names and native-process artifacts are historical examp
 - `.sneakoscope/reports/dfix-patch-swarm-route-blackbox.json`
 - `.sneakoscope/reports/retention-cleanup-safety.json`
 
-Those historical reports covered version drift, native-process proof, Zellij worker panes, and earlier patch-swarm closure. They remain archival evidence and are not represented as current 6.1.2 completion proof.
+Those historical reports covered version drift, native-process proof, Zellij worker panes, and earlier patch-swarm closure. They remain archival evidence and are not represented as current 6.2.0 completion proof.
 
 ## Priority Closure
 
@@ -523,8 +523,8 @@ codex-lb truthfulness remains bounded: `durable_env_file`, `durable_keychain`, a
 sks codex-lb setup --write-env-file --keychain
 ```
 
-For 6.1.2, a selected codex-lb must also report `X-App-Version >= 1.21.0-beta.3` from its origin `/health` endpoint. That release floor includes interrupted custom/apply-patch output synthesis plus reconnect-affinity hardening. `sks codex-lb status`, codex-lb doctor, deep/fix doctor, setup-before-write, and Codex launch preflight fail closed for an older or unverified proxy. The only bypass is the explicit `--allow-unverified-codex-lb-recovery` (or `SKS_ALLOW_UNVERIFIED_CODEX_LB_RECOVERY=1`) acknowledgement; SKS never silently changes providers. A `[No tool output found ...]` placeholder blocks same-thread continuation and requires a fresh task after proxy upgrade or an explicit `sks codex-lb use-oauth` switch.
+For 6.2.0, a selected codex-lb must also report `X-App-Version >= 1.21.0-beta.3` from its origin `/health` endpoint. That release floor includes interrupted custom/apply-patch output synthesis plus reconnect-affinity hardening. `sks codex-lb status`, codex-lb doctor, deep/fix doctor, setup-before-write, and Codex launch preflight fail closed for an older or unverified proxy. The only bypass is the explicit `--allow-unverified-codex-lb-recovery` (or `SKS_ALLOW_UNVERIFIED_CODEX_LB_RECOVERY=1`) acknowledgement; SKS never silently changes providers. A `[No tool output found ...]` placeholder blocks same-thread continuation and requires a fresh task after proxy upgrade or an explicit `sks codex-lb use-oauth` switch.
 
 Privacy statement: secrets are redacted, Codex Chrome Extension screenshots, native Computer Use screenshots, SuperSearch raw/source artifacts, Codex Web raw responses, and generated gpt-image-2 review images are local-only by default.
 
-The 6.1.2 SKS menu bar also exposes the current Codex CLI version, an `⬆` update-needed indicator, `Update Codex CLI Now`, and `Run sks doctor --fix`. Read-only status uses `sks codex update-status --json` with a bounded latest-version cache. The explicit mutation action prefers the native `codex update` self-updater; when that command is unavailable, it verifies the selected installation as an official standalone build, npm-global package, or Homebrew cask and invokes only that matching updater. Missing, debug, unsupported, or unverified installations fail closed. The fallback is therefore a visible, provenance-bound global update, not a silent package-manager guess.
+The 6.2.0 SKS menu bar also exposes the current Codex CLI version, an `⬆` update-needed indicator, `Update Codex CLI Now`, and `Run sks doctor --fix`. Read-only status uses `sks codex update-status --json` with a bounded latest-version cache. The explicit mutation action prefers the native `codex update` self-updater; when that command is unavailable, it verifies the selected installation as an official standalone build, npm-global package, or Homebrew cask and invokes only that matching updater. Missing, debug, unsupported, or unverified installations fail closed. The fallback is therefore a visible, provenance-bound global update, not a silent package-manager guess.

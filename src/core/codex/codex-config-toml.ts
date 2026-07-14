@@ -68,8 +68,8 @@ export async function cleanupCodexConfigBackups(configPath: string, opts: { keep
   const now = Date.now()
   const groups = new Map<string, Array<{ file: string; abs: string; mtimeMs: number }>>()
   for (const file of entries) {
-    if (!file.startsWith(`${base}.`)) continue
-    if (!/(?:^|[.-])(?:sks-|bak-|struct-bak-)|\.bak$/.test(file)) continue
+    const tag = ownedBackupTag(base, file)
+    if (!tag) continue
     const abs = path.join(dir, file)
     let stat
     try {
@@ -78,7 +78,6 @@ export async function cleanupCodexConfigBackups(configPath: string, opts: { keep
       continue
     }
     if (!stat.isFile()) continue
-    const tag = backupTag(base, file)
     const group = groups.get(tag) || []
     group.push({ file, abs, mtimeMs: stat.mtimeMs })
     groups.set(tag, group)
@@ -98,13 +97,17 @@ export async function cleanupCodexConfigBackups(configPath: string, opts: { keep
   return { cleaned: removed.length, files: removed }
 }
 
-function backupTag(base: string, file: string) {
+function ownedBackupTag(base: string, file: string): string | null {
+  if (!file.startsWith(`${base}.`)) return null
   const suffix = file.slice(`${base}.`.length)
-  const sks = suffix.match(/^sks-([^-]+)-/)
-  if (sks?.[1]) return `sks-${sks[1]}`
-  if (suffix.startsWith('struct-bak-')) return 'struct-bak'
-  if (suffix.startsWith('bak-')) return 'bak'
-  return 'misc'
+  if (/^sks-[A-Za-z0-9_.-]+\.bak$/.test(suffix)) {
+    const group = suffix.match(/^sks-([^-]+)-/)?.[1] || suffix.slice('sks-'.length, -'.bak'.length)
+    return `sks-${group}`
+  }
+  if (/^struct-bak-[A-Za-z0-9_.-]+$/.test(suffix)) return 'struct-bak'
+  if (/^bak-[A-Za-z0-9_.-]+$/.test(suffix)) return 'bak'
+  if (/^codex-app-ui-repair-[A-Za-z0-9_.-]+\.bak$/.test(suffix)) return 'codex-app-ui-repair'
+  return null
 }
 
 function messageOf(err: unknown) {

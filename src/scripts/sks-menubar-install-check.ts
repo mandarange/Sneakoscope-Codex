@@ -112,7 +112,11 @@ const hasBackgroundReadonlyActions = generatedSource.includes('runSksBackground(
   && !generatedSource.includes('runInTerminal');
 const hasNativeModalSource = generatedSource.includes('func promptText(title: String, message: String')
   && generatedSource.includes('NSSecureTextField')
-  && generatedSource.includes('stdinText: key + "\\n"');
+  && generatedSource.includes('stdinText: key + "\\n"')
+  && generatedSource.includes('final class McpManagerController')
+  && generatedSource.includes('add(menu, "Manage MCP Servers…", #selector(manageMcpServers))')
+  && generatedSource.includes('["menubar", "mcp", "list", "--json"]')
+  && generatedSource.includes('["menubar", "mcp", "add", "--stdin-json", "--json"]');
 const hasActionLogSource = generatedSource.includes('lastActionLogPath')
   && generatedSource.includes('.posixPermissions: 0o600')
   && generatedSource.includes('redactSecrets');
@@ -180,6 +184,7 @@ const expectedMenuItems = [
   'Update SKS Now',
   'Codex CLI Version',
   'Update Codex CLI Now',
+  'Manage MCP Servers',
   'Run sks doctor --fix',
   'View Last Log'
 ];

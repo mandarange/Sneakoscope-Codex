@@ -46,12 +46,18 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
     { id: 'codex_project_config_policy', run: () => splitCodexProjectConfigPolicy(root, { ...opts, writeReport: false }) },
     { id: 'codex_lb_tool_output_recovery', run: () => inspectCodexLbToolOutputRecoveryForLaunch(opts) }
   ])
-  const repair = opts.fix === true || readonly.ok === false
-    ? await repairCodexConfigEperm(root, { ...opts, codexProbe: probeCodex, actualCodex: probeCodex, fix: opts.fix !== false, writeReport: false })
+  // A failed read-only preflight must not invoke the full repair inspector unless
+  // the operator explicitly requested repair. The repair path re-runs readability
+  // before and after its work; on macOS ACL/TCC failures those repeated 5s probes
+  // used to compound into minute-scale `sks --mad` startup delays even though no
+  // mutation was authorized. Keep the blocker from the first pass and fail fast.
+  const repair = opts.fix === true
+    ? await repairCodexConfigEperm(root, { ...opts, codexProbe: probeCodex, actualCodex: probeCodex, fix: true, writeReport: false })
     : null
+  const providedZellijCapability = reusableZellijCapability(opts.zellijCapability, opts.requireZellij === true)
   const zellijCapability = opts.zellijCapability === false
     ? null
-    : await checkZellijCapability({ root, require: opts.requireZellij === true, writeReport: false })
+    : providedZellijCapability || await checkZellijCapability({ root, require: opts.requireZellij === true, writeReport: false })
   const codexArgs = buildCodexExecArgs({
     json: true,
     outputLastMessage: path.join(root, '.sneakoscope', 'reports', 'codex-preflight-output.json'),
@@ -88,6 +94,12 @@ export async function runCodexLaunchPreflight(rootInput: string = process.cwd(),
   }
   if (opts.writeReport !== false) await writeJsonAtomic(reportPath, { ...report, report_path: reportPath })
   return report
+}
+
+function reusableZellijCapability(value: any, requireZellij: boolean) {
+  if (!value || value.schema !== 'sks.zellij-capability.v1' || typeof value.status !== 'string') return null
+  if (requireZellij && value.status !== 'ok') return null
+  return value
 }
 
 export async function inspectCodexLbToolOutputRecoveryForLaunch(opts: any = {}) {

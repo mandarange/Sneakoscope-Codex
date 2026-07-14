@@ -73,10 +73,10 @@ test('generated Naruto skill keeps official threads lightweight and TriWiki-boun
   await installSkills(root);
 
   const naruto = await fs.readFile(path.join(root, '.agents', 'skills', 'naruto', 'SKILL.md'), 'utf8');
-  assert.match(naruto, /Automatic fan-out is one by default, two only .* at most three for critical multi-domain risk/i);
+  assert.match(naruto, /Automatic fan-out is two for non-trivial work .* at most three for critical multi-domain risk/i);
   assert.match(naruto, /historical Naruto process runtime is removed/i);
   assert.match(naruto, /custom scheduler, or worker pool/i);
-  assert.match(naruto, /bounded TriWiki attention\.use_first anchors/);
+  assert.match(naruto, /four ordinary or six complex query-aware TriWiki trust\/hydration anchors/);
   assert.match(naruto, /do not inject the full pack/);
 });
 

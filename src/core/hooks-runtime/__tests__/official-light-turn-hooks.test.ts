@@ -616,18 +616,20 @@ test('known non-Sol App parent is recorded as a blocker instead of claimed enfor
   }
 });
 
-test('automatic bounded work stays parent-owned and does not materialize Naruto artifacts', async () => {
-  const root = await tempRoot('sks-bounded-parent-owned-');
-  const session = 'bounded-parent';
+test('automatic bounded work materializes the bounded Naruto workflow', async () => {
+  const root = await tempRoot('sks-bounded-naruto-');
+  const session = 'bounded-naruto';
   try {
     await prepareRoute(root, '로그인 버그 수정해줘', {}, { sessionKey: session });
     const state: any = await loadStateForSession(root, session);
-    assert.equal(state.route, 'SKS');
-    assert.equal(state.subagents_required, false);
+    assert.equal(state.route, 'Naruto');
+    assert.equal(state.subagents_required, true);
     const dir = missionDir(root, state.mission_id);
     await fsp.access(path.join(dir, 'pipeline-plan.json'));
-    await assert.rejects(fsp.access(path.join(dir, 'subagent-plan.json')));
-    await assert.rejects(fsp.access(path.join(dir, 'naruto-gate.json')));
+    const plan = JSON.parse(await fsp.readFile(path.join(dir, 'subagent-plan.json'), 'utf8'));
+    assert.equal(plan.requested_subagents, 2);
+    assert.equal(plan.requested_subagents_explicit, false);
+    await fsp.access(path.join(dir, 'naruto-gate.json'));
   } finally {
     await fsp.rm(root, { recursive: true, force: true });
   }

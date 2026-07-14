@@ -237,6 +237,25 @@ test('SKS menu bar shows Codex CLI version, update indicator/action, and doctor 
   assert.doesNotMatch(updateBody, /runProcess\([^\n]*codex[^\n]*update/i);
 });
 
+test('SKS menu bar exposes a native modal MCP manager with functional add, remove, and enable controls', () => {
+  const swift = source('com.openai.codex');
+  assert.match(swift, /add\(menu, "Manage MCP Servers…", #selector\(manageMcpServers\)\)/);
+  assert.match(swift, /final class McpManagerController: NSObject, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate/);
+  assert.match(swift, /NSApp\.runModal\(for: panel\)/);
+  assert.match(swift, /makeButton\("Add…", #selector\(addServer\)\)/);
+  assert.match(swift, /makeButton\("Remove", #selector\(removeServer\)\)/);
+  assert.match(swift, /makeButton\("Disable", #selector\(toggleServer\)\)/);
+  assert.match(swift, /runSksSilent\(\["menubar", "mcp", "list", "--json"\]\)/);
+  assert.match(swift, /\["menubar", "mcp", "add", "--stdin-json", "--json"\]/);
+  assert.match(swift, /\["menubar", "mcp", "remove", server\.name, "--json"\]/);
+  assert.match(swift, /\["menubar", "mcp", action, server\.name, "--json"\]/);
+  assert.match(swift, /Changes are written safely to ~\/\.codex\/config\.toml/);
+  assert.match(swift, /Values are written only to Codex config and never shown in the MCP list/);
+  assert.match(swift, /DispatchQueue\.global\(qos: \.utility\)\.async/);
+  assert.ok(swift.indexOf('readDataToEndOfFile()') < swift.indexOf('process.waitUntilExit()'));
+  assert.doesNotMatch(swift, /process\.terminationHandler[\s\S]*readDataToEndOfFile/);
+});
+
 test('SKS menu bar actions run from global HOME scope instead of an arbitrary project', () => {
   const script = actionScriptSource({ nodeBin: '/usr/bin/node', sksEntry: '/opt/sneakoscope/dist/bin/sks.js' });
   const homeCd = script.indexOf('cd "$HOME" 2>/dev/null || true');

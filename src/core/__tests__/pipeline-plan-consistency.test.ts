@@ -60,15 +60,16 @@ test('route-owned QA execution and official Release Review never activate two fa
   assert.doesNotMatch(release.next_actions.join('\n'), /sks agent run/i);
 });
 
-test('implicit bounded Naruto routing does not create a default six-agent intake', () => {
+test('implicit bounded Naruto routing uses the bounded official subagent workflow without legacy intake', () => {
   for (const task of ['work on the parser', '로그인 버그 수정해줘', 'Implement the route parser']) {
     const routed: any = routePrompt(task);
     assert.equal(routed.explicit_invocation, false, task);
     const plan: any = buildPipelinePlan({ route: routed, task });
-    assert.equal(plan.route.subagents_required, false, task);
+    assert.equal(plan.route.subagents_required, true, task);
     assert.equal(plan.agent_intake.required, false, task);
     assert.equal(plan.agent_intake.requested_subagents, 0, task);
     assert.equal(plan.stages.some((stage: any) => stage.id === 'native_agent_intake'), false, task);
+    assert.equal(plan.stages.some((stage: any) => stage.id === 'official_subagent_execution'), true, task);
   }
 
   const explicitWorkRoute: any = routePrompt('$Work');
@@ -128,7 +129,7 @@ test('pipeline validation fails closed when actual blocking stages exceed the ta
 });
 
 test('independent stop blockers are represented while sharing the bounded canonical gate groups', () => {
-  const task = '$Research --agents 5 conduct a parallel adversarial review';
+  const task = '$DB --agents 5 conduct a parallel migration safety review';
   const plan: any = buildPipelinePlan({ route: routePrompt(task), task });
   for (const id of [
     'ssot_guard',

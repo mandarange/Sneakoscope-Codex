@@ -1,6 +1,7 @@
-export const DEFAULT_MAX_PACK_BYTES = 2414 * 1024
-// 6.1.2 measured 11,016,751 unpacked bytes after the final official custom-
-// agent catalog, Super Search provenance validation, and live Zellij activity
-// reader were included. Keep a narrow 10.53125 MiB ceiling shared by every
-// package-size gate; packed bytes remain under the existing 2414 KiB limit.
-export const DEFAULT_MAX_UNPACKED_BYTES = 11_042_816
+// 6.2.0 measures 2,476,542 packed bytes after the MCP manager, hook gate,
+// expanded custom-agent catalog, and query-aware TriWiki routing are included.
+// Keep the next 4 KiB boundary as the shared narrow packed ceiling.
+export const DEFAULT_MAX_PACK_BYTES = 2420 * 1024
+// The same package measures 11,107,547 unpacked bytes. Keep the next 16 KiB
+// boundary so every package-size gate has one explicit, measured budget.
+export const DEFAULT_MAX_UNPACKED_BYTES = 11_108_352

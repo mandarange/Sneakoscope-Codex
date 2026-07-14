@@ -17,7 +17,7 @@ const counts = [4, 8, 12, 20, 100].map((requested) => resolveSubagentThreadBudge
   configuredMaxThreads: requested === 20 ? 12 : undefined
 }))
 const implicitCount = resolveSubagentThreadBudget()
-assertGate(implicitCount.requestedSubagents === 1, 'implicit Naruto must default to one safe child', implicitCount)
+assertGate(implicitCount.requestedSubagents === 2, 'implicit Naruto must default to two independent children', implicitCount)
 assertGate(counts[0]?.requestedSubagents === 4, 'requested 4 must remain 4', counts)
 assertGate(counts[1]?.requestedSubagents === 8, 'requested 8 must remain 8', counts)
 assertGate(counts[2]?.requestedSubagents === 12, 'requested 12 must remain 12', counts)

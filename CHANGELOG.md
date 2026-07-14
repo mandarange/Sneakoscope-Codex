@@ -3,6 +3,34 @@
 ## [Unreleased]
 
 
+
+## [6.2.0] - 2026-07-14
+
+### Added
+
+- Add a native menu-bar MCP manager with a resizable server table and modal controls to list, add, remove, enable, disable, and refresh remote URL and local stdio servers.
+- Add matching `sks menubar mcp` commands and real global Codex configuration updates, including protected backups, file locking, TOML validation, and restrictive file permissions.
+- Add one common three-state Naruto decision gate to all ten Codex hook events, with bounded hash-only telemetry and route-owned orchestration detection.
+- Expand the official project custom-agent catalog from sixteen to twenty-one roles with native AppKit, toolchain, protocol, runtime-reliability, and TriWiki-evidence specialists.
+
+### Changed
+
+- Advance the package, Rust crate, managed assets, compatibility docs, and release metadata to the next minor version.
+- Default non-trivial generic Naruto work to two independent subagents, reserve automatic fan-out three for critical multi-domain risk, and preserve explicit operator counts.
+- Keep Research, AutoResearch, and QA-Loop on their route-owned orchestration contracts so the shared hook gate cannot create duplicate fan-out.
+- Inject only the current task's one-to-three recommended agent roles and use query-aware TriWiki budgets of four ordinary or six complex/high-risk anchors instead of serializing the full role catalog or an unrelated context prefix.
+
+### Fixed
+
+- Make MCP configuration updates fail closed for unreadable, malformed, symlinked, non-regular, or concurrently changed files while preserving unrelated TOML, multiline strings, comments, and byte layout.
+- Keep MCP secrets and sensitive URL or command details out of SKS process arguments, inherited process environment, errors, and command output; configured per-server environment values remain in the guarded Codex TOML. Bind reused codex-lb launch proof to the effective base URL.
+- Preserve explicit `--yes` pre-launch update behavior while allowing ordinary launches to defer the remote Zellij update lookup.
+
+### Performance
+
+- Reduce `sks --mad` ready-path latency by running independent macOS and launch-service probes concurrently, avoiding repeated read-only repair inspection, reusing valid launch evidence, and moving nonessential remote update work off the launch-critical path.
+- Keep the shared hook decision path bounded and reduce per-delegation role metadata through on-demand catalog selection while retaining full installed role coverage.
+
 ## [6.1.2] - 2026-07-13
 
 ### Added

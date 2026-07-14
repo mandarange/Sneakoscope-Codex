@@ -5,7 +5,7 @@ import readline from 'node:readline'
 import { ensureDir, globalSksRoot, nowIso, readJson, runProcess, writeJsonAtomic } from '../fsx.js'
 import { guardContextForRoute, guardedPackageInstall } from '../safety/mutation-guard.js'
 import { createRequestedScopeContract } from '../safety/requested-scope-contract.js'
-import { checkZellijCapability } from './zellij-capability.js'
+import { checkZellijCapability, type ZellijCapabilityReport } from './zellij-capability.js'
 import { compareVersionLike, parseZellijVersionText } from './zellij-command.js'
 
 export const ZELLIJ_UPDATE_NOTICE_SCHEMA = 'sks.zellij-update-notice.v1'
@@ -252,15 +252,19 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
   installHomebrew?: boolean
   allowHeadlessFallback?: boolean
   dryRun?: boolean
+  deferUpdateCheck?: boolean
 } = {}): Promise<{
   status: 'skipped' | 'current' | 'missing' | 'available' | 'skipped_by_user' | 'upgraded' | 'installed' | 'manual_required' | 'failed' | 'noop' | 'headless_fallback' | 'repair_required'
   current: string | null
   latest: string | null
   command: string | null
   error?: string | null
+  deferred?: boolean
+  capability?: ZellijCapabilityReport
 }> {
   const env = opts.env || process.env
   const list = (args || []).map((arg) => String(arg))
+  const autoYes = list.includes('--yes') || list.includes('-y')
   const mode = resolveZellijUpdatePromptMode({
     env,
     skipFlag: list.includes('--json') || list.includes('--skip-cli-tools') || list.includes('--skip-zellij-update'),
@@ -269,6 +273,19 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
   })
   if (mode === 'skip') {
     return { status: 'skipped', current: null, latest: null, command: null }
+  }
+  if (opts.deferUpdateCheck === true && !autoYes) {
+    const localCapability = await checkZellijCapability({ require: false, writeReport: false, env }).catch(() => null)
+    if (localCapability?.status === 'ok') {
+      return {
+        status: 'current',
+        current: localCapability.version,
+        latest: null,
+        command: null,
+        deferred: true,
+        capability: localCapability
+      }
+    }
   }
   const noticeInput: Parameters<typeof checkZellijUpdateNotice>[0] = { env }
   if (opts.missionDir !== undefined) noticeInput.missionDir = opts.missionDir
@@ -314,7 +331,6 @@ export async function maybePromptZellijUpdateForLaunch(args: string[] = [], opts
     return { status: 'current', current: notice.current_version, latest: notice.latest_version, command: null, error: notice.error || null }
   }
   const label = opts.label || 'Zellij launch'
-  const autoYes = list.includes('--yes') || list.includes('-y')
   if (mode === 'nonblocking-notice') {
     console.log(`Zellij update available: ${notice.current_version} -> ${notice.latest_version}. Run: ${notice.upgrade_command}`)
     return { status: 'available', current: notice.current_version, latest: notice.latest_version, command: notice.upgrade_command }

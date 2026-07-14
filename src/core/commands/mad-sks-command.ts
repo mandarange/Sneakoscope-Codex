@@ -144,7 +144,8 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
           selfHealOnMissing: true,
           autoApprove: rawArgs.includes('--yes') || rawArgs.includes('-y'),
           installHomebrew: rawArgs.includes('--install-homebrew'),
-          allowHeadlessFallback: headlessZellij
+          allowHeadlessFallback: headlessZellij,
+          deferUpdateCheck: true
         }).catch(() => ({ status: 'error', command: 'sks doctor --fix --yes' }))
       : await repairZellijForSks({
           root: launchRoot,
@@ -201,7 +202,10 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     sandbox: 'danger-full-access',
     serviceTier: 'fast',
     skipCodexLbToolOutputRecovery: glmMadLaunch,
-    allowUnverifiedToolOutputRecovery
+    allowUnverifiedToolOutputRecovery,
+    ...((zellijUpdate as any).deferred === true && (zellijUpdate as any).capability
+      ? { zellijCapability: (zellijUpdate as any).capability }
+      : {})
   };
   let launchPreflight = await runCodexLaunchPreflight(launchRoot, launchPreflightOpts);
   // Fresh-project bootstrap: when the ONLY blocker is that the managed Codex config does
@@ -297,6 +301,12 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   };
   const explicitWorkspace = readOption(cleanArgs, '--workspace', readOption(cleanArgs, '--session', null));
   const launchProfile = glmRuntime?.profile || profile;
+  const verifiedCodexLbToolOutputRecovery = launchPreflight.codex_lb_tool_output_recovery?.selected === true
+    && launchPreflight.codex_lb_tool_output_recovery?.tool_output_recovery?.ok === true
+    && launchPreflight.codex_lb_tool_output_recovery?.tool_output_recovery?.verified === true
+    && launchPreflight.codex_lb_tool_output_recovery?.tool_output_recovery?.supports_interrupted_tool_output_recovery === true
+      ? launchPreflight.codex_lb_tool_output_recovery.tool_output_recovery
+      : undefined;
   const launchOpts = glmRuntime
     ? buildGlmMadLaunchOpts(cleanArgs, {
         codexArgs: launchProfile.launch_args,
@@ -315,7 +325,18 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
   const workspace = explicitWorkspace || launchOpts.session || `sks-mad-${sanitizeZellijSessionName(process.cwd())}`;
   const launch: any = headlessZellij
     ? await writeMadHeadlessZellijFallback(madLaunch, workspace)
-    : await launchMadZellijUi([...cleanArgs, '--workspace', workspace], { ...launchOpts, missionId: madLaunch.mission_id, root: madLaunch.root, cwd: process.cwd(), ledgerRoot: path.join(madLaunch.dir, 'agents'), slotCount: 0, freshSession: autoDerivedMadSession, requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1' });
+    : await launchMadZellijUi([...cleanArgs, '--workspace', workspace], {
+        ...launchOpts,
+        missionId: madLaunch.mission_id,
+        root: madLaunch.root,
+        cwd: process.cwd(),
+        ledgerRoot: path.join(madLaunch.dir, 'agents'),
+        slotCount: 0,
+        freshSession: autoDerivedMadSession,
+        requireZellij: process.env.SKS_REQUIRE_ZELLIJ === '1',
+        ...(launchPreflight.zellij_capability ? { zellijCapability: launchPreflight.zellij_capability } : {}),
+        ...(verifiedCodexLbToolOutputRecovery ? { verifiedCodexLbToolOutputRecovery } : {})
+      });
   const afterLaunchUi = beforeUi ? await writeCodexAppUiSnapshot(launchRoot, `mad-after-launch-${uiSnapshotId}`).catch(() => null) : null;
   const launchUiDiff = beforeUi && afterLaunchUi ? diffCodexAppUiSnapshots(beforeUi, afterLaunchUi) : null;
   if (launchUiDiff) {
@@ -343,6 +364,26 @@ export async function madHighCommand(args: any = [], deps: any = {}) {
     ui_architecture: 'monitor_plus_viewports',
     right_column_mode: 'monitor-plus-viewports'
   });
+  if ((zellijUpdate as any).deferred === true && deps.maybePromptZellijUpdateForLaunch) {
+    const zellijUpdateNoticePromise = deps.maybePromptZellijUpdateForLaunch([...args, '--no-question'], {
+      label: glmMadLaunch ? 'GLM MAD launch' : 'MAD launch',
+      root: launchRoot,
+      missionDir: madLaunch.dir,
+      selfHealOnMissing: false,
+      allowHeadlessFallback: headlessZellij
+    }).then((notice: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'mad_sks.zellij_update_refreshed_background',
+      non_blocking: true,
+      status: notice?.status || 'unknown',
+      update_available: notice?.status === 'available'
+    })).catch((err: any) => appendJsonlBounded(path.join(madLaunch.dir, 'events.jsonl'), {
+      ts: nowIso(),
+      type: 'mad_sks.zellij_update_background_failed',
+      error: err?.message || String(err)
+    }));
+    launchLifecycleTasks.push(zellijUpdateNoticePromise);
+  }
   const madNativeSwarmPromise = startMadNativeSwarm(madLaunch.root, madLaunch, args, launchProfile, {
     env: {
       ...madSksEnv,

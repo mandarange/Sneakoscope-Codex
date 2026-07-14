@@ -78,14 +78,28 @@ export async function inspectCodexConfigReadability(rootInput: string = process.
       add({ name: 'config_symlink', ok: !isSymlink || symlinkDetail.allowed === true, detail: symlinkDetail })
     }
 
-    if (process.platform === 'darwin') {
-      add(await commandCheck('macos_acl_ls_le', 'ls', ['-le', configPath], root))
-      const acl = checks.find((check) => check.name === 'macos_acl_ls_le')
+    const readChecksPromise = Promise.all([
+      nodeReadCheck(configPath),
+      childReadCheck(configPath, root),
+      codexCliConfigLoadCheck(root, configPath, opts)
+    ])
+    // These are independent read-only metadata probes. Running them serially
+    // multiplied a single TCC/ACL timeout by three on the MAD launch path.
+    const macChecksPromise = process.platform === 'darwin'
+      ? Promise.all([
+        commandCheck('macos_acl_ls_le', 'ls', ['-le', configPath], root),
+        commandCheck('macos_flags_ls_lO', 'ls', ['-lO', configPath], root),
+        commandCheck('macos_xattr', 'xattr', ['-l', configPath], root, { allowExitCodes: [0, 1] })
+      ])
+      : Promise.resolve(null)
+    const [[nodeRead, childRead, codexLoad], macChecks] = await Promise.all([readChecksPromise, macChecksPromise])
+
+    if (macChecks) {
+      const [acl, flags, xattrs] = macChecks
+      add(acl)
       if (/\bdeny\b.*\b(read|readattr|readextattr|readsecurity|search)\b/i.test(String(acl?.detail?.stdout || ''))) blockers.add('acl_denied')
-      const flags = await commandCheck('macos_flags_ls_lO', 'ls', ['-lO', configPath], root)
       add(flags)
       if (/\b(uchg|schg|restricted)\b/.test(String(flags.detail?.stdout || ''))) blockers.add('flags_locked')
-      const xattrs = await commandCheck('macos_xattr', 'xattr', ['-l', configPath], root, { allowExitCodes: [0, 1] })
       add(xattrs)
       add({ name: 'macos_quarantine_xattr', ok: !/com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || '')), detail: { present: /com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || '')) } })
       if (/com\.apple\.quarantine/.test(String(xattrs.detail?.stdout || ''))) blockers.add('quarantine')
@@ -93,9 +107,9 @@ export async function inspectCodexConfigReadability(rootInput: string = process.
       add({ name: 'macos_metadata', ok: true, status: 'skipped_non_macos' })
     }
 
-    add(await nodeReadCheck(configPath))
-    add(await childReadCheck(configPath, root))
-    add(await codexCliConfigLoadCheck(root, configPath, opts))
+    add(nodeRead)
+    add(childRead)
+    add(codexLoad)
   } else {
     add({ name: 'config_file_checks', ok: true, status: 'skipped_config_missing', detail: { config_path: configPath } })
   }

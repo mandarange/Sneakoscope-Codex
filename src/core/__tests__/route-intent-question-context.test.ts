@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { routePrompt, routeRequiresSubagents } from '../routes.js';
+import { narutoDecisionForRoute, routePrompt, routeRequiresSubagents } from '../routes.js';
 
 const cases = [
   { prompt: '이거 왜 안 고쳐져? 로그인 버그 수정해줘', expectedRoute: 'Naruto', reason: 'direct_work' },
@@ -24,11 +24,11 @@ test('question-shaped prompts route by intent instead of question mark shape', (
   }
 });
 
-test('greetings and bounded work avoid subagents while explicit parallel work requires them', () => {
+test('greetings stay lightweight while bounded and explicit parallel work require subagents', () => {
   assert.equal(routePrompt('hi'), null);
   assert.equal(routePrompt('이 함수 설명해줘')?.id, 'Answer');
   const bounded = routePrompt('로그인 버그 수정해줘');
-  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), false);
+  assert.equal(routeRequiresSubagents(bounded, '로그인 버그 수정해줘'), true);
   const parallel = routePrompt('여러 패키지를 병렬 검토해줘');
   assert.equal(parallel?.id, 'Naruto');
   assert.equal(routeRequiresSubagents(parallel, '여러 패키지를 병렬 검토해줘'), true);
@@ -44,7 +44,7 @@ test('greetings and bounded work avoid subagents while explicit parallel work re
   assert.equal(ordinaryWork?.id, 'Naruto');
   assert.equal(ordinaryWork?.task_profile, 'bounded-work');
   assert.equal(ordinaryWork?.explicit_invocation, false);
-  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), false);
+  assert.equal(routeRequiresSubagents(ordinaryWork, 'work on the parser'), true);
 });
 
 test('implementation language and Korean fix conjugations route as work', () => {
@@ -100,12 +100,13 @@ test('legacy DB command and routing discussion stays out of the database route',
   }
 });
 
-test('specialized Research prompts keep their route when parallel execution is requested', () => {
+test('specialized Research prompts keep their route-owned orchestration when parallel execution is requested', () => {
   for (const prompt of ['research this topic in parallel', 'research this topic with subagents', '이 주제를 병렬로 연구해줘']) {
     const route = routePrompt(prompt);
     assert.equal(route?.id, 'Research', prompt);
     assert.ok(['parallel-read', 'parallel-write'].includes(route?.task_profile), prompt);
-    assert.equal(routeRequiresSubagents(route, prompt), true, prompt);
+    assert.equal(routeRequiresSubagents(route, prompt), false, prompt);
+    assert.equal(narutoDecisionForRoute(route, prompt).mode, 'route_owned', prompt);
   }
 
   assert.equal(routePrompt('fix the Research parser in parallel')?.id, 'Naruto');

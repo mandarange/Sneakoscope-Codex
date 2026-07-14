@@ -2,8 +2,8 @@ import {
   NARUTO_PARENT_EFFORT,
   NARUTO_PARENT_MODEL
 } from './model-policy.js'
-import { DEFAULT_NARUTO_REQUESTED_SUBAGENTS } from './thread-budget.js'
 import {
+  DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
   MAX_AUTOMATIC_REVIEWER_COUNT,
   MAX_AUTOMATIC_SUBAGENT_COUNT,
   officialSubagentRolePlan
@@ -25,8 +25,8 @@ export function buildNarutoHelpResult() {
       'sks naruto proof [latest|M-...] [--json]'
     ],
     commands: ['help', 'status', 'subagents', 'proof', 'run'],
-    default_requested_subagents: DEFAULT_NARUTO_REQUESTED_SUBAGENTS,
-    scaling_policy: 'one_safe_direct_child_by_default_parent_owned_risk_based_expansion',
+    default_requested_subagents: DEFAULT_AUTOMATIC_SUBAGENT_COUNT,
+    scaling_policy: 'two_independent_children_for_non_trivial_work_parent_owned_risk_based_expansion',
     automatic_subagent_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
     automatic_reviewer_ceiling: MAX_AUTOMATIC_REVIEWER_COUNT,
     critical_multi_domain_reviewer_ceiling: MAX_AUTOMATIC_SUBAGENT_COUNT,
@@ -43,6 +43,7 @@ export function buildNarutoHelpResult() {
     },
     legacy_process_runtime_available: false,
     parent: { model: NARUTO_PARENT_MODEL, model_reasoning_effort: NARUTO_PARENT_EFFORT },
+    agent_catalog_mode: 'full_catalog_only_on_explicit_help',
     agents: officialSubagentRolePlan()
   }
 }

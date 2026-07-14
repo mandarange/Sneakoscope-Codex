@@ -19,7 +19,7 @@ export const MAX_AGENT_COUNT = 20
 export const DEFAULT_AGENT_CONCURRENCY = 4
 /** @deprecated Legacy process-swarm queue ceiling; never an official thread cap. */
 export const MAX_NARUTO_AGENT_COUNT = 100
-/** @deprecated Legacy clone default; official workflows use one safe default child unless --agents is explicit. */
+/** @deprecated Legacy clone default; official workflows use two default children unless --agents is explicit. */
 export const DEFAULT_NARUTO_CLONES = 8
 export const AGENT_BACKENDS = ['fake', 'process', 'codex-sdk', 'zellij', 'ollama', 'local-llm'] as const
 

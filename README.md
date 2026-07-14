@@ -25,7 +25,7 @@ sneakoscope is a proof-first Codex trust layer for bounded agent workflows, sear
 
 Sneakoscope Codex (`sks`) is a Codex CLI and Codex App harness for people who want parallel AI coding without losing proof. It gives Codex a simple front door, an official subagent workflow, a local dashboard, TriWiki project memory, and release gates that separate machine evidence from LLM opinion.
 
-Current release: SKS **6.1.2**. `$Naruto` is the SKS alias for the Codex official subagent workflow. The parent runs on GPT-5.6 Sol Max, clear bounded subagents use GPT-5.6 Luna Max, and reasoning-sensitive work such as UI, review, debugging, planning, integration, security, database, and release judgment uses GPT-5.6 Sol Max. Official `SubagentStart`/`SubagentStop` events prove lifecycle only; successful completion additionally requires a structured parent summary with an explicit outcome for every thread. Preparation context alone is never completion proof. Normal non-Naruto Codex sessions continue to preserve explicit user model choices. See [CHANGELOG.md](CHANGELOG.md).
+Current release: SKS **6.2.0**. `$Naruto` is the SKS alias for the Codex official subagent workflow. The parent runs on GPT-5.6 Sol Max, clear bounded subagents use GPT-5.6 Luna Max, and reasoning-sensitive work such as UI, review, debugging, planning, integration, security, database, and release judgment uses GPT-5.6 Sol Max. Official `SubagentStart`/`SubagentStop` events prove lifecycle only; successful completion additionally requires a structured parent summary with an explicit outcome for every thread. Preparation context alone is never completion proof. Normal non-Naruto Codex sessions continue to preserve explicit user model choices. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
@@ -44,6 +44,8 @@ sks doctor --fix
 
 The SKS menu bar shows the installed Codex CLI version and latest known version. An `⬆` marker appears when an update is available; **Update Codex CLI Now** uses native `codex update` when the selected CLI advertises it, otherwise it verifies the installation provenance and invokes the matching official standalone-installer, npm-global, or Homebrew-cask update method. If the method cannot be verified, it fails closed instead of guessing. This is an explicit global tool mutation. **Run sks doctor --fix** performs the global-only menu repair flow without treating the user's home directory as a project.
 
+**Manage MCP Servers…** opens a native macOS manager for the global `~/.codex/config.toml`. It can add remote URL or local stdio servers, enable/disable existing entries, remove entries after confirmation, and refresh the current state. Mutations are lock-protected, backed up, TOML-validated, and written with mode `0600`; configured environment values and command arguments are never rendered in the list. Changes apply to new Codex sessions. The same plumbing is available through `sks menubar mcp list|add|enable|disable|remove` for diagnostics and tests.
+
 ## The Front Door
 
 | Command | What it does |
@@ -57,7 +59,9 @@ The SKS menu bar shows the installed Codex CLI version and latest known version.
 | `$Review` / `sks review --staged` | Reviews diffs with `evidence: machine` findings sorted above `evidence: llm`. |
 | `sks ui` | Opens the local live dashboard at `http://127.0.0.1:4477`. |
 
-## Naruto In 6.1.2
+`sks --mad` now prioritizes the interactive ready path: independent macOS config probes run concurrently, failed read-only preflight does not repeat mutation-capable repair inspection, verified Zellij/codex-lb evidence is reused, and the remote Zellij update lookup runs after the UI is ready. Existing unreadable or malformed config still blocks safely; pass an explicit repair flag such as `--repair-config` when repair is intended.
+
+## Naruto In 6.2.0
 
 `$Naruto` and `sks naruto run "task" --agents 8 --max-threads 12` use Codex official subagents. The parent is GPT-5.6 Sol Max; clear bounded `worker`/exploration slices use GPT-5.6 Luna Max; UI, testing, debugging, architecture, integration, security, database, research, release, and other judgment-sensitive work use narrow GPT-5.6 Sol Max custom specialists.
 
@@ -65,7 +69,9 @@ Fresh SKS-owned project config uses `max_threads = 12`, `max_depth = 1`, `job_ma
 
 Gates are task-profile aware: greetings and answer-only turns create no mission gate; tiny work gets minimal verification; parallel work gets scoped ownership and verification; high-risk work keeps the full safety gates. `SubagentStart`/`SubagentStop` prove lifecycle only. Completion also requires `subagent-parent-summary.json` with one trustworthy structured outcome per thread, correlated with `subagent-events.jsonl` and `subagent-evidence.json`.
 
-SKS installs sixteen narrow project custom agents and recommends only the roles relevant to the task. Automatic fan-out is one child by default, two for explicit parallel work or independent risk domains, and three only for critical multi-domain work; explicit `--agents N` is still supported. In CLI Zellij mode, the right side is a live observability surface rather than a static lane reservation: one monitor plus one viewport by default (maximum three) shows official thread role/model, redacted live phase/task/file updates from exact-agent Codex 0.144.1+ rollouts, `running`, `verifying`, and trustworthy parent-verdict completion/failure states. Rollout activity is display-only and never completion proof.
+Every installed Codex hook runs one common Naruto decision gate. The gate records `none`, `generic_naruto`, or `route_owned`: Answer, DFix, Wiki, Computer Use, Goal, and simple Git/control turns stay lightweight; ordinary non-trivial work defaults to two independent official subagents; critical work spanning at least three risk domains may use three. Research, AutoResearch, and QA-Loop retain their own exact orchestration contracts instead of receiving a second generic fan-out. Explicit `--agents N` remains authoritative.
+
+SKS installs twenty-one narrow project custom agents, including native AppKit, toolchain, protocol, runtime-reliability, and TriWiki-evidence specialists. Delegation prompts inject at most the three roles recommended for the current goal rather than serializing the full catalog. TriWiki context is also bounded and query-aware: ordinary work receives up to four trust/hydration anchors and complex, parallel, or high-risk work receives up to six, with source hydration required before relying on lower-trust hints. In CLI Zellij mode, the right side is a live observability surface rather than a static lane reservation: one monitor plus one viewport by default (maximum three) shows official thread role/model, redacted live phase/task/file updates from exact-agent Codex 0.144.1+ rollouts, `running`, `verifying`, and trustworthy parent-verdict completion/failure states. Rollout activity is display-only and never completion proof.
 
 `--clones` and `workers` remain one-release spelling aliases for official subagent behavior. The historical Naruto process swarm and its environment opt-in are removed; legacy backend, scheduler, pool, and model flags fail closed.
 
@@ -125,6 +131,7 @@ It shows the current quickstart flow: one-line install, `$Plan`, `sks review`, `
   - Auth/provider changes wait for the ChatGPT/Codex app to exit and reopen by bundle id; a failed restart is reported as a failed menu action.
   - Update installs always rebuild the companion with the newly installed SKS package, preventing a previous-version updater from restoring a stale menu binary.
   - The menubar dropdown's `View Last Log` item opens the most recent background action's log file, so you don't need to keep a Terminal window open to see command output.
+  - `Manage MCP Servers…` provides a resizable native table and add/remove/enable/disable controls for global Codex MCP configuration. Secret environment values and command arguments are accepted through native dialogs/stdin but omitted from list output and logs.
   - `sks menubar status --json` reports a `codex_sync` object with `bundle_id`, `codex_running`, and `icon_visible_expected` to show Codex-lifecycle detection state.
   - The menu displays the installed Codex CLI version, adds an `⬆` status icon when `sks codex update-status` sees a newer release, runs the official self-updater through `Update Codex CLI Now`, and exposes `Run sks doctor --fix` as a background repair action.
 - If Codex shows `[No tool output found for custom tool call ...]`, SKS blocks reuse of that structurally ambiguous thread. Upgrade codex-lb (or explicitly run `sks codex-lb use-oauth`), inspect possible side effects, then continue the persisted mission in a fresh Codex task. SKS never rewrites session JSONL or fabricates a successful tool output.

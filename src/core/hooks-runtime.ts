@@ -22,6 +22,7 @@ import { codePackFreshnessNote } from './hooks-runtime/code-pack-freshness-prefl
 import { claimHookInvocation } from './hooks-runtime/hook-invocation-dedupe.js';
 import { joinSystemMessages, teamLiveDigest } from './hooks-runtime/team-digest.js';
 import { armLightTurnStopBypass, clearLightTurnStopBypass, consumeLightTurnStopBypass, hasMatchingLightTurnStopBypass } from './hooks-runtime/light-turn.js';
+import { evaluateHookNarutoDecisionGate, looksLikeActiveContinuationPrompt } from './hooks-runtime/naruto-decision-gate.js';
 import { classifyTaskProfile } from './runtime/task-profile.js';
 import { resolveSubagentThreadBudget } from './subagents/thread-budget.js';
 import { readOfficialSubagentConfig } from './subagents/official-subagent-config.js';
@@ -141,16 +142,26 @@ export async function evaluateHookPayload(name: any, payload: any = {}, opts: an
   const loadedState = opts.state || await loadState(root, payload);
   const state = { ...loadedState, _session_key: loadedState?._session_key || sessionKey };
   const noQuestion = isNoQuestionRunning(state);
+  const sksNarutoDecision = await evaluateHookNarutoDecisionGate({
+    root,
+    name,
+    payload,
+    state,
+    sessionKey,
+    noQuestion,
+    parentLaunchMissionId: activeNarutoParentLaunchMissionId()
+  });
+  const withNarutoDecision = (result: any) => ({ ...result, sksNarutoDecision });
   if (name === 'user-prompt-submit') {
-    return hookUserPrompt(root, state, payload, noQuestion, sessionKey);
+    return withNarutoDecision(await hookUserPrompt(root, state, payload, noQuestion, sessionKey));
   }
-  if (name === 'pre-tool') return hookPreTool(root, state, payload, noQuestion, sessionKey);
-  if (name === 'post-tool') return hookPostTool(root, state, payload, noQuestion, sessionKey);
-  if (name === 'permission-request') return hookPermission(root, state, payload, noQuestion, sessionKey);
-  if (name === 'stop') return hookStop(root, state, payload, noQuestion, sessionKey);
-  if (name === 'subagent-start') return hookSubagentStart(root, state, payload, sessionKey);
-  if (name === 'subagent-stop') return hookSubagentStop(root, state, payload, sessionKey);
-  return { continue: true };
+  if (name === 'pre-tool') return withNarutoDecision(await hookPreTool(root, state, payload, noQuestion, sessionKey));
+  if (name === 'post-tool') return withNarutoDecision(await hookPostTool(root, state, payload, noQuestion, sessionKey));
+  if (name === 'permission-request') return withNarutoDecision(await hookPermission(root, state, payload, noQuestion, sessionKey));
+  if (name === 'stop') return withNarutoDecision(await hookStop(root, state, payload, noQuestion, sessionKey));
+  if (name === 'subagent-start') return withNarutoDecision(await hookSubagentStart(root, state, payload, sessionKey));
+  if (name === 'subagent-stop') return withNarutoDecision(await hookSubagentStop(root, state, payload, sessionKey));
+  return withNarutoDecision({ continue: true });
 }
 
 async function hookSubagentStart(root: any, state: any, payload: any = {}, sessionKey: any = null) {
@@ -288,9 +299,7 @@ async function hookUserPrompt(root: any, state: any, payload: any, noQuestion: a
       })
     };
   }
-  const parentLaunchMissionId = process.env.SKS_NARUTO_PARENT_LAUNCH === '1'
-    ? String(process.env.SKS_NARUTO_PARENT_MISSION_ID || '').trim()
-    : '';
+  const parentLaunchMissionId = activeNarutoParentLaunchMissionId();
   if (parentLaunchMissionId) {
     const attachedState = {
       ...state,
@@ -450,15 +459,6 @@ function shouldPrepareFreshRouteOnActivePrompt(prompt: any, route: any = null, o
   return routeRequiresSubagents(route, prompt);
 }
 
-function looksLikeActiveContinuationPrompt(prompt: any = '') {
-  const text = stripVisibleDecisionAnswerBlocks(String(prompt || ''))
-    .trim()
-    .replace(/[.!?。！？…,:;]+$/u, '')
-    .trim();
-  if (!text) return false;
-  return /^(?:(?:please\s+)?(?:keep\s+going|continue|resume|go\s+on|proceed|carry\s+on)(?:\s+please)?|계속(?:\s*진행)?(?:\s*해\s*줘|\s*해주세요|\s*해)?|이어\s*서(?:\s*해\s*줘|\s*해주세요|\s*진행해)?|이어서(?:\s*해\s*줘|\s*해주세요|\s*진행해)?|진행(?:\s*해\s*줘|\s*해주세요|\s*해)?|마저\s*해(?:\s*줘|\s*주세요)?|다음|next)$/i.test(text);
-}
-
 function isClarificationAwaiting(state: any = {}) {
   const phase = String(state.phase || '');
   const stopGate = String(state.stop_gate || '');
@@ -467,6 +467,12 @@ function isClarificationAwaiting(state: any = {}) {
   if (!state?.mission_id) return false;
   if (state.ambiguity_gate_required !== true || state.ambiguity_gate_passed === true) return false;
   return Boolean(state.clarification_required || state.implementation_allowed === false);
+}
+
+function activeNarutoParentLaunchMissionId() {
+  return process.env.SKS_NARUTO_PARENT_LAUNCH === '1'
+    ? String(process.env.SKS_NARUTO_PARENT_MISSION_ID || '').trim()
+    : '';
 }
 
 function isBlockingClarificationAwaiting(state: any = {}) {

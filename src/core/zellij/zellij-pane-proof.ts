@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { nowIso, readJson, writeJsonAtomic } from '../fsx.js'
 import { reconcileZellijLaneSupervisorPaneIds } from '../agents/zellij-lane-supervisor.js'
-import { checkZellijCapability } from './zellij-capability.js'
+import { checkZellijCapability, type ZellijCapabilityReport } from './zellij-capability.js'
 import { runZellij, zellijCommandStdout, type ZellijCommandResult } from './zellij-command.js'
 
 export const ZELLIJ_PANE_PROOF_SCHEMA = 'sks.zellij-pane-proof.v1'
@@ -15,6 +15,7 @@ export interface ZellijPaneProofOptions {
   expectedLaneCount?: number
   expectedCwd?: string
   expectedMainCommandIncludes?: string
+  zellijCapability?: ZellijCapabilityReport
 }
 
 export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOptions = {}) {
@@ -22,7 +23,8 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
   const session = await readJson<any>(path.join(outRoot, 'zellij-session.json'), null)
   const sessionName = opts.sessionName || session?.session_name || null
   const expectedMainCommand = opts.expectedMainCommandIncludes || (session?.codex_pane?.enabled === true ? String(session.codex_pane.bin || 'codex') : '')
-  const capability = await checkZellijCapability({ root, require: opts.require === true, writeReport: true })
+  const capability = reusableZellijCapability(opts.zellijCapability, opts.require === true)
+    || await checkZellijCapability({ root, require: opts.require === true, writeReport: true })
   const command = sessionName
     ? ['--session', sessionName, 'action', 'list-panes', '--json', '--all']
     : ['action', 'list-panes', '--json', '--all']
@@ -102,6 +104,12 @@ export async function writeZellijPaneProof(root: string, opts: ZellijPaneProofOp
   }
   await writeJsonAtomic(path.join(outRoot, 'zellij-pane-proof.json'), report)
   return report
+}
+
+function reusableZellijCapability(value: ZellijCapabilityReport | undefined, requireZellij: boolean): ZellijCapabilityReport | null {
+  if (!value || value.schema !== 'sks.zellij-capability.v1') return null
+  if (requireZellij && value.status !== 'ok') return null
+  return value
 }
 
 export async function readZellijPaneProof(root: string) {
