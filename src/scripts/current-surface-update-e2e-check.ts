@@ -45,6 +45,7 @@ try {
       SKS_GLOBAL_ROOT: path.join(home, '.sneakoscope-global'),
       SKS_INSTALLED_SKS_VERSION: '4.8.4',
       SKS_NPM_VIEW_SNEAKOSCOPE_VERSION: PACKAGE_VERSION,
+      SKS_UPDATE_TEMP_INSTALL_FIXTURE_ENTRYPOINT: path.join(packageRoot(), 'dist', 'bin', 'sks.js'),
       SKS_UPDATE_FAKE_INSTALL: '1',
       SKS_TEST_DOCTOR_OK: '1',
       SKS_TEST_OLD_DOCTOR_FAIL: '1',
@@ -57,6 +58,7 @@ try {
 
   const result = output.value;
   assertGate(result.status === 'updated', 'simulated update must finish updated', { status: result.status, error: result.error, stages: result.stages });
+  assertGate(result.temporary_install_smoke?.status === 'verified', 'simulated update must verify the package-local temporary install fixture', { temporary_install_smoke: result.temporary_install_smoke });
   assertGate(result.verification.length === 4 && result.verification.every((row) => row.ok), 'all final self-verification checks must pass', { verification: result.verification });
   assertGate(result.stages.some((stage) => stage.id === 'preflight' && stage.status === 'failed_continuing'), 'old-version doctor failure must continue', { stages: result.stages });
   assertGate(result.stages.some((stage) => stage.id === 'global_install' && stage.status === 'fake_installed'), 'fake install stage missing', { stages: result.stages });

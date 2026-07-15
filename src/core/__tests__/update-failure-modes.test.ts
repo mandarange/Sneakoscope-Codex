@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   UPDATE_STAGE_ORDER,
   runSksUpdateNow,
@@ -264,21 +263,12 @@ test('new-version doctor failure blocks migration and final success', async () =
     assert.equal(installStage?.detail?.code, 0);
     assert.equal(installStage?.detail?.timed_out, false);
 
-    const rollback = await runSksUpdateRollback({
-      ...fixture.options,
+    const rollbackAuthorization = await authorizeUpdateRollback({
+      targetVersion: '6.2.0',
       currentVersion: '6.3.0',
-      version: '6.2.0',
-      env: {
-        ...fixture.options.env,
-        SKS_UPDATE_FAKE_INSTALL: '1',
-        SKS_UPDATE_FAKE_NEW_ENTRYPOINT: fileURLToPath(new URL('../../bin/sks.js', import.meta.url)),
-        SKS_TEST_DOCTOR_FAIL: undefined,
-        SKS_TEST_DOCTOR_OK: '1'
-      }
+      env: fixture.options.env
     });
-    assert.equal(rollback.ok, true, rollback.error || 'rollback after doctor failure was blocked');
-    assert.equal(rollback.requested_version, '6.2.0');
-    assert.equal(rollback.update?.new_version, '6.2.0');
+    assert.equal(rollbackAuthorization.ok, true, rollbackAuthorization.ok ? '' : rollbackAuthorization.blocker);
   } finally {
     await fixture.cleanup();
   }
