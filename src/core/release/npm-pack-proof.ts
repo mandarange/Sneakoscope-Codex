@@ -30,6 +30,10 @@ export function writeNpmPackProof(root: string, info: Record<string, any>, packM
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
   const inputDigest = currentNpmPackInputDigest(root)
   const normalizedInfo = normalizeNpmPackInfo(info)
+  const atomicTempPaths = npmPackAtomicTempPaths(normalizedInfo)
+  if (atomicTempPaths.length > 0) {
+    throw new Error(`npm_pack_info_contains_atomic_temp:${atomicTempPaths.join(',')}`)
+  }
   const infoDigest = sha256Json(normalizedInfo)
   const fileListDigest = sha256Json(normalizedInfo.files)
   const proof: NpmPackProof = {
@@ -70,6 +74,7 @@ export function readCurrentNpmPackProof(root: string): { ok: boolean; proof: Npm
   if (!proof?.info || !Array.isArray(proof.info.files)) blockers.push('npm_pack_proof_files_missing')
   if (proof?.info) {
     const normalizedInfo = normalizeNpmPackInfo(proof.info)
+    if (npmPackAtomicTempPaths(normalizedInfo).length > 0) blockers.push('npm_pack_proof_atomic_temp_present')
     const infoDigest = sha256Json(normalizedInfo)
     const fileListDigest = sha256Json(normalizedInfo.files)
     const expectedProofId = sha256Text(`${NPM_PACK_PROOF_SCHEMA}\n${proof.input_digest}\n${infoDigest}\n${fileListDigest}\n${String(pkg.name || '')}@${String(pkg.version || '')}`)
@@ -156,6 +161,7 @@ export function currentNpmPackInputDigest(root: string): string {
   for (const relative of roots) collectRoot(root, relative, files)
   const hash = crypto.createHash('sha256')
   for (const relative of [...files].sort()) {
+    if (isSksAtomicTempInput(relative)) continue
     const file = path.join(root, relative)
     const stat = fs.statSync(file)
     hash.update(relative.replace(/\\/g, '/'))
@@ -191,6 +197,13 @@ export function normalizeNpmPackInfo(info: Record<string, any> = {}) {
   }
 }
 
+export function npmPackAtomicTempPaths(info: Record<string, any> = {}): string[] {
+  const normalized = Array.isArray(info.files) ? info : normalizeNpmPackInfo(info)
+  return normalized.files
+    .map((file: any) => String(file?.path || '').replace(/\\/g, '/'))
+    .filter((relative: string) => isSksAtomicTempInput(relative))
+}
+
 function addPackagePath(roots: Set<string>, value: unknown) {
   const relative = String(value || '').trim().replace(/^\.\//, '')
   if (relative && !path.isAbsolute(relative) && !relative.startsWith('../')) roots.add(relative)
@@ -205,19 +218,24 @@ function sha256Text(value: string): string {
 }
 
 function collectRoot(root: string, relative: string, out: Set<string>) {
+  if (isSksAtomicTempInput(relative)) return
   const target = path.join(root, relative)
   if (!fs.existsSync(target)) return
   const stat = fs.statSync(target)
   if (stat.isFile()) {
-    out.add(path.relative(root, target))
+    if (!isSksAtomicTempInput(relative)) out.add(path.relative(root, target))
     return
   }
   if (!stat.isDirectory()) return
   for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
     const child = path.join(relative, entry.name)
     if (entry.isDirectory()) collectRoot(root, child, out)
-    else if (entry.isFile()) out.add(child)
+    else if (entry.isFile() && !isSksAtomicTempInput(child)) out.add(child)
   }
+}
+
+function isSksAtomicTempInput(relative: string) {
+  return /\.\d+\.[a-f0-9]{6}\.tmp$/.test(path.basename(relative))
 }
 
 function sameStringList(left: string[], right: string[]) {

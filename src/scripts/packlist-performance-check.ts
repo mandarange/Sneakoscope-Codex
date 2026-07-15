@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { DEFAULT_MAX_PACK_BYTES, DEFAULT_MAX_UNPACKED_BYTES } from '../core/release/package-size-budget.js';
-import { writeNpmPackProof } from '../core/release/npm-pack-proof.js';
+import { npmPackAtomicTempPaths, writeNpmPackProof } from '../core/release/npm-pack-proof.js';
 import { assertGate, emitGate, root } from './sks-1-18-gate-lib.js';
 
 const MAX_FILES = Number(process.env.SKS_MAX_PACK_FILES || 2100);
@@ -14,6 +14,7 @@ const MAX_UNPACKED = Number(process.env.SKS_MAX_UNPACKED_BYTES || DEFAULT_MAX_UN
 const MAX_PACKED = Number(process.env.SKS_MAX_PACK_BYTES || DEFAULT_MAX_PACK_BYTES);
 const SURFACE_MAX_PACKED = Number(process.env.SKS_PACKAGE_SURFACE_MAX_PACK_BYTES || 25_000_000);
 const SURFACE_MAX_FILES = Number(process.env.SKS_PACKAGE_SURFACE_MAX_FILES || 2500);
+const MAX_ATOMIC_TEMP_PACK_ATTEMPTS = 4;
 
 function runNpmPack() {
   const npmCli = process.env.npm_execpath; // set when invoked via `npm run`
@@ -37,17 +38,27 @@ function runNpmPack() {
 }
 
 const packStarted = Date.now();
-const res = runNpmPack();
-const packMs = Date.now() - packStarted;
-assertGate(res.status === 0, 'npm_pack_failed', { stderr: res.stderr });
-
 let info;
-try {
-  const parsed = JSON.parse(res.stdout);
-  info = Array.isArray(parsed) ? parsed[0] : parsed;
-} catch (err) {
-  assertGate(false, 'npm_pack_unparseable', { error: String(err && err.message ? err.message : err) });
+let atomicTempFiles = [];
+let packAttempts = 0;
+for (; packAttempts < MAX_ATOMIC_TEMP_PACK_ATTEMPTS; packAttempts += 1) {
+  const res = runNpmPack();
+  assertGate(res.status === 0, 'npm_pack_failed', { stderr: res.stderr });
+  try {
+    const parsed = JSON.parse(res.stdout);
+    info = Array.isArray(parsed) ? parsed[0] : parsed;
+  } catch (err) {
+    assertGate(false, 'npm_pack_unparseable', { error: String(err && err.message ? err.message : err) });
+  }
+  atomicTempFiles = npmPackAtomicTempPaths(info);
+  if (atomicTempFiles.length === 0) break;
 }
+const packMs = Date.now() - packStarted;
+assertGate(atomicTempFiles.length === 0, 'npm_pack_atomic_temp_files_present', {
+  attempts: packAttempts,
+  max_attempts: MAX_ATOMIC_TEMP_PACK_ATTEMPTS,
+  atomic_temp_files: atomicTempFiles
+});
 
 const files = info.files.map((f) => f.path);
 const packProof = writeNpmPackProof(root, info, packMs);
@@ -102,6 +113,7 @@ const report = {
   size: info.size,
   unpackedSize: info.unpackedSize,
   pack_ms: packMs,
+  pack_attempts: packAttempts + 1,
   pack_proof_id: packProof.proof_id,
   pack_info_sha256: packProof.info_digest,
   pack_file_list_sha256: packProof.file_list_digest,

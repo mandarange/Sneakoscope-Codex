@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { writeNpmPackProof } from '../npm-pack-proof.js'
+import { currentNpmPackInputDigest, readCurrentNpmPackProof, writeNpmPackProof } from '../npm-pack-proof.js'
 import { readReleaseGateCacheRecord, writeReleaseGateCacheHit } from '../release-gate-cache-v2.js'
 import type { ReleaseGateNode } from '../release-gate-node.js'
 
@@ -54,6 +54,42 @@ test('packlist cache hits require current proof and related reports', () => {
     surface.pack_proof_id = 'tampered'
     fs.writeFileSync(surfacePath, `${JSON.stringify(surface)}\n`)
     assert.equal(readReleaseGateCacheRecord(root, packageGate), null, 'dependent package gate must share the exact pack proof id')
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('npm pack input digest ignores in-flight atomic temp files', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-pack-digest-atomic-temp-'))
+  try {
+    fs.mkdirSync(path.join(root, 'dist'), { recursive: true })
+    fs.writeFileSync(path.join(root, 'package.json'), '{"name":"fixture","version":"1.0.0","files":["dist"]}\n')
+    fs.writeFileSync(path.join(root, 'dist', 'index.js'), 'export const ready = true\n')
+    const before = currentNpmPackInputDigest(root)
+    const atomicTemp = path.join(root, 'dist', 'release-proof-truth.json.12345.a1b2c3.tmp')
+    fs.writeFileSync(atomicTemp, '{"partial":true}\n')
+    assert.equal(currentNpmPackInputDigest(root), before)
+
+    assert.throws(() => writeNpmPackProof(root, {
+      entryCount: 3,
+      size: 140,
+      unpackedSize: 280,
+      files: [{ path: 'package.json' }, { path: 'dist/index.js' }, { path: 'dist/release-proof-truth.json.12345.a1b2c3.tmp' }]
+    }, 25), /npm_pack_info_contains_atomic_temp/)
+
+    fs.rmSync(atomicTemp)
+    const proof = writeNpmPackProof(root, {
+      entryCount: 2,
+      size: 120,
+      unpackedSize: 240,
+      files: [{ path: 'package.json' }, { path: 'dist/index.js' }]
+    }, 25)
+    proof.info.files.push({ path: 'dist/release-proof-truth.json.12345.a1b2c3.tmp' })
+    fs.writeFileSync(path.join(root, '.sneakoscope', 'reports', 'npm-pack-proof.json'), `${JSON.stringify(proof)}\n`)
+    assert.ok(readCurrentNpmPackProof(root).blockers.includes('npm_pack_proof_atomic_temp_present'))
+
+    fs.writeFileSync(path.join(root, 'dist', 'customer-data.12345.production.tmp'), 'customer bytes\n')
+    assert.notEqual(currentNpmPackInputDigest(root), before, 'similar customer files outside the exact SKS atomic suffix must remain digest inputs')
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }
