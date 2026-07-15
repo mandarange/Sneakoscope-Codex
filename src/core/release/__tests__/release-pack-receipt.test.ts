@@ -62,8 +62,7 @@ test('release pack inspection allows retired tokens only in explicit cleanup and
     const tarball = createTarball(root, 'retired-allowlist', '6.3.0', '', {
       'dist/core/doctor/retired-managed-residue-private.js': 'const tombstone = "sks team --json";\n',
       'dist/core/doctor/retired-managed-projection-residue.js': 'const oldMode = "strict-team";\n',
-      'dist/core/doctor/retired-managed-residue-missions.js': 'const oldRoute = "$Team";\n',
-      'dist/core/doctor/retired-managed-residue-goal.js': 'const oldGoalField = "ralph_removed";\n',
+      'dist/core/doctor/retired-managed-residue-missions.js': 'const oldRoute = "$Team"; const oldGoalField = "ralph_removed";\n',
       'dist/core/init/skills.js': 'const retiredSkill = "ralph-supervisor";\n'
     })
     const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })

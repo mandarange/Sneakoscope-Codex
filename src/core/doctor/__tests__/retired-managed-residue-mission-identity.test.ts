@@ -65,6 +65,7 @@ test('doctor removes missions identified by retired route metadata and refreshes
     const teamMission = managedMissionRecord('M-team-kind', {
       route_blackbox_kind: 'actual_team_command'
     });
+    const ralphMission = managedMissionRecord('M-ralph-route', { route: '$Ralph' });
     const currentMissions = [
       {
         id: 'M-agent-bridge',
@@ -82,11 +83,11 @@ test('doctor removes missions identified by retired route metadata and refreshes
         created_at: '2026-01-04T00:00:00.000Z'
       }
     ];
-    for (const mission of [agentMission, teamMission, ...currentMissions]) {
+    for (const mission of [agentMission, teamMission, ralphMission, ...currentMissions]) {
       const missionRoot = path.join(missionsRoot, mission.id);
       await fs.mkdir(missionRoot, { recursive: true });
       await fs.writeFile(path.join(missionRoot, 'mission.json'), `${JSON.stringify(mission)}\n`);
-      if (mission === agentMission || mission === teamMission) {
+      if (mission === agentMission || mission === teamMission || mission === ralphMission) {
         const identity = mission as Record<string, unknown>;
         await fs.writeFile(path.join(missionRoot, 'events.jsonl'), `${JSON.stringify({
           type: 'mission.created',
@@ -100,15 +101,17 @@ test('doctor removes missions identified by retired route metadata and refreshes
     }
     await fs.writeFile(path.join(missionsRoot, 'index.json'), `${JSON.stringify({
       schema: 'sks.mission-index.v1',
-      mission_count: 4,
+      mission_count: 5,
       latest_mission_id: 'M-maddb2',
-      missions: [agentMission, teamMission, ...currentMissions]
+      missions: [agentMission, teamMission, ralphMission, ...currentMissions]
     }, null, 2)}\n`);
 
     const fixed = await reconcileRetiredManagedResidue({ root, fix: true });
     assert.equal(fixed.ok, true);
     await assert.rejects(fs.access(path.join(missionsRoot, agentMission.id)));
     await assert.rejects(fs.access(path.join(missionsRoot, teamMission.id)));
+    await assert.rejects(fs.access(path.join(missionsRoot, ralphMission.id)));
+    assert.equal(await findFile(path.join(root, '.sneakoscope', 'quarantine', 'retired-public-surface'), 'mission.json'), null);
     for (const mission of currentMissions) {
       assert.equal(JSON.parse(await fs.readFile(path.join(missionsRoot, mission.id, 'mission.json'), 'utf8')).id, mission.id);
     }
@@ -161,6 +164,35 @@ test('doctor never follows a symlinked retired route mission target', async () =
     await assert.rejects(fs.lstat(missionLink));
     assert.deepEqual(await fs.readFile(path.join(outside, 'mission.json')), missionBytes);
     assert.deepEqual(await fs.readFile(path.join(outside, 'events.jsonl')), eventBytes);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(outside, { recursive: true, force: true });
+  }
+});
+
+test('doctor quarantines symlinked Goal artifacts without touching external targets', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-goal-symlink-'));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'sks-current-goal-target-'));
+  try {
+    const missionRoot = path.join(root, '.sneakoscope', 'missions', 'M-current-goal');
+    await fs.mkdir(missionRoot, { recursive: true });
+    for (const [name, bytes] of [
+      ['goal-workflow.json', Buffer.from('{"pipeline_contract":{"ralph_removed":true}}\n')],
+      ['goal-bridge.md', Buffer.from('- Ralph route is removed from the user-facing SKS surface.\n')]
+    ] as const) {
+      const target = path.join(outside, name);
+      const link = path.join(missionRoot, name);
+      await fs.writeFile(target, bytes);
+      await fs.symlink(target, link);
+
+      const fixed = await reconcileRetiredManagedResidue({ root, fix: true });
+      assert.equal(fixed.ok, true);
+      await assert.rejects(fs.lstat(link));
+      assert.deepEqual(await fs.readFile(target), bytes);
+      const quarantined = await findFile(root, name);
+      assert.ok(quarantined);
+      assert.equal(await fs.readlink(quarantined), target);
+    }
   } finally {
     await fs.rm(root, { recursive: true, force: true });
     await fs.rm(outside, { recursive: true, force: true });

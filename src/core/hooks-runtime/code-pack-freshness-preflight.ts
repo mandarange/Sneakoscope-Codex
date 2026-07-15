@@ -2,19 +2,9 @@ import path from 'node:path';
 import { exists, readJson } from '../fsx.js';
 import { inspectCodePackHeadFreshness } from '../triwiki/code-pack-head-freshness.js';
 
-/** Bounded, non-blocking code-pack staleness nudge for the user-prompt-submit hook.
- *
- * Returns a one-line context note when a published code pack
- * (.sneakoscope/wiki/code-pack.json) exists but was generated against a different
- * git HEAD than the current one — i.e. the codebase moved and the LLM-facing code
- * summaries are now out of date. A follow-up commit that changes only the two
- * tracked code-pack metadata files remains fresh; otherwise committing the generated
- * pack would make itself stale forever. Returns null (silent) when there is no pack at all
- * (repos that never opted into `sks wiki refresh --code` must not be nagged) or when
- * the check can't complete cheaply. It NEVER regenerates the pack and NEVER blocks:
- * the common path is one JSON read plus one bounded `git log` history check,
- * wrapped in a hard timeout so it cannot blow the hook latency budget. Any
- * failure resolves to null. */
+/** Returns a bounded, non-blocking stale-code-pack note for user-prompt-submit.
+ * It stays silent when no pack exists or freshness is inconclusive, never regenerates
+ * the pack, and treats metadata-only follow-up commits as fresh. */
 export async function codePackFreshnessNote(root: string, opts: { budgetMs?: number } = {}): Promise<string | null> {
   const budgetMs = Math.max(1, opts.budgetMs ?? 750);
   const gitTimeoutMs = Math.max(1, budgetMs - 50);

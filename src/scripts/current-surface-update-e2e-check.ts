@@ -81,6 +81,7 @@ try {
     path.join(project, '.sneakoscope', 'missions', 'M-retired-surface'),
     path.join(project, '.sneakoscope', 'missions', 'M-shadow-surface'),
     path.join(project, '.sneakoscope', 'missions', 'M-kage-surface'),
+    path.join(project, '.sneakoscope', 'missions', 'M-ralph-surface'),
     path.join(home, '.agents', 'skills', 'team'),
     path.join(home, '.agents', 'skills', 'agent'),
     path.join(home, '.agents', 'skills', 'ralph'),
@@ -354,18 +355,10 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
   await fsp.writeFile(path.join(project, '.sneakoscope', 'work-order-ledger.json'), '{"schema_version":1,"route":"team","items":[]}\n');
   await fsp.mkdir(path.join(project, '.sneakoscope', 'update'), { recursive: true });
   await fsp.writeFile(path.join(project, '.sneakoscope', 'update', 'legacy-team-artifacts.json'), '{"schema":"sks.legacy-team-artifacts-migration.v1"}\n');
-  const retiredMission = path.join(project, '.sneakoscope', 'missions', 'M-retired-surface');
-  await fsp.mkdir(retiredMission, { recursive: true });
-  await fsp.writeFile(path.join(retiredMission, 'mission.json'), JSON.stringify({
-    id: 'M-retired-surface',
-    mode: 'mad-db',
-    prompt: 'generated migration fixture',
-    created_at: '2026-01-01T00:00:00.000Z',
-    phase: 'PREPARE',
-    questions_allowed: true,
-    implementation_allowed: false
-  }, null, 2) + '\n');
-  for (const [id, mode] of [['M-shadow-surface', '$ShadowClone'], ['M-kage-surface', '$Kagebunshin']] as const) {
+  for (const [id, mode] of [
+    ['M-retired-surface', 'mad-db'], ['M-shadow-surface', '$ShadowClone'],
+    ['M-kage-surface', '$Kagebunshin'], ['M-ralph-surface', '$Ralph']
+  ] as const) {
     const mission = path.join(project, '.sneakoscope', 'missions', id);
     await fsp.mkdir(mission, { recursive: true });
     await fsp.writeFile(path.join(mission, 'mission.json'), JSON.stringify({
@@ -377,6 +370,7 @@ async function seedUpgradeFixture(home: string, project: string): Promise<void> 
       questions_allowed: true,
       implementation_allowed: false
     }, null, 2) + '\n');
+    await fsp.writeFile(path.join(mission, 'events.jsonl'), `${JSON.stringify({ type: 'mission.created', mission: id, mode })}\n`);
   }
   const currentGoalRoot = path.join(project, '.sneakoscope', 'missions', 'M-current-goal');
   await fsp.mkdir(currentGoalRoot, { recursive: true });

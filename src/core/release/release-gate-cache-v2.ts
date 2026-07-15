@@ -28,17 +28,8 @@ export function releaseGateProofBankFile(root: string): string {
   return path.join(root, '.sneakoscope', 'proof-bank', 'gates', 'cache-v2.json')
 }
 
-// Files whose only release-to-release difference is the version literal.
-// Hashing them version-neutrally keeps a pure `sks versioning bump` from
-// invalidating every behavior gate: bumping the version rewrites
-// package.json, package-lock.json, and the three PACKAGE_VERSION constant
-// sources, which are inputs of ~280 gates (via `package.json` and `src/**`).
-// Before this normalization every publish re-ran the entire DAG from zero
-// (test:blackbox alone is ~11 minutes) even when no behavior changed.
-// Version/proof-correctness gates (release:proof-truth, release:metadata, ...)
-// are declared with `cache.enabled: false`, so they always re-run and still
-// catch version drift. Set SKS_RELEASE_CACHE_VERSION_SENSITIVE=1 to restore
-// the old fully version-sensitive hashing.
+// Keep behavior gates reusable across pure version bumps; proof/version gates remain uncached.
+// Set SKS_RELEASE_CACHE_VERSION_SENSITIVE=1 to restore version-sensitive hashing.
 const VERSION_NEUTRAL_CACHE_FILES = new Set([
   'package.json',
   'package-lock.json',

@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import path from 'node:path';
-import { readJson, readText } from '../fsx.js';
+import { readJson, readText, writeJsonAtomic, writeTextAtomic } from '../fsx.js';
 import {
   inspectConfinedPath,
   removeManagedPathVerified
@@ -22,7 +22,6 @@ import {
   walkEntries
 } from './retired-managed-residue-private.js';
 import { reconcileMissionTrustProjection } from './retired-managed-projection-residue.js';
-import { reconcileRetiredGoalArtifactResidue } from './retired-managed-residue-goal.js';
 
 const RETIRED_DB_ROOT_FILES = new Set([
   'mad-db-capability.json',
@@ -52,6 +51,7 @@ const MANAGED_MISSION_SCHEMAS = new Set([
 ]);
 const TEAM_ALIAS_RUNTIME_FILE = 'team-alias-to-naruto.json';
 const TEAM_ALIAS_RUNTIME_SCHEMA = 'sks.team-alias-to-naruto.v1';
+const RETIRED_GOAL_BRIDGE_LINE = /^- Ralph route is removed from the user-facing SKS surface\.\r?(?:\n|$)/m;
 
 export async function reconcileMissionArtifacts(
   root: string,
@@ -103,7 +103,7 @@ export async function reconcileMissionArtifacts(
       }
       continue;
     }
-    await reconcileRetiredGoalArtifactResidue({ root, missionRoot, fix, quarantineRoot, counters });
+    await reconcileRetiredGoalArtifactResidue(root, missionRoot, fix, quarantineRoot, counters);
     await reconcileMissionTrustProjection(root, missionRoot, fix, quarantineRoot, counters);
     await reconcileRetiredMissionRuntime(root, missionRoot, fix, quarantineRoot, counters);
     for (const name of RETIRED_DB_ROOT_FILES) {
@@ -302,6 +302,70 @@ async function reconcileRetiredMissionRuntime(
     const sessionsRoot = path.join(missionRoot, 'agents', 'sessions');
     if (await pathExistsForCleanup(root, sessionsRoot, counters)) {
       await reconcileRetiredSessionTree(root, sessionsRoot, fix, quarantineRoot, counters);
+    }
+  }
+}
+
+async function reconcileRetiredGoalArtifactResidue(
+  root: string,
+  missionRoot: string,
+  fix: boolean,
+  quarantineRoot: string,
+  counters: MutableCounters
+): Promise<void> {
+  for (const name of ['goal-workflow.json', 'goal-bridge.md']) {
+    const file = path.join(missionRoot, name);
+    const inspected = await inspectConfinedPath(root, file).catch(() => null);
+    if (!inspected) {
+      counters.errors++;
+      counters.remaining++;
+      continue;
+    }
+    if (inspected.leafSymlink) {
+      await reconcileKnownRetiredPath(root, file, false, fix, quarantineRoot, counters);
+      continue;
+    }
+    if (!inspected.stat?.isFile()) continue;
+    const workflowFile = name.endsWith('.json');
+    const workflow = workflowFile
+      ? await readJson<Record<string, any> | null>(file, null).catch(() => null)
+      : null;
+    const pipeline = workflow?.pipeline_contract;
+    const source = workflowFile ? '' : await readText(file, '');
+    const found = workflowFile
+      ? pipeline && typeof pipeline === 'object' && Object.hasOwn(pipeline, 'ralph_removed')
+      : RETIRED_GOAL_BRIDGE_LINE.test(source);
+    if (!found) continue;
+    const managed = workflowFile
+      ? workflow?.schema_version === 1
+        && workflow?.route === 'Goal'
+        && workflow?.native_goal?.workflow_kind === 'native /goal persistence bridge'
+      : source.startsWith('# SKS Goal Persistence Bridge\n')
+        && source.includes('## Native Codex Goal Control')
+        && source.includes('## SKS Bridge Contract');
+    counters.detected++;
+    if (!fix) {
+      counters.remaining++;
+      if (!managed) counters.preserved++;
+      continue;
+    }
+    try {
+      if (!managed) {
+        await quarantineUserPath(root, file, quarantineRoot);
+        counters.preserved++;
+        continue;
+      }
+      if (workflowFile) {
+        delete pipeline.ralph_removed;
+        await writeJsonAtomic(file, workflow);
+      } else {
+        await writeTextAtomic(file, source.replace(RETIRED_GOAL_BRIDGE_LINE, ''));
+      }
+      counters.removed++;
+      counters.rewrittenState++;
+    } catch {
+      counters.errors++;
+      counters.remaining++;
     }
   }
 }
