@@ -39,6 +39,7 @@ export {
   runValidatedReleaseUpgradeLifecycle,
   validateReleaseUpgradeMenuBarRollbackReceipt
 } from './release-upgrade-smoke-lifecycle.js'
+export { classifyPinnedReleaseUpgradeBaselineInspection } from './release-upgrade-smoke-inputs.js'
 export { runReleaseUpgradeSmoke } from './release-upgrade-smoke-runner.js'
 
 export function parseReleaseUpgradeSmokeArgs(argv: string[]): {

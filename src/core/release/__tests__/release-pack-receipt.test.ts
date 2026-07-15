@@ -62,13 +62,43 @@ test('release pack inspection allows retired tokens only in explicit cleanup and
     const tarball = createTarball(root, 'retired-allowlist', '6.3.0', '', {
       'dist/core/doctor/retired-managed-residue-private.js': 'const tombstone = "sks team --json";\n',
       'dist/core/doctor/retired-managed-projection-residue.js': 'const oldMode = "strict-team";\n',
-      'dist/core/doctor/retired-managed-residue-missions.js': 'const oldRoute = "$Team";\n'
+      'dist/core/doctor/retired-managed-residue-missions.js': 'const oldRoute = "$Team";\n',
+      'dist/core/init/skills.js': 'const retiredSkill = "ralph-supervisor";\n'
     })
     const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
     assert.equal(receipt.ok, true, receipt.blockers.join(','))
     assert.equal(receipt.retired_surface_scan.ok, true)
-    assert.equal(receipt.retired_surface_scan.allowlisted_finding_count, 3)
+    assert.equal(receipt.retired_surface_scan.allowlisted_finding_count, 4)
     assert.equal(receipt.retired_surface_scan.findings.length, 0)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection does not exempt retired commands in the global mode router', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-global-router-'))
+  try {
+    const tarball = createTarball(root, 'global-router-leak', '6.3.0', '', {
+      'dist/cli/global-mode-router.js': 'export const leaked = "sks team --json";\n'
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.retired_surface_scan.findings.some((finding) => finding.kind === 'retired_cli_command'), true)
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release pack inspection rejects retired Ralph identity in generated customer artifacts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sks-release-pack-retired-ralph-'))
+  try {
+    const tarball = createTarball(root, 'retired-ralph', '6.3.0', '', {
+      'dist/core/init.js': 'export const guidance = "Ralph route is removed";\n',
+      'dist/core/goal-workflow.js': 'export const contract = { ralph_removed: true };\n'
+    })
+    const receipt = inspectReleaseTarball({ tarball, kind: 'staged', root })
+    assert.equal(receipt.ok, false)
+    assert.equal(receipt.retired_surface_scan.findings.filter((finding) => finding.kind === 'retired_ralph_identity').length, 2)
   } finally {
     fs.rmSync(root, { recursive: true, force: true })
   }

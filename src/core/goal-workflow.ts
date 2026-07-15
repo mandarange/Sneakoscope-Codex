@@ -46,7 +46,6 @@ export async function writeGoalWorkflow(dir: any, mission: any, opts: any = {}) 
     },
     pipeline_contract: {
       overlay_only: true,
-      ralph_removed: true,
       ambiguity_gate: 'Goal creates/controls the native /goal persistence bridge only; use normal SKS ambiguity gates on the selected execution route when implementation is needed',
       context7: 'optional for Goal bridge/control unless external API/library documentation is involved',
       implementation: 'continue implementation through the selected SKS execution route; Goal is not a heavyweight independent implementation pipeline',
@@ -142,7 +141,6 @@ ${workflow.native_goal.slash_command}
 
 ## SKS Bridge Contract
 
-- Ralph route is removed from the user-facing SKS surface.
 - This file is a fast SKS overlay for Codex native persisted \`/goal\` workflow semantics.
 - Official Goal mode: ${workflow.goal_mode?.official_goal_available ? 'available/default-enabled' : 'unavailable; SKS fallback bridge used'}.
 - \`$Goal\` is not a heavyweight independent implementation pipeline.

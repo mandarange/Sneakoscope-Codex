@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import {
+  classifyPinnedReleaseUpgradeBaselineInspection,
   inspectReleaseSourceCleanliness,
   parseReleaseUpgradeSmokeArgs,
   runReleaseUpgradeSmoke
@@ -27,6 +28,18 @@ test('release upgrade smoke argv requires exact tarball bindings', () => {
   const blocked = parseReleaseUpgradeSmokeArgs(['--target-tarball', 'target.tgz', '--baseline-tarball', 'baseline.tgz'])
   assert.ok(blocked.blockers.includes('target_receipt_required'))
   assert.ok(blocked.blockers.includes('provided_baseline_sha256_required'))
+})
+
+test('pinned 6.2 baseline records expected legacy content without masking structural failures', () => {
+  const classified = classifyPinnedReleaseUpgradeBaselineInspection([
+    'secret_content_detected:openai_token:dist/scripts/naruto-gpt-final-pack-check.js:4ac5c1dbbc7ee46b',
+    'retired_surface_scan_finding_limit_reached',
+    'retired_surface_content_detected:retired_dollar_command:README.md:c0388f4e7a979d2e',
+    'tarball_secret_scan_extract_failed'
+  ])
+  assert.deepEqual(classified.blockers, ['tarball_secret_scan_extract_failed'])
+  assert.equal(classified.warnings.length, 3)
+  assert.ok(classified.warnings.every((warning) => warning.startsWith('published_6_2_expected_content:')))
 })
 
 test('release upgrade smoke fails closed before commands when the target receipt is invalid', async () => {

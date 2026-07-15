@@ -56,6 +56,7 @@ for (const file of removedHandlers) {
 }
 assertGate(!argsSource.includes("'--agent',"), 'CLI value-flag parsing must not preserve the retired public scheduler flag');
 const managedAgents = init.agentsBlockText();
+assertGate(!/\bralph\b/i.test(managedAgents), 'managed project guidance must describe only the current Goal surface');
 assertGate(!managedAgents.includes('$From-Chat-IMG'), 'managed project guidance must not advertise an unregistered visual route name');
 assertGate(!managedAgents.includes('$from-chat-img'), 'managed project guidance must not advertise the visual add-on skill as another execution alias');
 assertGate(managedAgents.includes('from-chat-img'), 'managed project guidance must retain the Naruto visual add-on skill name');

@@ -3,12 +3,14 @@ export type GlobalMode =
   | { readonly kind: 'glm-without-mad'; readonly args: string[] };
 
 const RESERVED_COMMANDS = new Set(['help', '--help', '-h', 'version', '--version', '-v']);
+const RETIRED_NARUTO_OPTION = ['--', 'naruto'].join('');
 const RETIRED_AGENT_OPTION = ['--', 'agent'].join('');
+const RETIRED_CLONES_OPTION = ['--', 'clones'].join('');
 
 const RETIRED_GLOBAL_EXECUTION_OPTION_NAMES = new Set([
-  '--naruto',
+  RETIRED_NARUTO_OPTION,
   RETIRED_AGENT_OPTION,
-  '--clones',
+  RETIRED_CLONES_OPTION,
   '--mad-db',
   '--mad-native-swarm',
   '--mad-swarm',

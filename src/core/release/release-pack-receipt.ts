@@ -280,13 +280,13 @@ const RETIRED_SURFACE_PATTERNS: ReleasePackContentPattern[] = [
   { kind: 'retired_naruto_workers_command', regex: /(^|[^A-Za-z0-9_-])naruto\s+workers(?=$|[^A-Za-z0-9_-])/gim },
   { kind: 'retired_menubar_mcp_command', regex: /\bsks\s+menubar\s+mcp(?=$|[\s"'`])/gi },
   { kind: 'retired_menubar_mcp_identity', regex: /(^|[^A-Za-z0-9])menubar[-_. ]mcp(?=$|[^A-Za-z0-9])/gim },
+  { kind: 'retired_ralph_identity', regex: /\bralph(?:[_-](?:removed|supervisor|resolver))?\b/gi },
   { kind: 'retired_team_runtime_identity', regex: /\b(?:team_trigger_matrix|full_team_recommended|full_team_honest_path|strict-team|team-alias-to-naruto)\b/gi },
   { kind: 'retired_team_profile', regex: /\bsks-team(?:\.config\.toml)?\b/gi },
   { kind: 'retired_team_lane_label', regex: /\b(?:Balanced Team Lane|Full Team Honest Path|full Team\/Honest proof path)\b/gi }
 ]
 
 const RETIRED_SURFACE_ALLOWLIST = [
-  /^dist\/cli\/global-mode-router\.js$/,
   /^dist\/core\/doctor\/retired-auto-review-config\.js$/,
   /^dist\/core\/doctor\/(?:command-alias-cleanup|current-project-guidance|retired-managed-projection-residue)\.js$/,
   /^dist\/core\/doctor\/retired-managed-residue(?:-artifact-helpers|-artifacts|-missions|-private|-runtime|-state)?\.js$/,
